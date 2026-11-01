@@ -25,7 +25,13 @@ physical schedule. Extend the checked SCF loop schedule with target-specific
 numerical kernels, preserving domains, indexing, reductions and failure obligations.
 Compare numerical variants through the same checked transaction and installed
 operation contracts. Establish field representations,
-layouts, aliasing and work bounds before adding generated arithmetic. VM control
+layouts, aliasing and work bounds before adding generated arithmetic. Preserve
+the STARK unit's fixed-height/query-growth baseline. Its shared observation
+summaries keep analysis independent of iteration maxima; instrumented compilation
+identifies repeated source-execution closure reads and formation checks as a
+separate cost. Evaluate owner-scoped reuse within an immutable subject before
+adding more lowering stages, with mutation/invalidation controls and unchanged
+independent candidate checking. VM control
 retains participant order and authority.
 
 Validate realization refinements across representative operations and protocol
@@ -106,7 +112,8 @@ Proceed through these phases inside one PR:
    through construction and independent record consumption. Reuse the installed
    block/grinding wire and kernels. Source proof declarations now select gates through that path, with scalar,
    block, zero-bit and positive-gate quartic Keccak STARK controls. The structured
-   verifier analysis and complete selected binding judgments remain in this unit.
+   verifier analysis and closed selected binding judgments are implemented; the
+   coherent validation and final review remain part of this unit.
    Select gates by authored query labels and labelled application paths, with
    independent source-to-selected-occurrence comparison. Separate FRI's common
    folding/opening implementation from query acquisition: the flagship selects
@@ -125,12 +132,13 @@ Proceed through these phases inside one PR:
    STARK realization claim. Exercise both gated and ungated source deployments.
 4. **Analysis and cost.** Measure the unchanged 256-row/100-query client and
    growth in queries, nested repeats and reused helpers. Its native execution
-   now passes; this does not enlarge the separate public-coin report profile.
-   That profile currently selects at most 64 scalar draw/index sites on an
-   expanded entry, excludes block draws and refuses verifier-local calls.
-   Define the required structured judgment before extending it; reuse shared
-   interaction extraction with bounded summaries, checked substitutions and
-   invalidation. Do not solve a refusal by merely raising limits. Optimize
+   now passes. The structured public-coin profile selects up to 64 query families,
+   including scalar and product index laws, with shared helper/repeat summaries
+   and actual deterministic verifier-local calls. It reuses the checked
+   realization owner and retains exact origins, pending deliveries and stop
+   dependencies. The separate binding profiles inspect actual encodings and
+   state successors. Measure these analyses on the same subjects; the former
+   flat-report limit was replaced by a bounded structural analysis, not raised. Optimize
    measured work inside the existing checked path; do not make represented execution or AOT
    prerequisites for this PR.
 5. **Review and completion.** Include degree-boundary and cancellation controls,
@@ -276,8 +284,8 @@ The [native index-block contract](spec/formats/native-index-block.md) fixes
 metadata order, final request length, nonoverlapping gate/index windows, occurrence
 coordinates, zero-difficulty elision, verifier rejection successor and accepted
 search/replay work. Native construction and CPU consumers implement that contract
-with independent byte controls. Source proof configuration and Lean interpretation
-remain separate work. Scalar index support grants no implicit block/gated capability.
+with independent byte controls. Source proof declarations now select these gates through checked authored
+paths. Lean interpretation remains separately owned. Scalar index support grants no implicit block/gated capability.
 
 The common acceptance configuration is KoalaBear with its quartic extension
 and Keccak Merkle rows. Runtime supplies that exact row instance. Lean must

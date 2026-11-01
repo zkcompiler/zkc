@@ -19,7 +19,7 @@ the three-table argument builds on the same concrete domains.
 | Module | Responsibility |
 |---|---|
 | `stark::configurations::contract` | The `Configuration` interface and layout helpers |
-| `stark::configurations::koala_bear_quartic` | The KoalaBear quartic Poseidon2 configuration |
+| `stark::configurations::koala_bear_quartic` | The KoalaBear quartic Poseidon2 and direct-challenge Keccak configurations |
 | `stark::configurations::baby_bear_quartic` | BabyBear quartic, width-16 Poseidon2 and direct quartic Merlin draws |
 | `stark::configurations::goldilocks_quadratic` | Goldilocks quadratic, width-8 Poseidon2 and direct quadratic Merlin draws |
 | `stark::single_table` | The parameterized single-table argument |
@@ -68,7 +68,7 @@ The STARK profiles use disjoint evaluation domains and retain the fast path.
 `stark::single_table::ScalarTableArgument<K, Table, B, LogFinal, Rounds, LogBlowup, Queries>`
 and `BlockTableArgument`
 prove the assertions of one present table of Bundle `B`, with the same
-statement, scopes and quotient equations as the [older profile](#single-table-statement-and-supported-relation).
+statement, scopes and quotient equations as the [octic profile](#single-table-statement-and-supported-relation).
 The trace has height `n = 2^(LogFinal + Rounds)` and is extended to
 `N = n * 2^LogBlowup` points of the configuration's coset. FRI makes `Rounds`
 binary folds, ends with a polynomial of `2^LogFinal` coefficients and checks

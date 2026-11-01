@@ -1752,10 +1752,13 @@ fn collection_limits_follow_payload_storage() {
     );
     native.core.policy.max_table_elements = 64;
     let path = Value::OraclePath(crate::oracle::Domain::Base, [[0u8; 32]; 25].into());
+    native.validate_value(&path).unwrap();
+    native.core.policy.max_table_elements = 24;
     assert_eq!(
         native.validate_value(&path).unwrap_err().code,
-        "refused:oracle-path-length"
+        "exhausted:element-limit"
     );
+    native.core.policy.max_table_elements = 64;
     let logical = LogicalType::fixed_vector(
         LogicalType::new(Type::Field, Identity::KoalaBear).unwrap(),
         64,

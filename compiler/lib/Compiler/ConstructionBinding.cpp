@@ -160,9 +160,12 @@ public:
       if (rule.sites.empty() || rule.sites.front() != event.site ||
           i + rule.sites.size() > events.size())
         return refuse("message grouping differs");
-      bool delivery = false;
-      for (const auto &draw : policy.draws)
-        delivery |= draw.second == event.site;
+      auto isDelivery = [&](StringRef site) {
+        return llvm::any_of(policy.draws, [&](const auto &draw) {
+          return draw.second == site;
+        });
+      };
+      bool delivery = !event.query;
       auto arguments = stateArguments();
       if (!arguments)
         return arguments.takeError();
@@ -175,7 +178,9 @@ public:
           if (!value)
             return value.takeError();
           arguments->push_back(*value);
-          if (!delivery) {
+          bool selectedDelivery = isDelivery(events[i + j].site);
+          delivery &= selectedDelivery;
+          if (!selectedDelivery) {
             required.push_back(*value);
             terminal.push_back(events[i + j].site);
           }
@@ -288,16 +293,18 @@ analyzeConstructionBinding(ModuleOp candidate, ArrayRef<Type> sourceInputs,
       return exported.takeError();
     primitives.push_back(std::move(*exported));
   }
-  return json::Value(json::Object{
-      {"format", "zkc.construction-binding/0"},
-      {"profile", name},
-      {"coverage", std::move(coverage)},
-      {"occurrences", std::move(occurrences)},
-      {"primitive_inventory", std::move(primitives)},
-      {"premises", json::Array{"installed-primitive-and-codec-meaning",
-                               "hash-collision-and-challenge-law",
-                               "fixed-authenticated-program",
-                               "no-independent-oracles-from-role-labels",
-                               "original-acceptance-correspondence-only"}}});
+  json::Array premises{"installed-primitive-and-codec-meaning",
+                       "hash-collision-and-challenge-law",
+                       "fixed-authenticated-program",
+                       "no-independent-oracles-from-role-labels"};
+  if (profile == NativeProofBindingProfile::NativeHistory)
+    premises.push_back("installed-host-invocation-initialization");
+  return json::Value(
+      json::Object{{"format", "zkc.construction-binding/0"},
+                   {"profile", name},
+                   {"coverage", std::move(coverage)},
+                   {"occurrences", std::move(occurrences)},
+                   {"primitive_inventory", std::move(primitives)},
+                   {"premises", std::move(premises)}});
 }
 } // namespace zkc::detail

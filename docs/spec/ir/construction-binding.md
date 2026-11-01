@@ -27,8 +27,11 @@ such as `x - x` is not a canonical encoding of `x`.
   new input in order. Query transitions return the new digest and decode that
   same digest as the challenge. Exact challenge delivery may leave the state
   unchanged. All other messages, including terminal messages, must be observed.
-  Distinct nonoverlapping operation tags separate initialization, observations
-  and queries. The actual program fixes the ordered logical type layout.
+  A grouped handler may omit an observation only when every selected leaf is
+  an exact challenge delivery; a delivery cannot exempt adjacent prover data.
+  Nonempty tags separate query transitions from non-query transitions; distinct
+  tags may not be prefixes of one another. A fixed tag may be reused within
+  either class. The actual program fixes the ordered logical type layout.
 - **Explicit inputs.** A local copyable state stores data for a stateless query.
   The checker symbolically executes actual straight-line handlers and checks the
   complete canonical encoding supplied to the selected hash. Every public input
@@ -95,6 +98,10 @@ or an execution fallback. A report contains:
 - `primitive_inventory`, including complete installed binding arguments and
   signatures; logical role names do not separate underlying hash instances;
 - `coverage` and named `premises`.
+
+Source/candidate and original-acceptance correspondence are checked facts, not
+external premises. Native history separately names installed host invocation
+initialization among its premises; local profiles do not inherit that binding.
 
 Local coverage contains `hash`, ordered `transitions`, `encoding_graph` and
 `terminal_outside_query`. Transitions identify the actual digest expression,

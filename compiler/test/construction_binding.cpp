@@ -1,3 +1,4 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/NativeProof.h"
@@ -8,6 +9,7 @@
 #include "zkc/Language/Project.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Language.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include <fstream>
 using namespace mlir;
@@ -253,6 +255,68 @@ interface Chain)");
                "on message commitment(t,value){return H::observe(t,value);}"
                "on message response(t,value){return t;}");
     refuses(analyze(text, NativeProofBindingProfile::CanonicalHashHistory),
+            "construction-binding-coverage");
+  });
+  cases.run("mixed-direction message grouping refuses before binding", [&] {
+    auto f = take(fixture(program, context));
+    auto unit =
+        cast<protocol_ir::ProtocolModuleOp>(f.original->getBody()->front());
+    auto record =
+        *unit.getBody().front().getOps<protocol_ir::ConstructionOp>().begin();
+    Builder builder(&context);
+    StringRef delivery = f.policy.draws.front().second;
+    std::string response = "label_" + llvm::toHex("response", true) + "_0";
+    unsigned changed = 0;
+    SmallVector<Attribute> rules;
+    for (auto attr : record.getRules()) {
+      auto rule = cast<DictionaryAttr>(attr);
+      auto sites = rule.getAs<ArrayAttr>("sites");
+      if (sites.size() == 1 &&
+          cast<StringAttr>(sites[0]).getValue() == response) {
+        ++changed;
+        continue;
+      }
+      if (sites.size() == 1 &&
+          cast<StringAttr>(sites[0]).getValue() == delivery) {
+        ++changed;
+        auto handler = SymbolTable(unit).lookup<func::FuncOp>(
+            rule.getAs<FlatSymbolRefAttr>("handler").getValue());
+        auto type = handler.getFunctionType();
+        SmallVector<Type> inputs(type.getInputs());
+        inputs.push_back(inputs.back());
+        handler.setType(builder.getFunctionType(inputs, type.getResults()));
+        handler.getBody().front().addArgument(inputs.back(), handler.getLoc());
+        NamedAttrList grouped(rule);
+        grouped.set("sites", builder.getStrArrayAttr({delivery, response}));
+        auto payload = rule.getAs<ArrayAttr>("payload");
+        grouped.set("payload", builder.getArrayAttr({payload[0], payload[0]}));
+        rule = grouped.getDictionary(&context);
+      }
+      rules.push_back(rule);
+    }
+    require(changed == 2,
+            "grouping must replace both actual message selectors");
+    record.setRulesAttr(builder.getArrayAttr(rules));
+    refuses(constructNativeProof(*f.original, f.policy),
+            "native-proof-construction-message-group");
+  });
+  auto tupleSource =
+      mutate(program, "send P->V(secret);", "send P->V((secret,secret));");
+  tupleSource = mutate(tupleSource, "return last==first+c;",
+                       "let (left,right)=first; return last==left+c;");
+  tupleSource = mutate(
+      tupleSource,
+      "on message {commitment,response}(t,value){return H::observe(t,value);}",
+      "on message commitment(t,value){let (a,b)=value; return "
+      "H::observe(H::observe(t,a),b);}"
+      "on message response(t,value){return H::observe(t,value);}");
+  cases.run("whole grouped payload is covered by actual nested hashes", [&] {
+    take(analyze(tupleSource, NativeProofBindingProfile::CanonicalHashHistory));
+  });
+  cases.run("a grouped handler cannot omit its second payload", [&] {
+    refuses(analyze(mutate(tupleSource, "H::observe(H::observe(t,a),b)",
+                           "H::observe(t,a)"),
+                    NativeProofBindingProfile::CanonicalHashHistory),
             "construction-binding-coverage");
   });
   return cases.result();

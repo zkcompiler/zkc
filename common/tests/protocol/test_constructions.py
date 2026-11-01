@@ -441,7 +441,7 @@ def test_copyable_construction_state_is_internal(toolchain, journal, directory, 
     else:
         rounds = producer[4][1][0]
         carried = [['state_copy', state]] if mutation == 'carried' else []
-        captures = [state] if mutation == 'capture' else []
+        captures = [['captured_state', state]] if mutation == 'capture' else []
         yielded = ['state_copy'] if carried else []
         outputs = ['leaked_state'] if carried else []
         body.insert(2, ['loop', 'leak', ['value', rounds, '2', 'iteration'],

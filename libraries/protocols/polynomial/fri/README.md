@@ -123,7 +123,7 @@ this migration claims no preserved proof size or throughput.
 | Source | Shared API and preserved outer schedule |
 |---|---|
 | `examples/projects/fri/main.zkc` | `ScalarLowDegree<Direct<E>,5,0,3,8>`; the source no longer selects a row commitment |
-| `libraries/arguments/stark/single_table/lib.zkc` | `Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds>`, scalar queries and binding, then trace/quotient openings and degree-adjusted DEEP values, then `QueryAssociated` |
+| `libraries/arguments/stark/single_table/lib.zkc` | `Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds>`, explicit scalar or block queries and binding, then trace/quotient openings and degree-adjusted DEEP values, then `QueryAssociated` |
 | `libraries/arguments/stark/single_table/low_degree.zkc` | Only `FriConfiguration<K>`: `Value = K::Extension`, `Challenge = K::Challenge`, `challenge = K::challenge`; no specialized Commit/Open remains |
 | `libraries/arguments/stark/single_table/koala_bear_octic/lib.zkc` | `ScalarLowDegree<Direct<Extension>,LogSize,0,LogHeight,Queries>` before trace/quotient openings and the existing DEEP equality |
 | `libraries/arguments/stark/whole_bundle/lib.zkc` | `ScalarLowDegree<Direct<Extension>,LogSize,0,MaxLogHeight,Queries>` before base/auxiliary/quotient openings and the existing DEEP equality |
@@ -133,7 +133,7 @@ The outer application signatures remain:
 `examples/projects/femtocairo/main.zkc` keeps
 `ThreeTableArgument<Execution,LogUp<Extension>,5,7,8,8>`;
 `examples/projects/stark/main.zkc` keeps
-`TableArgument<Poseidon2,0,B,LogFinal=0,Rounds=3,LogBlowup=2,Queries=8>`.
+`ScalarTableArgument<Poseidon2,0,B,LogFinal=0,Rounds=3,LogBlowup=2,Queries=8>`.
 The quartic configuration's octic challenge conversion is preserved explicitly.
 FRI retains no direct physical commitment dependency. All maintained callers
 select their query policy explicitly; no `LowDegree` compatibility alias remains.

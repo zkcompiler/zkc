@@ -184,12 +184,39 @@ fn quartet_wire_preserves_coordinates_and_refuses_every_noncanonical_slot() {
         bad[5] = if tag == 79 { 35 } else { 36 };
         assert!(b.decode_native_value(&value.physical_type(), &bad).is_err());
     }
-    assert!(
-        b.decode_native_value(
+    // A pruned multi-opening can exceed one path's depth. The codec enforces
+    // capacity and framing; the selected opening checker authenticates shape.
+    let long_path = b
+        .decode_native_value(
             &opening[1].physical_type(),
-            &[b"ZKCV\x00\x50".as_slice(), &25u32.to_le_bytes(), &[0; 800]].concat()
+            &[b"ZKCV\x00\x50".as_slice(), &25u32.to_le_bytes(), &[0; 800]].concat(),
         )
-        .is_err()
+        .unwrap();
+    assert!(matches!(
+        call(
+            "oracle.check",
+            vec![
+                result[0].clone(),
+                Value::Index(1),
+                Value::Index(1),
+                Value::Index(0),
+                opening[0].clone(),
+                long_path
+            ]
+        )[0],
+        Value::Bool(false)
+    ));
+    let limited = Policy {
+        max_table_elements: 24,
+        ..Policy::default()
+    };
+    assert!(
+        backend(limited)
+            .decode_native_value(
+                &opening[1].physical_type(),
+                &[b"ZKCV\x00\x50".as_slice(), &25u32.to_le_bytes(), &[0; 800]].concat()
+            )
+            .is_err()
     );
 }
 #[test]
@@ -202,7 +229,7 @@ fn exact_identities_and_independent_installation_signatures_agree() {
     assert_eq!(scheme.scalar_field(), Some(Identity::KoalaBearExt4));
     assert_eq!(suite.scalar_field(), Some(Identity::KoalaBearExt4));
     assert!(scheme.is_row_commitment());
-    assert!(!scheme.has_multi_opening());
+    assert!(scheme.has_multi_opening());
     assert!(suite.has_index_transcript());
     let service = ServiceContract::parse("random.koala-bear.ext4-binomial3/0").unwrap();
     assert_eq!(service.field(), Identity::KoalaBearExt4);
@@ -210,7 +237,16 @@ fn exact_identities_and_independent_installation_signatures_agree() {
     for (identity, names) in [
         (FIELD, vec!["random.draw", "random.vector", "random.index"]),
         (SUITE, vec!["transcript.challenge", "transcript.index"]),
-        (SCHEME, vec!["oracle.commit", "oracle.open", "oracle.check"]),
+        (
+            SCHEME,
+            vec![
+                "oracle.commit",
+                "oracle.open",
+                "oracle.check",
+                "oracle.open_many",
+                "oracle.check_many",
+            ],
+        ),
     ] {
         for name in names {
             let valid = binding(name, identity);
@@ -235,11 +271,9 @@ fn exact_identities_and_independent_installation_signatures_agree() {
     ] {
         assert!(Identity::parse(bad).is_err(), "{bad}");
     }
-    for name in ["oracle.open_many", "pcs.open"] {
-        let bad = binding(name, SCHEME);
-        assert!(b.binding_signature(&bad).is_none());
-        assert!(bad.signature().is_err());
-    }
+    let bad = binding("pcs.open", SCHEME);
+    assert!(b.binding_signature(&bad).is_none());
+    assert!(bad.signature().is_err());
 }
 #[test]
 fn quartic_tree_preflight_uses_sixteen_byte_elements_and_private_custody() {

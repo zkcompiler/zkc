@@ -235,10 +235,10 @@ def test_octic_air_control_remains_koala_only(bench, field):
         bench['stark'].air(ROOT, {'field': field})
 
 
-def test_existing_koala_air_stark_and_fri_preparations_are_unchanged(bench):
-    # Logical FRI source snapshot, independently checked against pre-policy HEAD:
-    # all 31 existing cases at statements
-    # zero and one, including source, shape, inputs, assets and refusal inputs.
+def test_koala_air_stark_and_fri_preparation_snapshot(bench):
+    # All 31 cases at statements zero and one, including source, shape, inputs,
+    # assets and refusals. Reversing only the ScalarLowDegree/ScalarTableArgument
+    # source spellings reproduces the pre-phase snapshot; the data is unchanged.
     rows = []
     for case in bench['coverage'].cases():
         if case.name not in ('air', 'stark', 'fri') or 'field' in case.shape:
@@ -251,4 +251,4 @@ def test_existing_koala_air_stark_and_fri_preparations_are_unchanged(bench):
                          'support': [str(path.relative_to(ROOT)) for path in p.support]})
     assert len(rows) == 62
     encoded = json.dumps(rows, sort_keys=True, separators=(',', ':')).encode()
-    assert hashlib.sha256(encoded).hexdigest() == 'b23613c0dabc125ae82901abfc91bad34313baafdc59d99469a522ce4160c2e7'
+    assert hashlib.sha256(encoded).hexdigest() == '2a723a2f817b6190a822e33a4bbc95abdcbad822259c10d8d6ad2d34825d6562'
