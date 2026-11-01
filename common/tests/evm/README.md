@@ -267,7 +267,10 @@ The foundation controls use real native producers, independent prime/binomial
 arithmetic, and complete invocation/transcript hash oracles. They cover
 structured observations, non-first acceptance, extension-vector strides, nested
 and filtered finite callbacks, empty admission, source stops and later malformed
-frames. The wire consumer emits the production expected-type helpers; separate
+frames. Participant-loop controls retain distinct Copy formals bound to the
+same parent value, including empty loops and altered messages. Success requires
+the exact 32-byte ABI Boolean; refusals require the exact class, code and hash
+frontier. The wire consumer emits the production expected-type helpers; separate
 raw-value views check coefficient order independently of their encoder. Its
 controls cover whole-value node/element/memory budgets, inactive/empty type
 refusals, fixed arrays, and opaque root/path envelopes. Envelope transport does

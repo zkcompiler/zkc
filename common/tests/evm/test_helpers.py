@@ -4,7 +4,7 @@ from abi import SELECTOR, decode_verify, encode_verify, keccak256, malformed_cas
 from foundation_controls import check_native_outcome
 from hash_chain_reference import BLS_SUITE, Chain
 from oracle import chain_trace, check_trace
-from validate import ABI_REFUSALS, REVERT_CLASSES, check_revert
+from validate import ABI_REFUSALS, REVERT_CLASSES, check_return, check_revert
 
 
 class NativeOutcomeTests(unittest.TestCase):
@@ -79,6 +79,17 @@ class AbiTests(unittest.TestCase):
 
 
 class TraceTests(unittest.TestCase):
+    def test_exact_returned_boolean(self):
+        for accepted in (False, True):
+            output = word(accepted).hex()
+            result = {"phase": "runtime", "status": "return", "output": output, "trace": []}
+            check_return(result, output, [])
+            for wrong in ("", output[2:], "00" + output, output + "00", word(2).hex()):
+                with self.subTest(output=wrong), self.assertRaises(AssertionError):
+                    check_return(result | {"output": wrong}, output, [])
+            with self.assertRaises(AssertionError):
+                check_return(result | {"phase": "deployment"}, output, [])
+
     def test_exact_refusal_and_frontier(self):
         event = {"kind": "keccak256", "input": "", "output": keccak256(b"").hex(),
                  "status": "return"}
@@ -93,6 +104,12 @@ class TraceTests(unittest.TestCase):
                 check_revert(wrong, "decode", 7, [])
         with self.assertRaises(AssertionError):
             check_revert(result("source", 6, []), "source", 6, [event])
+        capacity = result("resource", 2, [])
+        for wrong in (result("resource", 999, []), capacity | {"output": b"ZKCR".hex()},
+                      capacity | {"output": capacity["output"] + "00"},
+                      capacity | {"phase": "deployment"}):
+            with self.assertRaises(AssertionError):
+                check_revert(wrong, "resource", 2, [])
 
     def test_final_observation_mutants(self):
         chain = Chain(BLS_SUITE, b"independently prepared invocation")

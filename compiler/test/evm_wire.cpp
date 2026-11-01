@@ -159,6 +159,39 @@ void emitStore(MLIRContext &context, unsigned ceiling) {
          << evm::detail::runtimeHelpers(limits) << wire.definitions()
          << "} } }\n";
 }
+void emitAppend(MLIRContext &context) {
+  evm::NativeLayouts layouts(context);
+  EvmLimits limits;
+  limits.frameBytes = 32;
+  evm::WireGenerator wire(layouts, limits);
+  OpBuilder builder(&context);
+  Block body;
+  auto pointer =
+      body.addArgument(builder.getI64Type(), builder.getUnknownLoc());
+  auto count = body.addArgument(builder.getI64Type(), builder.getUnknownLoc());
+  auto value = body.addArgument(builder.getI64Type(), builder.getUnknownLoc());
+  builder.setInsertionPointToEnd(&body);
+  auto attribute = builder.getNamedAttr(
+      "value_type", TypeAttr::get(fixture(context, "bytes")));
+  auto append = evm::CheckedOp::create(
+      builder, builder.getUnknownLoc(),
+      {builder.getI64Type(), builder.getI64Type()}, "bytes.append",
+      {pointer, count, value}, {attribute});
+  require(succeeded(append.verify()), "invalid byte append fixture");
+  auto helper = take(wire.operation(append));
+  outs() << "object \"Append\" { code { datacopy(0, dataoffset(\"Runtime\"), "
+            "datasize(\"Runtime\")) return(0, datasize(\"Runtime\")) }\n"
+         << "object \"Runtime\" { code { {\n"
+         << "let base := memoryguard(0x400) mstore(0x40, base) "
+            "mstore(0x200, base)\n"
+         << "let n := calldataload(0) let p := evm_alloc(n)\n"
+         << "if calldataload(64) { pop(evm_alloc(sub(" << limits.memoryBytes
+         << ", mload(0x40)))) }\n"
+         << "let result, length := " << helper << "(p, n, calldataload(32))\n"
+         << "mstore(0, length) return(0, 32)\n}\n"
+         << evm::detail::runtimeHelpers(limits) << wire.definitions()
+         << "} } }\n";
+}
 void emit(MLIRContext &context, StringRef kind, StringRef mode,
           uint64_t memory) {
   evm::NativeLayouts layouts(context);
@@ -246,6 +279,15 @@ int main(int argc, char **argv) {
   registry.insert<evm::EvmDialect>();
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  if (argc == 2 && StringRef(argv[1]) == "--emit-append") {
+    try {
+      emitAppend(context);
+    } catch (const std::exception &failure) {
+      errs() << failure.what() << '\n';
+      return 1;
+    }
+    return 0;
+  }
   if (argc == 3 && StringRef(argv[1]) == "--emit-store") {
     unsigned ceiling = 0;
     if (StringRef(argv[2]).getAsInteger(10, ceiling) || !ceiling ||

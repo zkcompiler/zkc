@@ -69,3 +69,24 @@ proof Proof=Echo{prover P;verifier V;public{value};accept accepted;construction 
     assert policy[8:12] == [[], 'zkc.framed/0', '', []]
     assert response['descriptor'][1] == policy
     assert response['descriptor'][6] == []
+
+with case('source-selected gates remain native and refuse unsupported EVM construction'):
+    source = OUT / 'gated.zkc'
+    source.write_text('''module gated;
+domain Q=field("koala-bear.ext4-binomial3");
+protocol Queries roles(P,V)(coins:Random<Q>@V)->(accepted:bool@V) {
+  #[site(positions)] let positions=coins.indices(2,16);
+  let delivered=send V->P(positions);
+  return true;
+}
+proof Proof=Queries {
+  prover P; verifier V; public{}; accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",coins);
+  gate positions bits 0;
+}
+''')
+    selection = ['--source-format=zkc', f'--module=gated={source}', '--entry=gated::Proof']
+    native = json.loads(commands.run([compiler, 'language-package', *selection]))
+    policy = json.loads(native['artifact'])[2][1]
+    assert len(policy[11]) == 1 and policy[11][0][1] == '0'
+    commands.run([compiler, 'language-evm', *selection], refuses='evm.construction')

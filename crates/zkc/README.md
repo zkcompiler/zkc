@@ -4,15 +4,15 @@ Applications depend on `zkc` and execute authenticated packages through reusable
 Hosts. Generated Rust bindings call the SDK directly. Already compiled packages
 need neither the compiler nor the `zkc` executable at execution time.
 
-Native proof admission consumes one current version-zero schema: a twelve-field
-policy with explicit per-occurrence gates and an eight-field descriptor with
-construction-owned witness records. Gates bind the selected source query,
-bound, count and difficulty; witness records bind the executable index slot and
-codec. The complete descriptor, public statement and caller context enter the
-existing invocation binding. Regenerate affected packages when this schema changes.
-Explicit gate selection uses the pinned `NativeDeployment` API. Source-bound
-`ProofEntry` admission requires empty gates until its source interface represents
-that selection.
+Native proof admission checks the current version-zero
+[policy and descriptor](../../docs/spec/formats/proof.md#deployment-policy-and-descriptor).
+Gates bind the selected source query, bound, count and difficulty; witness records
+bind the executable index slot and codec. The complete descriptor, public
+statement and caller context enter the invocation binding. Source-bound
+`ProofEntry` admission checks the declaration's
+[gate selections](../../docs/spec/language/entries.md#proof-declarations);
+`NativeDeployment` admits an explicitly pinned native policy and artifact.
+Regenerate affected packages when the schema changes.
 
 ## Compile and generate bindings
 

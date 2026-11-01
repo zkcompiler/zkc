@@ -15,9 +15,9 @@ from abi import encode_verify
 from binomial_reference import Binomial, PLONKY3_FIELDS
 from hash_chain_reference import BLS12_381_R, BLS_SUITE, Chain, fr64be
 from logical_tree import decode_tree, encode_tree
-from oracle import chain_trace, check_trace
+from oracle import chain_trace
 from probe import PROFILES, check_solc, compile_request, execute
-from validate import check_revert
+from validate import check_return, check_revert
 
 ROOT = Path(__file__).resolve().parents[3]
 FIELDS = PLONKY3_FIELDS | {
@@ -212,10 +212,11 @@ class Subjects:
             except AssertionError as error:
                 raise AssertionError(f"{failure}: {error}") from error
         else:
-            if execution["status"] != "return" or int(execution["output"], 16) != expected:
-                raise AssertionError(failure)
             trace = static_trace(fixture)
-            check_trace(execution["trace"], trace)
+            try:
+                check_return(execution, int(expected).to_bytes(32, "big").hex(), trace)
+            except AssertionError as error:
+                raise AssertionError(f"{failure}: {error}") from error
         self.cases.append({"subject": path.name, "case": name, "decision": expected,
                            "runtime_bytes": len(artifact["runtime"]) // 2,
                            "gas": execution["runtime_gas"], "hashes": len(trace),
@@ -360,6 +361,41 @@ def finite(subjects):
                     native_error="exhausted:local-bound-limit", evm_revert=("resource", 13))
 
 
+def participant_loops(subjects):
+    source = (Path(__file__).parent / "fixtures/loops.zkc").read_text()
+    for flags in ((), ("--no-simplify", "--no-calculation-batching")):
+        subject = subjects.compile("loop-captures-ordered" if flags else "loop-captures-default",
+                                   source, "capture_bindings", flags)
+
+        def aliases(node):
+            if not isinstance(node, list):
+                return False
+            if len(node) == 7 and node[0] == "loop":
+                captures = node[4]
+                parents = [parent for _, parent in captures]
+                if len(set(parents)) < len(parents):
+                    return True
+            return any(aliases(child) for child in node)
+
+        # The source must actually exercise distinct formals bound to one
+        # parent, rather than merely repeating a value inside one callback.
+        if not aliases(json.loads(subject[1][4])):
+            raise AssertionError("participant loop fixture lost its aliased capture bindings")
+        for count in (0, 1, 3):
+            wires = {0: field_wire("bls12-381.fr", [7]), 1: index_wire(count)}
+            fixture, _ = subjects.run(subject, f"rounds-{count}", wires)
+            if count:
+                proof = bytearray.fromhex(fixture["proof"])
+                second = 48 + int.from_bytes(proof[40:48], "little")
+                size = int.from_bytes(proof[second:second + 8], "little")
+                changed = field_wire("bls12-381.fr", [8])
+                if size != len(changed):
+                    raise AssertionError("second loop message has an unexpected wire type")
+                proof[second + 8:second + 8 + size] = changed
+                subjects.run(subject, f"rounds-{count}-changed-capture", wires,
+                             proof=proof, expected=False)
+
+
 def filtered(subjects):
     field, f = "koala-bear.ext4-binomial3", FIELDS["koala-bear.ext4-binomial3"]
     source = (Path(__file__).parent / "fixtures/filtered.zkc").read_text()
@@ -449,7 +485,7 @@ def main():
         parser.add_argument(f"--{name}", type=Path, required=True)
     suites = {"arithmetic": arithmetic, "structured": structured, "envelopes": envelopes,
               "vectors": vectors, "finite": finite, "filtered": filtered,
-              "capacity": capacity, "bytes": bytes_access}
+              "loops": participant_loops, "capacity": capacity, "bytes": bytes_access}
     parser.add_argument("--suite", action="append", choices=suites)
     args = parser.parse_args()
     for name in ("compiler", "native_driver", "solc", "runner", "output"):

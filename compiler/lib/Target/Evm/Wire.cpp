@@ -825,15 +825,18 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
     } else if (action == "append") {
       out << "function " << name << "(p, n, " << lanes(elementLanes)
           << ") -> result, length {\n"
-          << countCheck << "if iszero(lt(n, "
+          << countCheck << "let bytes := evm_wire_mul(n, " << stride << ")\n"
+          << "evm_memory(p, bytes)\n";
+      if (packed)
+        out << "if gt(v0, 255) { evm_source(3) }\n";
+      out << "if iszero(lt(n, "
           << (packed ? limits.frameBytes : limits.publicElements)
           << ")) { evm_resource(2) }\n"
-          << "let bytes := evm_wire_mul(n, " << stride << ")\n"
-          << "evm_memory(p, bytes) length := add(n, 1)\n"
+          << "length := add(n, 1)\n"
           << "result := evm_alloc(evm_wire_mul(length, " << stride << "))\n"
           << "mcopy(result, p, bytes) let cell := add(result, bytes)\n";
       if (packed)
-        out << "if gt(v0, 255) { evm_source(3) } mstore8(cell, v0)\n";
+        out << "mstore8(cell, v0)\n";
       else
         stores(out, elementLanes, "cell");
       out << "}\n";

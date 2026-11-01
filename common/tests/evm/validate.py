@@ -27,6 +27,14 @@ ABI_REFUSALS = {
 }
 
 
+def check_return(result, output, trace):
+    if (result["phase"] != "runtime" or result["status"] != "return"
+            or result["output"] != output):
+        raise AssertionError(f"expected exact runtime return {output}, got "
+                             f"{result['phase']}/{result['status']}/{result['output']}")
+    check_trace(result["trace"], trace)
+
+
 def check_revert(result, kind, code, trace):
     output = (REVERT_CLASSES[kind] + code.to_bytes(32, "big")).hex()
     if (result["phase"] != "runtime" or result["status"] != "revert"
