@@ -2,6 +2,7 @@
 #include "OracleAnalysis.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 using namespace llvm;
@@ -18,7 +19,17 @@ LogicalResult charge(Operation *op, unsigned &remaining) {
   return success();
 }
 Value stripViews(Value value, Operation *use, unsigned &remaining) {
-  while (auto view = value.getDefiningOp<protocol_ir::RestrictRolesOp>()) {
+  for (;;) {
+    if (auto argument = dyn_cast<BlockArgument>(value))
+      if (Value capture = selectedCapture(argument)) {
+        if (failed(charge(use, remaining)))
+          return {};
+        value = capture;
+        continue;
+      }
+    auto view = value.getDefiningOp<protocol_ir::RestrictRolesOp>();
+    if (!view)
+      break;
     if (failed(charge(use, remaining)) ||
         failed(view->getName().verifyInvariants(view)))
       return {};
@@ -29,6 +40,22 @@ Value stripViews(Value value, Operation *use, unsigned &remaining) {
 bool singleton(Attribute roles, Attribute holder) {
   auto set = dyn_cast<ArrayAttr>(roles);
   return set && set.size() == 1 && set[0] == holder;
+}
+// Interface membership is a set. A formal-to-actual role map may change its
+// enumeration order; it must not change an ordered delivery occurrence.
+bool sameRoles(Attribute left, Attribute right, Operation *use,
+               unsigned &remaining) {
+  auto a = dyn_cast<ArrayAttr>(left), b = dyn_cast<ArrayAttr>(right);
+  if (!a || !b || a.size() != b.size() || failed(charge(use, remaining)))
+    return false;
+  llvm::DenseSet<Attribute> members;
+  for (Attribute role : a)
+    if (failed(charge(use, remaining)) || !members.insert(role).second)
+      return false;
+  for (Attribute role : b)
+    if (failed(charge(use, remaining)) || !members.erase(role))
+      return false;
+  return members.empty();
 }
 struct Components {
   SmallVector<Value> data;
@@ -50,6 +77,47 @@ LogicalResult components(Value anchor, Components &result, Operation *use,
     if (anchor != view.getAnchor())
       return refuse(use, "oracle interface requires the receiver component");
     result = {{view.getData()}, view.getHolderAttr(), view.getReceivers()};
+    return success();
+  }
+  if (auto branch = dyn_cast<protocol_ir::BranchOp>(producer)) {
+    if (failed(branch.verifyRegions()))
+      return failure();
+    unsigned port = cast<OpResult>(anchor).getResultNumber();
+    SmallVector<unsigned> common;
+    StringAttr holder;
+    ArrayAttr receivers;
+    bool first = true;
+    for (Region &region : branch.getArms()) {
+      auto returned = region.front().back().getOperands();
+      Components arm;
+      if (failed(components(returned[port], arm, use, symbols, remaining,
+                            depth + 1)))
+        return failure();
+      if ((!first && (holder != arm.holder ||
+                      !sameRoles(receivers, arm.receivers, use, remaining))) ||
+          !sameRoles(branch.getOutputRoles()[port], arm.receivers, use,
+                     remaining))
+        return refuse(use, "selected oracle families differ between arms");
+      holder = arm.holder;
+      receivers = arm.receivers;
+      SmallVector<unsigned> paired;
+      for (auto [index, value] : enumerate(returned)) {
+        if (failed(charge(use, remaining)))
+          return failure();
+        if (singleton(branch.getOutputRoles()[index], holder) &&
+            is_contained(arm.data, stripViews(value, use, remaining)) &&
+            (first || is_contained(common, unsigned(index))))
+          paired.push_back(index);
+      }
+      common = std::move(paired);
+      first = false;
+    }
+    if (common.empty())
+      return refuse(
+          use, "selected anchor lacks corresponding holder data in every arm");
+    result = {{}, holder, receivers};
+    for (unsigned index : common)
+      result.data.push_back(branch.getResult(index));
     return success();
   }
   auto call = dyn_cast<protocol_ir::ApplyOp>(producer);
@@ -75,7 +143,8 @@ LogicalResult components(Value anchor, Components &result, Operation *use,
         singleton(callee.getOutputRoles()[dataIndex], result.holder))
       data.push_back(call.getResult(dataIndex));
   }
-  if (data.empty() || callee.getOutputRoles()[index] != result.receivers)
+  if (data.empty() || !sameRoles(callee.getOutputRoles()[index],
+                                 result.receivers, use, remaining))
     return refuse(use, "oracle result lacks its paired holder data");
   auto mapped = [&](Attribute role) -> Attribute {
     auto found = llvm::find(callee.getRoles(), role);
@@ -104,7 +173,8 @@ LogicalResult paired(Value data, Value anchor, StringAttr holder,
   if (failed(components(anchor, actual, use, symbols, remaining)))
     return failure();
   if (!llvm::is_contained(actual.data, stripViews(data, use, remaining)) ||
-      holder != actual.holder || receivers != actual.receivers)
+      holder != actual.holder ||
+      !sameRoles(receivers, actual.receivers, use, remaining))
     return refuse(use,
                   "oracle interface mixes data, anchors or role components");
   return success();
@@ -162,8 +232,8 @@ collectOracleEntryPorts(protocol_ir::MathematicalOp program,
         !dataPorts.insert(data.getArgNumber()).second ||
         !singleton(program.getInputRoles()[data.getArgNumber()],
                    input.getHolderAttr()) ||
-        program.getInputRoles()[argument.getArgNumber()] !=
-            input.getReceivers())
+        !sameRoles(program.getInputRoles()[argument.getArgNumber()],
+                   input.getReceivers(), input, remaining))
       return refuse(input, "oracle input requires distinct paired entry leaves "
                            "with exact roles");
     if (pairs)
@@ -230,7 +300,8 @@ collectOracleResultPorts(protocol_ir::MathematicalOp program,
         break;
       }
     }
-    if (!pairedData || program.getOutputRoles()[index] != actual.receivers)
+    if (!pairedData || !sameRoles(program.getOutputRoles()[index],
+                                  actual.receivers, program, remaining))
       return refuse(
           program,
           "oracle result requires its holder data and exact receiver roles");

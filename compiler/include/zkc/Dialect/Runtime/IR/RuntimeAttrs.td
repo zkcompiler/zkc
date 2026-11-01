@@ -13,16 +13,21 @@ def RuntimeAssetReference : AttrDef<RuntimeDialect, "AssetReference"> {
 }
 def RuntimeOriginStepKind : I32EnumAttr<"OriginStepKind", "source path step", [
   I32EnumAttrCase<"Apply", 0, "apply">,
-  I32EnumAttrCase<"Repeat", 1, "repeat">
+  I32EnumAttrCase<"Repeat", 1, "repeat">,
+  I32EnumAttrCase<"Branch", 2, "branch">
 ]> {
   let cppNamespace = "::zkc::runtime";
   let genSpecializedAttr = 0;
 }
+def RuntimeOriginAlternative : StringRefParameter<> {
+  let defaultValue = "\"\"";
+}
 def RuntimeOriginStep : AttrDef<RuntimeDialect, "OriginStep"> {
   let mnemonic = "origin_step";
   let parameters = (ins EnumParameter<RuntimeOriginStepKind>:$kind,
-    StringRefParameter<>:$protocol, StringRefParameter<>:$site);
-  let assemblyFormat = "`<` $kind `,` $protocol `,` $site `>`";
+    StringRefParameter<>:$protocol, StringRefParameter<>:$site,
+    RuntimeOriginAlternative:$alternative);
+  let assemblyFormat = "`<` $kind `,` $protocol `,` $site (`,` $alternative^)? `>`";
   let genVerifyDecl = 1;
 }
 def RuntimeQueryOrigin : AttrDef<RuntimeDialect, "QueryOrigin"> {

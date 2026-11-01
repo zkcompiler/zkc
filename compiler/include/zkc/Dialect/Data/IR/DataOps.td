@@ -168,6 +168,18 @@ def Data_ProjectOp : Op<DataDialect, "project"> {
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
+// Selected total mathematics has no speculative/pure trait: selected work and
+// arm premises are part of its semantics even when every body is total.
+def Data_BranchOp : Op<DataDialect, "branch", [IsolatedFromAbove]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrArrayAttr:$alternatives);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let regions = (region VariadicRegion<AnyRegion>:$arms);
+  let hasRegionVerifier = 1;
+}
+def Data_YieldOp : Op<DataDialect, "yield", [Terminator,
+    HasParent<"zkc::data::BranchOp">]> {
+  let arguments = (ins Variadic<AnyType>:$inputs);
+}
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 def Data_MatchOp : Op<DataDialect, "match", [Terminator,
     DeclareOpInterfaceMethods<BranchOpInterface>]> {

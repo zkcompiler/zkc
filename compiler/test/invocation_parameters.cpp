@@ -1,4 +1,4 @@
-#include "support/NativeCases.h"
+#include "support/Formation.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
@@ -34,6 +34,18 @@ int main() {
     return succeeded(verifyInvocationParameters(
         emit, contract, args, builder.getArrayAttr(params),
         zkc::protocol::ParameterStage::Logical));
+  };
+  auto refuseParameters = [&](StringRef contract, ArrayAttr args,
+                              ArrayRef<Attribute> params, StringRef expected) {
+    SmallVector<std::string> codes;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : diagnostics::refusals(diagnostic))
+        codes.push_back(refusal.code);
+      return success();
+    });
+    require(!accepted(contract, args, params) &&
+                llvm::is_contained(codes, expected),
+            "unexpected parameter refusal: " + expected);
   };
   auto roundtrip = [&](const BindingApplication &binding,
                        ArrayRef<std::string> text) {
@@ -171,19 +183,38 @@ int main() {
         auto native = roundtrip({"numerical.map", {"koala-bear", "01"}, ""},
                                 {printJson(selected.encode())});
         auto mask = builder.getDenseBoolArrayAttr({true});
-        require(!accepted("numerical.map",
-                          builder.getArrayAttr({arguments[0], mask}),
-                          native.getValue()),
-                "unused positional input was discarded");
-        auto malformed = algebra::RingExpressionAttr::get(&context, {}, {},
-                                                          DenseI32ArrayAttr{});
-        require(
-            !accepted("numerical.sum",
-                      builder.getArrayAttr(
-                          {arguments[0], builder.getDenseBoolArrayAttr({})}),
-                      {malformed}),
-            "unchecked graph was admitted");
+        refuseParameters("numerical.map",
+                         builder.getArrayAttr({arguments[0], mask}),
+                         native.getValue(), "numerical-body-signature");
       });
+  cases.run("missing graph inventory fails before invocation admission", [&] {
+    refusesFormation<algebra::RingExpressionAttr>(
+        &context, "ring-limit", ArrayRef<algebra::FieldType>{},
+        ArrayRef<algebra::RingNodeAttr>{}, DenseI32ArrayAttr{});
+  });
+  cases.run("formed graphs still owe numerical output and field agreement",
+            [&] {
+              auto args = builder.getArrayAttr(
+                  {arguments[0], builder.getDenseBoolArrayAttr({})});
+              auto empty = take(algebra::importRingExpression(
+                  &context, take(ring::Expression::create({}, {}, {}))));
+              refuseParameters("numerical.sum", args, {empty},
+                               "numerical-body-signature");
+              auto multiple = take(algebra::importRingExpression(
+                  &context,
+                  take(ring::Expression::create(
+                      {}, {ring::Node::literal("koala-bear", "1")}, {0, 0}))));
+              refuseParameters("numerical.sum", args, {multiple},
+                               "numerical-body-signature");
+              auto other = take(algebra::importRingExpression(
+                  &context, take(ring::Expression::create(
+                                {{"baby-bear"}}, {ring::Node::slot(0)}, {0}))));
+              refuseParameters(
+                  "numerical.map",
+                  builder.getArrayAttr(
+                      {arguments[0], builder.getDenseBoolArrayAttr({true})}),
+                  {other}, "numerical-body-field");
+            });
   cases.run(
       "native numerical admission retains exact encoded body ceiling", [&] {
         // Adjust a prime literal to hit each byte boundary in a reachable

@@ -237,7 +237,7 @@ impl<'a> Validator<'a> {
                 Construct { alternative, .. } => {
                     require(results.len() == 1, "entry-host-signature")?;
                     let s = results[0];
-                    require(s.constructible && !s.custody, "entry-host-constructor")?;
+                    require(s.constructible && s.custody == 0, "entry-host-constructor")?;
                     let fields = if s.kind == SchemaKind::Variant {
                         &s.alternatives
                             .iter()

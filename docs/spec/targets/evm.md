@@ -51,6 +51,17 @@ buffers. Field vectors store coefficients inline, while sequences store their
 elements' lane cells. Variants store a tag and only the active payload. This
 representation conveys neither wire permission nor resource ownership.
 
+Checked nominal `resource_unit` leaves occupy zero value lanes in local
+signatures, outcomes, transfers and callback state. Logical slots and exact
+nominal signatures are checked before erasure; enclosing record payloads keep
+all their data lanes. Only the installed create/pass/consume bookkeeping
+operations erase, retaining their active-scope checks and surrounding ordered
+calls and source failures. Common closure admission still checks affine uses
+and root succession. Unlike CPU execution's authenticated unit handles, the
+closed EVM target exposes no unit handle or byte encoding. Units do not count
+as managed transcript generations and cannot enter public or proof wire ports.
+Other runtime capabilities still require their explicit target realization.
+
 Pure expressions and ordered helper calls use the same supported arithmetic.
 An explicit implementation constraint must be honored; a CPU provider selector
 does not silently select an EVM realization. The invocation adapter selects the

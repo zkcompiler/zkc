@@ -169,7 +169,7 @@ class Instances {
           return e;
         path.pop_back();
       } else if (const auto *control =
-                     std::get_if<LocalControl>(&operation.action)) {
+                     std::get_if<Control>(&operation.action)) {
         for (unsigned region = 0; region < control->regions.size(); ++region) {
           path.push_back(region);
           if (auto e = oracleObligations(*control->regions[region], path,

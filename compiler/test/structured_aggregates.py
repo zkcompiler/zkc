@@ -49,12 +49,18 @@ for name, before, after in [
     with case(name):
         export(source.replace(before, after), 'structured-source-original')
 
-with case('multi constructor variants require a separate admitted profile'):
+with case('multi constructor variants retain every alternative in whole-unit admission'):
     new = descriptor(['query', 'bls12-381.fr'], [('value', ['bool', 'field:bls12-381.fr']), ('none', [])])
     # A valid unused declaration still belongs to whole-unit admission.
     unused = f'func.func private @unused(%x:{new})->{new} {{ return %x : {new} }}'
-    export(source.replace('  func.func private @make', unused + '\n  func.func private @make'),
-           'structured-source-product')
+    snapshot = export(source.replace('  func.func private @make', unused + '\n  func.func private @make'))
+    definitions = {definition[1]: definition for definition in snapshot[7]}
+    expected = ['variant', ['tuple', [['atom', 'query'], ['atom', 'bls12-381.fr']]],
+                [['value', [['apply', 'bool', []],
+                            ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]],
+                 ['none', []]]]
+    assert definitions['unused'][4] == [expected]
+    assert definitions['unused'][5] == [expected]
 
 with case('product identity obeys the wire string bound'):
     old = descriptor(['query', 'bls12-381.fr'], [('value', ['bool', 'field:bls12-381.fr'])])

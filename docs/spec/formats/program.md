@@ -186,10 +186,16 @@ separately from installed bound-kernel roles.
 
 ## Closed participant behavior
 
-Programs admit compact value-count loops and nested service queries. They refuse
-composition calls, parameters and family selectors, recursively inside loop
-bodies. Participant programs contain ordered local invocations, typed sends
-and receives, declared service queries, and a final return. Direct participant
+Programs admit compact value-count loops, selected Boolean/ordinary-variant
+arms and nested service queries. They refuse composition calls, parameters and
+family selectors recursively inside every retained body. Participant programs
+contain ordered local invocations, typed sends and receives, declared service
+queries, closed selected arms with exact captures/payloads/yields, and a final
+return. All arms admit before execution; only the selected arm enters a frame,
+performs actions or charges execution work. Generic admission supplies no common
+input provenance. The [joint Host](../runtime/joint.md#selected-participant-branches)
+checks reached selectors before arm work; independent input agreement uses an
+[externally pinned context](input-bindings.md). Direct participant
 `stop` and `incomplete` records are refused; stopping work belongs to a local call.
 Closed local bodies retain their existing admitted conditional, loop, variant,
 bound-kernel, release and explicit-stop grammar. Installed bound-kernel contracts

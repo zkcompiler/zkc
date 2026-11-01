@@ -7,8 +7,10 @@ namespace zkc::language::detail {
 Semantics::Semantics(const std::vector<Declaration> &declarations,
                      ArrayRef<Asset> assets, Work &work,
                      std::function<bool(DeclarationId)> complete)
-    : work(work), naturals(work.limits.work, work.limits.naturalTerms,
-                           work.limits.naturalFactors),
+    : work(work),
+      naturals(work.limits.work, work.limits.naturalTerms,
+               work.limits.naturalFactors,
+               [&work](uint64_t amount) { return work.charge(amount); }),
       declarations(declarations), assets(assets),
       complete(std::move(complete)) {
   for (const auto &decl : declarations) {
@@ -73,9 +75,49 @@ bool valueType(const Type &type) { return !isStaticOnly(type); }
 bool Semantics::protocolValue(const Type &type, Span span) {
   if (type.kind == Type::Kind::LogicalRecord)
     return logicalRecord(type, span);
+  if ((type.kind == Type::Kind::Array || type.kind == Type::Kind::Tuple) &&
+      isLogicalValue(type)) {
+    for (const auto &child : type.arguments) {
+      const auto *nominal = typeDeclaration(child);
+      if (child.kind == Type::Kind::LogicalRecord && nominal &&
+          nominal->roles.empty())
+        return fail("source.oracle-boundary",
+                    "legacy logical families require separate ports", span);
+      if (!protocolValue(child, span))
+        return false;
+    }
+    return true;
+  }
   return isOracleHandle(type) || executableType(type, span);
 }
 bool Semantics::oraclePort(const Port &port) {
+  if (port.placement) {
+    unsigned participants = 0;
+    for (auto role : placementRoles(*port.placement))
+      participants = std::max(participants, role + 1);
+    auto rebuilt =
+        placement(port.type, *port.placement, participants, port.span);
+    if (!rebuilt)
+      return false;
+    if (*rebuilt != *port.placement || placementRoles(*rebuilt) != port.roles)
+      return fail("source.placement",
+                  "port placement disagrees with its schema", port.span);
+    if (const auto *oracle =
+            std::get_if<OraclePlacement>(&port.placement->value))
+      if (!port.oracle || port.oracle->holder != oracle->holder)
+        return fail("source.placement",
+                    "direct oracle holder metadata disagrees", port.span);
+    if (std::holds_alternative<ProductPlacement>(port.placement->value))
+      return !port.oracle ||
+             fail("source.placement", "product has no aggregate oracle holder",
+                  port.span);
+  }
+  const auto *nominal = typeDeclaration(port.type);
+  if (!port.placement && port.type.kind == Type::Kind::LogicalRecord &&
+      nominal && !nominal->roles.empty())
+    return fail("source.placement",
+                "distributed port requires its field placement tree",
+                port.span);
   if (isLogicalValue(port.type) != port.oracle.has_value())
     return fail("source.oracle-port",
                 "oracle ports require an explicit holder and receiver arrow",
@@ -251,7 +293,6 @@ std::optional<Type> Semantics::substitute(const Type &input,
         projections.emplace(std::move(key), std::move(value->dimension));
       }
     }
-    auto before = naturals.remainingWork();
     auto n = naturals.substitute(
         result.dimension,
         [&](const Natural::Factor &factor) -> const Natural * {
@@ -270,8 +311,6 @@ std::optional<Type> Semantics::substitute(const Type &input,
       accept(n.takeError(), span);
       return {};
     }
-    if (!charge(before - naturals.remainingWork(), span))
-      return {};
     result.dimension = std::move(*n);
     if (result.kind == Type::Kind::Natural) {
       result.symbolic = !result.dimension.isClosed();
@@ -296,7 +335,10 @@ std::optional<Type> Semantics::substitute(const Type &input,
   if (result.kind == Type::Kind::Array || result.kind == Type::Kind::Tuple ||
       result.kind == Type::Kind::Builtin)
     for (const auto &argument : result.arguments)
-      if (isLogicalValue(argument)) {
+      if (isLogicalValue(argument) &&
+          (result.kind == Type::Kind::Builtin ||
+           (argument.kind == Type::Kind::LogicalRecord &&
+            typeDeclaration(argument)->roles.empty()))) {
         fail("source.oracle-aggregate",
              "ordinary aggregates cannot contain logical protocol values",
              span);
@@ -638,14 +680,11 @@ bool Semantics::assumptions(const Declaration &caller,
   auto cancel =
       [&](const Natural &left,
           const Natural &right) -> std::optional<std::pair<Natural, Natural>> {
-    auto before = naturals.remainingWork();
     auto result = naturals.cancelCommonTerms(left, right);
     if (!result) {
       accept(result.takeError(), span);
       return {};
     }
-    if (!charge(before - naturals.remainingWork(), span))
-      return {};
     return std::move(*result);
   };
   auto requested = cancel(l->dimension, r->dimension);

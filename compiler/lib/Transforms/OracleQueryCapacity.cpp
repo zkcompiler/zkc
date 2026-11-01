@@ -4,6 +4,7 @@
 #include "zkc/Analysis/ProtocolConstants.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Refusal.h"
 #include <limits>
 using namespace mlir;
@@ -123,6 +124,33 @@ struct Analysis {
         if (auto e =
                 repeat(loop, view, view.getSequence(*action.getRepeatBody())))
           return e;
+        continue;
+      }
+      if (auto branch = dyn_cast<pir::BranchOp>(op)) {
+        SmallVector<OracleQuerySize> outputs(branch.getNumResults());
+        for (const auto &edge : action.getRegions()) {
+          const auto &arm = view.getSequence(edge.sequence);
+          if (auto e = charge(arm.getArguments().size()))
+            return e;
+          for (BlockArgument argument : arm.getArguments())
+            if (Value input = selectedCapture(argument)) {
+              auto size = get(input);
+              if (!size)
+                return size.takeError();
+              values[argument] = *size;
+            }
+          if (auto e = block(view, arm))
+            return e;
+          for (auto [index, yielded] : enumerate(arm.getYields())) {
+            auto size = get(yielded);
+            if (!size)
+              return size.takeError();
+            outputs[index] = joined(outputs[index], *size);
+          }
+        }
+        for (auto [output, size] : zip(branch.getResults(), outputs))
+          if (logical(output.getType()))
+            values[output] = size;
         continue;
       }
       OracleQuerySize size;

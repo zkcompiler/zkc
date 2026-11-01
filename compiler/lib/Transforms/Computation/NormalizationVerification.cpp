@@ -25,12 +25,12 @@ namespace {
 bool polynomial(Operation &op) {
   return poly::isPolynomialNormalizationOperation(&op);
 }
-bool flatTotal(Operation &op) {
-  return !op.getNumRegions() && !op.getNumSuccessors() &&
-         mathematical::isTotal(&op);
+bool structuralTotal(Operation &op) {
+  return (!op.getNumRegions() || isa<data::BranchOp>(op)) &&
+         !op.getNumSuccessors() && mathematical::isTotal(&op);
 }
 bool sameShape(Operation &source, Operation &candidate) {
-  return flatTotal(source) && flatTotal(candidate) &&
+  return structuralTotal(source) && structuralTotal(candidate) &&
          source.getName() == candidate.getName() &&
          source.getAttrDictionary() == candidate.getAttrDictionary() &&
          source.getNumOperands() == candidate.getNumOperands() &&
@@ -83,18 +83,16 @@ struct NormalizationProvenanceChecker::Implementation {
     Block::iterator end;
     llvm::DenseSet<Operation *> active;
 
-    FailureOr<SmallVector<Value>> read(func::FuncOp source,
-                                       ValueRange arguments) {
+    FailureOr<SmallVector<Value>> read(Block &source, ValueRange arguments) {
+      auto *owner = source.getParentOp();
       if (active.size() >= 64) {
         check.depthExhausted = true;
         return failure();
       }
-      if (!source || !source.getBody().hasOneBlock() ||
-          source.front().empty() ||
-          source.getNumArguments() != arguments.size() ||
-          !active.insert(source).second || !check.charge(*source))
+      if (source.empty() || source.getNumArguments() != arguments.size() ||
+          !active.insert(owner).second || !check.charge(*owner))
         return failure();
-      auto leave = llvm::scope_exit([&] { active.erase(source); });
+      auto leave = llvm::scope_exit([&] { active.erase(owner); });
       llvm::DenseMap<Value, Value> values;
       for (auto [formal, actual] : zip(source.getArguments(), arguments)) {
         if (!actual || formal.getType() != actual.getType() ||
@@ -102,8 +100,8 @@ struct NormalizationProvenanceChecker::Implementation {
           return failure();
         values[formal] = actual;
       }
-      for (auto &op : source.front().without_terminator()) {
-        if (!check.charge(op) || op.getNumRegions() || op.getNumSuccessors())
+      for (auto &op : source.without_terminator()) {
+        if (!check.charge(op) || op.getNumSuccessors())
           return failure();
         SmallVector<Value> inputs, outputs;
         for (Value operand : op.getOperands()) {
@@ -113,22 +111,43 @@ struct NormalizationProvenanceChecker::Implementation {
           inputs.push_back(actual);
         }
         if (auto call = dyn_cast<func::CallOp>(op)) {
-          // Admission owns the function-level contracts. A call with extra
-          // attributes cannot be silently erased by this substitution edge.
           for (auto attr : call->getAttrs())
             if (attr.getName().getValue() != "callee")
               return failure();
           auto helper = check.symbols.lookupSymbolIn<func::FuncOp>(
               check.root, call.getCalleeAttr());
-          auto returned = read(helper, inputs);
+          if (!helper || !helper.getBody().hasOneBlock())
+            return failure();
+          auto returned = read(helper.front(), inputs);
           if (failed(returned) || returned->size() != op.getNumResults())
             return failure();
           outputs = std::move(*returned);
         } else {
           if (cursor == end || !check.charge(*cursor) ||
               !sameShape(op, *cursor) ||
-              !llvm::equal(inputs, cursor->getOperands()))
+              !llvm::equal(inputs, cursor->getOperands()) ||
+              op.getNumRegions() != cursor->getNumRegions())
             return failure();
+          if (isa<data::BranchOp>(op)) {
+            auto outerCursor = cursor, outerEnd = end;
+            for (auto [before, after] :
+                 zip(op.getRegions(), cursor->getRegions())) {
+              if (!before.hasOneBlock() || !after.hasOneBlock() ||
+                  before.front().getArgumentTypes() !=
+                      after.front().getArgumentTypes())
+                return failure();
+              cursor = after.front().begin();
+              end = std::prev(after.front().end());
+              auto returned =
+                  read(before.front(), after.front().getArguments());
+              if (failed(returned) || cursor != end || !check.charge(*cursor) ||
+                  !isa<data::YieldOp>(*cursor) || !cursor->getAttrs().empty() ||
+                  !llvm::equal(*returned, cursor->getOperands()))
+                return failure();
+              cursor = outerCursor;
+              end = outerEnd;
+            }
+          }
           append_range(outputs, cursor->getResults());
           ++cursor;
         }
@@ -138,10 +157,9 @@ struct NormalizationProvenanceChecker::Implementation {
           values[before] = after;
         }
       }
-      auto &ret = source.front().back();
-      if (!isa<func::ReturnOp>(ret) || !ret.getAttrs().empty() ||
-          !check.charge(ret) ||
-          !llvm::equal(source.getResultTypes(), ret.getOperandTypes()))
+      auto &ret = source.back();
+      if (!isa<func::ReturnOp, data::YieldOp>(ret) || !ret.getAttrs().empty() ||
+          !check.charge(ret))
         return failure();
       SmallVector<Value> outputs;
       for (Value value : ret.getOperands()) {
@@ -159,7 +177,7 @@ struct NormalizationProvenanceChecker::Implementation {
   // source SSA. Only defining polynomial laws may consume extra instructions.
   struct Normalization {
     Implementation &check;
-    func::FuncOp source;
+    Block &source;
     Block &candidate;
     Block::iterator cursor;
     Builder attributes;
@@ -175,9 +193,10 @@ struct NormalizationProvenanceChecker::Implementation {
     unsigned depth = 0;
     bool invalid = false;
 
-    Normalization(Implementation &check, func::FuncOp source, Block &candidate)
+    Normalization(Implementation &check, Block &source, Block &candidate)
         : check(check), source(source), candidate(candidate),
-          cursor(candidate.begin()), attributes(source.getContext()) {}
+          cursor(candidate.begin()),
+          attributes(source.getParentOp()->getContext()) {}
 
     bool enter() {
       if (depth >= 128) {
@@ -196,8 +215,8 @@ struct NormalizationProvenanceChecker::Implementation {
         return {};
       }
       Operation &actual = *cursor;
-      if (!check.charge(actual) || !flatTotal(actual) || polynomial(actual) ||
-          actual.getName().getStringRef() != name ||
+      if (!check.charge(actual) || !structuralTotal(actual) ||
+          polynomial(actual) || actual.getName().getStringRef() != name ||
           actual.getNumResults() != 1 ||
           actual.getResult(0).getType() != type ||
           !llvm::equal(actual.getOperands(), inputs) ||
@@ -240,7 +259,7 @@ struct NormalizationProvenanceChecker::Implementation {
     }
     algebra::FieldType scalar(Value polynomial) {
       return algebra::FieldType::get(
-          source.getContext(),
+          source.getParentOp()->getContext(),
           cast<poly::PolynomialType>(polynomial.getType()).getDomain());
     }
     Value at(Value array, uint64_t index) {
@@ -320,14 +339,15 @@ struct NormalizationProvenanceChecker::Implementation {
       SmallVector<Term> samples;
       for (unsigned i = 0; i < n; ++i)
         samples.push_back(terms.anchor(field));
-      auto array =
-          data::FieldArrayType::get(source.getContext(), field.getDomain(), n);
+      auto array = data::FieldArrayType::get(
+          source.getParentOp()->getContext(), field.getDomain(), n);
       auto empty = attributes.getDictionaryAttr({});
       Term table =
           terms.expression("data.array_from_elements", array, empty, samples);
       Term polynomial = terms.expression(
           "poly.interpolate",
-          poly::PolynomialType::get(source.getContext(), field.getDomain(), 1),
+          poly::PolynomialType::get(source.getParentOp()->getContext(),
+                                    field.getDomain(), 1),
           attributes.getDictionaryAttr(
               {attributes.getNamedAttr("points", points)}),
           {table});
@@ -592,7 +612,10 @@ struct NormalizationProvenanceChecker::Implementation {
       degrees[op.getResult(0)] = std::move(bound);
       return true;
     }
-    bool run() {
+    bool run(unsigned nesting = 0) {
+      if (nesting > 64 || source.empty() || candidate.empty() ||
+          source.getArgumentTypes() != candidate.getArgumentTypes())
+        return false;
       for (auto [before, after] :
            zip(source.getArguments(), candidate.getArguments())) {
         if (!check.terms.charge())
@@ -602,12 +625,12 @@ struct NormalizationProvenanceChecker::Implementation {
       // Independently compute which polynomial descriptions/observations can
       // disappear. Every concrete operation is a root, even if itself unused.
       llvm::DenseSet<Value> needed;
-      for (Value returned : source.front().back().getOperands()) {
+      for (Value returned : source.back().getOperands()) {
         if (!check.terms.charge())
           return false;
         needed.insert(returned);
       }
-      for (auto &op : llvm::reverse(source.front().without_terminator())) {
+      for (auto &op : llvm::reverse(source.without_terminator())) {
         if (!check.charge(op))
           return false;
         if (polynomial(op) && llvm::none_of(op.getResults(), [&](Value value) {
@@ -618,8 +641,8 @@ struct NormalizationProvenanceChecker::Implementation {
         for (auto operand : op.getOperands())
           needed.insert(operand);
       }
-      for (auto &op : source.front().without_terminator()) {
-        if (!check.charge(op) || !flatTotal(op) || isa<func::CallOp>(op))
+      for (auto &op : source.without_terminator()) {
+        if (!check.charge(op) || !structuralTotal(op) || isa<func::CallOp>(op))
           return false;
         if (!polynomial(op)) {
           if (cursor == candidate.end() || !check.charge(*cursor) ||
@@ -629,6 +652,17 @@ struct NormalizationProvenanceChecker::Implementation {
                zip(op.getOperands(), cursor->getOperands()))
             if (!values.lookup(before) || values.lookup(before) != after)
               return false;
+          if (op.getNumRegions() != cursor->getNumRegions())
+            return false;
+          for (auto [before, after] :
+               zip(op.getRegions(), cursor->getRegions())) {
+            if (!before.hasOneBlock() || !after.hasOneBlock())
+              return false;
+            Normalization nested(check, before.front(), after.front());
+            if (!nested.run(nesting + 1))
+              return false;
+            append_range(generated, nested.generated);
+          }
           for (auto [before, after] :
                zip(op.getResults(), cursor->getResults()))
             values[before] = after;
@@ -696,10 +730,12 @@ struct NormalizationProvenanceChecker::Implementation {
           return false;
         values[op.getResult(0)] = result;
       }
-      auto &ret = source.front().back();
+      auto &ret = source.back();
       if (invalid || cursor == candidate.end() ||
           &*cursor != &candidate.back() || !check.charge(ret) ||
-          !check.charge(*cursor))
+          !check.charge(*cursor) || ret.getName() != cursor->getName() ||
+          ret.getAttrDictionary() != cursor->getAttrDictionary() ||
+          ret.getOperandTypes() != cursor->getOperandTypes())
         return false;
       for (auto [before, after] : zip(ret.getOperands(), cursor->getOperands()))
         if (!values.lookup(before) || values.lookup(before) != after)
@@ -713,7 +749,7 @@ struct NormalizationProvenanceChecker::Implementation {
       return refuse(source ? source.getOperation() : root,
                     "expanded interface differs");
     Expansion reader{*this, candidate.begin(), std::prev(candidate.end()), {}};
-    auto outputs = reader.read(source, candidate.getArguments());
+    auto outputs = reader.read(source.front(), candidate.getArguments());
     if (failed(outputs) || reader.cursor != reader.end ||
         !charge(candidate.back()) ||
         !llvm::equal(*outputs, candidate.back().getOperands()))
@@ -721,9 +757,14 @@ struct NormalizationProvenanceChecker::Implementation {
                     "actual helper substitution differs from the raw closure");
     return success();
   }
-  LogicalResult checkSimplification(func::FuncOp source, Block &candidate) {
-    if (!interface(source, candidate))
-      return refuse(source, "simplified interface differs");
+  LogicalResult simplify(Block &source, Block &candidate, unsigned depth = 0) {
+    if (depth > 64 || source.empty() || candidate.empty() ||
+        source.getArgumentTypes() != candidate.getArgumentTypes() ||
+        source.back().getName() != candidate.back().getName() ||
+        source.back().getAttrDictionary() !=
+            candidate.back().getAttrDictionary() ||
+        source.back().getOperandTypes() != candidate.back().getOperandTypes())
+      return refuse(source.getParentOp(), "simplified interface differs");
     llvm::DenseMap<Value, Value> aliases;
     llvm::DenseMap<Operation *, uint64_t> dimensions;
     auto canonical = [&](Value value) {
@@ -731,9 +772,10 @@ struct NormalizationProvenanceChecker::Implementation {
       return found == aliases.end() ? value : found->second;
     };
     // Read the supported laws without invoking folding or a producer.
-    for (auto &op : source.front().without_terminator()) {
-      if (!charge(op) || !flatTotal(op))
-        return refuse(source, "unsupported simplification subject");
+    for (auto &op : source.without_terminator()) {
+      if (!charge(op) || !structuralTotal(op))
+        return refuse(source.getParentOp(),
+                      "unsupported simplification subject");
       if (auto projection = dyn_cast<data::ArrayAtOp>(op)) {
         auto pack = canonical(projection->getOperand(0))
                         .getDefiningOp<data::ArrayFromElementsOp>();
@@ -752,11 +794,12 @@ struct NormalizationProvenanceChecker::Implementation {
     }
     llvm::DenseSet<Value> needed;
     llvm::DenseSet<Operation *> retained;
-    for (Value value : source.front().back().getOperands())
+    for (Value value : source.back().getOperands())
       needed.insert(canonical(value));
-    for (auto &op : llvm::reverse(source.front().without_terminator())) {
+    for (auto &op : llvm::reverse(source.without_terminator())) {
       if (!charge(op))
-        return refuse(source, "simplification liveness work bound");
+        return refuse(source.getParentOp(),
+                      "simplification liveness work bound");
       if (op.getNumResults() == 1 && aliases.contains(op.getResult(0)))
         continue;
       bool live = finite::isComputation(&op) ||
@@ -775,41 +818,57 @@ struct NormalizationProvenanceChecker::Implementation {
       values[a] = b;
     auto cursor = candidate.begin();
     auto end = std::prev(candidate.end());
-    for (auto &op : source.front().without_terminator()) {
+    for (auto &op : source.without_terminator()) {
       if (!retained.contains(&op))
         continue;
       if (cursor == end || !charge(*cursor))
-        return refuse(source, "missing live simplified instruction");
+        return refuse(source.getParentOp(),
+                      "missing live simplified instruction");
       auto &actual = *cursor++;
       if (auto found = dimensions.find(&op); found != dimensions.end()) {
         auto index = dyn_cast<data::IndexOp>(actual);
         if (!index || actual.getResultTypes() != op.getResultTypes() ||
             index.getValue() != found->second)
-          return refuse(source, "static dimension constant differs");
+          return refuse(source.getParentOp(),
+                        "static dimension constant differs");
       } else {
         if (!sameShape(op, actual))
-          return refuse(source, "live concrete instruction changed");
+          return refuse(source.getParentOp(),
+                        "live concrete instruction changed");
+        if (op.getNumRegions() != actual.getNumRegions())
+          return refuse(source.getParentOp(),
+                        "selected simplification shape changed");
+        for (auto [before, after] : zip(op.getRegions(), actual.getRegions()))
+          if (!before.hasOneBlock() || !after.hasOneBlock() ||
+              failed(simplify(before.front(), after.front(), depth + 1)))
+            return failure();
         for (auto [a, b] : llvm::zip(op.getOperands(), actual.getOperands()))
           if (values.lookup(canonical(a)) != b)
-            return refuse(source, "simplified operand differs");
+            return refuse(source.getParentOp(), "simplified operand differs");
       }
       for (auto [a, b] : llvm::zip(op.getResults(), actual.getResults()))
         values[a] = b;
     }
     if (cursor != end || !charge(*cursor))
-      return refuse(source, "extra simplified instruction");
+      return refuse(source.getParentOp(), "extra simplified instruction");
     for (auto [a, b] :
-         llvm::zip(source.front().back().getOperands(), cursor->getOperands()))
+         llvm::zip(source.back().getOperands(), cursor->getOperands()))
       if (values.lookup(canonical(a)) != b)
-        return refuse(source, "simplified return differs");
+        return refuse(source.getParentOp(), "simplified return differs");
     return success();
   }
+  LogicalResult checkSimplification(func::FuncOp source, Block &candidate) {
+    if (!interface(source, candidate))
+      return refuse(source, "simplified interface differs");
+    return simplify(source.front(), candidate);
+  }
+
   LogicalResult checkNormalization(func::FuncOp source, Block &candidate,
                                    SmallVectorImpl<Operation *> *generated) {
     if (!interface(source, candidate))
       return refuse(source ? source.getOperation() : root,
                     "normalized interface differs");
-    Normalization reader(*this, source, candidate);
+    Normalization reader(*this, source.front(), candidate);
     if (!reader.run())
       return refuse(
           source,

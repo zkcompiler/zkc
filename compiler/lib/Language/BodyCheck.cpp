@@ -20,8 +20,7 @@ BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
     : checker(checker), decl(decl), syntax(syntax), body(body),
       plan(checker.bodyPlan(decl.id)),
       witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth) {
-  retainExpressionValues = decl.oraclePredicateOwner.has_value() ||
-                           decl.kind == Declaration::Kind::Oracle;
+  retainExpressionValues = true;
 }
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
   auto available = allRoles();
@@ -60,16 +59,27 @@ std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
   }
   return found->second;
 }
-std::optional<ValueId> BodyChecker::input(const Type &type,
-                                          std::vector<unsigned> components,
-                                          Span span,
-                                          std::optional<unsigned> holder) {
+std::optional<ValueId>
+BodyChecker::input(const Type &type, std::vector<unsigned> components,
+                   Span span, std::optional<unsigned> holder,
+                   std::optional<ValuePlacement> placed) {
   if ((!math() && !(protocol() ? checker.types.protocolValue(type, span)
                                : checker.types.executableType(type, span))) ||
       !checker.types.chargeType(type, span))
     return {};
+  if (protocol() && placed) {
+    auto rebuilt =
+        checker.types.placement(type, *placed, decl.roles.size(), span);
+    if (!rebuilt)
+      return {};
+    if (*rebuilt != *placed || placementRoles(*placed) != components) {
+      fail("source.placement", "input placement disagrees with its schema",
+           span);
+      return {};
+    }
+  }
   ValueId value{uint32_t(body.values.size())};
-  body.values.push_back({type, std::move(components), span, holder});
+  body.values.push_back({type, std::move(components), span, holder, placed});
   uses.emplace_back();
   if (plan)
     usageValues.push_back(plan->usage.own(type, span, usageGuard));
@@ -78,8 +88,9 @@ std::optional<ValueId> BodyChecker::input(const Type &type,
 }
 bool BodyChecker::addInput(BindingId id, const Type &type,
                            std::vector<unsigned> components, Span span,
-                           std::optional<unsigned> holder) {
-  auto value = input(type, components, span, holder);
+                           std::optional<unsigned> holder,
+                           std::optional<ValuePlacement> placed) {
+  auto value = input(type, components, span, holder, placed);
   if (!value)
     return false;
   bindings.emplace(id, BindingState{type, std::move(components), *value, {}});
@@ -87,8 +98,21 @@ bool BodyChecker::addInput(BindingId id, const Type &type,
 }
 std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
                                          const Type &type,
-                                         Components components, Span span) {
+                                         Components components, Span span,
+                                         std::optional<ValuePlacement> placed) {
   std::optional<unsigned> holder;
+  if (protocol()) {
+    if (auto *projection = std::get_if<Projection>(&action)) {
+      const auto &base = body.values[projection->input.index];
+      if (base.placement) {
+        placed = checker.types.projectedPlacement(base.type, *base.placement,
+                                                  projection->path, span);
+        if (!placed)
+          return {};
+        components = placementRoles(*placed);
+      }
+    }
+  }
   if (auto *projection = std::get_if<Projection>(&action);
       projection && (projection->path.empty() || isOracleHandle(type)))
     holder = body.values[projection->input.index].oracleHolder;
@@ -105,17 +129,33 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
   if (auto *at = std::get_if<OracleSequenceAt>(&action))
     holder = body.values[at->input.index].oracleHolder;
   if (auto *construct = std::get_if<Construct>(&action);
-      construct && type.kind == Type::Kind::LogicalRecord)
+      construct && type.kind == Type::Kind::LogicalRecord && !placed)
     for (auto operand : construct->operands)
       if (isOracleHandle(body.values[operand.index].type)) {
         holder = body.values[operand.index].oracleHolder;
         break;
       }
+  if (protocol() && !placed && !isLogicalValue(type) &&
+      components.owners.empty())
+    placed = DataPlacement{components.roles};
+  if (placed) {
+    if (const auto *oracle = std::get_if<OraclePlacement>(&placed->value))
+      holder = oracle->holder;
+    else
+      holder.reset();
+  }
+  if (protocol() && !placed && isOracleHandle(type) && holder &&
+      components.owners.empty()) {
+    auto receivers = components.roles;
+    receivers.erase(std::remove(receivers.begin(), receivers.end(), *holder),
+                    receivers.end());
+    placed = OraclePlacement{*holder, std::move(receivers)};
+  }
   auto ids = emitResults(
       std::move(action),
       {{type,
         components.owners.empty() ? components.roles : std::vector<unsigned>{},
-        span, holder}},
+        span, holder, std::move(placed)}},
       span);
   if (ids && placement) {
     if (!placement->form(components, span))
@@ -139,15 +179,38 @@ BodyChecker::emitResults(decltype(Operation::action) action,
     if (!checker.types.chargeType(value.type, span) ||
         !checker.types.charge(value.components.size() + 1, span))
       return {};
-    if (value.type.kind == Type::Kind::LogicalRecord &&
+    const auto *nominal = checker.types.typeDeclaration(value.type);
+    if (protocol() && isLogicalValue(value.type) && !value.placement &&
+        ((nominal && !nominal->roles.empty()) ||
+         value.type.kind == Type::Kind::Tuple ||
+         value.type.kind == Type::Kind::Array)) {
+      fail("source.placement", "distributed value requires exact placement",
+           span);
+      return {};
+    }
+    if (value.type.kind == Type::Kind::LogicalRecord && !value.placement &&
         (!value.oracleHolder || value.components.size() < 2 ||
          !llvm::is_contained(value.components, *value.oracleHolder))) {
       fail("source.oracle-role", "logical record has no oriented role family",
            span);
       return {};
     }
+    if (protocol() && value.placement) {
+      auto rebuilt = checker.types.placement(value.type, *value.placement,
+                                             decl.roles.size(), span);
+      if (!rebuilt)
+        return {};
+      if (*rebuilt != *value.placement ||
+          placementRoles(*rebuilt) != value.components) {
+        fail("source.placement", "value placement disagrees with its schema",
+             span);
+        return {};
+      }
+    }
     if (protocol() && !placement && value.components.size() > 1 &&
-        !isLogicalValue(value.type)) {
+        !isLogicalValue(value.type) &&
+        !(value.placement &&
+          std::holds_alternative<ProductPlacement>(value.placement->value))) {
       if (!checker.types.admit(value.type, Boundary::Participants, span, &decl))
         return {};
     }
@@ -168,6 +231,12 @@ BodyChecker::emitResults(decltype(Operation::action) action,
 }
 std::optional<Components> BodyChecker::combine(ArrayRef<ValueId> args,
                                                Span span) {
+  for (auto id : args)
+    if (product(id)) {
+      fail("source.placement",
+           "a distributed product is not an ordinary data operand", span);
+      return {};
+    }
   if (placement) {
     std::vector<Components> inputs;
     for (auto id : args)
@@ -211,7 +280,7 @@ bool BodyChecker::restricted(const Type &type) {
   if (type.kind == Type::Kind::Associated || type.kind == Type::Kind::Parameter)
     return true;
   auto *d = checker.types.typeDeclaration(type);
-  return d && d->sealed;
+  return d && (d->sealed || d->resource);
 }
 std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {
@@ -249,6 +318,7 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
         std::holds_alternative<OracleSequenceAt>(operation.action) ||
         std::holds_alternative<ServiceQuery>(operation.action) ||
         std::holds_alternative<ProtocolApplication>(operation.action) ||
+        std::holds_alternative<Control>(operation.action) ||
         (syntax.layoutSyntax &&
          std::holds_alternative<ProtocolRepeat>(operation.action));
     if (!eligible)
@@ -283,6 +353,10 @@ bool BodyChecker::statementBody(const Statement &s) {
       orderedRoot, s.evaluation == Statement::Evaluation::Ordered && !s.exchange
                        ? std::optional(s.expression)
                        : std::nullopt);
+  SaveAndRestore patternRootScope(bindingPatternRoot,
+                                  std::optional(s.expression));
+  SaveAndRestore patternScope(
+      bindingPattern, s.kind == Statement::Kind::Let ? &s.pattern : nullptr);
   const auto &expr = syntax.expressions[s.expression];
   if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
       expr.binding && syntax.bindings[expr.binding->index].service) {
@@ -315,8 +389,63 @@ bool BodyChecker::statementBody(const Statement &s) {
       return false;
     return true;
   }
-  if (expr.kind == Expression::Kind::Call && !expr.binding) {
-    auto target = checker.resolve(decl, expr.text, expr.span, false);
+  std::optional<Type> expected;
+  std::optional<ValuePlacement> expectedPlaced;
+  std::optional<std::vector<unsigned>> selected;
+  if (s.type) {
+    auto resolved = checker.placedType(decl, *s.type);
+    if (resolved) {
+      expected = resolved->type;
+      expectedPlaced = resolved->placement;
+    }
+    if (!expected)
+      return false;
+  }
+  if (s.roles) {
+    selected = checker.roles(decl, *s.roles, s.span);
+    if (!selected || !active(*selected, s.span))
+      return false;
+  }
+  if (s.kind == Statement::Kind::Assign) {
+    auto found = bindings.find(*s.pattern.binding);
+    if (found == bindings.end())
+      return fail("source.assignment",
+                  "assignment target is not in this region", s.span);
+    expected = found->second.type;
+    if (found->second.value)
+      expectedPlaced = body.values[found->second.value->index].placement;
+    selected = found->second.roles;
+  }
+  std::optional<unsigned> requireOwner;
+  if (s.kind == Statement::Kind::Require && s.owner) {
+    auto roles = checker.roles(decl, {*s.owner}, s.span);
+    if (!roles || !active(*roles, s.span))
+      return false;
+    requireOwner = roles->front();
+  }
+  if (s.kind == Statement::Kind::Require)
+    expected = Type{};
+  if (s.kind == Statement::Kind::Expression && !s.terminated)
+    expected = Type(Type::Kind::Unit);
+  std::optional<TypeScope> methodTypes;
+  if ((expr.kind == Expression::Kind::Call ||
+       expr.kind == Expression::Kind::MethodCall) &&
+      !expr.binding) {
+    std::optional<DeclarationId> target;
+    if (expr.kind == Expression::Kind::MethodCall) {
+      // An unbound protocol application is dispatched before ordinary unit
+      // expression checking, just like a qualified protocol application.
+      methodTypes.emplace(*this, s.expression,
+                          s.kind == Statement::Kind::Expression && !s.terminated
+                              ? std::nullopt
+                              : expected);
+      if (!*methodTypes)
+        return false;
+      auto found = this->inference->callees.find(s.expression);
+      if (found != this->inference->callees.end())
+        target = found->second.declaration;
+    } else
+      target = checker.resolve(decl, expr.text, expr.span, false);
     if (checker.types.diagnostic)
       return false;
     if (target && checker.output.declarations[target->index].kind ==
@@ -336,45 +465,20 @@ bool BodyChecker::statementBody(const Statement &s) {
       return true;
     }
   }
-  std::optional<Type> expected;
-  std::optional<std::vector<unsigned>> selected;
-  if (s.type) {
-    expected = checker.type(decl, *s.type);
-    if (!expected)
-      return false;
-  }
-  if (s.roles) {
-    selected = checker.roles(decl, *s.roles, s.span);
-    if (!selected || !active(*selected, s.span))
-      return false;
-  }
-  if (s.kind == Statement::Kind::Assign) {
-    auto found = bindings.find(*s.pattern.binding);
-    if (found == bindings.end())
-      return fail("source.assignment",
-                  "assignment target is not in this region", s.span);
-    expected = found->second.type;
-    selected = found->second.roles;
-  }
-  std::optional<unsigned> requireOwner;
-  if (s.kind == Statement::Kind::Require && s.owner) {
-    auto roles = checker.roles(decl, {*s.owner}, s.span);
-    if (!roles || !active(*roles, s.span))
-      return false;
-    requireOwner = roles->front();
-  }
-  if (s.kind == Statement::Kind::Require)
-    expected = Type{};
-  if (s.kind == Statement::Kind::Expression && !s.terminated)
-    expected = Type(Type::Kind::Unit);
   SaveAndRestore completionScope(completionLoop,
                                  s.kind == Statement::Kind::Expression &&
-                                         expr.kind == Expression::Kind::For
+                                         (expr.kind == Expression::Kind::For ||
+                                          expr.kind == Expression::Kind::If ||
+                                          expr.kind == Expression::Kind::Match)
                                      ? std::optional(s.expression)
                                      : std::nullopt);
+  // A send's annotation and assignment destination describe the received
+  // value. Its payload is checked at the sender before that result exists.
+  // Receiver placement must not constrain payload availability or inference.
   auto value = expression(s.expression, expected, 1,
                           s.kind != Statement::Kind::Let &&
-                              s.kind != Statement::Kind::Assign);
+                              s.kind != Statement::Kind::Assign,
+                          s.exchange ? std::nullopt : expectedPlaced);
   if (!value) {
     if (!body.stopped || checker.types.diagnostic)
       return false;
@@ -448,7 +552,9 @@ bool BodyChecker::statementBody(const Statement &s) {
   if (s.kind == Statement::Kind::Let || s.kind == Statement::Kind::Assign ||
       s.kind == Statement::Kind::Expression) {
     if (!s.exchange && protocol() &&
-        (!demand(*value, selected.value_or(std::vector<unsigned>{}), s.span) ||
+        ((!product(*value) &&
+          !demand(*value, selected.value_or(std::vector<unsigned>{}),
+                  s.span)) ||
          !inference.commit()))
       return false;
     if (!bindResults(s, {*value}))
@@ -512,7 +618,8 @@ bool BodyChecker::statements(const SyntaxBody &source) {
 }
 std::optional<ValueId> BodyChecker::tail(const SyntaxBody &source,
                                          std::optional<Type> expected,
-                                         bool allowUntypedStop) {
+                                         bool allowUntypedStop,
+                                         std::optional<ValuePlacement> placed) {
   if (!statements(source) || body.stopped)
     return {};
   // A protocol loop body has its own tail statement. Expression-block tails
@@ -539,17 +646,19 @@ std::optional<ValueId> BodyChecker::tail(const SyntaxBody &source,
     return {};
   } else
     result = expression(source.results.front().second, expected, 1,
-                        allowUntypedStop);
+                        allowUntypedStop, placed);
   if (result && inference &&
-      (!demand(*result, {}, source.span) || !inference->commit()))
+      ((!product(*result) && !demand(*result, {}, source.span)) ||
+       !inference->commit()))
     return {};
   return result;
 }
 std::optional<ValueId> BodyChecker::block(const Expression &expr,
                                           std::optional<Type> expected,
                                           bool allowUntypedStop) {
-  auto value =
-      tail(syntax.bodies[expr.regions.front()], expected, allowUntypedStop);
+  auto value = tail(
+      syntax.bodies[expr.regions.front()], expected, allowUntypedStop,
+      contextualPlacement ? std::optional(*contextualPlacement) : std::nullopt);
   if (!value && body.stopped && !expected && !allowUntypedStop &&
       !checker.types.diagnostic)
     fail("source.inference", "stopped value block needs an expected type",
@@ -589,8 +698,11 @@ bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
     if (!seen.insert(found->second).second)
       return fail("source.return", "duplicate return port", source.span);
     auto value = expression(
-        id, inferResult ? std::nullopt
-                        : std::optional<Type>(outputs[found->second].type));
+        id,
+        inferResult ? std::nullopt
+                    : std::optional<Type>(outputs[found->second].type),
+        1, false,
+        inferResult ? std::nullopt : outputs[found->second].placement);
     if (!value) {
       if (body.stopped)
         body.results.clear();
@@ -607,13 +719,14 @@ bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
         body.values[value->index].oracleHolder != port.oracle->holder)
       return fail("source.oracle-role", "returned oracle holder differs",
                   syntax.expressions[id].span);
-    if (port.type.kind == Type::Kind::LogicalRecord &&
+    if (!port.placement && port.type.kind == Type::Kind::LogicalRecord &&
         components(*value).roles != port.roles)
       return fail(
           "source.oracle-role",
           "returned logical record must retain its complete role family",
           syntax.expressions[id].span);
-    if (isProtocol && !demand(*value, port.roles, syntax.expressions[id].span))
+    if (isProtocol && !port.placement &&
+        !demand(*value, port.roles, syntax.expressions[id].span))
       return false;
     if (!use(*value, syntax.expressions[id].span))
       return false;
@@ -653,6 +766,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
       return false;
     if (result.mode == Body::Mode::Protocol) {
       if (p.roles.size() > 1 && !isLogicalValue(p.type) &&
+          !(p.placement &&
+            std::holds_alternative<ProductPlacement>(p.placement->value)) &&
           !types.admit(p.type, Boundary::Participants, p.span, &decl))
         return false;
     }
@@ -660,7 +775,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
             sources[decl.id.index]->inputBindings[i], p.type,
             result.mode == Body::Mode::Math ? std::vector<unsigned>{i}
                                             : p.roles,
-            p.span, p.oracle ? std::optional(p.oracle->holder) : std::nullopt))
+            p.span, p.oracle ? std::optional(p.oracle->holder) : std::nullopt,
+            p.placement))
       return false;
   }
   for (unsigned i = 0; i < decl.services.size(); ++i)
@@ -688,6 +804,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
       return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
         !isLogicalValue(p.type) &&
+        !(p.placement &&
+          std::holds_alternative<ProductPlacement>(p.placement->value)) &&
         !types.admit(p.type, Boundary::Participants, p.span, &decl))
       return false;
   }
@@ -695,7 +813,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
 }
 bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
-  if (decl.generated && decl.generated->operation)
+  if ((decl.generated && decl.generated->operation) ||
+      (output.declarationIndex && output.declarationIndex->association(id)))
     return true;
   if (sources[id.index]->invalidBody)
     return types.fail("source.dependency", "body depends on malformed source",
@@ -756,16 +875,12 @@ bool Checker::body(DeclarationId id, unsigned depth) {
           output.declarations[decl.oraclePredicateOwner->index]
               .oracleDefinition->sourceCount))
     return false;
-  std::set<std::string> sites;
   for (const auto &region : sources[id.index]->bodies)
     for (const auto &statement : region.statements) {
       if (!statement.site)
         continue;
       if (!types.charge(statement.site->size() + 1, statement.span))
         return false;
-      if (!sites.insert(*statement.site).second)
-        return types.fail("source.site", "duplicate site label in protocol",
-                          statement.span);
     }
   const bool infer =
       inferredContracts.count(&decl) &&
@@ -788,7 +903,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     return false;
   }
   // Explicit and inferred sites share the protocol's namespace, including
-  // nested repeats. Reused local variable names need an explicit site override.
+  // nested repeats. Each selected arm introduces its own lexical namespace.
   std::set<std::string> resolvedSites;
   std::function<bool(const Body &)> validateSites = [&](const Body &body) {
     for (const auto &operation : body.operations) {
@@ -802,6 +917,15 @@ bool Checker::body(DeclarationId id, unsigned depth) {
       if (auto *repeat = std::get_if<ProtocolRepeat>(&operation.action))
         if (!validateSites(*repeat->region))
           return false;
+      if (auto *control = std::get_if<Control>(&operation.action)) {
+        const auto enclosingSites = resolvedSites;
+        for (const auto &arm : control->regions) {
+          resolvedSites.clear();
+          if (!validateSites(*arm))
+            return false;
+        }
+        resolvedSites = enclosingSites;
+      }
     }
     return true;
   };

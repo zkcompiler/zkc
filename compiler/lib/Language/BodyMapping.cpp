@@ -31,7 +31,7 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
                         std::is_same_v<T, Construct> ||
                         std::is_same_v<T, RoleAssembly> ||
                         std::is_same_v<T, LocalPrimitive> ||
-                        std::is_same_v<T, LocalControl> ||
+                        std::is_same_v<T, Control> ||
                         std::is_same_v<T, ScopedInvoke> ||
                         std::is_same_v<T, FiniteApplication>)
             list(action.operands);

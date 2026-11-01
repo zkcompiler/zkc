@@ -73,6 +73,19 @@ facts::Status MathematicalFacts::assume(const SourceDataFact &fact, Span at) {
   return snapshot.addBound(current, *left.value, {*right.value, fact.rightAxis},
                            facts::Premise::Formation);
 }
+facts::Status MathematicalFacts::reached(const SourceDataFact &fact, Span at) {
+  span = at;
+  auto left = snapshot.intern(fact.left.first, fact.left.second);
+  if (left.status != facts::Status::Proven)
+    return left.status;
+  auto right = snapshot.intern(fact.right.first, fact.right.second);
+  if (right.status != facts::Status::Proven)
+    return right.status;
+  // The adapter established the successful continuation. The mathematical
+  // kernel receives its scoped result, never the ordered guard itself.
+  return snapshot.addBound(current, *left.value, {*right.value, fact.rightAxis},
+                           facts::Premise::Result);
+}
 facts::Result<facts::Cardinality>
 MathematicalFacts::cardinality(const ValueOrigin &origin, unsigned axis,
                                Span at) {

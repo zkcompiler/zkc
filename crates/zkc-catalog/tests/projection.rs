@@ -24,6 +24,9 @@ fn operation<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
 fn complete_static_inventory() {
     let value = source();
     for (key, count) in [
+        ("frontendAssociations", CATALOG.frontend_associations.len()),
+        ("frontendHomes", CATALOG.frontend_homes.len()),
+        ("serviceMethods", CATALOG.service_methods.len()),
         ("sorts", CATALOG.sorts.len()),
         ("types", CATALOG.types.len()),
         ("operations", CATALOG.operations.len()),
@@ -193,7 +196,7 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
     assert_eq!(profile.implementation, ConsumerImplementation::Unselected);
     assert_eq!(
         profile.type_constructors,
-        ["index", "bool", "field", "vector"]
+        ["index", "bool", "field", "vector", "resource_unit"]
     );
     assert_eq!(
         profile.parameter_validators,
@@ -216,13 +219,18 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
         ("vector.equal", true),
         ("field.equal", true),
         ("field.embed", true),
+        ("resource_unit.create", false),
+        ("resource_unit.pass", false),
+        ("resource_unit.consume", false),
     ];
     assert_eq!(profile.operations.len(), expected.len());
     for (entry, (name, field)) in profile.operations.iter().zip(expected) {
         assert_eq!(entry.operation, name);
         assert_eq!(
             entry.static_parameters,
-            if field {
+            if name.starts_with("resource_unit.") {
+                &[Kind::Domain("Slot")][..]
+            } else if field {
                 &[Kind::Domain("Field")][..]
             } else {
                 &[]
@@ -615,4 +623,36 @@ fn native_index_blocks_have_distinct_product_and_search_contracts() {
     operation(&mut scalar, "transcript.native.indexed.indices")["facets"][0]["domain"] =
         json!("BoundedIndex");
     assert!(check(&scalar).is_err());
+}
+
+#[test]
+fn frontend_association_mutations_refuse() {
+    let original = source();
+    assert!(check(&original).is_ok());
+    for (section, field, value) in [
+        (
+            "frontendAssociations",
+            "signature",
+            json!("RandomConstructor"),
+        ),
+        ("frontendAssociations", "identity", json!("record.unknown")),
+        ("frontendAssociations", "authority", json!("all-records")),
+        ("frontendHomes", "constructor", json!("Vector")),
+        ("frontendHomes", "module", json!("foreign")),
+        ("serviceMethods", "signature", json!("Unknown")),
+        ("serviceMethods", "capability", json!("IndexRandomness")),
+    ] {
+        let mut changed = original.clone();
+        changed[section][0][field] = value;
+        assert!(check(&changed).is_err(), "{section}.{field}");
+    }
+    for section in ["frontendAssociations", "frontendHomes", "serviceMethods"] {
+        let mut changed = original.clone();
+        let duplicate = changed[section][0].clone();
+        changed[section].as_array_mut().unwrap().push(duplicate);
+        assert!(check(&changed).is_err(), "duplicate {section}");
+    }
+    let mut renamed = original.clone();
+    renamed["frontendAssociations"][0]["name"] = json!("open_payload");
+    assert!(check(&renamed).is_ok());
 }

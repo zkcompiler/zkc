@@ -381,6 +381,39 @@ impl Decoder<'_> {
             self.charge()?;
             let a = array(v)?;
             let i = match a.first().and_then(Json::as_str) {
+                Some("if") => {
+                    let a = record(v, "if", 7)?;
+                    Instruction::Conditional {
+                        site: name(&a[1])?,
+                        condition: name(&a[2])?,
+                        captures: names(&a[3])?,
+                        then_body: self.body(&a[4], depth + 1)?,
+                        else_body: self.body(&a[5], depth + 1)?,
+                        outputs: names(&a[6])?,
+                    }
+                }
+                Some("match") => {
+                    let a = record(v, "match", 6)?;
+                    let mut arms = Vec::new();
+                    for arm in list(&a[4], 32)? {
+                        let arm = array(arm)?;
+                        if arm.len() != 3 {
+                            return Err(err(ErrorCode::Record, "match arm arity"));
+                        }
+                        arms.push(super::code::ParticipantArm {
+                            alternative: name(&arm[0])?,
+                            payload: names(&arm[1])?,
+                            body: self.body(&arm[2], depth + 1)?,
+                        });
+                    }
+                    Instruction::Match {
+                        site: name(&a[1])?,
+                        input: name(&a[2])?,
+                        captures: names(&a[3])?,
+                        arms,
+                        outputs: names(&a[5])?,
+                    }
+                }
                 Some("local") => {
                     let a = record(v, "local", 5)?;
                     Instruction::Local {

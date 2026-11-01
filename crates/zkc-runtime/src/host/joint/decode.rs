@@ -1,6 +1,6 @@
 //! Bounded outer-object decoder. The embedded participant text has one owner:
 //! Runtime admission; this parser never interprets its positional records.
-use super::bundle::Segment;
+use super::bundle::{BranchArm, Segment};
 use super::{BundleError, BundleLimits, Step};
 use serde::{
     Deserialize, Deserializer,
@@ -23,11 +23,79 @@ struct RawStep {
 }
 enum RawSegment {
     Action(RawStep),
+    Branch {
+        entries: Vec<RawStep>,
+        arms: Vec<RawArm>,
+    },
     Loop {
         entries: Vec<RawStep>,
         body: Vec<RawSegment>,
         exits: Vec<RawStep>,
     },
+}
+struct RawArm {
+    alternative: String,
+    body: Vec<RawSegment>,
+    exits: Vec<RawStep>,
+}
+#[derive(Clone, Copy)]
+struct ArmSeed<'a>(SegmentSeed<'a>);
+impl<'de> DeserializeSeed<'de> for ArmSeed<'_> {
+    type Value = RawArm;
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<RawArm, D::Error> {
+        d.deserialize_map(self)
+    }
+}
+impl<'de> Visitor<'de> for ArmSeed<'_> {
+    type Value = RawArm;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("exact branch arm")
+    }
+    fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<RawArm, A::Error> {
+        let (mut alternative, mut body, mut exits) = (None, None, None);
+        while let Some(key) = a.next_key_seed(Text(self.0.limits.string_bytes, self.0.exceeded))? {
+            match key.as_str() {
+                "alternative" if alternative.is_none() => {
+                    alternative = Some(a.next_value_seed(Text(128, self.0.exceeded))?)
+                }
+                "body" if body.is_none() => {
+                    body = Some(a.next_value_seed(List {
+                        seed: SegmentSeed {
+                            depth: self.0.depth + 1,
+                            ..self.0
+                        },
+                        limit: self.0.limits.steps,
+                        exceeded: self.0.exceeded,
+                    })?)
+                }
+                "yield" if exits.is_none() => {
+                    let values = a.next_value_seed(List {
+                        seed: SegmentSeed {
+                            action_only: true,
+                            ..self.0
+                        },
+                        limit: self.0.limits.steps,
+                        exceeded: self.0.exceeded,
+                    })?;
+                    exits = Some(
+                        values
+                            .into_iter()
+                            .map(|v| match v {
+                                RawSegment::Action(s) => s,
+                                _ => unreachable!("action seed"),
+                            })
+                            .collect(),
+                    );
+                }
+                _ => return Err(de::Error::custom("unknown or duplicate branch arm field")),
+            }
+        }
+        Ok(RawArm {
+            alternative: alternative.ok_or_else(|| de::Error::custom("missing alternative"))?,
+            body: body.ok_or_else(|| de::Error::custom("missing arm body"))?,
+            exits: exits.ok_or_else(|| de::Error::custom("missing arm yield"))?,
+        })
+    }
 }
 #[derive(Clone, Copy)]
 struct SegmentSeed<'a> {
@@ -54,7 +122,8 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
     fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
         let (mut role, mut instruction, mut anchor) = (None, None, None);
         let (mut entries, mut body, mut exits) = (None, None, None);
-        let mut seen = 0u8;
+        let (mut branches, mut arms) = (None, None);
+        let mut seen = 0u16;
         while let Some(key) = a.next_key_seed(Text(self.limits.string_bytes, self.exceeded))? {
             let bit = match key.as_str() {
                 "role" => 1,
@@ -63,6 +132,8 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                 "loop" => 8,
                 "body" => 16,
                 "yield" => 32,
+                "branch" => 64,
+                "arms" => 128,
                 _ => return Err(de::Error::custom("unknown schedule field")),
             };
             if seen & bit != 0 {
@@ -76,7 +147,7 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                 1 => role = Some(a.next_value()?),
                 2 => instruction = Some(a.next_value()?),
                 4 => anchor = Some(a.next_value()?),
-                8 | 32 => {
+                8 | 32 | 64 => {
                     let values = a.next_value_seed(List {
                         seed: Self {
                             action_only: true,
@@ -89,14 +160,23 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                         .into_iter()
                         .map(|v| match v {
                             RawSegment::Action(step) => step,
-                            RawSegment::Loop { .. } => unreachable!("action-only seed"),
+                            _ => unreachable!("action-only seed"),
                         })
                         .collect();
                     if bit == 8 {
                         entries = Some(steps);
-                    } else {
+                    } else if bit == 32 {
                         exits = Some(steps);
+                    } else {
+                        branches = Some(steps);
                     }
+                }
+                128 => {
+                    arms = Some(a.next_value_seed(List {
+                        seed: ArmSeed(self),
+                        limit: 32,
+                        exceeded: self.exceeded,
+                    })?);
                 }
                 16 => {
                     body = Some(a.next_value_seed(List {
@@ -123,6 +203,10 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                     anchor: anchor.unwrap(),
                 }))
             }
+            192 => Ok(RawSegment::Branch {
+                entries: branches.unwrap(),
+                arms: arms.unwrap(),
+            }),
             56 => Ok(RawSegment::Loop {
                 entries: entries.unwrap(),
                 body: body.unwrap(),
@@ -161,6 +245,26 @@ fn flatten(
     for node in nodes {
         result.push(match node {
             RawSegment::Action(step) => Segment::Action(append(step, steps, limit)?),
+            RawSegment::Branch { entries, arms } => Segment::Branch {
+                entries: entries
+                    .into_iter()
+                    .map(|s| append(s, steps, limit))
+                    .collect::<Result<_, _>>()?,
+                arms: arms
+                    .into_iter()
+                    .map(|arm| {
+                        Ok(BranchArm {
+                            alternative: arm.alternative,
+                            body: flatten(arm.body, steps, limit, depth + 1)?,
+                            exits: arm
+                                .exits
+                                .into_iter()
+                                .map(|s| append(s, steps, limit))
+                                .collect::<Result<_, _>>()?,
+                        })
+                    })
+                    .collect::<Result<_, BundleError>>()?,
+            },
             RawSegment::Loop {
                 entries,
                 body,

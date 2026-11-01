@@ -291,7 +291,8 @@ int main() {
     auto selected = take(close(source()));
     const auto &proof = *selected.entry().proof();
     require(proof.prover == 0 && proof.verifier == 1 &&
-                proof.publicInputs == std::vector<unsigned>{0} &&
+                proof.publicInputs ==
+                    std::vector<EntryInputSelection>{{0, {}, 1, {}}} &&
                 proof.services == std::vector<unsigned>{0} &&
                 proof.target == 0 && proof.acceptance.port == 0 &&
                 proof.acceptance.role == 1 && proof.acceptance.path.empty(),
@@ -444,13 +445,8 @@ int main() {
           "{setup pcs{vk,pk,statement};setup pcs{statement};}",
           "{setup pcs{vk,pk,statement,statement.ordinary};}",
           "{setup pcs{vk,pk,statement,absent};}"}) {
-      // Missing key ingress is refused before the coverage check when no slot
-      // exists.
-      refuses(close(setupSource(choices, "function")),
-              choices == ";" || choices == "{}" ||
-                      choices == "{setup pcs{vk,statement};}"
-                  ? "source.ingress"
-                  : "source.entry");
+      // Retained Function arguments still require exact setup coverage.
+      refuses(close(setupSource(choices, "function")), "source.entry");
     }
   });
   cases.run("proof keys stay with their declared initializer", [] {
@@ -473,12 +469,12 @@ int main() {
                               "public{statement}")),
             "source.entry");
   });
-  cases.run("setup initialization does not grant nested or state constructors",
+  cases.run("setup initialization admits nested keys and refuses opening state",
             [] {
-              for (StringRef type : {"(PK,)", "builtin(\"opening_state\",C)"})
-                refuses(close(replaceText(setupSource(), "pk:PK@P",
-                                          ("pk:" + type + "@P").str())),
-                        "source.ingress");
+              take(close(replaceText(setupSource(), "pk:PK@P", "pk:(PK,)@P")));
+              refuses(close(replaceText(setupSource(), "pk:PK@P",
+                                        "pk:builtin(\"opening_state\",C)@P")),
+                      "source.ingress");
             });
 
   cases.run(

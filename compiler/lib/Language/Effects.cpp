@@ -177,7 +177,7 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                 return call(action.body.helper, {}, span) &&
                        (!action.predicate ||
                         call(action.predicate->helper, {}, span));
-              } else if constexpr (std::is_same_v<Action, LocalControl>) {
+              } else if constexpr (std::is_same_v<Action, Control>) {
                 for (const auto &region : action.regions) {
                   if (!region)
                     return types.fail("source.effect",

@@ -7,6 +7,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ResourceSources.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/Language.h"
@@ -223,6 +224,133 @@ int main() {
   auto compileSource = [&](StringRef text) {
     return take(compileEvmEntry(originalSource(text)));
   };
+  for (bool managed : {false, true})
+    cases.run(
+        managed ? "nominal units coexist with managed transcript state"
+                : "empty and nonempty records retain only data lanes",
+        [&] {
+          std::string text = R"zkc(
+module scalar;
+domain Fr=field("bls12-381.fr");
+struct Empty{}
+#[linear] struct Ticket<N:nat>{empty:(),phantom:[bool;0]}
+#[linear] struct Payload{value:Fr,padding:Empty}
+fn make()->Ticket<1>{return Ticket<1>{empty:(),phantom:[]};}
+fn make_second()->Ticket<2>{return Ticket<2>{empty:(),phantom:[]};}
+fn payload(value:Fr)->Payload{return Payload{value:value,padding:Empty{}};}
+fn advance(x:Ticket<1>)->Ticket<1>{return repack_record(x,((),[]));}
+fn check_empty(go:bool)->Empty{require go;return Empty{};}
+fn preserve(x:Payload)->Payload{
+  let parts=inspect_record(x);return repack_record(parts.0,parts.1);
+}
+fn finish(x:Ticket<1>,y:Ticket<2>,p:Payload)->Fr{
+  consume x;consume y;let parts=unpack(p);return parts.0;
+}
+protocol Work roles(P,V)(value:Fr@V,go:bool@V)->(accepted:bool@V){
+  let x@V=make();let next@V=advance(x);
+  let empty@V=check_empty(go);
+  let y@V=make_second();let p@V=payload(value);
+  let q@V=preserve(p);let observed@V=finish(next,y,q);
+  return(accepted=observed==value);
+}
+proof Proof=Work{prover P;verifier V;public{value,go};accept accepted;construction authored;}
+)zkc";
+          if (managed) {
+            text = replaceFixture(text, "go:bool@V)->",
+                                  "go:bool@V,coins:Random<Fr>@V)->");
+            text =
+                replaceFixture(text, "let x@V=make();",
+                               "let coin=coins.draw();let sent=send V->P(coin);"
+                               "let x@V=make();");
+            text = replaceFixture(
+                text, "construction authored;",
+                "construction fiat_shamir(\"hash-chain.keccak256."
+                "bls12-381.fr64be/0\",coins);");
+          }
+          auto original = originalSource(text);
+          require(original.bytes().contains("resource_unit.pass") &&
+                      original.bytes().contains("resource_unit.consume"),
+                  "fixture did not exercise native unit operations");
+          EvmOptions options;
+          options.simplify = false;
+          options.mathematics.finiteBulk = false;
+          auto compiled = take(compileEvmEntry(original, options));
+          auto target = compiled.targetSnapshot();
+          unsigned calls = 0, fields = 0, scopeChecks = 0, stops = 0;
+          target->walk([&](func::CallOp) { ++calls; });
+          target->walk([&](evm::CheckedOp op) {
+            fields += op.opcode() == "field.equal";
+            scopeChecks += op.opcode() == "scope.check";
+            stops += op.opcode() == "source.stop";
+          });
+          require(
+              calls && fields && scopeChecks && stops,
+              "unit erasure removed surrounding calls, data checks or stops");
+          require(StringRef(compiled.yul()).contains("let boundState :=") ==
+                      managed,
+                  "unit custody changed transcript selection");
+        });
+  for (StringRef malformed : {"nominal", "reused"})
+    cases.run("unit erasure requires native admission: " + malformed, [&] {
+      resource_sources::Source source;
+      source.binding("pass", "resource_unit.pass", {"Slot.A"});
+      source.binding("passB", "resource_unit.pass", {"Slot.B"});
+      auto helper = source.function("advance", {source.unit, source.unit},
+                                    {source.unit, source.unit});
+      exec::ScopedExecutionBuilder body(source.builder, helper);
+      auto left = source.invoke(body, "pass", helper.getArgument(1),
+                                source.unit, "left")[0];
+      auto right = source.invoke(body, "pass", helper.getArgument(2),
+                                 source.unit, "right")[0];
+      body.returned({left, right});
+      auto *entry = source.protocol(
+          "main", {source.unit, source.unit}, {source.unit, source.unit}, {"V"},
+          source.portRoles(2, {"V"}), source.portRoles(2, {"V"}));
+      source.operation("protocol.return",
+                       source.local("advance", entry->getArguments(),
+                                    {source.unit, source.unit}, "call", "V"));
+      PassManager pipeline(&source.context);
+      buildProjectionPipeline(pipeline, false);
+      buildClosedExecutionPipeline(pipeline, false);
+      require(succeeded(pipeline.run(*source.module)),
+              "invalid native unit fixture");
+      take(evm::lowerEndpoint(take(closeEndpoint(*source.module, "V")), {}));
+      SmallVector<exec::ApplyOp> passes;
+      source.module->walk([&](exec::ApplyOp op) { passes.push_back(op); });
+      require(passes.size() == 2, "missing native pass invocations");
+      if (malformed == "nominal")
+        passes[1].setBindingAttr(
+            FlatSymbolRefAttr::get(&source.context, "passB"));
+      else
+        passes[1]->setOperand(1, passes[0]->getOperand(1));
+      std::string message;
+      ScopedDiagnosticHandler handler(&source.context, [&](Diagnostic &diag) {
+        raw_string_ostream out(message);
+        diag.print(out);
+        return success();
+      });
+      refuses(closeEndpoint(*source.module, "V"), "endpoint-source");
+      require(StringRef(message).contains(malformed == "nominal"
+                                              ? "binding-signature"
+                                              : "execution-resource-reuse"),
+              "native unit refusal lost its diagnostic: " + message);
+    });
+  cases.run("formed random capability does not acquire unit erasure", [&] {
+    auto source = close(R"mlir(
+module { "protocol.module"() ({
+  "protocol.func"() ({ ^entry(%rng:!runtime.capability<rng,"bls12-381.fr">):
+    %ok = arith.constant true
+    "protocol.return"(%ok) : (i1)->()
+  }) {sym_name="main",function_type=(!runtime.capability<rng,"bls12-381.fr">)->i1,
+      roles=["V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+    diagnostics.clear();
+    refuses(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}),
+            "evm.lowering");
+    require(StringRef(diagnostics).contains("evm.unsupported-type"),
+            "unsupported capability lost its type refusal");
+  });
   constexpr StringLiteral bytesSource = R"zkc(
 module scalar;
 type Bytes=builtin("bytes");

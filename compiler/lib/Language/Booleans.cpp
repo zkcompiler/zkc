@@ -24,6 +24,7 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
       break;
     [[fallthrough]];
   case K::NotationCall:
+  case K::MethodCall:
   case K::Call: {
     // index<N>() is a checked built-in mathematical constant, not a
     // declaration in the inferred callee map. Ordinary expression checking
@@ -64,6 +65,8 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
   case K::Record:
   case K::Projection:
   case K::Block:
+  case K::If:
+  case K::Match:
     break;
   default:
     return refuse();

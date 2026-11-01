@@ -125,9 +125,8 @@ fn main() {
             [("P".into(),zkc::entry::Value::Record([("value".into(),value.into())].into()))].into()))]);
         let result=generic::call(&host,generic::Arguments::try_from(arguments).unwrap(),context(&host,"generic")).unwrap();
         assert!(result.report.is_success() && result.conversion_error.is_none());
-        let zkc::entry::Value::Record(mut roles)=result.value.unwrap().into() else{panic!()};
-        let zkc::entry::Value::Record(mut values)=roles.remove("P").unwrap() else{panic!()};
-        assert_eq!(u64::try_from(values.remove("out").unwrap()).unwrap(),value);
+        let roles:zkc::entry::Value=result.value.unwrap().into();
+        assert_eq!(u64::try_from(roles.field("P").unwrap().field("out").unwrap()).unwrap(),value);
     }
     let bytes=std::fs::read(&args[6]).unwrap();
     let host=checked::admit(&bytes,Default::default(),Default::default()).unwrap();
@@ -152,7 +151,7 @@ fn main() {
     let input=pcs::PInputs{pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0)};
     let input:zkc::entry::NamedValues=input.into();
     assert!(matches!(input.get("pk0").unwrap(),zkc::entry::Value::Leaf(zkc::execution::InputValue::ProverKeyFile{..})));
-    let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
+    let _public=pcs::PublicInputs{claim_c:scalar(0),claim_tag:true,point:scalar(0)};
     let _verifier=pcs::VInputs{};
     assert_eq!(pcs::setups::first,"first");
     let malformed=zkc::entry::Value::Array(vec![zkc::entry::Value::Record([("extra".into(),true.into())].into())]);
@@ -184,12 +183,12 @@ fn main() {
     },context(&host,"binding_shapes")).unwrap();
     assert!(result.report.is_success(),"{}",result.report.diagnostics());
     assert!(result.conversion_error.is_none());
-    let output=result.value.unwrap().P;
-    assert!(output.wrapped.value);
-    assert!(matches!(output.choice,shapes::SampleCases::__zkc_53656c66{}));
-    let zkc::entry::Value::Record(mut invalid)=output.into() else {panic!()};
-    invalid.insert("extra".into(),true.into());
-    assert_eq!(shapes::SampleShapesRunResultP::try_from(zkc::entry::Value::Record(invalid)).err().unwrap(),"entry-binding-fields");
+    let output=result.value.unwrap().P().unwrap();
+    assert!(matches!(output.choice().unwrap(),shapes::SampleCases::__zkc_53656c66{}));
+    let value:zkc::entry::Value=output.into();
+    assert_eq!(value.field("wrapped").unwrap().field("value").unwrap_err(),"entry-value-projection");
+    let invalid=[("extra".into(),true.into())].into();
+    assert_eq!(shapes::SampleShapesRunResultP::try_from(zkc::entry::Value::Record(invalid)).err().unwrap(),"entry-binding-value");
 
     let bytes=std::fs::read(&args[1]).unwrap();
     let host=run::admit(&bytes,Default::default(),authority(&bytes,&run::PACKAGE_SHA256)).unwrap();
@@ -206,11 +205,11 @@ fn main() {
     },context(&host,"generated_bindings")).unwrap();
     assert!(result.report.is_success(),"{}",result.report.diagnostics());
     assert!(result.conversion_error.is_none());
-    let received=result.value.unwrap().V;
-    assert!(received.received.marker);
-    assert!(matches!(received.received.choice,run::SampleChoice::Data{..}));
-    let zkc::entry::Value::Record(values)=received.into() else {panic!()};
-    let output=zkc::entry::outputs::proof_outputs(&values,Default::default(),Default::default()).unwrap();
+    let received=result.value.unwrap().V().unwrap();
+    assert!(received.received().unwrap().marker);
+    assert!(matches!(received.received().unwrap().choice,run::SampleChoice::Data{..}));
+    let value:zkc::entry::Value=received.into();
+    let output=zkc::entry::outputs::function_output(&value,Default::default(),Default::default()).unwrap();
     assert!(std::str::from_utf8(&output).unwrap().contains(r#""7""#));
     let mut tampered=bytes;tampered.push(b' ');
     assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap().code(),"entry-package-identity");

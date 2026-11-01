@@ -143,3 +143,109 @@ yield. Continuing alternatives retain their normal result/resource obligations.
 The native mathematical path also supports [conditional entry completion and
 bounded local termination](completion.md). Its executable records have no automatic correspondence to an independent
 formal carrier.
+
+## Selected Protocol and mathematical regions
+
+The registered selected-region forms are `protocol.branch`,
+`protocol.participant_branch` and `data.branch`. Their common structural
+interface has a selector followed by ordered explicit captures, ordered results,
+an `alternatives` string array, and one closed single-block arm per alternative.
+An `i1` selector has exactly `["then", "else"]`; an ordinary `!data.variant`
+selector has exactly its declared labels in declaration order. Unknown,
+repeated, missing or reordered alternatives refuse. No default arm is admitted.
+
+An arm receives its alternative's exact ordered payload types followed by all
+capture types. Boolean arms have no payload. The selector itself is evaluated
+once outside the arm; payloads are supplied only at selected entry. All arms
+are checked, including dormant arms. Isolation forbids ambient SSA capture.
+Each arm ends in the corresponding dialect's `yield`, with exactly the ordered
+result types. Selected execution enters one arm, charges its work and effects,
+and supplies its actual yielded values. Untaken arms perform no allocation,
+query, message or other action. Effect freedom alone does not authorize eager
+execution or speculation.
+
+`protocol.branch` additionally has a unique `site`, a nonempty distinct `roles`
+roster and one nonempty `output_roles` set per result. The selector must be
+available at every participating role. Every action's complete participant set
+must fit the roster, including holders and all receivers. Every arm must yield
+each declared result component. Captures may transfer affine state once into
+selected control; each arm checks its uses independently. A service reference
+is an immutable alias of its exact outer capture root and cannot be yielded as
+service authority. Nested control retains these constraints.
+
+Availability is independent of agreement. Shared scheduling requires static
+agreement, congruent admitted total mathematics, structural forwarding, or
+entry obligations over exact immutable components. Native derivation reports
+unresolved input groups with original native port, participant, complete
+variant-payload projection and value/tag/collection-extent selection. A dynamic
+extent requirement names its exact collection axis; a static type extent needs
+no input equality. A statically constructed enum tag needs no payload equality,
+even when the payload has ordered provenance. These groups are
+requirements for actual entry admission; formation, a public flag, a producer
+annotation and the existence of an API result discharge none of them. A common
+enum tag establishes no payload equality. Local actions, entropy, received
+values and unsupported provenance cannot establish common control. Calls
+substitute actual ports and role maps through checked acyclic bodies. Repeats
+retain initializer, recurrence and zero-path dependencies separately.
+
+Native selected-control formation applies to each Protocol definition whose
+actual static application closure contains a Protocol branch. It checks wrappers
+under their actual argument and role substitutions, including branches in
+retained dormant arms. An unrelated, uncalled definition cannot switch another
+definition's admission policy. Branch-free generic iteration retains its
+[joint count check](iteration.md); source-certified and named Entry admission
+still derive and discharge the required common-input inventory independently.
+Call-closure discovery and subsequent derivations share one cumulative work
+allowance; discovery is not unmetered preparation for that derivation.
+
+A demanded carry observation must agree initially and be preserved by its
+yielded transition. These are simultaneous induction obligations over the
+demanded slots, not permanent facts attached to equal initializers. Each
+obligation belongs to the exact instantiated loop, slot, role association and
+observation path; equal attribute dictionaries do not identify iterations of
+different loops or helper calls. Cyclic dependencies may use the preceding
+iteration's agreement only while all corresponding base and transition
+obligations are checked. Nested recurrences retain their enclosing invocation.
+Unknown state in an unrelated carry creates no agreement obligation.
+
+Tag, guarded payload and extent observations project the initial and transition
+values separately. Projecting a selected value rejoins the arm observations:
+an identical known observation in every arm is independent of the selector.
+Unknown observations cannot establish equality, and a Protocol branch's own
+scheduling demand remains separate. Payload alternatives and ordinals remain
+distinct; an
+inactive constructor alternative has no payload obligation on that guarded
+path. Its enclosing selected expression still requires tag agreement. An
+at-most-one body uses its initial carry; a known zero exit forwards the initial
+value and a known one exit forwards the transition. General exits retain the
+count, initial and transition dependencies, including a possible zero path.
+Analysis checks stored bodies even for zero counts, without unrolling runtime
+bounds. Exhausted derivation work refuses with `common-control-capacity`;
+missing provenance refuses with `common-control-provenance`.
+
+Projection produces `protocol.participant_branch`, preserving the site and
+alternatives, each participant's captures/results and each actual arm. Services
+retain their owning participant's existing service-port identity. Independent
+comparison checks selector, capture and payload association, every arm and
+exact yields. Retained action records associate each arm label with its nested
+actions; moving an action between arms changes its occurrence. A participant's
+stop or Entry completion affects that participant alone.
+
+`data.branch` has no Protocol roster or action permissions. Its inputs, payloads
+and results must be total mathematical data, and every arm admits only installed
+total operations and acyclic total helpers. It cannot contain a service, Local
+call, ordered guard, logical handle or resource. `data.yield` closes each arm.
+This form does not introduce an unregistered SCF operation or grant ordered
+execution to Math. Polynomial observations requiring a selected degree adapter
+remain an explicit unsupported profile. Numerical realization uses the
+[recursive computation recipes](computation.md#realization), preserving selected
+scope entry, arm-local work/allocation and independently checked payload,
+capture and yield association through native Program execution.
+
+Exact resource origins intersect corresponding arm successors. A legitimate
+fresh branch result may have unknown formal-relative origin; unknown does not
+prove an old-root recurrence. Zero trips retain the old root. Dependencies,
+common-value congruence, reached facts and authentication use their own
+transfer and join rules. Native control admission supplies no security theorem
+or independent formal interpretation. Implementation and executable/realization
+boundaries are recorded in [status](../../status.md).

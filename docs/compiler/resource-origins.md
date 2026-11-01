@@ -41,6 +41,7 @@ from both an unknown root and a noncontinuing execution.
 |---|---|
 | Affine input | Its own symbolic root. Identity edges require affine values at both ends. |
 | Installed state successor | Follow validated history, sampling and observation pairs. All applicable pairs for an output must identify the same exact input root; unknown or conflicting equations remain unknown. |
+| Nominal custody successor | Follow the installed `resource_unit.pass` input 0 to output 0. Create and consume never establish a root equation; matching nominal types alone are insufficient. |
 | Ordinary scoped `func.call` or `protocol.local_call` | Resolve the actual definition and substitute actual arguments into its formal-relative summary. Existing placement and call validation remain required. |
 | `protocol.apply` | Summarize the mathematical callee and substitute its actual inputs under the role/application validation and preparation rules. |
 | Scoped conditional | Join equal roots from every continuing arm. An explicit stopping arm contributes no returned value. |

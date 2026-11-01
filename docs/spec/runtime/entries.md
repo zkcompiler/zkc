@@ -7,7 +7,7 @@ for source rules and the [runtime reference](../../runtime/README.md) for usage.
 
 The native Host reads `zkc.language-interface/0`. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
-validation preserves kind, exact logical identity, usage permissions, constructor authority, custody, field
+validation preserves kind, exact logical identity, usage permissions, constructor authority, required sealing metadata, custody, field
 slices and nominal alternatives. Every logical port remains present, including
 zero-leaf values. Selectors and Entry choices must agree with those schemas.
 Source names use the [Unicode source profile](../language/lexical.md), retaining
@@ -32,6 +32,10 @@ name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
 leaves, and validation has a cumulative work allowance of 1,000,000. Native leaf
 parsing retains its own structural bounds. Portable schema summaries and the CPU's
 reconstructed native descriptor cache each have a 16 MiB total retained charge.
+Supply reconstruction and public selection indexing share a cumulative
+1,000,000-work allowance, independent of native storage width. Each reconstructed
+input/output supply plan also charges its retained descriptors and residual
+requirements against 16 MiB, including zero-storage schemas.
 Work bounds apply independently to each admission
 algorithm; a caller may also lower the compiler's phase limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
@@ -66,11 +70,32 @@ records role order, public/private inputs, setup-key ports, selected outputs and
 external services. Generated bindings, file requests and native ABI comparison
 use that plan. Native artifact facts are read independently during comparison.
 
+The plan retains exact source `(port, path, role)` associations and semantic empty
+values independently of physical storage. Complete transparent distributed roots
+of ordinary data admit through selected ordinary views. Ancestor sealing, hidden
+fields, ancestor constructor restrictions, custody and logical origins remain
+structural obligations; `Interface::outstanding_requirements` reports their
+coordinates. Recursive constructors for an ordinary selected value are checked
+separately at external ingress, preserving typed whole-value transport. Ordinary
+bytes cannot supply an oracle handle or anchor. The ordinary `Value` decoder does not
+accept a distributed root.
+
+Proof public entries use the strict `{port, path, role}` shape. They are ordered,
+disjoint verifier selections and cover every verifier ordinary input, including
+zero-storage values. Whole ordinary selections remain legal; whole logical public
+selections refuse. Run supply stays participant-specific. Proof public data is
+supplied once and routed to the corresponding native coordinates. Argument and
+setup assembly use increasing original native indices filtered for each role,
+then the existing service order. Public classification and availability establish
+no shared-control agreement; independently derived common-input requirements and
+trusted binding remain separate admission obligations.
+
+
 `RunRequest::setups` and `ProofRequest::setups` supply verifier-key bytes for every
 slot exactly. The Host authenticates and imports them through its existing bounded
-setup loader. Whole verifier-key inputs are initialized automatically: applications
+setup loader. Selected verifier-key slices, including nested keys, are initialized automatically: applications
 omit them from both named role inputs and named public values. Supplying a second
-value under that port name refuses. Prover-key inputs remain explicit named
+value under that selection alias refuses. Prover-key inputs remain explicit named
 `Value::Leaf` values containing authenticated `ProverMaterial`, a `ProverKeyFile`
 path, or a descriptor-backed `ProverKeyInput`. Both file forms require an
 independently expected material fingerprint. Other
@@ -155,8 +180,8 @@ Rust `entry::RunEntry::admit` retains an authenticated package, validates its
 interface and admits the exact run artifact through `RunHost`. Proof jobs use a
 separate API. Before accepting a run, every logical output must be copyable and
 have no affine custody; unsupported custody returns `entry-output-custody`.
-Every ordinary input must have source external construction authority or admission
-returns `entry-input-constructor`. Its native leaves must also have message codecs,
+Every external ordinary input must have source construction authority or
+admission returns `entry-input-constructor`. Its native leaves must also have message codecs,
 otherwise admission returns `entry-input-codec`. Whole builtin key ports instead use the explicit
 setup route above. These checks precede native bundle admission, which precedes
 asset admission.
@@ -207,11 +232,68 @@ run does not imply a protocol acceptance predicate: the caller must inspect its
 explicit result values. No source evaluation or protocol-specific execution loop
 is added.
 
+Retained Host calls transport already typed ordinary values from admitted
+outputs or calculations without repeating external constructor checks. They
+still check exact schemas, Copy/Drop permissions and custody. A whole sealed ordinary
+value may pass under its export policy, including as a child input; this grants
+no external byte constructor or public SDK field projection. Public SDK selection
+and input assembly through a sealed or inaccessible ancestor remain forbidden. Logical values, handles and
+custody cannot be supplied by assembling ordinary Host fields. Public source
+values still require canonical binding codecs. Setup-bearing context values
+arrive through external context maps and retain recursive constructor checks;
+the explicit builtin key initializer supplies keys separately.
+
+The native SDK represents inaccessible ordinary subtrees as
+`Value::Opaque(OpaqueValue)`. Its private storage originates only in admitted
+output reconstruction; public schema metadata cannot mint an owner. Whole-value
+input transport compares the complete admitted schema, including nominal
+identity, permissions, sealing, field visibility and zero-storage element
+metadata. Mismatch returns `entry-value-schema`. Hand-built transparent values
+retain external constructor checks. Native reports remove raw returned values
+after named reconstruction, including on failure, so they do not provide a
+second projection route.
+
+`OpaqueValue::field` and `variant_field` check the current unsealed ancestor and
+public child before returning a separately protected value. Unknown or private
+fields and sealed/associated projections return `entry-value-projection`; a
+wrong active alternative returns `entry-value-alternative`. An unsealed variant
+may expose its alternative name. `leaf` opens only an admitted native scalar or
+builtin kind, never a record or associated representation. Debug prints opaque
+type metadata without storage. These are source encapsulation rules; schema
+metadata and artifact bytes are public, and this makes no cryptographic hiding
+claim.
+
+Generated Rust bindings retain one opaque owner for such types, with checked
+public getters and no public representation fields or external constructor.
+Their conversion fingerprint is SHA-256 of the compact UTF-8 JSON encoding of
+the existing ordinary schema description, with every object's keys recursively
+sorted in ascending UTF-8 string order; arrays retain their declared order.
+The entire description participates, including authority metadata, nested fields,
+alternative payloads and zero-length element templates. Downstream JSON
+map-storage features do not change these bytes. Transport independently checks
+complete schema equality. Transparent bindings retain ordinary public fields. Neither generated metadata nor a matching layout
+grants source construction authority.
+
+Readable JSON export checks public visibility and sealing recursively, including
+inactive variant alternatives and zero-length element templates. Construction
+permission alone does not control output inspection: an entirely accessible
+nonconstructible result can export through its public fields and existing native
+leaf codecs. An inaccessible aggregate returns `entry-output-opaque` before
+encoding. No source whole-record opaque codec is declared by the current
+interface, and a native leaf codec cannot authorize opening its containing
+record. Input JSON remains external construction and cannot recreate retained
+owners. The low-level `BackendRun` adapter has no source opaque result owner and
+refuses inaccessible output schemas with `entry-backend-opaque` before native
+execution; the generic Runtime backend API retains its physical contract.
+
 ## Named proof calls
 
 `entry::ProofEntry::admit` authenticates the same package/interface boundary and
-binds the exact deployment through `NativeDeployment`. Inputs retain the source
-constructor requirement and outputs must be copyable without affine custody.
+binds the exact deployment through `NativeDeployment`. External inputs retain the
+recursive source constructor requirement; outputs must be copyable without affine custody. Operation-specific admission checks
+only the selected participant's consumed inputs and outputs, together with its
+public binding inputs. An unconsumed prover witness does not require a verifier
+constructor or input codec. Whole-artifact admission checks both participants.
 `prove` and `verify` take separate `ProofRequest` values; the verifier receives
 only its own inputs and the candidate proof. Neither method needs a live peer.
 The SDK supplies public values once through `ProofRequest::public`; `private`
@@ -472,8 +554,7 @@ though they have no native leaves. Unknown fields refuse. Verification rejects
 
 Booleans use JSON Boolean values; unit uses null; tuples and arrays use arrays;
 records use exact field-name objects. Variants contain exactly `case` and `fields`,
-with numeric names for positional fields. Associated representations are
-transparent. Fields and indices use canonical unsigned decimal strings: zero is
+with numeric names for positional fields. Associated representations have no public structural decoder or projection. Fields and indices use canonical unsigned decimal strings: zero is
 `"0"`, other values have no leading zeros. Signs, fractions, exponents, numeric
 JSON and out-of-range values refuse; there is no modular reduction. A
 [binary-field](../domains/values.md#binary-fields) element is never a decimal:

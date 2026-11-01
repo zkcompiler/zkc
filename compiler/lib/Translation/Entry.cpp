@@ -49,6 +49,8 @@ json::Value encodeEntrySchema(const Layout &layout) {
       result.push_back(
           json::Object{{"name", field.name},
                        {"offset", field.offset},
+                       {"public", field.isPublic},
+                       {"placement", nullptr},
                        {"schema", encodeEntrySchema(*field.layout)}});
     return result;
   };
@@ -64,17 +66,38 @@ json::Value encodeEntrySchema(const Layout &layout) {
     if (leaf.data())
       leaves.push_back(*leaf.data());
   }
-  return json::Object{{"kind", typeKindName(layout.type.kind)},
-                      {"identity", hash(typeIdentity(layout.type))},
-                      {"type", spelling(layout.type)},
-                      {"custody", layout.custody},
-                      {"constructible", layout.constructible},
-                      {"permissions", std::move(permissions)},
-                      {"fields", fields(layout.fields)},
-                      {"alternatives", std::move(alternatives)},
-                      {"leaves", std::move(leaves)}};
+  return json::Object{
+      {"kind", typeKindName(layout.type.kind)},
+      {"identity", hash(typeIdentity(layout.type))},
+      {"type", spelling(layout.type)},
+      {"generated", layout.generatedIdentity.empty()
+                        ? json::Value(nullptr)
+                        : json::Value(layout.generatedIdentity)},
+      {"custody", layout.custodyCount},
+      {"sealed", layout.sealed},
+      {"roles", json::Array{}},
+      {"element", layout.element ? encodeEntrySchema(*layout.element)
+                                 : json::Value(nullptr)},
+      {"constructible", layout.constructible},
+      {"permissions", std::move(permissions)},
+      {"fields", fields(layout.fields)},
+      {"alternatives", std::move(alternatives)},
+      {"leaves", std::move(leaves)}};
 }
 namespace entry_detail {
+Expected<bool> requiresNumericalConstruction(const Body &body,
+                                             const Operation &operation,
+                                             Layouts &layouts) {
+  auto *construct = std::get_if<Construct>(&operation.action);
+  if (!construct || construct->kind == Construct::Kind::Unpack)
+    return false;
+  if (operation.results.size() != 1)
+    return error("entry.construct", "source construction needs one result");
+  auto layout = layouts.get(body.values[operation.results.front().index].type);
+  if (!layout)
+    return layout.takeError();
+  return !(*layout)->constructible;
+}
 Expected<Calculation> extractCalculation(const Declaration &owner,
                                          const Body &body,
                                          const Operation &source,
@@ -85,7 +108,8 @@ Expected<Calculation> extractCalculation(const Declaration &owner,
   std::visit(
       [&](auto &a) {
         using T = std::decay_t<decltype(a)>;
-        if constexpr (std::is_same_v<T, MathValue> ||
+        if constexpr (std::is_same_v<T, Construct> ||
+                      std::is_same_v<T, MathValue> ||
                       std::is_same_v<T, LocalPrimitive> ||
                       std::is_same_v<T, HelperCall> ||
                       std::is_same_v<T, BulkApplication>) {
@@ -104,7 +128,8 @@ Expected<Calculation> extractCalculation(const Declaration &owner,
         }
       },
       action.action);
-  if (!std::holds_alternative<MathValue>(source.action) &&
+  if (!std::holds_alternative<Construct>(source.action) &&
+      !std::holds_alternative<MathValue>(source.action) &&
       !std::holds_alternative<LocalPrimitive>(source.action) &&
       !std::holds_alternative<HelperCall>(source.action) &&
       !std::holds_alternative<BulkApplication>(source.action) &&
@@ -202,7 +227,12 @@ class SourceArtifact {
       json::Object op;
       std::vector<ValueId> inputs;
       std::optional<std::vector<Type>> carried;
-      if (auto *construct = std::get_if<Construct>(&source.action)) {
+      auto numericalConstruction =
+          entry_detail::requiresNumericalConstruction(body, source, layouts);
+      if (!numericalConstruction)
+        return numericalConstruction.takeError();
+      if (auto *construct = std::get_if<Construct>(&source.action);
+          construct && !*numericalConstruction) {
         op["op"] =
             construct->kind == Construct::Kind::Unpack ? "unpack" : "construct";
         if (construct->kind != Construct::Kind::Unpack)

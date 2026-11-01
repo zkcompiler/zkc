@@ -196,11 +196,22 @@ int main() {
         aggregate.arguments = {oracle};
         for (uint64_t size : {0, 1}) {
           aggregate.dimension = Natural::constant(size);
-          zkc::test::refuses(layouts.get(aggregate), "source.oracle-aggregate");
+          auto schema = take(layouts.get(aggregate));
+          require(schema->element && schema->element->type == oracle &&
+                      schema->leaves.size() == size,
+                  "structural oracle layout lost its retained element schema");
+          zkc::test::refuses(layouts.packed(aggregate), "source.sequence");
+          zkc::test::refuses(
+              observeProtocolPort(schema, DataPlacement{{0}}, budget),
+              "source.placement");
         }
         Type tuple(Type::Kind::Tuple);
         tuple.arguments = {oracle};
-        zkc::test::refuses(layouts.get(tuple), "source.oracle-aggregate");
+        auto schema = take(layouts.get(tuple));
+        zkc::test::refuses(layouts.packed(tuple), "source.sequence");
+        zkc::test::refuses(
+            observeProtocolPort(schema, DataPlacement{{0}}, budget),
+            "source.placement");
       });
   cases.run("kind projections are forward functions rather than inference "
             "constructors",

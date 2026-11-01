@@ -1,5 +1,4 @@
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Companions.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/SourceTerms.h"
@@ -180,7 +179,7 @@ protocol Run roles(V,W,P)(source:Oracle<Table<F>>@P->V,
   return(out=first);
 }
 )");
-        auto entry = take(closeNativeRun(project, "m::Run"));
+        auto entry = take(closeSubject(project, "m::Run"));
         auto report = instances(entry);
         const auto &all = *report.getAsObject()->getArray("instances");
         const auto &root = find(all, "symbol", entry.root().symbol);
@@ -274,7 +273,7 @@ protocol Run roles(P,V)(source:O@P->V,a:Left@(P,V),b:Right@(P,V))->(out:O@P->V){
   return(out=source);
 }
 )");
-        auto entry = take(closeNativeRun(project, "m::Run"));
+        auto entry = take(closeSubject(project, "m::Run"));
         auto report = instances(entry);
         std::set<std::string> types, keys;
         for (const auto &item : *report.getAsObject()->getArray("instances")) {
@@ -321,7 +320,7 @@ protocol Run roles(P,V)(source:O@P->V,n:index@(P,V))->(out:O@P->V){
   return(out=source);
 }
 )");
-    auto entry = take(closeNativeRun(project, "m::Run"));
+    auto entry = take(closeSubject(project, "m::Run"));
     auto report = instances(entry);
     const auto &obligations =
         *find(*report.getAsObject()->getArray("instances"), "symbol",

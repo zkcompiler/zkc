@@ -120,6 +120,35 @@ Expected<SyntaxType> LayoutReader::type(Id id) {
   value.span = span(id);
   auto nodes = children(id);
   switch (kind(id)) {
+  case K::RoleType: {
+    auto annotated = port(id, true);
+    if (!annotated)
+      return annotated.takeError();
+    value = std::move(annotated->type);
+    if (value.components)
+      return fail(id, "duplicate placement annotation", "source.placement");
+    value.components = std::move(annotated->roles);
+    value.oracleHolder = std::move(annotated->oracleHolder);
+    value.span = span(id);
+    break;
+  }
+  case K::RoleApply: {
+    auto pair = parts(id, 2, 2);
+    if (!pair)
+      return pair.takeError();
+    auto base = type((*pair)[0]);
+    auto application = roles((*pair)[1]);
+    if (!base)
+      return base.takeError();
+    if (!application)
+      return application.takeError();
+    if (base->roles)
+      return fail(id, "duplicate role application", "source.roles");
+    value = std::move(*base);
+    value.roles = std::move(*application);
+    value.span = span(id);
+    break;
+  }
   case K::Argument:
   case K::Parameter: {
     auto inner = argument(id);

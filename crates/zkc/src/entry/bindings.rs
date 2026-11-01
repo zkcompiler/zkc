@@ -175,9 +175,10 @@ impl Generator {
             .collect()
     }
     fn schema(&mut self, schema: &Schema, prefix: &str) -> Result<String> {
-        if schema.kind.is_logical() {
+        if schema.is_logical() {
             return Err("entry-bindings-schema".into());
         }
+        let opaque = super::value::needs_opaque(schema);
         let simple = match schema.kind {
             Kind::Boolean => Some("::core::primitive::bool"),
             Kind::Index => Some("::core::primitive::u64"),
@@ -185,18 +186,19 @@ impl Generator {
             Kind::Field | Kind::Group | Kind::Builtin => Some("::zkc::entry::Value"),
             _ => None,
         };
-        if let Some(simple) = simple {
+        if let Some(simple) = simple
+            .filter(|_| !opaque || matches!(schema.kind, Kind::Field | Kind::Group | Kind::Builtin))
+        {
             return Ok(simple.into());
         }
         if let Some(name) = self.types.get(&schema.identity) {
             return Ok(name.clone());
         }
-        if schema.kind == Kind::Array {
-            let element = if let Some(field) = schema.fields.first() {
-                self.schema(&field.schema, &format!("{prefix}_Item"))?
-            } else {
-                "::zkc::entry::Value".into()
-            };
+        if schema.kind == Kind::Array && !opaque {
+            let element = self.schema(
+                schema.element.as_deref().ok_or("entry-bindings-schema")?,
+                &format!("{prefix}_Item"),
+            )?;
             let ty = format!("[{element};{}]", schema.fields.len());
             self.types.insert(schema.identity.clone(), ty.clone());
             return Ok(ty);
@@ -217,7 +219,9 @@ impl Generator {
         };
         let name = self.names.ty(&preferred)?;
         self.types.insert(schema.identity.clone(), name.clone());
-        if schema.kind == Kind::Variant {
+        if opaque {
+            self.opaque(&name, schema, prefix)?;
+        } else if schema.kind == Kind::Variant {
             let mut arms = Vec::new();
             let scope = self.names.scope();
             for arm in &schema.alternatives {
@@ -330,6 +334,51 @@ impl Generator {
             self.add("}}\n")?;
         }
         Ok(name)
+    }
+    fn opaque(&mut self, name: &str, schema: &Schema, prefix: &str) -> Result<()> {
+        let fingerprint = super::value::schema_fingerprint(schema);
+        self.add(format!("#[allow(non_camel_case_types)]\n#[derive(::core::fmt::Debug)]\npub struct {name} {{ __zkc_value: ::zkc::entry::OpaqueValue }}\n"))?;
+        self.add(format!("impl ::core::convert::From<{name}> for ::zkc::entry::Value {{fn from(value:{name})->Self{{Self::Opaque(value.__zkc_value)}}}}\n"))?;
+        self.add(format!("impl ::core::convert::TryFrom<::zkc::entry::Value> for {name} {{type Error=::std::string::String;fn try_from(value: ::zkc::entry::Value)->::core::result::Result<Self,Self::Error>{{let ::zkc::entry::Value::Opaque(value)=value else{{return ::core::result::Result::Err(\"entry-binding-value\".into());}};if !value.matches_binding(&{fingerprint:?}){{return ::core::result::Result::Err(\"entry-value-schema\".into());}}::core::result::Result::Ok(Self{{__zkc_value:value}})}}}}\n"))?;
+        if schema.sealed || schema.kind == Kind::Associated {
+            return Ok(());
+        }
+        if matches!(
+            schema.kind,
+            Kind::Boolean | Kind::Index | Kind::Field | Kind::Group | Kind::Builtin
+        ) {
+            self.add(format!("impl {name} {{pub fn leaf(&self)->::core::result::Result<::zkc::entry::Value,::std::string::String>{{self.__zkc_value.leaf()}}}}\n"))?;
+            return Ok(());
+        }
+        let scope = self.names.scope();
+        if schema.kind == Kind::Variant {
+            let case = self.names.member(scope, "alternative")?;
+            self.add(format!("impl {name} {{pub fn {case}(&self)->::core::result::Result<&str,::std::string::String>{{self.__zkc_value.alternative()}}}}\n"))?;
+            for arm in &schema.alternatives {
+                for field in arm.fields.iter().filter(|f| f.public) {
+                    let method = self
+                        .names
+                        .member(scope, &format!("{}_{}", arm.name, field.name))?;
+                    let ty = self.schema(
+                        &field.schema,
+                        &format!("{prefix}_{}_{}", arm.name, field.name),
+                    )?;
+                    self.add(format!("#[allow(non_snake_case)]\nimpl {name} {{pub fn {method}(&self)->::core::result::Result<{ty},::std::string::String>{{__zkc_decode(self.__zkc_value.variant_field({:?},{:?})?)}}}}\n",arm.name,field.name))?;
+                }
+            }
+        } else {
+            for field in schema.fields.iter().filter(|f| f.public) {
+                let label = if field.name.bytes().all(|c| c.is_ascii_digit()) {
+                    format!("item_{}", field.name)
+                } else {
+                    field.name.clone()
+                };
+                let method = self.names.member(scope, &label)?;
+                let ty = self.schema(&field.schema, &format!("{prefix}_{}", field.name))?;
+                self.add(format!("#[allow(non_snake_case)]\nimpl {name} {{pub fn {method}(&self)->::core::result::Result<{ty},::std::string::String>{{__zkc_decode(self.__zkc_value.field({:?})?)}}}}\n",field.name))?;
+            }
+        }
+        Ok(())
     }
     fn structure(&mut self, name: &str, fields: &[Member]) -> Result<()> {
         self.add(format!(

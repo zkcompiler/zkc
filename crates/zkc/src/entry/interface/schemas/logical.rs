@@ -4,6 +4,25 @@ use super::*;
 
 impl<'a> Schemas<'a> {
     pub(super) fn logical_schema(&mut self, schema: &'a Schema, depth: usize) -> Result<()> {
+        if schema.kind == Kind::LogicalRecord && schema.roles.is_empty() {
+            // Current-schema migration alternative for the brace source profile.
+            // Remove with its Layout seam when the source profile is retired.
+            require(
+                schema.custody == 0 && schema.permissions == [Permission::Copy, Permission::Drop],
+                E::Schema,
+            )?;
+            let mut direct_handle = false;
+            for field in &schema.fields {
+                self.charge(1)?;
+                require(field.placement.is_none(), E::Schema)?;
+                if field.schema.kind.is_handle() {
+                    direct_handle = true;
+                } else {
+                    self.shared(&field.schema)?;
+                }
+            }
+            require(direct_handle, E::Schema)?;
+        }
         let handle = schema.kind.is_handle();
         require(
             schema.oracle.get().is_some() == handle
@@ -54,43 +73,51 @@ impl<'a> Schemas<'a> {
         Ok(())
     }
     pub(super) fn logical_fields(&mut self, schema: &'a Schema, depth: usize) -> Result<()> {
-        let mut offset = 0;
+        let mut offset = schema.custody as usize;
         let mut names = BTreeSet::new();
-        let mut handle = false;
         require(schema.leaves.is_empty(), E::Schema)?;
-        for field in &schema.fields {
+        for (index, field) in schema.fields.iter().enumerate() {
             self.charge(1 + field.name.len())?;
             require(
-                identifier(&field.name)
-                    && names.insert(&field.name)
+                (if schema.kind == Kind::LogicalRecord {
+                    identifier(&field.name)
+                } else {
+                    field.name == index.to_string()
+                }) && names.insert(&field.name)
                     && field.offset as usize == offset,
                 E::Schema,
             )?;
             self.check(&field.schema, depth + 1)?;
             require(
-                field.schema.kind != Kind::LogicalRecord
-                    && !field.schema.custody
-                    && field.schema.permissions == [Permission::Copy, Permission::Drop],
+                schema
+                    .permissions
+                    .iter()
+                    .all(|p| field.schema.permissions.contains(p)),
                 E::Schema,
             )?;
+            if schema.kind == Kind::LogicalRecord && !schema.roles.is_empty() {
+                let formula = field.placement.as_ref().ok_or(E::Schema)?;
+                super::super::placement::check(&field.schema, formula, schema.roles.len(), self)?;
+            } else {
+                require(field.placement.is_none(), E::Schema)?;
+            }
             if field.schema.kind.is_handle() {
                 row_bound(&field.schema, field.maximum_rows.get().copied())?;
-                offset += 1;
-                handle = true;
             } else {
                 require(field.maximum_rows.get().is_none(), E::Schema)?;
-                self.shared(&field.schema)?;
-                offset += field.schema.leaves.len();
             }
+            offset = offset
+                .checked_add(body_width(&field.schema))
+                .ok_or(E::Limit)?;
             require(offset <= 1024, E::Limit)?;
         }
-        require(handle, E::Schema)
+        Ok(())
     }
     pub(super) fn shared(&mut self, schema: &Schema) -> Result<()> {
         self.charge(1 + schema.leaves.len())?;
         require(
-            !schema.kind.is_logical()
-                && !schema.custody
+            !schema.is_logical()
+                && schema.custody == 0
                 && schema.permissions == [Permission::Copy, Permission::Drop]
                 && schema
                     .leaves
@@ -98,6 +125,9 @@ impl<'a> Schemas<'a> {
                     .all(|l| self.leaves[l.as_str()].total && self.leaves[l.as_str()].participants),
             E::Schema,
         )?;
+        if let Some(element) = &schema.element {
+            self.shared(element)?;
+        }
         for field in schema
             .fields
             .iter()
@@ -124,10 +154,29 @@ pub(in crate::entry::interface) fn row_bound(
 /// Protocol slots differ from logical-record body offsets: every handle, even a
 /// zero-capacity sequence, occupies its data/anchor pair.
 pub(in crate::entry::interface) fn native_width(schema: &Schema) -> usize {
-    if schema.kind == Kind::LogicalRecord {
-        schema.fields.iter().map(|f| native_width(&f.schema)).sum()
-    } else if schema.kind.is_handle() {
+    if schema.kind.is_handle() {
         2
+    } else if schema.is_logical() {
+        schema.custody as usize
+            + schema
+                .fields
+                .iter()
+                .map(|f| native_width(&f.schema))
+                .sum::<usize>()
+    } else {
+        schema.leaves.len()
+    }
+}
+pub(in crate::entry::interface) fn body_width(schema: &Schema) -> usize {
+    if schema.kind.is_handle() {
+        1
+    } else if schema.is_logical() {
+        schema.custody as usize
+            + schema
+                .fields
+                .iter()
+                .map(|f| body_width(&f.schema))
+                .sum::<usize>()
     } else {
         schema.leaves.len()
     }

@@ -139,6 +139,38 @@ int main() {
             "payload flattening lost complete value boundaries");
     refuses(layouts.payload(value, 2), "evm.layout");
   });
+  cases.run("nominal custody slots erase without erasing adjacent data", [&] {
+    auto a = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::ResourceUnit, "Slot.A");
+    auto b = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::ResourceUnit, "Slot.B");
+    auto vector = data::FieldVectorType::get(&context, base.getDomain());
+    auto signature = take(layouts.signature({a, base, b, vector, a}));
+    require(
+        a != b && signature.values.size() == 5 &&
+            signature.lanes == ArrayRef<Type>{i256, i64, i64} &&
+            signature.values[0].first == 0 && signature.values[0].count == 0 &&
+            signature.values[1].first == 0 && signature.values[1].count == 1 &&
+            signature.values[2].first == 1 && signature.values[2].count == 0 &&
+            signature.values[3].first == 1 && signature.values[3].count == 2 &&
+            signature.values[4].first == 3 && signature.values[4].count == 0,
+        "zero-storage custody shifted or erased data lanes");
+    require(take(layouts.signature({a, b})).lanes.empty(),
+            "empty custody-only signature acquired storage");
+    refuses(layouts.get(a), "evm.layout");
+    auto wire = evm::verifyWireType(layouts, a);
+    require(bool(wire), "unit acquired a wire codec");
+    consumeError(std::move(wire));
+    auto transcript = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::Transcript,
+        "hash-chain.keccak256.bls12-381.fr64be/0");
+    refuses(layouts.signature({transcript}), "evm.layout");
+    MLIRContext foreign(registry);
+    foreign.loadAllAvailableDialects();
+    auto other = runtime::CapabilityType::get(
+        &foreign, runtime::CapabilityKind::ResourceUnit, "Slot.A");
+    refuses(layouts.signature({other}), "evm.layout");
+  });
   cases.run("local representation does not grant a wire codec", [&] {
     auto fixed = data::FixedVectorType::get(&context, base, 0);
     take(layouts.get(fixed));

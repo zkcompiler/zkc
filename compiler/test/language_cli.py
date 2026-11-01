@@ -37,13 +37,14 @@ with case('observation files cannot replace source or prior evidence'):
         attempted = commands.attempt([compiler, 'language-check', *inputs, f'--{option}=-'])
         assert attempted.returncode > 0 and not attempted.stdout
 
-with case('diagnostic source indices include the checked installation source'):
+with case('diagnostic source indices include both checked installation sources'):
     observation = OUT / 'source-indices.json'
     commands.run([compiler, 'language-check', *options, f'--diagnostics={observation}'])
     sources = json.loads(observation.read_text())['sources']
-    assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude']
-    assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation']
-    assert sources[-1]['path'] == '<installation>/zkc/prelude.zkc'
+    assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude', 'zkc::records']
+    assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation', 'installation']
+    assert [s['path'] for s in sources[-2:]] == ['<installation>/zkc/prelude.zkc',
+                                               '<installation>/zkc/records.zkc']
 
 with case('definition checking never treats empty Entry selection as omission'):
     for args in [
@@ -76,15 +77,19 @@ with case('explicit source path retains its original and interface'):
     assert original.count('"protocol.restrict_roles"') == 3
     (OUT / 'transfer.mlir').write_text(original)
 
-with case('explicit assets change capture without changing executable original'):
+with case('explicit assets bind generated Host schemas without changing the protocol'):
     relations = Path(__file__).resolve().parents[2] / 'examples/relations'
     asset_args = [f'--asset=circuit=r1cs-json={relations / "multiply.r1cs.json"}',
                   f'--asset=trace_constraints=air-json={relations / "squaring.air.json"}']
     commands.run([compiler, 'language-check', *options, *asset_args])
     captured = json.loads(commands.run([compiler, 'language-interface', *options, *asset_args]))
     assert captured['capture'] != host_interface['capture']
-    assert captured['original'] == host_interface['original']
-    assert commands.run([compiler, 'language-emit', *options, *asset_args]) == host_original
+    assert captured['original'] != host_interface['original']
+    assert captured['functions'] != host_interface['functions']
+    assert captured['protocols'] == host_interface['protocols']
+    subject_options = ['--source-format=zkc', '--subject=transfer::Transfer', *modules]
+    assert commands.run([compiler, 'language-emit', *subject_options, *asset_args]) == commands.run(
+        [compiler, 'language-emit', *subject_options])
     commands.run([compiler, 'language-check', *options, *asset_args, asset_args[0]], refuses='source.asset')
     commands.run([compiler, 'language-check', *options,
                   f'--asset=bad=guess={relations / "multiply.r1cs.json"}'], refuses='source.options')
@@ -355,7 +360,8 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
         args = ['--source-format=zkc', '--entry=sample::Demo', f'--module=sample={source}']
         schema = json.loads(commands.run([compiler, 'language-interface', *args]))
         assert schema['job']['construction']['suite'] == identity
-        assert schema['job']['public'] == [0, 1]
+        assert schema['job']['public'] == [{'port': 0, 'path': [], 'role': 'V'},
+                                           {'port': 1, 'path': [], 'role': 'V'}]
         for simplified in (0, 1):
             for released in (0, 1):
                 flags = ([] if simplified else ['--no-simplify']) + (['--release-storage'] if released else [])

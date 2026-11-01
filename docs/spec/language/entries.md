@@ -86,13 +86,36 @@ operation signatures are `D::prove(public, witness)` and
 type; structurally equal products do not make deployments interchangeable.
 Service, setup and resource authority are not freely constructible data fields.
 Only ordinary copyable native data crosses the Host numerical boundary;
-affine managed custody remains with its native owner. Internal numerical
-transport may preserve opaque or restricted nominal types, including existing
-native results. It grants no source constructor authority: opaque factories
+affine managed custody remains with its native owner. Internal numerical and
+generated child-call transport may preserve opaque or restricted nominal types,
+including existing native results. It grants no source constructor authority: opaque factories
 require their defining module's authority, and generated native results remain
 projection-only. Compiler publication checks this source correspondence.
 External input construction separately requires the schema's constructor
 permission; numerical result reconstruction does not grant that permission.
+An authored Function input may instead receive an already retained ordinary
+value of its exact closed schema, including a private or sealed record. Selecting
+that function checks ordinary Host data and usage permissions, not permission to
+construct every input from fields. Fresh JSON decoding and field assembly still
+need constructor authority. Whole-value passage grants no field projection,
+setup authority, resource custody or logical-handle ingress.
+
+Home-authorized construction of a value without an external constructor lowers
+through a numerical fragment retaining that checked source action and lexical
+owner. It does not make the raw Host constructor callable for that schema.
+
+Closing a checked Host invocation preserves its already typed ordinary arguments;
+it does not repeat external input construction. Direct native Protocol and proof
+selection still requires the consumed ordinary components to have an external
+supplier. Authored Function parameters follow the retained-value rule above. Semantic subject closure for either a
+protocol or proof retains the checked computation without asserting external
+supply or Host admission. All three closure contexts retain setup, scoped
+specialization, source-claim, message, relation and common-control checks.
+Generated signature admission independently checks exact whole-value schemas
+and Copy/Drop permissions, excluding logical handles and custody. Splitting an
+ancestor to form participant, public or setup records still requires its
+constructor and accessible fields, including zero-extent element templates.
+Setup context retains external assembly policy and exact builtin key suppliers.
 
 Only successful explicit source return roots are published. Normal joint-run
 false is ordinary data. Semantic verifier rejection produces Rejected without
@@ -110,6 +133,13 @@ static parameters and chooses proving/verification policy:
 proof-decl := "proof" name "=" path static-args? (";" | "{" clause* "}")
 ```
 
+The layout frontend admits `scheme Name = Protocol:` with one indented choice
+per line. `public state.statement, state.empty` retains the same checked
+field selectors. `setup pcs {state.vk, state.commitment}` associates selected
+ordinary leaves without consuming unrelated siblings. The declaration feeds the
+checked proof policy; construction realization remains separately selected by
+its own admitted contract. The retired layout `proof` head is refused.
+
 A protocol target requires a complete proof configuration block:
 
 ```text
@@ -126,11 +156,14 @@ proof Release = Proof;
 
 `prover`, `verifier`, `public`, `accept` and `construction` are required exactly
 once, in any order. Proof jobs require two distinct protocol participants. Public
-ports are named whole logical inputs and must cover exactly the data ports
-available at the verifier, including empty logical ports. Their order is
-canonicalized to declaration order. A mismatch diagnostic prints the expected
-`public` list. This explicit list approves the whole logical public interface;
-it includes setup-provided verifier keys even when the Host supplies their bytes.
+selections name ordinary input subtrees, such as `state.statement` and
+`state.empty`. A whole ordinary port uses its empty path. A whole role-bearing
+product is refused. Selections are canonicalized by input ordinal and field
+path, with the verifier role retained explicitly in the checked representation.
+Duplicates and ancestor overlap refuse. Coverage is exact over every verifier
+ordinary field, including units and empty products independently of native slots.
+The list includes setup-initialized verifier keys. It grants neither common
+control nor authority to construct a private, sealed or resource wrapper.
 Relation purposes do not authorize inputs.
 `accept` names a Boolean output or product field available at the verifier;
 its native result index follows the complete flattened output signature.
@@ -414,18 +447,20 @@ multilinear KZG, including keys and nested commitment/proof data. Merkle commitm
 do not require a setup key. Slots do not introduce runtime operations or authorize
 setup material.
 
-A proof slot must include at least one whole public verifier-key input available
-at the verifier. Every verifier-key input must satisfy that rule; at most 64
-verifier-key ports are admitted in a proof Entry, independently of the slot count.
+A proof slot must include at least one public exact builtin verifier-key field
+available at the verifier. Every verifier-key input must satisfy that rule; at most 64
+verifier-key fields are admitted in a proof Entry, independently of the slot count.
 Prover-key inputs must remain at the prover. The Host pins
 all keys in one slot to the same application-selected identity. Multiple slots
 may select different identities. A joint invocation slot does not require a verifier-key input.
 A protocol association supplies the joint invocation contract. A proof block
 always requires its complete configuration, even if it also has setup slots.
 
-Explicit setup association admits whole builtin `prover_key` and `verifier_key`
-input ports through checked Host initialization. It does not grant external construction authority,
-message transmission, nested/private key construction or opening-state ingress.
+Explicit setup association admits selected builtin `prover_key` and `verifier_key`
+fields through checked Host initialization, including visible nested fields. It
+does not grant external construction authority, message transmission, private
+key construction or opening-state ingress. Selected keys preserve unrelated
+ordinary siblings. Setup-associated commitments still require their actual data.
 Other input constructors keep their existing permission requirements. Current
 source slots require an input association; they do not express receive-only keys
 or a separate expected key per receive site. The native Host's authorized setup
@@ -433,3 +468,25 @@ registry governs incoming PCS headers. An authorized value may decode and be
 observed before `pcs.check` rejects a different explicit verifier key. Slots do
 not name outputs: an unchecked returned commitment or proof is authorized but
 not automatically tied to a specific output setup.
+
+## Ordinary component supply
+
+A transparent distributed root composed entirely of admitted ordinary fields can
+be supplied through its exact field-and-role roster. The bounded closed boundary
+plan reuses the checked schema, recursive placement and native component map.
+Every ordinary selection retains its original native coordinates and an explicit
+logical supply obligation even when it occupies no native slot. Native proof
+public indices remain a sorted flat expansion of the selected verifier data.
+A selected child does not authorize assembling its parent: all ancestor privacy,
+sealing, custody and construction obligations must hold. External root adapters
+cannot invent handle data, anchors or custody. Zero arrays validate their retained
+element template without inventing an element origin.
+
+Generated role inputs, Public and Witness contain selected ordinary subtrees.
+Whole unsplit ordinary ports keep their names. Child names join port and field
+names with underscores; whole names are reserved first and collisions receive
+`_2`, `_3` in coordinate order. Candidates over 120 UTF-8 bytes use a 48-byte
+UTF-8-safe prefix and a SHA256 digest of the framed port/path coordinate. Exact
+selection associations carry authority independently of aliases. Public supplies
+are routed once; Run supplies remain participant-specific. Availability and
+public classification do not establish common-control agreement.

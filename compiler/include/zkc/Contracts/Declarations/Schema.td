@@ -9,6 +9,26 @@ class ZKC_Contribution<string id, list<string> dependencies,
   list<string> requires = dependencies;
   list<ZKC_Declaration> declarations = records;
 }
+// Source associations grant elaboration rules, never execution authority.
+class ZKC_FrontendAssociation<string id, string owner, string value,
+                              string rule, bit fallback> : ZKC_Declaration {
+  string identity = id;
+  string module = owner;
+  string name = value;
+  string signature = rule;
+  bit implicit = fallback;
+}
+class ZKC_FrontendHome<string head, string owner, list<string> exports = []> : ZKC_Declaration {
+  string name = head;
+  string module = owner;
+  list<string> members = exports;
+}
+class ZKC_ServiceMethod<string value, string rule, string requirement>
+    : ZKC_Declaration {
+  string name = value;
+  string signature = rule;
+  string capability = requirement;
+}
 class ZKC_ParameterKind<string value> : ZKC_Declaration { string name = value; }
 def DomainKind : ZKC_ParameterKind<"Domain">;
 def TypeKind : ZKC_ParameterKind<"Type">;

@@ -12,15 +12,18 @@ pub(super) fn check(
     };
     check_interface(d, interface, families)
 }
-fn named(value: &TypedValue) -> NamedValues {
-    value
-        .schema()
-        .fields
-        .iter()
+fn named<'a>(
+    interface: &crate::entry::Interface,
+    ports: impl Iterator<Item = InputPort<'a>>,
+    value: &TypedValue,
+) -> NamedValues {
+    ports
+        .filter(|p| ordinary(interface, *p))
         .zip(value.fields())
-        .map(|(f, v)| (f.name.clone(), v.to_value()))
+        .map(|(p, v)| (p.name.clone(), v.to_value()))
         .collect()
 }
+
 fn extras<'a>(
     interface: &crate::entry::Interface,
     ports: impl Iterator<Item = InputPort<'a>>,
@@ -65,7 +68,7 @@ pub(super) fn run_request(
                     interface,
                     interface.input_ports(role),
                     &context.inputs,
-                    named(source),
+                    named(interface, interface.input_ports(role), source),
                 )?,
                 services: context.services.clone(),
             },
@@ -93,7 +96,7 @@ pub(super) fn proof_request(
         proof.verifier
     }];
     let private = if producer {
-        named(&values[1])
+        named(interface, interface.named_inputs(role), &values[1])
     } else {
         BTreeMap::new()
     };
@@ -104,7 +107,7 @@ pub(super) fn proof_request(
         .filter(|(n, _)| {
             interface
                 .input_ports(role)
-                .any(|p| p.public.is_some() && p.name.as_str() == n.as_str())
+                .any(|p| p.public && p.name.as_str() == n.as_str())
         })
         .map(|(n, v)| (n.clone(), data::duplicate(v)))
         .collect();
@@ -124,7 +127,7 @@ pub(super) fn proof_request(
             interface,
             interface.public_ports(),
             &public_extras,
-            named(&values[0]),
+            named(interface, interface.public_ports(), &values[0]),
         )?,
         private: crate::entry::RoleInputs {
             inputs: extras(

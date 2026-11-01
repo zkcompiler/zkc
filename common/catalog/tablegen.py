@@ -174,6 +174,12 @@ def project(catalog):
             target = caps[e["predicate"]]
             cls = "ZKC_CapabilityExport"
         emit(f"{cls}<{q(e['module'])}, {q(e['name'])}, {target}>", [ordinal(i)])
+    for i, a in enumerate(catalog["frontendAssociations"]):
+        emit(f"ZKC_FrontendAssociation<{q(a['identity'])}, {q(a['module'])}, {q(a['name'])}, {q(a['signature'])}, {flag(a['implicit'])}>", [ordinal(i)])
+    for i, h in enumerate(catalog["frontendHomes"]):
+        emit(f"ZKC_FrontendHome<{q(h['constructor'])}, {q(h['module'])}, {seq(q(m) for m in h['members'])}>", [ordinal(i)])
+    for i, m in enumerate(catalog["serviceMethods"]):
+        emit(f"ZKC_ServiceMethod<{q(m['name'])}, {q(m['signature'])}, {q(m['capability'])}>", [ordinal(i)])
     operations = {
         o["name"]: symbol("Operation", o["name"]) for o in catalog["operations"]
     }

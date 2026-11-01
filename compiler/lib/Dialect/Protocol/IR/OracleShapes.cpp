@@ -1,6 +1,7 @@
 #include "OracleAnalysis.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
@@ -92,6 +93,8 @@ class InitialShape {
           kind && kind.getStaticShape(meaning))
         return success();
     if (auto argument = dyn_cast<BlockArgument>(value)) {
+      if (auto capture = selectedCapture(argument))
+        return add(capture, scope, meaning);
       auto environment = scopes[scope];
       if (argument.getOwner() == &environment.program.getBody().front()) {
         if (environment.call)
@@ -110,6 +113,16 @@ class InitialShape {
     auto *op = value.getDefiningOp();
     if (!op || failed(op->getName().verifyInvariants(op)))
       return refuse("malformed oracle shape dependency");
+    if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+      if (failed(branch.verifyRegions()) ||
+          failed(add(branch.getInputs()[0], scope, Meaning{})))
+        return failure();
+      unsigned index = cast<OpResult>(value).getResultNumber();
+      for (Region &arm : branch.getArms())
+        if (failed(add(arm.front().back().getOperand(index), scope, meaning)))
+          return failure();
+      return success();
+    }
     if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op))
       return loop(repeat, cast<OpResult>(value).getResultNumber() + 1, item,
                   false);

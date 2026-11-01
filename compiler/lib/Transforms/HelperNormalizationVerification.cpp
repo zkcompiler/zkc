@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Interfaces/Collection.h"
 #include <limits>
 #include <vector>
@@ -114,7 +115,7 @@ struct HelperNormalizationChecker::Implementation {
     }
     for (auto &op : block.without_terminator()) {
       if (!terms.charge(1 + op.getNumOperands() + op.getNumResults()) ||
-          op.getNumRegions())
+          (op.getNumRegions() && !isa<data::BranchOp>(op)))
         return failure();
       SmallVector<Term> operands, results;
       for (Value value : op.getOperands()) {
@@ -151,6 +152,29 @@ struct HelperNormalizationChecker::Implementation {
         // executable occurrence admission remains the recipe caller's job.
         attributes.erase("site");
         auto name = op.getName().getStringRef();
+        if (auto branch = dyn_cast<data::BranchOp>(op)) {
+          SmallVector<Term> selected(operands);
+          for (auto [index, region] : enumerate(branch.getArms())) {
+            auto payload = selectedPayloadTypes(&op, index);
+            if (!payload) {
+              consumeError(payload.takeError());
+              return failure();
+            }
+            SmallVector<Term> arguments;
+            for (auto [position, type] : enumerate(*payload))
+              arguments.push_back(terms.expression(
+                  "selected_payload", type,
+                  builder.getDictionaryAttr({builder.getNamedAttr(
+                      "alternative", branch.getAlternatives()[index])}),
+                  {operands[0]}, position));
+            append_range(arguments, ArrayRef(operands).drop_front());
+            auto yielded = read(region.front(), arguments, source, depth + 1);
+            if (failed(yielded))
+              return failure();
+            append_range(selected, *yielded);
+          }
+          operands = std::move(selected);
+        }
         if (auto dim = dyn_cast<data::DimOp>(op)) {
           auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
           auto axis = dim.getAxisAttr().getInt();
@@ -184,7 +208,7 @@ struct HelperNormalizationChecker::Implementation {
       }
     }
     auto &ret = block.back();
-    if (!isa<func::ReturnOp>(ret) || !ret.getAttrs().empty() ||
+    if (!isa<func::ReturnOp, data::YieldOp>(ret) || !ret.getAttrs().empty() ||
         !terms.charge(1 + ret.getNumOperands()))
       return failure();
     SmallVector<Term> result;

@@ -10,6 +10,7 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -89,6 +90,9 @@ bool valueType(Type type) {
     return group.getDomain() == groupDomain;
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type))
     return service.getContract() == randomContract;
+  if (auto capability = dyn_cast<runtime::CapabilityType>(type))
+    return capability.getKind() == runtime::CapabilityKind::ResourceUnit &&
+           protocol::resourceUnitDomain(capability.getIdentity());
   return false;
 }
 
@@ -178,12 +182,16 @@ enum class Primitive {
   Split,
   Append,
   VectorEqual,
-  FieldEqual
+  FieldEqual,
+  UnitCreate,
+  UnitPass,
+  UnitConsume
 };
 struct PrimitiveSpec {
   StringLiteral contract, inputs, outputs;
   Primitive primitive;
   bool field;
+  bool slot = false;
 };
 constexpr PrimitiveSpec primitiveSpecs[] = {
     {"index.constant", "", "i", Primitive::Constant, false},
@@ -201,10 +209,14 @@ constexpr PrimitiveSpec primitiveSpecs[] = {
     {"vector.append", "vf", "v", Primitive::Append, true},
     {"vector.equal", "vv", "b", Primitive::VectorEqual, true},
     {"field.equal", "ff", "b", Primitive::FieldEqual, true},
+    {"resource_unit.create", "", "r", Primitive::UnitCreate, false, true},
+    {"resource_unit.pass", "r", "r", Primitive::UnitPass, false, true},
+    {"resource_unit.consume", "r", "", Primitive::UnitConsume, false, true},
 };
 struct CheckedPrimitive {
   Primitive primitive;
   uint64_t literal = 0;
+  std::string slot = {};
 };
 using PrimitiveMap = llvm::DenseMap<Operation *, CheckedPrimitive>;
 
@@ -215,6 +227,7 @@ bool primitivePorts(TypeRange types, StringRef ports) {
     bool valid = port == 'i'   ? type.isUnsignedInteger(64)
                  : port == 'b' ? type.isSignlessInteger(1)
                  : port == 'v' ? isa<data::FieldVectorType>(type)
+                 : port == 'r' ? isa<runtime::CapabilityType>(type)
                                : isa<algebra::FieldType>(type);
     if (!valid || !valueType(type))
       return false;
@@ -393,7 +406,11 @@ class Admission {
     for (const auto &spec : primitiveSpecs) {
       if (contract.getValue() != spec.contract)
         continue;
-      if (spec.field
+      if (spec.slot
+              ? (arguments.size() != 1 || !isa<StringAttr>(arguments[0]) ||
+                 !protocol::resourceUnitDomain(
+                     cast<StringAttr>(arguments[0]).getValue()))
+          : spec.field
               ? (arguments.size() != 1 ||
                  arguments[0] != StringAttr::get(op.getContext(), fieldDomain))
               : !arguments.empty())
@@ -423,6 +440,24 @@ class Admission {
             spec.outputs))
       return error("structured-reference-binding", "operation or ports");
     CheckedPrimitive checked{spec.primitive};
+    if (spec.slot) {
+      checked.slot =
+          cast<StringAttr>(
+              cast<runtime::BindingOp>(found->first).getArguments()[0])
+              .getValue()
+              .str();
+      SmallVector<Type> types;
+      llvm::append_range(types, op.getOperands().drop_front().getTypes());
+      llvm::append_range(
+          types,
+          cast<exec::OutcomeType>(op.getResult(0).getType()).getPayload());
+      for (auto type : types) {
+        auto unit = dyn_cast<runtime::CapabilityType>(type);
+        if (!unit || unit.getKind() != runtime::CapabilityKind::ResourceUnit ||
+            unit.getIdentity() != checked.slot)
+          return error("structured-reference-binding", "nominal unit slot");
+      }
+    }
     bool constant = spec.primitive == Primitive::Constant;
     if (parameters.size() != (constant ? 1u : 0u))
       return error("structured-reference-binding", "parameters");
@@ -1121,9 +1156,18 @@ using Transfer = std::shared_ptr<HeldValues>;
 struct Stop {
   std::string reason, site;
 };
+struct UnitRoot {
+  std::string slot;
+  uint64_t generation = 0;
+  bool live = true;
+};
+struct Unit {
+  std::shared_ptr<UnitRoot> root;
+  uint64_t generation;
+};
 // monostate is an absent participant component, never a missing SSA binding.
 using Datum = std::variant<std::monostate, bool, uint64_t, APInt, Vector,
-                           Domain, Result, Scope, Transfer, Stop>;
+                           Domain, Result, Scope, Transfer, Stop, Unit>;
 using Values = std::vector<Datum>;
 struct DomainRows {
   std::vector<Values> rows;
@@ -1227,6 +1271,12 @@ bool matches(Type type, const Datum &value) {
     return std::holds_alternative<uint64_t>(value);
   if (isa<runtime::ScopeType>(type))
     return std::holds_alternative<Scope>(value);
+  if (auto capability = dyn_cast<runtime::CapabilityType>(type)) {
+    auto unit = std::get_if<Unit>(&value);
+    return capability.getKind() == runtime::CapabilityKind::ResourceUnit &&
+           unit && unit->root->slot == capability.getIdentity() &&
+           unit->root->live && unit->generation == unit->root->generation;
+  }
   if (isa<exec::StopType>(type))
     return std::holds_alternative<Stop>(value);
   if (auto outcome = dyn_cast<exec::OutcomeType>(type)) {
@@ -1334,6 +1384,25 @@ class Reference {
     Primitive code = found->second.primitive;
     Outcome result;
     switch (code) {
+    case Primitive::UnitCreate:
+      result.values.emplace_back(
+          Unit{std::make_shared<UnitRoot>(UnitRoot{found->second.slot}), 0});
+      break;
+    case Primitive::UnitPass:
+    case Primitive::UnitConsume: {
+      auto unit = std::get<Unit>(args[0]);
+      if (!unit.root->live || unit.generation != unit.root->generation ||
+          unit.root->slot != found->second.slot)
+        return error("structured-reference-custody", "stale nominal unit");
+      if (code == Primitive::UnitConsume)
+        unit.root->live = false;
+      else {
+        ++unit.root->generation;
+        unit.generation = unit.root->generation;
+        result.values.emplace_back(std::move(unit));
+      }
+      break;
+    }
     case Primitive::Constant:
       result.values.emplace_back(found->second.literal);
       break;

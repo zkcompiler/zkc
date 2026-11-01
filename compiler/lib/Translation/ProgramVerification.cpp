@@ -164,6 +164,58 @@ class ArtifactCorrespondence {
             !environment.inputs(op.getOperands().drop_front(), r->values) ||
             !outputs(r->continuations))
           return false;
+      } else if (record.get<program::Conditional>() ||
+                 record.get<program::Match>()) {
+        if (op.getName().getStringRef() != "protocol.participant_branch")
+          return false;
+        program::Names alternatives, captured, joined;
+        std::string selector;
+        SmallVector<const program::Body *> bodies;
+        SmallVector<program::Names> payloads;
+        if (auto branch = record.get<program::Conditional>()) {
+          selector = branch->condition;
+          captured = branch->captures;
+          joined = branch->outputs;
+          alternatives = {"then", "else"};
+          bodies = {&branch->thenBody, &branch->elseBody};
+          payloads.resize(2);
+        } else {
+          const auto &match = *record.get<program::Match>();
+          selector = match.input;
+          captured = match.captures;
+          joined = match.outputs;
+          for (const auto &arm : match.arms) {
+            alternatives.push_back(arm.alternative);
+            bodies.push_back(&arm.body);
+            payloads.push_back(arm.payload);
+          }
+        }
+        if (!strings(op.getAttrOfType<ArrayAttr>("alternatives"),
+                     alternatives) ||
+            op.getNumRegions() != bodies.size() ||
+            op.getNumOperands() != 1 + captured.size() ||
+            !environment.inputs(op.getOperands().take_front(), {selector}) ||
+            !environment.inputs(op.getOperands().drop_front(), captured))
+          return false;
+        for (auto [index, region] : enumerate(op.getRegions())) {
+          if (!llvm::hasSingleElement(region))
+            return false;
+          auto &arm = region.front();
+          const auto &payload = payloads[index];
+          if (arm.getNumArguments() != payload.size() + captured.size())
+            return false;
+          Environment inner;
+          for (auto [argument, name] :
+               zip(arm.getArguments().take_front(payload.size()), payload))
+            if (!charge() || !inner.bind(argument, name))
+              return false;
+          if (!captures(arm.getArguments().drop_front(payload.size()), captured,
+                        inner) ||
+              !body(arm, *bodies[index], std::move(inner), depth + 1))
+            return false;
+        }
+        if (!outputs(joined))
+          return false;
       } else if (auto r = record.get<program::Loop>()) {
         auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op);
         if (!loop || r->carried.size() != op.getNumResults())

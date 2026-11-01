@@ -76,11 +76,21 @@ pub struct Step {
 #[derive(Clone, Debug)]
 pub enum Segment {
     Action(usize),
+    Branch {
+        entries: Vec<usize>,
+        arms: Vec<BranchArm>,
+    },
     Loop {
         entries: Vec<usize>,
         body: Vec<Segment>,
         exits: Vec<usize>,
     },
+}
+#[derive(Clone, Debug)]
+pub struct BranchArm {
+    pub alternative: String,
+    pub body: Vec<Segment>,
+    pub exits: Vec<usize>,
 }
 #[derive(Clone, Debug)]
 pub struct Bundle {
@@ -169,7 +179,7 @@ impl Bundle {
     pub fn steps(&self) -> &[Step] {
         &self.steps
     }
-    /// Compact admitted schedule. Loop entries/exits index `steps()`.
+    /// Compact admitted schedule. Control entries/arm yields index `steps()`.
     pub fn segments(&self) -> &[Segment] {
         &self.segments
     }
@@ -287,6 +297,17 @@ fn validate_preorder(segments: &[Segment], count: usize) -> Result<(), BundleErr
         for node in nodes {
             match node {
                 Segment::Action(i) => index(*i, next, count)?,
+                Segment::Branch { entries, arms } => {
+                    for i in entries {
+                        index(*i, next, count)?;
+                    }
+                    for arm in arms {
+                        walk(&arm.body, next, count, depth + 1)?;
+                        for i in &arm.exits {
+                            index(*i, next, count)?;
+                        }
+                    }
+                }
                 Segment::Loop {
                     entries,
                     body,

@@ -40,7 +40,16 @@ bool isOracleHandle(const Type &type) {
          type.kind == Type::Kind::OracleSequence;
 }
 bool isLogicalValue(const Type &type) {
-  return isOracleHandle(type) || type.kind == Type::Kind::LogicalRecord;
+  return isOracleHandle(type) || type.kind == Type::Kind::LogicalRecord ||
+         ((type.kind == Type::Kind::Tuple || type.kind == Type::Kind::Array) &&
+          llvm::any_of(type.arguments, [](const Type &child) {
+            return isLogicalValue(child);
+          }));
+}
+bool isLogicalValue(const PlacedType &type) {
+  return isLogicalValue(type.type) ||
+         (type.placement &&
+          std::holds_alternative<ProductPlacement>(type.placement->value));
 }
 StringRef oracleConstructor(const Type &type) {
   switch (type.kind) {

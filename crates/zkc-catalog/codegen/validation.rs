@@ -829,6 +829,82 @@ pub(super) fn validate(v: &Value) -> Result<()> {
             )?;
         }
     }
+    let mut frontend_ids = BTreeSet::new();
+    let mut implicit_names = BTreeSet::new();
+    for r in list(&v["frontendAssociations"])? {
+        let id = string(&r["identity"])?;
+        let expected = match id {
+            "record.unpack" => "RecordUnpack",
+            "record.inspect" => "RecordInspect",
+            "record.repack" => "RecordRepack",
+            "service.random" => "RandomConstructor",
+            _ => return Err("unknown frontend identity".into()),
+        };
+        require(
+            expected == string(&r["signature"])?,
+            "frontend signature identity mismatch",
+        )?;
+        require(frontend_ids.insert(id), "duplicate frontend identity")?;
+        let module = string(&r["module"])?;
+        let name = string(&r["name"])?;
+        require(
+            module.starts_with("zkc::") && path(module, "::") && identifier(name),
+            "invalid frontend owner",
+        )?;
+        require(
+            exports.insert((module, name)),
+            "duplicate frontend ownership",
+        )?;
+        require(
+            !boolean(&r["implicit"])? || implicit_names.insert(name),
+            "duplicate implicit frontend name",
+        )?;
+    }
+    let mut homes = BTreeSet::new();
+    for r in list(&v["frontendHomes"])? {
+        let head = string(&r["constructor"])?;
+        let module = string(&r["module"])?;
+        require(
+            (catalog.types.contains_key(head) || ["oracle", "oracle_sequence"].contains(&head))
+                && module.starts_with("zkc::")
+                && path(module, "::"),
+            "invalid frontend home",
+        )?;
+        require(homes.insert(head), "duplicate frontend home")?;
+        let mut members = BTreeSet::new();
+        for member in list(&r["members"])? {
+            let name = string(member)?;
+            require(
+                name.starts_with("zkc::") && path(name, "::") && members.insert(name),
+                "invalid frontend home members",
+            )?;
+        }
+    }
+    let mut methods = BTreeSet::new();
+    for r in list(&v["serviceMethods"])? {
+        let name = string(&r["name"])?;
+        require(
+            identifier(name) && methods.insert(name),
+            "invalid or duplicate service method",
+        )?;
+        let expected = match string(&r["signature"])? {
+            "RandomDraw" => "",
+            "RandomIndex" => "IndexRandomness",
+            "RandomIndices" => "IndexBlockRandomness",
+            _ => return Err("unknown service signature".into()),
+        };
+        require(
+            expected == string(&r["capability"])?,
+            "service method capability mismatch",
+        )?;
+        if !expected.is_empty() {
+            require(
+                kinds(&lookup(&catalog.capabilities, &r["capability"])?["parameters"])?
+                    == [("Domain", "Field")],
+                "unknown service capability",
+            )?;
+        }
+    }
     for m in catalog.meanings.values() {
         let name = string(&m["name"])?;
         require(

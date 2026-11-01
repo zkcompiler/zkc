@@ -505,3 +505,36 @@ The CLI succeeds only on completed execution without reporting/cleanup errors.
 A returned `false` is an ordinary output; application acceptance must select and
 interpret the intended result. See the [bundle walkthrough](../../runtime/bundles.md)
 and [named Entry execution](../../runtime/entries.md).
+
+## Selected participant branches
+
+A compact segment also has the exact shape
+`{"branch": [Step, ...], "arms": [Arm, ...]}`, where each arm is exactly
+`{"alternative": label, "body": [Segment, ...], "yield": [Step, ...]}`.
+Unknown, duplicate or missing fields refuse. Labels and their order must equal
+all corresponding admitted participant branch alternatives. Boolean order is
+`then`, `else`; variant order is declaration order. Entries use the same optional
+Local selector prefix and ordered role headers as loop entries. All arms occur
+exactly once in static preorder, including dormant arms. Each has a separate
+lexical scope, exact yield boundary and complete exchange coverage. An arm
+cannot be substituted for its sibling by editing a schedule coordinate.
+
+The Host validates every reached selector before entering any selected arm.
+Different Boolean choices or enum tags fail with `branch-selector-disagreement`;
+no arm frame, action, query, message, allocation or yield has then executed.
+Equal enum tags do not imply equal payloads. Event-free branches still have
+headers and comparison. Runtime occurrence paths append
+`["branch", site, alternative]`; reports retain that complete path, the checked
+selector and whether entry completed. A returned participant skips only its own
+suffix. Peer obligations remain independently scheduled.
+
+This reached check is scoped execution evidence, separate from derived source
+requirements, public proof bindings and security request correspondence.
+Source-certified independent execution requires the same externally pinned,
+trusted input-binding context at every participating process. Availability,
+public/type/name equality and producer-authored agreement records cannot supply
+that context. Generic independent Program execution continues to establish only
+its own participant behavior. Current native proof request/record-codec
+reconstruction refuses selected participant branches with
+`native-proof-selected-control`; it does not flatten dormant arms or claim full
+selected transcript support.

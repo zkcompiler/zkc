@@ -1,0 +1,41 @@
+# Common-input inventory fixture
+
+`boolean.*` and `custody-fields.*` are freshly emitted checked
+source/original/interface triples. Both the outer and dormant inner Boolean
+control contribute distinct input equivalence classes. The custody fixture
+selects one shared ordinary Boolean field below a two-role affine prefix. Its
+source field path is `[field(0)]`; the existing component map resolves it to
+native input 2, independently of the custody components at inputs 0 and 1.
+This semantic subject supplies no external construction or custody authority. Generation checks the
+source/native association, independent native inventory reconstruction and exact
+source inventory comparison before writing any fixture.
+
+Regenerate with the pinned compiler build:
+
+```sh
+build/compiler/test/zkc-common_interface-test compiler/test/fixtures/common-inputs
+```
+
+The interface original digest binds the exact original bytes. The toolchain
+identity binds the compiler's semantic sources; neither digest independently
+proves source adequacy. Independent SDK tests must consume a fresh emitted
+package and execute actual participants with an externally pinned input context.
+This fixture supplies no input agreement, execution certificate or formal proof.
+
+## Current fixture SHA-256
+
+These hashes cover the exact retained bytes from the generator above.
+
+| File | SHA-256 |
+|---|---|
+| `boolean.zkc` | `77d5eb5f80a516bc6466a6ec40223d28c72b75ed86cb1af9fbf44f47f16867ac` |
+| `boolean.mlir` | `a6370d7c8fbca788da8a9e6f3ebf3744c88c431102ca7d490de064d7ada34e42` |
+| `boolean.json` | `bbff273876802e1ee634f0f4c2736371beaac4b4ac1b7733286d76b2a86e8b0a` |
+| `custody-fields.zkc` | `7f860eafedb25f0ce4970c0381bac5dde69f306d439b6b5fe54f27609df13483` |
+| `custody-fields.mlir` | `45846f6cbab49ca5591bf6ffa97270098e8350adf9aebae5d8e9302e4b6f9489` |
+| `custody-fields.json` | `813876a467fff967b0642e72e60d1a9938cb4ca29eacf96ae8725af0a55acd8a` |
+
+The SDK interface suite consumes the emitted custody fixture directly and checks
+that the ordinary field maps to native input 2, after the two custody components.
+Fresh compiler-to-SDK CPU tests separately check actual common-input admission.
+External supply and capability admission keep their own policies.

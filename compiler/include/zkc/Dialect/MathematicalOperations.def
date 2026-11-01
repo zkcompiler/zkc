@@ -96,3 +96,8 @@ ZKC_MATH_OPERATION(protocol_ir::OracleVirtualOp, Action, Context::Protocol, "cal
 ZKC_MATH_OPERATION(protocol_ir::OracleInputOp, Action, Context::Protocol, "holder", "receivers", "shape_bounds")
 ZKC_MATH_OPERATION(protocol_ir::OracleComponentsOp, Control, Context::Protocol, "holder", "receivers")
 ZKC_MATH_OPERATION(protocol_ir::OracleShapeOp, Control, Context::Protocol, "dimension")
+
+ZKC_MATH_OPERATION(protocol_ir::BranchOp, Control, Context::Protocol, "site", "roles", "output_roles", "alternatives")
+ZKC_MATH_OPERATION(protocol_ir::ParticipantBranchOp, Control, Context::Participant, "site", "alternatives")
+ZKC_MATH_OPERATION(data::BranchOp, Total, Context::Protocol | Context::Participant | Context::Helper, "alternatives")
+ZKC_MATH_OPERATION(data::YieldOp, Control, Context::Helper)

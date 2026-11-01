@@ -135,6 +135,76 @@ replace setup authority or child policies. `RunContext` defaults to a fresh
 OS-random session per reached call; explicit session freshness belongs to the
 application.
 
+`Interface::protocol_inputs` and `protocol_outputs` expose checked recursive
+schemas, placements and exact component maps. Placement ordinals refer to
+`Interface::participants`; nominal role applications preserve declaration order.
+`ordinary_input(port, path, role)` selects one visible constructible ordinary
+subtree, including children of distributed roots. `ordinary_inputs(role)` exposes
+the reconstructed supply roster; each item's optional `name()` is its invocation
+alias. Input-group descriptions retain the exact `port`, ordinal `path`, and
+source `role` beside that alias. Whole unsplit ordinary ports retain their names.
+Generated families allocate descriptive aliases within their own selected roster;
+the Host maps those fields to invocation inputs using checked coordinates.
+
+Complete transparent roots containing ordinary components can execute through
+`RunEntry` and `ProofEntry`. Public proof selections are exact
+`{port, path, role}` records; they cover every verifier ordinary input, including
+empty values. Supply each empty unit as `null`, empty tuple/array as `[]`, and
+empty ordinary record as `{}`. Whole distributed values have no `Value` decoder.
+`outstanding_requirements()` reports unsatisfied sealing, hidden-field, custody,
+and handle-origin obligations. Supplying ordinary holder data does not create a
+handle. Ancestor construction and access rules apply to every selected child.
+
+Setup associations initialize only the exact verifier-key slices from pinned
+material. Caller duplicates refuse; nested commitments and other setup-associated
+data still need values, and unrelated siblings remain ordinary arguments.
+Participant assembly scatters by original native index before appending services.
+`native_input_position(role, original)` exposes that checked ABI association for
+independent adapters. Availability and public classification confer no
+common-control agreement; its trusted input-binding requirements remain separate.
+
+`BackendRun::bind_common_inputs(context_bytes, externally_trusted_pin)` derives
+requirements from the authenticated package's selected Protocol inventory. The
+returned `InputBoundBackendRun::start_role` checks actual inputs before creating
+a Runner and preserves backend custody on refusal. `common_input_requirements()`
+exposes the resolved inventory for application provisioning; binding takes no
+replacement inventory. Value, tag and exact-axis extent observations remain
+distinct. Tag and extent checks compare neither payloads nor contents.
+
+Named `RunEntry::bind_common_inputs` returns `InputBoundRunEntry`. Its `prepare`
+uses ordinary named/setup/service preparation and checks **all supplied joint
+inputs before issuance or execution**, then returns the existing joint plan.
+Empty semantic inputs still need explicit supply. This API adds no independent
+named transport. Bind after selecting the CPU installation and admission options.
+
+The authenticated compiler owns complete source/native inventory derivation and
+comparison. The SDK authenticates the owner-associated inventory, validates every
+retained Protocol's local inventory, and checks mapped types against the actual
+Program. It cannot establish source coverage by rehashing an attacker-edited
+package. Fresh compiler publication and paired execution remain integration gates
+until the producer delivers. Computing a digest of received context bytes supplies
+no external pin authority. Generic native execution, joint reached-header
+agreement and independent pin trust retain separate contracts.
+
+Private and sealed ordinary outputs remain usable as whole typed inputs through
+`Value::Opaque`. Its `OpaqueValue` stores the admitted schema and payload
+privately. `value.field("public_child")` returns a checked public child; that
+child can itself be opaque. Sealed roots and private ancestors refuse selection.
+`variant_field` also checks the active alternative, and `leaf` applies only to
+native scalar/builtin kinds. Metadata remains available through `schema()`.
+Passing the retained owner into a compatible `FunctionRequest` preserves exact
+schema identity without granting a byte constructor. A hand-built record cannot
+replace it. Debug never prints the stored representation.
+
+Generated opaque bindings keep private storage and expose only checked public
+getters; transparent input bindings retain public fields. Named Run/proof reports
+publish source values through `outputs` and remove the duplicate raw native
+returns. JSON export of an inaccessible aggregate refuses with
+`entry-output-opaque`; fully public result structures still use existing codecs,
+including when their source constructor is unavailable. See the
+[opaque value contract](../../docs/spec/runtime/entries.md#named-run-calls)
+for the adjacent transport and export rules.
+
 ## Memory and optional adapters
 
 Default features are `cpu`, `project` and `parallel`. With
@@ -256,7 +326,9 @@ reuses the Runtime joint Host. Calls supply typed backend values in that ABI's
 order. Each executing backend is linked independently before frame entry.
 
 This small adapter supports data-only run packages. Setup assets, services and
-proof packages require their owning adapters and refuse here. Typed values do
+proof packages require their owning adapters and refuse here. Inaccessible source
+outputs refuse with `entry-backend-opaque`; this adapter exposes physical backend
+values and cannot supply a source opaque owner. Typed values do
 not bypass source constructor or custody restrictions. Native applications keep
 the named, schema-driven `RunEntry` and `FunctionEntry` APIs described above.
 
@@ -383,3 +455,16 @@ bytes. `calldata()` encodes `verify(publicInputs, context, proof)` from the exis
 canonical wire values and native framed proof; it does not reinterpret them.
 The [target contract](../../docs/spec/targets/evm.md) defines supported operations,
 outcomes, ceilings, tool pins, authenticated reuse and atomic publication.
+
+The focused compiler/SDK pairing test compiles fresh source packages with the
+selected native tool. After building the native producer, run from the checkout:
+
+```sh
+ZKC_ENTRY_COMPONENTS_COMPILER=/absolute/path/to/zkc-compile \
+  CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=build/cargo-entry-components-sdk \
+  cargo test --offline --locked -p zkc --test entry_components -- --ignored
+```
+
+This explicitly selected check covers ordinary distributed Run/proof assembly
+and generated Host families. The normal unit suite's independently authored
+carriers do not replace this fresh producer/consumer integration check.

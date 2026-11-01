@@ -30,6 +30,7 @@
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -67,36 +68,12 @@ LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
       mapping.map(arg, input);
     OpBuilder builder(call);
     for (auto &op : helper.front().without_terminator()) {
-      if (!remaining) {
-        if (outcome)
-          *outcome = OptimizationOutcome::exhausted(WorkOwner::HelperOperations,
-                                                    1, remaining);
-        return diagnostics::emit(call.emitError(),
-                                 "mathematical-expansion-limit");
-      }
-      --remaining;
-      uint64_t slots = op.getNumOperands() + op.getNumResults();
-      if (slots > indices) {
-        if (outcome)
-          *outcome = OptimizationOutcome::exhausted(WorkOwner::HelperSlots,
-                                                    slots, indices);
-        return diagnostics::emit(call.emitError(),
-                                 "mathematical-expansion-limit");
-      }
-      if (work && slots + 1 > *work) {
-        if (outcome)
-          *outcome = OptimizationOutcome::exhausted(WorkOwner::HelperOperations,
-                                                    slots + 1, *work);
-        return diagnostics::emit(call.emitError(),
-                                 "mathematical-expansion-limit");
-      }
-      indices -= slots;
-      if (work)
-        *work -= slots + 1;
+      if (failed(
+              chargeHelperOperations(&op, remaining, indices, work, outcome)))
+        return failure();
       auto *copy = builder.clone(op, mapping);
       copy->setLoc(CallSiteLoc::get(op.getLoc(), call.getLoc()));
-      if (auto nested = dyn_cast<func::CallOp>(copy))
-        pending.push_back(nested);
+      copy->walk([&](func::CallOp nested) { pending.push_back(nested); });
     }
     for (auto [result, returned] :
          zip(call.getResults(), helper.front().back().getOperands()))
@@ -179,14 +156,17 @@ class Projector {
     for (auto &op : block) {
       auto meaning = classify(&op);
       if (!meaning || (meaning->category != Category::Action &&
-                       !isa<protocol_ir::RepeatOp>(op)))
+                       !isa<protocol_ir::RepeatOp, protocol_ir::BranchOp>(op)))
         continue;
       SmallVector<Attribute> targets;
       for (auto participant : participants) {
         auto record = cast<DictionaryAttr>(participant);
         auto role = cast<StringAttr>(record.get("role"));
         StringRef operation;
-        if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
+        if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+          if (is_contained(branch.getRoles(), role))
+            operation = protocol_ir::ParticipantBranchOp::getOperationName();
+        } else if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
           if (is_contained(repeat.getRoles(), role))
             operation = protocol_ir::ProtocolLoopOp::getOperationName();
         } else if (auto exchange = dyn_cast<zkc::protocol_ir::ExchangeOp>(op)) {
@@ -224,10 +204,15 @@ class Projector {
         action.set("callee", op.getAttr("callee"));
       if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
         auto argument = cast<BlockArgument>(query.getReference());
-        while (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
-                   argument.getOwner()->getParentOp()))
-          argument =
-              cast<BlockArgument>(repeat.getInputs()[argument.getArgNumber()]);
+        while (argument.getOwner()->getParentOp() !=
+               query->getParentOfType<protocol_ir::MathematicalOp>()) {
+          if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
+                  argument.getOwner()->getParentOp()))
+            argument = cast<BlockArgument>(
+                repeat.getInputs()[argument.getArgNumber()]);
+          else
+            argument = cast<BlockArgument>(selectedCapture(argument));
+        }
         action.set("service",
                    builder.getI64IntegerAttr(argument.getArgNumber()));
       }
@@ -235,6 +220,16 @@ class Projector {
         action.set("maximum", repeat.getMaximumAttr());
         action.set("body",
                    actionBindings(repeat.getBody().front(), participants));
+      }
+      if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+        SmallVector<Attribute> arms;
+        for (auto [index, region] : enumerate(branch.getArms()))
+          arms.push_back(builder.getDictionaryAttr(
+              {builder.getNamedAttr("alternative",
+                                    branch.getAlternatives()[index]),
+               builder.getNamedAttr(
+                   "body", actionBindings(region.front(), participants))}));
+        action.set("arms", builder.getArrayAttr(arms));
       }
       actions.push_back(action.getDictionary(builder.getContext()));
     }
@@ -256,7 +251,7 @@ class Projector {
       }
       --captureWork;
       auto *op = current.getDefiningOp();
-      if (op && isTotal(op)) {
+      if (op && isTotal(op) && !isSelectedControl(op)) {
         if (plan.recipes.insert(op))
           llvm::append_range(pending, op->getOperands());
       } else {
@@ -304,6 +299,12 @@ class Projector {
           llvm::append_range(pending, plan.leaves);
         }
       }
+      if (auto branch = dyn_cast<protocol_ir::BranchOp>(op))
+        if (is_contained(branch.getRoles(), roleName))
+          for (Value input : branch.getInputs())
+            if (!isa<protocol_ir::ServiceReferenceType>(input.getType()) &&
+                availability.values.lookup(input).test(role))
+              pending.push_back(input);
       if (auto message = dyn_cast<zkc::protocol_ir::ExchangeOp>(op))
         if (message.getSenderAttr() == roleName)
           pending.push_back(message.getInput());
@@ -382,7 +383,69 @@ class Projector {
       if (isa<zkc::protocol_ir::StatementOp>(op))
         continue;
       builder.setInsertionPointToEnd(&body);
-      if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
+      if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+        if (!is_contained(branch.getRoles(), roleName))
+          continue;
+        SmallVector<Value> arguments{mapping.lookup(branch.getInputs()[0])};
+        SmallVector<unsigned> captures, results;
+        SmallVector<Type> resultTypes;
+        for (auto [index, input] : enumerate(branch.getInputs().drop_front()))
+          if (availability.values.lookup(input).test(role) &&
+              !isa<protocol_ir::ServiceReferenceType>(input.getType())) {
+            captures.push_back(index + 1);
+            if (!mapping.contains(input))
+              return diagnostics::emit(op.emitError(),
+                                       "mathematical-projection",
+                                       "unmapped branch capture");
+            arguments.push_back(mapping.lookup(input));
+          }
+        for (auto [index, placement] : enumerate(branch.getOutputRoles()))
+          if (is_contained(cast<ArrayAttr>(placement), roleName)) {
+            results.push_back(index);
+            resultTypes.push_back(branch.getResult(index).getType());
+          }
+        OperationState state(
+            op.getLoc(), protocol_ir::ParticipantBranchOp::getOperationName());
+        state.addOperands(arguments);
+        state.addTypes(resultTypes);
+        state.addAttribute("site", branch.getSiteAttr());
+        state.addAttribute("alternatives", branch.getAlternatives());
+        for (unsigned i = 0; i < branch.getNumRegions(); ++i)
+          state.addRegion();
+        auto projected =
+            cast<protocol_ir::ParticipantBranchOp>(builder.create(state));
+        for (auto [armIndex, region] : enumerate(branch.getArms())) {
+          auto payload = selectedPayloadTypes(branch, armIndex);
+          if (!payload)
+            return diagnostics::emit(op.emitError(), payload.takeError());
+          auto &inner = region.front();
+          auto *targetBody = new Block();
+          projected->getRegion(armIndex).push_back(targetBody);
+          IRMapping nested;
+          for (auto [index, type] : enumerate(*payload))
+            nested.map(inner.getArgument(index),
+                       targetBody->addArgument(type, op.getLoc()));
+          for (unsigned capture : captures)
+            nested.map(inner.getArgument(payload->size() + capture - 1),
+                       targetBody->addArgument(
+                           branch.getInputs()[capture].getType(), op.getLoc()));
+          auto services = serviceNames;
+          for (auto [index, input] : enumerate(branch.getInputs().drop_front()))
+            if (isa<protocol_ir::ServiceReferenceType>(input.getType()) &&
+                availability.values.lookup(input).test(role))
+              services[inner.getArgument(payload->size() + index)] =
+                  serviceNames.lookup(input);
+          SmallVector<Value> yielded;
+          for (unsigned result : results)
+            yielded.push_back(inner.back().getOperand(result));
+          if (failed(projectBlock(inner, *targetBody, roleName, role, yielded,
+                                  nested, services)))
+            return failure();
+        }
+        for (auto [index, result] : enumerate(results))
+          mapping.map(branch.getResult(result), projected.getResult(index));
+        builder.setInsertionPointToEnd(&body);
+      } else if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
         if (!is_contained(repeat.getRoles(), roleName))
           continue;
         auto plan = captures(repeat, role);

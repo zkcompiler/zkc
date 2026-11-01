@@ -56,6 +56,15 @@ Formal authored nodes use typed named fields (`formal.specification`,
 They contain no parser-kind names or token arrays. Ordinary written types,
 patterns and expressions retain the same role across grammar replacement.
 
+Record reconstruction uses these written declarations, including private
+declarations used only inside a body. They retain the declared role telescope,
+field visibility, written placements, restrictions and sealing; zero-storage
+fields and array element types remain present. The checker combines these
+authored facts with independently checked instance substitutions. Public API
+inspection and flattened native field maps cannot replace this source inventory.
+The structured snapshot's static declaration rows serve native type admission;
+they are not a second encoding of lexical visibility or source role abstraction.
+
 A local binding proposal gives exact written use/binder addresses. A declaration
 lookup gives provider/target and all exact-span candidates; candidates do not
 select an occurrence. A closed-instance record fixes its template, ordered

@@ -37,6 +37,9 @@ struct SyntaxType {
   unsigned height = 1;
   std::vector<SyntaxType> arguments;
   std::vector<ArgumentLabel> labels;
+  std::optional<std::vector<std::string>> roles;
+  std::optional<std::vector<std::string>> components;
+  std::optional<std::string> oracleHolder;
 };
 struct EntrySelector {
   SyntaxType target;
@@ -287,7 +290,7 @@ struct SyntaxSetupSlot {
 };
 struct SyntaxProofEntry {
   SyntaxName prover, verifier;
-  std::vector<SyntaxName> publicInputs;
+  std::vector<SyntaxInputSelector> publicInputs;
   SyntaxSelector acceptance;
   std::optional<SyntaxSelector> completion;
   std::optional<SyntaxName> target, service;

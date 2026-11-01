@@ -7,7 +7,7 @@ fn digest(s: &str) -> String {
     crate::io::bytes::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, name: &str, leaves: Json) -> Json {
-    json!({"kind":kind,"type":name,"identity":digest(name),"custody":false,"constructible":true,
+    json!({"kind":kind,"type":name,"identity":digest(name),"generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,
         "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
 fn boolean() -> Json {
@@ -24,7 +24,7 @@ fn record(name: &str, fields: Vec<(&str, Json)>, constructible: bool) -> Json {
     let mut leaves = Vec::new();
     let mut result = Vec::new();
     for (name, s) in fields {
-        result.push(json!({"name":name,"offset":offset,"schema":s}));
+        result.push(json!({"name":name,"offset":offset,"public":true,"placement":null,"schema":s}));
         let children = s["leaves"].as_array().unwrap();
         offset += children.len();
         leaves.extend(children.iter().cloned());
@@ -911,17 +911,20 @@ fn joint_inputs_keep_independent_role_copies_and_cleanup_receipt() {
     .unwrap();
     let report = entry.prepare(joint_request()).unwrap().execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut roles) = report.value.unwrap().into_value() else {
-        panic!("record")
-    };
-    let Value::Record(mut p) = roles.remove("P").unwrap() else {
-        panic!("P")
-    };
-    let Value::Record(mut v) = roles.remove("V").unwrap() else {
-        panic!("V")
-    };
-    assert!(bool::try_from(p.remove("結果").unwrap()).unwrap());
-    assert!(!bool::try_from(v.remove("結果").unwrap()).unwrap());
+    let roles = report.value.unwrap().into_value();
+    assert!(
+        bool::try_from(
+            roles
+                .field("P")
+                .unwrap()
+                .field("結果")
+                .unwrap()
+                .leaf()
+                .unwrap()
+        )
+        .unwrap()
+    );
+    assert!(!bool::try_from(roles.field("V").unwrap().field("結果").unwrap()).unwrap());
     assert_eq!(report.usage.dispatches, 3);
     assert!(
         report.calls[0].native["cleanup_errors"]
@@ -1061,13 +1064,9 @@ fn produced_bytes() -> Vec<u8> {
         .unwrap()
         .execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut result) = report.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut proof) = result.remove("proof").unwrap() else {
-        panic!("proof")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = proof.remove("bytes").unwrap()
+    let result = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(v)) =
+        result.field("proof").unwrap().field("bytes").unwrap()
     else {
         panic!("bytes")
     };
@@ -1086,15 +1085,9 @@ fn proof_exact_bytes_round_trip_wrong_public_and_malformed_are_distinct() {
         .unwrap()
         .execute();
     assert!(accepted.is_success(), "{}", accepted.diagnostics());
-    let Value::Variant {
-        alternative,
-        fields,
-    } = accepted.value.unwrap().into_value()
-    else {
-        panic!("variant")
-    };
-    assert_eq!(alternative, "Accepted");
-    assert!(fields.contains_key("outputs"));
+    let accepted = accepted.value.unwrap().into_value();
+    assert_eq!(accepted.alternative().unwrap(), "Accepted");
+    assert!(accepted.variant_field("Accepted", "outputs").is_ok());
     let wrong = entry
         .prepare(proof_request(false, false, bytes.clone()))
         .unwrap()
@@ -1146,13 +1139,9 @@ fn verification_rejection_has_no_outputs_and_cleanup_remains_separate() {
         .unwrap()
         .execute();
     assert!(produced.is_success(), "{}", produced.diagnostics());
-    let Value::Record(mut result) = produced.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut proof) = result.remove("proof").unwrap() else {
-        panic!("proof")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = proof.remove("bytes").unwrap()
+    let result = produced.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(v)) =
+        result.field("proof").unwrap().field("bytes").unwrap()
     else {
         panic!("bytes")
     };
@@ -1164,15 +1153,12 @@ fn verification_rejection_has_no_outputs_and_cleanup_remains_separate() {
         .unwrap()
         .execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Variant {
-        alternative,
-        fields,
-    } = report.value.unwrap().into_value()
-    else {
-        panic!("variant")
-    };
-    assert_eq!(alternative, "Rejected");
-    assert!(fields.is_empty());
+    let value = report.value.unwrap().into_value();
+    assert_eq!(value.alternative().unwrap(), "Rejected");
+    assert_eq!(
+        value.variant_field("Rejected", "outputs").unwrap_err(),
+        "entry-value-projection"
+    );
     assert_eq!(
         report.calls[0].native["verification_decision"],
         json!("rejected")
@@ -1278,7 +1264,8 @@ fn native_output_retention_does_not_require_public_input_codec() {
     let ledger = ExecutionLedger::new(Default::default(), Default::default());
     let typed = data::from_output(entry.host(), schema, native.into(), &ledger).unwrap();
     assert!(ledger.snapshot().live_reserved_bytes > 0);
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = typed.into_value() else {
+    let Value::Leaf(crate::execution::InputValue::Native(v)) = typed.into_value().leaf().unwrap()
+    else {
         panic!("native polynomial")
     };
     assert!(matches!(*v, zkc_cpu::Value::Polynomial(_)));
@@ -1371,13 +1358,14 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
     );
     let report = entry.prepare(request).unwrap().execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut roles) = report.value.unwrap().into_value() else {
-        panic!("roles")
-    };
-    let Value::Record(mut outputs) = roles.remove("P").unwrap() else {
-        panic!("outputs")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(value)) = outputs.remove("結果").unwrap()
+    let roles = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(value)) = roles
+        .field("P")
+        .unwrap()
+        .field("結果")
+        .unwrap()
+        .leaf()
+        .unwrap()
     else {
         panic!("polynomial")
     };
@@ -1390,7 +1378,8 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
 fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress() {
     use zkc_runtime::vm::{LogicalType, PhysicalType};
     let vector = schema("builtin", "Vector", json!(["vector:bls12-381.fr"]));
-    let polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
+    let mut polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
+    polynomial["constructible"] = json!(false);
     let physical = |name| {
         PhysicalType::default_for(LogicalType::parse(name).unwrap())
             .unwrap()
@@ -1421,7 +1410,7 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     )
     .err()
     .expect("public ingress remains closed");
-    assert_eq!(refused.code(), "entry-input-codec");
+    assert_eq!(refused.code(), "entry-input-constructor");
     let (public, _, proof, _, _) = proof_schemas();
     let family = "数学::証明₂";
     let witness = record(
@@ -1503,13 +1492,14 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     );
     let report = entry.prepare(request).unwrap().execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut result) = report.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut outputs) = result.remove("outputs").unwrap() else {
-        panic!("outputs")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(value)) = outputs.remove("結果").unwrap()
+    let result = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(value)) = result
+        .field("outputs")
+        .unwrap()
+        .field("結果")
+        .unwrap()
+        .leaf()
+        .unwrap()
     else {
         panic!("polynomial")
     };
@@ -1563,13 +1553,9 @@ fn single_endpoint_proof_children_preserve_independent_operation_closures() {
         .unwrap()
         .execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut result) = report.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut proof) = result.remove("proof").unwrap() else {
-        panic!("proof")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = proof.remove("bytes").unwrap()
+    let result = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(v)) =
+        result.field("proof").unwrap().field("bytes").unwrap()
     else {
         panic!("bytes")
     };

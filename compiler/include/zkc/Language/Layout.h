@@ -59,6 +59,7 @@ private:
   std::variant<std::string, PolynomialLayout, QuotientLayout, OracleLayout>
       value;
 };
+struct EntryBoundaryPlan;
 struct Layout;
 struct LayoutField {
   std::string name;
@@ -66,6 +67,9 @@ struct LayoutField {
   unsigned offset = 0;
   /// Row bound of this direct logical field, after generic substitution.
   std::optional<uint64_t> maximumRows = {};
+  bool isPublic = true;
+  /// Specialized formula in this declaration's ordered role telescope.
+  std::optional<ValuePlacement> placement = {};
 };
 struct LayoutAlternative {
   std::string name;
@@ -73,16 +77,24 @@ struct LayoutAlternative {
 };
 /// A logical source value has one deterministic, bounded SSA layout.
 /// Products flatten in declaration order; variants retain their closed tag.
-/// Custody, when present, is the first leaf and is never a user data field.
+/// Custody, when present, is a prefix and is never a user data field.
 struct Layout {
   Type type;
   /// Generated nominal identity binds exact source, family and installation.
   std::string generatedIdentity;
   Permissions permissions;
+  std::vector<std::string> roleParameters;
+  std::optional<Resource> restriction = {};
+  bool sealed = false;
   std::vector<LayoutLeaf> leaves;
   std::vector<LayoutField> fields;
   std::vector<LayoutAlternative> alternatives;
   bool custody = false;
+  /// One unit for an ordinary restriction; telescope arity for a distributed
+  /// one.
+  unsigned custodyCount = 0;
+  /// Retained even for zero arrays, independently of physical fields.
+  std::shared_ptr<const Layout> element;
   bool constructible = false;
   /// Includes formal element meaning even when an array has zero leaves.
   bool formal = false;
@@ -95,6 +107,7 @@ struct Layout {
 class LayoutIdentities {
   uint64_t &remaining;
   std::map<const Layout *, std::string> cache;
+  unsigned depth = 0;
 
 public:
   explicit LayoutIdentities(uint64_t &remaining) : remaining(remaining) {}
@@ -113,20 +126,43 @@ struct ProtocolPortLeaf {
   /// Present for a handle or sequence; never for an aggregate root.
   std::shared_ptr<const Layout> oracleData;
   std::optional<uint64_t> maximumRows = {};
+  std::optional<ValuePlacement> placement = {};
+  bool custody = false;
   unsigned nativeSize() const { return leaf.oracle() ? 2 : 1; }
+  /// Body availability only; never a field-access or common-value judgment.
+  std::vector<unsigned> roles() const;
+};
+enum class ProtocolComponentFacet { Data, OracleData, OracleAnchor, Custody };
+/// Component identity is typed and independent of the physical SSA selection.
+struct ProtocolPortComponent {
+  std::vector<unsigned> fieldPath;
+  unsigned localLeaf;
+  unsigned role;
+  ProtocolComponentFacet facet;
+  unsigned nativeIndex;
 };
 /// A bounded observation of a source layout, not an executable representation.
-/// Ordinary leaves retain their port roles; each oracle expands to holder data
-/// followed by its receiver anchor. Body offsets always count one per handle.
+/// Each handle expands to its own holder data and exact receiver anchor family.
+/// Multiple ordinary components can deliberately select the same native index.
 struct ProtocolPortLayout {
   std::shared_ptr<const Layout> body;
   std::vector<ProtocolPortLeaf> leaves;
   /// Prefix map from body offsets (including the end) to ABI offsets.
   std::vector<unsigned> nativeOffsets{0};
+  std::optional<ValuePlacement> placement = {};
+  std::vector<ProtocolPortComponent> components;
   unsigned size() const { return nativeOffsets.back(); }
   llvm::Expected<LayoutSlice> select(llvm::ArrayRef<unsigned>,
-                                     bool anchor = false) const;
+                                     bool anchor = false,
+                                     bool specification = false) const;
 };
+/// Observe already instantiated layout/placement schemas. This performs no
+/// source checking, constructor authorization, or nominal placement
+/// recomputation.
+llvm::Expected<ProtocolPortLayout> observeProtocolPort(
+    std::shared_ptr<const Layout>, const std::optional<ValuePlacement> &,
+    uint64_t &remaining, const Limits & = {},
+    std::optional<uint64_t> maximumRows = {}, bool checkBounds = true);
 /// Contextual single-value carrier. Products use one alternative whose payload
 /// is exactly flat->leaves in order, including the empty payload for unit.
 /// This representation conveys no source constructor or field-access authority.
@@ -142,12 +178,24 @@ class Layouts {
 public:
   explicit Layouts(const CheckedProject &, const Limits & = {});
   explicit Layouts(const ClosedEntry &, const Limits & = {});
+  /// All layout and nested semantic work debits the enclosing allowance,
+  /// including work performed before a failed observation. The allowance must
+  /// outlive this observer.
+  Layouts(const ClosedEntry &, const Limits &, uint64_t &remaining);
   ~Layouts();
   Layouts(const Layouts &) = delete;
   Layouts &operator=(const Layouts &) = delete;
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
   llvm::Expected<PackedLayout> packed(const Type &);
   llvm::Expected<ProtocolPortLayout> protocolPort(const Port &);
+  /// Body values carry handles directly and need no external row admission.
+  llvm::Expected<ProtocolPortLayout> protocolValue(const Value &);
+  /// Rebuild exact placed identity from specialized types and checked schemas.
+  /// Does not flatten storage or grant source access to private fields.
+  llvm::Expected<ValuePlacement> placement(const Type &, const ValuePlacement &,
+                                           unsigned participants);
+  llvm::Expected<EntryBoundaryPlan> entryBoundary(const Declaration &protocol,
+                                                  const Declaration &entry);
   /// Resolve a closed kind through the shared Contracts owner and the exact row
   /// layout.
   llvm::Expected<OracleKindLayout> oracleKind(const Type &);
@@ -170,6 +218,9 @@ private:
   std::map<std::string, std::string> slots;
   std::map<std::string, std::shared_ptr<const Layout>> cache;
   llvm::Error charge(uint64_t);
+  llvm::Error initializeTypes();
+  llvm::Expected<ProtocolPortLayout> protocolPort(const Port &,
+                                                  bool checkBounds);
   llvm::Expected<LayoutSlice> select(llvm::ArrayRef<Port>, unsigned,
                                      llvm::ArrayRef<unsigned>);
   llvm::Expected<std::shared_ptr<const Layout>> build(const Type &, unsigned);

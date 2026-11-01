@@ -140,12 +140,25 @@ expressions, claims and declarations:
 
 | Family | Syntax carried |
 |---|---|
-| `type.*` | Named/builtin/formal terms, holes, natural expressions, arrays and tuples; written static arguments and argument labels |
+| `type.*` | Named/builtin/formal terms, holes, natural expressions, arrays and tuples; written static arguments, argument labels and explicit role applications |
 | `pattern.*` | Names, ignore/unit/tuple/record patterns, optional type, child patterns, record labels and shorthand flags |
 | `expr.*` | Written expressions, ordered operands, static arguments and labels, branch payloads, nested bodies, index patterns, roles, `each`, grouping and shorthand |
 | `stmt.*` | Binding/assignment/expression/drop/consume/require; written type, roles, site, guard owner and send endpoints |
 | `claim_expr.*` | Natural/reference/application/binary/unary/list claim terms, written registry versions, arguments and labels |
 | `declaration.*` | Authored declaration kind and header, body, inputs/results, members, clauses, setup, proof/construction choices and claim blocks |
+
+A type node with an authored `roles(...)` suffix additionally has
+`role_arguments`, an ordered array of written role names. An annotation inside a
+structural type additionally has `components`, its written role-name list, and
+`oracle_holder` exactly when an arrow was written. Unannotated ordinary type
+nodes retain their existing exact shape. These fields are source syntax, not
+ordinary static arguments or inferred agreement. Struct/alias declaration roles
+and field order/visibility remain in the existing declaration/port nodes.
+
+A proof's written `public` array contains `input_selector` nodes, retaining the
+written input name and dotted field names in order. The source verifier is
+implicit in these written selectors; checked Entry selections retain its exact
+participant ordinal. Whole ordinary inputs have an empty written path.
 
 The remaining kinds are `body`, `port`, `parameter`, `notation`, `selector`,
 `input_selector`, `name`, `requirement`, `clause`, `relation_application`,

@@ -197,6 +197,11 @@ pub fn run_outputs_with_installation(
         format: &'static str,
         roles: T,
     }
+    for values in values.values() {
+        for value in values.values() {
+            super::value::check_readable(value)?;
+        }
+    }
     let backend = backend(capacity, setups, cpu.clone(), installation)?;
     struct Roles<'a> {
         values: &'a RoleValues,
@@ -274,6 +279,9 @@ pub(crate) fn proof_outputs_reserved(
         format: &'static str,
         values: T,
     }
+    for value in values.values() {
+        super::value::check_readable(value)?;
+    }
     let backend = backend(capacity, setups, cpu.clone(), installation)?;
     cpu.enter(|| {
         encode_reserved(
@@ -324,6 +332,7 @@ pub fn function_output_with_installation(
         format: &'static str,
         value: T,
     }
+    super::value::check_readable(value)?;
     let backend = backend(capacity, setups, cpu.clone(), installation)?;
     cpu.enter(|| {
         encode(Document {
@@ -371,6 +380,12 @@ impl Serialize for Item<'_> {
             return Err(S::Error::custom("entry output depth"));
         }
         match self.value {
+            Value::Opaque(value) => Item {
+                value: value.readable().map_err(S::Error::custom)?,
+                backend: self.backend,
+                depth: self.depth,
+            }
+            .serialize(serializer),
             Value::Unit => serializer.serialize_unit(),
             Value::Tuple(values) | Value::Array(values) => {
                 let mut seq = serializer.serialize_seq(Some(values.len()))?;

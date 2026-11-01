@@ -9,11 +9,13 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/ComputationRecipes.h"
-#include "support/NativeCases.h"
+#include "support/Formation.h"
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -28,6 +30,15 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
+// A formed literal with a wrong result association must reach the independent
+// source reader, including when the instruction's result is unused.
+algebra::ConstantFieldOp mismatchedLiteral(OpBuilder &builder,
+                                           Location location, Type result) {
+  auto other = algebra::FieldType::get(builder.getContext(), "koala-bear");
+  require(result != other, "literal mutation must change the nominal field");
+  return algebra::ConstantFieldOp::create(
+      builder, location, result, take(algebra::decodeFieldLiteral(other, "0")));
+}
 const char *laneFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !data.field_vector<"bls12-381.fr">
@@ -494,6 +505,13 @@ int main() {
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("malformed literal carrier fails before source comparison", [&] {
+    Builder builder(&context);
+    refusesFormation<algebra::FieldLiteralAttr>(
+        &context, "field-literal",
+        algebra::FieldType::get(&context, "bls12-381.fr"),
+        builder.getI64IntegerAttr(0));
+  });
   auto map = [&](StringRef label, std::string text, bool expected) {
     cases.run(label, [&] {
       auto module = parseSourceString<ModuleOp>(text, &context);
@@ -600,11 +618,8 @@ int main() {
     SymbolTable symbols(&module->getBody()->front());
     auto helper = symbols.lookup<func::FuncOp>("observe");
     OpBuilder builder(&helper.getBody().front().back());
-    algebra::ConstantFieldOp::create(
-        builder, helper.getLoc(), helper.getArgument(0).getType(),
-        algebra::FieldLiteralAttr::get(
-            &context, cast<algebra::FieldType>(helper.getArgument(0).getType()),
-            builder.getI64IntegerAttr(0)));
+    mismatchedLiteral(builder, helper.getLoc(),
+                      helper.getArgument(0).getType());
     require(!compareMap(*module),
             "empty-result helper hid an invalid unused instruction");
   });
@@ -645,11 +660,8 @@ int main() {
     lastCall.setOperand(1, helper.getArgument(1));
     auto &chain = symbols.lookup<func::FuncOp>("chain").getBody().front();
     OpBuilder builder(&chain.back());
-    algebra::ConstantFieldOp::create(
-        builder, module->getLoc(), chain.getArgument(0).getType(),
-        algebra::FieldLiteralAttr::get(
-            &context, cast<algebra::FieldType>(chain.getArgument(0).getType()),
-            builder.getI64IntegerAttr(0)));
+    mismatchedLiteral(builder, module->getLoc(),
+                      chain.getArgument(0).getType());
     require(!compareMap(*module, 100000),
             "memoization hid an unused invalid helper instruction");
   });
@@ -704,14 +716,16 @@ int main() {
     SymbolTable symbols(&unit);
     auto source = symbols.lookup<func::FuncOp>("formula");
     OpBuilder builder(&source.getBody().front().back());
-    algebra::ConstantFieldOp::create(
-        builder, source.getLoc(), source.getFunctionType().getResult(0),
-        algebra::FieldLiteralAttr::get(
-            &context,
-            cast<algebra::FieldType>(source.getFunctionType().getResult(0)),
-            builder.getI64IntegerAttr(0)));
+    require(compareMap(*module), "unmutated literal fixture refused");
+    auto malformed = mismatchedLiteral(builder, source.getLoc(),
+                                       source.getFunctionType().getResult(0));
+    refuses(algebra::describeRingExpression(
+                source.front(), source.front().back().getOperands()),
+            "ring-literal");
     require(!compareMap(*module),
-            "unused malformed literal escaped Ring admission");
+            "unused mismatched literal escaped Ring admission");
+    malformed.erase();
+    require(compareMap(*module), "restored literal fixture refused");
   });
   cases.run("uninstalled source field is refused at type formation", [&] {
     bool diagnosed = false;
@@ -831,12 +845,8 @@ int main() {
             auto formula = symbols.lookup<func::FuncOp>("formula");
             auto &body = formula.getBody().front();
             OpBuilder builder(&body.back());
-            algebra::ConstantFieldOp::create(
-                builder, formula.getLoc(), body.getArgument(0).getType(),
-                algebra::FieldLiteralAttr::get(
-                    &context,
-                    cast<algebra::FieldType>(body.getArgument(0).getType()),
-                    builder.getI64IntegerAttr(0)));
+            mismatchedLiteral(builder, formula.getLoc(),
+                              body.getArgument(0).getType());
             require(!compareMap(*module, 100000, true),
                     "neutral normalization hid an unused invalid literal");
           }

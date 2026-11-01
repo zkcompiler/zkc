@@ -1,10 +1,12 @@
 #include "Checker.h"
+#include "CommonRequirements.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Language/EntryBoundary.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
@@ -146,9 +148,25 @@ void frame(std::string &out, StringRef value) {
 Error Work::charge(uint64_t amount, std::optional<Span> span) {
   if (cancellation && cancellation->cancelled())
     return failure("source.cancelled", "source analysis cancelled", span);
-  if (amount > limits.work - used)
+  if (amount > remaining())
     return failure("source.limit", "checked work limit exceeded", span);
   used += amount;
+  if (allowance)
+    *allowance -= amount;
+  return Error::success();
+}
+Error chargeSemanticIndex(const std::vector<Declaration> &declarations,
+                          Work &work) {
+  if (auto e = work.charge(declarations.size() + 1))
+    return e;
+  for (const auto &decl : declarations) {
+    if (auto e = work.charge(
+            decl.qualifiedName.size() + decl.parameters.size() + 1, decl.span))
+      return e;
+    for (const auto &parameter : decl.parameters)
+      if (auto e = work.charge(parameter.atom.size() + 1, parameter.span))
+        return e;
+  }
   return Error::success();
 }
 Error Work::count(uint64_t &counter, uint64_t limit, StringRef what,
@@ -170,10 +188,10 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
   std::set<StringRef> names;
   for (const auto &source : sources) {
     if (source.origin != SourceOrigin::Captured ||
-        (source.module == "zkc" || source.module == "zkc::prelude"))
-      return failure(
-          "source.module",
-          "zkc and zkc::prelude are reserved for installation sources");
+        (source.module == "zkc" || source.module == "zkc::prelude" ||
+         source.module == "zkc::records"))
+      return failure("source.module", "zkc, zkc::prelude and zkc::records are "
+                                      "reserved for installation sources");
     if (source.diagnosticPath.size() > 4096)
       return failure("source.limit", "diagnostic path byte limit exceeded");
     if (source.text.size() > limits.fileBytes ||
@@ -286,6 +304,9 @@ ArrayRef<Token> CheckedProject::tokens(SourceId id) const {
              ? ArrayRef<Token>(storage->tokens[id.index])
              : ArrayRef<Token>();
 }
+const DeclarationIndex &CheckedProject::declarationIndex() const {
+  return *storage->declarationIndex;
+}
 StringRef CheckedProject::installationIdentity() const {
   return storage->installation;
 }
@@ -323,11 +344,15 @@ Expected<CheckedProject> Analysis::checkedProject() const {
 Analysis analyze(const CapturedProject &capture, const Limits &limits,
                  source::Cancellation cancellation) {
   auto output = std::make_shared<detail::AnalysisStorage>();
-  auto checked = std::make_shared<detail::CheckedStorage>(capture);
+  auto checked = std::make_shared<detail::CheckedStorage>(
+      capture, installedCatalogIdentity());
   auto sources = std::make_shared<std::vector<SourceBuffer>>(
       capture.sources().begin(), capture.sources().end());
   sources->push_back({"zkc::prelude", installedPrelude,
                       "<installation>/zkc/prelude.zkc",
+                      SourceOrigin::Installation});
+  sources->push_back({"zkc::records", installedRecords,
+                      "<installation>/zkc/records.zkc",
                       SourceOrigin::Installation});
   checked->sources = sources;
   output->sources = sources;
@@ -376,7 +401,6 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
       return error;
     if (!output->diagnostics.empty())
       return Error::success();
-    checked->installation = installedCatalogIdentity();
     checked->work = work.used;
     checked->declarationCount = work.declarations;
     checked->operationCount = work.operations;
@@ -444,7 +468,8 @@ Expected<EntrySelection> resolveEntry(const CheckedProject &project,
       return syntax.takeError();
     // Reuse completed source signatures and the actual import namespaces.
     // Template bodies and source buffers remain shared and immutable.
-    detail::CheckedStorage scope(project.capture());
+    detail::CheckedStorage scope(project.capture(),
+                                 project.installationIdentity().str());
     if (auto error = work.charge(project.declarations().size()))
       return std::move(error);
     scope.declarations.assign(project.declarations().begin(),
@@ -583,11 +608,16 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
 }
 namespace {
 Error validateClosedData(const ClosedEntry &entry, const Limits &limits,
-                         detail::Work &work) {
+                         detail::Work &work, bool externalSupply) {
   if (entry.protocolOrNull())
     if (auto error = detail::checkClosedSourceClaims(entry, work))
       return error;
   Layouts layouts(entry, limits);
+  if (externalSupply && entry.protocolOrNull()) {
+    auto boundary = layouts.entryBoundary(entry.protocol(), entry.entry());
+    if (!boundary)
+      return boundary.takeError();
+  }
   if (auto error = detail::checkSetups(entry, layouts, work))
     return error;
   std::function<Error(const Body &)> checkMessages =
@@ -674,6 +704,14 @@ Expected<ClosedEntry>
 closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
            std::optional<EntryKind> kind,
            std::optional<HostInvocation::Kind> operation) {
+  return ClosedEntry::closeSelected(project, name, limits, kind, operation,
+                                    ClosedEntry::ClosureContext::ExternalEntry);
+}
+Expected<ClosedEntry>
+ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
+                           const Limits &limits, std::optional<EntryKind> kind,
+                           std::optional<HostInvocation::Kind> operation,
+                           ClosureContext context) {
   if (auto error = checkScopedElaboration(project, limits))
     return std::move(error);
   auto selected = resolveEntry(project, name, limits, kind);
@@ -709,7 +747,10 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
   ClosedEntry entry(project, decl.id, storage);
   if (auto error = checkScopedSpecialization(entry, limits))
     return error;
-  if (auto error = validateClosedData(entry, limits, work))
+  if (auto error = validateClosedData(entry, limits, work,
+                                      context == ClosureContext::ExternalEntry))
+    return error;
+  if (auto error = detail::checkCommonControlRequirements(entry, work))
     return error;
   std::set<std::string> invoked;
   std::function<Error(const Body &, unsigned)> collect =
@@ -730,7 +771,10 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
             return detail::failure("source.limit",
                                    "Host invocation instance limit exceeded",
                                    op.span);
-          auto child = closeInvocation(project, *call, limits);
+          // These arguments were checked as typed Host data. Closing their
+          // deployment must not grant or demand external byte constructors.
+          auto child = closeProtocol(project, *call, limits,
+                                     ClosureContext::HostInvocation);
           if (!child)
             return child.takeError();
           if (auto e = work.charge(child->storage->work, op.span))
@@ -739,7 +783,7 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
               {call->kind, call->target, call->arguments,
                std::make_shared<ClosedEntry>(std::move(*child))});
         }
-      } else if (const auto *control = std::get_if<LocalControl>(&op.action)) {
+      } else if (const auto *control = std::get_if<Control>(&op.action)) {
         for (const auto &region : control->regions)
           if (auto e = collect(*region, depth + 1))
             return e;
@@ -758,6 +802,13 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
 Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
                                       const HostInvocation &invocation,
                                       const Limits &limits) {
+  return ClosedEntry::closeProtocol(project, invocation, limits,
+                                    ClosedEntry::ClosureContext::ExternalEntry);
+}
+Expected<ClosedEntry>
+ClosedEntry::closeProtocol(const CheckedProject &project,
+                           const HostInvocation &invocation,
+                           const Limits &limits, ClosureContext context) {
   if (auto e = checkScopedElaboration(project, limits))
     return e;
   if (invocation.kind != HostInvocation::Kind::Run &&
@@ -774,8 +825,8 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
       return detail::failure("source.host-invocation",
                              "proof invocation requires a closed proof family",
                              target.span);
-    return closeEntry(project, target.qualifiedName, limits, EntryKind::Proof,
-                      invocation.kind);
+    return closeSelected(project, target.qualifiedName, limits,
+                         EntryKind::Proof, invocation.kind, context);
   }
   if (target.kind != Declaration::Kind::Protocol)
     return detail::failure("source.host-invocation",
@@ -815,8 +866,11 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
   ClosedEntry child(project, selected, storage);
   if (auto e = checkScopedSpecialization(child, limits))
     return e;
-  if (auto e = validateClosedData(child, limits, work))
+  if (auto e = validateClosedData(child, limits, work,
+                                  context == ClosureContext::ExternalEntry))
     return e;
+  if (auto error = detail::checkCommonControlRequirements(child, work))
+    return error;
   storage->work = work.used;
   return child;
 }
@@ -831,19 +885,22 @@ Expected<ClosedEntry> closeSubject(const CheckedProject &project,
     return selected.takeError();
   const auto &declaration = project.declarations()[selected->declaration.index];
   if (declaration.kind == Declaration::Kind::Entry && declaration.proof())
-    return closeEntry(project, name, limits, EntryKind::Proof);
+    return ClosedEntry::closeSelected(
+        project, name, limits, EntryKind::Proof, {},
+        ClosedEntry::ClosureContext::SemanticSubject);
   if (!declaration.generated ||
       declaration.generated->operation != HostInvocation::Kind::Run)
     return detail::failure("source.subject",
                            "subject must name a closed protocol or proof, not "
                            "a Host Entry function",
                            declaration.span);
-  return closeInvocation(project,
-                         {HostInvocation::Kind::Run,
-                          declaration.generated->target,
-                          std::move(selected->arguments),
-                          {}},
-                         limits);
+  return ClosedEntry::closeProtocol(
+      project,
+      {HostInvocation::Kind::Run,
+       declaration.generated->target,
+       std::move(selected->arguments),
+       {}},
+      limits, ClosedEntry::ClosureContext::SemanticSubject);
 }
 
 const Declaration &ClosedEntry::entry() const {
@@ -884,10 +941,20 @@ std::string installedCatalogIdentity() {
   };
   row({"source-name-profile", sourceNameProfileIdentity()});
   row({"prelude", "zkc::prelude", detail::digest(installedPrelude)});
-  for (const auto &service : protocol::sourceServices)
-    row({"source-service", service.module, service.name,
-         std::to_string(static_cast<unsigned>(service.family)),
-         std::to_string(service.parameters)});
+  row({"records", "zkc::records", detail::digest(installedRecords)});
+  for (const auto &home : protocol::frontendHomes()) {
+    row({"frontend-home", home.constructor, home.module});
+    for (const auto &member : home.members)
+      row({"frontend-home-member", home.constructor, member});
+  }
+  for (const auto &method : protocol::serviceMethodDeclarations())
+    row({"service-method", method.name,
+         std::to_string(static_cast<unsigned>(method.signature)),
+         method.capability});
+  for (const auto &service : protocol::frontendAssociations())
+    row({"frontend-association", service.module, service.name,
+         std::to_string(static_cast<unsigned>(service.signature)),
+         service.identity, service.implicit ? "implicit" : "explicit"});
   const auto &catalog = protocol::installedDomains();
   for (const auto &domain : catalog.allDomains()) {
     row({"domain", domain.identity, domain.sort, domain.modulus,

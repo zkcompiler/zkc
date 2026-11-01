@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -564,6 +565,9 @@ planNativeRequests(pir::ProtocolModuleOp projected,
                    const NativeProofPolicy &policy,
                    ArrayRef<NativeTranscriptEvent> events,
                    const mathematical::RealizedProtocol *realization) {
+  if (auto e = requireUnconditionalProtocolControl(
+          projected, "native-request-control-profile"))
+    return std::move(e);
   SmallVector<NativeRequestCountPair> counts;
   if (realization &&
       any_of(events, [](const auto &event) { return event.reconstructed; })) {

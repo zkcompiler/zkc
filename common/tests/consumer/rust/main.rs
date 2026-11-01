@@ -91,13 +91,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(prepared.execute().is_success());
     let result = joint::call(&host, arguments()?, context())?;
     assert!(result.report.is_success() && result.conversion_error.is_none());
-    let Value::Record(mut roles) = Value::from(result.value.unwrap()) else {
-        panic!("roles")
-    };
-    let Value::Record(mut values) = roles.remove("V").unwrap() else {
-        panic!("results")
-    };
-    assert!(bool::try_from(values.remove("received").unwrap())?);
+    let roles = Value::from(result.value.unwrap());
+    assert!(bool::try_from(roles.field("V")?.field("received")?)?);
 
     let options = ProofOptions {
         binding: BindingPolicy::AllowAuthored,

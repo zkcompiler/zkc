@@ -1,0 +1,13 @@
+enum Choice:
+    Some(bool)
+    None()
+pub protocol Run roles(P,V)(value: Choice @(P,V)) -> bool @(P,V):
+    result = match value:
+        case Some(item):
+            if item:
+                true
+            else:
+                false
+        case None():
+            false
+    return result

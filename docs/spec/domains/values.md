@@ -440,6 +440,12 @@ external backend or provider.
 | `resource_unit.pass` | `resource_unit:D` | `resource_unit:D` | Consume the current permission and transfer its successor |
 | `resource_unit.consume` | `resource_unit:D` | none | Consume the permission without a successor |
 
+Native exact-root analysis follows the validated `resource_unit.pass` input to
+its output. Create and consume supply no successor equation: equal nominal slot
+types alone cannot connect a destroyed occurrence to a fresh one. Source record
+succession uses this installed operation and is independently compared against
+the actual native body.
+
 Creation establishes no external guard or evidence. Any actual guard remains a
 separate operation with its original success/failure behavior. Producer sites,
 used ports, and consuming or fallible unit-return calls survive lowering and
@@ -459,8 +465,8 @@ created units through explicit results. The current scalar Lean profile does not
 
 This permission is affine: unused values may be dropped, including explicit
 physical release. A stronger use obligation, such as must-consume, is a
-different discipline with its own contract. Existing generic requirement rules and Fiat–Shamir construction refusals
-are unchanged; logical resource operations grant no cryptographic replay law.
+different discipline with its own contract. Wire, public-input and construction-state
+checks remain separate; logical resource operations grant no cryptographic replay law.
 
 On a local frame's successful exit, only resource-unit occurrences explicitly
 returned from that frame remain live. On a stopped exit, no occurrence from that

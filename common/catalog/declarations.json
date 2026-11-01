@@ -14820,7 +14820,8 @@
         "index",
         "bool",
         "field",
-        "vector"
+        "vector",
+        "resource_unit"
       ],
       "parameterValidators": [
         "None",
@@ -15441,8 +15442,200 @@
               "capability": "ExtensionField"
             }
           ]
+        },
+        {
+          "operation": "resource_unit.create",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "S",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Slot"
+              }
+            }
+          ],
+          "stage": "CompilerGenerated",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "resource_unit.pass",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "S",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Slot"
+              }
+            }
+          ],
+          "stage": "CompilerGenerated",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "resource_unit.consume",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "S",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Slot"
+              }
+            }
+          ],
+          "stage": "CompilerGenerated",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": []
+          },
+          "requirements": []
         }
       ]
+    }
+  ],
+  "frontendAssociations": [
+    {
+      "identity": "record.unpack",
+      "module": "zkc::records",
+      "name": "unpack",
+      "signature": "RecordUnpack",
+      "implicit": true
+    },
+    {
+      "identity": "record.inspect",
+      "module": "zkc::records",
+      "name": "inspect_record",
+      "signature": "RecordInspect",
+      "implicit": true
+    },
+    {
+      "identity": "record.repack",
+      "module": "zkc::records",
+      "name": "repack_record",
+      "signature": "RecordRepack",
+      "implicit": true
+    },
+    {
+      "identity": "service.random",
+      "module": "zkc::prelude",
+      "name": "Random",
+      "signature": "RandomConstructor",
+      "implicit": true
+    }
+  ],
+  "frontendHomes": [
+    {
+      "constructor": "vector",
+      "module": "zkc::vector",
+      "members": [
+        "zkc::primitives::vector::append",
+        "zkc::primitives::vector::length",
+        "zkc::primitives::vector::get",
+        "zkc::primitives::vector::sum",
+        "zkc::primitives::vector::product",
+        "zkc::primitives::vector::split",
+        "zkc::primitives::vector::add",
+        "zkc::primitives::vector::hadamard",
+        "zkc::primitives::vector::scale",
+        "zkc::primitives::vector::dot",
+        "zkc::primitives::vector::fill",
+        "zkc::primitives::vector::elements",
+        "zkc::primitives::vector::indices",
+        "zkc::primitives::vector::at",
+        "zkc::primitives::vector::subtract",
+        "zkc::primitives::vector::inverse",
+        "zkc::primitives::vector::geometric",
+        "zkc::primitives::vector::rotate",
+        "zkc::primitives::vector::bit_reverse",
+        "zkc::primitives::vector::bit_reverse_rows",
+        "zkc::primitives::vector::equal",
+        "zkc::primitives::vector::find_last",
+        "zkc::primitives::vector::prefix_sum",
+        "zkc::primitives::vector::prefix_product"
+      ]
+    },
+    {
+      "constructor": "oracle",
+      "module": "zkc::oracles",
+      "members": []
+    },
+    {
+      "constructor": "oracle_sequence",
+      "module": "zkc::oracles",
+      "members": []
+    }
+  ],
+  "serviceMethods": [
+    {
+      "name": "draw",
+      "signature": "RandomDraw",
+      "capability": ""
+    },
+    {
+      "name": "index",
+      "signature": "RandomIndex",
+      "capability": "IndexRandomness"
+    },
+    {
+      "name": "indices",
+      "signature": "RandomIndices",
+      "capability": "IndexBlockRandomness"
     }
   ]
 }

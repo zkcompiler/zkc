@@ -121,6 +121,7 @@ impl Conversion<'_> {
                     .ok_or("benchmark-ingress: retained payload overflow")?;
                 Value::Leaf(value)
             }
+            Value::Opaque(value) => Value::Opaque(value),
             Value::Unit => Value::Unit,
             Value::Tuple(values) | Value::Array(values) => {
                 let fields = array(schema, "fields")?;
@@ -265,6 +266,7 @@ fn share_fields(values: &NamedValues) -> Result<NamedValues> {
 fn share_value(value: &Value) -> Result<Value> {
     Ok(match value {
         Value::Leaf(value) => Value::Leaf(share_leaf(value)?),
+        Value::Opaque(value) => Value::Opaque(value.clone()),
         Value::Unit => Value::Unit,
         Value::Tuple(values) => {
             Value::Tuple(values.iter().map(share_value).collect::<Result<_>>()?)

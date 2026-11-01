@@ -312,6 +312,23 @@ pub struct PreparedRun<'a> {
     loading: Option<zkc_runtime::vm::LiveReservation>,
 }
 impl PreparedRun<'_> {
+    /// Check all prepared ordinary data before issuing any invocation resource.
+    pub(crate) fn check_common_inputs(
+        &self,
+        bindings: &zkc_runtime::host::input_binding::InputBindings,
+    ) -> Result<()> {
+        for role in &self.roles {
+            bindings
+                .check_role_prepared(
+                    &role.entry.role,
+                    &role.backend,
+                    &entry_values(&role.values, &self.loaded),
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
     /// Every ordinary exit after issuance retires issued roots and preserves the
     /// primary result. Session freshness remains the application's obligation.
     pub fn execute(self) -> HostReport {

@@ -66,11 +66,9 @@ pub(super) fn run_authority(
         .collect();
     let mut inputs = BTreeMap::new();
     for role in interface.roles() {
-        let native = interface
-            .input_ports(role)
-            .flat_map(|p| &p.definition.native);
-        for (local, original) in native.enumerate() {
-            if let Some(slot) = slots.get(&(*original as usize)) {
+        let native = interface.role_native_inputs(role);
+        for (local, original) in native.into_iter().enumerate() {
+            if let Some(slot) = slots.get(&(original as usize)) {
                 inputs.insert((role.native_name.clone(), local), (*slot).to_owned());
             }
         }

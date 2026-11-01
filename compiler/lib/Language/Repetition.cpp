@@ -80,11 +80,13 @@ bool BodyChecker::repeat(const Expression &expr) {
           expr.span);
     if (!use(*state.value, expr.span) ||
         !nested.addInput(id, state.type, state.roles, expr.span,
-                         body.values[state.value->index].oracleHolder))
+                         body.values[state.value->index].oracleHolder,
+                         body.values[state.value->index].placement))
       return false;
     operation.carried.push_back(*state.value);
     results.push_back({state.type, state.roles, expr.span,
-                       body.values[state.value->index].oracleHolder});
+                       body.values[state.value->index].oracleHolder,
+                       body.values[state.value->index].placement});
   }
   for (const auto &p : summary->places) {
     if (states.count(p.binding))
@@ -97,15 +99,15 @@ bool BodyChecker::repeat(const Expression &expr) {
                                     "loop invariants require Copy; declare "
                                     "mutable state and supply its successor"))
       return false;
-    const auto &original = bindings.at(p.binding).roles;
+    auto value = capturePlace(p, expr.span);
+    if (!value)
+      return false;
+    const auto &original = body.values[value->index].components;
     std::vector<unsigned> selected;
     std::set_intersection(original.begin(), original.end(), roles->begin(),
                           roles->end(), std::back_inserter(selected));
     if (selected.empty())
       return fail("source.roles", "capture has no loop participant", expr.span);
-    auto value = capturePlace(p, expr.span);
-    if (!value)
-      return false;
     value = restrictRoles(*value, selected, expr.span);
     if (!value || !use(*value, expr.span))
       return false;
@@ -170,6 +172,10 @@ bool BodyChecker::repeat(const Expression &expr) {
           "source.move",
           "loop state needs a whole successor on every continuing iteration",
           expr.span);
+    if (region->values[state.value->index].placement !=
+        results[region->results.size()].placement)
+      return fail("source.placement", "loop successor changes placed identity",
+                  expr.span);
     if (region->values[state.value->index].oracleHolder !=
         results[region->results.size()].oracleHolder)
       return fail("source.oracle-role", "loop successor changes oracle holder",

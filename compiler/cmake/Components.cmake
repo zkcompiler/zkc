@@ -64,6 +64,9 @@ add_zkc_component(Contracts
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc" zkc_prelude_source)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Records.zkc" zkc_records_source)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Records.zkc")
 configure_file(lib/Language/Prelude.inc.in generated/Prelude.inc @ONLY)
 add_zkc_component(Syntax
   lib/Syntax/Syntax.cpp
@@ -96,6 +99,7 @@ add_zkc_component(Language
   lib/Language/FormalSourceWriter.cpp
   lib/Language/FormalSource.cpp
   lib/Language/LayoutDeclarations.cpp
+  lib/Language/LayoutEntries.cpp
   lib/Language/LayoutExpressions.cpp
   lib/Language/LayoutOracles.cpp
   lib/Language/LayoutBodies.cpp
@@ -122,6 +126,7 @@ add_zkc_component(Language
   lib/Language/Entries.cpp
   lib/Language/Constructions.cpp
   lib/Language/ConstructionCodecs.cpp
+  lib/Language/EntryBoundary.cpp
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp
   lib/Language/Permissions.cpp
@@ -157,6 +162,8 @@ add_zkc_component(Language
   lib/Language/Regions.cpp
   lib/Language/BodyCheck.cpp
   lib/Language/Placement.cpp
+  lib/Language/ValuePlacement.cpp
+  lib/Language/PlacedTypes.cpp
   lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
   lib/Language/Oracles.cpp
@@ -170,6 +177,8 @@ add_zkc_component(Language
   lib/Language/CallableConstraints.cpp
   lib/Language/OperatorInference.cpp
   lib/Language/ExpressionInference.cpp
+  lib/Language/DeclarationIndex.cpp
+  lib/Language/RecordIntrinsics.cpp
   lib/Language/CallResolution.cpp
   lib/Language/Calls.cpp
   lib/Language/Builtins.cpp
@@ -178,6 +187,7 @@ add_zkc_component(Language
   lib/Language/Applications.cpp
   lib/Language/Repetition.cpp
   lib/Language/Completion.cpp
+  lib/Language/CommonControl.cpp
   lib/Language/Control.cpp
   lib/Language/Specialize.cpp
 )
@@ -240,6 +250,7 @@ add_zkc_component(IR
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
   lib/Analysis/MathematicalFacts.cpp
+  lib/Analysis/CommonControl.cpp
   lib/Analysis/Interactions.cpp
   lib/Analysis/ProtocolConstants.cpp
   lib/Analysis/SuccessfulContinuations.cpp
@@ -273,6 +284,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/IR/OraclePorts.cpp
   lib/Dialect/Protocol/IR/OracleShapes.cpp
   lib/Dialect/Protocol/IR/OracleAnalysis.cpp
+  lib/Dialect/SelectedControl.cpp
   lib/Dialect/MathematicalSemantics.cpp
   lib/Dialect/Protocol/NativePolicy.cpp
   lib/Dialect/Protocol/IR/Protocol.cpp
@@ -419,6 +431,8 @@ add_zkc_component(Compiler
   lib/Compiler/Language.cpp
   lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
+  lib/Compiler/CommonInterface.cpp
+  lib/Compiler/InterfaceEntryBoundary.cpp
   lib/Compiler/LanguageInterfaceReader.cpp
   lib/Compiler/LanguageInterfaceWriter.cpp
   lib/Compiler/LanguageInterfaceComparison.cpp

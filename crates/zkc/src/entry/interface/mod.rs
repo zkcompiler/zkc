@@ -2,8 +2,18 @@
 //! checks structure and internal consistency, not MLIR meaning or native code.
 #[cfg(feature = "cpu")]
 mod binding;
+mod boundary;
+mod common;
 mod origin;
+mod placement;
 mod ports;
+mod selection;
+pub use boundary::{BoundaryRequirement, SelectionPurpose};
+pub use raw::{
+    Component as PortComponent, Facet as ComponentFacet, Placement as ValuePlacement,
+    PublicSelection as PublicInputSelection,
+};
+pub use selection::{OrdinaryInput, ProtocolPort};
 pub(in crate::entry) mod syntax;
 pub(in crate::entry) use ports::InputPort;
 #[cfg(feature = "cpu")]
@@ -51,6 +61,8 @@ pub struct Interface {
     pub(in crate::entry) selected: usize,
     pub(in crate::entry) types: BTreeMap<String, Leaf>,
     ports: ports::Ports,
+    #[cfg_attr(not(feature = "cpu"), allow(dead_code))]
+    common: Vec<common::Requirement>,
     pub(in crate::entry) setups: Vec<Setup>,
 }
 /// Package provenance plus its checked logical view. Only this type can bind a
@@ -86,16 +98,29 @@ impl BoundInterface {
     }
 }
 impl Interface {
+    #[cfg(any(feature = "cpu", test))]
     pub(in crate::entry) fn check_executable_ports(&self) -> Result<()> {
-        let protocol = self.selected_protocol();
+        self.check_executable_role(None)
+    }
+    pub(in crate::entry) fn check_executable_role(&self, role: Option<&str>) -> Result<()> {
         require(
-            protocol
-                .inputs
+            !self
+                .ports
+                .residual
                 .iter()
-                .chain(&protocol.outputs)
-                .all(|port| !port.schema.kind.is_logical()),
+                .any(|r| role.is_none_or(|role| r.role == role)),
             InterfaceError::NativeBinding,
         )
+    }
+    /// Exact source public selections, including initialized keys and empty data.
+    pub fn public_selections(&self) -> &[PublicInputSelection] {
+        match &self.document.job {
+            raw::Job::Proof { public, .. } => public,
+            _ => &[],
+        }
+    }
+    pub fn outstanding_requirements(&self) -> &[BoundaryRequirement] {
+        &self.ports.residual
     }
     #[cfg(feature = "project")]
     pub(crate) fn from_compiler(bytes: &[u8]) -> Result<Self> {
@@ -114,6 +139,7 @@ impl Interface {
             ports::Ports::new(&document, checked.selected, &checked.types, &checked.setups)?;
         Ok(Self {
             ports,
+            common: checked.common,
             document,
             selected: checked.selected,
             types: checked.types,
@@ -124,7 +150,7 @@ impl Interface {
     /// admitting native programs or executing any protocol operation.
     pub fn describe(&self) -> serde_json::Value {
         use serde_json::json;
-        let port = |p: &raw::Port| json!({"name":p.name, "type":p.display_type, "roles":p.roles});
+        let port = |p: &raw::Port| json!({"name":p.name, "type":p.display_type, "placement":p.placement.describe()});
         let protocol = self.selected_protocol();
         let selection = |s: &raw::Selector| {
             json!({"port":protocol.outputs[s.port as usize].name,
@@ -157,6 +183,7 @@ impl Interface {
                 "services":self.services(role).map(|s| json!({"name":s.name,"contract":s.contract})).collect::<Vec<_>>()
             })).collect::<Vec<_>>(),
             "setups":self.setup_names().collect::<Vec<_>>(), "proof":proof,
+            "outstanding_requirements":self.outstanding_requirements().iter().map(|r| json!({"port":r.port,"path":r.path,"role":r.role,"direction":if r.output {"output"} else {"input"},"facet":r.facet.map(|f|format!("{f:?}")),"reason":r.reason})).collect::<Vec<_>>(),
             "input_groups":self.input_groups().iter().map(|g|g.describe()).collect::<Vec<_>>()})
     }
     pub fn entry(&self) -> &str {

@@ -265,12 +265,12 @@ protocol Shared<C:Family> roles(P,V)(x:C::Item@(P,V))->(r:C::Item@(P,V)) where (
 protocol Forward roles(P,V)(x:Box::Item@(P,V))->(r:Box::Item@(P,V)){let r=Shared<Box>(x);return r;}
 )";
         take(check(source));
-        refuses(
-            zkc::test::closeProtocolDeployment(
-                take(check(source + "entry fn Demo(inputs: Forward::Inputs) { "
-                                    "return Forward::run(inputs); }")),
-                "m::Demo"),
-            "source.ingress");
+        auto project =
+            take(check(source + "entry fn Demo(inputs: Forward::Inputs) { "
+                                "return Forward::run(inputs); }"));
+        take(zkc::test::closeProtocolDeployment(project, "m::Demo"));
+        refuses(zkc::test::closeNativeRun(project, "m::Forward"),
+                "source.ingress");
       });
   return cases.result();
 }

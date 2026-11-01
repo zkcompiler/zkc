@@ -19,7 +19,12 @@ pub(super) fn check(
     let mut expected = BTreeSet::new();
     let mut verifier_keys = BTreeSet::new();
     for port in &protocol.inputs {
-        for (native, spelling) in port.native.iter().zip(&port.schema.leaves) {
+        for component in &port.components {
+            if component.facet != raw::Facet::Data {
+                continue;
+            }
+            let native = &component.native;
+            let spelling = super::placement::component_type(port, component)?;
             schemas.charge(1)?;
             let (kind, needs_setup) = schemas.setup_properties(spelling)?;
             if needs_setup {
@@ -28,11 +33,17 @@ pub(super) fn check(
             if kind == "prover_key"
                 && let raw::Job::Proof { verifier, .. } = &document.job
             {
-                require(!port.roles.contains(verifier), E::Selection)?;
+                require(
+                    !port.components.iter().any(|c| {
+                        c.native == *native && protocol.roles[c.role as usize] == *verifier
+                    }),
+                    E::Selection,
+                )?;
             }
             if kind == "verifier_key" {
                 require(
-                    port.schema.kind == raw::Kind::Builtin && port.native.len() == 1,
+                    validate::project_role(port, &component.path, component.role)
+                        .is_ok_and(|(s, n)| s.kind == raw::Kind::Builtin && n.len() == 1),
                     E::Selection,
                 )?;
                 verifier_keys.insert(*native as usize);
@@ -81,7 +92,18 @@ pub(super) fn check(
                     } = &document.job
                     {
                         require(
-                            public.contains(&port.index) && port.roles.contains(verifier),
+                            public.iter().any(|s| {
+                                s.port == port.index
+                                    && validate::project_role(
+                                        port,
+                                        &s.path,
+                                        component_role(protocol, verifier),
+                                    )
+                                    .is_ok_and(|(_, n)| n.contains(&(index as u32)))
+                            }) && port.components.iter().any(|c| {
+                                c.native as usize == index
+                                    && protocol.roles[c.role as usize] == *verifier
+                            }),
                             E::Selection,
                         )?;
                     }
@@ -97,4 +119,12 @@ pub(super) fn check(
     }
     require(covered.len() == expected.len(), E::Selection)?;
     Ok(result)
+}
+
+fn component_role(protocol: &raw::Protocol, role: &str) -> u32 {
+    protocol
+        .roles
+        .iter()
+        .position(|r| r == role)
+        .expect("checked proof role") as u32
 }

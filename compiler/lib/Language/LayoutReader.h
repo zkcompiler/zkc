@@ -53,6 +53,7 @@ class LayoutReader {
   llvm::Error oracleShapes(SyntaxDeclaration &decl, llvm::ArrayRef<Id>);
   llvm::Error oracleDefinitionBody(Id, SyntaxDeclaration &);
   llvm::Error body(Id id, SyntaxDeclaration &decl, bool region = false);
+  llvm::Error proofEntry(Id, SyntaxDeclaration &, SyntaxDeclaration);
 
 public:
   LayoutReader(const syntax::Snapshot &, llvm::ArrayRef<Token>, Work &);

@@ -186,7 +186,9 @@ impl HostReport {
                 "sent_bytes":execution.wire.sent_bytes,"replacement_bytes":execution.wire.replacement_bytes});
             result["reached"] = json!(execution.reached.iter().map(|r|json!({"role":r.step.role,"instruction":r.step.instruction,
                 "anchor":r.step.anchor,"iterations":r.iterations,"progress":format!("{:?}",r.progress),
-                "loop_count":r.loop_count,"loop_started":r.loop_started,"sent_bytes":r.sent_bytes,
+                "loop_count":r.loop_count,"loop_started":r.loop_started,
+                "branch_alternative":r.branch_alternative,"branch_started":r.branch_started,
+                "control_path":r.path.iter().map(path_element).collect::<Vec<_>>(),"sent_bytes":r.sent_bytes,
                 "receive_completion":r.receive_completion.as_ref().map(|v|format!("{v:?}"))})).collect::<Vec<_>>());
             result["pending"] = json!(execution.pending.as_ref().map(|p|json!({"send_step":p.send_step,
                 "receive_step":p.receive_step,"original_bytes":p.original_bytes,"bytes":p.bytes.len()})));
@@ -343,4 +345,17 @@ pub(super) fn check_units(
         }
     }
     Ok(())
+}
+
+fn path_element(element: &zkc_runtime::vm::PathElement) -> serde_json::Value {
+    use zkc_runtime::vm::PathElement;
+    match element {
+        PathElement::Branch { site, alternative } => json!(["branch", site, alternative]),
+        PathElement::Match { site, alternative } => json!(["match", site, alternative]),
+        PathElement::Conditional { site, taken } => {
+            json!(["if", site, if *taken { "then" } else { "else" }])
+        }
+        PathElement::For { site, index } => json!(["for", site, index.to_string()]),
+        PathElement::Loop { site, iteration } => json!(["loop", site, iteration.to_string()]),
+    }
 }

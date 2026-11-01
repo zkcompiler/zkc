@@ -73,6 +73,52 @@ isolated region around each expression. The choice and its alternatives are
 explained in [the rationale](../../rationale/mathematical-ir.md).
 No intermediate located common program is required by this profile.
 
+## Native layout of participant-placed products
+
+A participant-placed source product lowers to declaration-ordered native leaves.
+Its ordinary static type identity and its ordered role application are separate.
+Every child has its own data placement, exact oracle family, or recursively
+instantiated product placement. A product's participation summary grants no
+field access and supplies no default oracle holder. Ordinary-only products,
+nested role maps, and products containing independent holders use the same
+representation.
+
+A component observation records `(field_path, local_leaf, role, facet,
+native_index)`. Field paths use declaration ordinals, including private and
+zero-storage children. Facets distinguish data, oracle holder data, oracle
+receiver anchors, and custody. Multiple ordinary role components may select one
+multi-role SSA position. A direct oracle uses the existing holder-data and
+receiver-anchor pair with its own holder and exact receiver family; nested
+products do not replace those families with a root-wide family. Native indices
+are selections, not source-place identities. Zero arrays retain their element
+schema independently of expanded storage.
+
+An explicitly restricted distributed wrapper has a leading body custody unit
+for each role in its declared telescope, in telescope order. Each unit has
+exactly one local owner. The native unit type binds the complete instantiated
+static nominal type, including phantom arguments. Caller participant indices
+and wrapper field paths are component coordinates rather than parts of that
+unit type: extracting a child and passing it through a callee must preserve its
+native type. Equal unit types do not identify dynamic roots. Actual SSA edges,
+installed resource transfers, and native resource-origin analysis establish
+origination and succession. Empty wrappers retain their units; nested wrappers
+retain separate prefixes and paths. Source usage checking separately enforces
+one root obligation and constructor or consuming-API authority.
+
+Protocol construction and consumption execute actual scoped Local operations at
+each fragment's owner. Creation is fresh; consumption followed by creation does
+not establish a successor. Calls, captures, repetition carries, projections and
+returns preserve the complete ordered leaf association. Continuing loop yields
+must preserve exact resource roots; the zero-trip result keeps the initial
+association. Participant availability establishes neither common-control
+evidence nor agreement of ordinary components. General shared branches require
+the separate control contract and cannot use Local-only branch lowering.
+
+This layout contract does not establish ingress, retained-schema, interface,
+formal-consumer or proof-profile support. Those consumers must retain and check
+the complete logical schema and recompute component coverage from the actual
+candidate before claiming that integration.
+
 ## Logical oracle kinds and handles
 
 `#protocol.oracle_kind<"table", [T]>` associates ordinary table data with a
@@ -395,6 +441,11 @@ a lazy interface view: transporting a virtual sequence does not evaluate all
 its rows. Checked preparation forwards the original references and materializes
 data only for an actual holder-data demand. A returned handle likewise
 requires its matching data leaf with exact roles in the same result tuple.
+
+Interface receiver membership is a set: substituting an ordered formal-role
+map can permute its enumeration without changing its members. Pair admission
+compares the exact holder, receiver members and actual data/anchor association.
+This does not reorder an oracle delivery or its observable receiver sequence.
 
 Application expansion preserves the caller's anchor. Splitting, returning and
 rebinding a component pair creates no new anchor. Only a root input binding

@@ -2,6 +2,7 @@
 #include "BodyCheck.h"
 #include "BodySummary.h"
 #include "FiniteDomains.h"
+#include "RecordIntrinsics.h"
 #include "ScopedWitness.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
@@ -37,44 +38,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         Type(Type::Kind::Index), math() ? std::vector<unsigned>{} : allRoles(),
         expr.span);
   }
-  if (expr.kind == Expression::Kind::Call && expr.text == "unpack") {
-    if (!local() || expr.children.size() != 1 || !expr.arguments.empty() ||
-        !expr.callLabels.empty()) {
-      fail("source.call", "unpack requires one local value", expr.span);
-      return {};
-    }
-    auto value = expression(expr.children.front(), {}, depth + 1);
-    if (!value)
-      return {};
-    auto source = body.values[value->index].type;
-    if (!checker.types.constructorAllowed(decl, source)) {
-      fail("source.private", "unpack requires constructor authority",
-           expr.span);
-      return {};
-    }
-    if (source.kind == Type::Kind::Variant) {
-      fail("source.type", "variants are unpacked by exhaustive match",
-           expr.span);
-      return {};
-    }
-    auto fields = checker.types.fields(source, expr.span);
-    if (!fields)
-      return {};
-    Type result(fields->empty() ? Type::Kind::Unit : Type::Kind::Tuple);
-    for (auto &f : *fields)
-      result.arguments.push_back(f.type);
-    if (source.kind == Type::Kind::Associated)
-      result = fields->front().type;
-    if (!use(*value, expr.span))
-      return {};
-    // The empty alternative denotes product construction; unpack is explicit
-    // because it consumes a restricted wrapper's custody token in lowering.
-    return emit(Construct{{*value}, {}, Construct::Kind::Unpack}, result, {},
-                expr.span);
-  }
   const auto id = uint32_t(&expr - syntax.expressions.data());
   const auto &target = inference->callees.at(id);
   auto &callee = checker.output.declarations[target.declaration.index];
+  if (const auto *association =
+          checker.output.declarationIndex->association(target.declaration);
+      association && isRecordIntrinsic(association->signature))
+    return recordCall(expr, target, association->signature, depth);
   if (callee.generated && !callee.generated->constructible &&
       (callee.kind == Declaration::Kind::Record ||
        callee.kind == Declaration::Kind::Variant)) {
@@ -228,10 +198,24 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!type || (!math() && !checker.types.executableType(*type, expr.span)))
       return {};
     auto arg = expression(expr.children[i], *type, depth + 1);
-    if (!arg || !use(*arg, expr.span))
+    if (!arg)
+      return {};
+    if (product(*arg)) {
+      fail("source.placement",
+           "ordinary calls cannot read a distributed product as data",
+           expr.span);
+      return {};
+    }
+    if (!use(*arg, expr.span))
       return {};
     args[parameter] = *arg;
     authoredOperands.push_back(*arg);
+    if (expr.kind == Expression::Kind::MethodCall && i == 0 &&
+        (!scopedArgs.empty() || !domainArgs.empty())) {
+      if (!checker.types.charge(1, expr.span))
+        return {};
+      body.expressionValues.insert_or_assign(expr.children.front(), *arg);
+    }
   }
   auto resultType =
       checker.types.substitute(callee.outputs.front().type, subst, expr.span);
@@ -319,13 +303,17 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     resultComponents = *available;
   }
   CallBinding evidence{target, staticArgs, args, {}, {}, {}, {}};
-  if (!scopedArgs.empty() || !domainArgs.empty()) {
+  evidence.argumentOrder = binding;
+  {
     evidence.scopedSource = witnesses.calls.size();
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
     evidence.domainArguments = domainArgs;
     ScopedCallSource source{
-        decl.id, target.declaration, id, {}, scoped, domains, {}};
+        {decl.id, target.declaration, id, {}, target.module, staticArgs},
+        scoped,
+        domains,
+        {}};
     std::function<bool(uint32_t, unsigned)> retainDomain =
         [&](uint32_t expression, unsigned nesting) {
           const auto &argument = syntax.expressions[expression];
@@ -439,7 +427,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     auto &operation = body.operations.back();
     operation.binding = evidence;
     if (!checkCallAction(checker.types, checker.output.declarations, body,
-                         operation))
+                         operation, checker.output.declarationIndex.get()))
       return {};
     return value;
   };

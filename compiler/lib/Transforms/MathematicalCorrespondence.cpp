@@ -2,6 +2,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/StringMap.h"
 #include <set>
 
@@ -12,8 +13,9 @@ namespace {
 using Environment = ValueCorrespondence::Environment;
 using Term = ValueCorrespondence::Term;
 bool expression(Operation *op) {
-  return isProtocolValueExpression(op) || isa<func::CallOp>(op);
+  return isProtocolValueExpression(op) && !isa<data::BranchOp>(op);
 }
+
 Operation *nextAction(Operation *op) {
   while (op && expression(op))
     op = op->getNextNode();
@@ -49,12 +51,13 @@ class Correspondence {
       for (StringRef key : {"roles", "receivers"})
         if (auto attr = op->getAttrOfType<ArrayAttr>(key))
           result.set(key, set(attr));
-      if (auto attr = op->getAttrOfType<ArrayAttr>("carried_roles")) {
-        SmallVector<Attribute> sets;
-        for (auto value : attr)
-          sets.push_back(set(cast<ArrayAttr>(value)));
-        result.set("carried_roles", ArrayAttr::get(op->getContext(), sets));
-      }
+      for (StringRef key : {"carried_roles", "output_roles"})
+        if (auto attr = op->getAttrOfType<ArrayAttr>(key)) {
+          SmallVector<Attribute> sets;
+          for (auto value : attr)
+            sets.push_back(set(cast<ArrayAttr>(value)));
+          result.set(key, ArrayAttr::get(op->getContext(), sets));
+        }
       if (!prefix.empty())
         if (auto site = op->getAttrOfType<StringAttr>("site"))
           result.set("site", StringAttr::get(op->getContext(),
@@ -97,6 +100,48 @@ class Correspondence {
   }
   LogicalResult fail(StringRef detail) { return terms.refuse(detail); }
 
+  LogicalResult selectedRegions(Operation *source, Operation *target,
+                                Environment left, Environment right,
+                                const Substitution &substitution,
+                                unsigned depth) {
+    if (source->getNumRegions() != target->getNumRegions())
+      return fail("selected arm count differs");
+    for (auto [aRegion, bRegion] :
+         zip(source->getRegions(), target->getRegions())) {
+      if (!hasSingleElement(aRegion) || !hasSingleElement(bRegion))
+        return fail("selected arm shape differs");
+      auto &a = aRegion.front();
+      auto &b = bRegion.front();
+      if (a.getArgumentTypes() != b.getArgumentTypes())
+        return fail("selected payload or capture types differ");
+      auto payload = selectedPayloadTypes(source, aRegion.getRegionNumber());
+      if (!payload) {
+        consumeError(payload.takeError());
+        return fail("invalid selected payload");
+      }
+      Environment innerLeft = terms.environment(),
+                  innerRight = terms.environment();
+      for (auto [index, x, y] : enumerate(a.getArguments(), b.getArguments())) {
+        Term value =
+            index < payload->size()
+                ? terms.anchor(x.getType())
+                : terms.value(left,
+                              source->getOperand(index - payload->size() + 1));
+        terms.bind(innerLeft, x, value);
+        terms.bind(innerRight, y,
+                   index < payload->size()
+                       ? value
+                       : terms.value(right, target->getOperand(
+                                                index - payload->size() + 1)));
+      }
+      Operation *inner = nextAction(&b.front());
+      if (failed(sameBlock(a, inner, innerLeft, innerRight, substitution,
+                           depth + 1)))
+        return failure();
+    }
+    return success();
+  }
+
   LogicalResult sameBlock(Block &source, Operation *&cursor, Environment left,
                           Environment right, const Substitution &substitution,
                           unsigned depth, bool inlined = false) {
@@ -106,6 +151,43 @@ class Correspondence {
     for (auto &op : source) {
       if (!terms.charge())
         return fail("operation comparison exceeds its bound");
+      if (auto call = dyn_cast<func::CallOp>(op)) {
+        auto helper = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+            call, call.getCalleeAttr());
+        if (!helper || helper.empty() || !terms.charge(call.getNumOperands()))
+          return fail("missing total helper body");
+        Environment arguments = terms.environment();
+        for (auto [argument, input] :
+             zip(helper.getArguments(), call.getOperands()))
+          terms.bind(arguments, argument, terms.value(left, input));
+        if (auto actual = dyn_cast_if_present<func::CallOp>(cursor)) {
+          auto target = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+              actual, actual.getCalleeAttr());
+          if (!target || target.empty() ||
+              call.getResultTypes() != actual.getResultTypes())
+            return fail("total helper signature differs");
+          Environment candidateArguments = terms.environment();
+          for (auto [argument, input] :
+               zip(target.getArguments(), actual.getOperands()))
+            terms.bind(candidateArguments, argument, terms.value(right, input));
+          Operation *nested = nextAction(&target.front().front());
+          if (failed(sameBlock(helper.front(), nested, arguments,
+                               candidateArguments, substitution, depth + 1)))
+            return failure();
+          for (auto [result, returned] :
+               zip(actual.getResults(), target.front().back().getOperands()))
+            terms.bind(right, result,
+                       terms.value(candidateArguments, returned));
+          cursor = nextAction(cursor->getNextNode());
+        } else if (failed(sameBlock(helper.front(), cursor, arguments, right,
+                                    substitution, depth + 1, true))) {
+          return failure();
+        }
+        for (auto [result, returned] :
+             zip(call.getResults(), helper.front().back().getOperands()))
+          terms.bind(left, result, terms.value(arguments, returned));
+        continue;
+      }
       if (expression(&op))
         continue;
       if (auto application = dyn_cast<protocol_ir::ApplyOp>(op)) {
@@ -185,14 +267,18 @@ class Correspondence {
                               output.getType(), cast<ArrayAttr>(owners)));
         continue;
       }
-      if (inlined && isa<protocol_ir::MathematicalReturnOp>(op))
+      if (inlined && isa<protocol_ir::MathematicalReturnOp, func::ReturnOp>(op))
         return success();
       if (!cursor || op.getName() != cursor->getName() ||
           substitution.attributes(&op) != cursor->getAttrDictionary() ||
           !operands(left, op.getOperands(), right, cursor->getOperands()))
         return fail(
             "ordered operation or operand correspondence is unsupported");
-      if (isa<protocol_ir::RepeatOp, protocol_ir::ProtocolLoopOp>(op)) {
+      if (isSelectedControl(&op)) {
+        if (failed(
+                selectedRegions(&op, cursor, left, right, substitution, depth)))
+          return failure();
+      } else if (isa<protocol_ir::RepeatOp, protocol_ir::ProtocolLoopOp>(op)) {
         auto &a = op.getRegion(0).front();
         auto &b = cursor->getRegion(0).front();
         if (a.getArgumentTypes() != b.getArgumentTypes())
@@ -225,13 +311,39 @@ class Correspondence {
   LogicalResult projectedBlock(Block &source, Block &target, Environment left,
                                Environment right, StringAttr role,
                                ArrayRef<Value> outputs, unsigned depth) {
+    Operation *cursor = nextAction(&target.front());
+    return projectedSequence(source, cursor, left, right, role, outputs, depth);
+  }
+  LogicalResult projectedSequence(Block &source, Operation *&cursor,
+                                  Environment left, Environment right,
+                                  StringAttr role, ArrayRef<Value> outputs,
+                                  unsigned depth, bool inlined = false) {
     if (depth > 64 || !terms.charge())
       return fail("projection comparison exceeds its bound");
     terms.roleComponent(left, role);
-    Operation *cursor = nextAction(&target.front());
     for (auto &op : source) {
       if (!terms.charge())
         return fail("projection comparison exceeds its bound");
+      if (inlined && isa<func::ReturnOp>(op))
+        return success();
+      if (auto call = dyn_cast<func::CallOp>(op)) {
+        auto helper = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+            call, call.getCalleeAttr());
+        if (!helper || helper.empty() || !terms.charge(call.getNumOperands()))
+          return fail("missing projected total helper body");
+        Environment arguments = terms.environment();
+        for (auto [argument, input] :
+             zip(helper.getArguments(), call.getOperands()))
+          terms.bind(arguments, argument, terms.value(left, input));
+        auto returned = helper.front().back().getOperands();
+        SmallVector<Value> results(returned.begin(), returned.end());
+        if (failed(projectedSequence(helper.front(), cursor, arguments, right,
+                                     role, results, depth + 1, true)))
+          return failure();
+        for (auto [result, value] : zip(call.getResults(), returned))
+          terms.bind(left, result, terms.value(arguments, value));
+        continue;
+      }
       if (expression(&op) || isa<protocol_ir::StatementOp>(op))
         continue;
       if (isa<protocol_ir::MathematicalReturnOp, protocol_ir::ProtocolYieldOp>(
@@ -245,7 +357,80 @@ class Correspondence {
         cursor = cursor->getNextNode();
         continue;
       }
-      if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
+      if (isa<data::BranchOp>(op)) {
+        if (!isa_and_nonnull<data::BranchOp>(cursor) ||
+            op.getAttrDictionary() != cursor->getAttrDictionary() ||
+            !operands(left, op.getOperands(), right, cursor->getOperands()) ||
+            failed(selectedRegions(&op, cursor, left, right, Substitution{},
+                                   depth)) ||
+            !results(left, &op, right, cursor))
+          return fail("projected selected mathematics differs");
+      } else if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+        if (!is_contained(branch.getRoles(), role))
+          continue;
+        auto actual =
+            dyn_cast_if_present<protocol_ir::ParticipantBranchOp>(cursor);
+        if (!actual || actual.getSite() != branch.getSite() ||
+            actual.getAlternatives() != branch.getAlternatives() ||
+            !terms.compare(left, branch.getInputs()[0], right,
+                           actual.getInputs()[0]))
+          return fail("projected branch selector, arms or site differs");
+        SmallVector<unsigned> captures, ports;
+        for (auto [index, input] : enumerate(branch.getInputs().drop_front()))
+          if (!isa<protocol_ir::ServiceReferenceType>(input.getType()) &&
+              terms.value(left, input))
+            captures.push_back(index + 1);
+        for (auto [index, placement] : enumerate(branch.getOutputRoles()))
+          if (is_contained(cast<ArrayAttr>(placement), role))
+            ports.push_back(index);
+        if (actual.getNumOperands() != captures.size() + 1 ||
+            actual.getNumResults() != ports.size())
+          return fail("projected branch port count differs");
+        for (auto [index, input] : enumerate(captures))
+          if (!terms.compare(left, branch.getInputs()[input], right,
+                             actual.getInputs()[index + 1]))
+            return fail("projected branch capture association differs");
+        for (auto [armIndex, region] : enumerate(branch.getArms())) {
+          auto &a = region.front();
+          auto &b = actual->getRegion(armIndex).front();
+          auto payload = selectedPayloadTypes(branch, armIndex);
+          if (!payload ||
+              b.getNumArguments() != payload->size() + captures.size()) {
+            if (!payload)
+              consumeError(payload.takeError());
+            return fail("projected branch payload or captures differ");
+          }
+          Environment innerLeft = terms.environment(),
+                      innerRight = terms.environment();
+          for (unsigned i = 0; i < payload->size(); ++i) {
+            if (a.getArgument(i).getType() != b.getArgument(i).getType())
+              return fail("projected branch payload type differs");
+            Term value = terms.anchor(a.getArgument(i).getType());
+            terms.bind(innerLeft, a.getArgument(i), value);
+            terms.bind(innerRight, b.getArgument(i), value);
+          }
+          for (auto [index, input] : enumerate(branch.getInputs().drop_front()))
+            terms.bind(innerLeft, a.getArgument(payload->size() + index),
+                       terms.value(left, input));
+          for (auto [index, capture] : enumerate(captures))
+            terms.bind(innerRight, b.getArgument(payload->size() + index),
+                       terms.value(right, actual.getInputs()[index + 1]));
+          SmallVector<Value> yielded;
+          for (unsigned port : ports)
+            yielded.push_back(a.back().getOperand(port));
+          if (failed(projectedBlock(a, b, innerLeft, innerRight, role, yielded,
+                                    depth + 1)))
+            return failure();
+        }
+        for (auto [index, port] : enumerate(ports)) {
+          if (branch.getResult(port).getType() !=
+              actual.getResult(index).getType())
+            return fail("projected branch result type differs");
+          Term value = terms.anchor(branch.getResult(port).getType());
+          terms.bind(left, branch.getResult(port), value);
+          terms.bind(right, actual.getResult(index), value);
+        }
+      } else if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
         if (!is_contained(repeat.getRoles(), role))
           continue;
         auto loop = dyn_cast_if_present<protocol_ir::ProtocolLoopOp>(cursor);

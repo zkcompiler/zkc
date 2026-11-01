@@ -17,7 +17,9 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Entry.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
+#include <functional>
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::language;
@@ -43,9 +45,156 @@ constexpr StringLiteral sourceText = R"(module sample;
   entry fn Twice(x:index)->index{return add(x,x);}
   entry fn Demo(x:index)->index{return Twice(Twice(x));})";
 CompiledEntry compiled() { return take(compileEntry(original(sourceText))); }
+std::string opaqueSource() {
+  auto file = MemoryBuffer::getFile(ZKC_OPAQUE_HOST_FIXTURE);
+  require(bool(file), "missing opaque Host transport fixture");
+  return (*file)->getBuffer().str();
+}
+CheckedProject opaqueProject(StringRef text) {
+  CaptureOptions options;
+  options.format = "zkc-layout";
+  return take(analyze(take(capture({{"m", text.str(), "opaque.zkc"}}, options)))
+                  .checkedProject());
+}
+CompiledEntry opaqueCompiled(StringRef name) {
+  auto project = opaqueProject(opaqueSource());
+  auto closed = take(closeEntry(project, ("m::" + name).str()));
+  return take(compileEntry(take(prepareOriginal(closed))));
+}
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("opaque proof subjects do not claim external ingress", [] {
+    auto project = opaqueProject(opaqueSource());
+    refuses(closeEntry(project, "m::Demo"), "source.ingress");
+    for (auto kind :
+         {HostInvocation::Kind::Prove, HostInvocation::Kind::Verify})
+      refuses(closeEntry(project, "m::Demo", {}, EntryKind::Proof, kind),
+              "source.ingress");
+    auto subject = take(closeSubject(project, "m::Demo"));
+    require(subject.entry().proof() && !subject.invocationKind(),
+            "semantic proof subject acquired a Host operation");
+    take(prepareOriginal(subject));
+  });
+  for (StringRef name : {"Produce", "Check", "Run", "Import"})
+    cases.run(
+        "whole opaque typed Host child publishes and reads: " + name, [=] {
+          auto entry = opaqueCompiled(name);
+          take(packageEntry(entry));
+          auto &checked = entry.original();
+          take(admitOriginal(checked.entry(), checked.bytes(),
+                             checked.interfaceJson()));
+          mlir::DialectRegistry registry;
+          registerDialects(registry);
+          mlir::MLIRContext context(registry);
+          auto module = mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(),
+                                                                &context);
+          require(bool(module), "opaque Host original did not parse");
+          auto functions = take(readHostFunctions(*module));
+          auto artifact = take(json::parse(entry.bytes()));
+          require(functions == *artifact.getAsObject()->getArray("functions"),
+                  "independent Host readback changed typed transport");
+          if (auto e = checkHostArtifact(entry.bytes(), checked.interface()))
+            throw std::runtime_error(toString(std::move(e)));
+        });
+  cases.run("generated opaque witness schema cannot be forged", [] {
+    auto entry = opaqueCompiled("Produce");
+    auto artifact = take(json::parse(entry.bytes()));
+    // Keep repeated Host schemas consistent. The independently packaged child
+    // must still determine the generated field association.
+    std::function<void(json::Value &)> forge = [&](json::Value &value) {
+      if (auto *object = value.getAsObject()) {
+        if (object->getString("type") == "m::Demo::Witness")
+          (*object->getArray("fields")->front().getAsObject())["name"] =
+              "forged_witness";
+        for (auto &field : *object)
+          forge(field.second);
+      } else if (auto *array = value.getAsArray())
+        for (auto &element : *array)
+          forge(element);
+    };
+    forge(artifact);
+    rejects(
+        checkHostArtifact(printJson(artifact), entry.original().interface()),
+        "entry.signature");
+  });
+  cases.run("home construction does not grant a raw Host constructor", [] {
+    auto entry = opaqueCompiled("Produce");
+    auto artifact = take(json::parse(entry.bytes()));
+    bool replaced = false;
+    std::function<void(json::Value &)> forge = [&](json::Value &value) {
+      if (auto *object = value.getAsObject()) {
+        auto *results = object->getArray("results");
+        if (object->getString("op") == "numeric" && results &&
+            results->size() == 1 &&
+            results->front().getAsObject()->getObject("schema")->getString(
+                "type") == "m::Secret") {
+          (*object)["op"] = "construct";
+          object->erase("calculation");
+          (*object)["alternative"] = "";
+          replaced = true;
+        }
+        for (auto &field : *object)
+          forge(field.second);
+      } else if (auto *array = value.getAsArray())
+        for (auto &element : *array)
+          forge(element);
+    };
+    forge(artifact);
+    require(replaced, "home construction did not use a numerical fragment");
+    rejects(
+        checkHostArtifact(printJson(artifact), entry.original().interface()),
+        "entry.construct");
+  });
+  for (StringRef barrier : {"sealed", "private"})
+    cases.run("typed Host cannot split a " + barrier + " ancestor", [=] {
+      auto text = opaqueSource();
+      text.erase(text.find("entry def Produce"));
+      auto body = text.find("    value <- reveal");
+      auto scheme = text.find("scheme Demo");
+      require(body != std::string::npos && scheme != std::string::npos,
+              "missing protocol body");
+      text.replace(body, scheme - body, "    return true\n\n");
+      text += R"(
+entry def Run(inputs: Round::Inputs) -> Round::RunResult:
+    completed <- Round::run(inputs)
+    return completed
+)";
+      auto at = text.find("struct State roles");
+      require(at != std::string::npos, "missing distributed ancestor");
+      if (barrier == "sealed")
+        text.insert(at, "#[sealed]\n");
+      else {
+        at = text.find("pub witness: Secret");
+        require(at != std::string::npos, "missing private split target");
+        text.erase(at, 4);
+      }
+      if (barrier == "sealed") {
+        CaptureOptions options;
+        options.format = "zkc-layout";
+        auto captured = take(capture({{"m", text, "opaque.zkc"}}, options));
+        refuses(analyze(captured).checkedProject(), "source.private");
+        return;
+      }
+      auto project = opaqueProject(text);
+      auto closed = take(closeEntry(project, "m::Run"));
+      refuses(compileEntry(take(prepareOriginal(closed))), "source.interface");
+    });
+  cases.run("typed Host cannot erase zero-extent element assembly authority",
+            [] {
+              auto project = opaqueProject(R"(
+#[sealed]
+struct Empty roles(P, V):
+pub protocol Zero roles(P, V)(state: [Empty roles(P, V); 0]) -> bool @V:
+    return true
+entry def Run(inputs: Zero::Inputs) -> Zero::RunResult:
+    completed <- Zero::run(inputs)
+    return completed
+)");
+              auto closed = take(closeEntry(project, "m::Run"));
+              refuses(compileEntry(take(prepareOriginal(closed))),
+                      "source.interface");
+            });
   cases.run("standalone typed static calls and native numerical Program", [] {
     auto entry = compiled();
     auto artifact = take(json::parse(entry.bytes()));

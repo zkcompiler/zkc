@@ -97,8 +97,9 @@ struct Loop {
   Names outputs;
 };
 
-/// Role-local structured control. Regions have explicit captures and yield
-/// their ordered results; protocol interaction remains outside these regions.
+/// Selected structured control with closed captures and ordered typed yields.
+/// Local functions retain Local permissions; participant arms may contain
+/// participant actions. Service roots remain immutable participant metadata.
 struct Conditional {
   std::string condition;
   Names captures;

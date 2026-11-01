@@ -30,12 +30,13 @@ class Profiles(unittest.TestCase):
         self.assertEqual([m["operation"] for m in profile["operations"]], [
             "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
             "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
-            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"])
+            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed",
+            "resource_unit.create", "resource_unit.pass", "resource_unit.consume"])
         self.assertEqual(profile["implementation"], "unselected")
         for member in profile["operations"]:
             roots = [t["parameter"] for t in member["scope"] if t["kind"] == "root"]
             self.assertEqual(roots, [] if member["operation"].startswith("index.") else [
-                {"kind": "Domain", "sort": "Field"}])
+                {"kind": "Domain", "sort": "Slot" if member["operation"].startswith("resource_unit.") else "Field"}])
         self.assertEqual(project(value), project(value))
 
     def test_profile_refusals(self):

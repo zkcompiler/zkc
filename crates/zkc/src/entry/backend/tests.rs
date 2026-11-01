@@ -37,6 +37,8 @@ impl InstalledOperation for Add {
 struct Arithmetic {
     ty: PhysicalType,
     id: ImplementationId,
+    frames: usize,
+    applications: usize,
 }
 impl Backend for Arithmetic {
     type Value = Number;
@@ -64,6 +66,7 @@ impl Backend for Arithmetic {
             })
     }
     fn enter_frame(&mut self, _: &Frame, args: &[Number]) -> Result<(), BackendError> {
+        self.frames += 1;
         args.iter().try_for_each(|v| self.validate_value(v))
     }
     fn leave_frame(
@@ -80,6 +83,7 @@ impl Backend for Arithmetic {
         _: &Invocation<'_>,
         args: &[Number],
     ) -> Result<Vec<Number>, BackendError> {
+        self.applications += 1;
         let [a, b] = args else {
             return Err(BackendError::new("operands"));
         };
@@ -138,6 +142,9 @@ fn installed() -> (Contracts, Arithmetic) {
             LogicalType::parse("field:koala-bear").unwrap(),
         )
         .unwrap();
+    builder
+        .add_wire_permission(ty.clone(), WireCodec::Native)
+        .unwrap();
     let declaration = OperationBinding {
         contract: "field.add".into(),
         arguments: vec!["koala-bear".into()],
@@ -161,19 +168,24 @@ fn installed() -> (Contracts, Arithmetic) {
             allow_unspecified_timing: true,
             allow_variable_time: false,
         }),
-        Arithmetic { ty, id },
+        Arithmetic {
+            ty,
+            id,
+            frames: 0,
+            applications: 0,
+        },
     )
 }
 fn digest(value: &str) -> String {
     crate::io::bytes::hex(&Sha256::digest(value.as_bytes()))
 }
 fn package(ty: &PhysicalType, constructible: bool) -> Package {
-    let field = json!({"kind":"field","identity":digest("F"),"type":"F","custody":false,"constructible":constructible,
+    let field = json!({"kind":"field","identity":digest("F"),"type":"F","generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":constructible,
         "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":["field:koala-bear"]});
-    let port = |name: &str, index: u32| json!({"name":name,"index":index,"native":[index],"roles":["P"],"type":"F","schema":field});
+    let port = |name: &str, index: u32| json!({"name":name,"index":index,"native":[index],"placement":{"kind":"data","roles":[0]},"components":[{"path":[],"leaf":0,"role":0,"facet":"data","native":index}],"type":"F","schema":field});
     let interface = json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("source"),"toolchain":"test",
         "entry":"example::Main","protocol":"example_Add","protocols":[{"symbol":"example_Add","roles":["P"],
-        "inputs":[port("a",0),port("b",1)],"outputs":[port("sum",0)],"services":[],"clauses":[]}],"relations":[],"job":{"kind":"run"}});
+        "inputs":[port("a",0),port("b",1)],"outputs":[port("sum",0)],"services":[],"common_input_requirements":[],"clauses":[]}],"relations":[],"job":{"kind":"run"}});
     let t = ty.spelling();
     let candidate = json!([
         "zkc.program/0",
@@ -284,6 +296,244 @@ fn change_package(package: &Package, change: impl FnOnce(&mut serde_json::Value)
     .unwrap()
 }
 
+fn paired_run() -> (BackendRun, Arithmetic) {
+    let (contracts, backend) = installed();
+    let package = change_package(&package(&backend.ty, true), |frame| {
+        let mut interface: serde_json::Value =
+            serde_json::from_str(frame["interface"].as_str().unwrap()).unwrap();
+        let protocol = &mut interface["protocols"][0];
+        protocol["roles"] = json!(["P", "V"]);
+        protocol["common_input_requirements"] = json!([{"components":[
+            {"input":0,"role":"P","path":[]},{"input":0,"role":"V","path":[]}
+        ],"observation":{"kind":"value"}}]);
+        for kind in ["inputs", "outputs"] {
+            for port in protocol[kind].as_array_mut().unwrap() {
+                port["placement"]["roles"] = json!([0, 1]);
+                let mut component = port["components"][0].clone();
+                component["role"] = json!(1);
+                port["components"].as_array_mut().unwrap().push(component);
+            }
+        }
+        frame["interface"] = json!(interface.to_string());
+        let mut artifact: serde_json::Value =
+            serde_json::from_str(frame["artifact"].as_str().unwrap()).unwrap();
+        let mut candidate: serde_json::Value =
+            serde_json::from_str(artifact["candidate"].as_str().unwrap()).unwrap();
+        let mut verifier = candidate[3][0].clone();
+        verifier[1] = json!("v");
+        verifier[3] = json!("role00000001");
+        candidate[3].as_array_mut().unwrap().push(verifier);
+        candidate[4][0][2]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(["role00000001", "v"]));
+        artifact["candidate"] = json!(candidate.to_string());
+        artifact["roles"] = json!(["role00000000", "role00000001"]);
+        artifact["steps"] = json!([
+            {"role":0,"instruction":0,"anchor":0}, {"role":1,"instruction":0,"anchor":1},
+            {"role":0,"instruction":1,"anchor":null}, {"role":1,"instruction":1,"anchor":null}
+        ]);
+        frame["artifact"] = json!(artifact.to_string());
+    });
+    (
+        BackendRun::admit(
+            package,
+            &contracts,
+            &backend,
+            joint::BundleLimits::default(),
+        )
+        .unwrap(),
+        backend,
+    )
+}
+
+fn trusted_context(run: &BackendRun, backend: &Arithmetic) -> (Vec<u8>, [u8; 32]) {
+    // Hand-authored fixture authority only. These hashes identify the fixture;
+    // computing them here does not authenticate an external application's source.
+    let components = ["role00000000", "role00000001"]
+        .map(|role| {
+            let input = run
+                .interface()
+                .native_input_position(if role.ends_with('0') { "P" } else { "V" }, 0)
+                .unwrap();
+            InputComponent {
+                role: role.into(),
+                input,
+                path: vec![],
+            }
+        })
+        .to_vec();
+    let required = vec![InputRequirement {
+        components,
+        ty: backend.ty.clone(),
+        observation: Observation::Value,
+    }];
+    assert_eq!(run.common_input_requirements().unwrap(), required);
+    let bytes = zkc_format::logical::encode_tree(&json!([
+        "zkc.input-bindings/0",
+        digest(std::str::from_utf8(run.bundle().admitted().bytes()).unwrap()),
+        run.bundle().entry(),
+        [[
+            [["role00000000", "0", []], ["role00000001", "0", []]],
+            backend.ty.spelling(),
+            "value",
+            ["active", "14000000"]
+        ]]
+    ]))
+    .unwrap();
+    let pin = Sha256::digest(&bytes).into();
+    (bytes, pin)
+}
+
+#[test]
+fn pinned_entry_checks_actual_components_before_creating_a_participant() {
+    let (run, backend) = paired_run();
+    let (bytes, pin) = trusted_context(&run, &backend);
+    let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
+    let input = |role: &str, a, backend: Arithmetic| joint::RoleInput {
+        role: role.into(),
+        values: [a, 22]
+            .map(|value| Number {
+                value,
+                ty: backend.ty.clone(),
+            })
+            .to_vec(),
+        backend,
+    };
+    let error = match bound.start_role(
+        "pinned",
+        input("role00000001", 21, backend),
+        ValueBudget::default(),
+        WorkBudget::default(),
+    ) {
+        Ok(_) => panic!("disagreeing role input must refuse"),
+        Err(error) => error,
+    };
+    assert!(matches!(error.error, RuntimeError::Backend(ref e) if e.code == "input-binding-Value"));
+    assert_eq!(error.usage.instructions, 0);
+    assert_eq!(error.usage.live_value_bytes, 0);
+    assert_eq!(error.backend.frames, 0);
+    assert_eq!(error.backend.applications, 0);
+    let mut runner = bound
+        .start_role(
+            "pinned",
+            input("role00000001", 20, error.backend),
+            ValueBudget::default(),
+            WorkBudget::default(),
+        )
+        .map_err(|e| e.error)
+        .unwrap();
+    let Action::Local(local) = runner.poll() else {
+        panic!("local computation");
+    };
+    runner.execute_local(&local.cut).unwrap();
+    let Action::Returned(values) = runner.poll() else {
+        panic!("ordinary participant execution");
+    };
+    assert_eq!(values[0].value, 42);
+    assert_eq!(runner.backend().applications, 1);
+}
+
+#[test]
+fn pinned_entry_retains_inventory_pin_and_installation_boundaries() {
+    for change in ["pin", "inventory", "role", "entry", "program"] {
+        let (run, backend) = paired_run();
+        let (mut bytes, _pin) = trusted_context(&run, &backend);
+        let pin = match change {
+            "pin" => [0; 32],
+            "inventory" | "role" => {
+                let mut tree = zkc_format::logical::decode_tree(&bytes).unwrap();
+                if change == "inventory" {
+                    tree[3] = json!([]);
+                } else {
+                    tree[3][0][0].as_array_mut().unwrap().swap(0, 1);
+                }
+                bytes = zkc_format::logical::encode_tree(&tree).unwrap();
+                Sha256::digest(&bytes).into()
+            }
+            subject => {
+                let mut tree = zkc_format::logical::decode_tree(&bytes).unwrap();
+                tree[if subject == "entry" { 2 } else { 1 }] = json!("wrong");
+                bytes = zkc_format::logical::encode_tree(&tree).unwrap();
+                Sha256::digest(&bytes).into()
+            }
+        };
+        let expected = match change {
+            "pin" => BindingError::Identity,
+            "inventory" | "role" => BindingError::Requirements,
+            _ => BindingError::Subject,
+        };
+        assert!(
+            matches!(run.bind_common_inputs(&bytes, &pin), Err(error) if error == expected),
+            "{change}"
+        );
+    }
+    let (run, backend) = paired_run();
+    let (bytes, pin) = trusted_context(&run, &backend);
+    let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
+    let (_, mut other) = installed();
+    // Keep actual inputs valid while substituting only the independently issued
+    // operation handle; common-value admission cannot authorize that handle.
+    other.ty = backend.ty.clone();
+    let values = [20, 22]
+        .map(|value| Number {
+            value,
+            ty: other.ty.clone(),
+        })
+        .to_vec();
+    let error = match bound.start_role(
+        "other_installation",
+        joint::RoleInput {
+            role: "role00000000".into(),
+            backend: other,
+            values,
+        },
+        ValueBudget::default(),
+        WorkBudget::default(),
+    ) {
+        Ok(_) => panic!("wrong installed operation authority must refuse"),
+        Err(error) => error,
+    };
+    assert!(matches!(error.error, RuntimeError::Admission(_)));
+    assert_eq!(error.backend.frames, 0);
+}
+
+#[test]
+fn common_input_binding_does_not_supply_a_service_adapter_or_input_ports() {
+    let (contracts, backend) = installed();
+    let original = package(&backend.ty, true);
+    let with_service = change_package(&original, |frame| {
+        let mut interface: serde_json::Value =
+            serde_json::from_str(frame["interface"].as_str().unwrap()).unwrap();
+        interface["protocols"][0]["services"] = json!([
+            {"name":"entropy", "contract":"random.bls12-381.fr/0", "owner":"P", "native":2}
+        ]);
+        frame["interface"] = json!(interface.to_string());
+    });
+    assert!(
+        matches!(BackendRun::admit(with_service, &contracts, &backend, joint::BundleLimits::default()), Err(error) if error == "entry-backend-services")
+    );
+
+    let (run, backend) = paired_run();
+    let (bytes, pin) = trusted_context(&run, &backend);
+    let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
+    let error = match bound.start_role(
+        "missing_input",
+        joint::RoleInput {
+            role: "role00000000".into(),
+            backend,
+            values: vec![],
+        },
+        ValueBudget::default(),
+        WorkBudget::default(),
+    ) {
+        Ok(_) => panic!("binding must not invent missing inputs"),
+        Err(error) => error,
+    };
+    assert!(matches!(error.error, RuntimeError::Backend(ref e) if e.code == "input-binding-Input"));
+    assert_eq!(error.backend.frames, 0);
+}
+
 #[test]
 fn execution_rechecks_the_actual_backend_catalog() {
     let (contracts, backend) = installed();
@@ -366,11 +616,12 @@ fn nested_source_constructor_authority_is_required() {
         child["identity"] = json!(digest("opaque-child"));
         child["constructible"] = json!(false);
         let parent = json!({"kind":"record","identity":digest("outer"),"type":"Outer",
-            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
-            "fields":[{"name":"value","offset":0,"schema":child}],"alternatives":[],
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,"permissions":["Copy","Drop"],
+            "fields":[{"name":"value","offset":0,"public":true,"placement":null,"schema":child}],"alternatives":[],
             "leaves":["field:koala-bear"]});
         interface["protocols"][0]["inputs"][0]["type"] = json!("Outer");
         interface["protocols"][0]["inputs"][0]["schema"] = parent;
+        interface["protocols"][0]["inputs"][0]["components"][0]["path"] = json!([0]);
         frame["interface"] = json!(interface.to_string());
     });
     // The source schema itself is valid; the portable application seam must
@@ -425,5 +676,34 @@ fn independent_codec_backend_reaches_the_same_common_driver_after_bounded_decodi
             .encode_wire(&report.roles[0].outputs[0])
             .unwrap(),
         42u32.to_le_bytes()
+    );
+}
+
+#[test]
+fn independent_backend_cannot_expose_an_opaque_source_output_as_raw_storage() {
+    let (contracts, backend) = installed();
+    let original = package(&backend.ty, true);
+    let package = change_package(&original, |package| {
+        let mut interface: serde_json::Value =
+            serde_json::from_str(package["interface"].as_str().unwrap()).unwrap();
+        let port = &mut interface["protocols"][0]["outputs"][0];
+        let field = port["schema"].clone();
+        let mut record = field.clone();
+        record["kind"] = json!("record");
+        record["identity"] = json!(digest("SecretOutput"));
+        record["type"] = json!("SecretOutput");
+        record["constructible"] = json!(false);
+        record["fields"] =
+            json!([{"name":"hidden","offset":0,"public":false,"placement":null,"schema":field}]);
+        port["schema"] = record;
+        port["type"] = json!("SecretOutput");
+        port["components"][0]["path"] = json!([0]);
+        package["interface"] = json!(interface.to_string());
+    });
+    assert_eq!(
+        BackendRun::admit(package, &contracts, &backend, Default::default())
+            .err()
+            .unwrap(),
+        "entry-backend-opaque"
     );
 }

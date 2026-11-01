@@ -407,11 +407,16 @@ Expected<json::Value> parameterData(Attribute parameter) {
     if (!value)
       return value.takeError();
     json::Array path, event;
-    for (const auto &step : value->path)
-      path.push_back(json::Array{
-          step.kind == protocol::NativeOriginStep::Kind::Apply ? "apply"
-                                                               : "repeat",
-          step.protocol, step.site});
+    for (const auto &step : value->path) {
+      json::Array frame{
+          step.kind == protocol::NativeOriginStep::Kind::Apply    ? "apply"
+          : step.kind == protocol::NativeOriginStep::Kind::Repeat ? "repeat"
+                                                                  : "branch",
+          step.protocol, step.site};
+      if (step.kind == protocol::NativeOriginStep::Kind::Branch)
+        frame.push_back(step.alternative);
+      path.push_back(std::move(frame));
+    }
     if (auto *query = std::get_if<protocol::NativeQueryOrigin>(&value->event))
       event = json::Array{
           "query",        query->protocol,

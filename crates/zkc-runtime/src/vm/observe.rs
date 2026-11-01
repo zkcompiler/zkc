@@ -40,6 +40,7 @@ pub struct LoadError<B> {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PathElement {
+    Branch { site: String, alternative: String },
     Match { site: String, alternative: String },
     Conditional { site: String, taken: bool },
     For { site: String, index: u64 },
@@ -66,6 +67,8 @@ impl Origin {
             self.path
                 .iter()
                 .map(|p| match p {
+                    PathElement::Branch { site, alternative } =>
+                        serde_json::json!(["branch", site, alternative]),
                     PathElement::Match { site, alternative } =>
                         serde_json::json!(["match", site, alternative]),
                     PathElement::Conditional { site, taken } =>

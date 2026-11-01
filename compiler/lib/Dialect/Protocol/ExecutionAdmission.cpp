@@ -177,7 +177,15 @@ class ExecutionAdmission {
       if (!occurrence || !identifier(occurrence.getValue()) ||
           !sites.insert(occurrence.getValue()).second)
         return fail(op, "interactive-site");
-      if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op)) {
+      if (auto branch = dyn_cast<protocol_ir::ParticipantBranchOp>(op)) {
+        if (!attributes(op, {"site", "alternatives"}) ||
+            failed(branch.verifyRegions()) || !consume(op, branch.getInputs()))
+          return fail(op, "interactive-branch-body");
+        for (Region &arm : branch.getArms())
+          if (!body(participant, arm.front(), branch.getResultTypes(), sites,
+                    depth + 1))
+            return fail(op, "interactive-branch-body");
+      } else if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op)) {
         if (!attributes(op,
                         {"site", "carried", "count", "parameter", "maximum"}) ||
             !loop.getBody().hasOneBlock() || !loop.getMaximum() ||

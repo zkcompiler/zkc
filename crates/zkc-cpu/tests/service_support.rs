@@ -66,6 +66,109 @@ const SERVICES: &[(ServiceContract, &str, &str)] = &[
         "field:koala-bear.ext4-binomial3@plonky3.koala-bear.ext4-binomial3/0",
     ),
 ];
+
+#[test]
+fn selected_branch_queries_use_the_bound_service_and_dormant_arms_do_not_draw() {
+    for nested in [false, true] {
+        let query = json!([
+            ["query", "selected_draw", "rng", "draw", [], ["drawn"]],
+            ["yield", ["drawn"]]
+        ]);
+        let selected_body = if nested {
+            json!([
+                [
+                    "if",
+                    "inner",
+                    "selected",
+                    ["fallback"],
+                    query,
+                    [["yield", ["fallback"]]],
+                    ["inner_result"]
+                ],
+                ["yield", ["inner_result"]]
+            ])
+        } else {
+            query
+        };
+        let mut candidate: serde_json::Value =
+            serde_json::from_slice(&program(SERVICES[0].1, SERVICES[0].2)).unwrap();
+        candidate[3][0][4] = json!([
+            ["selected", "bool@native.bool/0"],
+            ["fallback", SERVICES[0].2]
+        ]);
+        candidate[3][0][6] = json!([
+            [
+                "if",
+                "outer",
+                "selected",
+                ["selected", "fallback"],
+                selected_body,
+                [["yield", ["fallback"]]],
+                ["result"]
+            ],
+            ["return", ["result"]]
+        ]);
+        candidate[3][0][7][0][2] = json!("2");
+        let admitted = zkc_runtime::vm::Program::decode(
+            candidate.to_string().as_bytes(),
+            zkc_cpu::cpu_contracts(),
+        )
+        .unwrap();
+        for selected in [false, true] {
+            for budget in [0, 1] {
+                let registry = ServiceRegistry::new(Policy::default());
+                let root = registry
+                    .issue_test_tape("Alice", budget, vec![Scalar::from(7u64)])
+                    .unwrap();
+                let backend = native()
+                    .with_services(registry.clone(), [("rng".into(), root.clone())].into())
+                    .unwrap();
+                admitted.check_installation(&backend).unwrap();
+                let mut runner = Runner::new(
+                    &admitted,
+                    "main",
+                    "Alice",
+                    "session",
+                    backend,
+                    vec![Value::Bool(selected), Value::Field(Scalar::from(3u64))],
+                )
+                .unwrap_or_else(|e| panic!("{}", e.error));
+                while runner.advance_local_control().unwrap() {}
+                if selected {
+                    let Action::Query(query) = runner.poll() else {
+                        panic!("selected branch must reach its service query")
+                    };
+                    runner.execute_query(&query.cut).unwrap();
+                    while runner.advance_local_control().unwrap() {}
+                }
+                let outcome = runner.poll();
+                if selected && budget == 0 {
+                    let Action::Stopped(stop) = outcome else {
+                        panic!("selected query must exhaust its service budget")
+                    };
+                    let zkc_runtime::vm::StopKind::Backend(error) = stop.kind else {
+                        panic!("service budget refusal")
+                    };
+                    assert_eq!(error.code, "exhausted:resource-budget");
+                } else {
+                    let Action::Returned(values) = outcome else {
+                        panic!("branch must return, got {outcome:?}")
+                    };
+                    let expected = Scalar::from(if selected { 7u64 } else { 3u64 });
+                    assert!(
+                        matches!(values.as_slice(), [Value::Field(value)] if *value == expected)
+                    );
+                }
+                let backend = runner.into_backend();
+                assert_eq!(backend.active_frames(), 0);
+                let observation = registry.observe(&root).unwrap();
+                assert_eq!(observation.state.unwrap().draw_count, u64::from(selected));
+                assert!(!observation.leased);
+            }
+        }
+    }
+}
+
 struct Adapter {
     inner: CpuBackend,
     mutate: fn(&mut ServiceSupport),

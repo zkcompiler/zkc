@@ -69,12 +69,11 @@ int main() {
                 take(runtime::importNumericalPlan(&context, neutral));
             accept(
                 target::verifyNumericalPlan(field, logical, mask, alternative));
-            // Choose an unambiguously invalid shape, independently of sharing.
-            auto wrong = runtime::NumericalPlanAttr::get(
-                &context, plan.getExpression(), 8, plan.getSlots(),
-                DenseI32ArrayAttr::get(&context, {}));
-            refuse(target::verifyNumericalPlan(field, logical, mask, wrong),
-                   "numerical-plan-shape");
+            // Malformed shapes must refuse at checked attribute formation,
+            // before the represented verifier receives an admitted carrier.
+            neutral.locations.clear();
+            refuses(runtime::importNumericalPlan(&context, neutral),
+                    "numerical-plan-shape");
           });
     }
   }

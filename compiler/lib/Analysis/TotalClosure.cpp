@@ -2,10 +2,12 @@
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
@@ -112,6 +114,64 @@ struct TotalClosure::Impl {
   }
 
 public:
+  LogicalResult selected(Operation *op, TotalSummary &summary,
+                         unsigned depth = 0) {
+    if (depth >= 64)
+      return limit(op, "selected mathematics nesting exceeds 64");
+    if (!isa<data::BranchOp>(op) || failed(verifySelectedControl(op)) ||
+        failed(verifyTotalTypes(op, types)))
+      return failure();
+    summary.depth = std::max(summary.depth, depth + 1);
+    for (Region &region : op->getRegions()) {
+      for (Value argument : region.front().getArguments()) {
+        auto policy = types.get(argument.getType());
+        if (!policy || !policy->total || policy->affine)
+          return refuse(op, "selected Math arguments must be total data");
+      }
+      for (Operation &child : region.front()) {
+        if (!remainingOperations || ++summary.expandedOperations > 100000 ||
+            failed(charge(&child,
+                          1 + child.getNumOperands() + child.getNumResults())))
+          return limit(&child, "selected mathematics work limit");
+        --remainingOperations;
+        if (failed(child.getName().verifyInvariants(&child)) ||
+            failed(verifyOperation(&child, Helper)))
+          return failure();
+        if (isa<data::YieldOp>(child)) {
+          if (&child != &region.front().back())
+            return refuse(&child, "yield must terminate its selected arm");
+        } else if (isa<data::BranchOp>(child)) {
+          if (failed(selected(&child, summary, depth + 1)))
+            return failure();
+        } else if (auto call = dyn_cast<func::CallOp>(child)) {
+          const TotalSummary *callee;
+          if (failed(get(call, callee)))
+            return failure();
+          if (callee->expandedOperations > 100000 - summary.expandedOperations)
+            return limit(call, "selected helper expansion limit");
+          summary.expandedOperations += callee->expandedOperations;
+          summary.depth = std::max(summary.depth, depth + callee->depth + 1);
+          summary.observesPolynomial |= callee->observesPolynomial;
+        } else if (!isTotal(&child) || child.getNumRegions() ||
+                   failed(verifyTotalTypes(&child, types))) {
+          return refuse(&child,
+                        "selected Math permits only admitted total operations");
+        }
+        summary.observesPolynomial |=
+            isa<poly::PolynomialCoefficientsOp>(child);
+      }
+    }
+    // Polynomial observations need a path-sensitive degree adapter; a flat
+    // replay cannot silently erase selected premises.
+    if (summary.observesPolynomial)
+      return refuse(op,
+                    "selected polynomial observation profile is unsupported");
+    return success();
+  }
+  LogicalResult verifySelected(Operation *op) {
+    TotalSummary summary;
+    return selected(op, summary);
+  }
   LogicalResult verifyObservations(Block &body) {
     for (auto call : body.getOps<func::CallOp>()) {
       const TotalSummary *summary;
@@ -192,6 +252,8 @@ public:
         for (auto value : returned.getOperands())
           summary.results.push_back(environment.lookup(value));
       } else if (isTotal(op)) {
+        if (isa<data::BranchOp>(op) && failed(selected(op, summary)))
+          return failure();
         summary.observesPolynomial |= isa<poly::PolynomialCoefficientsOp>(op);
         if (failed(verifyTotalTypes(op, types)))
           return failure();
@@ -323,6 +385,13 @@ LogicalResult TotalClosure::verifyObservations(Block &body) {
   if (impl->refused)
     return failure();
   auto result = impl->verifyObservations(body);
+  impl->refused = failed(result);
+  return result;
+}
+LogicalResult TotalClosure::verifySelected(Operation *op) {
+  if (impl->refused)
+    return failure();
+  auto result = impl->verifySelected(op);
   impl->refused = failed(result);
   return result;
 }

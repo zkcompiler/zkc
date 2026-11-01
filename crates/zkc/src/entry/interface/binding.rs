@@ -30,12 +30,12 @@ impl BoundInterface {
                 && bundle.roles().len() == p.roles.len(),
             E::NativeBinding,
         )?;
-        for (role, actual) in self.roles().iter().zip(bundle.roles()) {
+        for (role_index, (role, actual)) in self.roles().iter().zip(bundle.roles()).enumerate() {
             let expected = &role.native_name;
             let entry = &actual.entry;
             require(&entry.role == expected, E::NativeBinding)?;
-            let inputs = leaves(self.input_ports(role).map(|p| p.definition));
-            let outputs = leaves(self.output_ports(role));
+            let inputs = leaves(p.inputs.iter(), Some(role_index as u32))?;
+            let outputs = leaves(p.outputs.iter(), Some(role_index as u32))?;
             require(
                 inputs.len() == entry.inputs.len() && outputs.len() == entry.outputs.len(),
                 E::NativeBinding,
@@ -61,12 +61,20 @@ impl BoundInterface {
     /// Check the exact deployment, complete original-port mappings and selected
     /// construction. This is admission consistency, not a soundness judgment.
     pub fn check_proof(&self, deployment: &NativeDeployment) -> Result<()> {
-        self.check_executable_ports()?;
         let p = &self.document.protocols[self.selected];
         let proof = self.proof().ok_or(E::NativeBinding)?;
         let prover = &self.roles()[proof.prover].native_name;
         let verifier = &self.roles()[proof.verifier].native_name;
         let native = deployment.source_interface();
+        let role = native.operation.map(|producing| {
+            &self.roles()[if producing {
+                proof.prover
+            } else {
+                proof.verifier
+            }]
+            .name
+        });
+        self.view.check_executable_role(role.map(String::as_str))?;
         let entry = deployment.entry();
         let suite = proof.suite.as_deref();
         let services: Vec<_> = proof
@@ -118,12 +126,23 @@ impl BoundInterface {
                     },
             E::NativeBinding,
         )?;
-        let expected_public = leaves(self.public_ports().map(|p| p.definition));
+        let expected_public: Vec<_> = self
+            .public_ports()
+            .flat_map(|p| {
+                p.definition
+                    .native
+                    .iter()
+                    .zip(&p.definition.schema.leaves)
+                    .map(|(&n, t)| (n as usize, t.as_str()))
+            })
+            .collect::<std::collections::BTreeMap<_, _>>()
+            .into_iter()
+            .collect();
         self.ports(
             &expected_public,
             native.public.iter().map(|p| (p.original, &p.logical)),
         )?;
-        for ports in self.roles() {
+        for (role_index, ports) in self.roles().iter().enumerate() {
             let role = &ports.native_name;
             let Some(actual) = native.roles.get(role) else {
                 require(
@@ -139,11 +158,11 @@ impl BoundInterface {
                 continue;
             };
             self.ports(
-                &leaves(self.input_ports(ports).map(|p| p.definition)),
+                &leaves(p.inputs.iter(), Some(role_index as u32))?,
                 actual.data.iter().map(|p| (p.original, &p.logical)),
             )?;
             self.ports(
-                &leaves(self.output_ports(ports)),
+                &leaves(p.outputs.iter(), Some(role_index as u32))?,
                 actual.outputs.iter().map(|p| (p.original, &p.logical)),
             )?;
             let services: Vec<_> = self.services(ports).map(|s| s.native as usize).collect();
@@ -180,13 +199,23 @@ impl BoundInterface {
         Ok(())
     }
 }
-fn leaves<'a>(ports: impl Iterator<Item = &'a Port>) -> Vec<(usize, &'a str)> {
-    ports
-        .flat_map(|p| {
-            p.native
-                .iter()
-                .zip(&p.schema.leaves)
-                .map(|(n, t)| (*n as usize, t.as_str()))
-        })
-        .collect()
+pub(super) fn leaves<'a>(
+    ports: impl Iterator<Item = &'a Port>,
+    role: Option<u32>,
+) -> Result<Vec<(usize, &'a str)>> {
+    let mut result = std::collections::BTreeMap::new();
+    for port in ports {
+        for component in &port.components {
+            if role.is_some_and(|r| r != component.role) {
+                continue;
+            }
+            let ty =
+                super::placement::component_type(port, component).map_err(|_| E::NativeBinding)?;
+            let index = component.native as usize;
+            if let Some(previous) = result.insert(index, ty) {
+                require(previous == ty, E::NativeBinding)?;
+            }
+        }
+    }
+    Ok(result.into_iter().collect())
 }

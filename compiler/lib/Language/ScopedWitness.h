@@ -22,20 +22,28 @@ struct ScopedInvocationSource {
   uint32_t expression;
   std::shared_ptr<const SyntaxDeclaration> syntax;
 };
+/// An immutable resolved source occurrence. SSA operands and service slots are
+/// reconstructed from syntax and the candidate graph, never copied here.
+struct SourceCall {
+  DeclarationId owner, target;
+  uint32_t expression;
+  std::shared_ptr<const SyntaxDeclaration> syntax;
+  std::optional<Type> module = {};
+  std::vector<Type> arguments = {};
+};
 struct DomainCallSource {
   CallableReference target;
   std::vector<Type> arguments;
 };
-struct ScopedCallSource {
-  DeclarationId owner, target;
-  uint32_t expression;
-  std::shared_ptr<const SyntaxDeclaration> syntax;
+struct ScopedCallSource : SourceCall {
   std::map<BindingId, unsigned> scoped, domains;
   std::map<uint32_t, DomainCallSource> domainCalls;
   std::vector<OperatorBinding> notationFamily = {};
 };
 bool checkScopedValues(Semantics &, const CheckedStorage &,
                        const ScopedSource &, const ScopedBinding &);
+bool checkInvocationValues(Semantics &, const CheckedStorage &,
+                           const ScopedSource &, const Body &);
 llvm::Error checkScopedSources(const CheckedStorage &, Work &);
 } // namespace zkc::language::detail
 #endif

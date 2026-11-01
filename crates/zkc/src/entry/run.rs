@@ -93,7 +93,7 @@ impl RunEntry {
         } else {
             arguments::check_ports(&interface)
         })
-        .map_err(|e| E::new(P::Interface, e))?;
+        .map_err(|e| E::boundary(P::Interface, e, &interface))?;
         let native = RunHost::admit_artifact(
             &package.authenticated_artifact(),
             limits,
@@ -103,6 +103,9 @@ impl RunEntry {
         .map_err(|e| E::new(P::Admission, e))?;
         interface
             .check_run(&native)
+            .map_err(|e| E::new(P::Binding, e))?;
+        interface
+            .common_input_requirements(native.bundle())
             .map_err(|e| E::new(P::Binding, e))?;
         let assets = EntryAssets::admit(
             &package,
@@ -124,6 +127,35 @@ impl RunEntry {
             interface,
             assets,
             native,
+        })
+    }
+    /// Resolve the authenticated selected original inventory against this Run.
+    pub fn common_input_requirements(
+        &self,
+    ) -> std::result::Result<Vec<super::InputRequirement>, super::InterfaceError> {
+        self.interface
+            .common_input_requirements(self.native.bundle())
+    }
+    /// Pin expectations for every supplied joint input. The compiler owns
+    /// inventory completeness; the application owns the external pin's trust.
+    pub fn bind_common_inputs(
+        self,
+        bytes: &[u8],
+        expected_sha256: &[u8; 32],
+    ) -> std::result::Result<InputBoundRunEntry, super::BindingError> {
+        let required = self
+            .common_input_requirements()
+            .map_err(|_| super::BindingError::Requirements)?;
+        let bindings = super::InputBindings::admit_pinned(
+            self.native.bundle().admitted(),
+            self.native.bundle().entry(),
+            &required,
+            bytes,
+            expected_sha256,
+        )?;
+        Ok(InputBoundRunEntry {
+            entry: self,
+            bindings,
         })
     }
     pub fn package(&self) -> &Package {
@@ -223,6 +255,33 @@ impl RunEntry {
     }
 }
 
+/// A named joint Run with immutable source-derived expectations. Preparation
+/// checks all supplied roles before issuance or execution; this API does not
+/// expose an independent-role transport protocol.
+pub struct InputBoundRunEntry {
+    entry: RunEntry,
+    bindings: super::InputBindings,
+}
+impl InputBoundRunEntry {
+    pub fn package(&self) -> &Package {
+        self.entry.package()
+    }
+    pub fn interface(&self) -> &Interface {
+        self.entry.interface()
+    }
+    pub fn prepare(&self, request: RunRequest) -> EntryResult<PreparedRun<'_>> {
+        let prepared = self.entry.prepare(request)?;
+        prepared
+            .native
+            .check_common_inputs(&self.bindings)
+            .map_err(|e| E::new(P::Preparation, e))?;
+        Ok(prepared)
+    }
+    pub fn check_inputs(&self, request: RunRequest) -> EntryResult<()> {
+        self.prepare(request).map(drop)
+    }
+}
+
 pub struct PreparedRun<'a> {
     interface: &'a Interface,
     native: native::PreparedRun<'a>,
@@ -231,6 +290,8 @@ pub struct PreparedRun<'a> {
 /// result exists. Outputs are published only on completion with successful cleanup.
 #[must_use = "inspect the execution outcome and cleanup report"]
 pub struct RunReport {
+    /// Execution and cleanup evidence; raw native returns are removed after
+    /// reconstruction. Source results are available only through `outputs`.
     pub native: HostReport,
     pub outputs: Option<RoleValues>,
     pub output_error: Option<String>,
@@ -268,21 +329,30 @@ impl PreparedRun<'_> {
             output_error: None,
         };
         if report.native.failure.is_some() || !report.native.cleanup_errors.is_empty() {
-            return report;
+            return public_report(report);
         }
         let Some(execution) = &report.native.execution else {
-            return report;
+            return public_report(report);
         };
         if execution.outcome != Outcome::Completed {
-            return report;
+            return public_report(report);
         }
         match collect(self.interface, execution) {
             Ok(outputs) => report.outputs = Some(outputs),
             Err(code) => report.output_error = Some(code),
         }
-        report
+        public_report(report)
     }
 }
+fn public_report(mut report: RunReport) -> RunReport {
+    if let Some(execution) = &mut report.native.execution {
+        for role in &mut execution.roles {
+            role.outputs.clear();
+        }
+    }
+    report
+}
+
 fn collect(interface: &Interface, execution: &Report<zkc_cpu::CpuBackend>) -> Result<RoleValues> {
     let mut outputs = BTreeMap::new();
     for role in interface.roles() {

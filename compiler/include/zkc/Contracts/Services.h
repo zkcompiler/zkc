@@ -1,6 +1,7 @@
 #ifndef ZKC_CONTRACTS_SERVICES_H
 #define ZKC_CONTRACTS_SERVICES_H
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -14,17 +15,26 @@ namespace zkc::protocol {
 // independently select execution and its registered interpretation.
 enum class ServiceFamily { Random };
 struct SourceService {
-  llvm::StringLiteral module, name;
+  llvm::StringRef module, name;
   ServiceFamily family;
   unsigned parameters;
 };
-inline constexpr SourceService sourceServices[] = {
-    {"zkc::prelude", "Random", ServiceFamily::Random, 1}};
+inline const std::vector<SourceService> sourceServices = [] {
+  std::vector<SourceService> rows;
+  for (const auto &association : frontendAssociations())
+    if (association.signature == FrontendSignature::RandomConstructor)
+      rows.push_back(
+          {association.module, association.name, ServiceFamily::Random, 1});
+  return rows;
+}();
 inline const SourceService *sourceService(llvm::StringRef qualifiedName) {
-  auto [module, name] = qualifiedName.rsplit("::");
-  for (const auto &service : sourceServices)
-    if (service.module == module && service.name == name)
-      return &service;
+  auto *association = frontendAssociation(qualifiedName);
+  if (!association ||
+      association->signature != FrontendSignature::RandomConstructor)
+    return nullptr;
+  for (const auto &row : sourceServices)
+    if (row.module == association->module && row.name == association->name)
+      return &row;
   return nullptr;
 }
 // Installed random-service signatures. Contracts identify distributions;
@@ -76,15 +86,21 @@ inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
   auto field = randomServiceField(contract);
   if (field.empty())
     return {};
-  if (method == "draw")
-    return ServiceMethod{{}, {"field", field.str(), {}}};
-  if (method == "index" &&
-      installedDomains().hasFact("IndexRandomness", {field.str()}))
-    return ServiceMethod{{{"index", {}, {}}}, {"index", {}, {}}};
-  if (method == "indices" &&
-      installedDomains().hasFact("IndexBlockRandomness", {field.str()}))
-    return ServiceMethod{{{"index", {}, {}}, {"index", {}, {}}},
-                         {"indices", {}, {}}};
+  for (const auto &row : serviceMethodDeclarations()) {
+    if (row.name != method ||
+        (!row.capability.empty() &&
+         !installedDomains().hasFact(row.capability, {field.str()})))
+      continue;
+    switch (row.signature) {
+    case ServiceSignature::RandomDraw:
+      return ServiceMethod{{}, {"field", field.str(), {}}};
+    case ServiceSignature::RandomIndex:
+      return ServiceMethod{{{"index", {}, {}}}, {"index", {}, {}}};
+    case ServiceSignature::RandomIndices:
+      return ServiceMethod{{{"index", {}, {}}, {"index", {}, {}}},
+                           {"indices", {}, {}}};
+    }
+  }
   return {};
 }
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {

@@ -76,6 +76,19 @@ pub(crate) fn install_role<B: Backend>(
                     names.insert(function.clone());
                 }
                 model::Instruction::Loop { body, .. } => walk(body, names),
+                model::Instruction::Conditional {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    walk(then_body, names);
+                    walk(else_body, names);
+                }
+                model::Instruction::Match { arms, .. } => {
+                    for arm in arms {
+                        walk(&arm.body, names);
+                    }
+                }
                 _ => {}
             }
         }

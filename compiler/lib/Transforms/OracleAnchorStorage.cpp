@@ -1,5 +1,6 @@
 #include "OracleAnchorStorage.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/Interactions.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
@@ -45,8 +46,8 @@ struct Planner {
     auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
     // Instance ordinals identify storage, but cannot reconstruct coordinates
     // when nested trip counts vary. Keep each actual enclosing iteration.
-    for (unsigned i = 1; i < constructor.path.size(); ++i)
-      storage.fields.push_back({"iteration." + std::to_string(i - 1), index});
+    for (unsigned i = 0; i < constructor.repeatDepth; ++i)
+      storage.fields.push_back({"iteration." + std::to_string(i), index});
     for (const auto &shape : constructor.kind.getShapeDimensions())
       storage.fields.push_back({"shape." + shape.name, index});
     storage.fields.push_back({"query.leaves", index});
@@ -76,9 +77,11 @@ struct Planner {
     constructor.roles.push_back(std::move(storage));
     return Error::success();
   }
-  Error anchor(Operation *op, std::vector<unsigned> path, uint64_t maximum) {
+  Error anchor(Operation *op, std::vector<unsigned> path, uint64_t maximum,
+               unsigned repeatDepth) {
     OracleAnchorConstructor constructor;
     constructor.path = std::move(path);
+    constructor.repeatDepth = repeatDepth;
     if (auto site = op->getAttrOfType<StringAttr>("site"))
       constructor.site = site.getValue().str();
     constructor.maximumInstances = maximum;
@@ -173,28 +176,37 @@ struct Planner {
     result.constructors.push_back(std::move(constructor));
     return Error::success();
   }
-  Error block(Block &body, std::vector<unsigned> path, uint64_t multiplicity,
-              unsigned depth) {
+  Error block(const InteractionDeclaration &view,
+              const InteractionSequence &sequence, uint64_t multiplicity,
+              unsigned repeatDepth, unsigned depth) {
     if (!depth)
       return error("oracle-storage-limit");
-    for (auto [i, op] : enumerate(body)) {
+    for (unsigned ordinal : sequence.getActions()) {
+      const auto &action = view.getActions()[ordinal];
+      auto *op = action.getOperation();
       if (!remaining)
         return error("oracle-storage-limit");
       --remaining;
-      auto location = path;
-      location.push_back(i);
       if (isa<pir::ApplyOp>(op))
         return error("oracle-storage-preparation");
       if (isa<pir::OracleInputOp, pir::OracleSendOp, pir::OracleVirtualOp>(op))
-        if (auto e = anchor(&op, location, multiplicity))
+        if (auto e = anchor(op,
+                            std::vector<unsigned>(action.getPath().begin(),
+                                                  action.getPath().end()),
+                            multiplicity, repeatDepth))
           return e;
-      if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
-        uint64_t bound = repeat.getMaximum();
-        if (bound &&
-            multiplicity > std::numeric_limits<uint64_t>::max() / bound)
-          return error("oracle-storage-capacity");
-        if (auto e = block(repeat.getBody().front(), std::move(location),
-                           multiplicity * bound, depth - 1))
+      for (const auto &edge : action.getRegions()) {
+        uint64_t maximum = multiplicity;
+        unsigned repeats = repeatDepth;
+        if (edge.kind == InteractionRegion::Kind::Repeat) {
+          uint64_t bound = cast<pir::RepeatOp>(op).getMaximum();
+          if (bound && maximum > std::numeric_limits<uint64_t>::max() / bound)
+            return error("oracle-storage-capacity");
+          maximum *= bound;
+          ++repeats;
+        }
+        if (auto e = block(view, view.getSequence(edge.sequence), maximum,
+                           repeats, depth - 1))
           return e;
       }
     }
@@ -244,7 +256,15 @@ planOracleAnchorStorage(ModuleOp prepared, StringRef entry,
   if (!program)
     return error("oracle-storage-entry");
   Planner planner{program, symbols, select, {entry.str(), {}}};
-  if (auto e = planner.block(program.getBody().front(), {}, 1, 64))
+  uint64_t remaining = 1000000;
+  facts::Work work(remaining);
+  InteractionAnalysis interactions(prepared);
+  auto view = interactions.get(program, work);
+  if (!view) {
+    consumeError(view.takeError());
+    return error("oracle-storage-limit");
+  }
+  if (auto e = planner.block(**view, (*view)->getBody(), 1, 0, 64))
     return std::move(e);
   // Charge expanded native structure across every role, including repeated
   // uniqued layouts. Canonical byte size belongs to reference/publication

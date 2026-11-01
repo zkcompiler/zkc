@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/ScopeExit.h"
 
 using namespace mlir;
@@ -138,7 +139,9 @@ LogicalResult ResourceOrigins::successors(Operation *op,
       entry->second.reset();
     return success();
   };
-  if ((facts->history &&
+  if ((binding->declaration.getContract() == "resource_unit.pass" &&
+       failed(pair(0, 0))) ||
+      (facts->history &&
        failed(pair(facts->history->stateInput, facts->history->stateOutput))) ||
       (facts->sampling && failed(pair(facts->sampling->stateInput,
                                       facts->sampling->stateOutput))) ||
@@ -196,6 +199,45 @@ LogicalResult ResourceOrigins::block(Block &body, unsigned depth,
             found != environment.end())
           environment[op->getResult(index)] = found->second;
       }
+    } else if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+      llvm::DenseMap<unsigned, unsigned> common;
+      bool first = true;
+      for (auto [armIndex, region] : enumerate(branch.getArms())) {
+        Summary arm;
+        if (failed(block(region.front(), depth + 1, arm)))
+          return failure();
+        result.depth = std::max(result.depth, arm.depth + 1);
+        llvm::DenseMap<unsigned, unsigned> roots;
+        auto payload = selectedPayloadTypes(op, armIndex);
+        if (!payload)
+          return diagnostics::emit(op->emitOpError(), payload.takeError());
+        for (auto [output, input] : arm.roots) {
+          // A generated variant payload is not an old capture root.
+          if (input < payload->size())
+            continue;
+          unsigned capture = input - payload->size() + 1;
+          if (capture >= op->getNumOperands())
+            return malformed(op, "invalid selected origin association");
+          auto found = environment.find(op->getOperand(capture));
+          if (found != environment.end())
+            roots[output] = found->second;
+        }
+        if (first) {
+          common = std::move(roots);
+          first = false;
+        } else {
+          SmallVector<unsigned> remove;
+          for (auto [output, root] : common) {
+            auto found = roots.find(output);
+            if (found == roots.end() || found->second != root)
+              remove.push_back(output);
+          }
+          for (unsigned output : remove)
+            common.erase(output);
+        }
+      }
+      for (auto [output, root] : common)
+        environment[op->getResult(output)] = root;
     } else if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op)) {
       // Only the continuing edge supplies SSA results. Completion of one role
       // cannot prune another role's mathematical suffix or its obligations.

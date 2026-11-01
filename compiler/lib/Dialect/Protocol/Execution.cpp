@@ -3,6 +3,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -229,6 +230,85 @@ class ExecutionModelReader {
                                       attr(op, "peer").str(), n,
                                       type(op->getResult(0).getType())}});
         }
+      } else if (op->getName().getStringRef() ==
+                 "protocol.participant_branch") {
+        auto alternatives = op->getAttrOfType<ArrayAttr>("alternatives");
+        if (!attributes(op, {"site", "alternatives"}) ||
+            op->getNumOperands() == 0 || !alternatives ||
+            alternatives.empty() ||
+            alternatives.size() != op->getNumRegions()) {
+          fail("interactive-branch-body");
+          return {};
+        }
+        auto selectorType =
+            encodeBoundType(op->getOperand(0).getType(), physical);
+        if (!selectorType) {
+          consumeError(selectorType.takeError());
+          fail("interactive-branch-selector");
+          return {};
+        }
+        bool boolean = selectorType->kind == "bool";
+        if (boolean &&
+            (alternatives.size() != 2 ||
+             alternatives[0] != StringAttr::get(op->getContext(), "then") ||
+             alternatives[1] != StringAttr::get(op->getContext(), "else"))) {
+          fail("interactive-branch-alternatives");
+          return {};
+        }
+        auto captured = names(op->getOperands().drop_front(), env);
+        std::vector<program::MatchArm> arms;
+        for (auto [index, region] : enumerate(op->getRegions())) {
+          auto label = dyn_cast<StringAttr>(alternatives[index]);
+          if (!label || !llvm::hasSingleElement(region)) {
+            fail("interactive-branch-body");
+            return {};
+          }
+          SmallVector<Type> payload;
+          if (!boolean) {
+            auto types = data::variantPayloadTypes(op->getOperand(0).getType(),
+                                                   label.getValue());
+            if (!types) {
+              consumeError(types.takeError());
+              fail("interactive-branch-payload");
+              return {};
+            }
+            payload = std::move(*types);
+          }
+          auto &inner = region.front();
+          SmallVector<Type> expectedTypes(payload);
+          append_range(expectedTypes,
+                       op->getOperands().drop_front().getTypes());
+          if (inner.getArgumentTypes() != ArrayRef<Type>(expectedTypes)) {
+            fail("interactive-branch-payload");
+            return {};
+          }
+          Env nested;
+          program::Names bindings;
+          for (auto argument :
+               inner.getArguments().take_front(payload.size())) {
+            auto name = fresh();
+            nested[argument] = name;
+            bindings.push_back(std::move(name));
+          }
+          for (auto [argument, name] :
+               zip(inner.getArguments().drop_front(payload.size()), captured))
+            nested[argument] = name;
+          arms.push_back(
+              {label.getValue().str(), std::move(bindings),
+               body(inner, std::move(nested), op->getResultTypes())});
+        }
+        auto selector = name(op->getOperand(0), env);
+        auto joined = results(op, env);
+        if (boolean)
+          out.push_back({site, program::Conditional{std::move(selector),
+                                                    std::move(captured),
+                                                    std::move(arms[0].body),
+                                                    std::move(arms[1].body),
+                                                    std::move(joined)}});
+        else
+          out.push_back(
+              {site, program::Match{std::move(selector), std::move(captured),
+                                    std::move(arms), std::move(joined)}});
       } else if (auto loop = dyn_cast<zkc::protocol_ir::ProtocolLoopOp>(op)) {
         if (!attributes(op,
                         {"site", "carried", "count", "parameter", "maximum"}) ||

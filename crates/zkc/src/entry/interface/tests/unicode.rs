@@ -105,7 +105,7 @@ fn variant_schema(key: &str, names: [&str; 2], encoded: &str, labels: [&str; 2])
     let mut ty = schema("variant", key, json!([spelling]));
     ty["alternatives"] = json!([
         {"name":names[0],"fields":[]},
-        {"name":names[1],"fields":[{"name":"値","offset":0,"schema":boolean}]}
+        {"name":names[1],"fields":[{"name":"値","offset":0,"public":true,"placement":null,"schema":boolean}]}
     ]);
     ty
 }
@@ -119,7 +119,7 @@ fn nominal_enum_identity_hashes_decoded_original_utf8_and_rejects_tampering() {
             "選択",
             0,
             json!([0]),
-            json!(["P"]),
+            json!([0]),
             variant_schema(key, ["Empty", "Flag"], hex, labels),
         ))
     };
@@ -196,8 +196,8 @@ pub(in crate::entry) fn run_fixture(
     let artifact = json!({"format":"zkc.run/0","candidate":carrier.to_string(),"entry":"main","roles":native_names,"steps":steps}).to_string();
     let doc = json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"数学::実行₂","protocol":"main","relations":[],"job":{"kind":"run"},
-        "protocols":[{"symbol":"main","roles":names,"inputs":[port("入力",0,json!([0]),json!(names),ty.clone())],
-        "outputs":[port("結果",0,json!([0]),json!(names),ty.clone())],"services":[],"clauses":[]}]});
+        "protocols":[{"symbol":"main","roles":names,"inputs":[port("入力",0,json!([0]),json!((0..names.len()).collect::<Vec<_>>()),ty.clone())],
+        "outputs":[port("結果",0,json!([0]),json!((0..names.len()).collect::<Vec<_>>()),ty.clone())],"services":[],"common_input_requirements":[],"clauses":[]}]});
     (doc, artifact)
 }
 #[test]
@@ -411,7 +411,7 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
     let outputs = report.outputs.unwrap();
     entry::outputs::output_setups(&material, &authority, capacity).unwrap();
     let entry::Value::Leaf(crate::execution::InputValue::Native(returned)) =
-        &outputs["受信者"]["結果"]
+        outputs["受信者"]["結果"].leaf().unwrap()
     else {
         panic!("native key");
     };
@@ -458,7 +458,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
         doc["protocols"][0][direction]
             .as_array_mut()
             .unwrap()
-            .push(port(name, 1, json!([1]), json!(["受信者"]), ty.clone()));
+            .push(port(name, 1, json!([1]), json!([0]), ty.clone()));
     }
     doc["setups"] = json!([
         {"name":"setup00000001","inputs":[{"port":0,"path":[]}]},
@@ -537,7 +537,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     let outputs = report.outputs.unwrap();
     for (name, identity) in [("結果", identities[0]), ("結果₂", identities[1])] {
         let entry::Value::Leaf(crate::execution::InputValue::Native(value)) =
-            &outputs["受信者"][name]
+            outputs["受信者"][name].leaf().unwrap()
         else {
             panic!("native key");
         };
@@ -653,10 +653,10 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
     let boolean = schema("boolean", "bool", json!(["bool"]));
     let doc = json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"数学::証明₂","protocol":"main","relations":[],
-        "protocols":[{"symbol":"main","roles":["検証者","証明者"],"services":[],"clauses":[],
-            "inputs":[port("公開",0,json!([0]),json!(["検証者","証明者"]),boolean.clone()),port("秘密",1,json!([1]),json!(["証明者"]),boolean.clone())],
-            "outputs":[port("受理",0,json!([0]),json!(["検証者"]),boolean.clone()),port("結果",1,json!([1]),json!(["証明者"]),boolean)]}],
-        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"gates":[], "construction":{"kind":"authored", "format": "zkc.framed/0"}}});
+        "protocols":[{"symbol":"main","roles":["検証者","証明者"],"services":[],"common_input_requirements":[],"clauses":[],
+            "inputs":[port("公開",0,json!([0]),json!([0,1]),boolean.clone()),port("秘密",1,json!([1]),json!([1]),boolean.clone())],
+            "outputs":[port("受理",0,json!([0]),json!([0]),boolean.clone()),port("結果",1,json!([1]),json!([1]),boolean)]}],
+        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[{"port":0,"path":[],"role":"検証者"}],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"gates":[],"construction":{"kind":"authored", "format": "zkc.framed/0"}}});
     (doc, artifact)
 }
 fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {
@@ -770,7 +770,16 @@ fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices()
         let mut bad = doc.clone();
         if swapped {
             bad["protocols"][0]["roles"] = json!(["証明者", "検証者"]);
-            bad["protocols"][0]["inputs"][0]["roles"] = json!(["証明者", "検証者"]);
+            for direction in ["inputs", "outputs"] {
+                for p in bad["protocols"][0][direction].as_array_mut().unwrap() {
+                    let roles = p["placement"]["roles"].as_array_mut().unwrap();
+                    for role in roles.iter_mut() {
+                        *role = json!(1 - role.as_u64().unwrap());
+                    }
+                    roles.sort_by_key(|r| r.as_u64().unwrap());
+                    refresh_components(p);
+                }
+            }
         } else {
             rename(&mut bad, "証明者", "role00000000");
             rename(&mut bad, "検証者", "role00000001");
@@ -824,8 +833,9 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()
-        .push(port("検証鍵", 2, json!([2]), json!(["検証者"]), key_schema));
-    doc["job"]["public"] = json!([0, 2]);
+        .push(port("検証鍵", 2, json!([2]), json!([0]), key_schema));
+    doc["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"検証者"},{"port":2,"path":[],"role":"検証者"}]);
     doc["setups"] = json!([{"name":"鍵₂","inputs":[{"port":2,"path":[]}]}]);
     let options = ProofOptions {
         binding: BindingPolicy::AllowAuthored,
@@ -1121,18 +1131,13 @@ fn proof_file_preparation_checks_selected_codecs_before_setup_material() {
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()
-        .push(port(
-            "key",
-            2,
-            json!([2]),
-            json!(["検証者"]),
-            key_schema.clone(),
-        ));
+        .push(port("key", 2, json!([2]), json!([0]), key_schema.clone()));
     doc["protocols"][0]["outputs"]
         .as_array_mut()
         .unwrap()
-        .push(port("key", 2, json!([2]), json!(["検証者"]), key_schema));
-    doc["job"]["public"] = json!([0, 2]);
+        .push(port("key", 2, json!([2]), json!([0]), key_schema));
+    doc["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"検証者"},{"port":2,"path":[],"role":"検証者"}]);
     doc["setups"] = json!([{"name":"key","inputs":[{"port":2,"path":[]}]}]);
     let host = ProofEntry::admit(
         package(&doc, &artifact.to_string()),

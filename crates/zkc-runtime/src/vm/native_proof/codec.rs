@@ -18,6 +18,9 @@ fn charge(work: &mut usize, amount: usize) -> Result<()> {
 fn available(op: &Instruction, internal: &BTreeSet<String>) -> Result<()> {
     let allowed = |values: &[String]| values.iter().all(|v| !internal.contains(v));
     let valid = match op {
+        Instruction::Conditional { .. } | Instruction::Match { .. } => {
+            return Err(refuse("native-proof-selected-control"));
+        }
         Instruction::Local { inputs, .. } | Instruction::Query { inputs, .. } => allowed(inputs),
         Instruction::Send { input, .. } => !internal.contains(input),
         Instruction::Receive { .. } => true,
@@ -1097,6 +1100,20 @@ fn rename(op: &mut Instruction, names: &Names) {
         }
     };
     match op {
+        Instruction::Conditional {
+            condition,
+            captures,
+            ..
+        } => {
+            *condition = mapped(names, condition);
+            map(captures);
+        }
+        Instruction::Match {
+            input, captures, ..
+        } => {
+            *input = mapped(names, input);
+            map(captures);
+        }
         Instruction::Local { inputs, .. } | Instruction::Query { inputs, .. } => map(inputs),
         Instruction::Send { input, .. } => *input = mapped(names, input),
         Instruction::Receive { .. } => {}

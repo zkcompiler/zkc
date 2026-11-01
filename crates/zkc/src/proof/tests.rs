@@ -154,6 +154,13 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     []
                 ],
                 [
+                    "pass",
+                    "resource_unit.pass",
+                    ["Slot.A"],
+                    "logical/resource_unit.pass",
+                    []
+                ],
+                [
                     "consume",
                     "resource_unit.consume",
                     ["Slot.A"],
@@ -169,6 +176,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     [],
                     ["bool@native.bool/0"],
                     [
+                        ["op", "create", "create", [], [], ["u"]],
+                        ["op", "pass", "pass", [], ["u"], ["next"]],
+                        ["op", "consume", "consume", [], ["next"], []],
                         ["bool_constant", "accept", "yes", true],
                         ["return", ["yes"]]
                     ],
@@ -420,11 +430,16 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         .unwrap();
         assert!(verified.outcome.is_ok());
         assert_eq!(verified.verification_result(), Some(true));
+        if let Some(counts) = verified.execution_counts.json() {
+            assert_eq!(counts["operations"]["resource_unit.create"], 1);
+            assert_eq!(counts["operations"]["resource_unit.pass"], 1);
+            assert_eq!(counts["operations"]["resource_unit.consume"], 1);
+        }
         if handling == "consume" {
             // A normal negative decision is retained structurally before its
             // diagnostic is rendered. Malformed framing remains a failure.
             let mut rejected_program: Json = serde_json::from_str(&candidate).unwrap();
-            rejected_program[2][1][4][0][3] = json!(false);
+            rejected_program[2][1][4][3][3] = json!(false);
             let rejected_candidate = rejected_program.to_string();
             let mut rejected: Json = serde_json::from_str(&deployment_bytes).unwrap();
             rejected[4] = json!(rejected_candidate);

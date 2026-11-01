@@ -44,6 +44,9 @@ public:
   mlir::LogicalResult get(mlir::func::FuncOp function,
                           const TotalSummary *&result);
   mlir::LogicalResult get(mlir::func::CallOp call, const TotalSummary *&result);
+  /// Check every arm of registered selected mathematics under this closure's
+  /// cumulative allowance. Ordered/Local/Protocol actions are never admitted.
+  mlir::LogicalResult verifySelected(mlir::Operation *);
   // Validate polynomial observations in one already formed, flat block in this
   // symbol table against a bounded, helper-expanded private snapshot. Every
   // helper is checked first;

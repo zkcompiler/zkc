@@ -1,0 +1,46 @@
+struct Inner roles(A, B):
+    pub unrelated: bool @B
+    pub flag: bool @(A, B)
+    pub empty: () @A
+
+struct Outer roles(X, Y):
+    pub prefix: bool @X
+    pub nested: Inner roles(Y, X)
+    pub empty: () @Y
+
+enum Choice:
+    Some(bool)
+    None()
+
+pub protocol Boolean roles(P, V)(flag: bool @(P, V)) -> bool @(P, V):
+    result = if flag:
+        true
+    else:
+        false
+    return result
+
+pub protocol Tag roles(P, V)(choice: Choice @(P, V)) -> bool @(P, V):
+    result = match choice:
+        case Some(item):
+            true
+        case None():
+            false
+    return result
+
+pub protocol Payload roles(P, V)(choice: Choice @(P, V)) -> bool @(P, V):
+    result = match choice:
+        case Some(item):
+            if item:
+                true
+            else:
+                false
+        case None():
+            false
+    return result
+
+pub protocol Permuted roles(P, V)(state: Outer roles(V, P)) -> bool @(P, V):
+    result = if state.nested.flag:
+        true
+    else:
+        false
+    return result

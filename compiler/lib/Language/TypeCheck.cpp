@@ -68,8 +68,9 @@ Checker::arguments(const Declaration &context, const Declaration &target,
 }
 
 std::optional<Type> Checker::type(const Declaration &context,
-                                  const SyntaxType &s, unsigned depth) {
-  auto result = elaborateType(context, s, depth);
+                                  const SyntaxType &s, unsigned depth,
+                                  bool allowPlacement) {
+  auto result = elaborateType(context, s, depth, allowPlacement);
   if (result && !types.chargeType(*result, s.span))
     return {};
   if (result && result->kind == Type::Kind::LogicalRecord &&
@@ -78,8 +79,8 @@ std::optional<Type> Checker::type(const Declaration &context,
   return result;
 }
 std::optional<Type> Checker::elaborateType(const Declaration &context,
-                                           const SyntaxType &s,
-                                           unsigned depth) {
+                                           const SyntaxType &s, unsigned depth,
+                                           bool allowPlacement) {
   if (depth > work.limits.typeDepth || !types.charge(1, s.span)) {
     if (!types.diagnostic)
       types.fail("source.limit", "source type complexity limit exceeded",
@@ -88,6 +89,11 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   }
   using S = SyntaxType::Kind;
   using K = Type::Kind;
+  if (!allowPlacement && (s.roles || s.components)) {
+    types.fail("source.oracle-aggregate",
+               "placed values are not ordinary static type arguments", s.span);
+    return {};
+  }
   if (s.kind == S::Hole) {
     types.fail("source.inference",
                "a static hole is allowed only as a whole call argument",
@@ -97,7 +103,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   if (s.kind == S::Builtin || s.kind == S::Formal) {
     std::vector<Type> arguments;
     for (const auto &syntax : s.arguments) {
-      auto argument = elaborateType(context, syntax, depth + 1);
+      auto argument = type(context, syntax, depth + 1);
       if (!argument)
         return {};
       arguments.push_back(std::move(*argument));
@@ -131,29 +137,26 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     return result;
   }
   if (s.kind == S::PowerOfTwo) {
-    auto exponent = elaborateType(context, s.arguments[0], depth + 1);
+    auto exponent = type(context, s.arguments[0], depth + 1);
     if (!exponent)
       return {};
     if (exponent->kind != K::Natural) {
       types.fail("source.natural", "pow2 requires a natural exponent", s.span);
       return {};
     }
-    auto before = types.naturals.remainingWork();
     auto value = types.naturals.powerOfTwo(exponent->dimension);
     if (!value) {
       types.accept(value.takeError(), s.span);
       return {};
     }
-    if (!types.charge(before - types.naturals.remainingWork(), s.span))
-      return {};
     Type result(K::Natural);
     result.dimension = std::move(*value);
     result.symbolic = !result.dimension.isClosed();
     return result;
   }
   if (s.kind == S::Add || s.kind == S::Multiply) {
-    auto a = elaborateType(context, s.arguments[0], depth + 1),
-         b = elaborateType(context, s.arguments[1], depth + 1);
+    auto a = type(context, s.arguments[0], depth + 1),
+         b = type(context, s.arguments[1], depth + 1);
     if (!a || !b)
       return {};
     if (a->kind != K::Natural || b->kind != K::Natural) {
@@ -161,7 +164,6 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  s.span);
       return {};
     }
-    auto before = types.naturals.remainingWork();
     auto n = s.kind == S::Add
                  ? types.naturals.add(a->dimension, b->dimension)
                  : types.naturals.multiply(a->dimension, b->dimension);
@@ -169,16 +171,15 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       types.accept(n.takeError(), s.span);
       return {};
     }
-    if (!types.charge(before - types.naturals.remainingWork(), s.span))
-      return {};
     Type result(K::Natural);
     result.dimension = std::move(*n);
     result.symbolic = !result.dimension.isClosed();
     return result;
   }
   if (s.kind == S::Array) {
-    auto element = elaborateType(context, s.arguments[0], depth + 1),
-         count = elaborateType(context, s.arguments[1], depth + 1);
+    auto element =
+        elaborateType(context, s.arguments[0], depth + 1, allowPlacement);
+    auto count = type(context, s.arguments[1], depth + 1);
     if (!element || !count)
       return {};
     if (!valueType(*element) || count->kind != K::Natural) {
@@ -192,7 +193,11 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  s.span);
       return {};
     }
-    if (isLogicalValue(*element)) {
+    if (isLogicalValue(*element) &&
+        !(element->kind == K::LogicalRecord &&
+          !types.typeDeclaration(*element)->roles.empty()) &&
+        element->kind != K::Tuple && element->kind != K::Array &&
+        !(isOracleHandle(*element) && s.arguments[0].oracleHolder)) {
       types.fail("source.oracle-aggregate",
                  "logical oracle handles require their bounded sequence",
                  s.span);
@@ -206,14 +211,18 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   if (s.kind == S::Tuple) {
     Type result(s.arguments.empty() ? K::Unit : K::Tuple);
     for (auto &child : s.arguments) {
-      auto t = elaborateType(context, child, depth + 1);
+      auto t = elaborateType(context, child, depth + 1, allowPlacement);
       if (!t)
         return {};
       if (!valueType(*t)) {
         types.fail("source.type", "static term in tuple type", s.span);
         return {};
       }
-      if (isLogicalValue(*t)) {
+      if (isLogicalValue(*t) &&
+          !(t->kind == K::LogicalRecord &&
+            !types.typeDeclaration(*t)->roles.empty()) &&
+          t->kind != K::Tuple && t->kind != K::Array &&
+          !(isOracleHandle(*t) && child.oracleHolder)) {
         types.fail("source.oracle-aggregate",
                    "logical oracle handles require separate protocol ports",
                    s.span);
@@ -260,7 +269,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       SyntaxType syntax;
       syntax.name = prefix.str();
       syntax.span = s.span;
-      auto base = elaborateType(context, syntax, depth + 1);
+      auto base = type(context, syntax, depth + 1);
       if (!base)
         return {};
       return types.associated(
@@ -313,9 +322,17 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     return {};
   if (decl.kind == Declaration::Kind::Domain)
     return decl.domain;
-  if (decl.kind == Declaration::Kind::Alias)
+  if (decl.kind == Declaration::Kind::Alias) {
+    // Admit the alias category before its placed target becomes an ordinary
+    // Type. Structural children inherit the same category requirement.
+    if (!allowPlacement && decl.placement) {
+      types.fail("source.oracle-aggregate",
+                 "a placed alias is not an ordinary data type", s.span);
+      return {};
+    }
     return types.substitute(decl.domain, types.substitution(decl, *args),
                             s.span);
+  }
   Type result;
   if (decl.kind == Declaration::Kind::Record)
     result.kind = decl.logical ? K::LogicalRecord : K::Record;

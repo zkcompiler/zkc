@@ -20,9 +20,11 @@ struct OracleRoleStorage {
 struct OracleAnchorConstructor {
   enum class Kind { Input, Send, Virtual };
   Kind constructor;
-  // Instruction ordinals in the prepared entry, descending through repeats.
+  // Instruction ordinals in the prepared entry. A selected descent inserts
+  // the arm ordinal before its first instruction ordinal.
   // These are not JSON array paths in the original structured snapshot.
   std::vector<unsigned> path;
+  unsigned repeatDepth = 0;
   protocol_ir::OracleKindAttr kind;
   std::string holder, site, declaration;
   std::vector<std::string> receivers;

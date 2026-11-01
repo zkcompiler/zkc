@@ -1,0 +1,9 @@
+#[affine]
+struct State roles(A,B):
+    pub flag: bool @(A,B)
+pub protocol Run roles(P,V)(state:State roles(P,V)) -> bool @(P,V):
+    result = if state.flag:
+        true
+    else:
+        false
+    return result

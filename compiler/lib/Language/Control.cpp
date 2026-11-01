@@ -6,14 +6,29 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
                                             std::optional<Type> expected,
                                             unsigned depth,
                                             bool allowUntypedStop) {
-  if (!local()) {
-    fail("source.mode", "control flow requires an ordered local function",
+  if (oracleMode()) {
+    fail("source.mode", "oracle plans do not admit selected control",
          expr.span);
     return {};
   }
   const bool loop = expr.kind == Expression::Kind::For;
   const bool match = expr.kind == Expression::Kind::Match;
   const bool collectingBranch = plan && !loop;
+  if (loop && !local()) {
+    fail("source.mode", "use bounded protocol repetition or a finite Math fold",
+         expr.span);
+    return {};
+  }
+  if (expr.roles && !protocol()) {
+    fail("source.roles", "a selected roster requires Protocol mode", expr.span);
+    return {};
+  }
+  auto roster = protocol()
+                    ? (expr.roles ? checker.roles(decl, *expr.roles, expr.span)
+                                  : std::optional(allRoles()))
+                    : std::optional(std::vector<unsigned>{});
+  if (!roster || (protocol() && !active(*roster, expr.span)))
+    return {};
   if (loop && expr.roles) {
     fail("source.mode", "participant loop headers require protocol mode",
          expr.span);
@@ -24,10 +39,11 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
          expr.span);
     return {};
   }
-  LocalControl operation;
-  operation.kind = loop    ? LocalControl::Kind::For
-                   : match ? LocalControl::Kind::Match
-                           : LocalControl::Kind::If;
+  Control operation;
+  operation.kind = loop    ? Control::Kind::For
+                   : match ? Control::Kind::Match
+                           : Control::Kind::If;
+  operation.roles = *roster;
   std::vector<Alternative> alternatives;
   for (unsigned i = 0; i < (loop ? 2u : 1u); ++i) {
     auto value = expression(expr.children[i],
@@ -42,6 +58,8 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       return {};
     }
     if (!use(*value, expr.span))
+      return {};
+    if (protocol() && !demand(*value, *roster, expr.span))
       return {};
     operation.operands.push_back(*value);
     if (match) {
@@ -74,6 +92,15 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
   for (auto id : states) {
     const auto &state = bindings.at(id);
     if (state.value && available(*state.value)) {
+      if (protocol() && !active(state.roles, expr.span))
+        return {};
+      if (protocol() &&
+          !std::includes(roster->begin(), roster->end(), state.roles.begin(),
+                         state.roles.end())) {
+        fail("source.roles", "mutable state extends beyond the branch roster",
+             expr.span);
+        return {};
+      }
       if (!collectingBranch && !use(*state.value, expr.span))
         return {};
       initial.emplace_back(id, *state.value);
@@ -105,10 +132,35 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     // Captures are transferred into the control. Unlike mutable state they
     // are not returned from its arms, so the collector must own fresh inputs.
     auto value = capturePlace(p, expr.span);
+    if (value && protocol()) {
+      const auto &original = body.values[value->index];
+      std::vector<unsigned> selected;
+      std::set_intersection(original.components.begin(),
+                            original.components.end(), roster->begin(),
+                            roster->end(), std::back_inserter(selected));
+      if (selected.empty()) {
+        fail("source.roles", "capture has no branch participant", expr.span);
+        return {};
+      }
+      value = restrictRoles(*value, selected, expr.span);
+    }
     if (!value || !use(*value, expr.span))
       return {};
     captures.emplace_back(p, *value);
     operation.operands.push_back(*value);
+  }
+  std::map<unsigned, ServiceId> serviceRoots;
+  for (auto id : summary->services) {
+    const auto root = services.at(id);
+    if (!llvm::is_contained(*roster, body.services[root.index].owner)) {
+      fail("source.roles", "service owner is outside the branch roster",
+           expr.span);
+      return {};
+    }
+    if (serviceRoots
+            .emplace(root.index, ServiceId{uint32_t(serviceRoots.size())})
+            .second)
+      operation.services.push_back(root);
   }
   struct Arm {
     std::shared_ptr<Body> body;
@@ -141,7 +193,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     }
     Arm arm;
     arm.body = std::make_shared<Body>();
-    arm.body->mode = Body::Mode::Local;
+    arm.body->mode = body.mode;
     arm.body->stage = body.stage;
     arm.checker = std::make_unique<BodyChecker>(checker, decl, syntax,
                                                 *arm.body, callDepth);
@@ -153,6 +205,14 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
                                     expr.span)
             : usageGuard;
     nested.inference = inference;
+    nested.enclosing = this;
+    nested.completionAllowed = completionAllowed;
+    if (protocol())
+      nested.activeRoles = *roster;
+    for (auto root : operation.services)
+      arm.body->services.push_back(body.services[root.index]);
+    for (auto id : summary->services)
+      nested.services.emplace(id, serviceRoots.at(services.at(id).index));
     nested.retainExpressionValues = retainExpressionValues;
     if (!inheritScoped(nested))
       return {};
@@ -174,7 +234,10 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     std::vector<ValueId> payloads;
     if (match)
       for (const auto &field : alternatives[ordinal].fields) {
-        auto value = nested.input(field.type, {}, expr.span);
+        auto value = nested.input(
+            field.type,
+            math() ? std::vector<unsigned>{arm.body->inputs} : *roster,
+            expr.span);
         if (!value)
           return {};
         payloads.push_back(*value);
@@ -205,7 +268,9 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
         if (!nested.bindPattern(expr.payloads[index][i], payloads[i]))
           return {};
     auto value =
-        nested.tail(syntax.bodies[expr.regions[index]], resultType, true);
+        nested.tail(syntax.bodies[expr.regions[index]], resultType, true,
+                    contextualPlacement ? std::optional(*contextualPlacement)
+                                        : std::nullopt);
     if (checker.types.diagnostic)
       return {};
     if (!arm.body->stopped) {
@@ -269,6 +334,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     packedType.kind = Type::Kind::Tuple;
     packedType.arguments = types;
   }
+  std::optional<Value> joinedValue;
   for (auto &arm : arms) {
     auto &nested = *arm.checker;
     std::vector<ValueId> forwarded;
@@ -280,10 +346,22 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
         values.push_back(*nested.bindings.at(id).value);
       if (collectingBranch && arm.result && !nested.use(*arm.result, expr.span))
         return {};
-      auto packed = collectingBranch ? nested.transport(values, expr.span)
-                                     : nested.pack(values, expr.span);
+      auto packed = (collectingBranch || protocol())
+                        ? nested.transport(values, expr.span)
+                        : nested.pack(values, expr.span);
       if (!packed || (!collectingBranch && !nested.use(*packed, expr.span)))
         return {};
+      const auto &yield = arm.body->values[packed->index];
+      if (protocol()) {
+        if (joinedValue && (joinedValue->placement != yield.placement ||
+                            joinedValue->oracleHolder != yield.oracleHolder ||
+                            joinedValue->components != yield.components)) {
+          fail("source.placement",
+               "branch yields have different placed identities", expr.span);
+          return {};
+        }
+        joinedValue = yield;
+      }
       arm.body->results.push_back(*packed);
       if (collectingBranch) {
         // These values leave the arm through the join. Their obligations end
@@ -307,7 +385,20 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
         usageGuard =
             plan->usage.unite(usageGuard, arm.checker->usageGuard, expr.span);
   }
-  auto packed = emit(std::move(operation), packedType, {}, expr.span);
+  Components dependencies;
+  if (math()) {
+    auto combined = combine(operation.operands, expr.span);
+    if (!combined)
+      return {};
+    dependencies = *combined;
+  }
+  std::optional<ValueId> packed;
+  if (protocol() && joinedValue) {
+    auto result = emitResults(std::move(operation), {*joinedValue}, expr.span);
+    if (result)
+      packed = result->front();
+  } else
+    packed = emit(std::move(operation), packedType, dependencies, expr.span);
   if (!packed)
     return {};
   if (stopped) {

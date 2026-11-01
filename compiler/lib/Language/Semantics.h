@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_SEMANTICS_H
 #include "State.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Language/Layout.h"
 #include <functional>
 #include <set>
 namespace zkc::language::detail {
@@ -53,6 +54,10 @@ public:
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;
   llvm::Expected<protocol::BoundType> nativeLayout(const Type &);
+  /// Synchronously borrow declarations for a bounded port observation. Returned
+  /// layout trees own their storage; performed work is reconciled on errors
+  /// too. The caller attaches its span when accepting an error.
+  llvm::Expected<ProtocolPortLayout> nativePortLayout(const Port &);
   Substitution substitution(const Declaration &, llvm::ArrayRef<Type>) const;
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);
@@ -121,6 +126,20 @@ public:
   bool oracleField(const TypeField &);
   /// Restricted nominal formation, cached by complete instantiated type.
   bool logicalRecord(const Type &, Span);
+  /// Recompute product identities and field formulas, never edit identity text.
+  std::optional<ValuePlacement> placement(const Type &, const ValuePlacement &,
+                                          unsigned participants, Span,
+                                          unsigned = 1);
+  std::optional<PlacedType>
+  substitutePlaced(const PlacedType &, const Substitution &, unsigned, Span);
+  bool admitPlaced(const PlacedType &, Span, const Declaration *, unsigned = 1);
+  std::optional<ValuePlacement> remapPlacement(const ValuePlacement &,
+                                               llvm::ArrayRef<unsigned>,
+                                               unsigned, Span);
+  std::optional<ValuePlacement> projectedPlacement(const Type &,
+                                                   const ValuePlacement &,
+                                                   llvm::ArrayRef<unsigned>,
+                                                   Span);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);
   /// Structural projection only; bounds and access are checked after inference.
@@ -142,6 +161,20 @@ public:
   std::optional<CallSignature>
   intrinsicSignature(const Declaration *, llvm::StringRef, llvm::ArrayRef<Type>,
                      llvm::ArrayRef<std::string>, Span);
+  struct EntryField {
+    EntryInputSelection selection;
+    Type type;
+    std::string name;
+    bool initialized = false;
+  };
+  /// Source subtree roster. Closed physical selection is derived by Layouts.
+  std::optional<std::vector<EntryField>>
+  entryFields(const Declaration &protocol, const Declaration *entry,
+              bool inputs, bool atoms = false);
+  std::optional<std::vector<EntryField>>
+  entryFamilyFields(const Declaration &generated,
+                    llvm::ArrayRef<Type> arguments, Span);
+  bool checkEntryPublic(const Declaration &, const Declaration &);
   bool checkProofEntry(const Declaration &, const Declaration &);
   /// Resolve labelled application paths against actual query/service
   /// identities. Returns the canonical source-occurrence order of the supplied

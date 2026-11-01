@@ -129,10 +129,13 @@ under its admitted contract; that does not introduce another instruction tag.
 ["loop", site, Count, list(Carried), list(Capture),
  ParticipantBody, list(output)]
 ["return_if", site, condition, list(value), list(continuation)]
+["if", site, condition, list(capture), ParticipantBody, ParticipantBody, list(output)]
+["match", site, input, list(capture), list(ParticipantArm), list(output)]
 ["yield", list(value)]
 ["return", list(value)]
 
 Count = ["value", count_value, maximum, induction]
+ParticipantArm = [alternative, list(payload_binding), ParticipantBody]
 ```
 
 `count_value`, `induction` and every continuation are value names. `maximum` is
@@ -145,10 +148,20 @@ have continuation bindings; ordinary copyable results do not.
 
 Local and participant instruction alternatives are distinct even when they
 share `yield` or `return` shapes. Participant bodies cannot contain `op`,
-Boolean literals, `if`, `for`, `match`, `release` or direct `stop`. Local bodies
+Boolean literals, `for`, `release` or direct `stop`. Local bodies
 cannot contain `send`, `receive`, `query`, `loop` or `return_if`. Composition,
 parameter and family-selector records are absent from both closed grammars.
 
+Participant `if` and `match` use the same closed capture, exhaustive alternative,
+active payload and typed join rules as Local control. Every arm must admit under
+participant permissions. Only the selected arm creates a frame, executes actions,
+charges execution work or yields. Immutable service roots remain participant
+interface metadata and cannot be manufactured, returned or selected as data.
+An explicit participant branch occurrence uses `["branch", site, alternative]`
+in the runtime origin, distinct from Local control and loop iteration frames.
+Generic Program admission establishes no source common-input provenance. The
+[joint Host](../runtime/joint.md) compares reached selectors before arm work;
+independent execution establishes no agreement with peers.
 Participant-loop captures use explicit bindings:
 
 ```text

@@ -51,6 +51,45 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
         assert native(source) == source
         assert project(source) == project(source)
 
+    for section, field, replacement, diagnostic in [
+        ("frontendAssociations", "signature", "RandomConstructor", "frontend signature identity mismatch"),
+        ("frontendAssociations", "identity", "record.unknown", "frontend signature identity mismatch"),
+        ("frontendHomes", "constructor", "Vector", "invalid frontend home"),
+        ("frontendHomes", "module", "foreign", "invalid frontend home"),
+        ("serviceMethods", "signature", "Unknown", "service method capability mismatch"),
+        ("serviceMethods", "capability", "IndexRandomness", "service method capability mismatch"),
+    ]:
+        with case(f"independent frontend refusal {section}.{field}"):
+            value = copy.deepcopy(source)
+            value[section][0][field] = replacement
+            try:
+                validate(value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("source accepted invalid frontend association")
+            native(value, diagnostic, check_source=False)
+    for section, diagnostic in [("frontendAssociations", "duplicate source export ownership"),
+                                ("frontendHomes", "duplicate frontend home"),
+                                ("serviceMethods", "invalid or duplicate service method")]:
+        with case("independent duplicate " + section):
+            value = copy.deepcopy(source)
+            value[section].append(copy.deepcopy(value[section][0]))
+            native(value, diagnostic, check_source=False)
+    with case("source spelling is separate from installed identity"):
+        value = copy.deepcopy(source)
+        value["frontendAssociations"][0]["name"] = "open_payload"
+        assert native(value)["frontendAssociations"] == value["frontendAssociations"]
+    with case("unknown frontend authority fields refuse"):
+        value = copy.deepcopy(source)
+        value["frontendAssociations"][0]["authority"] = "all-records"
+        try:
+            validate(value)
+        except ValueError as error:
+            assert "unknown fields" in str(error)
+        else:
+            raise AssertionError("source accepted unknown association authority")
+
     with case("installed contribution cannot enroll itself into the selected consumer"):
         inventory = native(source, composed=True)
         assert inventory["operations"][-1]["name"] == "example.unenrolled"

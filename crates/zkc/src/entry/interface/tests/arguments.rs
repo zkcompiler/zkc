@@ -28,6 +28,9 @@ fn statement_interface(statement: Value) -> Interface {
     doc["relations"][0]["inputs"][0]["schema"] = statement;
     doc["relations"][0]["inputs"][0]["native"] = json!((0..leaves).collect::<Vec<_>>());
     doc["relations"][0]["inputs"][1]["native"] = json!([leaves]);
+    for p in doc["protocols"][0]["inputs"].as_array_mut().unwrap() {
+        refresh_components(p);
+    }
     read(&doc).unwrap()
 }
 
@@ -57,7 +60,7 @@ fn variant_schema(name: &str, children: Vec<Value>) -> Value {
         .into_iter()
         .enumerate()
         .map(|(index, child)| {
-            let field = json!({"name":index.to_string(),"offset":offset,"schema":child});
+            let field = json!({"name":index.to_string(),"offset":offset,"public":true,"placement":null,"schema":child});
             offset += field["schema"]["leaves"].as_array().unwrap().len();
             field
         })
@@ -72,8 +75,8 @@ fn public_wire_duplication_preserves_the_original_payload_allocation() {
     let bytes = schema("builtin", "bytes", json!(["bytes"]));
     let mut pair = schema("tuple", "(bytes,bytes)", json!(["bytes", "bytes"]));
     pair["fields"] = json!([
-        {"name":"0","offset":0,"schema":bytes},
-        {"name":"1","offset":1,"schema":bytes}
+        {"name":"0","offset":0,"public":true,"placement":null,"schema":bytes},
+        {"name":"1","offset":1,"public":true,"placement":null,"schema":bytes}
     ]);
     let interface = statement_interface(pair);
     let role = &interface.roles()[interface.proof().unwrap().verifier];

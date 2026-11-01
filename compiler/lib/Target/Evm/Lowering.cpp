@@ -7,6 +7,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -28,6 +29,12 @@ namespace {
 constexpr StringLiteral suite = "hash-chain.keccak256.bls12-381.fr64be/0";
 using Values = SmallVector<Value>;
 using ValueMap = llvm::DenseMap<Value, Values>;
+
+bool isTranscript(Type type) {
+  auto capability = dyn_cast<runtime::CapabilityType>(type);
+  return capability &&
+         capability.getKind() == runtime::CapabilityKind::Transcript;
+}
 
 class EvmTypes : public TypeConverter {
 public:
@@ -52,6 +59,15 @@ private:
     } else if (isa<IndexType>(type))
       out.push_back(i64);
     else if (auto capability = dyn_cast<runtime::CapabilityType>(type)) {
+      if (capability.getKind() == runtime::CapabilityKind::ResourceUnit) {
+        auto signature = layouts.signature(TypeRange(type));
+        if (!signature) {
+          consumeError(signature.takeError());
+          return failure();
+        }
+        append_range(out, signature->lanes);
+        return success();
+      }
       if (capability.getKind() != runtime::CapabilityKind::Transcript ||
           capability.getIdentity() != suite)
         return failure();
@@ -156,7 +172,7 @@ private:
   LogicalResult checkCapabilities(Operation *op, TypeRange types) {
     unsigned count = 0;
     std::function<bool(Type)> inspect = [&](Type type) {
-      if (isa<runtime::CapabilityType>(type))
+      if (isTranscript(type))
         return ++count <= 1;
       if (auto outcome = dyn_cast<exec::OutcomeType>(type))
         return llvm::all_of(outcome.getPayload(), inspect);
@@ -409,6 +425,11 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
   auto resultTypes = converted(op->getResultTypes(), op);
   if (failed(resultTypes))
     return failure();
+  if (protocol::resourceUnitContract(name)) {
+    // Exact nominal signatures and affine succession were checked before
+    // erasure. Retain the active-scope check above, even for empty results.
+    return bind(op, {}, map);
+  }
   if (auto scalar = lowerScalar(op, name, operands, parameters, map))
     return *scalar;
   if (name == "index.constant") {
@@ -980,7 +1001,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       return failure();
     Value generation = integer(loc, UINT64_MAX);
     for (Value value : op->getOperands())
-      if (isa<runtime::CapabilityType>(value.getType()))
+      if (isTranscript(value.getType()))
         generation = map.lookup(value)[0];
     return bind(op, checkedResult(op, "scope.enter", {operands[0], generation}),
                 map);
@@ -993,7 +1014,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     auto outcome = cast<exec::OutcomeType>(op->getOperand(1).getType());
     unsigned offset = 1;
     for (Type type : outcome.getPayload()) {
-      if (isa<runtime::CapabilityType>(type))
+      if (isTranscript(type))
         generation = operands[offset];
       auto convertedTypes = converted(TypeRange(type), op);
       if (failed(convertedTypes))
@@ -1040,7 +1061,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         return failure();
       Value generation = integer(loc, UINT64_MAX);
       for (Value value : op->getOperands())
-        if (isa<runtime::CapabilityType>(value.getType()))
+        if (isTranscript(value.getType()))
           generation = map.lookup(value)[0];
       Value parent =
           checked(op, "scope.current", {builder.getI64Type()}, {})[0];
@@ -1055,7 +1076,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       Value generation = integer(loc, UINT64_MAX);
       unsigned offset = 0;
       for (Type type : op->getResultTypes()) {
-        if (isa<runtime::CapabilityType>(type))
+        if (isTranscript(type))
           generation = (*results)[offset];
         auto convertedTypes = converted(TypeRange(type), op);
         if (failed(convertedTypes))

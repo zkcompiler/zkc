@@ -275,6 +275,71 @@
       "name": "schema_type_mismatch",
       "admitted": false,
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"x\",\"bool@native.bool/0\"]],[],[[\"send\",\"message\",\"payload\",\"V\",\"x\"],[\"return\",[]]],[]],[\"participant\",\"mainV\",\"root\",\"V\",[],[\"bool@native.bool/0\"],[[\"receive\",\"message\",\"payload\",\"P\",\"x\",\"index@native.index/0\"],[\"return\",[\"x\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"],[\"V\",\"mainV\"]]]]]"
+    },
+    {
+      "name": "participant_selected_if",
+      "admitted": true,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "dormant_unbound",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"ambient\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "dormant_wrong_yield",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_extra_if_field",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"],[]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_return_in_arm",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"return\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_wrong_selector",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_local_op_in_arm",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"bool_constant\",\"bad\",\"bad\",false],[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_selected_match",
+      "admitted": true,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_dormant_payload_leak",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"payload\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_nonexhaustive_match",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_duplicate_match_tag",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"some\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_wrong_payload_arity",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_payload_cannot_shadow_service",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[[\"payload\",\"random.bls12-381.fr/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     }
   ]
 }

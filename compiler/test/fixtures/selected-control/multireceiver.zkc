@@ -1,0 +1,9 @@
+domain F = field("bls12-381.fr")
+type K = builtin("oracle.table", F, 16)
+type O = builtin("oracle", K)
+pub protocol Run roles(P,V,W)(flag: bool @(P,V,W), word: O @P -> (V,W)) -> O @P -> (V,W):
+    result = if flag:
+        word
+    else:
+        word
+    return result

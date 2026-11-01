@@ -12,7 +12,7 @@ against a trusted immutable installation context without constructing a backend.
 The result owns its exact bytes, immutable typed code and a clone of that context.
 Local functions use
 positional operands and shared region layouts; participants retain named SSA
-registers and shared loop-input layouts recorded during admission.
+registers and typed loop/selected-arm input layouts recorded during admission.
 Loop frames use those admitted types in induction, carried-value and capture
 order; the evaluator supplies actual values, not inferred port types.
 This is an internal representation of the admitted program, with the
@@ -165,8 +165,10 @@ entry, once. Frames from another instance, superseded proposals and already
 attempted frames cannot enter. Frame custody uses object identity; equal
 instance-local IDs and diagnostic metadata do not establish it.
 Participant Entry frames carry the admitted service interface; function Entry
-frames have none. Participant loop
-frames inherit that interface; local calls receive their explicit operand view.
+frames have none. Participant loop and selected-arm frames inherit that
+immutable interface; local calls receive their explicit operand view. Selected
+arm frames retain the actual alternative and typed payload/capture inputs;
+untaken arms create no frame.
 Backend entry atomically checks custody and leaves no child active on refusal.
 Only a successful entry pushes the VM frame. An exit must match the innermost
 frame. Backend exit removes that view even when output validation or cleanup

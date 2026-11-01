@@ -400,6 +400,16 @@ def validate(catalog):
             "rules": sequence(rule),
             "capabilities": sequence(row({"name": text, "parameters": sequence(kind)})),
             "exports": sequence(export),
+            "frontendAssociations": sequence(row({
+                "identity": text, "module": text, "name": text,
+                "signature": one_of("RecordUnpack", "RecordInspect", "RecordRepack", "RandomConstructor"),
+                "implicit": flag,
+            })),
+            "frontendHomes": sequence(row({"constructor": text, "module": text, "members": sequence(text)})),
+            "serviceMethods": sequence(row({
+                "name": text, "signature": one_of("RandomDraw", "RandomIndex", "RandomIndices"),
+                "capability": text,
+            })),
             "families": sequence(
                 row(
                     {
@@ -454,7 +464,47 @@ def validate(catalog):
             require(len(row[key]) <= 1024, "operation declaration limit")
         facets = [facet["kind"] for facet in row["facets"]]
         require(len(facets) == len(set(facets)), "duplicate semantic facet")
+    validate_frontend(catalog)
     validate_profiles(catalog)
+
+
+def validate_frontend(catalog):
+    import re
+
+    def path(value):
+        return bool(re.fullmatch(r"zkc(?:::[A-Za-z_][A-Za-z_0-9]*)+", value))
+
+    identities = {"record.unpack": "RecordUnpack", "record.inspect": "RecordInspect",
+                  "record.repack": "RecordRepack", "service.random": "RandomConstructor"}
+    owners = {(r["module"], r["name"]) for r in catalog["exports"]}
+    seen = set()
+    implicit = set()
+    for row in catalog["frontendAssociations"]:
+        require(identities.get(row["identity"]) == row["signature"], "frontend signature identity mismatch")
+        require(row["identity"] not in seen, "duplicate frontend identity")
+        seen.add(row["identity"])
+        require(path(row["module"]) and bool(re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", row["name"])), "invalid frontend owner")
+        owner = (row["module"], row["name"])
+        require(owner not in owners, "duplicate frontend ownership")
+        owners.add(owner)
+        if row["implicit"]:
+            require(row["name"] not in implicit, "duplicate implicit frontend name")
+            implicit.add(row["name"])
+    heads = {t["name"] for t in catalog["types"]} | {"oracle", "oracle_sequence"}
+    seen = set()
+    for row in catalog["frontendHomes"]:
+        require(row["constructor"] in heads and path(row["module"]), "invalid frontend home")
+        require(row["constructor"] not in seen, "duplicate frontend home")
+        seen.add(row["constructor"])
+        require(len(row["members"]) == len(set(row["members"])) and all(path(member) for member in row["members"]), "invalid frontend home members")
+    seen = set()
+    rules = {"RandomDraw": "", "RandomIndex": "IndexRandomness", "RandomIndices": "IndexBlockRandomness"}
+    for row in catalog["serviceMethods"]:
+        require(bool(re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", row["name"])), "invalid service method")
+        require(row["name"] not in seen, "duplicate service method")
+        seen.add(row["name"])
+        require(rules.get(row["signature"]) == row["capability"], "service method capability mismatch")
+        require(not row["capability"] or any(c["name"] == row["capability"] and c["parameters"] == [{"kind": "Domain", "sort": "Field"}] for c in catalog["capabilities"]), "unknown service capability")
 
 
 def unique(pairs):

@@ -369,13 +369,18 @@ int main(int argc, char **argv) {
     require(bool(failure), "binary field entered prime coefficient codec");
     consumeError(std::move(failure));
   });
-  cases.run(
-      "uninstalled extension basis refuses complete codec admission", [&] {
-        auto failure = evm::verifyWireType(
-            layouts, fixture(context, "field:koala-bear.ext4-binomial11"));
-        require(bool(failure), "uninstalled basis acquired native codec");
-        consumeError(std::move(failure));
-      });
+  cases.run("uninstalled extension basis refuses checked type formation", [&] {
+    std::string diagnostics;
+    ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
+      raw_string_ostream out(diagnostics);
+      diagnostic.print(out);
+      return success();
+    });
+    auto type =
+        parseType("!algebra.field<\"koala-bear.ext4-binomial11\">", &context);
+    require(!type && StringRef(diagnostics).contains("unknown-domain"),
+            "uninstalled basis escaped checked type formation");
+  });
   cases.run("affine and represented CPU values refuse", [&] {
     auto type = runtime::CapabilityType::get(
         &context, runtime::CapabilityKind::Transcript,

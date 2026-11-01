@@ -3,7 +3,7 @@
 `vm::Program::decode(bytes, &contracts)` admits `zkc.program/0` into immutable typed VM code. It
 checks all retained definitions and prepares local positional operands, region
 layouts and operation bindings without consulting a backend. Participant code
-uses named SSA registers and loop-input layouts retained by the same admission
+uses named SSA registers and loop/selected-arm input layouts retained by the same admission
 walk. Both forms retain the admitted structured control;
 there is no second serialized format.
 
@@ -83,7 +83,7 @@ Timing authorization never follows from role, determinism or provider name.
 Dynamic checks and resource transitions remain in backend execution hooks.
 
 Inside `instance`, `loading` admits the initial invocation and participant
-arguments; `frames` owns typed loop-frame construction, entry and terminal
+arguments; `frames` owns typed loop/selected-arm frame construction, entry and terminal
 cleanup; `values` owns validation, scopes and
 owned return handoffs; `preparation` owns deterministic classification, recording
 snapshots and replay. Handoffs must be consumed through their originating VM.

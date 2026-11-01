@@ -19,7 +19,10 @@ pub use package::{CompileOptions, Package, PackageError, PackagedAsset};
 mod errors;
 pub use errors::{EntryError, EntryPhase};
 mod interface;
-pub use interface::{BoundInterface, Interface, InterfaceError};
+pub use interface::{
+    BoundInterface, BoundaryRequirement, ComponentFacet, Interface, InterfaceError, OrdinaryInput,
+    PortComponent, ProtocolPort, PublicInputSelection, SelectionPurpose, ValuePlacement,
+};
 #[cfg(feature = "cpu")]
 mod assets;
 #[cfg(feature = "cpu")]
@@ -28,7 +31,7 @@ pub use assets::EntryAssets;
 #[cfg(feature = "cpu")]
 mod value;
 #[cfg(feature = "cpu")]
-pub use value::Value;
+pub use value::{OpaqueValue, Value};
 mod function;
 #[cfg(feature = "cpu")]
 pub use function::cpu::{
@@ -43,7 +46,10 @@ pub use function::{
 #[cfg(feature = "cpu")]
 mod run;
 #[cfg(feature = "cpu")]
-pub use run::{NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport, RunRequest};
+pub use run::{
+    InputBoundRunEntry, NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport,
+    RunRequest,
+};
 
 /// Operational allowance for an omitted service or selected transcript budget.
 /// Explicit budgets, including zero, override it; native hard limits still apply.
@@ -77,4 +83,7 @@ pub mod bindings;
 #[cfg(feature = "cpu")]
 mod backend;
 #[cfg(feature = "cpu")]
-pub use backend::BackendRun;
+pub use backend::{
+    BackendRun, BindingError, InputBindings, InputBoundBackendRun, InputComponent,
+    InputRequirement, Observation,
+};

@@ -11,6 +11,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
@@ -18,6 +19,7 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
@@ -50,6 +52,7 @@ constexpr uint64_t staticSiteByteLimit = 16 * 1024 * 1024;
 /// exported with the unit, closed under associated members.
 struct UsedIdentities {
   llvm::StringSet<> domains, services;
+  uint64_t typeWork = 8000000;
 };
 
 // This profile is deliberately smaller than the installed native catalogue.
@@ -73,13 +76,18 @@ Expected<runtime::BindingOp> primitiveBinding(Operation *op,
   if (!profile ||
       declaration.getArguments().size() != profile->staticParameters.size())
     return error("structured-source-binding");
-  // Enrollment and actual static formation are separate. This initial profile
-  // has only closed domain roots; future kinds require an explicit consumer.
+  // Slot roots are exact nominal custody identities, not algebraic domains.
   for (auto [argument, parameter] :
        llvm::zip(declaration.getArguments(), profile->staticParameters)) {
     auto domain = dyn_cast<StringAttr>(argument);
-    if (parameter.kind != StaticKind::Domain || !domain ||
-        installedDomains().identitySort(domain.getValue()) != parameter.sort)
+    if (parameter.kind != StaticKind::Domain || !domain)
+      return error("structured-source-binding");
+    if (parameter.sort == "Slot") {
+      if (!resourceUnitDomain(domain.getValue()))
+        return error("structured-source-binding");
+      continue;
+    }
+    if (installedDomains().identitySort(domain.getValue()) != parameter.sort)
       return error("structured-source-binding");
     used.domains.insert(domain.getValue().str());
   }
@@ -224,9 +232,12 @@ bool sourceIdentityWithinLimit(data::IdentityAttr identity) {
 }
 
 // Keep admission separate from the broader shared serializable vocabulary.
-// In particular, multi-alternative variants, fixed arrays, arbitrary catalog
-// heads, and nested service ports retain their previous source refusals.
+// Fixed arrays, arbitrary catalog heads, and nested service ports retain their
+// source refusals. Ordinary variants retain every declared payload.
 Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
+  if (!used.typeWork)
+    return error("structured-source-limit");
+  --used.typeWork;
   if (depth >= depthLimit)
     return error("structured-source-type-depth");
   const auto &catalog = installedDomains();
@@ -249,6 +260,12 @@ Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
     return nominal("group", "Group", group.getDomain());
   if (auto groups = dyn_cast<data::GroupVectorType>(type))
     return nominal("groups", "Group", groups.getDomain());
+  if (auto capability = dyn_cast<runtime::CapabilityType>(type);
+      capability &&
+      capability.getKind() == runtime::CapabilityKind::ResourceUnit)
+    return resourceUnitDomain(capability.getIdentity())
+               ? Error::success()
+               : error("structured-source-type");
   protocol_ir::OracleKindAttr kind;
   if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type))
     kind = handle.getKind();
@@ -268,16 +285,18 @@ Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
   if (auto sequence = dyn_cast<data::SequenceType>(type))
     return checkSortProfile(sequence.getElementType(), used, depth + 1);
   if (auto product = dyn_cast<data::VariantType>(type)) {
-    if (product.getAlternatives().size() != 1)
-      return error("structured-source-product");
-    auto constructor = product.getAlternatives().front();
     if (!sourceIdentityWithinLimit(product.getIdentity()) ||
-        constructor.getLabel().getValue().size() > 512 ||
-        constructor.getPayload().size() > signatureLimit)
+        product.getAlternatives().empty() ||
+        product.getAlternatives().size() > signatureLimit)
       return error("structured-source-limit");
-    for (auto child : constructor.getPayload())
-      if (auto e = checkSortProfile(child, used, depth + 1))
-        return e;
+    for (auto constructor : product.getAlternatives()) {
+      if (constructor.getLabel().getValue().size() > 512 ||
+          constructor.getPayload().size() > signatureLimit)
+        return error("structured-source-limit");
+      for (auto child : constructor.getPayload())
+        if (auto e = checkSortProfile(child, used, depth + 1))
+          return e;
+    }
     return Error::success();
   }
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {
@@ -858,6 +877,28 @@ class Exporter {
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
     };
+    const auto operationName = op.getName().getStringRef();
+    if (operationName == "protocol.branch" || operationName == "data.branch") {
+      bool protocol = operationName == "protocol.branch";
+      if (auto e = protocol ? attributes(op, {"site", "roles", "alternatives",
+                                              "output_roles"})
+                            : attributes(op, {"alternatives"}))
+        return std::move(e);
+      if ((protocol && owner != "protocol") ||
+          (!protocol && owner != "math" && owner != "protocol"))
+        return error("structured-source-operation");
+      auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+      if (!alternatives || alternatives.size() != op.getNumRegions())
+        return error("structured-source-region");
+      if (!protocol)
+        return json::Array{"data_branch", names(alternatives)};
+      json::Array outputRoles;
+      for (auto scope : op.getAttrOfType<ArrayAttr>("output_roles"))
+        outputRoles.push_back(names(cast<ArrayAttr>(scope)));
+      return json::Array{"protocol_branch",
+                         names(op.getAttrOfType<ArrayAttr>("roles")),
+                         names(alternatives), std::move(outputRoles)};
+    }
     if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
       // Native formation already checked nested active rosters and state
       // scopes.
@@ -1188,7 +1229,11 @@ class Exporter {
         return std::move(e);
       if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
-      return json::Array{"product.make", make.getAlternative()};
+      bool product = cast<data::VariantType>(make.getResult().getType())
+                         .getAlternatives()
+                         .size() == 1;
+      return json::Array{product ? "product.make" : "variant.make",
+                         make.getAlternative()};
     }
     if (auto get = dyn_cast<data::GetOp>(op)) {
       if (auto e = attributes(op, {"index"}))
@@ -1291,8 +1336,10 @@ class Exporter {
                             : owner == "oracle"
                                 ? isa<protocol_ir::OracleYieldOp>(op)
                                 : isa<protocol_ir::MathematicalReturnOp>(op))
-                         : owner == "protocol" && terminator == "yield" &&
-                               isa<protocol_ir::ProtocolYieldOp>(op);
+                         : terminator == "yield" &&
+                               ((owner == "protocol" &&
+                                 isa<protocol_ir::ProtocolYieldOp>(op)) ||
+                                op.getName().getStringRef() == "data.yield");
         if (!valid || op.getOperandTypes() != outputs)
           return error("structured-source-region");
         if (auto e = attributes(op, {}))
@@ -1306,7 +1353,8 @@ class Exporter {
         return error("structured-source-limit");
       auto inputs = sorts(op.getOperandTypes(),
                           isa<protocol_ir::QueryOp, protocol_ir::ApplyOp,
-                              protocol_ir::RepeatOp>(op));
+                              protocol_ir::RepeatOp>(op) ||
+                              op.getName().getStringRef() == "protocol.branch");
       if (!inputs)
         return inputs.takeError();
       auto results = sorts(op.getResultTypes());
@@ -1331,7 +1379,10 @@ class Exporter {
         return std::move(e);
       json::Array regions;
       if (op.getNumRegions()) {
-        if (!isa<protocol_ir::RepeatOp>(op) || op.getNumRegions() != 1)
+        bool selected = op.getName().getStringRef() == "protocol.branch" ||
+                        op.getName().getStringRef() == "data.branch";
+        if (!selected &&
+            (!isa<protocol_ir::RepeatOp>(op) || op.getNumRegions() != 1))
           return error("structured-source-region");
         for (Region &nested : op.getRegions()) {
           if (!llvm::hasSingleElement(nested) || nested.front().empty())
@@ -1339,7 +1390,24 @@ class Exporter {
           Block &inner = nested.front();
           // Count becomes the induction argument; state and immutable captures
           // retain their ordered types, without identifying their SSA values.
-          SmallVector<Type> expectedInputs(op.getOperandTypes());
+          SmallVector<Type> expectedInputs;
+          if (selected) {
+            if (!op.getNumOperands())
+              return error("structured-source-region");
+            auto selector = op.getOperand(0).getType();
+            if (!selector.isSignlessInteger(1)) {
+              auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+              auto payload = data::variantPayloadTypes(
+                  selector,
+                  cast<StringAttr>(alternatives[regions.size()]).getValue());
+              if (!payload)
+                return payload.takeError();
+              llvm::append_range(expectedInputs, *payload);
+            }
+            llvm::append_range(expectedInputs,
+                               TypeRange(op.getOperandTypes()).drop_front());
+          } else
+            llvm::append_range(expectedInputs, op.getOperandTypes());
           SmallVector<Type> expectedOutputs(op.getResultTypes());
           if (inner.getArgumentTypes() != TypeRange(expectedInputs))
             return error("structured-source-region");
@@ -1485,7 +1553,11 @@ class Exporter {
       if (!helper || helper.isExternal() || !helper.isPrivate() ||
           helper->getParentOp() != unit.getOperation())
         return error(code, "private Math closure required");
-      for (Operation &instruction : helper.getBody().front()) {
+      SmallVector<Operation *> actual;
+      helper.getBody().walk<WalkOrder::PreOrder>(
+          [&](Operation *op) { actual.push_back(op); });
+      for (Operation *nested : actual) {
+        Operation &instruction = *nested;
         if (auto call = dyn_cast<func::CallOp>(instruction)) {
           if (auto e = check(symbols.lookup(call.getCallee())))
             return e;
@@ -1516,7 +1588,10 @@ class Exporter {
                 data::DimOp, data::MakeOp, data::GetOp, data::BoundedAtOp,
                 arith::ConstantOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
                 arith::CmpIOp, arith::SelectOp>(instruction);
-        if (!allowed || instruction.getNumRegions())
+        bool selected = instruction.getName().getStringRef() == "data.branch";
+        allowed |=
+            selected || instruction.getName().getStringRef() == "data.yield";
+        if (!allowed || (instruction.getNumRegions() && !selected))
           return error(code, instruction.getName().getStringRef());
       }
       computationChecked.insert(op);
@@ -1791,6 +1866,15 @@ class Exporter {
             return e;
         } else if (!effective.insert(rendered).second) {
           return error("structured-source-site", "expanded protocol collision");
+        }
+        if (op.getName().getStringRef() == "protocol.branch") {
+          // Stored native sites already encode lexical arm identity. Only
+          // application expansion adds an effective-site prefix.
+          for (auto &nested : op.getRegions()) {
+            if (auto e = visit(nested.front(), prefix, applicationDepth,
+                               repeatDepth + 1))
+              return e;
+          }
         }
         if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op))
           // A repeat header survives expansion. Its body has the same static

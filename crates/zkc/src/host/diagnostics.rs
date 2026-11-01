@@ -25,6 +25,8 @@ pub(crate) fn origin(value: &Origin) -> Json {
             .iter()
             .take(4)
             .map(|p| match p {
+                PathElement::Branch { site, alternative } =>
+                    json!(["branch", text(site), text(alternative)]),
                 PathElement::Match { site, alternative } =>
                     json!(["match", text(site), text(alternative)]),
                 PathElement::Conditional { site, taken } =>

@@ -103,6 +103,8 @@ pub struct ProofEntry {
 /// still be checked for execution success, including rejection and cleanup.
 #[must_use = "check is_success() or into_result(); invocation preparation is not proof acceptance"]
 pub struct ProofReport {
+    /// Native evidence and proof bytes; raw result storage is removed after
+    /// reconstruction. Source results are available only through `outputs`.
     pub native: NativeProofReport,
     pub outputs: Option<NamedValues>,
     pub output_error: Option<String>,
@@ -247,15 +249,21 @@ impl ProofEntry {
         {
             return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }
-        if retained_inputs {
+        let ports = if retained_inputs {
             arguments::check_host_ports(&interface, operation)
-                .map_err(|e| E::new(P::Interface, e))?;
         } else if let Some(operation) = operation {
             arguments::check_proof_ports(&interface, operation)
-                .map_err(|e| E::new(P::Interface, e))?;
         } else {
-            arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
-        }
+            arguments::check_ports(&interface)
+        };
+        ports.map_err(|e| {
+            E::boundary_for_role(
+                P::Interface,
+                e,
+                &interface,
+                operation.and_then(|op| interface.proof_role(op)),
+            )
+        })?;
         let setup_authority = setups.clone();
         let mut authority =
             setups::proof_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?;
@@ -601,10 +609,11 @@ impl ProofEntry {
             output_error: None,
             binding_scope: self.scope,
         };
+        let native_outputs = report.native.outputs.take();
         if report.native.outcome.is_err() || !report.native.cleanup_errors.is_empty() {
             return report;
         }
-        if let Some(outputs) = &report.native.outputs {
+        if let Some(outputs) = &native_outputs {
             let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
             let result = (|| -> Result<NamedValues> {
                 let mut leaves = outputs.clone();
@@ -652,6 +661,14 @@ pub struct ProofCall<'a> {
 impl ProofEntry {
     /// Check requested result codecs before input loading or execution.
     pub fn check_result_encoding(&self, operation: ProofOperation) -> Result<()> {
+        let proof = self.interface.proof().expect("admitted proof");
+        let role = &self.interface.roles()[match operation {
+            ProofOperation::Prove => proof.prover,
+            ProofOperation::Verify => proof.verifier,
+        }];
+        for port in self.interface.output_ports(role) {
+            value::check_readable_schema(&port.schema)?;
+        }
         if self
             .output_types(operation)
             .iter()

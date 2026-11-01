@@ -55,6 +55,47 @@ void proven(facts::Status status) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("selected Math true path establishes the exact installed bound",
+            [] {
+              take(check(R"(
+math fn conditional(xs:Vector<Fr>,i:index)->Fr {
+ return if intrinsic("index.less",i,intrinsic<Fr>("vector.length",xs)) {
+  at(xs,i)
+ } else { 0 };
+})"));
+            });
+  cases.run("an unselected Math path cannot borrow the true-path bound", [] {
+    refuses(check(R"(
+math fn conditional(xs:Vector<Fr>,i:index)->Fr where () {
+ return if intrinsic("index.less",i,intrinsic<Fr>("vector.length",xs)) {
+  0
+ } else { at(xs,i) };
+})"),
+            "source.data-bound");
+  });
+  cases.run("a successful Local guard preserves its exact container subject",
+            [] {
+              take(check(R"(
+fn length(xs:Vector<Fr>)->index=primitive("vector.length");
+math fn less(a:index,b:index)->bool=primitive("index.less");
+fn guarded(xs:Vector<Fr>,i:index)->Fr {
+ let n=length(xs);
+ require less(i,n);
+ return at(xs,i);
+})"));
+            });
+  cases.run("a Local guard grants no bound on an unrelated container", [] {
+    refuses(check(R"(
+fn length(xs:Vector<Fr>)->index=primitive("vector.length");
+math fn less(a:index,b:index)->bool=primitive("index.less");
+fn guarded(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr {
+ let n=length(xs);
+ require less(i,n);
+ return at(ys,i);
+})"),
+            "source.data-bound");
+  });
+
   cases.run("read-only mutable captures preserve mathematical facts", [] {
     auto project = take(check(R"(
 fn preserve(xs:Vector<Fr>,c:bool,n:index)->Vector<Fr> {

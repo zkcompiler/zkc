@@ -8,69 +8,116 @@ type Result<T> = std::result::Result<T, BundleError>;
 enum Scope {
     Root,
     Loop(usize),
+    Branch(usize, usize),
 }
-// None marks a role that does not participate in this loop.
+// None marks a role that does not participate in this region.
 type Scopes = [Option<Scope>];
 
 struct Check<'a> {
     bundle: &'a Bundle,
     parents: Vec<Vec<Scope>>,
     next_anchor: usize,
-    loop_headers: BTreeMap<String, Vec<(usize, usize)>>,
-    visited_loops: BTreeSet<String>,
+    control_headers: BTreeMap<String, Vec<(usize, usize)>>,
+    visited_controls: BTreeSet<String>,
 }
 impl Bundle {
     pub(super) fn validate_segments(&self) -> Result<()> {
         let mut parents = Vec::new();
-        let mut loop_headers = BTreeMap::<String, Vec<(usize, usize)>>::new();
-        for (role_index, role) in self.roles.iter().enumerate() {
-            let mut scopes: Vec<(usize, usize)> = Vec::new();
-            let mut local = Vec::new();
-            for (index, action) in role.actions.iter().enumerate() {
-                local.push(
-                    scopes
-                        .last()
-                        .map_or(Scope::Root, |(start, _)| Scope::Loop(*start)),
-                );
-                match action {
-                    ProgramAction::Loop { site, end, .. } => {
-                        loop_headers
-                            .entry(site.clone())
-                            .or_default()
-                            .push((role_index, index));
-                        if *end <= index
-                            || *end >= role.actions.len()
-                            || scopes
-                                .last()
-                                .is_some_and(|(_, parent_end)| end >= parent_end)
-                            || !matches!(&role.actions[*end], ProgramAction::Yield { site: s } if s == site)
+        let mut control_headers = BTreeMap::<String, Vec<(usize, usize)>>::new();
+        fn regions(
+            actions: &[ProgramAction],
+            role: usize,
+            start: usize,
+            end: usize,
+            scope: Scope,
+            parents: &mut [Scope],
+            headers: &mut BTreeMap<String, Vec<(usize, usize)>>,
+        ) -> Result<()> {
+            let mut index = start;
+            while index < end {
+                parents[index] = scope;
+                match &actions[index] {
+                    ProgramAction::Loop {
+                        site, end: last, ..
+                    } => {
+                        if *last <= index
+                            || *last >= end
+                            || !matches!(&actions[*last], ProgramAction::Yield { site: s } if s == site)
                         {
                             return Err(BundleError::Coverage);
                         }
-                        scopes.push((index, *end));
+                        headers.entry(site.clone()).or_default().push((role, index));
+                        regions(
+                            actions,
+                            role,
+                            index + 1,
+                            *last,
+                            Scope::Loop(index),
+                            parents,
+                            headers,
+                        )?;
+                        parents[*last] = Scope::Loop(index);
+                        index = *last + 1;
                     }
-                    ProgramAction::Yield { .. } => {
-                        if scopes.pop().is_none_or(|(_, end)| end != index) {
+                    ProgramAction::Branch {
+                        site,
+                        alternatives,
+                        ends,
+                    } => {
+                        if alternatives.is_empty() || alternatives.len() != ends.len() {
                             return Err(BundleError::Coverage);
                         }
+                        headers.entry(site.clone()).or_default().push((role, index));
+                        let mut first = index + 1;
+                        for (arm, last) in ends.iter().enumerate() {
+                            if *last < first
+                                || *last >= end
+                                || !matches!(&actions[*last], ProgramAction::Yield { site:s } if s == site)
+                            {
+                                return Err(BundleError::Coverage);
+                            }
+                            regions(
+                                actions,
+                                role,
+                                first,
+                                *last,
+                                Scope::Branch(index, arm),
+                                parents,
+                                headers,
+                            )?;
+                            parents[*last] = Scope::Branch(index, arm);
+                            first = *last + 1;
+                        }
+                        index = first;
                     }
-                    ProgramAction::Finish if !scopes.is_empty() => {
+                    ProgramAction::Yield { .. } => return Err(BundleError::Coverage),
+                    ProgramAction::Finish if scope != Scope::Root => {
                         return Err(BundleError::Coverage);
                     }
-                    _ => {}
+                    _ => index += 1,
                 }
             }
-            if !scopes.is_empty() {
-                return Err(BundleError::Coverage);
-            }
+            Ok(())
+        }
+        for (role_index, role) in self.roles.iter().enumerate() {
+            let mut local = vec![Scope::Root; role.actions.len()];
+            regions(
+                &role.actions,
+                role_index,
+                0,
+                role.actions.len(),
+                Scope::Root,
+                &mut local,
+                &mut control_headers,
+            )?;
             parents.push(local);
         }
         let mut check = Check {
             bundle: self,
             parents,
             next_anchor: 0,
-            loop_headers,
-            visited_loops: BTreeSet::new(),
+            control_headers,
+            visited_controls: BTreeSet::new(),
         };
         check.block(
             &self.segments,
@@ -167,6 +214,76 @@ impl Check<'_> {
                     }
                     self.bundle.group(&group)?;
                 }
+                Segment::Branch { entries, arms } => {
+                    let mut headers = Vec::new();
+                    let mut ends_by_role = Vec::new();
+                    let mut position = 0;
+                    let mut previous = None;
+                    let mut identity = None;
+                    while position < entries.len() {
+                        let mut step = self.step(entries[position], scopes)?;
+                        let role = step.role;
+                        if previous.is_some_and(|p| p >= role)
+                            || step.anchor != Some(self.next_anchor)
+                        {
+                            return Err(BundleError::Shape);
+                        }
+                        previous = Some(role);
+                        if matches!(self.action(&step), ProgramAction::Local { .. }) {
+                            position += 1;
+                            step = self
+                                .step(*entries.get(position).ok_or(BundleError::Shape)?, scopes)?;
+                        }
+                        if step.role != role || step.anchor != Some(self.next_anchor) {
+                            return Err(BundleError::Shape);
+                        }
+                        let ProgramAction::Branch {
+                            site,
+                            alternatives,
+                            ends,
+                        } = self.action(&step)
+                        else {
+                            return Err(BundleError::Shape);
+                        };
+                        let current = (site.clone(), alternatives.clone());
+                        if identity.as_ref().is_some_and(|old| old != &current) {
+                            return Err(BundleError::Shape);
+                        }
+                        identity = Some(current);
+                        headers.push((role, step.instruction));
+                        ends_by_role.push((role, ends.clone()));
+                        position += 1;
+                    }
+                    let Some((site, alternatives)) = identity else {
+                        return Err(BundleError::Shape);
+                    };
+                    if self.control_headers.get(&site) != Some(&headers)
+                        || !self.visited_controls.insert(site)
+                    {
+                        return Err(BundleError::Coverage);
+                    }
+                    if arms.len() != alternatives.len() {
+                        return Err(BundleError::Shape);
+                    }
+                    self.next_anchor += 1;
+                    for (arm_index, (arm, alternative)) in arms.iter().zip(alternatives).enumerate()
+                    {
+                        if arm.alternative != alternative {
+                            return Err(BundleError::Shape);
+                        }
+                        let mut children = vec![None; scopes.len()];
+                        for (role, header) in &headers {
+                            children[*role] = Some(Scope::Branch(*header, arm_index));
+                        }
+                        let ends = ends_by_role
+                            .iter()
+                            .map(|(role, ends)| (*role, ends[arm_index]))
+                            .collect::<Vec<_>>();
+                        self.block(&arm.body, &children, false)?;
+                        self.tail(&arm.exits, &children, Some(&ends))?;
+                    }
+                    cursor += 1;
+                }
                 Segment::Loop {
                     entries,
                     body,
@@ -211,8 +328,8 @@ impl Check<'_> {
                     let Some((site, _)) = identity else {
                         return Err(BundleError::Shape);
                     };
-                    if self.loop_headers.get(&site) != Some(&headers)
-                        || !self.visited_loops.insert(site)
+                    if self.control_headers.get(&site) != Some(&headers)
+                        || !self.visited_controls.insert(site)
                     {
                         return Err(BundleError::Coverage);
                     }

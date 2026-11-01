@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_BINDINGWITNESS_H
 #include "Internal.h"
 #include "Semantics.h"
+#include "zkc/Language/DeclarationIndex.h"
 namespace zkc::language::detail {
 /// The binder calls one domain/body combinator; filtered forms add a predicate.
 bool checkFiniteReductionTarget(Semantics &, const Declaration &, bool filtered,
@@ -25,6 +26,6 @@ bool checkOperatorOperands(Semantics &, const NotationDescriptor &,
 bool checkCallInputMapping(Semantics &, llvm::ArrayRef<unsigned>,
                            unsigned inputs, Span);
 bool checkCallAction(Semantics &, llvm::ArrayRef<Declaration>, const Body &,
-                     const Operation &);
+                     const Operation &, const DeclarationIndex * = nullptr);
 } // namespace zkc::language::detail
 #endif

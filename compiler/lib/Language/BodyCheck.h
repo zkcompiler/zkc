@@ -14,10 +14,14 @@ public:
   bool addDomain(BindingId, const DomainParameter &, unsigned);
   bool addService(BindingId, const ServicePort &);
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span,
-                std::optional<unsigned> holder = {});
+                std::optional<unsigned> holder = {},
+                std::optional<ValuePlacement> placed = {});
 
 private:
   friend class ExpressionInference;
+  std::optional<ValueId> recordCall(const Expression &,
+                                    const CallableReference &,
+                                    protocol::FrontendSignature, unsigned);
   Checker &checker;
   Declaration &decl;
   const SyntaxDeclaration &syntax;
@@ -30,8 +34,14 @@ private:
   uint32_t statement = 0;
   /// Only the outer expression selected by an authored `<-` may be ordered.
   std::optional<uint32_t> orderedRoot;
+  const Pattern *bindingPattern = nullptr;
+  std::optional<uint32_t> bindingPatternRoot;
+  bool retiresCustody(const Pattern &, const Type &, unsigned = 1);
   bool retainExpressionValues = false;
   Placement *placement = nullptr;
+  const ValuePlacement *contextualPlacement = nullptr;
+  /// Uninstantiated constructor field schema: category guidance, not roles.
+  const ValuePlacement *contextualPlacementSchema = nullptr;
   const ExpressionTypes *inference = nullptr;
   std::set<uint32_t> mathematicalExpressions;
   std::set<std::vector<unsigned>> formationRequirements;
@@ -58,7 +68,13 @@ private:
     bool commit();
   };
   Components components(ValueId) const;
+  bool product(ValueId) const;
   bool demand(ValueId, llvm::ArrayRef<unsigned>, Span);
+  bool matchPlacement(ValueId, const ValuePlacement &, Span);
+  std::optional<ValuePlacement> inferRecordPlacement(const Type &,
+                                                     llvm::ArrayRef<TypeField>,
+                                                     llvm::ArrayRef<ValueId>,
+                                                     Span);
   bool settle(Placement &);
   std::optional<std::vector<unsigned>> activeRoles;
   /// Successful completion is a statement boundary, never an operand exit.
@@ -103,7 +119,8 @@ private:
   std::vector<unsigned> allRoles() const;
   std::optional<Components> combine(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> emit(decltype(Operation::action), const Type &,
-                              Components, Span);
+                              Components, Span,
+                              std::optional<ValuePlacement> = {});
   std::optional<std::vector<ValueId>> emitResults(decltype(Operation::action),
                                                   std::vector<Value>, Span);
   std::optional<std::vector<ValueId>> application(const Expression &);
@@ -134,7 +151,8 @@ private:
   bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});
   std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span,
-                               std::optional<unsigned> holder = {});
+                               std::optional<unsigned> holder = {},
+                               std::optional<ValuePlacement> placed = {});
   bool bindPattern(const Pattern &, ValueId, unsigned = 1);
   bool bindResults(const Statement &, llvm::ArrayRef<ValueId>);
   bool assign(BindingId, ValueId, Span);
@@ -149,7 +167,8 @@ private:
   bool statementBody(const Statement &);
   bool labelSite(const Statement &, size_t firstOperation);
   std::optional<ValueId> tail(const SyntaxBody &, std::optional<Type>,
-                              bool allowUntypedStop = false);
+                              bool allowUntypedStop = false,
+                              std::optional<ValuePlacement> = {});
   std::optional<ValueId> block(const Expression &, std::optional<Type>,
                                bool allowUntypedStop);
   std::optional<std::pair<BindingId, std::vector<unsigned>>>
@@ -168,8 +187,9 @@ private:
                                                  bool domain = false);
   std::optional<Type> inferredType(uint32_t) const;
   std::optional<ValueId> expression(uint32_t, std::optional<Type> = {},
-                                    unsigned = 1,
-                                    bool allowUntypedStop = false);
+                                    unsigned = 1, bool allowUntypedStop = false,
+                                    std::optional<ValuePlacement> placed = {},
+                                    const ValuePlacement *schema = nullptr);
   std::optional<ValueId> evaluate(uint32_t, std::optional<Type>, unsigned,
                                   bool allowUntypedStop);
   std::optional<ValueId> call(const Expression &, unsigned);

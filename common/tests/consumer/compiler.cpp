@@ -5,6 +5,7 @@
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/EntryBoundary.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Stages.h"
@@ -121,6 +122,64 @@ int main() {
     llvm::errs() << llvm::toString(std::move(error));
     return 18;
   }
+  zkc::language::CaptureOptions options;
+  options.format = "zkc-layout";
+  auto components = zkc::language::capture({{"components", R"(
+struct State roles(P, V):
+    pub statement: index @(P, V)
+    pub witness: index @P
+    pub empty: () @V
+pub protocol Round roles(P, V)(state: State roles(P, V)) -> bool @V:
+    received <- send state.witness from P to V
+    return received == state.statement
+scheme Demo = Round:
+    prover P
+    verifier V
+    public state.statement, state.empty
+    accept result
+    construction authored
+)",
+                                             "components.zkc"}},
+                                           options);
+  if (!components) {
+    llvm::errs() << llvm::toString(components.takeError());
+    return 19;
+  }
+  auto componentProject = zkc::language::analyze(*components).checkedProject();
+  if (!componentProject) {
+    llvm::errs() << llvm::toString(componentProject.takeError());
+    return 20;
+  }
+  auto componentEntry =
+      zkc::language::closeEntry(*componentProject, "components::Demo");
+  if (!componentEntry) {
+    llvm::errs() << llvm::toString(componentEntry.takeError());
+    return 21;
+  }
+  zkc::language::Layouts layouts(*componentEntry);
+  auto boundary = layouts.entryBoundary(componentEntry->protocol(),
+                                        componentEntry->entry());
+  if (!boundary) {
+    llvm::errs() << llvm::toString(boundary.takeError());
+    return 22;
+  }
+  if (boundary->inputs.size() != 4 || !boundary->inputs.back().native.empty())
+    return 23;
+  auto componentOriginal = zkc::language::prepareOriginal(*componentEntry);
+  if (!componentOriginal) {
+    llvm::errs() << llvm::toString(componentOriginal.takeError());
+    return 24;
+  }
+  auto componentPolicy = zkc::language::proofPolicy(*componentOriginal);
+  if (!componentPolicy) {
+    llvm::errs() << llvm::toString(componentPolicy.takeError());
+    return 25;
+  }
+  const auto &publicInputs = componentOriginal->interface().proof->publicInputs;
+  if (publicInputs != std::vector<zkc::language::EntryInputSelection>(
+                          {{0, {0}, 1, {}}, {0, {2}, 1, {}}}) ||
+      componentPolicy->publicInputs != std::vector<unsigned>{0})
+    return 26;
   auto gatedEntry = zkc::language::closeEntry(*checked, "m::Gates");
   if (!gatedEntry) {
     llvm::errs() << llvm::toString(gatedEntry.takeError());

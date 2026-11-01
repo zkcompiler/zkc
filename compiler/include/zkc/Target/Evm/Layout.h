@@ -61,6 +61,8 @@ public:
   ~NativeLayouts();
   llvm::Expected<const ValueLayout *> get(mlir::Type);
   llvm::Expected<const FieldLayout *> field(algebra::FieldType);
+  /// Logical slots include admitted nominal resource units with zero lanes.
+  /// This does not give those affine permissions a data layout or wire codec.
   llvm::Expected<SignatureLayout> signature(mlir::TypeRange);
   llvm::Expected<SignatureLayout> payload(data::VariantType,
                                           uint32_t alternative);

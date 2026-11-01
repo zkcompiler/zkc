@@ -125,7 +125,16 @@ pub protocol Relay<K: OracleKind> roles(A, B)(
 received <- Relay(word) @(P, V)
 ```
 
-## Restricted logical records
+## Migration controls for direct logical families
+
+The following retained direct-family fixtures describe the earlier native
+profile. [Distributed records](records.md) defines the accepted role-bearing
+source contract. During source migration, independent native and SDK readers
+admit the exact telescope-free alternative defined in the
+[current interface schema](../formats/entry.md). All required current members,
+one complete oriented family and ordinary shared metadata are checked; historical
+encodings with omitted members still refuse. Remove this alternative with the
+brace parser after maintained sources and fixtures migrate to role-bearing records.
 
 `#[logical] struct` groups logical handles with shared metadata. It is a distinct
 nominal type, including its complete static arguments, private fields and fields

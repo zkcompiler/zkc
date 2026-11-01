@@ -2,7 +2,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Compiler/StructuredSource.h"
@@ -60,8 +59,7 @@ CheckedProject checked(StringRef code, StringRef declarations = prefix) {
   return take(analyze(project).checkedProject());
 }
 CheckedOriginal original(StringRef code) {
-  return take(prepareOriginal(
-      take(zkc::test::closeNativeRun(checked(code), "m::Run"))));
+  return take(prepareOriginal(take(closeSubject(checked(code), "m::Run"))));
 }
 const Declaration &run(const ClosedEntry &entry) { return entry.protocol(); }
 void withModule(const CheckedOriginal &source,
@@ -75,20 +73,13 @@ void withModule(const CheckedOriginal &source,
   require(bool(module), "fresh original did not parse");
   body(*module);
 }
-void accepted(const CheckedOriginal &source, bool structured = true) {
+void accepted(const CheckedOriginal &source) {
   auto view = take(readInterface(source.bytes(), source.interfaceJson()));
   if (auto error = compareInterface(source.entry(), view))
     throw std::runtime_error(toString(std::move(error)));
   take(admitOriginal(source.entry(), source.bytes(), source.interfaceJson()));
   withModule(source, [&](mlir::ModuleOp module) {
     take(compareOriginal(source.entry(), module));
-    if (!structured) {
-      refuses(protocol::exportStructuredSource(source.bytes(),
-                                               run(source.entry()).symbol,
-                                               *module.getContext()),
-              "structured-source-product");
-      return;
-    }
     auto exported = take(protocol::exportStructuredSource(
         source.bytes(), run(source.entry()).symbol, *module.getContext()));
     require(!exported.bytes.empty(), "structured source export was empty");
@@ -478,7 +469,7 @@ enum Choice{Some(index,()),None()}
 protocol Run roles(P,V)(state:WithChoice@P->V)
   ->(out:WithChoice@P->V){return(out=state);}
 )");
-        accepted(source, false);
+        accepted(source);
         schemaMutation(source, [&](json::Object &schema) {
           auto &alternatives = *field(schema, "choice")
                                     .getObject("schema")
@@ -505,8 +496,8 @@ protocol Run roles(P,V)(state:WithChoice@P->V)
           renamedRelay.replace(at, 5, "Other");
           at += 5;
         }
-        auto alternate = take(zkc::test::closeNativeRun(
-            checked(renamedRelay, renamed), "m::Run"));
+        auto alternate =
+            take(closeSubject(checked(renamedRelay, renamed), "m::Run"));
         withModule(source, [&](mlir::ModuleOp module) {
           refuses(compareOriginal(alternate, module), "source.correspondence");
         });
@@ -528,8 +519,7 @@ protocol Run roles(P,V)(a:O@P->V,b:O@P->V)->(out:F@V){
       renamed.replace(at, 5, "Other");
       at += 5;
     }
-    auto alternate =
-        take(zkc::test::closeNativeRun(checked(code, renamed), "m::Run"));
+    auto alternate = take(closeSubject(checked(code, renamed), "m::Run"));
     withModule(source, [&](mlir::ModuleOp module) {
       refuses(compareOriginal(alternate, module), "source.correspondence");
     });

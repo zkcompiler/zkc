@@ -276,6 +276,212 @@ fn work(xs:Vector<Fr>)->Fr{return ∑ x in xs with true,x;}
       require(bool(error), "corrupt finite binding accepted");
       consumeError(std::move(error));
     });
+  for (const auto &expression :
+       {"∑ x in xs with true,x*x", "∑ (x,y) in zip(xs,ys) with x==y,x*y",
+        "∑ (x in xs) (y in ys) with enabled,x*y",
+        "∑ (x,_) in zip(xs,ys) with enabled,x*a",
+        "∑ x in xs with enabled,(∑ y in ys with x==y,x*y)",
+        "∑ x in xs with enabled,if enabled {x*a} else {x*b}",
+        "if enabled {∑ x in xs with true,x*a} else {∑ x in ys with false,x*b}"})
+    cases.run(std::string("filtered notation callback identity ") + expression,
+              [&] {
+                auto project = take(check(notationPrelude + R"(
+reduction ∑=sum,sum_where;
+fn work(xs:Vector<Fr>,ys:Vector<Fr>,a:Fr,b:Fr,enabled:bool)->Fr{return
+)" + expression + R"(;}
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P,b:Fr@P,enabled:bool@P)->(r:Fr@P){return work(xs,ys,a,b,enabled);}
+entry fn Run(inputs:Demo::Inputs){return Demo::run(inputs);}
+)"));
+                take(zkc::test::closeProtocolDeployment(project, "m::Run"));
+              });
+  const std::vector<std::string> invocationMutations = {
+      "callback occurrence",
+      "same-typed captures",
+      "notation target",
+      "dormant helper target",
+      "dormant static argument",
+      "dormant producer occurrence",
+      "dormant expression value",
+      "generated parameter origin",
+      "omitted dormant call",
+      "duplicate dormant call",
+      "missing notation binding",
+      "capture snapshot origin",
+      "coordinated helper argument"};
+  for (unsigned mutation = 0; mutation != invocationMutations.size();
+       ++mutation)
+    cases.run(
+        "filtered notation invocation provenance " +
+            invocationMutations[mutation],
+        [&] {
+          auto project = take(check(notationPrelude + R"(
+fn pass<N:nat>(value:Fr)->Fr{return value;}
+fn other<N:nat>(value:Fr)->Fr{return value;}
+fn another<I:Type+Copy+Drop>(rows:domain<I>,keep:fn(item:I)->bool effects(stop) where item_from(item, rows),term:fn(item:I)->Fr effects(stop) where item_from(item, rows))->Fr effects(stop){return sum_where(rows,keep,term);}
+reduction ∑=sum,sum_where;
+fn work(xs:Vector<Fr>,a:Fr,b:Fr,enabled:bool)->Fr{
+ return ∑ x in xs with enabled,if true {pass<2>(x*a)} else {pass<2>(x*b)};
+}
+)"));
+          auto &body =
+              const_cast<Body &>(*declarationNamed(project, "m::work").body);
+          auto reduction =
+              llvm::find_if(body.operations, [](const Operation &op) {
+                return op.binding && op.binding->filteredReduction;
+              });
+          require(reduction != body.operations.end(),
+                  "missing filtered invocation");
+          auto &call = std::get<HelperCall>(reduction->action);
+          require(call.scopedArguments.size() == 2,
+                  "missing predicate or term");
+          auto &predicate = body.scopedBindings[call.scopedArguments[0]];
+          auto &term = body.scopedBindings[call.scopedArguments[1]];
+          auto &computation =
+              const_cast<ScopedComputation &>(*term.computation);
+          auto &callback = const_cast<Body &>(*computation.body);
+          auto selected =
+              llvm::find_if(callback.operations, [](const Operation &op) {
+                return std::holds_alternative<LocalControl>(op.action);
+              });
+          require(selected != callback.operations.end(),
+                  "missing selected callback body");
+          const auto &control = std::get<LocalControl>(selected->action);
+          auto &dormant = const_cast<Body &>(*control.regions[1]);
+          auto helper =
+              llvm::find_if(dormant.operations, [](const Operation &op) {
+                return std::holds_alternative<HelperCall>(op.action);
+              });
+          require(helper != dormant.operations.end(),
+                  "missing dormant helper call");
+          if (mutation == 0)
+            computation.expression = predicate.computation->expression;
+          require(term.captures.size() == 2, "missing same-typed capture pair");
+          if (mutation == 1)
+            std::swap(term.captures[0], term.captures[1]);
+          if (mutation == 2) {
+            auto target = declarationNamed(project, "m::another").id;
+            call.callee = target;
+            reduction->binding->target.declaration = target;
+          }
+          if (mutation == 3) {
+            auto target = declarationNamed(project, "m::other").id;
+            std::get<HelperCall>(helper->action).callee = target;
+            helper->binding->target.declaration = target;
+          }
+          if (mutation == 4) {
+            auto &arguments = std::get<HelperCall>(helper->action).arguments;
+            arguments[0].dimension = Natural::constant(3);
+            helper->binding->arguments = arguments;
+          }
+          if (mutation == 5)
+            ++helper->span.begin;
+          if (mutation == 6) {
+            auto result = helper->results.front();
+            for (auto &[expression, value] : dormant.expressionValues)
+              if (value.index == result.index)
+                value = std::get<HelperCall>(helper->action).operands[0];
+          }
+          if (mutation == 7) {
+            auto projection =
+                llvm::find_if(callback.operations, [](const Operation &op) {
+                  const auto *read = std::get_if<Projection>(&op.action);
+                  return read && read->path.empty() && read->input.index == 0;
+                });
+            require(projection != callback.operations.end(),
+                    "missing generated parameter binding");
+            std::get<Projection>(projection->action).input = ValueId{1};
+          }
+          if (mutation == 8)
+            dormant.operations.erase(helper);
+          if (mutation == 9) {
+            auto duplicate = *helper;
+            auto result = duplicate.results.front();
+            duplicate.results.front() =
+                ValueId{unsigned(dormant.values.size())};
+            dormant.values.push_back(dormant.values[result.index]);
+            dormant.operations.push_back(std::move(duplicate));
+          }
+          if (mutation == 10)
+            reduction->binding.reset();
+          if (mutation == 11) {
+            auto replacement =
+                llvm::find_if(body.operations, [&](const Operation &op) {
+                  return op.results.size() == 1 &&
+                         op.results[0].index == term.captures[1].index;
+                });
+            require(replacement != body.operations.end(),
+                    "missing replacement snapshot");
+            auto capture =
+                llvm::find_if(body.operations, [&](const Operation &op) {
+                  return op.results.size() == 1 &&
+                         op.results[0].index == term.captures[0].index;
+                });
+            require(capture != body.operations.end(),
+                    "missing capture snapshot");
+            std::get<Projection>(capture->action).input =
+                std::get<Projection>(replacement->action).input;
+          }
+          if (mutation == 12) {
+            auto &argument = std::get<HelperCall>(helper->action);
+            require(dormant.inputs != 0, "missing dormant inputs");
+            auto replacement = ValueId{dormant.inputs - 1};
+            require(dormant.values[replacement.index].type ==
+                        dormant.values[argument.operands[0].index].type,
+                    "helper argument types differ");
+            argument.operands[0] = replacement;
+            helper->binding->operands[0] = replacement;
+          }
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "forged filtered invocation accepted");
+          auto diagnostic = toString(std::move(error));
+          require(namesIdentifier(diagnostic, "source.binding-witness") ||
+                      namesIdentifier(diagnostic, "source.scoped-witness"),
+                  "unexpected filtered invocation refusal: " + diagnostic);
+        });
+  for (unsigned mutation = 0; mutation != 3; ++mutation)
+    cases.run(
+        "same-signature filtered callbacks " + std::to_string(mutation), [&] {
+          auto project = take(check(notationPrelude + R"(
+fn all<I:Type+Copy+Drop>(rows:domain<I>,term:fn(item:I)->bool effects(stop) where item_from(item, rows))->bool effects(stop){return fold(rows,true,fn(state,item)=>state && term(item));}
+fn all_where<I:Type+Copy+Drop>(rows:domain<I>,keep:fn(item:I)->bool effects(stop) where item_from(item, rows),term:fn(item:I)->bool effects(stop) where item_from(item, rows))->bool effects(stop){return fold_where(rows,true,keep,fn(state,item)=>state && term(item));}
+reduction ⋀=all,all_where;
+fn work(xs:Vector<Fr>,a:Fr,b:Fr)->bool{return ⋀ x in xs with x==a,(x==b);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:bool@P){return work(xs,a,b);}
+entry fn Run(inputs:Demo::Inputs){return Demo::run(inputs);}
+)"));
+          if (mutation == 0) {
+            take(zkc::test::closeProtocolDeployment(project, "m::Run"));
+            return;
+          }
+          auto &body =
+              const_cast<Body &>(*declarationNamed(project, "m::work").body);
+          auto reduction =
+              llvm::find_if(body.operations, [](const Operation &op) {
+                return op.binding && op.binding->filteredReduction;
+              });
+          require(reduction != body.operations.end(),
+                  "missing Boolean reduction");
+          auto &call = std::get<HelperCall>(reduction->action);
+          auto &predicate = body.scopedBindings[call.scopedArguments[0]];
+          auto &term = body.scopedBindings[call.scopedArguments[1]];
+          require(predicate.signature == term.signature,
+                  "callback signatures differ");
+          if (mutation == 1) {
+            std::swap(call.scopedArguments[0], call.scopedArguments[1]);
+            reduction->binding->scopedArguments = call.scopedArguments;
+          } else {
+            const_cast<ScopedComputation &>(*term.computation).expression =
+                predicate.computation->expression;
+            term.source = predicate.source;
+            term.span = predicate.span;
+          }
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "substituted Boolean callback accepted");
+          auto diagnostic = toString(std::move(error));
+          require(namesIdentifier(diagnostic, "source.binding-witness") ||
+                      namesIdentifier(diagnostic, "source.scoped-witness"),
+                  "unexpected Boolean callback refusal: " + diagnostic);
+        });
   for (const auto &input : {std::string("xs"), std::string("keep(xs)"),
                             std::string("{xs}"), std::string("record.values"),
                             std::string("array"), std::string("[1,2]")})

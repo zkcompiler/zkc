@@ -65,7 +65,50 @@ impl<'a> Schemas<'a> {
         self.charge(1 + schema.display_type.len() + schema.identity.len())?;
         text(&schema.display_type, 256 * 1024)?;
         require(hash(&schema.identity), E::Schema)?;
-        require(schema.leaves.len() <= 1024, E::Limit)?;
+        require(
+            !schema.sealed
+                || matches!(
+                    schema.kind,
+                    Kind::Record | Kind::LogicalRecord | Kind::Variant | Kind::Associated
+                ),
+            E::Schema,
+        )?;
+        if let Some(generated) = &schema.generated {
+            self.charge(1 + generated.len())?;
+            require(
+                hash(generated)
+                    && matches!(schema.kind, Kind::Record | Kind::Variant | Kind::Associated),
+                E::Schema,
+            )?;
+        }
+        require(
+            schema.leaves.len() <= 1024 && schema.custody <= 1024,
+            E::Limit,
+        )?;
+        require(
+            (schema.kind == Kind::Array) == schema.element.is_some(),
+            E::Schema,
+        )?;
+        require(
+            schema.kind == Kind::LogicalRecord || schema.roles.is_empty(),
+            E::Schema,
+        )?;
+        require(schema.roles.len() <= 16, E::Limit)?;
+        let mut role_names = BTreeSet::new();
+        for role in &schema.roles {
+            self.charge(1 + role.len())?;
+            require(identifier(role) && role_names.insert(role), E::Schema)?;
+        }
+        if let Some(element) = &schema.element {
+            self.check(element, depth + 1)?;
+            require(
+                schema
+                    .permissions
+                    .iter()
+                    .all(|p| element.permissions.contains(p)),
+                E::Schema,
+            )?;
+        }
         require(
             schema.permissions.windows(2).all(|p| p[0] < p[1]),
             E::Schema,
@@ -84,7 +127,7 @@ impl<'a> Schemas<'a> {
         )?;
         for (index, spelling) in schema.leaves.iter().enumerate() {
             let leaf = self.leaf(spelling)?;
-            if schema.custody && index == 0 {
+            if index < schema.custody as usize {
                 continue;
             }
             require(
@@ -106,15 +149,23 @@ impl<'a> Schemas<'a> {
                 )?;
             }
         }
-        let start = usize::from(schema.custody);
-        if schema.custody {
+        let start = schema.custody as usize;
+        if schema.custody != 0 {
             require(
-                matches!(schema.kind, Kind::Record | Kind::Variant | Kind::Associated)
-                    && !schema.permissions.contains(&Copy)
-                    && !schema.constructible
-                    && schema.leaves.first().is_some_and(|l| {
-                        l == &format!("resource_unit:zkl_resource_{}", schema.identity)
-                    }),
+                !schema.permissions.contains(&Copy)
+                    && if schema.kind == Kind::LogicalRecord {
+                        start == schema.roles.len() && schema.leaves.is_empty()
+                    } else {
+                        start == 1
+                            && matches!(
+                                schema.kind,
+                                Kind::Record | Kind::Variant | Kind::Associated
+                            )
+                            && !schema.constructible
+                            && schema.leaves.first().is_some_and(|l| {
+                                l == &format!("resource_unit:zkl_resource_{}", schema.identity)
+                            })
+                    },
                 E::Schema,
             )?;
         }
@@ -143,7 +194,7 @@ impl<'a> Schemas<'a> {
                 let payload = &expected.1;
                 self.fields(&actual.fields, payload, 0, depth, &schema.permissions)?;
             }
-        } else if schema.kind == Kind::LogicalRecord {
+        } else if schema.is_logical() && !schema.kind.is_handle() {
             self.logical_fields(schema, depth)?;
         } else if !schema.fields.is_empty() {
             self.fields(
@@ -210,7 +261,8 @@ impl<'a> Schemas<'a> {
             )?;
             self.check(&field.schema, depth + 1)?;
             require(
-                !field.schema.kind.is_logical()
+                !field.schema.is_logical()
+                    && field.placement.is_none()
                     && field.maximum_rows.get().is_none()
                     && permissions
                         .iter()
@@ -221,7 +273,8 @@ impl<'a> Schemas<'a> {
         }
         require(next == leaves.len(), E::Schema)
     }
-    pub(super) fn participants(&self, schema: &Schema) -> Result<()> {
+    pub(super) fn participants(&mut self, schema: &Schema) -> Result<()> {
+        self.charge(1 + schema.leaves.len())?;
         require(
             schema.permissions.contains(&Permission::Copy)
                 && schema
@@ -229,39 +282,52 @@ impl<'a> Schemas<'a> {
                     .iter()
                     .all(|leaf| self.leaves[leaf.as_str()].participants),
             E::Schema,
-        )
+        )?;
+        if let Some(element) = &schema.element {
+            self.participants(element)?;
+        }
+        for field in schema
+            .fields
+            .iter()
+            .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
+        {
+            self.participants(&field.schema)?;
+        }
+        Ok(())
     }
     fn shape(&self, s: &Schema) -> Result<()> {
-        let start = usize::from(s.custody);
+        let start = s.custody as usize;
         require(
             s.kind == Kind::Variant || s.alternatives.is_empty(),
             E::Schema,
         )?;
         let valid = match s.kind {
-            Kind::Oracle | Kind::OracleSequence | Kind::LogicalRecord => {
-                !s.custody
+            Kind::Oracle | Kind::OracleSequence => {
+                s.custody == 0
                     && !s.constructible
                     && s.leaves.is_empty()
                     && s.permissions == [Permission::Copy, Permission::Drop]
-                    && (if s.kind == Kind::LogicalRecord {
-                        !s.fields.is_empty()
-                    } else {
-                        s.fields.is_empty()
-                    })
+                    && s.fields.is_empty()
             }
+            Kind::LogicalRecord => !s.constructible && s.leaves.is_empty(),
             Kind::Variant => !s.alternatives.is_empty(),
             Kind::Associated => s.fields.len() == 1 && s.fields[0].name == "value",
             Kind::Record | Kind::Tuple | Kind::Array => {
-                if s.fields.is_empty() && s.leaves.len() != start {
+                if s.is_logical() && (s.constructible || s.custody != 0 || !s.leaves.is_empty()) {
+                    return Err(E::Schema);
+                }
+                if !s.is_logical() && s.fields.is_empty() && s.leaves.len() != start {
                     return Err(E::Schema);
                 }
                 s.fields.iter().enumerate().all(|(i, f)| {
                     (if s.kind == Kind::Record {
                         identifier(&f.name)
                     } else {
-                        f.name == i.to_string()
+                        f.name == i.to_string() && f.public
                     }) && (s.kind != Kind::Array
-                        || f.schema.identity == s.fields[0].schema.identity)
+                        || s.element
+                            .as_ref()
+                            .is_some_and(|e| f.schema.identity == e.identity))
                 })
             }
             Kind::Unit => s.fields.is_empty() && s.leaves.is_empty(),
@@ -308,6 +374,8 @@ fn same_fields(a: &[Field], b: &[Field]) -> bool {
         && a.iter().zip(b).all(|(a, b)| {
             a.name == b.name
                 && a.offset == b.offset
+                && a.public == b.public
+                && a.placement == b.placement
                 && a.schema.identity == b.schema.identity
                 && a.maximum_rows == b.maximum_rows
         })
@@ -315,8 +383,12 @@ fn same_fields(a: &[Field], b: &[Field]) -> bool {
 fn same_schema(a: &Schema, b: &Schema) -> bool {
     a.kind == b.kind
         && a.identity == b.identity
+        && a.generated == b.generated
         && a.display_type == b.display_type
         && a.custody == b.custody
+        && a.sealed == b.sealed
+        && a.roles == b.roles
+        && a.element.as_ref().map(|e| &e.identity) == b.element.as_ref().map(|e| &e.identity)
         && a.constructible == b.constructible
         && a.permissions == b.permissions
         && a.leaves == b.leaves
@@ -332,20 +404,26 @@ fn same_schema(a: &Schema, b: &Schema) -> bool {
 }
 /// Source constructor authority is independent of native decoding.
 pub(in crate::entry) fn check_import(schema: &Schema) -> std::result::Result<(), String> {
-    if schema.kind.is_logical() || schema.custody || !schema.constructible {
+    if schema.is_logical() || schema.custody != 0 || schema.sealed || !schema.constructible {
         return Err("entry-input-constructor".into());
+    }
+    if let Some(element) = &schema.element {
+        check_import(element)?;
     }
     for field in schema
         .fields
         .iter()
         .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
     {
+        if !field.public {
+            return Err("entry-input-constructor".into());
+        }
         check_import(&field.schema)?;
     }
     Ok(())
 }
 pub(in crate::entry) fn check_export(schema: &Schema) -> std::result::Result<(), String> {
-    if schema.kind.is_logical() || schema.custody || !schema.permissions.contains(&Permission::Copy)
+    if schema.is_logical() || schema.custody != 0 || !schema.permissions.contains(&Permission::Copy)
     {
         return Err("entry-output-custody".into());
     }

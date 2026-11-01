@@ -9,9 +9,7 @@ use zkc_cpu::services::{ServiceReference, ServiceRegistry};
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Sequence, Value};
 use zkc_runtime::host::joint::{Bundle, BundleLimits};
 use zkc_runtime::interpreter::Runner;
-use zkc_runtime::vm::{
-    Action, LogicalType, Packet, PathElement, ProgramState, StopKind, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{Action, LogicalType, Packet, StopKind, Value as RuntimeValue};
 
 #[path = "language_native/attempts.rs"]
 mod attempts;
@@ -28,7 +26,6 @@ mod setups;
 
 struct Participant {
     runner: Runner<CpuBackend>,
-    loops: Vec<(String, u64, u64)>,
 }
 impl Deref for Participant {
     type Target = Runner<CpuBackend>;
@@ -76,52 +73,14 @@ fn start(
         runner: Runner::new(&admitted, entry, role, "language_test", backend, inputs)
             .map_err(|failure| failure.error)
             .unwrap(),
-        loops: Vec::new(),
     }
 }
 fn next(runner: &mut Participant) -> Action<Value> {
     for _ in 0..100 {
-        let mut origin = runner.root_origin().clone();
-        origin.path.extend(
-            runner
-                .loops
-                .iter()
-                .map(|(site, _, iteration)| PathElement::Loop {
-                    site: site.clone(),
-                    iteration: *iteration,
-                }),
-        );
-        match runner.inspect_program().unwrap() {
-            ProgramState::Unpolled {
-                kind: None,
-                site: Some(site),
-            } => {
-                let site = site.to_owned();
-                // Each fixture supplies the intended local count. Joint count
-                // agreement is the RunHost driver's separate obligation.
-                if let Some(count) = runner.loop_count(&origin, &site).unwrap() {
-                    runner.enter_loop(&origin, &site, count).unwrap();
-                    if count != 0 {
-                        runner.loops.push((site, count, 0));
-                    }
-                }
-                continue;
-            }
-            ProgramState::Yield => {
-                runner.yield_loop(&origin).unwrap();
-                let (_, count, iteration) = runner.loops.last_mut().unwrap();
-                *iteration += 1;
-                if *iteration == *count {
-                    runner.loops.pop();
-                }
-                continue;
-            }
-            ProgramState::ReturnIf { site } => {
-                let site = site.to_owned();
-                runner.return_if(&origin, &site).unwrap();
-                continue;
-            }
-            _ => {}
+        // Independent execution uses this role's own selectors/counts. Joint
+        // agreement belongs to the Host, never this fixture driver.
+        if runner.advance_local_control().unwrap() {
+            continue;
         }
         match runner.poll() {
             Action::Local(local) => runner.execute_local(&local.cut).unwrap(),

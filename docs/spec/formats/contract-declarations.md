@@ -28,7 +28,8 @@ does not install a runtime implementation by adding a declaration.
 
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
-`mathematicalIntrinsics` and `consumerProfiles`. The format tag is
+`mathematicalIntrinsics`, `consumerProfiles`, `frontendAssociations`,
+`frontendHomes` and `serviceMethods`. The format tag is
 `zkc.contract-declarations/0`. Every list follows the contribution dependency
 order and then its explicit declaration order. No consumer may infer meaning
 from an ordinal instead of the declared identity. Unknown fields, duplicate
@@ -340,19 +341,24 @@ narrower consumer family.
 
 The initial owner-fixed profile is `structured-source-primitives`. It requires
 unselected implementations, lists constructors `index`, `bool`, `field`,
-`vector`, and validators `None`, `Natural`. Its exact operation order is:
+`vector`, `resource_unit`, and validators `None`, `Natural`. Its exact operation order is:
 
 ```text
 index.constant, index.add, index.sub, index.mul, index.div, index.mod,
 index.equal, index.less, vector.empty, vector.length, vector.sum,
-vector.split, vector.append, vector.equal, field.equal, field.embed
+vector.split, vector.append, vector.equal, field.equal, field.embed,
+resource_unit.create, resource_unit.pass, resource_unit.consume
 ```
 
 The eight index operations have no static roots. Every field/vector operation
 has exactly one Domain root of sort Field. `field.embed` additionally projects
 the associated `BaseField`; that projection is not another caller argument and
 its declared `ExtensionField` requirement remains mandatory. `vector.equal`
-retains its declared `CommRing` requirement. `index.constant` uses the exact
+retains its declared `CommRing` requirement. The three resource-unit operations
+have one exact Domain root of sort Slot; Slot identities are nominal custody
+identities, not installed algebraic domains. Their native export enrollment
+does not establish an independent formal interpretation.
+`index.constant` uses the exact
 `Natural` validator with bounds `[1,1]`; the others use `None` with `[0,0]`.
 There is no enrollment by operation prefix, authoring stage, contribution
 installation, MLIR interface or inherited TableGen class.
@@ -411,3 +417,55 @@ History only. No sampling facet asserts a compound-query security theorem.
 `indices`), natural N, natural Q, and optionally natural b. Naturals use the
 full u64 carrier: N is power-of-two in [1,2^63], Q in [1,2^20], b in [0,64].
 The [native block format](native-index-block.md) owns the exact bytes.
+
+## Frontend declaration associations
+
+The exact version-0 envelope also contains `frontendAssociations`,
+`frontendHomes` and `serviceMethods`. These source-facing rows grant typed
+elaboration rules, never executable implementations or formal interpretations.
+All objects reject unknown fields. Duplicate identities, namespace ownership,
+implicit names, constructor homes and service member names refuse.
+
+A frontend association has exactly `identity`, `module`, `name`, `signature`
+and Boolean `implicit`. The closed pairs are `record.unpack` / `RecordUnpack`,
+`record.inspect` / `RecordInspect`, `record.repack` / `RecordRepack` and
+`service.random` / `RandomConstructor`. The module is a `zkc::` path; the name
+is an identifier. Installation-origin source must supply the corresponding
+checked declaration. Captured source with the same spelling cannot install an
+association. Source marker signatures are alpha-normalized and checked against
+the selected rule. An implicit association is considered only after ordinary
+lexical/import lookup fails; a failed declared call never retries an intrinsic.
+
+The record rules derive payload types in declared field order from the actual
+nominal schema, retaining phantom arguments. Inspect and repack require an
+explicitly restricted ordinary or fixed-roster distributed record whose payload
+fields are Copy and Drop. Distributed inspection returns the same wrapper
+placement plus the exact placed payload tuple; repacking requires that payload
+placement and preserves the nominal instance and ordered role application.
+Unpack retires a restricted wrapper and transfers all required children. Each
+operation checks constructor authority against its authored lexical caller.
+Specialization preserves that caller, and independent witness checking
+reconstructs the schema and authority. The intrinsic's module supplies no
+constructor authority. Ordinary unrestricted unpack is pure; custody retirement,
+inspection and repacking require ordered execution and an outer `<-` in layout
+source. Custody-retiring restricted destructuring has the same ordered requirement.
+
+A frontend home contains exactly `constructor`, `module` and `members`. The constructor
+is an admitted native constructor identity or the existing logical `oracle` /
+`oracle_sequence` constructor identity. Lookup uses checked type category and
+catalog identity, never a printed alias or type name. Nominal wrappers retain
+their own home; aliases retain their target. A home association supplies no new
+methods, capabilities, role inference or implementation.
+
+A service member contains exactly `name`, `signature` and `capability`.
+`RandomDraw` requires the empty capability; `RandomIndex` requires the installed
+unary Field predicate `IndexRandomness`; `RandomIndices` requires
+`IndexBlockRandomness`. These rules retain the existing ordered request
+signatures and independently selected provider roots. Member spelling is
+separate from rule identity. No unknown rule falls back to a textual signature.
+
+A home also carries an exact `members` list of canonical source declaration
+paths. It permits deliberate API forwarding, such as Vector's primitive
+reexports. A forwarded member is eligible only when that home actually exports
+the selected declaration and its first authored data parameter has the same
+semantic constructor family. Unlisted imports and reexports add no methods.

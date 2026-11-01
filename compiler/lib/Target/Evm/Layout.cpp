@@ -2,6 +2,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
@@ -172,6 +173,17 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
 Expected<SignatureLayout> NativeLayouts::signature(TypeRange types) {
   SignatureLayout result;
   for (Type type : types) {
+    if (auto unit = dyn_cast_if_present<runtime::CapabilityType>(type);
+        unit && unit.getKind() == runtime::CapabilityKind::ResourceUnit) {
+      LogicalTypePermissions permissions;
+      if (unit.getContext() != &storage->context || !formed(unit, permissions))
+        return zkc::error("evm.layout",
+                          "requires a formed nominal resource unit");
+      // Custody has no value storage. Keep its logical slot without granting
+      // Copy/Drop data layout or wire permission; closure admission owns uses.
+      result.values.push_back({unsigned(result.lanes.size()), 0});
+      continue;
+    }
     auto layout = get(type);
     if (!layout)
       return layout.takeError();

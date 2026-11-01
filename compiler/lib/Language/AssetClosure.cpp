@@ -113,7 +113,7 @@ Error closeAssets(const CheckedProject &project, ClosedStorage &closed,
           retained.emplace(identity, found->second);
         }
       } else if (const auto *control =
-                     std::get_if<LocalControl>(&operation.action)) {
+                     std::get_if<Control>(&operation.action)) {
         for (const auto &region : control->regions)
           if (auto error = visit(*region))
             return error;

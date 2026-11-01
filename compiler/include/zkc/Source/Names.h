@@ -36,6 +36,10 @@ std::string nativeSetupName(unsigned ordinal);
 std::string nativeAlternativeName(unsigned ordinal);
 // Labelled source sites have a namespace disjoint from generated ordinals.
 std::string nativeSiteName(llvm::StringRef label, uint64_t ordinal);
+// A closed selected arm has a lexical namespace distinct from its siblings.
+std::string nativeSelectedSite(llvm::StringRef branch,
+                               llvm::StringRef alternative,
+                               llvm::StringRef site);
 
 // Exact UTF-8 preimage bytes, without normalization. Decoding accepts only
 // lowercase, even-length hex and valid UTF-8, bounded by decoded byte count.

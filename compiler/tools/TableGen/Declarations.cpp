@@ -88,7 +88,7 @@ struct Model {
   DeclarationOrder order;
   Records sorts, types, operations, members, capabilities, rules, typeExports,
       families, familyCases, associatedTypes, capabilityExports,
-      consumerProfiles;
+      consumerProfiles, frontendAssociations, frontendHomes, serviceMethods;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
         types(order.sort("ZKC_Type")), operations(order.sort("ZKC_Operation")),
@@ -100,7 +100,10 @@ struct Model {
         familyCases(order.sort("ZKC_TypeFamilyCase")),
         associatedTypes(order.sort("ZKC_AssociatedType")),
         capabilityExports(order.sort("ZKC_CapabilityExport")),
-        consumerProfiles(order.sort("ZKC_ConsumerProfile")) {
+        consumerProfiles(order.sort("ZKC_ConsumerProfile")),
+        frontendAssociations(order.sort("ZKC_FrontendAssociation")),
+        frontendHomes(order.sort("ZKC_FrontendHome")),
+        serviceMethods(order.sort("ZKC_ServiceMethod")) {
     if (records.getAllDerivedDefinitions("ZKC_Declaration").size() > 100000)
       PrintFatalError("declaration record limit");
     validateMathematicalDeclarations(records);
@@ -241,6 +244,59 @@ void Model::validate() {
         r->getValueAsDef("capability")->getValueAsListOfDefs("parameters");
     require(ps.size() == 1 && parameter(ps[0]).first == "Domain", r,
             "source capability requires a unary domain predicate");
+  }
+  std::map<StringRef, StringRef> frontendRules{
+      {"record.unpack", "RecordUnpack"},
+      {"record.inspect", "RecordInspect"},
+      {"record.repack", "RecordRepack"},
+      {"service.random", "RandomConstructor"}};
+  std::set<StringRef> frontendIds, implicitNames, homes, methods;
+  for (const auto *r : frontendAssociations) {
+    checkExport(r);
+    auto identity = r->getValueAsString("identity");
+    require(frontendRules.count(identity) &&
+                frontendRules.at(identity) == r->getValueAsString("signature"),
+            r, "frontend signature identity mismatch");
+    require(frontendIds.insert(identity).second, r,
+            "duplicate frontend identity");
+    if (r->getValueAsBit("implicit"))
+      require(implicitNames.insert(name(r)).second, r,
+              "duplicate implicit frontend name");
+  }
+  for (const auto *r : frontendHomes) {
+    auto head = name(r), module = r->getValueAsString("module");
+    require((head == "oracle" || head == "oracle_sequence" ||
+             any_of(types, [&](const auto *t) { return name(t) == head; })) &&
+                module.starts_with("zkc::") && path(module, "::"),
+            r, "invalid frontend home");
+    require(homes.insert(head).second, r, "duplicate frontend home");
+    std::set<StringRef> exports;
+    for (auto member : r->getValueAsListOfStrings("members"))
+      require(member.starts_with("zkc::") && path(member, "::") &&
+                  exports.insert(member).second,
+              r, "invalid frontend home members");
+  }
+  std::map<StringRef, StringRef> serviceRules{
+      {"RandomDraw", ""},
+      {"RandomIndex", "IndexRandomness"},
+      {"RandomIndices", "IndexBlockRandomness"}};
+  for (const auto *r : serviceMethods) {
+    auto rule = r->getValueAsString("signature"),
+         cap = r->getValueAsString("capability");
+    require(identifier(name(r)) && methods.insert(name(r)).second, r,
+            "invalid or duplicate service method");
+    require(serviceRules.count(rule) && serviceRules.at(rule) == cap, r,
+            "service method capability mismatch");
+    require(cap.empty() ||
+                any_of(capabilities,
+                       [&](const auto *c) {
+                         auto ps = c->getValueAsListOfDefs("parameters");
+                         return name(c) == cap && ps.size() == 1 &&
+                                parameter(ps.front()) ==
+                                    std::make_pair(StringRef("Domain"),
+                                                   StringRef("Field"));
+                       }),
+            r, "unknown service capability");
   }
 }
 void Model::validateOperation(const Record *op, bool consumer) {
@@ -861,6 +917,33 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
         "AuthoringStage::CompilerGenerated; }\n"
         "const ParameterContract *parameterContract(llvm::StringRef key) { "
         "auto *d = declaration(key); return d ? &d->parameters : nullptr; }\n";
+  os << "llvm::ArrayRef<FrontendAssociation> frontendAssociations() {\n"
+        "static const std::vector<FrontendAssociation> rows = {\n";
+  for (const auto *r : m.frontendAssociations)
+    os << "{" << quote(r->getValueAsString("identity")) << ", "
+       << quote(r->getValueAsString("module")) << ", " << quote(name(r))
+       << ", FrontendSignature::" << r->getValueAsString("signature") << ", "
+       << boolean(r->getValueAsBit("implicit")) << "},\n";
+  os << "}; return rows; }\n"
+        "const FrontendAssociation *frontendAssociation(llvm::StringRef "
+        "qualified) {\n"
+        "for (const auto &r : frontendAssociations())\n"
+        "if (qualified == r.module + \"::\" + r.name) return &r;\n"
+        "return nullptr; }\n";
+  os << "llvm::ArrayRef<FrontendHome> frontendHomes() {\n"
+        "static const std::vector<FrontendHome> rows = {\n";
+  for (const auto *r : m.frontendHomes)
+    os << "{" << quote(name(r)) << ", " << quote(r->getValueAsString("module"))
+       << ", " << strings(r->getValueAsListOfStrings("members")) << "},\n";
+  os << "}; return rows; }\n";
+  os << "llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations() "
+        "{\n"
+        "static const std::vector<ServiceMethodDeclaration> rows = {\n";
+  for (const auto *r : m.serviceMethods)
+    os << "{" << quote(name(r))
+       << ", ServiceSignature::" << r->getValueAsString("signature") << ", "
+       << quote(r->getValueAsString("capability")) << "},\n";
+  os << "}; return rows; }\n";
   os << "llvm::ArrayRef<SourceTypeExport> sourceTypeExports() {\nstatic const "
         "std::vector<SourceTypeExport> values = {\n";
   for (const auto *r : m.typeExports)
@@ -1206,6 +1289,32 @@ json::Object inventory(const Model &m) {
                      {"naturals", intrinsic->getValueAsInt("naturals")},
                      {"domainPoints", intrinsic->getValueAsBit("domainPoints")},
                      {"scalar", intrinsic->getValueAsBit("scalar")}});
+  json::Array associations, homes, services;
+  for (const auto *r : m.frontendAssociations)
+    associations.push_back(
+        json::Object{{"identity", r->getValueAsString("identity")},
+                     {"module", r->getValueAsString("module")},
+                     {"name", name(r)},
+                     {"signature", r->getValueAsString("signature")},
+                     {"implicit", r->getValueAsBit("implicit")}});
+  for (const auto *r : m.frontendHomes)
+    homes.push_back(json::Object{{"constructor", name(r)},
+                                 {"module", r->getValueAsString("module")},
+                                 {"members", [&] {
+                                    json::Array members;
+                                    for (auto member :
+                                         r->getValueAsListOfStrings("members"))
+                                      members.push_back(member);
+                                    return members;
+                                  }()}});
+  for (const auto *r : m.serviceMethods)
+    services.push_back(
+        json::Object{{"name", name(r)},
+                     {"signature", r->getValueAsString("signature")},
+                     {"capability", r->getValueAsString("capability")}});
+  result["frontendAssociations"] = std::move(associations);
+  result["frontendHomes"] = std::move(homes);
+  result["serviceMethods"] = std::move(services);
   result["types"] = std::move(types);
   result["operations"] = std::move(ops);
   result["members"] = std::move(members);

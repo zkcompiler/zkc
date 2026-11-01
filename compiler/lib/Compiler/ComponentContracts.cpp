@@ -1206,10 +1206,6 @@ Error checkComponentDeclarations(const J &value) {
     auto resource = string((*record)[1]);
     if (resource != "ordinary" && resource != "affine" && resource != "linear")
       return error("component-declaration");
-    if (kind == "logical_record" && resource != "ordinary")
-      return error("component-declaration-record");
-    if (resource == "linear" && !*(*record)[2].getAsBoolean())
-      return error("component-declaration-record");
     if (array((*record)[3]).size() > 512)
       return error("component-declaration-limit");
     if (kind != "variant") {
@@ -1229,10 +1225,51 @@ Error checkComponentDeclarations(const J &value) {
         return e;
     }
   }
-  // Logical records cannot acquire resource custody through an ordinary
-  // nominal child, including children erased by zero-length layouts.
-  std::set<std::string> ordinary;
-  std::function<Error(const J &, unsigned)> shared =
+  // Retain every nominal child, including children with no physical leaves.
+  std::function<Error(const J &, unsigned)> referenced =
+      [&](const J &value, unsigned depth) -> Error {
+    if (!remaining || depth > 64)
+      return error("component-declaration-limit");
+    --remaining;
+    const auto &term = array(value);
+    auto tag = string(term[0]);
+    const A *arguments = nullptr;
+    if (tag == "nominal") {
+      auto kind = string(term[1]);
+      if ((kind == "record" || kind == "logical_record" || kind == "variant") &&
+          !declarations.count(key(value)))
+        return error("component-declaration-record");
+      arguments = &array(term[3]);
+    } else if (tag == "array")
+      return referenced(term[1], depth + 1);
+    else if (tag == "tuple")
+      arguments = &array(term[1]);
+    else if (tag == "builtin" || tag == "formal")
+      arguments = &array(term[2]);
+    if (arguments)
+      for (const auto &argument : *arguments)
+        if (auto e = referenced(argument, depth + 1))
+          return e;
+    return Error::success();
+  };
+  for (const auto &[identity, declaration] : declarations) {
+    if (auto e = referenced((*declaration)[0], 0))
+      return e;
+    bool variant = array((*declaration)[0])[1] == J("variant");
+    for (const auto &member : array((*declaration)[3])) {
+      if (variant) {
+        for (const auto &field : array(array(member)[1]))
+          if (auto e = referenced(array(field)[1], 0))
+            return e;
+      } else if (auto e = referenced(array(member)[1], 0))
+        return e;
+    }
+  }
+  // Ordinary carriers cannot hide distributed logical category, including
+  // children erased by zero-length layouts. Distributed records may contain
+  // nested records and restrictions; source comparison checks their authority.
+  std::set<std::string> checkedOrdinary;
+  std::function<Error(const J &, unsigned)> ordinaryCategory =
       [&](const J &value, unsigned depth) -> Error {
     if (!remaining || depth > 64)
       return error("component-declaration-limit");
@@ -1247,42 +1284,48 @@ Error checkComponentDeclarations(const J &value) {
       if (kind == "record" || kind == "variant") {
         auto identity = key(value);
         auto found = declarations.find(identity);
-        if (found == declarations.end() || (*found->second)[1] != J("ordinary"))
+        if (found == declarations.end())
           return error("component-declaration-record");
-        if (!ordinary.insert(identity).second)
+        if (!checkedOrdinary.insert(identity).second)
           return Error::success();
         const auto &members = array((*found->second)[3]);
         if (kind == "variant") {
           for (const auto &alternative : members)
             for (const auto &field : array(array(alternative)[1]))
-              if (auto e = shared(array(field)[1], depth + 1))
+              if (auto e = ordinaryCategory(array(field)[1], depth + 1))
                 return e;
         } else
           for (const auto &field : members)
-            if (auto e = shared(array(field)[1], depth + 1))
+            if (auto e = ordinaryCategory(array(field)[1], depth + 1))
               return e;
-        // Closed member types already substitute the nominal arguments.
-        // A phantom type argument does not confer resource custody.
+        // Logical category is checked before physical expansion, including
+        // phantom arguments. An ordinary carrier cannot erase that category.
+        for (const auto &argument : array(term[3]))
+          if (auto e = ordinaryCategory(argument, depth + 1))
+            return e;
         return Error::success();
       }
       arguments = &array(term[3]);
     } else if (tag == "array") {
-      return shared(term[1], depth + 1);
+      return ordinaryCategory(term[1], depth + 1);
     } else if (tag == "tuple")
       arguments = &array(term[1]);
-    else if (tag == "builtin" || tag == "formal")
+    else if (tag == "builtin" || tag == "formal") {
+      if (tag == "builtin" &&
+          (term[1] == J("oracle") || term[1] == J("oracle_sequence")))
+        return error("component-declaration-record");
       arguments = &array(term[2]);
+    }
     if (arguments)
       for (const auto &argument : *arguments)
-        if (auto e = shared(argument, depth + 1))
+        if (auto e = ordinaryCategory(argument, depth + 1))
           return e;
     return Error::success();
   };
   for (const auto &[identity, declaration] : declarations)
-    if (array((*declaration)[0])[1] == J("logical_record"))
-      for (const auto &field : array((*declaration)[3]))
-        if (auto e = shared(array(field)[1], 0))
-          return e;
+    if (array((*declaration)[0])[1] != J("logical_record"))
+      if (auto e = ordinaryCategory((*declaration)[0], 0))
+        return e;
   for (const auto &value : array((*rows)[1])) {
     auto owner = value.getAsArray();
     if (!owner || owner->size() != 3 || !validString((*owner)[0]))
@@ -1304,6 +1347,8 @@ Error checkComponentDeclarations(const J &value) {
         if (!names.insert(string((*port)[0]).str()).second)
           return error("component-declaration-duplicate");
         if (auto e = checkStaticTerm((*port)[1]))
+          return e;
+        if (auto e = referenced((*port)[1], 0))
           return e;
         if (array((*port)[2]).size() > 16)
           return error("component-declaration-limit");

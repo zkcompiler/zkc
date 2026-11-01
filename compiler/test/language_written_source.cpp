@@ -67,5 +67,51 @@ int main() {
     }
     require(member && callback, "written declarations were not exported");
   });
+  cases.run("body-only distributed records retain authored authority", [] {
+    CaptureOptions options;
+    options.format = "zkc-layout";
+    auto project = take(analyze(take(capture({{"written",
+                                               R"(
+struct State roles(A, B):
+    pub value: index @A
+    secret: () @B
+    empty: [index @B; 0]
+pub protocol Run roles(P, V)() -> index @P:
+    state = State roles(P, V) {value: 7, secret: (), empty: []}
+    return state.value
+)",
+                                               {}}},
+                                             options)))
+                            .checkedProject());
+    auto view = take(json::parse(take(inspectWrittenSource(project))));
+    bool declaration = false, visible = false, hidden = false, empty = false;
+    bool placed = false;
+    for (const auto &row : *view.getAsObject()->getArray("declarations")) {
+      const auto &owner = *row.getAsObject();
+      if (owner.getString("owner") != "written::State")
+        continue;
+      for (const auto &value : *owner.getArray("nodes")) {
+        const auto &node = *value.getAsObject();
+        if (node.getArray("path")->empty()) {
+          require(node.getBoolean("public") == false &&
+                      *node.getArray("roster") == json::Array{"A", "B"},
+                  "private record or nominal role telescope was erased");
+          declaration = true;
+        }
+        if (node.getString("kind") == "port") {
+          if (node.getString("name") == "value")
+            visible = node.getBoolean("public") == true;
+          if (node.getString("name") == "secret")
+            hidden = node.getBoolean("public") == false;
+          if (node.getString("name") == "empty")
+            empty = node.getBoolean("public") == false;
+        }
+        if (const auto *components = node.getArray("components"))
+          placed |= *components == json::Array{"B"};
+      }
+    }
+    require(declaration && visible && hidden && empty && placed,
+            "body-only record lost private, zero-storage or placed syntax");
+  });
   return cases.result();
 }

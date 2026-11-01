@@ -1,5 +1,6 @@
 #ifndef ZKC_LANGUAGE_CHECKER_H
 #define ZKC_LANGUAGE_CHECKER_H
+#include "CallResolution.h"
 #include "Internal.h"
 #include "Semantics.h"
 #include "UsagePlan.h"
@@ -9,6 +10,7 @@ struct BodyWitnesses {
   std::vector<std::shared_ptr<ScopedSource>> sources;
   std::vector<std::shared_ptr<ScopedCallSource>> calls;
   std::vector<std::shared_ptr<ScopedInvocationSource>> invocations;
+  std::vector<std::shared_ptr<IntrinsicCallSource>> intrinsics;
   std::map<unsigned, std::shared_ptr<NotationFamilies>> notations;
 };
 struct BodyPlan {
@@ -37,6 +39,8 @@ public:
   std::vector<Diagnostic> *recoveryDiagnostics = nullptr;
   bool recover(llvm::Error);
   bool namesReady = false;
+  bool indexDeclarations();
+  bool checkInstalledSignatures();
   CheckedStorage &output;
   Work &work;
   Semantics types;
@@ -56,10 +60,16 @@ public:
                        llvm::StringRef, Span,
                        std::optional<std::string> abstractModule = {});
   std::optional<Type> type(const Declaration &, const SyntaxType &,
-                           unsigned = 1);
+                           unsigned = 1, bool allowPlacement = false);
+  std::optional<PlacedType> placedType(const Declaration &, const SyntaxType &,
+                                       unsigned = 1);
 
   std::optional<std::vector<unsigned>> roles(const Declaration &,
                                              llvm::ArrayRef<std::string>, Span);
+  /// Resolve an injective participant substitution in authored telescope order.
+  /// Unlike roles(), this is not an availability set and must never be sorted.
+  std::optional<std::vector<unsigned>>
+  roleArguments(const Declaration &, llvm::ArrayRef<std::string>, Span);
   std::optional<std::vector<Type>>
   arguments(const Declaration &, const Declaration &,
             llvm::ArrayRef<SyntaxType>, Span,
@@ -70,6 +80,8 @@ public:
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   std::optional<CallableReference> callable(const Declaration &,
                                             llvm::StringRef, Span);
+  std::optional<CallableReference> method(const Declaration &, const Type &,
+                                          llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
                                                  const SyntaxOperator &,
                                                  bool filtered = false);
@@ -123,7 +135,7 @@ private:
   bool collectUsage(const Declaration &, const Type &, Usage, Span,
                     llvm::StringRef, llvm::StringRef);
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
-                                    unsigned);
+                                    unsigned, bool allowPlacement);
   std::vector<SyntaxDeclaration> syntax;
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<std::string, DeclarationId> modules;

@@ -137,3 +137,20 @@ and successor models. A mandatory analysis must enforce its work contract even
 when an upstream solver has no budget option. Unsupported, Unknown and Capacity
 cannot be interpreted as successful security judgments or trigger a weaker
 compatibility checker.
+
+## Selected-region coordinates
+
+The native view exposes ordered child edges of kind `Repeat` or `BranchArm`.
+An edge retains its region ordinal, selected alternative when present,
+participating roster, sequence and actual block arguments/yields. This is
+borrowed structure, with no reached-event or common-control judgment.
+
+Existing repeat paths descend directly from the repeat operation ordinal to
+the body operation ordinal. Branch paths insert an arm ordinal between the
+branch operation and the arm operation. For example, `[3,1,2]` names operation
+2 in arm 1 of branch operation 3. Typed edges distinguish that arm coordinate
+from an ordinary operation ordinal. Application, oracle and transformation
+consumers must preserve this distinction; a lexical path remains separate from
+a runtime iteration or source record-field path. Missing paths return absence;
+work exhaustion is a refusal. All arms, coordinates, role associations,
+arguments and yields contribute to bounded extraction and cached replay work.

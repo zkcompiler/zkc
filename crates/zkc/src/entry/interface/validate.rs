@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) struct Checked {
     pub selected: usize,
+    pub common: Vec<super::common::Requirement>,
     pub types: BTreeMap<String, Leaf>,
     pub setups: Vec<super::Setup>,
 }
@@ -48,7 +49,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
             )?;
             schema_port(&input.schema, &input.native, &mut flat, &mut schemas)?;
             require(
-                !input.schema.kind.is_logical()
+                !input.schema.is_logical()
                     && input.schema.permissions.contains(&Permission::Copy)
                     && input.schema.permissions.contains(&Permission::Drop),
                 E::Schema,
@@ -87,6 +88,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
     }
     let mut symbols = BTreeSet::new();
     let mut selected = None;
+    let mut common = Vec::new();
     for (index, protocol) in document.protocols.iter().enumerate() {
         schemas.charge(1 + protocol.symbol.len())?;
         text(&protocol.symbol, 4096)?;
@@ -96,7 +98,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
         }
         let mut roles = BTreeMap::new();
         require(
-            !protocol.roles.is_empty() && protocol.roles.len() <= 1024,
+            !protocol.roles.is_empty() && protocol.roles.len() <= 16,
             E::Schema,
         )?;
         for (index, role) in protocol.roles.iter().enumerate() {
@@ -108,6 +110,10 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
         }
         let input_count = ports(&protocol.inputs, &roles, &mut schemas)?;
         ports(&protocol.outputs, &roles, &mut schemas)?;
+        let local = super::common::check(protocol, &mut schemas)?;
+        if protocol.symbol == document.protocol {
+            common = local;
+        }
         let mut names: BTreeSet<_> = protocol.inputs.iter().map(|p| &p.name).collect();
         for (index, service) in protocol.services.iter().enumerate() {
             schemas
@@ -169,6 +175,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
     )?;
     let setups = super::setups::check(document, &document.protocols[selected], &mut schemas)?;
     Ok(Checked {
+        common,
         selected,
         types: schemas.finish(),
         setups,
@@ -203,42 +210,26 @@ fn ports<'a>(
     let mut names = BTreeSet::new();
     let mut flat = 0;
     for (index, port) in ports.iter().enumerate() {
-        schemas.charge(1 + port.name.len() + port.display_type.len() + port.roles.len())?;
+        schemas.charge(1 + port.name.len() + port.display_type.len())?;
         require(
             identifier(&port.name)
                 && names.insert(&port.name)
                 && port.index as usize == index
-                && port.display_type == port.schema.display_type
-                && !port.roles.is_empty(),
+                && port.display_type == port.schema.display_type,
             E::Schema,
         )?;
-        let mut previous = None;
-        for role in &port.roles {
-            let index = *roles.get(role).ok_or(E::Schema)?;
-            require(previous.is_none_or(|p| p < index), E::Schema)?;
-            previous = Some(index);
-        }
         schema_port(&port.schema, &port.native, &mut flat, schemas)?;
-        let logical = port.schema.kind.is_logical();
         require(
-            port.holder.get().is_some() == logical
-                && port.maximum_rows.get().is_some() == port.schema.kind.is_handle(),
+            port.maximum_rows.get().is_some() == port.schema.kind.is_handle(),
             E::Schema,
         )?;
-        if logical {
-            require(
-                port.roles.len() >= 2 && port.holder.get().is_some_and(|h| port.roles.contains(h)),
-                E::Schema,
-            )?;
-            if port.schema.kind.is_handle() {
-                super::schemas::row_bound(
-                    &port.schema,
-                    port.maximum_rows.get().copied().flatten(),
-                )?;
-            }
-        } else if port.roles.len() > 1 {
-            schemas.participants(&port.schema)?;
+        if port.schema.kind.is_handle() {
+            super::schemas::row_bound(&port.schema, port.maximum_rows.get().copied().flatten())?;
         }
+        super::placement::check(&port.schema, &port.placement, roles.len(), schemas)?;
+        let derived = super::placement::components(port, schemas)?;
+        schemas.charge(port.components.len())?;
+        require(port.components == derived, E::Schema)?;
     }
     Ok(flat)
 }
@@ -252,42 +243,109 @@ pub(super) fn select<'a>(
         &protocol.outputs
     };
     let port = ports.get(selector.port as usize).ok_or(E::Selection)?;
-    if let Some(role) = &selector.role {
-        require(port.roles.contains(role), E::Selection)?;
-    }
-    project_selector(port, &selector.path, selector.role.is_none())
+    let role = selector
+        .role
+        .as_ref()
+        .map(|role| {
+            protocol
+                .roles
+                .iter()
+                .position(|r| r == role)
+                .map(|r| r as u32)
+                .ok_or(E::Selection)
+        })
+        .transpose()?;
+    project_selector(
+        port,
+        &selector.path,
+        role,
+        selector.role.is_none(),
+        super::SelectionPurpose::SpecificationObservation,
+    )
 }
 pub(super) fn project<'a>(port: &'a Port, path: &[u32]) -> Result<(&'a Schema, &'a [u32])> {
-    project_selector(port, path, false)
+    project_selector(
+        port,
+        path,
+        None,
+        false,
+        super::SelectionPurpose::SetupAssociation,
+    )
+}
+pub(super) fn project_role<'a>(
+    port: &'a Port,
+    path: &[u32],
+    role: u32,
+) -> Result<(&'a Schema, &'a [u32])> {
+    project_selector(
+        port,
+        path,
+        Some(role),
+        false,
+        super::SelectionPurpose::OrdinarySupply,
+    )
+}
+/// Resolve semantic selection authority without traversing physical prefixes.
+pub(super) fn selected_schema<'a>(
+    port: &'a Port,
+    path: &[u32],
+    purpose: super::SelectionPurpose,
+) -> Result<(&'a Schema, &'a Placement)> {
+    let specification = purpose == super::SelectionPurpose::SpecificationObservation;
+    let mut schema = &port.schema;
+    let mut placement = &port.placement;
+    require(path.len() <= 32, E::Limit)?;
+    for &index in path {
+        require(
+            (schema.custody == 0 || specification && !schema.is_logical())
+                && (specification
+                    || !schema.sealed && (schema.is_logical() || schema.constructible))
+                && !matches!(schema.kind, Kind::Variant | Kind::Associated),
+            E::Selection,
+        )?;
+        let field = schema.fields.get(index as usize).ok_or(E::Selection)?;
+        require(specification || field.public, E::Selection)?;
+        if let Placement::Product { fields, .. } = placement {
+            placement = fields
+                .get(if schema.kind == Kind::Array {
+                    0
+                } else {
+                    index as usize
+                })
+                .ok_or(E::Selection)?;
+        }
+        schema = &field.schema;
+    }
+    Ok((schema, placement))
 }
 fn project_selector<'a>(
     port: &'a Port,
     path: &[u32],
+    role: Option<u32>,
     anchor: bool,
+    purpose: super::SelectionPurpose,
 ) -> Result<(&'a Schema, &'a [u32])> {
-    let mut schema = &port.schema;
+    let specification = purpose == super::SelectionPurpose::SpecificationObservation;
+    let (schema, placement) = selected_schema(port, path, purpose)?;
+    let mut current = &port.schema;
     let mut offset = 0usize;
-    require(path.len() <= 32, E::Limit)?;
     for &index in path {
-        require(
-            !schema.custody && !matches!(schema.kind, Kind::Variant | Kind::Associated),
-            E::Selection,
-        )?;
-        let field = schema.fields.get(index as usize).ok_or(E::Selection)?;
-        let prefix = if schema.kind == Kind::LogicalRecord {
-            schema.fields[..index as usize]
-                .iter()
-                .map(|f| super::schemas::native_width(&f.schema))
-                .sum()
+        let field = &current.fields[index as usize];
+        let prefix = if current.is_logical() {
+            current.custody as usize
+                + current.fields[..index as usize]
+                    .iter()
+                    .map(|f| super::schemas::native_width(&f.schema))
+                    .sum::<usize>()
         } else {
             field.offset as usize
         };
         offset = offset.checked_add(prefix).ok_or(E::Limit)?;
-        schema = &field.schema;
+        current = &field.schema;
     }
     if anchor {
         require(
-            port.holder.get().is_some() && schema.kind == Kind::Oracle,
+            matches!(placement, Placement::Oracle { .. }) && schema.kind == Kind::Oracle,
             E::Selection,
         )?;
         let native = port
@@ -296,7 +354,22 @@ fn project_selector<'a>(
             .ok_or(E::Selection)?;
         return Ok((schema.data_schema.get().ok_or(E::Selection)?, native));
     }
-    require(!schema.kind.is_logical(), E::Selection)?;
+    if purpose == super::SelectionPurpose::SetupAssociation {
+        require(
+            !schema.sealed && schema.custody == 0 && !schema.kind.is_handle(),
+            E::Selection,
+        )?;
+        return Ok((
+            schema,
+            &port.native[offset..offset + super::schemas::native_width(schema)],
+        ));
+    }
+    require(
+        !schema.is_logical() && (specification || !schema.sealed),
+        E::Selection,
+    )?;
+    let roles = super::placement::ordinary_roles(schema, placement).ok_or(E::Selection)?;
+    require(role.is_none_or(|r| roles.contains(&r)), E::Selection)?;
     let native = port
         .native
         .get(offset..offset + schema.leaves.len())
@@ -361,13 +434,7 @@ fn job(
             && protocol.roles.contains(verifier),
         E::Selection,
     )?;
-    let required: Vec<_> = protocol
-        .inputs
-        .iter()
-        .filter(|p| p.roles.contains(verifier))
-        .map(|p| p.index)
-        .collect();
-    require(public == &required, E::Selection)?;
+    super::boundary::check_public(protocol, public, verifier, schemas)?;
     schemas.charge(1 + acceptance.path.len())?;
     check_decision(protocol, acceptance, verifier)?;
     if let Some(completion) = completion {
@@ -464,13 +531,45 @@ fn job(
         for (operand, input) in clause.subject.operands.iter().zip(&relation.inputs) {
             require(operand.direction == Direction::Input, E::Selection)?;
             let port = &protocol.inputs[operand.port as usize];
+            let verifier_role = protocol
+                .roles
+                .iter()
+                .position(|r| r == verifier)
+                .ok_or(E::Selection)? as u32;
+            let (selected, placed) = selected_schema(
+                port,
+                &operand.path,
+                super::SelectionPurpose::SpecificationObservation,
+            )?;
             let visible = if operand.role.is_none() {
-                port.holder.get() == Some(verifier)
+                matches!(placed, Placement::Oracle { holder, .. } if *holder == verifier_role)
             } else {
-                port.roles.contains(verifier)
+                super::placement::ordinary_roles(selected, placed)
+                    .is_some_and(|roles| roles.contains(&verifier_role))
             };
             require((input.purpose == Purpose::Witness) != visible, E::Selection)?;
         }
+    }
+    Ok(())
+}
+
+pub(super) fn public_data(schema: &Schema, work: &mut Schemas<'_>) -> Result<()> {
+    work.charge(1 + schema.fields.len() + schema.alternatives.len())?;
+    require(
+        !schema.is_logical() && !schema.sealed && schema.custody == 0,
+        E::Selection,
+    )?;
+    for field in schema
+        .fields
+        .iter()
+        .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
+    {
+        work.charge(1)?;
+        require(field.public, E::Selection)?;
+        public_data(&field.schema, work)?;
+    }
+    if let Some(element) = &schema.element {
+        public_data(element, work)?;
     }
     Ok(())
 }

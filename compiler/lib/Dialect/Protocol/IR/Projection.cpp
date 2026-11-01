@@ -778,16 +778,16 @@ struct MetadataVerifier {
           return refuse(record,
                         "inserted transcript helper used by retained action");
     }
-    llvm::DenseMap<Operation *, Operation *> parents;
+    llvm::DenseMap<Operation *, Block *> parents;
     for (auto [ref, participant] : byReference)
-      parents[participant] = participant;
+      parents[participant] = &participant.getBody().front();
     return checkActions(constructedActions ? constructedActions : actions,
                         byReference, parents, 0);
   }
   LogicalResult checkActions(
       ArrayAttr actions,
       const llvm::DenseMap<Attribute, protocol_ir::ParticipantOp> &byReference,
-      const llvm::DenseMap<Operation *, Operation *> &parents, unsigned depth) {
+      const llvm::DenseMap<Operation *, Block *> &parents, unsigned depth) {
     if (depth > 64)
       return refuse(record, "projection region depth exceeds 64");
     // Resolve every retained action to its actual participant occurrence, in
@@ -801,10 +801,15 @@ struct MetadataVerifier {
       bool loop =
           action && action.getAs<StringAttr>("kind") ==
                         StringAttr::get(record.getContext(), "protocol.repeat");
+      bool branch =
+          action && action.getAs<StringAttr>("kind") ==
+                        StringAttr::get(record.getContext(), "protocol.branch");
       bool localCall = action && action.getAs<StringAttr>("kind") ==
                                      StringAttr::get(record.getContext(),
                                                      "protocol.local_call");
-      if (!(loop ? keys(action, {"site", "kind", "targets", "maximum", "body"})
+      if (!(branch ? keys(action, {"site", "kind", "targets", "arms"})
+            : loop
+                ? keys(action, {"site", "kind", "targets", "maximum", "body"})
             : localCall ? keys(action, {"site", "kind", "targets", "callee"})
             : action &&
                     action.getAs<StringAttr>("kind") ==
@@ -823,13 +828,13 @@ struct MetadataVerifier {
            kind.getValue() != "protocol.guard" &&
            kind.getValue() != "protocol.finish_if" &&
            kind.getValue() != "protocol.query" && !localCall && !loop &&
-           !start) ||
-          (!loop &&
+           !branch && !start) ||
+          (!loop && !branch &&
            targets.size() !=
                (kind.getValue() == "protocol.exchange" || start ? 2u : 1u)))
         return refuse(record, "invalid source action occurrence");
       llvm::DenseSet<Operation *> owners;
-      llvm::DenseMap<Operation *, Operation *> children;
+      llvm::DenseMap<Operation *, Block *> children;
       protocol_ir::EmitOp send;
       protocol_ir::AwaitOp receive;
       for (auto targetItem : targets) {
@@ -844,6 +849,7 @@ struct MetadataVerifier {
             kind.getValue() == "protocol.exchange"
                 ? (operation.getValue() == "protocol.send" ||
                    operation.getValue() == "protocol.receive")
+            : branch    ? operation.getValue() == "protocol.participant_branch"
             : loop      ? operation.getValue() == "protocol.loop"
             : localCall ? operation.getValue() == "protocol.local_call"
             : start     ? operation.getValue() == "protocol.construction_start"
@@ -863,8 +869,7 @@ struct MetadataVerifier {
         auto found = occurrences[participant].find(site);
         if (found == occurrences[participant].end() ||
             found->second.second->getName().getStringRef() != expected ||
-            found->second.second->getParentOp() !=
-                parents.lookup(participant) ||
+            found->second.second->getBlock() != parents.lookup(participant) ||
             found->second.first <= previous.lookup(participant) ||
             !retainedActions.insert({participant, site}).second)
           return refuse(record,
@@ -900,7 +905,7 @@ struct MetadataVerifier {
               projected.getMaximumAttr() != maximum ||
               !action.getAs<ArrayAttr>("body"))
             return refuse(record, "repeat bound or body is missing or changed");
-          children[participant] = projected;
+          children[participant] = &projected.getBody().front();
         }
         if (localCall)
           authoredCallees.insert(action.get("callee"));
@@ -930,6 +935,30 @@ struct MetadataVerifier {
                logicalType(receive.getOutput().getType())))
         return refuse(record,
                       "exchange participant schemas, peers or types disagree");
+      if (branch) {
+        auto arms = action.getAs<ArrayAttr>("arms");
+        if (!arms || arms.empty() || arms.size() > 256)
+          return refuse(record, "invalid retained selected arms");
+        for (auto [index, item] : enumerate(arms)) {
+          auto arm = dyn_cast<DictionaryAttr>(item);
+          if (!keys(arm, {"alternative", "body"}) ||
+              !arm.getAs<StringAttr>("alternative") ||
+              !arm.getAs<ArrayAttr>("body"))
+            return refuse(record, "invalid retained selected arm");
+          llvm::DenseMap<Operation *, Block *> armParents;
+          for (Operation *owner : owners) {
+            auto selected = dyn_cast<protocol_ir::ParticipantBranchOp>(
+                occurrences[owner].lookup(site).second);
+            if (!selected || selected.getNumRegions() != arms.size() ||
+                selected.getAlternatives()[index] != arm.get("alternative"))
+              return refuse(record, "selected arm identity differs");
+            armParents[owner] = &selected->getRegion(index).front();
+          }
+          if (failed(checkActions(arm.getAs<ArrayAttr>("body"), byReference,
+                                  armParents, depth + 1)))
+            return failure();
+        }
+      }
       if (loop && failed(checkActions(action.getAs<ArrayAttr>("body"),
                                       byReference, children, depth + 1)))
         return failure();
@@ -1093,6 +1122,8 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     return failure();
   unsigned operations = 0;
   NativeTypePolicies types(unit);
+  SymbolTableCollection helperSymbols;
+  TotalClosure helpers(unit, helperSymbols);
   for (auto &declaration : unit.getBody().front()) {
     if (auto relation = dyn_cast<relation::DeclareOp>(declaration)) {
       for (auto attr : relation->getAttrs())
@@ -1144,6 +1175,15 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
       if (depth > 64)
         return refuse(participant, "participant region depth exceeds 64");
       for (auto &op : block) {
+        if (auto branch = dyn_cast<protocol_ir::ParticipantBranchOp>(op)) {
+          if (failed(branch.verifyRegions()))
+            return failure();
+          for (Region &arm : branch.getArms())
+            if (failed(self(self, arm.front(), depth + 1)))
+              return failure();
+        }
+        if (isa<data::BranchOp>(op) && failed(helpers.verifySelected(&op)))
+          return failure();
         if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op)) {
           if (!loop.getMaximum() || failed(loop.verifyRegions()))
             return refuse(loop,

@@ -216,7 +216,9 @@ class Parser {
     while (!end() && !at(close) && !boundary()) {
       auto before = cursor;
       children.push_back(argument(parameter));
-      if (take(",") || ((parameter || kind == Kind::Tuple) && take(";"))) {
+      if (take(",") ||
+          ((parameter || kind == Kind::Tuple || kind == Kind::Array) &&
+           take(";"))) {
         if (separated)
           *separated = true;
         continue;
@@ -243,16 +245,15 @@ class Parser {
     } else {
       children.push_back(name(false));
       if (take("->")) {
-        children.push_back(name(false));
-        while (at(",") && token(1).kind == TokenKind::Word && text(2) != ":") {
-          advance();
+        if (at("("))
+          children.push_back(list(Kind::Roles, "(", ")"));
+        else
           children.push_back(name(false));
-        }
       }
     }
     return make(Kind::Roles, begin, children);
   }
-  NodeId expression(unsigned minimum = 0) {
+  NodeId expression(unsigned minimum = 0, bool allowRoleApplication = true) {
     auto begin = mark();
     if (!enter())
       return {0};
@@ -272,7 +273,9 @@ class Parser {
       bool matching = take("match");
       if (!matching)
         expect("if");
-      std::vector<NodeId> parts{expression()};
+      std::vector<NodeId> parts{expression(0, false)};
+      if (take("roles"))
+        parts.push_back(list(Kind::Roles, "(", ")"));
       expect(":");
       parts.push_back(
           suite(matching ? SuiteKind::Cases : SuiteKind::Statements));
@@ -428,6 +431,11 @@ class Parser {
       } else if (at("@") && minimum <= 80) {
         auto roles = role();
         left = make(Kind::RoleType, begin, {left, roles});
+      } else if (allowRoleApplication && at("roles") && text(1) == "(" &&
+                 minimum <= 100) {
+        advance();
+        auto arguments = list(Kind::Roles, "(", ")");
+        left = make(Kind::RoleApply, begin, {left, arguments});
       } else if (auto postfix =
                      notation(text(), NotationDescriptor::Position::Postfix);
                  postfix && postfix->precedence >= minimum) {
@@ -440,7 +448,8 @@ class Parser {
         if (!op || op->precedence < minimum)
           break;
         advance();
-        auto right = expression(op->precedence + (op->right ? 0 : 1));
+        auto right = expression(op->precedence + (op->right ? 0 : 1),
+                                allowRoleApplication);
         for (auto operand : {left, right}) {
           const auto &node = data->nodes[operand.index];
           if (node.kind != Kind::Binary || node.childCount != 2)
@@ -480,8 +489,11 @@ class Parser {
     auto begin = mark();
     if (!take(TokenKind::LineEnd))
       missing("newline before suite");
-    if (!take(TokenKind::Indent))
+    if (!take(TokenKind::Indent)) {
+      if (kind == SuiteKind::Fields)
+        return make(Kind::Suite, begin);
       return missing("indented nonempty suite");
+    }
     if (!enter())
       return {0};
     auto leave = scope_exit([&] { --recursion; });
@@ -541,7 +553,7 @@ class Parser {
       if (cursor == before && !end() && !at(TokenKind::Dedent))
         children.push_back(recover());
     }
-    if (children.empty())
+    if (children.empty() && kind != SuiteKind::Fields)
       missing("nonempty suite");
     take(TokenKind::Dedent);
     return make(Kind::Suite, begin, children);
@@ -586,12 +598,25 @@ class Parser {
       return make(Kind::QueryBody, begin, children);
     } else if (context == SuiteKind::Scheme &&
                (at("construction") || at("prover") || at("verifier") ||
-                at("public") || at("accept"))) {
+                at("public") || at("accept") || at("complete") ||
+                at("target") || at("setup"))) {
       auto word = text();
       advance();
-      if (word == "public")
+      if (word == "setup") {
+        children.push_back(name(false));
         children.push_back(list(Kind::Parameters, "{", "}"));
-      else
+      } else if (word == "public") {
+        if (at("{"))
+          children.push_back(list(Kind::Parameters, "{", "}"));
+        else {
+          auto first = mark();
+          std::vector<NodeId> selections;
+          do {
+            selections.push_back(expression());
+          } while (take(","));
+          children.push_back(make(Kind::Parameters, first, selections));
+        }
+      } else
         children.push_back(expression());
       kind = Kind::Selection;
     } else {
@@ -830,7 +855,7 @@ class Parser {
       expect("=");
       children.push_back(expression(80));
       expect(":");
-      children.push_back(suite(SuiteKind::Scheme, true));
+      children.push_back(suite(SuiteKind::Scheme));
       return make(Kind::Scheme, begin, children);
     } else if (take("protocol"))
       kind = Kind::Protocol;
@@ -961,7 +986,7 @@ class Parser {
       expect("in");
       children.push_back(expression());
       expect("..");
-      children.push_back(expression());
+      children.push_back(expression(0, false));
       if (take("roles"))
         children.push_back(list(Kind::Roles, "(", ")"));
       if (take("max"))
@@ -970,7 +995,9 @@ class Parser {
       children.push_back(suite(SuiteKind::Statements));
       return make(Kind::For, begin, children);
     } else if (take("if")) {
-      children.push_back(expression());
+      children.push_back(expression(0, false));
+      if (take("roles"))
+        children.push_back(list(Kind::Roles, "(", ")"));
       expect(":");
       children.push_back(suite(SuiteKind::Statements));
       if (take("else")) {
@@ -981,7 +1008,9 @@ class Parser {
       }
       return make(Kind::If, begin, children);
     } else if (take("match")) {
-      children.push_back(expression());
+      children.push_back(expression(0, false));
+      if (take("roles"))
+        children.push_back(list(Kind::Roles, "(", ")"));
       expect(":");
       children.push_back(suite(SuiteKind::Cases));
       return make(Kind::Match, begin, children);

@@ -207,6 +207,10 @@ def main():
         for name in ("FormalSource", "FormalSourceWriter", "LayoutReader", "OracleSyntax", "OracleDefinitions", "OracleInspection")
     )
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
+    private_headers["ZkcLanguage"].update(
+        ROOT / f"lib/Language/{name}.h"
+        for name in ("CallResolution", "CommonRequirements", "RecordIntrinsics")
+    )
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
     private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Entry/Native.h")
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))

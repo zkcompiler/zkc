@@ -79,7 +79,8 @@ class Comparator {
   const Limits &limits;
   Layouts layouts;
   std::map<std::string, mlir::Operation *> outlined, maps;
-  std::set<mlir::Operation *> usedOutlined, usedMaps;
+  std::set<mlir::Operation *> usedOutlined, usedMaps, usedCustody;
+  std::map<std::string, mlir::Operation *> custodyHelpers;
   exec::ControlCursor *scoped = nullptr;
   unsigned accounted = 0;
   std::map<std::string, mlir::Operation *> finiteDefinitions;
@@ -88,6 +89,7 @@ class Comparator {
   Correspondence report;
   uint64_t remaining;
   uint64_t siteOrdinal = 0;
+  std::optional<std::pair<std::string, std::string>> selectedSiteScope;
   std::map<std::string, mlir::Operation *> bindings;
   std::set<std::string> usedBindings;
   template <class T> std::optional<T> take(Expected<T> value) {
@@ -820,18 +822,75 @@ class Comparator {
       return {};
     return result;
   }
+  std::optional<Values>
+  custodyPrimitive(mlir::Block &block, mlir::Block::iterator &cursor,
+                   StringRef contract, mlir::ValueRange inputs,
+                   ArrayRef<LayoutLeaf> outputs, const ProtocolPortLeaf &leaf,
+                   Span span, StringRef site) {
+    LocalPrimitive expected{contract.str(), {}, {}};
+    if (scoped)
+      return primitive(block, cursor, expected, inputs, outputs, span, site);
+    auto owners = leaf.roles();
+    auto *call = next(block, cursor, span, "protocol.local_call", inputs,
+                      outputs.size());
+    if (!call || owners.size() != 1 ||
+        !attributes(*call, {"callee", "role", "site"}) ||
+        !string(*call, "role", nativeRoleName(owners.front())) ||
+        !string(*call, "site", site) || !types(call->getResultTypes(), outputs))
+      return fail("role-local custody call differs"), std::nullopt;
+    auto name = call->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
+    auto found = name ? custodyHelpers.find(name.getValue().str())
+                      : custodyHelpers.end();
+    auto helper = found == custodyHelpers.end()
+                      ? mlir::func::FuncOp()
+                      : mlir::dyn_cast<mlir::func::FuncOp>(found->second);
+    if (!helper || !usedCustody.insert(helper).second ||
+        !attributes(*helper, {"sym_name", "sym_visibility", "function_type",
+                              "no_inline", "runtime.origin"}) ||
+        !string(*helper, "sym_visibility", "private") ||
+        !helper->getAttrOfType<mlir::UnitAttr>("no_inline") ||
+        helper.getNumArguments() != inputs.size() + 1 ||
+        mlir::TypeRange(helper.getArgumentTypes().drop_front()) !=
+            inputs.getTypes() ||
+        !record(*helper, span))
+      return fail("custody helper interface differs"), std::nullopt;
+    if (!charge(1))
+      return {};
+    if (++report.operations > limits.operations) {
+      failure =
+          error("source.limit", "custody helper definition limit exceeded");
+      return {};
+    }
+    auto origin = helper->getAttrOfType<mlir::ArrayAttr>("runtime.origin");
+    auto identity = origin && origin.size() == 2
+                        ? mlir::dyn_cast<mlir::StringAttr>(origin[0])
+                        : mlir::StringAttr();
+    auto arguments = identity ? mlir::dyn_cast<mlir::ArrayAttr>(origin[1])
+                              : mlir::ArrayAttr();
+    if (!identity || identity.getValue() != helper.getSymName() || !arguments ||
+        !arguments.empty())
+      return fail("custody helper origin differs"), std::nullopt;
+    if (!withScoped(helper, [&] {
+          auto inner = helper.front().begin();
+          auto result = primitive(helper.front(), inner, expected,
+                                  helper.getArguments().drop_front(), outputs,
+                                  span, "custody");
+          return result && finish(helper.front(), inner, span, *result, false);
+        }))
+      return {};
+    return Values(call->getResults());
+  }
   bool retire(mlir::Block &block, mlir::Block::iterator &cursor,
               mlir::Value value, Span span, StringRef site) {
     return bool(primitive(block, cursor,
                           LocalPrimitive{"resource_unit.consume", {}, {}},
                           value, {}, span, site));
   }
-  std::vector<unsigned> oracleReceivers(const Port &port,
+  std::vector<unsigned> oracleReceivers(const OraclePlacement &placement,
                                         ArrayRef<unsigned> mapping = {}) {
     std::vector<unsigned> result;
-    for (auto role : port.roles)
-      if (role != port.oracle->holder)
-        result.push_back(mapping.empty() ? role : mapping[role]);
+    for (auto role : placement.receivers)
+      result.push_back(mapping.empty() ? role : mapping[role]);
     llvm::sort(result);
     return result;
   }
@@ -848,10 +907,11 @@ class Comparator {
     }
     return true;
   }
-  bool oraclePortAttributes(mlir::Operation &operation, const Port &port,
+  bool oraclePortAttributes(mlir::Operation &operation,
+                            const OraclePlacement &placement,
                             ArrayRef<unsigned> mapping, bool binding,
                             std::optional<uint64_t> maximum = {}) {
-    unsigned holder = port.oracle->holder;
+    unsigned holder = placement.holder;
     if (!mapping.empty())
       holder = mapping[holder];
     if (!(binding
@@ -859,19 +919,20 @@ class Comparator {
               : attributes(operation, {"holder", "receivers"})) ||
         !string(operation, "holder", nativeRoleName(holder)) ||
         !roleSet(operation.getAttr("receivers"),
-                 oracleReceivers(port, mapping)))
+                 oracleReceivers(placement, mapping)))
       return fail("oracle port role family differs");
     return !binding || oracleShapeBounds(operation, maximum);
   }
   mlir::Operation *oracleComponents(mlir::Block &block,
                                     mlir::Block::iterator &cursor, Span span,
-                                    mlir::Value value, const Port &port,
+                                    mlir::Value value,
+                                    const OraclePlacement &placement,
                                     ArrayRef<unsigned> mapping = {}) {
     auto *operation =
         next(block, cursor, span, "protocol.oracle_components", value, 2);
     auto data = protocol_ir::getOracleFamilyDataType(value.getType());
     if (!operation || !data ||
-        !oraclePortAttributes(*operation, port, mapping, false) ||
+        !oraclePortAttributes(*operation, placement, mapping, false) ||
         operation->getResult(0).getType() != data ||
         operation->getResult(1).getType() != value.getType())
       return fail("oracle component view differs"), nullptr;
@@ -879,14 +940,15 @@ class Comparator {
   }
   mlir::Operation *bindOracle(mlir::Block &block, mlir::Block::iterator &cursor,
                               Span span, mlir::ValueRange pair,
-                              const Port &port, ArrayRef<unsigned> mapping,
+                              const OraclePlacement &placement,
+                              ArrayRef<unsigned> mapping,
                               std::optional<uint64_t> maximum) {
     auto *operation =
         next(block, cursor, span, "protocol.oracle_input", pair, 1);
     auto data = protocol_ir::getOracleFamilyDataType(pair[1].getType());
     if (!operation || !data || pair[0].getType() != data ||
         operation->getResult(0).getType() != pair[1].getType() ||
-        !oraclePortAttributes(*operation, port, mapping, true, maximum))
+        !oraclePortAttributes(*operation, placement, mapping, true, maximum))
       return fail("oracle input binding differs"), nullptr;
     return operation;
   }
@@ -905,8 +967,9 @@ class Comparator {
         result.push_back(value[leaf.bodyOffset]);
         continue;
       }
-      auto *parts = oracleComponents(block, cursor, span,
-                                     value[leaf.bodyOffset], port, mapping);
+      auto *parts = oracleComponents(
+          block, cursor, span, value[leaf.bodyOffset],
+          std::get<OraclePlacement>(leaf.placement->value), mapping);
       if (!parts)
         return {};
       llvm::append_range(result, parts->getResults());
@@ -930,8 +993,9 @@ class Comparator {
       }
       auto *joined =
           bindOracle(block, cursor, span,
-                     value.slice(leaf.nativeOffset, leaf.nativeSize()), port,
-                     mapping, leaf.maximumRows);
+                     value.slice(leaf.nativeOffset, leaf.nativeSize()),
+                     std::get<OraclePlacement>(leaf.placement->value), mapping,
+                     leaf.maximumRows);
       if (!joined)
         return {};
       result.push_back(joined->getResult(0));
@@ -963,17 +1027,21 @@ class Comparator {
       if (!layout ||
           !types(mlir::ValueRange(native).getTypes(), (**layout).leaves))
         return false;
-      if (availability)
-        for (auto value : native) {
+      if (availability) {
+        auto observed = take(layouts.protocolValue(source.values[i]));
+        if (!observed || observed->leaves.size() != native.size())
+          return false;
+        for (auto [value, leaf] : llvm::zip(native, observed->leaves)) {
+          auto expected = leaf.roles();
           auto found = availability->values.find(value);
           if (found == availability->values.end() ||
-              (exact &&
-               found->second.count() != source.values[i].components.size()))
+              (exact && found->second.count() != expected.size()))
             return fail("participant availability differs");
-          for (auto role : source.values[i].components)
+          for (auto role : expected)
             if (role >= found->second.size() || !found->second[role])
               return fail("participant availability differs");
         }
+      }
       values[i] = std::move(native);
       return true;
     };
@@ -1000,8 +1068,7 @@ class Comparator {
           return false;
         continue;
       }
-      if (!region && source.mode == Body::Mode::Protocol &&
-          decl.inputs[i].oracle) {
+      if (!region && source.mode == Body::Mode::Protocol) {
         auto observed = take(layouts.protocolPort(decl.inputs[i]));
         if (!observed)
           return false;
@@ -1104,6 +1171,9 @@ class Comparator {
       }
       Values result;
       auto site = nativeSiteName(op.site.value_or(""), siteOrdinal++);
+      if (selectedSiteScope)
+        site = nativeSelectedSite(selectedSiteScope->first,
+                                  selectedSiteScope->second, site);
       if (auto *projection = std::get_if<Projection>(&op.action)) {
         auto selected =
             take(layouts.get(source.values[projection->input.index].type));
@@ -1119,27 +1189,62 @@ class Comparator {
                       input.begin() + offset + (**selected).leaves.size());
       } else if (auto *construct = std::get_if<Construct>(&op.action)) {
         auto input = flatten(construct->operands);
-        if (construct->kind == Construct::Kind::Unpack) {
+        if (construct->kind == Construct::Kind::Inspect) {
+          auto origin = take(layouts.get(
+              source.values[construct->operands.front().index].type));
+          if (!origin)
+            return false;
+          result = input;
+          llvm::append_range(
+              result, ArrayRef(input).drop_front((**origin).custodyCount));
+        } else if (construct->kind == Construct::Kind::Repack) {
+          auto observed = take(layouts.protocolValue(
+              source.values[construct->operands.front().index]));
+          if (!observed)
+            return false;
+          for (unsigned i = 0; i < resultLayouts.front()->custodyCount; ++i) {
+            auto passed = custodyPrimitive(
+                block, cursor, "resource_unit.pass", input[i],
+                ArrayRef<LayoutLeaf>(leaves).slice(i, 1), observed->leaves[i],
+                op.span, site + "_repack_" + std::to_string(i));
+            if (!passed)
+              return false;
+            llvm::append_range(result, *passed);
+          }
+          llvm::append_range(result, values[construct->operands[1].index]);
+        } else if (construct->kind == Construct::Kind::Unpack) {
           auto origin = take(layouts.get(
               source.values[construct->operands.front().index].type));
           if (!origin)
             return false;
           if ((**origin).custody) {
-            if (!retire(block, cursor, input.front(), op.span,
-                        site + "_unpack"))
+            auto observed = take(layouts.protocolValue(
+                source.values[construct->operands.front().index]));
+            if (!observed)
               return false;
-            input.erase(input.begin());
+            for (unsigned i = 0; i < (**origin).custodyCount; ++i)
+              if (!custodyPrimitive(block, cursor, "resource_unit.consume",
+                                    input[i], {}, observed->leaves[i], op.span,
+                                    site + "_unpack_" + std::to_string(i)))
+                return false;
+            input.erase(input.begin(), input.begin() + (**origin).custodyCount);
           }
           result = std::move(input);
         } else {
           if (resultLayouts.front()->custody) {
-            auto created = primitive(
-                block, cursor, LocalPrimitive{"resource_unit.create", {}, {}},
-                {}, ArrayRef<LayoutLeaf>(leaves).take_front(), op.span,
-                site + "_create");
-            if (!created)
+            auto observed = take(
+                layouts.protocolValue(source.values[op.results.front().index]));
+            if (!observed)
               return false;
-            llvm::append_range(result, *created);
+            for (unsigned i = 0; i < resultLayouts.front()->custodyCount; ++i) {
+              auto created = custodyPrimitive(
+                  block, cursor, "resource_unit.create", {},
+                  ArrayRef<LayoutLeaf>(leaves).slice(i, 1), observed->leaves[i],
+                  op.span, site + "_create_" + std::to_string(i));
+              if (!created)
+                return false;
+              llvm::append_range(result, *created);
+            }
           }
           if (source.values[op.results.front().index].type.kind ==
               Type::Kind::Variant) {
@@ -1156,16 +1261,17 @@ class Comparator {
             llvm::append_range(result, input);
         }
       } else if (auto *consume = std::get_if<Consume>(&op.action)) {
-        auto input =
-            take(layouts.get(source.values[consume->input.index].type));
-        if (!input)
+        auto observed =
+            take(layouts.protocolValue(source.values[consume->input.index]));
+        if (!observed)
           return false;
-        for (unsigned i = 0; i < (**input).leaves.size(); ++i)
-          if ((**input).leaves[i].data() &&
-              StringRef(*(**input).leaves[i].data())
-                  .starts_with("resource_unit:") &&
-              !retire(block, cursor, values[consume->input.index][i], op.span,
-                      site + "_" + std::to_string(i)))
+        for (const auto &leaf : observed->leaves)
+          if (leaf.leaf.data() &&
+              StringRef(*leaf.leaf.data()).starts_with("resource_unit:") &&
+              !custodyPrimitive(block, cursor, "resource_unit.consume",
+                                values[consume->input.index][leaf.bodyOffset],
+                                {}, leaf, op.span,
+                                site + "_" + std::to_string(leaf.bodyOffset)))
             return false;
       } else if (auto *math = std::get_if<MathValue>(&op.action)) {
         auto operands = flatten(math->operands);
@@ -1759,19 +1865,22 @@ class Comparator {
           return fail(
               "repeat site, maximum, roles or carried interface differs");
         unsigned flat = 0;
-        for (unsigned i = 0; i < op.results.size(); ++i)
-          for (unsigned j = 0; j < resultLayouts[i]->leaves.size(); ++j)
-            if (!roleSet(carriedRoles[flat++],
-                         source.values[op.results[i].index].components))
+        for (auto id : op.results) {
+          auto observed = take(layouts.protocolValue(source.values[id.index]));
+          if (!observed)
+            return false;
+          for (const auto &leaf : observed->leaves)
+            if (!roleSet(carriedRoles[flat++], leaf.roles()))
               return fail("repeat carried roles differ");
+        }
         if (!llvm::hasSingleElement(actual->getRegion(0)) ||
             !body(decl, *repeat->region, actual->getRegion(0).front(),
                   availability, true))
           return false;
         result = Values(actual->getResults());
-      } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
+      } else if (auto *control = std::get_if<Control>(&op.action)) {
         auto input = flatten(control->operands);
-        bool match = control->kind == LocalControl::Kind::Match;
+        bool match = control->kind == Control::Kind::Match;
         std::vector<std::string> labels;
         if (match) {
           auto subject = take(
@@ -1790,35 +1899,92 @@ class Comparator {
             input.erase(input.begin());
           }
         }
-        bool loop = control->kind == LocalControl::Kind::For;
-        if (loop && input.size() < 2 + leaves.size())
-          return fail("loop state interface is incomplete");
-        unsigned forwarded = loop ? input.size() - 2 - leaves.size() : 0;
-        auto arm = [&](mlir::func::CallOp call, unsigned index) {
-          auto function = this->region(call, op.span);
-          if (!function || index >= control->regions.size() ||
-              !types(mlir::cast<exec::OutcomeType>(
-                         function.getResultTypes().front())
-                         .getPayload(),
-                     leaves))
-            return fail("control region result signature differs");
-          return body(decl, *control->regions[index], function.front(), nullptr,
-                      true, forwarded);
-        };
-        bool agrees =
-            match  ? scoped->match(input.front(),
-                                   mlir::ValueRange(input).drop_front(), labels,
-                                   site, arm, result)
-            : loop ? scoped->loop(
-                         input[0], input[1],
-                         mlir::ValueRange(input).slice(2, leaves.size()),
-                         mlir::ValueRange(input).drop_front(2 + leaves.size()),
-                         false, site, arm, result)
-                   : scoped->conditional(input.front(),
-                                         mlir::ValueRange(input).drop_front(),
-                                         site, arm, result);
-        if (!agrees || !account())
-          return fail("control occurrence, transfer or state differs");
+        if (source.mode != Body::Mode::Local) {
+          const bool protocol = source.mode == Body::Mode::Protocol;
+          for (auto service : control->services)
+            input.push_back(services[service.index]);
+          auto *actual = next(block, cursor, op.span,
+                              protocol ? "protocol.branch" : "data.branch",
+                              input, leaves.size(), control->regions.size());
+          if (!actual)
+            return false;
+          const auto expected =
+              match ? labels : std::vector<std::string>{"then", "else"};
+          auto alternatives =
+              actual->getAttrOfType<mlir::ArrayAttr>("alternatives");
+          if (!alternatives || alternatives.size() != expected.size())
+            return fail("selected alternatives differ");
+          for (unsigned i = 0; i < expected.size(); ++i)
+            if (alternatives[i] !=
+                mlir::StringAttr::get(module.getContext(), expected[i]))
+              return fail("selected alternative identity differs");
+          if (protocol) {
+            if (!attributes(*actual, {"site", "roles", "output_roles",
+                                      "alternatives"}) ||
+                !string(*actual, "site", site) ||
+                !roleSet(actual->getAttr("roles"), control->roles))
+              return fail("selected roster or site differs");
+            auto outputRoles =
+                actual->getAttrOfType<mlir::ArrayAttr>("output_roles");
+            if (!outputRoles || outputRoles.size() != leaves.size())
+              return fail("selected result role coverage differs");
+            unsigned flat = 0;
+            for (auto id : op.results) {
+              auto observed =
+                  take(layouts.protocolValue(source.values[id.index]));
+              if (!observed)
+                return false;
+              for (const auto &leaf : observed->leaves)
+                if (!roleSet(outputRoles[flat++], leaf.roles()))
+                  return fail("selected result placement differs");
+            }
+          } else if (!attributes(*actual, {"alternatives"}))
+            return fail("extra mathematical selected attributes");
+          for (unsigned arm = 0; arm < control->regions.size(); ++arm) {
+            if (!llvm::hasSingleElement(actual->getRegion(arm)))
+              return fail("selected arm must have exactly one block");
+            auto enclosing = selectedSiteScope;
+            auto restore = llvm::scope_exit(
+                [&] { selectedSiteScope = std::move(enclosing); });
+            if (protocol)
+              selectedSiteScope = std::pair(site, expected[arm]);
+            if (!body(decl, *control->regions[arm],
+                      actual->getRegion(arm).front(), availability, true))
+              return false;
+          }
+          result = Values(actual->getResults());
+        } else {
+          bool loop = control->kind == Control::Kind::For;
+          if (loop && input.size() < 2 + leaves.size())
+            return fail("loop state interface is incomplete");
+          unsigned forwarded = loop ? input.size() - 2 - leaves.size() : 0;
+          auto arm = [&](mlir::func::CallOp call, unsigned index) {
+            auto function = this->region(call, op.span);
+            if (!function || index >= control->regions.size() ||
+                !types(mlir::cast<exec::OutcomeType>(
+                           function.getResultTypes().front())
+                           .getPayload(),
+                       leaves))
+              return fail("control region result signature differs");
+            return body(decl, *control->regions[index], function.front(),
+                        nullptr, true, forwarded);
+          };
+          bool agrees =
+              match ? scoped->match(input.front(),
+                                    mlir::ValueRange(input).drop_front(),
+                                    labels, site, arm, result)
+              : loop
+                  ? scoped->loop(
+                        input[0], input[1],
+                        mlir::ValueRange(input).slice(2, leaves.size()),
+                        mlir::ValueRange(input).drop_front(2 + leaves.size()),
+                        false, site, arm, result)
+                  : scoped->conditional(input.front(),
+                                        mlir::ValueRange(input).drop_front(),
+                                        site, arm, result);
+          if (!agrees || !account())
+            return fail("control occurrence, transfer or state differs");
+        }
       } else
         return fail("source operation has no comparison rule");
       if (result.size() != leaves.size())
@@ -1863,8 +2029,7 @@ class Comparator {
     Values returned;
     for (unsigned i = 0; i < source.results.size(); ++i) {
       const auto &value = values[source.results[i].index];
-      if (!region && source.mode == Body::Mode::Protocol &&
-          decl.outputs[i].oracle) {
+      if (!region && source.mode == Body::Mode::Protocol) {
         auto parts = expandPort(block, cursor, decl.outputs[i].span, value,
                                 decl.outputs[i]);
         if (!parts)
@@ -1888,6 +2053,7 @@ class Comparator {
              source.mode == Body::Mode::Oracle ? "protocol.oracle_yield"
              : region && source.mode == Body::Mode::Protocol ? "protocol.yield"
              : source.mode == Body::Mode::Protocol           ? "protocol.return"
+             : region                                        ? "data.yield"
                                                              : "func.return",
              returned, 0);
     return (ret && attributes(*ret, {}) && cursor == block.end()) ||
@@ -2174,6 +2340,9 @@ public:
                              "implementation", "function_type"}) ||
             !name || !bindings.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "invalid or duplicate binding");
+      } else if (name && name.getValue().starts_with("zkl_custody_")) {
+        if (!custodyHelpers.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence", "duplicate custody helper");
       } else if (op.hasAttr("runtime.region")) {
         if (!name || !outlined.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "duplicate outlined control");
@@ -2308,15 +2477,20 @@ public:
             if (leaf.leaf.oracle()) {
               llvm::append_range(leaves, leaf.oracleData->leaves);
               if (!roles || flat >= roles.size() ||
-                  !roleSet(roles[flat++], {port.oracle->holder}))
+                  !roleSet(roles[flat++],
+                           {std::get<OraclePlacement>(leaf.placement->value)
+                                .holder}))
                 return error("source.correspondence",
                              "oracle holder role differs");
             }
             leaves.push_back(leaf.leaf);
-            if (protocol && (!roles || flat >= roles.size() ||
-                             !roleSet(roles[flat++], leaf.leaf.oracle()
-                                                         ? oracleReceivers(port)
-                                                         : port.roles)))
+            if (protocol &&
+                (!roles || flat >= roles.size() ||
+                 !roleSet(roles[flat++],
+                          leaf.leaf.oracle()
+                              ? std::get<OraclePlacement>(leaf.placement->value)
+                                    .receivers
+                              : leaf.roles())))
               return error("source.correspondence",
                            "flattened port roles differ");
           }
@@ -2476,6 +2650,7 @@ public:
       return error("source.correspondence", "extra relation declaration");
     if (index != functions.size() || usedBindings.size() != bindings.size() ||
         usedOutlined.size() != outlined.size() ||
+        usedCustody.size() != custodyHelpers.size() ||
         usedMaps.size() != maps.size() ||
         usedFiniteDefinitions.size() != finiteDefinitions.size())
       return error("source.correspondence",

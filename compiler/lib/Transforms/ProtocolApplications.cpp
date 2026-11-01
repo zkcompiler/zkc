@@ -116,6 +116,12 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
             for (auto owners : repeat.getCarriedRoles())
               carried.push_back(mapped(cast<ArrayAttr>(owners)));
             repeat.setCarriedRolesAttr(builder.getArrayAttr(carried));
+          } else if (auto branch = dyn_cast<protocol_ir::BranchOp>(copy)) {
+            branch.setRolesAttr(mapped(branch.getRoles()));
+            SmallVector<Attribute> placements;
+            for (auto owners : branch.getOutputRoles())
+              placements.push_back(mapped(cast<ArrayAttr>(owners)));
+            branch.setOutputRolesAttr(builder.getArrayAttr(placements));
           } else if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(copy)) {
             exchange.setSenderAttr(role(exchange.getSenderAttr()));
             exchange.setReceiverAttr(role(exchange.getReceiverAttr()));

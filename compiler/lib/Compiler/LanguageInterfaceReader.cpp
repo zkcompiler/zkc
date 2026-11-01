@@ -123,31 +123,9 @@ class Reader {
     }
     return unsigned(*result);
   }
-  std::optional<std::vector<unsigned>> roles(const json::Array &array) {
-    if (!charge(array.size() + 1))
-      return {};
-    std::vector<unsigned> result;
-    for (const auto &item : array) {
-      auto name = item.getAsString();
-      if (!name) {
-        fail("invalid role name");
-        return {};
-      }
-      auto found = roleIndices.find(*name);
-      if (found == roleIndices.end() ||
-          (!result.empty() && found->second <= result.back())) {
-        fail("unknown, repeated or unordered role");
-        return {};
-      }
-      result.push_back(found->second);
-    }
-    if (result.empty()) {
-      fail("empty port roles");
-      return {};
-    }
-    return result;
-  }
   bool matchesRoles(mlir::Attribute attribute, ArrayRef<unsigned> roles) {
+    if (!charge(roles.size() + 1))
+      return false;
     auto array = mlir::dyn_cast_if_present<mlir::ArrayAttr>(attribute);
     if (!array || array.size() != roles.size())
       return fail("native role arity differs");
@@ -221,18 +199,20 @@ class Reader {
       return false;
     for (unsigned i = 0; i < a.size(); ++i)
       if (a[i].name != b[i].name || a[i].offset != b[i].offset ||
-          a[i].schema != b[i].schema || a[i].maximumRows != b[i].maximumRows)
+          a[i].schema != b[i].schema || a[i].maximumRows != b[i].maximumRows ||
+          a[i].isPublic != b[i].isPublic || a[i].placement != b[i].placement)
         return false;
     return true;
   }
   bool sameSchema(const InterfaceSchema &a, const InterfaceSchema &b) {
     if (!charge(a.leaves.size() + a.alternatives.size() + 1) ||
-        a.kind != b.kind || a.type != b.type || a.custody != b.custody ||
+        a.kind != b.kind || a.type != b.type || a.generated != b.generated ||
+        a.custody != b.custody || a.sealed != b.sealed ||
         a.constructible != b.constructible ||
         !(a.permissions == b.permissions) || a.leaves != b.leaves ||
         a.oracle != b.oracle || a.maximum != b.maximum ||
-        a.oracleData != b.oracleData ||
-        a.alternatives.size() != b.alternatives.size() ||
+        a.oracleData != b.oracleData || a.element != b.element ||
+        a.roles != b.roles || a.alternatives.size() != b.alternatives.size() ||
         !sameFields(a.fields, b.fields))
       return false;
     for (unsigned i = 0; i < a.alternatives.size(); ++i)
@@ -241,22 +221,266 @@ class Reader {
         return false;
     return true;
   }
+  std::optional<std::vector<unsigned>> indices(const json::Array &values,
+                                               unsigned participants,
+                                               bool ordered,
+                                               bool nonempty = true) {
+    if (!charge(values.size() + 1))
+      return {};
+    std::vector<unsigned> result;
+    std::set<unsigned> distinct;
+    for (const auto &value : values) {
+      auto index = value.getAsInteger();
+      if (!index || *index < 0 || uint64_t(*index) >= participants ||
+          !distinct.insert(unsigned(*index)).second ||
+          (!ordered && !result.empty() && result.back() >= uint64_t(*index)))
+        return fail("placement roles must be distinct, bounded and canonical"),
+               std::nullopt;
+      result.push_back(unsigned(*index));
+    }
+    if (nonempty && result.empty())
+      return fail("placement roles must be nonempty"), std::nullopt;
+    return result;
+  }
+  std::optional<ValuePlacement>
+  placement(const json::Value &value, unsigned participants, unsigned depth) {
+    if (depth > limits.typeDepth || !charge(1)) {
+      if (!failure)
+        failure = error("source.limit", "placement depth exceeded");
+      return {};
+    }
+    auto *raw = value.getAsObject();
+    auto kind = raw ? raw->getString("kind") : std::nullopt;
+    if (!kind)
+      return fail("missing placement kind"), std::nullopt;
+    if (*kind == "data") {
+      auto *obj = object(value, {"kind", "roles"});
+      auto *values = obj ? array(*obj, "roles") : nullptr;
+      auto roles =
+          values ? indices(*values, participants, false) : std::nullopt;
+      if (!roles)
+        return {};
+      return ValuePlacement(DataPlacement{std::move(*roles)});
+    }
+    if (*kind == "oracle") {
+      auto *obj = object(value, {"kind", "holder", "receivers"});
+      if (!obj)
+        return {};
+      auto holder = natural(*obj, "holder");
+      auto *values = array(*obj, "receivers");
+      auto receivers =
+          values ? indices(*values, participants, false) : std::nullopt;
+      if (!holder || !receivers)
+        return {};
+      if (*holder >= participants || is_contained(*receivers, *holder))
+        return fail("oracle holder must be outside its receivers"),
+               std::nullopt;
+      return ValuePlacement(OraclePlacement{*holder, std::move(*receivers)});
+    }
+    if (*kind != "product")
+      return fail("unknown placement kind"), std::nullopt;
+    auto *obj = object(value, {"kind", "instance", "arguments", "fields"});
+    if (!obj)
+      return {};
+    auto instance = text(*obj, "instance", 64);
+    auto *arguments = array(*obj, "arguments"), *fields = array(*obj, "fields");
+    auto roles =
+        arguments ? indices(*arguments, participants, true) : std::nullopt;
+    if (!instance || !hash(*instance) || !roles || !fields)
+      return fail("invalid product placement"), std::nullopt;
+    ProductPlacement result{instance->str(), std::move(*roles), {}};
+    for (const auto &field : *fields) {
+      auto child = placement(field, participants, depth + 1);
+      if (!child)
+        return {};
+      result.fields.push_back(std::move(*child));
+    }
+    return ValuePlacement(std::move(result));
+  }
+  unsigned bodyWidth(const InterfaceSchema &value) {
+    if (!charge(1))
+      return 0;
+    if (!logicalSchema(value))
+      return value.leaves.size();
+    if (value.oracle)
+      return 1;
+    unsigned width = value.custody;
+    for (const auto &field : value.fields)
+      width += bodyWidth(*field.schema);
+    return width;
+  }
+  bool rawLogical(const json::Value &value, unsigned depth) {
+    if (depth > limits.typeDepth || !charge(1)) {
+      if (!failure)
+        failure = error("source.limit", "schema category depth exceeded");
+      return false;
+    }
+    auto *obj = value.getAsObject();
+    if (!obj)
+      return false;
+    auto kind = obj->getString("kind");
+    if (kind == "oracle" || kind == "oracle_sequence" ||
+        kind == "logical_record")
+      return true;
+    if (kind == "array") {
+      auto *element = obj->get("element");
+      return element && rawLogical(*element, depth + 1);
+    }
+    if (kind == "tuple") {
+      auto *fields = obj->getArray("fields");
+      if (fields)
+        for (const auto &field : *fields) {
+          auto *f = field.getAsObject();
+          if (f && f->get("schema") && rawLogical(*f->get("schema"), depth + 1))
+            return true;
+        }
+    }
+    return false;
+  }
+  std::vector<unsigned> participants(const ValuePlacement &value) {
+    if (const auto *data = std::get_if<DataPlacement>(&value.value))
+      return data->roles;
+    if (const auto *oracle = std::get_if<OraclePlacement>(&value.value)) {
+      auto result = oracle->receivers;
+      result.push_back(oracle->holder);
+      llvm::sort(result);
+      return result;
+    }
+    return std::get<ProductPlacement>(value.value).arguments;
+  }
+  void canonicalApplications(const InterfaceSchema &schema,
+                             ValuePlacement &value) {
+    auto *product = std::get_if<ProductPlacement>(&value.value);
+    if (!product)
+      return;
+    bool array = schema.kind == Type::Kind::Array;
+    if (array || schema.kind == Type::Kind::Tuple)
+      llvm::sort(product->arguments);
+    for (unsigned i = 0; i < product->fields.size(); ++i) {
+      const auto &child = array ? schema.element : schema.fields[i].schema;
+      canonicalApplications(*child, product->fields[i]);
+    }
+  }
+  bool placementSchema(const InterfaceSchema &schema,
+                       const ValuePlacement &value, unsigned roster,
+                       unsigned depth = 0) {
+    if (depth > limits.typeDepth || !charge(1)) {
+      if (!failure)
+        failure = error("source.limit", "placement schema depth exceeded");
+      return false;
+    }
+    if (auto *data = std::get_if<DataPlacement>(&value.value)) {
+      if (logicalSchema(schema))
+        return fail("logical schema has data placement");
+      if (data->roles.size() > 1 &&
+          (!schema.permissions.copy ||
+           llvm::any_of(schema.leaves,
+                        [&](const auto &leaf) {
+                          return !nativeLeaves.at(leaf).participants;
+                        }) ||
+           (schema.element && !sharedSchema(*schema.element))))
+        return fail("ordinary placement cannot share restricted components");
+      return true;
+    }
+    if (std::holds_alternative<OraclePlacement>(value.value))
+      return schema.oracle.has_value() ||
+             fail("oracle placement requires a handle schema");
+    if ((schema.kind != Type::Kind::LogicalRecord &&
+         schema.kind != Type::Kind::Tuple &&
+         schema.kind != Type::Kind::Array) ||
+        schema.oracle)
+      return fail(
+          "product placement requires a distributed or structural product");
+    const auto &product = std::get<ProductPlacement>(value.value);
+    bool array = schema.kind == Type::Kind::Array;
+    bool legacy =
+        schema.kind == Type::Kind::LogicalRecord && schema.roles.empty();
+    if (product.instance != schema.identity ||
+        product.fields.size() != (array ? 1 : schema.fields.size()) ||
+        (schema.kind == Type::Kind::LogicalRecord && !legacy &&
+         product.arguments.size() != schema.roles.size()))
+      return fail("product instance, role arity or field count differs");
+    std::set<unsigned> childRoles;
+    for (unsigned i = 0; i < product.fields.size(); ++i) {
+      const auto &child = array ? schema.element : schema.fields[i].schema;
+      if (!child ||
+          !placementSchema(*child, product.fields[i], roster, depth + 1))
+        return false;
+      auto roles = participants(product.fields[i]);
+      if (!charge(roles.size() + product.arguments.size() + 1))
+        return false;
+      for (auto role : roles) {
+        if (!is_contained(product.arguments, role))
+          return fail("field placement escapes the role application");
+        childRoles.insert(role);
+      }
+      if (schema.kind == Type::Kind::LogicalRecord && !legacy) {
+        if (!schema.fields[i].placement)
+          return fail("distributed field formula missing");
+        auto expected =
+            substitutePlacement(*schema.fields[i].placement, product.arguments,
+                                roster, remaining, limits.typeDepth);
+        if (!expected) {
+          failure = expected.takeError();
+          return false;
+        }
+        canonicalApplications(*child, *expected);
+        if (*expected != product.fields[i])
+          return fail("field placement differs from declaration formula");
+      }
+    }
+    if ((schema.kind != Type::Kind::LogicalRecord || legacy) &&
+        !llvm::equal(product.arguments, childRoles))
+      return fail("structural product roles differ from canonical child union");
+    if (legacy) {
+      // The brace profile has one explicit oriented family for all handles.
+      // Remove this alternative with the corresponding Layout migration seam.
+      const OraclePlacement *family = nullptr;
+      for (unsigned i = 0; i < product.fields.size(); ++i) {
+        if (!charge(1 + product.arguments.size()))
+          return false;
+        if (schema.fields[i].schema->oracle) {
+          auto *actual = std::get_if<OraclePlacement>(&product.fields[i].value);
+          if (!actual || (family && !(*family == *actual)))
+            return fail(
+                "legacy logical fields have different oriented families");
+          family = actual;
+        } else {
+          auto *actual = std::get_if<DataPlacement>(&product.fields[i].value);
+          if (!actual || actual->roles != product.arguments)
+            return fail(
+                "legacy metadata differs from its complete role family");
+        }
+      }
+      if (!family || participants(ValuePlacement(*family)) != product.arguments)
+        return fail("legacy logical product lacks its exact oriented family");
+    }
+    return true;
+  }
   bool fields(const json::Array &array, ArrayRef<std::string> leaves,
               unsigned start, unsigned depth, Permissions parent,
-              std::vector<InterfaceField> &result) {
+              std::vector<InterfaceField> &result, bool logical = false,
+              unsigned telescope = 0) {
     unsigned offset = start;
     std::set<std::string> names;
     std::optional<bool> positional;
     for (const auto &item : array) {
       if (!charge(1))
         return false;
-      auto *obj = object(item, {"name", "offset", "schema"});
+      auto *raw = item.getAsObject();
+      bool bounded = raw && raw->get("maximum_rows");
+      auto *obj =
+          bounded ? object(item, {"name", "offset", "public", "placement",
+                                  "schema", "maximum_rows"})
+                  : object(item,
+                           {"name", "offset", "public", "placement", "schema"});
       if (!obj)
         return false;
       auto name = text(*obj, "name", limits.identifierBytes);
       auto at = natural(*obj, "offset");
-      if (!name || !at)
-        return false;
+      auto visible = obj->getBoolean("public");
+      if (!name || !at || !visible)
+        return fail("invalid field metadata");
       bool numbered = llvm::all_of(*name, isDigit);
       if (!positional)
         positional = numbered;
@@ -268,62 +492,27 @@ class Reader {
       auto *childObject = obj->getObject("schema");
       auto *childLeaves =
           childObject ? childObject->getArray("leaves") : nullptr;
-      if (!childLeaves || offset > leaves.size() ||
-          childLeaves->size() > leaves.size() - offset)
-        return fail("field slice is out of bounds");
-      auto child = schema(*obj->get("schema"), depth + 1,
-                          leaves.slice(offset, childLeaves->size()));
-      if (!child)
-        return false;
-      if (child->oracle || child->kind == Type::Kind::LogicalRecord ||
-          offset > leaves.size() ||
-          child->leaves.size() > leaves.size() - offset ||
-          !llvm::equal(child->leaves,
-                       leaves.slice(offset, child->leaves.size())) ||
-          !child->permissions.includes(parent))
-        return fail("field leaves or permissions differ from parent");
-      offset += child->leaves.size();
-      result.push_back({name->str(), *at, std::move(child)});
-    }
-    return offset == leaves.size() || fail("fields omit native leaves");
-  }
-  bool logicalFields(const json::Array &array, unsigned depth,
-                     std::vector<InterfaceField> &result) {
-    unsigned offset = 0;
-    bool hasOracle = false;
-    std::set<std::string> names;
-    for (const auto &item : array) {
-      if (!charge(1))
-        return false;
-      auto *raw = item.getAsObject();
-      bool bounded = raw && raw->get("maximum_rows");
-      auto *obj =
-          bounded ? object(item, {"name", "offset", "schema", "maximum_rows"})
-                  : object(item, {"name", "offset", "schema"});
-      if (!obj)
-        return false;
-      auto name = text(*obj, "name", limits.identifierBytes);
-      auto at = natural(*obj, "offset");
-      if (!name || !at || *at != offset || !isSourceIdentifier(*name) ||
-          !names.insert(name->str()).second)
-        return fail("logical field name, order or body offset differs");
-      auto *childObject = obj->getObject("schema");
-      auto *ls = childObject ? childObject->getArray("leaves") : nullptr;
-      if (!ls)
-        return fail("logical field schema is missing");
+      if (!childLeaves)
+        return fail("missing field leaves");
       std::vector<std::string> expected;
-      for (const auto &leaf : *ls) {
-        auto spelling = leaf.getAsString();
-        if (!spelling || !charge(spelling->size() + 1))
-          return fail("invalid logical field data leaf");
-        expected.push_back(spelling->str());
+      for (const auto &leaf : *childLeaves) {
+        auto text = leaf.getAsString();
+        if (!text || !charge(text->size() + 1))
+          return fail("invalid field leaf");
+        expected.push_back(text->str());
       }
       auto child = schema(*obj->get("schema"), depth + 1, expected);
       if (!child)
         return false;
-      if (child->kind == Type::Kind::LogicalRecord || child->custody ||
-          !(child->permissions == Permissions{true, true}))
-        return fail("nested logical record or nonshared logical field");
+      if ((!logical && logicalSchema(*child)) ||
+          !child->permissions.includes(parent))
+        return fail("field category or permissions differ from parent");
+      if (!logical &&
+          (offset > leaves.size() ||
+           child->leaves.size() > leaves.size() - offset ||
+           !llvm::equal(child->leaves,
+                        leaves.slice(offset, child->leaves.size()))))
+        return fail("field leaves differ from parent");
       std::optional<uint64_t> maximum;
       if (bounded) {
         maximum = unsignedText(*obj->get("maximum_rows"));
@@ -335,34 +524,42 @@ class Reader {
             child->oracle->kind, child->oracle->arguments);
         if (!signature) {
           consumeError(signature.takeError());
-          return fail("logical field oracle kind is unavailable");
+          return fail("oracle kind unavailable");
         }
         if (signature->staticShape("rows").has_value() == maximum.has_value())
-          return fail("logical field row bound is missing or invented");
-        hasOracle = true;
-        ++offset;
-      } else {
-        if (maximum || !sharedSchema(*child))
-          return fail(
-              "ordinary logical fields require shared data without bounds");
-        offset += child->leaves.size();
-      }
+          return fail("field row bound is missing or invented");
+      } else if (maximum)
+        return fail("ordinary or aggregate field has a row bound");
+      std::optional<ValuePlacement> formula;
+      if (telescope) {
+        formula = placement(*obj->get("placement"), telescope, depth + 1);
+        if (!formula ||
+            !placementSchema(*child, *formula, telescope, depth + 1))
+          return false;
+      } else if (!obj->get("placement")->getAsNull())
+        return fail("ordinary or structural field has a placement formula");
+      offset += bodyWidth(*child);
+      if (failure)
+        return false;
       if (offset > limits.aggregateLeaves)
-        return fail("logical record body exceeds the leaf limit");
-      result.push_back({name->str(), *at, std::move(child), maximum});
+        return fail("product body exceeds leaf limit");
+      result.push_back({name->str(), *at, std::move(child), maximum, *visible,
+                        std::move(formula)});
     }
-    return hasOracle || fail("logical record requires a direct handle field");
+    return logical || offset == leaves.size() ||
+           fail("fields omit native leaves");
   }
   bool sharedSchema(const InterfaceSchema &value) {
     if (!charge(1 + value.leaves.size()) || value.custody || value.oracle ||
-        value.kind == Type::Kind::LogicalRecord ||
-        !(value.permissions == Permissions{true, true}))
+        logicalSchema(value) || !(value.permissions == Permissions{true, true}))
       return false;
     for (const auto &leaf : value.leaves) {
       const auto &policy = nativeLeaves.at(leaf);
       if (!policy.participants || !policy.total)
         return false;
     }
+    if (value.element && !sharedSchema(*value.element))
+      return false;
     for (const auto &field : value.fields)
       if (!sharedSchema(*field.schema))
         return false;
@@ -376,8 +573,13 @@ class Reader {
     using K = Type::Kind;
     bool nominal = value.kind == K::Record || value.kind == K::Variant ||
                    value.kind == K::Associated;
+    if (value.sealed && !nominal && value.kind != K::LogicalRecord)
+      return fail("sealing requires a nominal schema");
+    if (value.sealed && value.constructible)
+      return fail("sealed schema cannot grant ordinary construction");
     if (value.kind == K::Oracle || value.kind == K::OracleSequence)
-      return (value.oracle && value.oracleData &&
+      return (value.roles.empty() && !value.element && value.oracle &&
+              value.oracleData &&
               value.maximum.has_value() == (value.kind == K::OracleSequence) &&
               value.leaves.empty() && value.fields.empty() &&
               value.alternatives.empty() && !value.custody &&
@@ -385,13 +587,41 @@ class Reader {
               value.permissions == Permissions{true, true}) ||
              fail("oracle schemas require a complete logical handle or "
                   "sequence");
-    if (value.kind == K::LogicalRecord)
-      return (!value.oracle && !value.oracleData && !value.maximum &&
-              value.leaves.empty() && !value.custody && !value.constructible &&
-              value.permissions == Permissions{true, true} &&
-              !value.fields.empty() && value.alternatives.empty()) ||
-             fail("logical record requires its complete nominal field schema");
-    if (value.custody && !nominal)
+    if (value.kind == K::LogicalRecord) {
+      if (value.oracle || value.oracleData || value.maximum ||
+          !value.leaves.empty() || value.constructible ||
+          !value.alternatives.empty() ||
+          (value.custody &&
+           (value.custody != value.roles.size() || value.permissions.copy)))
+        return fail("invalid distributed record schema or custody arity");
+      if (value.roles.empty()) {
+        // Explicit current-schema transition category, never a missing-field
+        // fallback. Its source admission is Semantics::logicalRecord.
+        if (value.custody || !(value.permissions == Permissions{true, true}))
+          return fail("legacy logical records require unrestricted custody");
+        bool handle = false;
+        for (const auto &field : value.fields) {
+          if (!charge(1) || !isSourceIdentifier(field.name) || field.placement)
+            return fail("legacy logical fields cannot declare role formulas");
+          if (field.schema->oracle)
+            handle = true;
+          else if (!sharedSchema(*field.schema))
+            return fail("legacy logical metadata must be ordinary shared data");
+        }
+        return handle || fail("legacy logical record requires a direct handle");
+      }
+      for (const auto &field : value.fields)
+        if (!isSourceIdentifier(field.name) || !field.placement)
+          return fail("distributed fields require declaration-local placement "
+                      "formulas");
+      return true;
+    }
+    if (!value.roles.empty())
+      return fail("only distributed records declare role parameters");
+    if (logicalSchema(value) &&
+        (value.constructible || value.custody || !value.leaves.empty()))
+      return fail("structural logical product has an ordinary data carrier");
+    if (value.custody > 1 || (value.custody && !nominal))
       return fail("custody requires a nominal type");
     if (value.kind == K::Variant)
       return !value.alternatives.empty() ||
@@ -412,11 +642,14 @@ class Reader {
       return true;
     }
     if (value.kind == K::Tuple || value.kind == K::Array) {
+      if (value.kind == K::Array && !value.element)
+        return fail("array element schema missing");
       for (unsigned i = 0; i < value.fields.size(); ++i) {
-        if (value.fields[i].name != std::to_string(i))
+        if (value.fields[i].name != std::to_string(i) ||
+            !value.fields[i].isPublic)
           return fail("structural product fields require positional indices");
-        if (value.kind == K::Array && value.fields[i].schema->identity !=
-                                          value.fields[0].schema->identity)
+        if (value.kind == K::Array &&
+            value.fields[i].schema->identity != value.element->identity)
           return fail("array elements have different types");
       }
       return true;
@@ -516,23 +749,26 @@ class Reader {
     bool sequence = raw && raw->getString("kind") == "oracle_sequence";
     bool oracle = sequence || (raw && raw->getString("kind") == "oracle");
     auto *obj =
-        sequence ? object(value, {"kind", "identity", "type", "custody",
-                                  "constructible", "permissions", "fields",
-                                  "alternatives", "leaves", "oracle",
-                                  "data_schema", "maximum"})
+        sequence
+            ? object(value, {"kind", "identity", "type", "generated", "custody",
+                             "sealed", "constructible", "permissions", "fields",
+                             "alternatives", "leaves", "roles", "element",
+                             "oracle", "data_schema", "maximum"})
         : oracle
-            ? object(value, {"kind", "identity", "type", "custody",
-                             "constructible", "permissions", "fields",
-                             "alternatives", "leaves", "oracle", "data_schema"})
-            : object(value,
-                     {"kind", "identity", "type", "custody", "constructible",
-                      "permissions", "fields", "alternatives", "leaves"});
+            ? object(value, {"kind", "identity", "type", "generated", "custody",
+                             "sealed", "constructible", "permissions", "fields",
+                             "alternatives", "leaves", "roles", "element",
+                             "oracle", "data_schema"})
+            : object(value, {"kind", "identity", "type", "generated", "custody",
+                             "sealed", "constructible", "permissions", "fields",
+                             "alternatives", "leaves", "roles", "element"});
     if (!obj)
       return {};
     auto type = text(*obj, "type"), kindName = text(*obj, "kind"),
          identity = text(*obj, "identity", 64);
-    auto custody = obj->getBoolean("custody"),
-         constructible = obj->getBoolean("constructible");
+    auto custody = natural(*obj, "custody");
+    auto constructible = obj->getBoolean("constructible");
+    auto sealed = obj->getBoolean("sealed");
     auto *perms = array(*obj, "permissions"), *fs = array(*obj, "fields"),
          *alts = array(*obj, "alternatives"), *ls = array(*obj, "leaves");
     if (!type || !kindName || !identity || !perms || !fs || !alts || !ls)
@@ -561,8 +797,8 @@ class Reader {
     auto caps = permissions(*perms);
     if (!caps)
       return {};
-    if (!custody || !constructible || ls->size() != expected.size() ||
-        ls->size() > limits.aggregateLeaves ||
+    if (!custody || !sealed || !constructible ||
+        ls->size() != expected.size() || ls->size() > limits.aggregateLeaves ||
         (!fs->empty() && !alts->empty())) {
       fail("invalid schema shape or custody");
       return {};
@@ -571,13 +807,66 @@ class Reader {
     result->kind = *kind;
     result->identity = identity->str();
     result->type = type->str();
+    if (!obj->get("generated")->getAsNull()) {
+      auto generated = text(*obj, "generated", 64);
+      if (!generated || !hash(*generated) ||
+          (*kind != K::Record && *kind != K::Variant &&
+           *kind != K::Associated)) {
+        fail("generated-family identity requires a nominal schema");
+        return {};
+      }
+      result->generated = generated->str();
+    }
     result->custody = *custody;
+    result->sealed = *sealed;
     result->constructible = *constructible;
     if (result->kind == K::Associated && *constructible) {
       fail("opaque associated type cannot grant external construction");
       return {};
     }
     result->permissions = *caps;
+    auto *roleNames = array(*obj, "roles");
+    if (!roleNames || roleNames->size() > 16 ||
+        *custody > limits.aggregateLeaves) {
+      fail("schema role telescope or custody count exceeds limit");
+      return {};
+    }
+    std::set<std::string> names;
+    for (const auto &role : *roleNames) {
+      auto name = role.getAsString();
+      if (!name || !charge(name->size() + 1) ||
+          name->size() > limits.identifierBytes || !isSourceIdentifier(*name) ||
+          !names.insert(name->str()).second) {
+        fail("invalid or repeated declaration role parameter");
+        return {};
+      }
+      result->roles.push_back(name->str());
+    }
+    if (*kind == K::Array) {
+      auto *elementObject = obj->getObject("element");
+      auto *elementLeaves =
+          elementObject ? elementObject->getArray("leaves") : nullptr;
+      if (!elementLeaves) {
+        fail("array requires an element schema");
+        return {};
+      }
+      std::vector<std::string> expectedElement;
+      for (const auto &leaf : *elementLeaves) {
+        auto text = leaf.getAsString();
+        if (!text || !charge(text->size() + 1)) {
+          fail("invalid element leaf");
+          return {};
+        }
+        expectedElement.push_back(text->str());
+      }
+      result->element =
+          schema(*obj->get("element"), depth + 1, expectedElement);
+      if (!result->element)
+        return {};
+    } else if (!obj->get("element")->getAsNull()) {
+      fail("element schema requires an array");
+      return {};
+    }
     if (sequence) {
       result->maximum = unsignedText(*obj->get("maximum"));
       if (!result->maximum)
@@ -617,7 +906,7 @@ class Reader {
       auto policy = leafPermissions(*spelling);
       if (!policy)
         return {};
-      if (!(result->custody && index == 0) &&
+      if (!(index < result->custody) &&
           (!policy->includes(*caps) ||
            (*constructible && *kind != K::Record && *kind != K::Tuple &&
             *kind != K::Array && *kind != K::Variant &&
@@ -629,15 +918,24 @@ class Reader {
       ++index;
     }
     constexpr StringLiteral custodyPrefix = "resource_unit:zkl_resource_";
-    unsigned start = unsigned(result->custody);
-    if (start &&
-        (result->leaves.empty() || caps->copy || *constructible ||
-         !StringRef(result->leaves.front()).starts_with(custodyPrefix) ||
-         StringRef(result->leaves.front()).drop_front(custodyPrefix.size()) !=
-             *identity)) {
+    unsigned start = result->custody;
+    bool logicalProduct = rawLogical(value, depth);
+    if (failure)
+      return {};
+    if (start && (caps->copy || *constructible ||
+                  (*kind != K::LogicalRecord &&
+                   (start != 1 || result->leaves.size() < start)))) {
       fail("invalid nominal custody prefix");
       return {};
     }
+    if (*kind != K::LogicalRecord)
+      for (unsigned i = 0; i < start; ++i)
+        if (!StringRef(result->leaves[i]).starts_with(custodyPrefix) ||
+            StringRef(result->leaves[i]).drop_front(custodyPrefix.size()) !=
+                *identity) {
+          fail("invalid nominal custody identity");
+          return {};
+        }
     if (!alts->empty()) {
       if (result->leaves.size() != start + 1) {
         fail("variant schema requires one native variant leaf");
@@ -685,12 +983,36 @@ class Reader {
           return {};
         result->alternatives.push_back(std::move(arm));
       }
-    } else if (*kind == K::LogicalRecord) {
-      if (!result->leaves.empty() || !logicalFields(*fs, depth, result->fields))
+    } else if (!fs->empty() || *kind == K::LogicalRecord) {
+      if (!fields(*fs, result->leaves, start, depth, *caps, result->fields,
+                  logicalProduct, result->roles.size()))
         return {};
-    } else if (!fs->empty()) {
-      if (!fields(*fs, result->leaves, start, depth, *caps, result->fields))
+      bool actualLogical = logicalSchema(*result);
+      if (actualLogical != logicalProduct &&
+          (!result->leaves.empty() || bodyWidth(*result) != 0)) {
+        fail("product logical category differs from child schemas");
         return {};
+      }
+      if (failure)
+        return {};
+      if (!actualLogical) {
+        unsigned width = start;
+        for (const auto &field : result->fields) {
+          if (logicalSchema(*field.schema) || width > result->leaves.size() ||
+              field.schema->leaves.size() > result->leaves.size() - width ||
+              !llvm::equal(field.schema->leaves,
+                           ArrayRef(result->leaves)
+                               .slice(width, field.schema->leaves.size()))) {
+            fail("ordinary product field leaves differ");
+            return {};
+          }
+          width += field.schema->leaves.size();
+        }
+        if (width != result->leaves.size()) {
+          fail("product native coverage differs");
+          return {};
+        }
+      }
     } else if (result->leaves.size() > (start ? start : 1) ||
                (!start && !result->leaves.empty() &&
                 (protocol::typeKind(result->leaves[0]) == "variant" ||
@@ -710,32 +1032,66 @@ class Reader {
   }
   struct PortLeaf {
     const InterfaceSchema *schema;
-    const std::string *data;
+    std::string data;
     unsigned offset;
     std::optional<uint64_t> maximumRows;
+    std::optional<ValuePlacement> placement;
+    std::vector<unsigned> path;
+    unsigned local = 0;
+    bool custody = false;
   };
   bool observe(const InterfaceSchema &value, std::optional<uint64_t> maximum,
                std::vector<PortLeaf> &leaves, unsigned &offset,
-               unsigned depth = 0) {
-    if (!charge(1) || depth > limits.typeDepth)
-      return fail("interface port traversal limit exceeded");
-    if (value.kind == Type::Kind::LogicalRecord) {
-      for (const auto &field : value.fields)
-        if (!observe(*field.schema, field.maximumRows, leaves, offset,
-                     depth + 1))
-          return false;
-    } else if (value.oracle) {
-      leaves.push_back({&value, nullptr, offset, maximum});
-      offset += 2;
-    } else {
-      for (const auto &data : value.leaves) {
-        if (!charge(1))
-          return false;
-        leaves.push_back({&value, &data, offset++, {}});
-      }
+               unsigned depth = 0, const ValuePlacement *placed = nullptr,
+               std::vector<unsigned> path = {}) {
+    if (depth > limits.typeDepth || !charge(1 + path.size())) {
+      if (!failure)
+        failure =
+            error("source.limit", "interface port traversal limit exceeded");
+      return false;
     }
-    return offset <= limits.aggregateLeaves ||
-           fail("expanded interface port exceeds the leaf limit");
+    auto add = [&](std::string data, unsigned local, bool custody,
+                   const ValuePlacement *placement) {
+      if (!charge(data.size() + path.size() + 1))
+        return false;
+      leaves.push_back({&value, std::move(data), offset, maximum,
+                        placement ? std::optional(*placement) : std::nullopt,
+                        path, local, custody});
+      offset += value.oracle ? 2 : 1;
+      return offset <= limits.aggregateLeaves ||
+             fail("expanded port exceeds leaf limit");
+    };
+    if (value.oracle)
+      return add({}, 0, false, placed);
+    const auto *product =
+        placed ? std::get_if<ProductPlacement>(&placed->value) : nullptr;
+    for (unsigned i = 0; i < value.custody; ++i) {
+      std::optional<ValuePlacement> fragment;
+      if (product)
+        fragment = ValuePlacement(DataPlacement{{product->arguments[i]}});
+      else if (placed)
+        fragment = *placed;
+      std::string unit = "resource_unit:zkl_resource_" + value.identity;
+      if (!add(std::move(unit), i, true, fragment ? &*fragment : nullptr))
+        return false;
+    }
+    if (!value.fields.empty() || logicalSchema(value)) {
+      for (unsigned i = 0; i < value.fields.size(); ++i) {
+        const auto &field = value.fields[i];
+        auto childPath = path;
+        childPath.push_back(i);
+        const auto *childPlacement =
+            product ? &product->fields[value.kind == Type::Kind::Array ? 0 : i]
+                    : placed;
+        if (!observe(*field.schema, field.maximumRows, leaves, offset,
+                     depth + 1, childPlacement, std::move(childPath)))
+          return false;
+      }
+    } else
+      for (unsigned i = value.custody; i < value.leaves.size(); ++i)
+        if (!add(value.leaves[i], i, false, placed))
+          return false;
+    return true;
   }
   bool oracleTypes(const InterfaceSchema &schema, mlir::Type dataType,
                    mlir::Type anchorType, std::optional<uint64_t> maximumRows) {
@@ -802,104 +1158,144 @@ class Reader {
         return false;
       auto *raw = item.getAsObject();
       auto *rawSchema = raw ? raw->getObject("schema") : nullptr;
-      bool record =
-          rawSchema && rawSchema->getString("kind") == "logical_record";
       bool handle =
           rawSchema && (rawSchema->getString("kind") == "oracle" ||
                         rawSchema->getString("kind") == "oracle_sequence");
       auto *obj =
-          record   ? object(item, {"name", "type", "roles", "index", "native",
-                                   "schema", "holder"})
-          : handle ? object(item, {"name", "type", "roles", "index", "native",
-                                   "schema", "holder", "maximum_rows"})
-                   : object(item, {"name", "type", "roles", "index", "native",
-                                   "schema"});
+          handle ? object(item, {"name", "type", "index", "native", "schema",
+                                 "placement", "components", "maximum_rows"})
+                 : object(item, {"name", "type", "index", "native", "schema",
+                                 "placement", "components"});
       if (!obj)
         return false;
-      auto name = text(*obj, "name", limits.identifierBytes);
-      auto type = text(*obj, "type");
+      auto name = text(*obj, "name", limits.identifierBytes),
+           type = text(*obj, "type");
       auto index = natural(*obj, "index");
-      auto *rs = this->array(*obj, "roles"), *ns = this->array(*obj, "native");
-      if (!name || !type || !index || !rs || !ns)
-        return false;
-      auto owners = roles(*rs);
-      if (!owners)
-        return false;
+      auto *ns = this->array(*obj, "native"),
+           *cs = this->array(*obj, "components");
+      auto *ls = rawSchema ? rawSchema->getArray("leaves") : nullptr;
+      if (!name || !type || !index || !ns || !cs || !ls)
+        return fail("invalid port metadata");
       if (flat > types.size() || ns->size() > types.size() - flat ||
           flat > nativeRoles.size() || ns->size() > nativeRoles.size() - flat)
         return fail("port slice is out of bounds");
-      std::vector<std::string> expected;
-      for (unsigned i = 0; i < ns->size(); ++i) {
-        auto at = (*ns)[i].getAsInteger();
-        if (!at || *at != flat + i)
+      for (unsigned i = 0; i < ns->size(); ++i)
+        if ((*ns)[i].getAsInteger() != int64_t(flat + i))
           return fail("native port index is not contiguous");
-        if (record || handle)
-          continue;
-        auto data = protocol::encodeBoundType(types[flat + i], false);
-        if (!data) {
-          consumeError(data.takeError());
-          return fail("data schema binds a non-data native port");
-        }
-        expected.push_back(data->spelling());
+      std::vector<std::string> expected;
+      for (const auto &leaf : *ls) {
+        auto text = leaf.getAsString();
+        if (!text || !charge(text->size() + 1))
+          return fail("invalid port schema leaf");
+        expected.push_back(text->str());
       }
       auto logical = schema(*obj->get("schema"), 1, expected);
-      if (!logical)
+      auto placed = placement(*obj->get("placement"), roleIndices.size(), 1);
+      if (!logical || !placed ||
+          !placementSchema(*logical, *placed, roleIndices.size()))
         return false;
-      if (!record && !handle && owners->size() > 1 &&
-          (!logical->permissions.copy ||
-           llvm::any_of(logical->leaves, [&](const auto &leaf) {
-             return !nativeLeaves.at(leaf).participants;
-           })))
-        return fail("logical port cannot have multiple participant components");
       if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           *index != result.size() || *type != logical->type)
         return fail("logical port name, index or type differs");
       InterfacePort port{
-          name->str(), std::move(*owners), {}, std::move(logical)};
-      std::vector<unsigned> receivers;
-      if (record || handle) {
-        auto holder = text(*obj, "holder", limits.identifierBytes);
-        auto found = holder ? roleIndices.find(*holder) : roleIndices.end();
-        if (found == roleIndices.end() ||
-            !is_contained(port.roles, found->second) || port.roles.size() < 2)
-          return fail("oracle holder is not in its role family");
-        port.oracle = InterfaceOraclePort{found->second, {}};
-        if (handle && !obj->get("maximum_rows")->getAsNull()) {
+          name->str(), participants(*placed), {}, std::move(logical),
+          {},          std::move(*placed),    {}};
+      // Derived summaries are never used to authorize individual components.
+      llvm::sort(port.roles);
+      if (handle) {
+        auto *oracle = std::get_if<OraclePlacement>(&port.placement->value);
+        if (!oracle)
+          return fail("handle requires oracle placement");
+        port.oracle = InterfaceOraclePort{oracle->holder, {}};
+        if (!obj->get("maximum_rows")->getAsNull()) {
           port.oracle->maximumRows = unsignedText(*obj->get("maximum_rows"));
           if (!port.oracle->maximumRows)
             return false;
         }
-        for (auto role : port.roles)
-          if (role != port.oracle->holder)
-            receivers.push_back(role);
       }
       std::vector<PortLeaf> leaves;
       unsigned count = 0;
       if (!observe(*port.schema,
                    port.oracle ? port.oracle->maximumRows : std::nullopt,
-                   leaves, count) ||
+                   leaves, count, 0, &*port.placement) ||
           count != ns->size())
         return fail("expanded port arity differs");
+      std::vector<InterfaceComponent> reconstructed;
       for (const auto &leaf : leaves) {
         unsigned at = flat + leaf.offset;
+        if (!leaf.placement)
+          return fail("native leaf placement missing");
+        auto componentStart = reconstructed.size();
+        auto append = [&](unsigned role, InterfaceComponentFacet facet,
+                          unsigned index) {
+          if (!charge(leaf.path.size() + 1))
+            return false;
+          reconstructed.push_back({leaf.path, leaf.local, role, facet, index});
+          return true;
+        };
         if (leaf.schema->oracle) {
-          if (!port.oracle ||
+          const auto *oracle =
+              std::get_if<OraclePlacement>(&leaf.placement->value);
+          if (!oracle ||
               !oracleTypes(*leaf.schema, types[at], types[at + 1],
                            leaf.maximumRows) ||
-              !matchesRoles(nativeRoles[at], {port.oracle->holder}) ||
-              !matchesRoles(nativeRoles[at + 1], receivers))
+              !matchesRoles(nativeRoles[at], {oracle->holder}) ||
+              !matchesRoles(nativeRoles[at + 1], oracle->receivers))
             return false;
+          // Holder data precedes the canonical receiver anchor family in ABI
+          // order.
+          if (!append(oracle->holder, InterfaceComponentFacet::OracleData, at))
+            return false;
+          for (unsigned role : oracle->receivers)
+            if (!append(role, InterfaceComponentFacet::OracleAnchor, at + 1))
+              return false;
         } else {
+          const auto *dataPlacement =
+              std::get_if<DataPlacement>(&leaf.placement->value);
           auto data = protocol::encodeBoundType(types[at], false);
           if (!data) {
             consumeError(data.takeError());
             return fail("ordinary field binds a logical native component");
           }
-          if (data->spelling() != *leaf.data ||
-              !matchesRoles(nativeRoles[at], port.roles))
-            return fail("ordinary field type or role mapping differs");
+          if (!dataPlacement || data->spelling() != leaf.data ||
+              !matchesRoles(nativeRoles[at], dataPlacement->roles))
+            return fail("ordinary field type or participant mapping differs");
+          for (unsigned role : dataPlacement->roles)
+            if (!append(role,
+                        leaf.custody ? InterfaceComponentFacet::Custody
+                                     : InterfaceComponentFacet::Data,
+                        at))
+              return false;
         }
+        llvm::sort(
+            MutableArrayRef(reconstructed).drop_front(componentStart),
+            [](const auto &a, const auto &b) { return a.role < b.role; });
       }
+      if (!charge(reconstructed.size() + cs->size() + 1) ||
+          cs->size() != reconstructed.size())
+        return fail("port component coverage differs");
+      for (unsigned i = 0; i < cs->size(); ++i) {
+        auto *component =
+            object((*cs)[i], {"path", "leaf", "role", "facet", "native"});
+        if (!component)
+          return false;
+        auto *path = this->array(*component, "path");
+        auto leaf = natural(*component, "leaf"),
+             role = natural(*component, "role"),
+             native = natural(*component, "native");
+        auto facet = text(*component, "facet");
+        const auto &actual = reconstructed[i];
+        if (!path || !leaf || !role || !native || !facet ||
+            !charge(path->size() + 1) || path->size() != actual.path.size() ||
+            *leaf != actual.leaf || *role != actual.role ||
+            *native != actual.native ||
+            *facet != componentFacetName(actual.facet))
+          return fail("port component identity, order or selection differs");
+        for (unsigned j = 0; j < path->size(); ++j)
+          if ((*path)[j].getAsInteger() != int64_t(actual.path[j]))
+            return fail("port component path differs");
+      }
+      port.components = std::move(reconstructed);
       for (unsigned i = 0; i < count; ++i)
         port.native.push_back(flat++);
       result.push_back(std::move(port));
@@ -910,23 +1306,51 @@ class Reader {
     if (auto found = schemaIdentities.find(&schema);
         found != schemaIdentities.end())
       return found->second;
+    if (!remaining)
+      return error("source.limit", "schema identity budget exceeded");
+    --remaining;
     FramedHash hash(remaining);
     hash.frame("zkc.language.schema/0");
     hash.frame(typeKindName(schema.kind));
     hash.frame(schema.identity);
-    hash.frame(schema.custody ? "1" : "0");
+    if (!schema.generated.empty())
+      hash.frame(schema.generated);
+    hash.frame(std::to_string(schema.custody));
+    hash.frame(schema.sealed ? "1" : "0");
     hash.frame(schema.constructible ? "1" : "0");
     for (bool allowed : {schema.permissions.copy, schema.permissions.drop})
       hash.frame(allowed ? "1" : "0");
-    if (schema.oracle || schema.kind == Type::Kind::LogicalRecord) {
+    hash.frame(std::to_string(schema.roles.size()));
+    for (const auto &role : schema.roles)
+      hash.frame(role);
+    if (schema.element) {
+      hash.frame("element");
+      auto element = schemaIdentity(*schema.element);
+      if (!element)
+        return element.takeError();
+      hash.frame(*element);
+    } else
+      hash.frame("");
+    if (schema.oracleData) {
+      hash.frame("data_schema");
+      auto data = schemaIdentity(*schema.oracleData);
+      if (!data)
+        return data.takeError();
+      hash.frame(*data);
+    } else
+      hash.frame("");
+    if (logicalSchema(schema)) {
       std::vector<PortLeaf> leaves;
       unsigned count = 0;
-      if (!observe(schema, {}, leaves, count))
+      if (!observe(schema, {}, leaves, count)) {
+        if (failure)
+          return std::move(failure);
         return error("source.interface", "invalid logical schema identity");
+      }
       hash.frame(std::to_string(leaves.size()));
       for (const auto &leaf : leaves) {
         if (!leaf.schema->oracle) {
-          hash.frame(*leaf.data);
+          hash.frame(leaf.data);
           continue;
         }
         hash.frame("oracle");
@@ -941,11 +1365,49 @@ class Reader {
       for (const auto &leaf : schema.leaves)
         hash.frame(leaf);
     }
+    std::function<Error(const ValuePlacement &, unsigned)> formula =
+        [&](const ValuePlacement &p, unsigned level) -> Error {
+      if (!remaining || level > limits.typeDepth)
+        return error("source.limit", "schema formula identity budget exceeded");
+      --remaining;
+      if (const auto *data = std::get_if<DataPlacement>(&p.value)) {
+        hash.frame("data");
+        hash.frame(std::to_string(data->roles.size()));
+        for (unsigned role : data->roles)
+          hash.frame(std::to_string(role));
+      } else if (const auto *oracle = std::get_if<OraclePlacement>(&p.value)) {
+        hash.frame("oracle");
+        hash.frame(std::to_string(oracle->holder));
+        hash.frame(std::to_string(oracle->receivers.size()));
+        for (unsigned role : oracle->receivers)
+          hash.frame(std::to_string(role));
+      } else {
+        const auto &product = std::get<ProductPlacement>(p.value);
+        hash.frame("product");
+        hash.frame(product.instance);
+        hash.frame(std::to_string(product.arguments.size()));
+        for (unsigned role : product.arguments)
+          hash.frame(std::to_string(role));
+        hash.frame(std::to_string(product.fields.size()));
+        for (const auto &field : product.fields)
+          if (auto e = formula(field, level + 1))
+            return e;
+      }
+      return Error::success();
+    };
     auto fields = [&](ArrayRef<InterfaceField> fields) -> Error {
       hash.frame(std::to_string(fields.size()));
       for (const auto &field : fields) {
+        if (!remaining)
+          return error("source.limit", "schema field identity budget exceeded");
+        --remaining;
         hash.frame(field.name);
         hash.frame(std::to_string(field.offset));
+        hash.frame(field.isPublic ? "1" : "0");
+        hash.frame(field.placement ? "placement" : "");
+        if (field.placement)
+          if (auto e = formula(*field.placement, 0))
+            return e;
         if (field.maximumRows) {
           hash.frame("maximum_rows");
           hash.frame(std::to_string(*field.maximumRows));
@@ -1218,59 +1680,103 @@ class Reader {
     view.relations.push_back(std::move(result));
     return true;
   }
-  std::shared_ptr<const InterfaceSchema> project(const InterfacePort &port,
-                                                 const json::Array &path,
-                                                 std::vector<unsigned> &indices,
-                                                 std::vector<unsigned> &native,
-                                                 bool anchor = false) {
-    auto schema = port.schema;
-    unsigned offset = 0;
+  std::shared_ptr<const InterfaceSchema>
+  project(const InterfacePort &port, const json::Array &path,
+          std::vector<unsigned> &indices, std::vector<unsigned> &native,
+          bool anchor = false, std::optional<unsigned> role = {},
+          bool publicOnly = false, unsigned *holder = nullptr,
+          bool specification = false, bool association = false) {
+    auto selected = port.schema;
     for (const auto &item : path) {
       if (!charge(1))
         return {};
       auto at = item.getAsInteger();
-      if (!at || *at < 0 || uint64_t(*at) >= schema->fields.size() ||
-          schema->custody || schema->kind == Type::Kind::Variant ||
-          schema->kind == Type::Kind::Associated) {
-        fail("selector path is not a logical product projection");
+      if (!at || *at < 0 || uint64_t(*at) >= selected->fields.size() ||
+          (selected->custody && !specification) ||
+          selected->kind == Type::Kind::Variant ||
+          selected->kind == Type::Kind::Associated ||
+          (publicOnly && !selected->fields[*at].isPublic)) {
+        fail("selector path is not an accessible product projection");
         return {};
       }
-      indices.push_back(*at);
-      if (schema->kind == Type::Kind::LogicalRecord) {
-        // Schema field offsets count body leaves. Derive the expanded prefix
-        // independently, including preceding handles and zero-leaf fields.
-        std::vector<PortLeaf> prefix;
-        unsigned width = 0;
-        for (unsigned i = 0; i < unsigned(*at); ++i)
-          if (!observe(*schema->fields[i].schema, schema->fields[i].maximumRows,
-                       prefix, width))
-            return {};
-        offset += width;
-      } else
-        offset += schema->fields[*at].offset;
-      schema = schema->fields[*at].schema;
+      indices.push_back(unsigned(*at));
+      selected = selected->fields[*at].schema;
     }
-    if (anchor) {
-      if (!port.oracle || schema->kind != Type::Kind::Oracle ||
-          !schema->oracleData || offset + 1 >= port.native.size()) {
-        fail("anchor selector requires one singleton oracle field");
+    if (anchor &&
+        (selected->kind != Type::Kind::Oracle || !selected->oracleData)) {
+      fail("anchor selector requires one singleton oracle field");
+      return {};
+    }
+    if (!anchor && !association && logicalSchema(*selected)) {
+      fail("logical selection requires a singleton anchor");
+      return {};
+    }
+    std::set<unsigned> seen;
+    unsigned available = 0;
+    for (const auto &component : port.components) {
+      if (!charge(component.path.size() + 1))
+        return {};
+      if (component.path.size() < indices.size() ||
+          !llvm::equal(ArrayRef(component.path).take_front(indices.size()),
+                       indices))
+        continue;
+      if (anchor) {
+        if (component.path != indices)
+          continue;
+        if (component.facet == InterfaceComponentFacet::OracleData && holder)
+          *holder = component.role;
+        if (component.facet != InterfaceComponentFacet::OracleAnchor)
+          continue;
+      } else {
+        if (component.facet != InterfaceComponentFacet::Data)
+          continue;
+        if (role && component.role != *role)
+          continue;
+      }
+      if (seen.insert(component.native).second)
+        native.push_back(component.native);
+      ++available;
+    }
+    if ((!association &&
+         native.size() != (anchor ? 1 : selected->leaves.size())) ||
+        (role && !selected->leaves.empty() && !available)) {
+      fail("selector participant does not have every selected component");
+      return {};
+    }
+    // Zero-width ordinary selections retain their placement availability.
+    if (role && selected->leaves.empty()) {
+      const ValuePlacement *placed =
+          port.placement ? &*port.placement : nullptr;
+      auto current = port.schema;
+      for (auto index : indices) {
+        if (placed)
+          if (auto *product = std::get_if<ProductPlacement>(&placed->value))
+            placed =
+                &product
+                     ->fields[current->kind == Type::Kind::Array ? 0 : index];
+        current = current->fields[index].schema;
+      }
+      std::function<bool(const ValuePlacement &, unsigned)> available =
+          [&](const ValuePlacement &where, unsigned depth) {
+            if (!charge(1) || depth > limits.typeDepth)
+              return false;
+            if (const auto *data = std::get_if<DataPlacement>(&where.value))
+              return charge(data->roles.size()) &&
+                     is_contained(data->roles, *role);
+            if (const auto *product =
+                    std::get_if<ProductPlacement>(&where.value))
+              return !product->fields.empty() &&
+                     llvm::all_of(product->fields, [&](const auto &field) {
+                       return available(field, depth + 1);
+                     });
+            return false;
+          };
+      if (!placed || !available(*placed, 0)) {
+        fail("zero-width selection is unavailable at this role");
         return {};
       }
-      native.push_back(port.native[offset + 1]);
-      return schema->oracleData;
     }
-    if (schema->oracle || schema->kind == Type::Kind::LogicalRecord) {
-      fail("logical relation selection requires a singleton anchor");
-      return {};
-    }
-    if (offset > port.native.size() ||
-        schema->leaves.size() > port.native.size() - offset) {
-      fail("selector native slice is out of bounds");
-      return {};
-    }
-    for (unsigned i = 0; i < schema->leaves.size(); ++i)
-      native.push_back(port.native[offset + i]);
-    return schema;
+    return anchor ? selected->oracleData : selected;
   }
   std::optional<InterfaceSelector>
   selector(const json::Value &value,
@@ -1298,16 +1804,16 @@ class Reader {
       if (!role)
         return {};
       auto found = roleIndices.find(*role);
-      if (found == roleIndices.end() ||
-          !is_contained(ports[*port].roles, found->second))
+      if (found == roleIndices.end())
         return fail("selector does not name an actual participant component"),
                std::nullopt;
       owner = found->second;
     }
     InterfaceSelector result{
         *direction == "output", *port, owner, {}, {}, anchor};
-    auto schema =
-        project(ports[*port], *path, result.path, result.native, anchor);
+    auto schema = project(ports[*port], *path, result.path, result.native,
+                          anchor, anchor ? std::nullopt : std::optional(owner),
+                          false, &result.role, true);
     if (!schema)
       return {};
     if (selected)
@@ -1528,11 +2034,42 @@ class Reader {
       return {};
     return toHex(SHA256::hash(arrayRefFromStringRef(identity)), true);
   }
+  bool retainedSchemaType(const Type &type, const InterfaceSchema &schema,
+                          unsigned depth = 0) {
+    if (depth > limits.typeDepth || !charge(1)) {
+      if (!failure)
+        failure = error("source.limit", "retained schema type depth exceeded");
+      return false;
+    }
+    auto identity = typeIdentity(type);
+    if (!charge(identity.size() + 1))
+      return false;
+    if (schema.kind != type.kind ||
+        toHex(SHA256::hash(arrayRefFromStringRef(identity)), true) !=
+            schema.identity ||
+        schema.type != spelling(type))
+      return fail("retained field static type differs from complete schema");
+    if (type.kind == Type::Kind::Array) {
+      if (type.arguments.size() != 1 || !type.dimension.isClosed() ||
+          !schema.element ||
+          schema.fields.size() != type.dimension.closedValue() ||
+          !retainedSchemaType(type.arguments[0], *schema.element, depth + 1))
+        return fail("retained array element or extent differs");
+    } else if (type.kind == Type::Kind::Tuple) {
+      if (type.arguments.size() != schema.fields.size())
+        return fail("retained tuple arity differs");
+      for (unsigned i = 0; i < type.arguments.size(); ++i)
+        if (!retainedSchemaType(type.arguments[i], *schema.fields[i].schema,
+                                depth + 1))
+          return false;
+    }
+    return true;
+  }
   bool retainedSchemas(protocol_ir::ProtocolModuleOp module) {
     bool logical = llvm::any_of(schemas, [](const auto &item) {
       return item.second->kind == Type::Kind::LogicalRecord;
     });
-    if (!logical)
+    if (!logical && !module->hasAttr("source_declarations"))
       return true;
     auto declarations =
         exportDeclarationData(module->getAttr("source_declarations"));
@@ -1566,8 +2103,8 @@ class Reader {
         if (!field || field->size() != 2 ||
             (*field)[0].getAsString() != expected[i].name)
           return fail("retained nominal field name or order differs");
-        auto identity = retainedIdentity((*field)[1]);
-        if (!identity || *identity != expected[i].schema->identity)
+        auto type = retainedType((*field)[1]);
+        if (!type || !retainedSchemaType(*type, *expected[i].schema))
           return fail("retained nominal field type differs");
       }
       return true;
@@ -1587,9 +2124,22 @@ class Reader {
             if (!type || type->kind != schema.kind ||
                 spelling(*type) != schema.type)
               return fail("retained nominal source identity differs");
-            if (record[1].getAsString() != "ordinary")
-              return fail("logical declarations and their ordinary fields "
-                          "cannot claim resource custody");
+            if (record[2].getAsBoolean() != schema.sealed)
+              return fail("retained sealing policy differs from schema");
+            auto resource = record[1].getAsString();
+            if (!resource ||
+                (resource != "ordinary" && resource != "linear" &&
+                 resource != "affine") ||
+                (resource == "linear" &&
+                 (schema.permissions.copy || schema.permissions.drop)) ||
+                (resource == "affine" && schema.permissions.copy) ||
+                (resource == "ordinary" && schema.custody) ||
+                (resource != "ordinary" &&
+                 (schema.constructible ||
+                  schema.custody != (schema.kind == Type::Kind::LogicalRecord
+                                         ? schema.roles.size()
+                                         : 1))))
+              return fail("retained resource policy differs from schema");
             const auto &members = *record[3].getAsArray();
             if (schema.kind == Type::Kind::Variant) {
               if (!charge(1 + members.size()) ||
@@ -1607,6 +2157,8 @@ class Reader {
             } else if (!matchFields(members, schema.fields))
               return false;
           }
+          if (schema.element && !bind(*schema.element))
+            return false;
           for (const auto &field : schema.fields)
             if (!bind(*field.schema))
               return false;
@@ -1617,27 +2169,31 @@ class Reader {
           return true;
         };
     for (const auto &item : schemas)
-      if (item.second->kind == Type::Kind::LogicalRecord && !bind(*item.second))
+      if ((item.second->kind == Type::Kind::LogicalRecord ||
+           item.second->kind == Type::Kind::Record ||
+           item.second->kind == Type::Kind::Variant) &&
+          !bind(*item.second))
         return false;
     return true;
   }
-  bool transportAttributes(mlir::Operation &operation,
-                           const InterfacePort &port,
+  bool transportAttributes(mlir::Operation &operation, const PortLeaf &leaf,
                            ArrayRef<unsigned> mapping,
                            std::optional<uint64_t> maximum, bool binding) {
-    if (!port.oracle)
+    const auto *oracle =
+        leaf.placement ? std::get_if<OraclePlacement>(&leaf.placement->value)
+                       : nullptr;
+    if (!oracle)
       return fail("logical transport has no oriented family");
     auto mapped = [&](unsigned role) {
       return mapping.empty() ? role : mapping[role];
     };
     auto holder = operation.getAttrOfType<mlir::StringAttr>("holder");
     std::vector<unsigned> receivers;
-    for (auto role : port.roles)
-      if (role != port.oracle->holder)
-        receivers.push_back(mapped(role));
+    for (auto role : oracle->receivers)
+      receivers.push_back(mapped(role));
     llvm::sort(receivers);
     if (!holder ||
-        holder.getValue() != nativeRoleName(mapped(port.oracle->holder)) ||
+        holder.getValue() != nativeRoleName(mapped(oracle->holder)) ||
         !matchesRoles(operation.getAttr("receivers"), receivers) ||
         operation.getAttrs().size() != (binding ? 3u : 2u))
       return fail("logical transport role family differs");
@@ -1663,7 +2219,8 @@ class Reader {
       unsigned count = 0;
       if (!observe(*port.schema,
                    port.oracle ? port.oracle->maximumRows : std::nullopt,
-                   leaves, count))
+                   leaves, count, 0,
+                   port.placement ? &*port.placement : nullptr))
         return false;
       for (const auto &leaf : leaves) {
         if (!leaf.schema->oracle)
@@ -1675,7 +2232,7 @@ class Reader {
         if (!binding || binding.getData() != actual[port.native[leaf.offset]] ||
             binding.getAnchor() != actual[port.native[leaf.offset + 1]] ||
             !checked.insert(binding).second ||
-            !transportAttributes(*binding, port, mapping, leaf.maximumRows,
+            !transportAttributes(*binding, leaf, mapping, leaf.maximumRows,
                                  true))
           return fail("logical transport input pair, order or bound differs");
       }
@@ -1692,7 +2249,8 @@ class Reader {
       unsigned count = 0;
       if (!observe(*port.schema,
                    port.oracle ? port.oracle->maximumRows : std::nullopt,
-                   leaves, count))
+                   leaves, count, 0,
+                   port.placement ? &*port.placement : nullptr))
         return false;
       for (const auto &leaf : leaves) {
         if (!leaf.schema->oracle)
@@ -1704,7 +2262,7 @@ class Reader {
         auto parts = data.getDefiningOp<protocol_ir::OracleComponentsOp>();
         if (!parts || parts.getData() != data || parts.getAnchor() != anchor ||
             !checked.insert(parts).second ||
-            !transportAttributes(*parts, port, mapping, {}, false))
+            !transportAttributes(*parts, leaf, mapping, {}, false))
           return fail(
               "logical transport components are unpaired, reused or reordered");
         ordered.push_back(parts);
@@ -1754,6 +2312,10 @@ class Reader {
           }
           std::vector<unsigned> mapping;
           for (auto attribute : roles) {
+            if (!charge(protocol.roles.size() + 1)) {
+              valid = false;
+              return;
+            }
             auto name = mlir::dyn_cast<mlir::StringAttr>(attribute);
             unsigned role = 0;
             while (name && role < protocol.roles.size() &&
@@ -1797,8 +2359,9 @@ class Reader {
     return true;
   }
   bool protocolRecord(const json::Value &value) {
-    auto *obj = object(
-        value, {"symbol", "roles", "inputs", "outputs", "services", "clauses"});
+    auto *obj =
+        object(value, {"symbol", "roles", "inputs", "outputs", "services",
+                       "clauses", "common_input_requirements"});
     if (!obj)
       return false;
     auto symbol = text(*obj, "symbol", limits.symbolBytes);
@@ -1873,6 +2436,18 @@ class Reader {
     }
     if (input != type.getNumInputs() || output != type.getNumResults())
       return fail("interface omits native ports");
+    auto common = decodeCommonRequirements(
+        *obj->get("common_input_requirements"), *current, remaining, limits);
+    if (!common) {
+      failure = common.takeError();
+      return false;
+    }
+    current->commonInputRequirements = std::move(*common);
+    if (auto e = checkNativeCommonRequirements(function, *current, remaining,
+                                               limits)) {
+      failure = std::move(e);
+      return false;
+    }
     std::set<std::string> clauseNames;
     for (const auto &item : *clauses) {
       auto clause = clauseRecord(item);
@@ -1947,26 +2522,51 @@ class Reader {
     if (!slots || slots->size() > 64)
       return fail("invalid setup slot array");
     const auto &protocol = view.selectedProtocol();
+    std::vector<unsigned> publicNative;
+    if (view.proof) {
+      auto selected = detail::interfacePublicNative(
+          protocol, view.proof->publicInputs, view.proof->verifier, remaining,
+          limits);
+      if (!selected) {
+        failure = selected.takeError();
+        return false;
+      }
+      publicNative = std::move(*selected);
+    }
     std::set<unsigned> expected;
     std::set<unsigned> verifierKeys, covered;
-    for (unsigned p = 0; p < protocol.inputs.size(); ++p) {
-      const auto &input = protocol.inputs[p];
-      if (input.oracle)
-        continue;
-      for (unsigned i = 0; i < input.native.size(); ++i) {
-        if (!charge(1))
+    std::map<unsigned, std::set<unsigned>> dataRoles;
+    for (const auto &input : protocol.inputs) {
+      for (const auto &component : input.components) {
+        if (!charge(component.path.size() + 1))
           return false;
-        const auto &leaf = nativeLeaves.at(input.schema->leaves[i]);
-        if (view.proof && leaf.proverKey &&
-            is_contained(input.roles, view.proof->verifier))
+        if (component.facet == InterfaceComponentFacet::Data)
+          dataRoles[component.native].insert(component.role);
+      }
+      std::vector<PortLeaf> leaves;
+      unsigned width = 0;
+      if (!observe(*input.schema,
+                   input.oracle ? input.oracle->maximumRows : std::nullopt,
+                   leaves, width, 0, &*input.placement))
+        return false;
+      for (const auto &leaf : leaves) {
+        if (leaf.schema->oracle || leaf.custody)
+          continue;
+        auto policy = leafPermissions(leaf.data);
+        if (!policy)
+          return false;
+        const auto &native = nativeLeaves.at(leaf.data);
+        unsigned index = input.native[leaf.offset];
+        if (view.proof && native.proverKey &&
+            dataRoles[index].count(view.proof->verifier))
           return fail("proof prover keys must stay with the prover");
-        if (leaf.setup)
-          expected.insert(input.native[i]);
-        if (leaf.verifierKey) {
-          if (input.schema->kind != Type::Kind::Builtin ||
-              input.native.size() != 1)
-            return fail("key initialization requires a whole builtin port");
-          verifierKeys.insert(input.native[i]);
+        if (native.setup)
+          expected.insert(index);
+        if (native.verifierKey) {
+          if (leaf.schema->kind != Type::Kind::Builtin ||
+              leaf.schema->leaves.size() != 1)
+            return fail("key initialization requires a whole builtin field");
+          verifierKeys.insert(index);
         }
       }
     }
@@ -2000,7 +2600,7 @@ class Reader {
           return fail("setup selector input is absent");
         InterfaceEntryInput selected{*port, {}, {}};
         if (!project(protocol.inputs[*port], *path, selected.path,
-                     selected.native))
+                     selected.native, false, {}, true, nullptr, false, true))
           return false;
         bool nonempty = false;
         for (unsigned index : selected.native) {
@@ -2012,9 +2612,8 @@ class Reader {
           if (!covered.insert(index).second)
             return fail("setup selectors overlap");
           if (view.proof && verifierKeys.count(index)) {
-            if (!is_contained(view.proof->publicInputs, *port) ||
-                !is_contained(protocol.inputs[*port].roles,
-                              view.proof->verifier))
+            if (!is_contained(publicNative, index) ||
+                !dataRoles[index].count(view.proof->verifier))
               return fail("proof setup keys must be public verifier inputs");
             publicVerifier = true;
           }
@@ -2087,22 +2686,32 @@ class Reader {
     for (const auto &input : *publicInputs) {
       if (!charge(1))
         return false;
-      auto index = input.getAsInteger();
-      if (!index || *index < 0 || uint64_t(*index) >= current->inputs.size() ||
-          (!proof.publicInputs.empty() &&
-           uint64_t(*index) <= proof.publicInputs.back()))
-        return fail("invalid public logical input index");
-      proof.publicInputs.push_back(*index);
-    }
-    std::vector<unsigned> required;
-    for (unsigned i = 0; i < current->inputs.size(); ++i) {
-      if (!charge(current->inputs[i].roles.size() + 1))
+      const auto *selected = object(input, {"port", "path", "role"});
+      if (!selected)
         return false;
-      if (is_contained(current->inputs[i].roles, proof.verifier))
-        required.push_back(i);
+      auto port = natural(*selected, "port");
+      auto role = text(*selected, "role", limits.identifierBytes);
+      auto *path = array(*selected, "path");
+      if (!port || !role || !path || *port >= current->inputs.size() ||
+          *role != *verifier || path->size() > limits.typeDepth)
+        return fail("invalid public field selection");
+      EntryInputSelection result{*port, {}, proof.verifier, {}};
+      for (const auto &step : *path) {
+        if (!charge(1))
+          return false;
+        auto index = step.getAsInteger();
+        if (!index || *index < 0 || uint64_t(*index) > UINT32_MAX)
+          return fail("invalid public path ordinal");
+        result.path.push_back(*index);
+      }
+      proof.publicInputs.push_back(std::move(result));
     }
-    if (required != proof.publicInputs)
-      return fail("public policy differs from verifier data ports");
+    auto publicNative = detail::interfacePublicNative(
+        *current, proof.publicInputs, proof.verifier, remaining, limits);
+    if (!publicNative) {
+      failure = publicNative.takeError();
+      return false;
+    }
     std::shared_ptr<const InterfaceSchema> logical;
     auto acceptance = selector(*obj->get("acceptance"), &logical);
     if (!acceptance)
@@ -2245,10 +2854,17 @@ class Reader {
         if (operand.output)
           return fail("exported target requires Entry input operands");
         const auto &port = current->inputs[operand.port];
-        bool visible =
-            operand.anchor
-                ? port.oracle && port.oracle->holder == proof.verifier
-                : is_contained(port.roles, proof.verifier);
+        bool visible = operand.anchor
+                           ? operand.role == proof.verifier
+                           : llvm::all_of(operand.native, [&](unsigned index) {
+                               return llvm::any_of(
+                                   port.components, [&](const auto &component) {
+                                     return component.native == index &&
+                                            component.role == proof.verifier &&
+                                            component.facet ==
+                                                InterfaceComponentFacet::Data;
+                                   });
+                             });
         if ((input.purpose == RelationPurpose::Witness) == visible)
           return fail(
               "target purpose differs from verifier input availability");
@@ -2331,7 +2947,12 @@ class Reader {
       }
       leaves.push_back(text->str());
     }
-    return schema(value, 0, leaves);
+    auto result = schema(value, 0, leaves);
+    if (result && logicalSchema(*result)) {
+      fail("Host schema contains logical category");
+      return {};
+    }
+    return result;
   }
   bool host(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
     auto *obj = object(value, {"format", "capture", "original", "toolchain",
@@ -2499,6 +3120,26 @@ public:
       return std::move(failure);
     return result;
   }
+  Expected<std::string> runIdentity(const json::Value &value) {
+    auto *object = value.getAsObject();
+    auto *leaves = object ? object->getArray("leaves") : nullptr;
+    if (!leaves)
+      return error("source.interface", "schema leaves missing");
+    std::vector<std::string> expected;
+    for (const auto &leaf : *leaves) {
+      auto text = leaf.getAsString();
+      if (!text || !charge(text->size() + 1)) {
+        if (!failure)
+          fail("invalid schema leaf");
+        return std::move(failure);
+      }
+      expected.push_back(text->str());
+    }
+    auto result = schema(value, 0, expected);
+    if (!result)
+      return std::move(failure);
+    return schemaIdentity(*result);
+  }
   Expected<LanguageInterface> run(const json::Value &value,
                                   mlir::ModuleOp module, StringRef digest) {
     if (!read(value, module, digest))
@@ -2510,6 +3151,12 @@ public:
 Expected<std::shared_ptr<const InterfaceSchema>>
 decodeHostSchema(const json::Value &value, const Limits &limits) {
   return Reader(limits, {}).runSchema(value);
+}
+Expected<std::string> interfaceSchemaIdentity(const json::Value &value,
+                                              const Limits &limits) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  return Reader(limits, {}).runIdentity(value);
 }
 Expected<LanguageInterface> decodeInterface(mlir::ModuleOp module,
                                             StringRef digest,

@@ -114,7 +114,7 @@ BodyChecker::transport(ValueId value, ArrayRef<unsigned> path, Span span) {
 }
 std::optional<ValueId> BodyChecker::transport(ArrayRef<ValueId> values,
                                               Span span) {
-  if (!plan)
+  if (!plan && !protocol())
     return pack(values, span);
   if (values.size() == 1)
     return values.front();
@@ -122,15 +122,42 @@ std::optional<ValueId> BodyChecker::transport(ArrayRef<ValueId> values,
   std::vector<UsagePlan::Value> fields;
   for (auto value : values) {
     type.arguments.push_back(body.values[value.index].type);
-    fields.push_back(usageValues[value.index]);
+    if (!plan && !use(value, span))
+      return {};
+    if (plan)
+      fields.push_back(usageValues[value.index]);
   }
-  auto roles = combine(values, span);
-  auto result =
-      roles ? emit(Construct{std::vector<ValueId>(values.begin(), values.end()),
-                             {}},
-                   type, *roles, span)
-            : std::nullopt;
-  if (result && !values.empty())
+  std::optional<ValueId> result;
+  if (protocol() && !values.empty()) {
+    ProductPlacement schema{typeIdentity(type), {}, {}};
+    std::set<unsigned> participation;
+    for (auto value : values) {
+      const auto &placed = body.values[value.index].placement;
+      if (!placed) {
+        fail("source.placement", "control yield has unresolved placement",
+             span);
+        return {};
+      }
+      schema.fields.push_back(*placed);
+      auto roles = placementRoles(*placed);
+      participation.insert(roles.begin(), roles.end());
+    }
+    schema.arguments.assign(participation.begin(), participation.end());
+    auto placed =
+        checker.types.placement(type, schema, decl.roles.size(), span);
+    if (!placed)
+      return {};
+    result =
+        emit(Construct{std::vector<ValueId>(values.begin(), values.end()), {}},
+             type, placementRoles(*placed), span, *placed);
+  } else {
+    auto roles = combine(values, span);
+    if (roles)
+      result = emit(
+          Construct{std::vector<ValueId>(values.begin(), values.end()), {}},
+          type, *roles, span);
+  }
+  if (plan && result && !values.empty())
     usageValues[result->index] = plan->usage.product(fields, span);
   return result;
 }
@@ -152,7 +179,7 @@ BodyChecker::restrictRoles(ValueId value, ArrayRef<unsigned> roles, Span span) {
   }
   if (ArrayRef<unsigned>(before.components) == roles)
     return value;
-  if (isLogicalValue(before.type)) {
+  if (isLogicalValue(before.type) || product(value)) {
     fail("source.oracle-role",
          "oracle aliases retain the complete holder/receiver family", span);
     return {};
@@ -198,6 +225,12 @@ bool BodyChecker::assign(BindingId id, ValueId value, Span span) {
   if (body.values[value.index].type != state.type)
     return fail("source.type", "assignment cannot change the binding type",
                 span);
+  if (state.value && body.values[state.value->index].placement &&
+      (isLogicalValue(state.type) || product(*state.value)) &&
+      body.values[state.value->index].placement !=
+          body.values[value.index].placement)
+    return fail("source.placement", "assignment cannot change placed identity",
+                span);
   if (state.value && body.values[state.value->index].oracleHolder !=
                          body.values[value.index].oracleHolder)
     return fail("source.oracle-role",
@@ -215,6 +248,34 @@ bool BodyChecker::assign(BindingId id, ValueId value, Span span) {
   state.value = *next;
   state.pieces.clear();
   return true;
+}
+bool BodyChecker::retiresCustody(const Pattern &pattern, const Type &type,
+                                 unsigned depth) {
+  if (depth > checker.work.limits.expressionDepth ||
+      !checker.types.charge(1, pattern.span))
+    return false;
+  if (pattern.kind == Pattern::Kind::Record) {
+    const auto *nominal = checker.types.typeDeclaration(type);
+    if (nominal && nominal->resource)
+      return true;
+    auto fields = checker.types.fields(type, pattern.span);
+    if (!fields)
+      return false;
+    for (unsigned i = 0; i < pattern.children.size(); ++i) {
+      auto field = llvm::find_if(
+          *fields, [&](const auto &f) { return f.name == pattern.labels[i]; });
+      if (field != fields->end() &&
+          retiresCustody(pattern.children[i], field->type, depth + 1))
+        return true;
+    }
+  } else if (pattern.kind == Pattern::Kind::Tuple &&
+             type.kind == Type::Kind::Tuple) {
+    for (unsigned i = 0;
+         i < pattern.children.size() && i < type.arguments.size(); ++i)
+      if (retiresCustody(pattern.children[i], type.arguments[i], depth + 1))
+        return true;
+  }
+  return false;
 }
 bool BodyChecker::bindPattern(const Pattern &p, ValueId value, unsigned depth) {
   if (depth > checker.work.limits.expressionDepth ||
@@ -241,7 +302,11 @@ bool BodyChecker::bindPattern(const Pattern &p, ValueId value, unsigned depth) {
                       p.span);
   std::vector<TypeField> fields;
   if (p.kind == Pattern::Kind::Record) {
-    auto specified = checker.type(decl, *p.type);
+    auto placed = checker.placedType(decl, *p.type);
+    if (placed && placed->placement &&
+        !matchPlacement(value, *placed->placement, p.span))
+      return false;
+    auto specified = placed ? std::optional<Type>(placed->type) : std::nullopt;
     if (!specified)
       return false;
     if (*specified != type || (type.kind != Type::Kind::Record &&
@@ -313,9 +378,11 @@ bool BodyChecker::bindResults(const Statement &s, ArrayRef<ValueId> values) {
   if (values.size() == 1) {
     auto value = values.front();
     if (s.type) {
-      auto expected = checker.type(decl, *s.type);
+      auto expected = checker.placedType(decl, *s.type);
       if (!expected ||
-          (*expected != body.values[value.index].type &&
+          (expected->placement &&
+           !matchPlacement(value, *expected->placement, s.span)) ||
+          (expected->type != body.values[value.index].type &&
            !fail("source.type", "binding annotation differs from result",
                  s.span)))
         return false;

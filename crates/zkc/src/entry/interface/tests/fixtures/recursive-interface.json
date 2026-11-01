@@ -1,0 +1,408 @@
+{
+  "format": "zkc.language-interface/0",
+  "setups": [],
+  "capture": "460ee6aa3a80359181b794cc31a7185addba77626e9f719c10e3c8efb8668a1d",
+  "original": "0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5",
+  "toolchain": "test-toolchain",
+  "entry": "sample::Proof",
+  "protocol": "sample_Protocol",
+  "protocols": [
+    {
+      "symbol": "sample_Protocol",
+      "roles": [
+        "A",
+        "B",
+        "V"
+      ],
+      "inputs": [
+        {
+          "name": "state",
+          "index": 0,
+          "native": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "placement": {
+            "kind": "product",
+            "instance": "5e426f92df907e540b88b5927654cd66944e7357f05a5997c454f3cf3ab0bbbb",
+            "arguments": [
+              0,
+              1,
+              2
+            ],
+            "fields": [
+              {
+                "kind": "product",
+                "instance": "acb8cbff1386ee1714ea3b356da66a4c7c0b3d89a1caee20312fe21c83f448c0",
+                "arguments": [
+                  1,
+                  0,
+                  2
+                ],
+                "fields": [
+                  {
+                    "kind": "oracle",
+                    "holder": 1,
+                    "receivers": [
+                      2
+                    ]
+                  },
+                  {
+                    "kind": "oracle",
+                    "holder": 0,
+                    "receivers": [
+                      2
+                    ]
+                  },
+                  {
+                    "kind": "data",
+                    "roles": [
+                      1
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "data",
+                "roles": [
+                  2
+                ]
+              }
+            ]
+          },
+          "type": "Outer",
+          "schema": {
+            "kind": "logical_record",
+            "identity": "5e426f92df907e540b88b5927654cd66944e7357f05a5997c454f3cf3ab0bbbb",
+            "type": "Outer",
+            "custody": 0,
+            "sealed": false,
+            "constructible": false,
+            "permissions": [
+              "Copy",
+              "Drop"
+            ],
+            "fields": [
+              {
+                "name": "nested",
+                "offset": 0,
+                "public": true,
+                "placement": {
+                  "kind": "product",
+                  "instance": "acb8cbff1386ee1714ea3b356da66a4c7c0b3d89a1caee20312fe21c83f448c0",
+                  "arguments": [
+                    1,
+                    0,
+                    2
+                  ],
+                  "fields": [
+                    {
+                      "kind": "oracle",
+                      "holder": 1,
+                      "receivers": [
+                        2
+                      ]
+                    },
+                    {
+                      "kind": "oracle",
+                      "holder": 0,
+                      "receivers": [
+                        2
+                      ]
+                    },
+                    {
+                      "kind": "data",
+                      "roles": [
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "schema": {
+                  "kind": "logical_record",
+                  "identity": "acb8cbff1386ee1714ea3b356da66a4c7c0b3d89a1caee20312fe21c83f448c0",
+                  "type": "Inner<phantom>",
+                  "custody": 0,
+                  "sealed": false,
+                  "constructible": false,
+                  "permissions": [
+                    "Copy",
+                    "Drop"
+                  ],
+                  "fields": [
+                    {
+                      "name": "left",
+                      "offset": 0,
+                      "public": true,
+                      "placement": {
+                        "kind": "oracle",
+                        "holder": 0,
+                        "receivers": [
+                          2
+                        ]
+                      },
+                      "schema": {
+                        "kind": "oracle",
+                        "identity": "9c5366cd89be665f5b0c40a022656e1932f37a3fd291196a8da83e1638aaf9bb",
+                        "type": "Handle<bool,Some(\"0\"),None>",
+                        "custody": 0,
+                        "sealed": false,
+                        "constructible": false,
+                        "permissions": [
+                          "Copy",
+                          "Drop"
+                        ],
+                        "fields": [],
+                        "alternatives": [],
+                        "leaves": [],
+                        "roles": [],
+                        "element": null,
+                        "oracle": {
+                          "kind": "table",
+                          "arguments": [
+                            [
+                              "type",
+                              "bool"
+                            ],
+                            [
+                              "nat",
+                              "0"
+                            ]
+                          ]
+                        },
+                        "data_schema": {
+                          "kind": "builtin",
+                          "identity": "ecfce0b89f7c10a654c33811991cf6da4eab166f1e321280cf64709484a87754",
+                          "type": "sequence<bool>",
+                          "custody": 0,
+                          "sealed": false,
+                          "constructible": true,
+                          "permissions": [
+                            "Copy",
+                            "Drop"
+                          ],
+                          "fields": [],
+                          "alternatives": [],
+                          "leaves": [
+                            "sequence<bool>"
+                          ],
+                          "roles": [],
+                          "element": null,
+                          "generated": null
+                        },
+                        "generated": null
+                      }
+                    },
+                    {
+                      "name": "right",
+                      "offset": 1,
+                      "public": true,
+                      "placement": {
+                        "kind": "oracle",
+                        "holder": 1,
+                        "receivers": [
+                          2
+                        ]
+                      },
+                      "schema": {
+                        "kind": "oracle",
+                        "identity": "9c5366cd89be665f5b0c40a022656e1932f37a3fd291196a8da83e1638aaf9bb",
+                        "type": "Handle<bool,Some(\"0\"),None>",
+                        "custody": 0,
+                        "sealed": false,
+                        "constructible": false,
+                        "permissions": [
+                          "Copy",
+                          "Drop"
+                        ],
+                        "fields": [],
+                        "alternatives": [],
+                        "leaves": [],
+                        "roles": [],
+                        "element": null,
+                        "oracle": {
+                          "kind": "table",
+                          "arguments": [
+                            [
+                              "type",
+                              "bool"
+                            ],
+                            [
+                              "nat",
+                              "0"
+                            ]
+                          ]
+                        },
+                        "data_schema": {
+                          "kind": "builtin",
+                          "identity": "ecfce0b89f7c10a654c33811991cf6da4eab166f1e321280cf64709484a87754",
+                          "type": "sequence<bool>",
+                          "custody": 0,
+                          "sealed": false,
+                          "constructible": true,
+                          "permissions": [
+                            "Copy",
+                            "Drop"
+                          ],
+                          "fields": [],
+                          "alternatives": [],
+                          "leaves": [
+                            "sequence<bool>"
+                          ],
+                          "roles": [],
+                          "element": null,
+                          "generated": null
+                        },
+                        "generated": null
+                      }
+                    },
+                    {
+                      "name": "empty",
+                      "offset": 2,
+                      "public": false,
+                      "placement": {
+                        "kind": "data",
+                        "roles": [
+                          0
+                        ]
+                      },
+                      "schema": {
+                        "kind": "unit",
+                        "identity": "2e38e77b22c314a449e91fafed92a43826ac6aa403ae6a8acb6cf58239fbaf5d",
+                        "type": "()",
+                        "custody": 0,
+                        "sealed": false,
+                        "constructible": true,
+                        "permissions": [
+                          "Copy",
+                          "Drop"
+                        ],
+                        "fields": [],
+                        "alternatives": [],
+                        "leaves": [],
+                        "roles": [],
+                        "element": null,
+                        "generated": null
+                      }
+                    }
+                  ],
+                  "alternatives": [],
+                  "leaves": [],
+                  "roles": [
+                    "A",
+                    "B",
+                    "V"
+                  ],
+                  "element": null,
+                  "generated": null
+                }
+              },
+              {
+                "name": "count",
+                "offset": 2,
+                "public": true,
+                "placement": {
+                  "kind": "data",
+                  "roles": [
+                    2
+                  ]
+                },
+                "schema": {
+                  "kind": "index",
+                  "identity": "1bc04b5291c26a46d918139138b992d2de976d6851d0893b0476b85bfbdfc6e6",
+                  "type": "index",
+                  "custody": 0,
+                  "sealed": false,
+                  "constructible": true,
+                  "permissions": [
+                    "Copy",
+                    "Drop"
+                  ],
+                  "fields": [],
+                  "alternatives": [],
+                  "leaves": [
+                    "index"
+                  ],
+                  "roles": [],
+                  "element": null,
+                  "generated": null
+                }
+              }
+            ],
+            "alternatives": [],
+            "leaves": [],
+            "roles": [
+              "X",
+              "Y",
+              "Z"
+            ],
+            "element": null,
+            "generated": null
+          },
+          "components": [
+            {
+              "path": [
+                0,
+                0
+              ],
+              "leaf": 0,
+              "role": 1,
+              "facet": "oracle_data",
+              "native": 0
+            },
+            {
+              "path": [
+                0,
+                0
+              ],
+              "leaf": 0,
+              "role": 2,
+              "facet": "oracle_anchor",
+              "native": 1
+            },
+            {
+              "path": [
+                0,
+                1
+              ],
+              "leaf": 0,
+              "role": 0,
+              "facet": "oracle_data",
+              "native": 2
+            },
+            {
+              "path": [
+                0,
+                1
+              ],
+              "leaf": 0,
+              "role": 2,
+              "facet": "oracle_anchor",
+              "native": 3
+            },
+            {
+              "path": [
+                1
+              ],
+              "leaf": 0,
+              "role": 2,
+              "facet": "data",
+              "native": 4
+            }
+          ]
+        }
+      ],
+      "outputs": [],
+      "services": [],
+      "clauses": [],
+      "common_input_requirements": []
+    }
+  ],
+  "relations": [],
+  "job": {
+    "kind": "run"
+  }
+}

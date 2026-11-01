@@ -17,7 +17,7 @@ bool Checker::classifyServices() {
       auto port = std::move(inputs[slot.index]);
       if (!types.charge(1, port.span))
         return false;
-      const protocol::SourceService *service = nullptr;
+      const protocol::FrontendAssociation *service = nullptr;
       if (port.type.kind == SyntaxType::Kind::Name) {
         // A static binder shadows an implicit installed source constructor.
         bool bound = false;
@@ -33,20 +33,14 @@ bool Checker::classifyServices() {
           auto target = resolve(decl, port.type.name, port.type.span, false);
           if (types.diagnostic)
             return false;
-          if (!target) {
-            for (const auto &installed : protocol::sourceServices)
-              if (port.type.name == installed.name) {
-                target = resolve(
-                    decl, (installed.module + "::" + installed.name).str(),
-                    port.type.span);
-                if (!target)
-                  return false;
-                break;
-              }
-          }
+          if (!target)
+            target = output.declarationIndex->implicit(port.type.name);
           if (target) {
             const auto &constructor = output.declarations[target->index];
-            service = protocol::sourceService(constructor.qualifiedName);
+            service = output.declarationIndex->association(*target);
+            if (service && service->signature !=
+                               protocol::FrontendSignature::RandomConstructor)
+              service = nullptr;
             if (service) {
               port.serviceConstructor = constructor.qualifiedName;
               if (!recordReference(decl, constructor.module, *target,

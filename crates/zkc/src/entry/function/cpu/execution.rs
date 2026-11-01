@@ -94,7 +94,6 @@ impl EntryHost {
             .parameters
             .iter()
             .map(|p| {
-                self.interface.check_native_input(&p.schema)?;
                 let value = request
                     .arguments
                     .remove(&p.name)

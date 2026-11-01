@@ -183,7 +183,9 @@ numerical byte ceiling.
 `runtime.origin` contains an entry identity, an ordered path of
 `runtime.origin_step` attributes, and one `runtime.query_origin`,
 `runtime.message_origin` or `runtime.start_origin` event. Path kinds are the
-`apply` and `repeat` enum cases. A query stores its service-input index as u64,
+`apply`, `repeat` and `branch` enum cases. A branch step additionally retains
+its nonempty declared alternative; other step kinds have no alternative.
+A query stores its service-input index as u64,
 separately from its service contract, method and owner; it does not parse an
 `input_N` name internally. Message events retain schema, sender and receiver.
 Start events retain the original caller and application site. All names, the

@@ -87,7 +87,12 @@ assembly and its fixtures; it does not change `zkc.program/0` bytes.
 values not represented by the profile's `i1` and `i64` scalar types. `data.construct`, `data.unpack` and
 `data.project` manipulate these logical values. The native mathematical
 aggregate carrier and its existing Data operations have their own checked
-representation contract; neither carrier is an alias for the other.
+representation contract; neither carrier is an alias for the other. Typed Host
+layouts retain each field's Boolean visibility, a complete array element
+layout even at length zero, and an optional generated-family identity. Their
+[Entry schema export](../formats/entry.md) uses integer custody counts, empty
+declaration-role arrays and null field placements. Distributed logical values
+use the Protocol ABI rather than this Host carrier.
 
 These operations carry inherent data instead of an encoded JSON descriptor.
 `exec.numeric` has a nonempty `calculation` identity and `exec.invoke` a nonempty

@@ -70,12 +70,18 @@ bool matchesSubject(const SourceClaimBlock &block, const ClosedEntry &entry) {
          protocol->origin && protocol->origin->index == block.subject->index &&
          protocol->staticArguments == block.arguments;
 }
-// A path traverses only explicitly labelled calls. Repeated occurrences are
-// static sites, not dynamic loop iterations. No synthetic ordinal is exported.
-using Sites = std::map<std::string, const Operation *>;
-Error exportedSites(ArrayRef<Declaration> declarations, const Body *body,
-                    StringRef prefix, Sites &sites, detail::Work &work,
-                    unsigned depth = 1) {
+// A path traverses labelled calls and selected alternatives. Repeated
+// occurrences are static sites, not dynamic loop iterations.
+struct ExportedSite {
+  const Operation *operation;
+  std::vector<std::string> nativePath;
+};
+using Sites = std::map<std::string, ExportedSite>;
+Error exportedSites(
+    ArrayRef<Declaration> declarations, const Body *body, StringRef prefix,
+    Sites &sites, detail::Work &work, unsigned depth = 1,
+    std::vector<std::string> nativeParents = {},
+    std::optional<std::pair<std::string, std::string>> selectedScope = {}) {
   if (!body)
     return Error::success();
   if (depth > work.limits.callDepth)
@@ -86,19 +92,52 @@ Error exportedSites(ArrayRef<Declaration> declarations, const Body *body,
     auto path = op.site ? (prefix + *op.site).str() : std::string();
     if (path.size() > work.limits.symbolBytes)
       return detail::failure("source.limit", "source claim site path exceeded");
-    if (op.site && !sites.emplace(path, &op).second)
-      return detail::failure("source.claim.site", "ambiguous exported site",
-                             op.span);
-    if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
-      if (auto e = exportedSites(declarations, repeat->region.get(), prefix,
-                                 sites, work, depth + 1))
-        return e;
-    } else if (auto *call = std::get_if<ProtocolApplication>(&op.action)) {
-      if (op.site)
-        if (auto e = exportedSites(declarations,
-                                   declarations[call->callee.index].body.get(),
-                                   path + ".", sites, work, depth + 1))
+    std::string nativeSite;
+    if (op.site) {
+      nativeSite = nativeSiteName(*op.site, 0);
+      if (selectedScope)
+        nativeSite = nativeSelectedSite(selectedScope->first,
+                                        selectedScope->second, nativeSite);
+      auto nativePath = nativeParents;
+      nativePath.push_back(nativeSite);
+      for (const auto &part : nativePath)
+        if (auto e = work.charge(part.size() + 1, op.span))
           return e;
+      if (!sites.emplace(path, ExportedSite{&op, std::move(nativePath)}).second)
+        return detail::failure("source.claim.site", "ambiguous exported site",
+                               op.span);
+    }
+    if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+      if (auto e =
+              exportedSites(declarations, repeat->region.get(), prefix, sites,
+                            work, depth + 1, nativeParents, selectedScope))
+        return e;
+    } else if (auto *control = std::get_if<Control>(&op.action)) {
+      if (!op.site)
+        continue;
+      for (unsigned arm = 0; arm < control->regions.size(); ++arm) {
+        auto alternative =
+            control->kind == Control::Kind::If
+                ? (arm == 0 ? std::string("then") : std::string("else"))
+                : control->alternatives[arm];
+        if (auto e = exportedSites(
+                declarations, control->regions[arm].get(),
+                path + "." + alternative + ".", sites, work, depth + 1,
+                nativeParents,
+                std::pair(nativeSite, control->kind == Control::Kind::If
+                                          ? alternative
+                                          : nativeAlternativeName(arm))))
+          return e;
+      }
+    } else if (auto *call = std::get_if<ProtocolApplication>(&op.action)) {
+      if (op.site) {
+        auto parents = nativeParents;
+        parents.push_back(nativeSite);
+        if (auto e = exportedSites(
+                declarations, declarations[call->callee.index].body.get(),
+                path + ".", sites, work, depth + 1, std::move(parents)))
+          return e;
+      }
     }
   }
   return Error::success();
@@ -285,7 +324,7 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
           if (auto e = retainBody(*repeat->region, depth + 1))
             return e;
       } else if (const auto *control =
-                     std::get_if<LocalControl>(&operation.action)) {
+                     std::get_if<Control>(&operation.action)) {
         for (const auto &region : control->regions)
           if (region)
             if (auto e = retainBody(*region, depth + 1))
@@ -844,8 +883,9 @@ Expected<json::Value> sourceClaimsData(const ClosedEntry &entry,
           for (const auto &capability : value->arguments)
             capabilities.getAsArray()->push_back(expression(capability));
         // Occurrence proposals are attachments. Native paths follow labelled
-        // calls and the final source site; aggregate messages may have several
-        // native leaves, which the admitted construction context must resolve.
+        // calls and exact selected-arm scopes; aggregate messages may have
+        // several native leaves, which the admitted construction context must
+        // resolve.
         json::Array siteBindings;
         std::set<std::string> referencedSites;
         std::function<void(const E &)> collectSites = [&](const E &value) {
@@ -857,14 +897,12 @@ Expected<json::Value> sourceClaimsData(const ClosedEntry &entry,
         };
         collectSites(property);
         for (const auto &path : referencedSites) {
-          SmallVector<StringRef> parts;
-          StringRef(path).split(parts, '.');
           json::Array nativePath;
-          for (auto part : parts)
-            nativePath.push_back(nativeSiteName(part, 0));
+          for (const auto &part : sites.at(path).nativePath)
+            nativePath.push_back(part);
           siteBindings.push_back(json::Object{
               {"site", path},
-              {"source", sourceNode(project, sites.at(path)->span)},
+              {"source", sourceNode(project, sites.at(path).operation->span)},
               {"native_path", std::move(nativePath)}});
         }
         json::Value method = nullptr;

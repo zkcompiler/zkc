@@ -1,4 +1,5 @@
 #include "zkc/Language/Natural.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 #include <limits>
@@ -184,5 +185,72 @@ int main() {
   NaturalArithmetic oneTerm(100, 1);
   refuses(oneTerm.multiply(add(n, one), add(n, one)), "source.limit");
   refuses(Natural::atom(""), "source.natural");
+  // An enclosing ledger sees every admitted unit, including error prefixes.
+  uint64_t enclosing = 1000;
+  unsigned admissions = 0;
+  auto admit = [&](uint64_t amount) -> Error {
+    ++admissions;
+    if (amount > enclosing)
+      return zkc::error("source.limit", "test enclosing allowance exhausted");
+    enclosing -= amount;
+    return Error::success();
+  };
+  NaturalArithmetic hooked(1000, 1024, 64, admit);
+  NaturalArithmetic standalone(1000);
+  check(take(hooked.add(n, one)) == take(standalone.add(n, one)));
+  check(take(hooked.multiply(n, m)) == take(standalone.multiply(n, m)));
+  check(take(hooked.powerOfTwo(n)) == take(standalone.powerOfTwo(n)));
+  check(take(hooked.substitute(n, {{"N", one}})) ==
+        take(standalone.substitute(n, {{"N", one}})));
+  check(take(hooked.cancelCommonTerms(n, n)) ==
+        take(standalone.cancelCommonTerms(n, n)));
+  check(enclosing == hooked.remainingWork() &&
+        enclosing == standalone.remainingWork());
+  auto beforeOverflow = enclosing;
+  refuses(hooked.powerOfTwo(Natural::constant(64)), "source.natural");
+  refuses(standalone.powerOfTwo(Natural::constant(64)), "source.natural");
+  check(enclosing == beforeOverflow - 2 &&
+        enclosing == standalone.remainingWork());
+  refuses(hooked.add(maximum, one), "source.natural");
+  refuses(standalone.add(maximum, one), "source.natural");
+  check(enclosing == standalone.remainingWork());
+  refuses(hooked.multiply(maximum, Natural::constant(2)), "source.natural");
+  refuses(standalone.multiply(maximum, Natural::constant(2)), "source.natural");
+  check(enclosing == standalone.remainingWork());
+
+  // Exhaustion must precede the borrowed lookup, not just its final result.
+  enclosing = 1;
+  unsigned boundedLookups = 0;
+  auto remainingBefore = hooked.remainingWork();
+  refuses(hooked.substitute(n,
+                            [&](const Natural::Factor &) -> const Natural * {
+                              ++boundedLookups;
+                              return &one;
+                            }),
+          "source.limit");
+  check(boundedLookups == 0 && enclosing == 1 &&
+        hooked.remainingWork() == remainingBefore);
+  enclosing = 3;
+  refuses(hooked.substitute(n,
+                            [&](const Natural::Factor &) -> const Natural * {
+                              ++boundedLookups;
+                              return &one;
+                            }),
+          "source.limit");
+  check(boundedLookups == 1 && enclosing == 1 &&
+        hooked.remainingWork() == remainingBefore - 2);
+
+  // Local ceilings still refuse before contacting the enclosing authority.
+  enclosing = 1000;
+  NaturalArithmetic locallyBounded(1, 1024, 64, admit);
+  auto callsBefore = admissions;
+  refuses(locallyBounded.powerOfTwo(one), "source.limit");
+  check(enclosing == 1000 && admissions == callsBefore &&
+        locallyBounded.remainingWork() == 1);
+  NaturalArithmetic cancelled(1000, 1024, 64, [](uint64_t) -> Error {
+    return zkc::error("source.cancelled", "test cancellation");
+  });
+  refuses(cancelled.add(one, zero), "source.cancelled");
+  check(cancelled.remainingWork() == 1000);
   outs() << "bounded natural normalization checks passed\n";
 }

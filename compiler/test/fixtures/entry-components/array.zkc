@@ -1,0 +1,8 @@
+struct Pair roles(P, V):
+    pub left: index @P
+    pub right: index @V
+pub protocol Round<N: nat> roles(P, V)(state: [Pair roles(P, V); N]) -> bool @V:
+    return true
+entry def Run(inputs: Round<2>::Inputs) -> Round<2>::RunResult:
+    result <- Round<2>::run(inputs)
+    return result

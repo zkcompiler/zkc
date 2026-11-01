@@ -113,7 +113,10 @@ struct ResourceOriginAnalysis::Impl {
         at->second.reset();
       return true;
     };
-    if ((facts->history &&
+    // A nominal unit's installed pass transfers that exact capability. Fresh
+    // create/consume operations deliberately supply no successor equation.
+    if ((binding.getContract() == "resource_unit.pass" && !pair(0, 0)) ||
+        (facts->history &&
          !pair(facts->history->stateInput, facts->history->stateOutput)) ||
         (facts->sampling &&
          !pair(facts->sampling->stateInput, facts->sampling->stateOutput)) ||

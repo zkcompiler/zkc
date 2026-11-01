@@ -1,3 +1,4 @@
+#include "Names.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/PatternMatch.h"
@@ -66,6 +67,20 @@ void closureRefuses(StringRef source, StringRef code,
   require(!selected, "Entry closure unexpectedly accepted");
   auto message = toString(selected.takeError());
   require(StringRef(message).contains(code), message);
+}
+// A retained Host argument may be forwarded without being externally
+// constructible. Exercise fresh native ingress independently of that path.
+void nativeIngressRefuses(StringRef source) {
+  auto project = check(source);
+  auto retained = must(closeEntry(project, "m::Demo"));
+  require(retained.invocations().size() == 1,
+          "retained wrapper must contain one native invocation");
+  const auto &call = retained.invocations().front();
+  auto external =
+      closeInvocation(project, {call.kind, call.target, call.arguments, {}});
+  require(!external, "fresh native ingress accepted a restricted value");
+  require(namesIdentifier(toString(external.takeError()), "source.ingress"),
+          "fresh native ingress failed for another reason");
 }
 void nativeClosureRefuses(StringRef source, StringRef code,
                           StringRef protocol = "m::Run") {
@@ -234,9 +249,8 @@ protocol Run roles(P)(point:G@P,value:F@P)->(r:bool@P) {
 entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(encoding));
-  closureRefuses(R"(module m;type State=builtin("shake128_state");
-protocol Run roles(P)(s:State@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
-                 "source.ingress");
+  nativeIngressRefuses(R"(module m;type State=builtin("shake128_state");
+protocol Run roles(P)(s:State@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   refuses(R"(module m;type State=builtin("shake128_state");
 protocol Run roles(P,V)(s:State@P)->(){let r=send P->V(s);return();})",
           "source.ingress");
@@ -271,11 +285,10 @@ enum Choice{Some(Fr),None()}
                        "entry fn Demo(inputs: Relay<Secret>::Inputs) { return "
                        "Relay<Secret>::run(inputs); }",
                    "source.ingress");
-  closureRefuses(prefix +
-                     "struct Secret{value:Fr}protocol Run "
-                     "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
-                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
-                 "source.ingress");
+  nativeIngressRefuses(
+      prefix + "struct Secret{value:Fr}protocol Run "
+               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   refuses(prefix + "interface I{type State:Invent;}", "source.type");
   auto emitted = nativeOriginal(prefix + R"(
 struct Secret{value:Fr}
@@ -624,11 +637,10 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
                "=nested(x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { "
                "return Run::run(inputs); }");
   must(compileEntry(nestedConstructor));
-  closureRefuses(prefix +
-                     "#[sealed] enum Secret {A(bool)}protocol Run "
-                     "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
-                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
-                 "source.ingress");
+  nativeIngressRefuses(
+      prefix + "#[sealed] enum Secret {A(bool)}protocol Run "
+               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(prefix +
               "#[sealed] enum Secret {A(bool)}fn "
@@ -1003,12 +1015,23 @@ void bounds() {
     expanded += "type A" + std::to_string(i) + "=(A" + std::to_string(i - 1) +
                 ",A" + std::to_string(i - 1) + ");";
   refuses(expanded, "source.limit");
-  auto fanout = check(
-      "module m;protocol Run "
-      "roles(P)(z:[[[[();1024];1024];1024];1024]@P)->(){return("
-      ");}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
-  auto exploded = prepareOriginal(
-      must(zkc::test::closeProtocolDeployment(fanout, "m::Demo")));
+  // Observation checking may reach the capacity boundary before native
+  // layout expansion. Both stages must reject the same zero-leaf fanout.
+  auto exploded = [&]() -> Expected<CheckedOriginal> {
+    auto captured = must(capture(
+        {{"m",
+          "module m;protocol Run "
+          "roles(P)(z:[[[[();1024];1024];1024];1024]@P)->(){return("
+          ");}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+          "fanout.zkc"}}));
+    auto project = analyze(captured).checkedProject();
+    if (!project)
+      return project.takeError();
+    auto selected = zkc::test::closeProtocolDeployment(*project, "m::Demo");
+    if (!selected)
+      return selected.takeError();
+    return prepareOriginal(*selected);
+  }();
   require(!exploded, "zero-leaf schema fanout escaped the work bound");
   require(StringRef(toString(exploded.takeError())).contains("source.limit"),
           "wrong schema fanout failure");

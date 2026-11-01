@@ -33,7 +33,7 @@ bool formedFields(ArrayRef<LayoutFieldAttr> fields, uint64_t offset = 0) {
 } // namespace
 LogicalResult LayoutFieldAttr::verify(function_ref<InFlightDiagnostic()> emit,
                                       StringAttr name, uint64_t offset,
-                                      LayoutAttr layout) {
+                                      LayoutAttr layout, bool /*isPublic*/) {
   if (!text(name) || !layout || offset > 200000)
     return emit() << "invalid logical layout field";
   return success();
@@ -49,10 +49,11 @@ LayoutAlternativeAttr::verify(function_ref<InFlightDiagnostic()> emit,
 LogicalResult LayoutAttr::verify(function_ref<InFlightDiagnostic()> emit,
                                  StringAttr kind, StringAttr identity,
                                  StringAttr displayType, bool custody,
-                                 bool /*constructible*/, bool copy, bool drop,
-                                 ArrayRef<LayoutFieldAttr> fields,
+                                 bool sealed, bool constructible, bool copy,
+                                 bool drop, ArrayRef<LayoutFieldAttr> fields,
                                  ArrayRef<LayoutAlternativeAttr> alternatives,
-                                 ArrayRef<Type> leaves) {
+                                 ArrayRef<Type> leaves, LayoutAttr element,
+                                 StringAttr generated) {
   if (!text(kind) || !knownKind(kind.getValue()) || !text(identity) ||
       identity.getValue().size() != 64 ||
       !llvm::all_of(
@@ -61,6 +62,25 @@ LogicalResult LayoutAttr::verify(function_ref<InFlightDiagnostic()> emit,
       !text(displayType) || (copy && !drop) ||
       !formedFields(fields, custody ? 1 : 0))
     return emit() << "invalid logical layout metadata";
+  if (sealed && constructible)
+    return emit() << "sealed layout cannot grant ordinary construction";
+  if (sealed && kind.getValue() != "record" && kind.getValue() != "variant" &&
+      kind.getValue() != "associated")
+    return emit() << "sealing requires a nominal layout";
+  if ((kind.getValue() == "array") != bool(element))
+    return emit() << "array layout requires exactly one element template";
+  if (generated &&
+      ((kind.getValue() != "record" && kind.getValue() != "variant" &&
+        kind.getValue() != "associated") ||
+       !text(generated) || generated.getValue().size() != 64 ||
+       !llvm::all_of(generated.getValue(), [](char c) {
+         return llvm::isDigit(c) || (c >= 'a' && c <= 'f');
+       })))
+    return emit() << "generated family requires a nominal identity digest";
+  if (kind.getValue() == "array")
+    for (auto field : fields)
+      if (field.getLayout() != element || !field.getIsPublic())
+        return emit() << "array field differs from its element template";
   bool variant = kind.getValue() == "variant";
   if (variant != !alternatives.empty() || (variant && !fields.empty()))
     return emit() << "logical alternatives require a variant layout";
@@ -75,6 +95,10 @@ LogicalResult LayoutAttr::verify(function_ref<InFlightDiagnostic()> emit,
   SmallVector<Attribute> attrs{kind, identity, displayType};
   llvm::append_range(attrs, fields);
   llvm::append_range(attrs, alternatives);
+  if (element)
+    attrs.push_back(element);
+  if (generated)
+    attrs.push_back(generated);
   return detail::verifyStructure(emit, attrs, leaves);
 }
 LogicalResult ValueType::verify(function_ref<InFlightDiagnostic()> emit,
@@ -111,19 +135,22 @@ class LayoutImport {
               SmallVectorImpl<LayoutFieldAttr> &result, unsigned depth) {
     for (const auto &value : array) {
       auto *object = value.getAsObject();
-      if (!object || object->size() != 3 || !remaining--)
+      if (!object || object->size() != 5 || !remaining--)
         return false;
       auto name = string(*object, "name");
       auto offset = object->getInteger("offset");
       auto *schema = object->get("schema");
-      if (!name || !offset || *offset < 0 || !schema)
+      auto visible = object->getBoolean("public");
+      auto *placement = object->get("placement");
+      if (!name || !offset || *offset < 0 || !schema || !visible ||
+          !placement || !placement->getAsNull())
         return false;
       auto child = read(*schema, depth + 1);
       if (!child)
         return false;
-      auto field = LayoutFieldAttr::getChecked(builder.getUnknownLoc(),
-                                               builder.getContext(), name,
-                                               uint64_t(*offset), child);
+      auto field = LayoutFieldAttr::getChecked(
+          builder.getUnknownLoc(), builder.getContext(), name,
+          uint64_t(*offset), child, *visible);
       if (!field)
         return false;
       result.push_back(field);
@@ -135,19 +162,38 @@ public:
   explicit LayoutImport(MLIRContext *context) : builder(context) {}
   LayoutAttr read(const llvm::json::Value &value, unsigned depth = 0) {
     auto *object = value.getAsObject();
-    if (!object || object->size() != 9 || depth >= 64 || !remaining--)
+    if (!object || object->size() != 13 || depth >= 64 || !remaining--)
       return {};
     auto kind = string(*object, "kind"), identity = string(*object, "identity"),
          display = string(*object, "type");
-    auto custody = object->getBoolean("custody"),
-         constructible = object->getBoolean("constructible");
+    auto custody = object->getInteger("custody");
+    auto constructible = object->getBoolean("constructible");
+    auto sealed = object->getBoolean("sealed");
     auto *permissions = object->getArray("permissions"),
          *fieldRows = object->getArray("fields"),
          *alternativeRows = object->getArray("alternatives"),
          *leafRows = object->getArray("leaves");
-    if (!kind || !identity || !display || !custody || !constructible ||
-        !permissions || !fieldRows || !alternativeRows || !leafRows)
+    if (!kind || !identity || !display || !custody || !sealed ||
+        !constructible || *custody < 0 || *custody > 1 ||
+        !object->getArray("roles") || !object->getArray("roles")->empty() ||
+        !object->get("element") || !object->get("generated") || !permissions ||
+        !fieldRows || !alternativeRows || !leafRows)
       return {};
+    StringAttr generated;
+    if (!object->get("generated")->getAsNull()) {
+      generated = string(*object, "generated");
+      if (!generated || generated.getValue().size() != 64 ||
+          !llvm::all_of(generated.getValue(), [](char c) {
+            return llvm::isDigit(c) || (c >= 'a' && c <= 'f');
+          }))
+        return {};
+    }
+    LayoutAttr element;
+    if (!object->get("element")->getAsNull()) {
+      element = read(*object->get("element"), depth + 1);
+      if (!element)
+        return {};
+    }
     bool copy = false, drop = false;
     if (permissions->size() == 2 && (*permissions)[0].getAsString() == "Copy" &&
         (*permissions)[1].getAsString() == "Drop")
@@ -195,11 +241,12 @@ public:
         return {};
       leaves.push_back(type);
     }
-    return LayoutAttr::getChecked(
-        builder.getUnknownLoc(), builder.getContext(), kind, identity, display,
-        *custody, *constructible, copy, drop,
-        ArrayRef<LayoutFieldAttr>(nativeFields),
-        ArrayRef<LayoutAlternativeAttr>(alternatives), ArrayRef<Type>(leaves));
+    return LayoutAttr::getChecked(builder.getUnknownLoc(), builder.getContext(),
+                                  kind, identity, display, bool(*custody),
+                                  *sealed, *constructible, copy, drop,
+                                  ArrayRef<LayoutFieldAttr>(nativeFields),
+                                  ArrayRef<LayoutAlternativeAttr>(alternatives),
+                                  ArrayRef<Type>(leaves), element, generated);
   }
 };
 } // namespace

@@ -19,7 +19,7 @@ syntax::Budget budget(const Work &work) {
   result.tokenBytes = work.limits.tokenBytes;
   result.identifierBytes = work.limits.identifierBytes;
   result.depth = work.limits.parseDepth;
-  result.work = work.limits.work - work.used;
+  result.work = work.remaining();
   return result;
 }
 Error acceptSnapshot(const syntax::Snapshot &tree, Work &work) {

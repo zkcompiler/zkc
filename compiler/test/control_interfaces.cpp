@@ -34,7 +34,7 @@ module {
   }
 })mlir";
 constexpr StringLiteral logicalMatching = R"mlir(
-#choice = #data.layout<"variant", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Choice", false, true, true, true alternatives [#data.layout_alternative<"left">, #data.layout_alternative<"right">]>
+#choice = #data.layout<"variant", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Choice", false, false, true, true, true alternatives [#data.layout_alternative<"left">, #data.layout_alternative<"right">]>
 !V = !data.value<#choice>
 module {
   func.func @choose(%value: !V, %capture: ui64) -> ui64 {

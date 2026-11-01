@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
@@ -1577,6 +1578,15 @@ Expected<std::vector<std::string>> oracleEntries(ModuleOp source) {
 Expected<OracleCommonRequirements>
 oracleRequirements(ModuleOp source, StringRef entry,
                    ArrayRef<OracleRootSelection> selections) {
+  auto unit = dyn_cast<pir::ProtocolModuleOp>(source.getBody()->front());
+  auto program = unit ? dyn_cast_or_null<pir::MathematicalOp>(
+                            SymbolTable::lookupSymbolIn(unit, entry))
+                      : pir::MathematicalOp{};
+  if (!program)
+    return error("oracle-common-interface");
+  if (auto e = requireUnconditionalProtocolControl(
+          program, "oracle-realization-control-profile"))
+    return std::move(e);
   std::map<std::vector<unsigned>, const OracleTableRealization *> selected;
   for (const auto &item : selections)
     if (item.entry == entry &&
@@ -1597,11 +1607,6 @@ oracleRequirements(ModuleOp source, StringRef entry,
       });
   if (!storage)
     return storage.takeError();
-  auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
-  auto program = dyn_cast_or_null<pir::MathematicalOp>(
-      SymbolTable::lookupSymbolIn(unit, entry));
-  if (!program)
-    return refuse();
   auto capacity = analyzeOracleQueryCapacity(source, entry);
   if (!capacity)
     return capacity.takeError();

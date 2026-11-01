@@ -70,6 +70,36 @@ void roundTrip(MLIRContext &context, const BoundType &bound, bool physical) {
   require(mlir::parseType(printed, &context) == native,
           "textual native type roundtrip changed identity");
 }
+
+void refusesRepresentation(MLIRContext &context, Type logical,
+                           StringRef representation, ArrayRef<Type> children,
+                           StringRef exportCode) {
+  unsigned diagnostics = 0;
+  SmallVector<std::string> codes;
+  ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+    ++diagnostics;
+    for (const auto &refusal : zkc::diagnostics::refusals(diagnostic))
+      codes.push_back(refusal.code);
+    return success();
+  });
+  auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+  require(!runtime::RepresentedType::getChecked(emit, &context, logical,
+                                                representation, children),
+          "checked construction accepted a malformed representation");
+  require(is_contained(codes, "represented-type-formation"),
+          "malformed representation lost its formation refusal");
+#ifdef NDEBUG
+  // The checked constructor is the supported refusal boundary with assertions.
+  // Release-only malformed storage also exercises independent silent export.
+  auto before = diagnostics;
+  auto malformed = runtime::RepresentedType::get(&context, logical,
+                                                 representation, children);
+  refuses(encodeBoundType(malformed, true), exportCode);
+  require(diagnostics == before, "type export leaked a diagnostic");
+#else
+  (void)exportCode;
+#endif
+}
 } // namespace
 
 int main() {
@@ -496,34 +526,25 @@ int main() {
             "binding-logical-type-at-physical-stage");
   });
   cases.run("nested physical wrapper", [&] {
-    refuses(encodeBoundType(zkc::runtime::RepresentedType::get(
-                                &context, physical, "arkworks.fr/0", {}),
-                            true),
-            "binding-type");
+    refusesRepresentation(context, physical, "arkworks.fr/0", {},
+                          "binding-type");
   });
   cases.run("wrapped noncanonical tensor", [&] {
     auto tensor = RankedTensorType::get({2}, logical);
-    refuses(encodeBoundType(zkc::runtime::RepresentedType::get(
-                                &context, tensor, "arkworks.fr-vector/0", {}),
-                            true),
-            "binding-type");
+    refusesRepresentation(context, tensor, "arkworks.fr-vector/0", {},
+                          "binding-type");
   });
   for (StringRef representation : {"", "uninstalled", "arkworks.g1/0"})
     cases.run(Twine("wrong physical representation: ") + representation, [&] {
-      refuses(encodeBoundType(zkc::runtime::RepresentedType::get(
-                                  &context, logical, representation, {}),
-                              true),
-              "binding-representation");
+      refusesRepresentation(context, logical, representation, {},
+                            "binding-representation");
     });
   cases.run("wrapped wrong commitment carrier", [&] {
     auto object =
         zkc::commitment::PolynomialObjectType::get(&context, oracle, "proof");
     auto representation = take(defaultRepresentation({"proof", oracle, {}}));
-    refuses(encodeBoundType(
-                zkc::runtime::RepresentedType::get(
-                    &context, object, representation.representation, {}),
-                true),
-            "binding-type");
+    refusesRepresentation(context, object, representation.representation, {},
+                          "binding-type");
   });
   cases.run("checked native construction and assembly preserve formation", [&] {
     ScopedDiagnosticHandler diagnostics(&context,
@@ -633,7 +654,11 @@ int main() {
               {"kind", "boolean"},
               {"identity", std::string(64, 'a')},
               {"type", "bool"},
-              {"custody", false},
+              {"generated", nullptr},
+              {"custody", 0},
+              {"sealed", false},
+              {"roles", llvm::json::Array{}},
+              {"element", nullptr},
               {"constructible", true},
               {"permissions", llvm::json::Array{"Copy", "Drop"}},
               {"fields", llvm::json::Array{}},
@@ -645,8 +670,12 @@ int main() {
         object["kind"] = "record";
         object["identity"] = std::string(64, 'b');
         object["type"] = "Claim";
-        object["fields"] = llvm::json::Array{llvm::json::Object{
-            {"name", "accepted"}, {"offset", 0}, {"schema", scalar()}}};
+        object["fields"] =
+            llvm::json::Array{llvm::json::Object{{"name", "accepted"},
+                                                 {"offset", 0},
+                                                 {"public", true},
+                                                 {"placement", nullptr},
+                                                 {"schema", scalar()}}};
         MLIRContext fresh;
         require(!data::importLayout(&fresh, record),
                 "layout boundary initialized an unregistered dialect");
@@ -744,21 +773,19 @@ int main() {
                 "inactive selected representation was replaced by a default");
         auto children = SmallVector<Type>(native.getChildren());
         children.pop_back();
-        refuses(encodeBoundType(
-                    runtime::RepresentedType::get(
-                        &context, logical, "logical.variant/0", children),
-                    true),
-                "binding-representation");
+        refusesRepresentation(context, logical, "logical.variant/0", children,
+                              "binding-representation");
+        auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+        refusesRepresentation(context, field, "foreign/layout", {},
+                              "binding-representation");
+#ifdef NDEBUG
         children.assign(native.getChildren().begin(),
                         native.getChildren().end());
         children.back() = runtime::RepresentedType::get(
-            &context, algebra::FieldType::get(&context, "bls12-381.fr"),
-            "foreign/layout", ArrayRef<Type>{});
-        refuses(encodeBoundType(
-                    runtime::RepresentedType::get(
-                        &context, logical, "logical.variant/0", children),
-                    true),
-                "binding-representation");
+            &context, field, "foreign/layout", ArrayRef<Type>{});
+        refusesRepresentation(context, logical, "logical.variant/0", children,
+                              "binding-representation");
+#endif
       });
   cases.run("native formation retains its wider variant shape allowance", [&] {
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
@@ -866,10 +893,8 @@ int main() {
         refuses(encodeBoundType(physical, true), "binding-representation");
         refuses(encodeBoundType(algebra::FieldType::get(&context, "f7"), false),
                 "binding-type-identity");
-        refuses(encodeBoundType(runtime::RepresentedType::get(
-                                    &context, logical, "foreign/layout", {}),
-                                true),
-                "binding-representation");
+        refusesRepresentation(context, logical, "foreign/layout", {},
+                              "binding-representation");
         require(diagnostics == 0,
                 "Expected-return type export leaked diagnostics");
       });

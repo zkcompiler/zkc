@@ -310,8 +310,7 @@ bool Checker::retainNotations() {
                 operation.binding->notation->position ==
                     NotationDescriptor::Position::Index)
               indexedCalls.insert(site(operation.span));
-            if (const auto *control =
-                    std::get_if<LocalControl>(&operation.action)) {
+            if (const auto *control = std::get_if<Control>(&operation.action)) {
               for (const auto &nested : control->regions)
                 if (!findIndexed(*nested, depth + 1))
                   return false;
@@ -536,7 +535,7 @@ bool Checker::retainNotations() {
               selected.isPublic)
             record.descriptor = selected.descriptor;
         }
-        if (auto control = std::get_if<LocalControl>(&operation.action)) {
+        if (auto control = std::get_if<Control>(&operation.action)) {
           for (const auto &nested : control->regions)
             if (!emitted(*nested, depth + 1))
               return false;

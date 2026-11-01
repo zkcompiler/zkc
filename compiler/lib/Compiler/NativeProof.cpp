@@ -29,6 +29,7 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -1696,6 +1697,9 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   auto original = unit(source);
   if (!original || original.getProfile() != pir::Profile::Protocol)
     return error("native-proof-source");
+  if (auto e = requireUnconditionalProtocolControl(
+          original, "native-proof-control-profile"))
+    return std::move(e);
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
   SymbolTableCollection constructionSymbols;

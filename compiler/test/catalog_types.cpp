@@ -23,7 +23,7 @@ int main() {
       "consumer selection preserves kinded roots and refuses nonmembers", [&] {
         using namespace zkc::protocol;
         const auto *profile = consumerProfile("structured-source-primitives");
-        require(profile && profile->operations.size() == 16 &&
+        require(profile && profile->operations.size() == 19 &&
                     profile->implementation ==
                         ConsumerImplementation::Unselected,
                 "structured primitive selection changed");
@@ -31,6 +31,12 @@ int main() {
             consumerProfileOperation(profile->name, "index.add");
         const auto *embed =
             consumerProfileOperation(profile->name, "field.embed");
+        const auto *pass =
+            consumerProfileOperation(profile->name, "resource_unit.pass");
+        require(pass && pass->staticParameters ==
+                            std::vector<StaticParameter>{
+                                {StaticKind::Domain, "Slot"}},
+                "custody consumer lost its nominal slot root");
         require(index && index->staticParameters.empty(),
                 "index gained a static argument");
         require(embed && embed->staticParameters ==

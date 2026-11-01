@@ -387,12 +387,19 @@ private:
     return result;
   }
   json::Value type(const SyntaxType &value) {
-    return emit(
-        ("type." + syntaxKind(value.kind)).str(), value.span,
-        json::Object{{"name", value.name},
-                     {"arguments", list("argument", value.arguments,
-                                        [&](auto &arg) { return type(arg); })},
-                     {"labels", labels(value.labels)}});
+    json::Object fields{
+        {"name", value.name},
+        {"arguments", list("argument", value.arguments,
+                           [&](auto &arg) { return type(arg); })},
+        {"labels", labels(value.labels)}};
+    if (value.components)
+      fields["components"] = strings(*value.components);
+    if (value.oracleHolder)
+      fields["oracle_holder"] = *value.oracleHolder;
+    if (value.roles)
+      fields["role_arguments"] = strings(*value.roles);
+    return emit(("type." + syntaxKind(value.kind)).str(), value.span,
+                std::move(fields));
   }
   json::Array labels(ArrayRef<ArgumentLabel> values) {
     json::Array result;
@@ -956,7 +963,7 @@ private:
                 {"prover", p.prover.name},
                 {"verifier", p.verifier.name},
                 {"public", list("public", p.publicInputs,
-                                [&](auto &n) { return named(n); })},
+                                [&](auto &n) { return inputSelector(n); })},
                 {"acceptance", child("acceptance", 0,
                                      [&] { return selector(p.acceptance); })},
                 {"completion",

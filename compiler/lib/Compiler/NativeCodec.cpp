@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -573,6 +574,9 @@ constructNativeCodec(ModuleOp module, const NativeProofPolicy &policy,
                      const protocol::ConstructionPlan &plan,
                      ArrayRef<NativeTranscriptEvent> events,
                      const json::Array &transcript) {
+  if (auto e = requireUnconditionalProtocolControl(
+          module, "native-codec-control-profile"))
+    return std::move(e);
   return CodecEmitter(cast<pir::ProtocolModuleOp>(module.getBody()->front()),
                       policy, plan)
       .run(events, transcript);

@@ -41,6 +41,14 @@ Expected<SyntaxPort> LayoutReader::port(Id id, bool unnamed) {
         return holder.takeError();
       result.oracleHolder = std::move(*holder);
       for (auto receiver : roleNodes.drop_front()) {
+        if (kind(receiver) == K::Roles) {
+          auto family = roles(receiver);
+          if (!family)
+            return family.takeError();
+          result.roles.insert(result.roles.end(), family->begin(),
+                              family->end());
+          continue;
+        }
         if (kind(receiver) != K::Name)
           return fail(receiver, "oracle receiver must be a role name",
                       "source.oracle-port");
@@ -60,6 +68,8 @@ Expected<SyntaxPort> LayoutReader::port(Id id, bool unnamed) {
   auto projected6 = type(target);
   if (!projected6)
     return projected6.takeError();
+  if (projected6->components && (!result.roles.empty() || result.oracleHolder))
+    return fail(id, "duplicate placement annotation", "source.placement");
   result.type = std::move(*projected6);
   return result;
 }
@@ -423,6 +433,8 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     result.name = std::move(*projected41);
   }
   using D = Declaration::Kind;
+  if (kind(id) == K::Scheme)
+    return proofEntry(id, parent, std::move(result));
   switch (kind(id)) {
   case K::Section:
     if (result.explicitPublic)
@@ -472,12 +484,16 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
       return error;
   }
   if (auto roster = first(id, K::Roles)) {
-    if (result.kind != D::Protocol)
-      return fail(*roster, "native role rosters belong to protocols",
+    if (result.kind != D::Protocol && result.kind != D::Record &&
+        result.kind != D::Alias)
+      return fail(*roster,
+                  "role telescopes require a protocol, struct or alias",
                   "source.roles");
     auto projected44 = roles(*roster);
     if (!projected44)
       return projected44.takeError();
+    if (projected44->empty())
+      return fail(*roster, "role telescope must be nonempty", "source.roles");
     result.roles = std::move(*projected44);
   }
   if (auto inputs = first(id, K::Parameters)) {

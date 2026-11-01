@@ -667,11 +667,81 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
             "mathematicalIdentities",
             "mathematicalIntrinsics",
             "consumerProfiles",
+            "frontendAssociations",
+            "frontendHomes",
+            "serviceMethods",
         ],
         &[],
     )?;
     choice(&v["format"], &["zkc.contract-declarations/0"])?;
     let fields = [
+        (
+            "frontend_associations",
+            array(&v["frontendAssociations"], |r| {
+                object(
+                    r,
+                    &["identity", "module", "name", "signature", "implicit"],
+                    &[],
+                )?;
+                Ok(record(
+                    "FrontendAssociation",
+                    &[
+                        ("identity", quoted(&r["identity"])?),
+                        ("module", quoted(&r["module"])?),
+                        ("name", quoted(&r["name"])?),
+                        (
+                            "signature",
+                            variant(
+                                &r["signature"],
+                                "FrontendSignature",
+                                &[
+                                    "RecordUnpack",
+                                    "RecordInspect",
+                                    "RecordRepack",
+                                    "RandomConstructor",
+                                ],
+                            )?,
+                        ),
+                        ("implicit", flag(&r["implicit"])?),
+                    ],
+                ))
+            })?,
+        ),
+        (
+            "frontend_homes",
+            array(&v["frontendHomes"], |r| {
+                object(r, &["constructor", "module", "members"], &[])?;
+                Ok(record(
+                    "FrontendHome",
+                    &[
+                        ("constructor", quoted(&r["constructor"])?),
+                        ("module", quoted(&r["module"])?),
+                        ("members", array(&r["members"], quoted)?),
+                    ],
+                ))
+            })?,
+        ),
+        (
+            "service_methods",
+            array(&v["serviceMethods"], |r| {
+                object(r, &["name", "signature", "capability"], &[])?;
+                Ok(record(
+                    "ServiceMethodDeclaration",
+                    &[
+                        ("name", quoted(&r["name"])?),
+                        (
+                            "signature",
+                            variant(
+                                &r["signature"],
+                                "ServiceSignature",
+                                &["RandomDraw", "RandomIndex", "RandomIndices"],
+                            )?,
+                        ),
+                        ("capability", quoted(&r["capability"])?),
+                    ],
+                ))
+            })?,
+        ),
         ("sorts", array(&v["sorts"], quoted)?),
         ("types", array(&v["types"], constructor)?),
         ("operations", array(&v["operations"], operation)?),

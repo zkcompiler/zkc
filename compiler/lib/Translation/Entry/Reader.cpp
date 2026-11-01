@@ -57,6 +57,8 @@ class Reader {
         result.push_back(
             json::Object{{"name", field.getName().getValue().str()},
                          {"offset", field.getOffset()},
+                         {"public", field.getIsPublic()},
+                         {"placement", nullptr},
                          {"schema", std::move(*nested)}});
       }
       return result;
@@ -88,21 +90,37 @@ class Reader {
     }
     if (!bytes(layout.getKind().getValue().size() +
                layout.getIdentity().getValue().size() +
-               layout.getDisplayType().getValue().size()))
+               layout.getDisplayType().getValue().size() +
+               (layout.getGenerated() ? layout.getGenerated().getValue().size()
+                                      : 0)))
       return fail("Host layout exceeds metadata allowance");
     if (layout.getCopy())
       permissions.push_back("Copy");
     if (layout.getDrop())
       permissions.push_back("Drop");
-    return json::Object{{"kind", layout.getKind().getValue().str()},
-                        {"identity", layout.getIdentity().getValue().str()},
-                        {"type", layout.getDisplayType().getValue().str()},
-                        {"custody", layout.getCustody()},
-                        {"constructible", layout.getConstructible()},
-                        {"permissions", std::move(permissions)},
-                        {"fields", std::move(*members)},
-                        {"alternatives", std::move(alternatives)},
-                        {"leaves", std::move(leaves)}};
+    json::Value element = nullptr;
+    if (layout.getElement()) {
+      auto nested = schema(layout.getElement(), depth + 1);
+      if (!nested)
+        return nested.takeError();
+      element = std::move(*nested);
+    }
+    return json::Object{
+        {"kind", layout.getKind().getValue().str()},
+        {"identity", layout.getIdentity().getValue().str()},
+        {"type", layout.getDisplayType().getValue().str()},
+        {"generated", layout.getGenerated()
+                          ? json::Value(layout.getGenerated().getValue())
+                          : json::Value(nullptr)},
+        {"custody", unsigned(layout.getCustody())},
+        {"sealed", layout.getSealed()},
+        {"roles", json::Array{}},
+        {"element", std::move(element)},
+        {"constructible", layout.getConstructible()},
+        {"permissions", std::move(permissions)},
+        {"fields", std::move(*members)},
+        {"alternatives", std::move(alternatives)},
+        {"leaves", std::move(leaves)}};
   }
   Expected<json::Value> schema(mlir::Type type) {
     if (auto native = mlir::dyn_cast<data::ValueType>(type))

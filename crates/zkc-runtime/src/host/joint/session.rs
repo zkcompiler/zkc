@@ -360,6 +360,76 @@ impl<B: WireBackend> Execution<B> {
                         return Some(outcome);
                     }
                 }
+                Segment::Branch { entries, arms } => {
+                    let mut headers = Vec::new();
+                    for index in entries {
+                        let step = &bundle.steps[*index];
+                        let reached = self.report.reached.len();
+                        if let Some(outcome) = self.step(bundle, *index, path, hooks) {
+                            return Some(outcome);
+                        }
+                        if !self.returned(step.role)
+                            && matches!(bundle.action(step), Some(ProgramAction::Branch { .. }))
+                        {
+                            headers.push((*index, reached));
+                        }
+                    }
+                    if headers.is_empty() {
+                        continue;
+                    }
+                    let alternative = self.report.reached[headers[0].1]
+                        .branch_alternative
+                        .expect("checked selector");
+                    if headers.iter().any(|(_, reached)| {
+                        self.report.reached[*reached].branch_alternative != Some(alternative)
+                    }) {
+                        return Some(Outcome::DriverFailed(contract(
+                            "branch-selector-disagreement",
+                        )));
+                    }
+                    let first = &bundle.steps[headers[0].0];
+                    let ProgramAction::Branch { site, .. } =
+                        bundle.action(first).expect("branch header")
+                    else {
+                        unreachable!()
+                    };
+                    let arm = &arms[alternative];
+                    for (index, reached) in headers {
+                        let step = &bundle.steps[index];
+                        let runner = self.slots[step.role]
+                            .runner
+                            .as_mut()
+                            .expect("initialized role");
+                        let mut origin = runner.root_origin().clone();
+                        origin.path.extend_from_slice(path);
+                        let result = runner.enter_branch(&origin, site, alternative);
+                        if runner.stop().is_some() {
+                            self.report.reached[reached].progress = Progress::Stopped;
+                            return Some(Outcome::ParticipantStopped { role: step.role });
+                        }
+                        if let Err(error) = result {
+                            self.report.reached[reached].progress = Progress::Failed;
+                            return Some(Outcome::DriverFailed(runtime_failure(
+                                FailureKind::Contract,
+                                &error,
+                            )));
+                        }
+                        self.report.reached[reached].branch_started = true;
+                    }
+                    let mut child = path.to_vec();
+                    child.push(PathElement::Branch {
+                        site: site.clone(),
+                        alternative: arm.alternative.clone(),
+                    });
+                    if let Some(outcome) = self.segments(bundle, &arm.body, &child, hooks) {
+                        return Some(outcome);
+                    }
+                    for index in &arm.exits {
+                        if let Some(outcome) = self.step(bundle, *index, &child, hooks) {
+                            return Some(outcome);
+                        }
+                    }
+                }
                 Segment::Loop {
                     entries,
                     body,
@@ -506,6 +576,9 @@ impl<B: WireBackend> Execution<B> {
             iterations,
             loop_count: None,
             loop_started: false,
+            branch_alternative: None,
+            branch_started: false,
+            path: path.to_vec(),
             progress: Progress::Exposed,
             sent_bytes: None,
             replacement_bytes: None,
@@ -611,6 +684,18 @@ impl<B: WireBackend> Execution<B> {
             .expect("initialized roster");
         let mut origin = runner.root_origin().clone();
         origin.path.extend_from_slice(path);
+        if let ProgramAction::Branch { site, .. } = action {
+            match runner
+                .branch_selector(&origin, site)
+                .map_err(|e| runtime_failure(FailureKind::Contract, &e))?
+            {
+                Some(arm) => {
+                    self.report.reached.last_mut().unwrap().branch_alternative = Some(arm);
+                    return Ok(StepResult::Completed);
+                }
+                None => return Ok(StepResult::Stopped),
+            }
+        }
         if let ProgramAction::Loop { site, .. } = action {
             match runner
                 .loop_count(&origin, site)
@@ -856,6 +941,7 @@ impl<B: WireBackend> Execution<B> {
                 }
             }
             ProgramAction::Finish
+            | ProgramAction::Branch { .. }
             | ProgramAction::Loop { .. }
             | ProgramAction::Yield { .. }
             | ProgramAction::ReturnIf { .. } => {

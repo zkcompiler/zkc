@@ -12,6 +12,58 @@
 using namespace llvm;
 namespace zkc::language {
 namespace {
+Expected<json::Value> describePlacement(const CheckedProject &project,
+                                        const Type &type,
+                                        const ValuePlacement &placement,
+                                        detail::Work &work) {
+  auto roles = [](ArrayRef<unsigned> values) {
+    json::Array result;
+    for (auto value : values)
+      result.push_back(value);
+    return result;
+  };
+  if (auto failure = work.charge(placementRoles(placement).size() + 1))
+    return std::move(failure);
+  if (const auto *data = std::get_if<DataPlacement>(&placement.value))
+    return json::Object{{"kind", "data"}, {"roles", roles(data->roles)}};
+  if (const auto *oracle = std::get_if<OraclePlacement>(&placement.value))
+    return json::Object{{"kind", "oracle"},
+                        {"holder", oracle->holder},
+                        {"receivers", roles(oracle->receivers)}};
+  const auto &product = std::get<ProductPlacement>(placement.value);
+  if (auto failure =
+          work.charge(product.instance.size() + product.fields.size()))
+    return std::move(failure);
+  const Declaration *nominal = nullptr;
+  if (type.kind == Type::Kind::LogicalRecord) {
+    if (auto failure = work.charge(project.declarations().size()))
+      return std::move(failure);
+    auto found = llvm::find_if(project.declarations(), [&](const auto &decl) {
+      return decl.qualifiedName == type.domain;
+    });
+    if (found == project.declarations().end() ||
+        found->fields.size() != product.fields.size())
+      return error("source.placement", "inspection product schema differs");
+    nominal = &*found;
+  }
+  json::Array fields;
+  for (unsigned i = 0; i < product.fields.size(); ++i) {
+    if (nominal && !nominal->fields[i].isPublic) {
+      fields.push_back(json::Object{{"private", true}});
+      continue;
+    }
+    const auto &fieldType =
+        nominal ? nominal->fields[i].type : type.arguments[i];
+    auto child = describePlacement(project, fieldType, product.fields[i], work);
+    if (!child)
+      return child.takeError();
+    fields.push_back(std::move(*child));
+  }
+  return json::Object{{"kind", "product"},
+                      {"instance", product.instance},
+                      {"arguments", roles(product.arguments)},
+                      {"fields", std::move(fields)}};
+}
 json::Array permissions(Permissions value) {
   json::Array result;
   if (value.copy)
@@ -67,7 +119,7 @@ Expected<json::Object> describe(const CheckedProject &project,
       result.push_back(decl.roles[index]);
     return result;
   };
-  auto ports = [&](ArrayRef<Port> ports) {
+  auto ports = [&](ArrayRef<Port> ports) -> Expected<json::Array> {
     json::Array result;
     for (const auto &port : ports) {
       json::Object value{{"name", port.name},
@@ -79,6 +131,14 @@ Expected<json::Object> describe(const CheckedProject &project,
             port.oracle->maximumRows
                 ? json::Value(type(*port.oracle->maximumRows))
                 : json::Value(nullptr);
+      }
+      if (port.placement &&
+          std::holds_alternative<ProductPlacement>(port.placement->value)) {
+        auto placed =
+            describePlacement(project, port.type, *port.placement, work);
+        if (!placed)
+          return placed.takeError();
+        value["placement"] = std::move(*placed);
       }
       result.push_back(std::move(value));
     }
@@ -194,6 +254,12 @@ Expected<json::Object> describe(const CheckedProject &project,
   };
   auto effects = decl.body ? decl.body->effects
                            : decl.effectAllowance.value_or(EffectSummary{});
+  auto inputs = ports(decl.inputs);
+  if (!inputs)
+    return inputs.takeError();
+  auto outputs = ports(decl.outputs);
+  if (!outputs)
+    return outputs.takeError();
   json::Object result{
       {"name", decl.qualifiedName},
       {"abstract", decl.abstract},
@@ -210,9 +276,9 @@ Expected<json::Object> describe(const CheckedProject &project,
       {"parameters", std::move(parameters)},
       {"roles", std::move(roster)},
       {"input_order", std::move(order)},
-      {"inputs", ports(decl.inputs)},
+      {"inputs", std::move(*inputs)},
       {"scoped_inputs", std::move(scoped)},
-      {"outputs", ports(decl.outputs)},
+      {"outputs", std::move(*outputs)},
       {"services", std::move(services)},
       {"requirements", std::move(requirements)},
       {"admissions", std::move(admissions)},
@@ -611,6 +677,12 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
                 "outputs", "services", "effects", "effect_allowance"})
             value.erase(key);
           value["kind"] = kind;
+          if (!decl.roles.empty()) {
+            json::Array roles;
+            for (const auto &role : decl.roles)
+              roles.push_back(role);
+            value["roles"] = std::move(roles);
+          }
         };
         auto fields = [&](ArrayRef<TypeField> fields) {
           json::Array result;
@@ -620,6 +692,16 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
                                  {"type", formatType(field.type)}};
               if (field.maximumRows)
                 value["maximum_rows"] = formatType(*field.maximumRows);
+              if (field.placement) {
+                auto placed = describePlacement(project, field.type,
+                                                *field.placement, work);
+                if (!placed) {
+                  inspectionError = placed.takeError();
+                  break;
+                }
+                value["ordinal"] = unsigned(&field - fields.data());
+                value["placement"] = std::move(*placed);
+              }
               result.push_back(std::move(value));
             }
           return result;
@@ -629,6 +711,15 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
         case Declaration::Kind::Alias:
           dataKind(decl.kind == Declaration::Kind::Domain ? "domain" : "alias");
           value["type"] = formatType(decl.domain);
+          if (decl.placement) {
+            auto placed =
+                describePlacement(project, decl.domain, *decl.placement, work);
+            if (!placed) {
+              inspectionError = placed.takeError();
+              break;
+            }
+            value["placement"] = std::move(*placed);
+          }
           break;
         case Declaration::Kind::Record:
         case Declaration::Kind::Variant: {
@@ -649,7 +740,7 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
           }
           value["constructor"] =
               decl.generated && !decl.generated->constructible ? "native"
-              : decl.sealed || privateFields                   ? "owner"
+              : decl.sealed || decl.resource || privateFields  ? "owner"
                                                                : "public";
           value["private_fields"] = privateFields;
           value["fields"] = fields(decl.fields);
@@ -690,6 +781,8 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
         default:
           break;
         }
+        if (inspectionError)
+          break;
         json.value(std::move(value));
       }
     });

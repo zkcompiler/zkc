@@ -83,7 +83,10 @@ impl Program {
         self.executable.functions[symbol].clone()
     }
     pub(super) fn loop_inputs(&self, participant: &str, site: &str) -> &FrameInputs {
-        &self.executable.participant_layouts[participant][site]
+        &self.executable.participant_layouts[participant][site][0]
+    }
+    pub(super) fn branch_inputs(&self, participant: &str, site: &str, arm: usize) -> &FrameInputs {
+        &self.executable.participant_layouts[participant][site][arm]
     }
     /// Decode, structurally admit and prepare an immutable VM program.
     /// This performs no backend installation and grants no execution authority.
@@ -781,7 +784,7 @@ struct Check<'a> {
     services: &'a [super::ServicePort],
     seen: BTreeSet<String>,
     schemas: &'a mut BTreeMap<(String, String), PhysicalType>,
-    loop_inputs: &'a mut BTreeMap<String, FrameInputs>,
+    region_inputs: &'a mut BTreeMap<String, Vec<FrameInputs>>,
 }
 impl Check<'_> {
     fn message(&mut self, schema: &str, peer: &str, ty: PhysicalType) -> Result<()> {
@@ -807,12 +810,13 @@ impl Check<'_> {
         &mut self,
         body: &Body,
         mut env: Env,
-        expected: &[PhysicalType],
+        expected: Option<&[PhysicalType]>,
         in_loop: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<PhysicalType>> {
         if body.is_empty() {
             return Err(err(ErrorCode::Terminal, "empty body"));
         }
+        let mut returned = Vec::new();
         for (i, instruction) in body.iter().enumerate() {
             let terminal = matches!(instruction, Instruction::Return(_) | Instruction::Yield(_));
             if terminal != (i + 1 == body.len()) {
@@ -822,6 +826,100 @@ impl Check<'_> {
                 ));
             }
             match instruction {
+                Instruction::Conditional {
+                    site: s,
+                    condition,
+                    captures,
+                    then_body,
+                    else_body,
+                    outputs,
+                } => {
+                    site(&mut self.sites, s)?;
+                    operands(
+                        &mut env,
+                        std::slice::from_ref(condition),
+                        std::slice::from_ref(&*super::code::BOOL_TYPE),
+                    )?;
+                    let (child, ports) = self.branch_captures(&mut env, captures)?;
+                    let names = self.region_names(&child);
+                    let outer_seen = std::mem::replace(&mut self.seen, names);
+                    let left = self.body(then_body, child.clone(), None, true)?;
+                    self.seen = self.region_names(&child);
+                    let right = self.body(else_body, child, None, true)?;
+                    self.seen = outer_seen;
+                    if left != right {
+                        return Err(err(ErrorCode::Signature, "participant-if-yield"));
+                    }
+                    self.region_inputs
+                        .insert(s.clone(), vec![ports.clone(), ports]);
+                    results(&mut env, &mut self.seen, outputs, &left)?;
+                }
+                Instruction::Match {
+                    site: s,
+                    input,
+                    captures,
+                    arms,
+                    outputs,
+                } => {
+                    site(&mut self.sites, s)?;
+                    let ty = lookup(&env, input)?;
+                    let logical = ty.logical();
+                    let descriptor = logical
+                        .variant_descriptor()
+                        .ok_or_else(|| err(ErrorCode::Type, "match-scrutinee"))?;
+                    if arms.len() != descriptor.alternatives().len() {
+                        return Err(err(ErrorCode::Signature, "match-exhaustive"));
+                    }
+                    operands(
+                        &mut env,
+                        std::slice::from_ref(input),
+                        std::slice::from_ref(&ty),
+                    )?;
+                    let (captured, capture_ports) = self.branch_captures(&mut env, captures)?;
+                    let shared_captures: Arc<[_]> =
+                        capture_ports.iter().cloned().collect::<Vec<_>>().into();
+                    let mut layouts = Vec::new();
+                    let mut joined = None;
+                    let outer_seen = self.seen.clone();
+                    for (i, (arm, alternative)) in
+                        arms.iter().zip(descriptor.alternatives()).enumerate()
+                    {
+                        if arm.alternative != alternative.label() {
+                            return Err(err(ErrorCode::Signature, "match-alternative"));
+                        }
+                        let types = ty
+                            .variant_payload(i)
+                            .ok_or_else(|| err(ErrorCode::Type, "match-payload"))?;
+                        if arm.payload.len() != types.len() {
+                            return Err(err(ErrorCode::Signature, "match-payload"));
+                        }
+                        let mut child = captured.clone();
+                        self.seen = self.region_names(&child);
+                        for (name, ty) in arm.payload.iter().zip(types) {
+                            define(&mut child, &mut self.seen, name, ty.clone())?;
+                        }
+                        let ports = arm
+                            .payload
+                            .iter()
+                            .zip(types)
+                            .map(|(n, t)| (n.clone(), t.clone()))
+                            .collect();
+                        layouts.push(FrameInputs::with_captures(ports, shared_captures.clone()));
+                        let types = self.body(&arm.body, child, None, true)?;
+                        if joined.as_ref().is_some_and(|old| old != &types) {
+                            return Err(err(ErrorCode::Signature, "participant-match-yield"));
+                        }
+                        joined = Some(types);
+                    }
+                    self.seen = outer_seen;
+                    self.region_inputs.insert(s.clone(), layouts);
+                    results(
+                        &mut env,
+                        &mut self.seen,
+                        outputs,
+                        &joined.unwrap_or_default(),
+                    )?;
+                }
                 Instruction::Query {
                     site: s,
                     port,
@@ -942,11 +1040,11 @@ impl Check<'_> {
                         .iter()
                         .map(|(name, _)| (name.clone(), child[name].ty.clone()))
                         .collect::<Vec<_>>();
-                    self.loop_inputs.insert(
+                    self.region_inputs.insert(
                         s.clone(),
-                        FrameInputs::with_captures(explicit, captured.into()),
+                        vec![FrameInputs::with_captures(explicit, captured.into())],
                     );
-                    self.body(body, child, &types, true)?;
+                    self.body(body, child, Some(&types), true)?;
                     results(&mut env, &mut self.seen, outputs, &types)?;
                 }
                 Instruction::ReturnIf {
@@ -970,12 +1068,60 @@ impl Check<'_> {
                         .collect();
                     results(&mut env, &mut self.seen, continuations, &types)?;
                 }
-                Instruction::Return(names) if !in_loop => operands(&mut env, names, expected)?,
-                Instruction::Yield(names) if in_loop => operands(&mut env, names, expected)?,
+                Instruction::Return(names) if !in_loop => {
+                    returned = self.terminal(&mut env, names, expected)?;
+                }
+                Instruction::Yield(names) if in_loop => {
+                    returned = self.terminal(&mut env, names, expected)?;
+                }
                 _ => return Err(err(ErrorCode::Terminal, "return/yield in wrong region")),
             }
         }
-        Ok(())
+        Ok(returned)
+    }
+    fn terminal(
+        &self,
+        env: &mut Env,
+        names: &[String],
+        expected: Option<&[PhysicalType]>,
+    ) -> Result<Vec<PhysicalType>> {
+        let types = names
+            .iter()
+            .map(|n| lookup(env, n))
+            .collect::<Result<Vec<_>>>()?;
+        operands(env, names, expected.unwrap_or(&types))?;
+        Ok(types)
+    }
+    fn region_names(&self, env: &Env) -> BTreeSet<String> {
+        env.keys()
+            .cloned()
+            .chain(self.services.iter().map(|p| p.name.clone()))
+            .collect()
+    }
+    fn branch_captures(&self, env: &mut Env, captures: &[String]) -> Result<(Env, FrameInputs)> {
+        let types = captures
+            .iter()
+            .map(|n| lookup(env, n))
+            .collect::<Result<Vec<_>>>()?;
+        operands(env, captures, &types)?;
+        let mut child = Env::new();
+        let mut ports = Vec::new();
+        for (name, ty) in captures.iter().zip(types) {
+            if child
+                .insert(
+                    name.clone(),
+                    Binding {
+                        ty: ty.clone(),
+                        available: true,
+                    },
+                )
+                .is_some()
+            {
+                return Err(err(ErrorCode::Capture, "duplicate/overlapping capture"));
+            }
+            ports.push((name.clone(), ty));
+        }
+        Ok((child, ports.into()))
     }
 }
 fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayouts> {
@@ -1027,11 +1173,11 @@ fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayout
             sites: BTreeSet::new(),
             seen,
             schemas: &mut schemas,
-            loop_inputs: participant_layouts
+            region_inputs: participant_layouts
                 .entry(participant.symbol.clone())
                 .or_default(),
         }
-        .body(&participant.body, env, &participant.outputs, false)?;
+        .body(&participant.body, env, Some(&participant.outputs), false)?;
     }
     for (name, roles) in &p.entries {
         if p.functions.contains_key(name) {

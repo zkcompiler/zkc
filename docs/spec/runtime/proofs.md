@@ -74,6 +74,12 @@ per-attempt stops. Ingress keeps its `ingress.<parameter>` outer site and stores
 the inner instruction separately. These are diagnostics and do not alter origins,
 transcript history or proof framing.
 
+Verifier-local helpers may create, pass and consume nominal record custody
+units in their exact default native representation. These local bookkeeping
+permissions do not admit provider resources or grant wire/codec permissions.
+Verifier participant inputs and outputs retain their separate data admission
+rules, and native affine-use checks still apply to every unit.
+
 Session cleanup requires no active frames or residual logical resource units.
 The proof host does not export returned logical units to a caller. Deployment
 admission refuses affine entry outputs other than RNG, nonce or transcript

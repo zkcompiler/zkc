@@ -9,6 +9,44 @@ const SUITE: &str = "merlin3.bls12-381.fr64be/0";
 const STATE: &str = "transcript:merlin3.bls12-381.fr64be/0@host.resource/0";
 const FIELD: &str = "field:bls12-381.fr@arkworks.fr/0";
 
+#[test]
+fn local_verifier_custody_does_not_grant_wire_or_provider_permissions() {
+    let unit = "resource_unit:Slot.A@logical.resource_unit/0";
+    let rng = "rng:bls12-381.fr@host.resource/0";
+    let mut fixture = Fixture::authored();
+    fixture.program[2] = json!([
+        [
+            "function",
+            "unit",
+            [["x", unit]],
+            [unit],
+            [["return", ["x"]]],
+            ["unit", []]
+        ],
+        [
+            "function",
+            "rng",
+            [["x", rng]],
+            [rng],
+            [["return", ["x"]]],
+            ["rng", []]
+        ]
+    ]);
+    let contracts = crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose());
+    let program = Program::decode(fixture.program.to_string().as_bytes(), &contracts).unwrap();
+    verifier_function(&program.program.functions["unit"], &contracts).unwrap();
+    assert!(!verifier_data(
+        &PhysicalType::parse(unit).unwrap(),
+        &contracts
+    ));
+    assert_eq!(
+        verifier_function(&program.program.functions["rng"], &contracts)
+            .unwrap_err()
+            .0,
+        "native-proof-verifier-resource"
+    );
+}
+
 struct Fixture {
     program: Json,
     events: Vec<NativeTranscriptEvent>,
@@ -1796,4 +1834,45 @@ fn block_witness_slots_follow_nested_source_applications() {
         "gate.apply_11_apply_1_a_b_draw",
     );
     f.admit(None).unwrap();
+}
+
+#[test]
+fn selected_participant_requests_refuse_before_codec_or_message_flattening() {
+    for nested in [false, true] {
+        let mut fixture = Fixture::authored();
+        let send = fixture.program[3][0][6][0].clone();
+        let branch = json!([
+            "if",
+            "choice",
+            "public",
+            ["candidate"],
+            [send, ["yield", []]],
+            [["yield", []]],
+            []
+        ]);
+        fixture.program[3][0][6] = if nested {
+            fixture.program[3][0][4]
+                .as_array_mut()
+                .unwrap()
+                .push(json!(["count", "index@native.index/0"]));
+            json!([
+                [
+                    "loop",
+                    "rounds",
+                    ["value", "count", "2", "i"],
+                    [],
+                    [["public", "public"], ["candidate", "candidate"]],
+                    [branch, ["yield", []]],
+                    []
+                ],
+                ["return", []]
+            ])
+        } else {
+            json!([branch, ["return", []]])
+        };
+        assert_eq!(
+            fixture.admit(None).unwrap_err().0,
+            "native-proof-selected-control"
+        );
+    }
 }

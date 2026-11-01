@@ -340,8 +340,46 @@ pub struct Intrinsic {
     pub scalar: bool,
 }
 
+/// Source association rules; no backend or formal authority is installed here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrontendSignature {
+    RecordUnpack,
+    RecordInspect,
+    RecordRepack,
+    RandomConstructor,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrontendAssociation {
+    pub identity: &'static str,
+    pub module: &'static str,
+    pub name: &'static str,
+    pub signature: FrontendSignature,
+    pub implicit: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrontendHome {
+    pub members: &'static [&'static str],
+    pub constructor: &'static str,
+    pub module: &'static str,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServiceSignature {
+    RandomDraw,
+    RandomIndex,
+    RandomIndices,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ServiceMethodDeclaration {
+    pub name: &'static str,
+    pub signature: ServiceSignature,
+    pub capability: &'static str,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Catalog {
+    pub frontend_associations: &'static [FrontendAssociation],
+    pub frontend_homes: &'static [FrontendHome],
+    pub service_methods: &'static [ServiceMethodDeclaration],
     pub sorts: &'static [&'static str],
     pub types: &'static [TypeConstructor],
     pub operations: &'static [Operation],

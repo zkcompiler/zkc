@@ -37,6 +37,7 @@ struct InputSchemaPort<'a> {
     name: &'a str,
     schema: &'a Schema,
     key: Option<&'static str>,
+    coordinate: Option<(u32, &'a [u32], &'a str)>,
 }
 pub struct InputGroup<'a> {
     interface: InputInterface<'a>,
@@ -75,6 +76,7 @@ impl InputGroup<'_> {
             .map(|port| {
                 json!({
                     "name": port.name,
+                    "selection": port.coordinate.map(|(port,path,role)| json!({"port":port,"path":path,"role":role})),
                     "schema": describe(port.schema),
                     "initializer": (port.key == Some("prover_key")).then_some("prover_key"),
                     "constructible": port.key == Some("prover_key") ||
@@ -112,6 +114,7 @@ impl Interface {
                         name: &p.definition.name,
                         schema: &p.definition.schema,
                         key: p.key,
+                        coordinate: Some((p.index, p.path, &self.participants()[p.role as usize])),
                     })
                     .collect(),
             })
@@ -130,6 +133,7 @@ impl Interface {
                     name: &p.definition.name,
                     schema: &p.definition.schema,
                     key: p.key,
+                    coordinate: Some((p.index, p.path, &self.participants()[p.role as usize])),
                 })
                 .collect(),
         };
@@ -163,6 +167,7 @@ impl FunctionInterface {
                     name: &p.name,
                     schema: &p.schema,
                     key: None,
+                    coordinate: None,
                 })
                 .collect(),
         }
@@ -238,3 +243,20 @@ fn describe(schema: &Schema) -> Json {
 mod decode;
 #[cfg(feature = "cpu")]
 pub use decode::{Decoder, InputError, Resolver};
+
+impl super::OrdinaryInput<'_> {
+    /// Decode only this selection through the ordinary bounded input decoder.
+    /// The resulting named value supplies no omitted sibling or resource origin.
+    pub fn input_group<'a>(&'a self, name: &'a str) -> InputGroup<'a> {
+        InputGroup {
+            interface: InputInterface::Deployment(self.interface),
+            name,
+            ports: vec![InputSchemaPort {
+                name: "value",
+                schema: self.schema(),
+                key: None,
+                coordinate: Some((self.port(), self.path(), self.role())),
+            }],
+        }
+    }
+}

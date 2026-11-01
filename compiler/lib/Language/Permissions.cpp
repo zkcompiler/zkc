@@ -51,9 +51,23 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
   if (!decl || (type.kind != Type::Kind::Record &&
                 type.kind != Type::Kind::LogicalRecord &&
                 type.kind != Type::Kind::Associated)) {
-    fail("source.type", "type has no product fields; variants require match",
+    fail("source.type",
+         "type has no product fields; variants require match: " +
+             spelling(type),
          span);
     return {};
+  }
+  if (decl->generated) {
+    StringRef member = decl->generated->member;
+    if (member.contains(':') || member == "Public" || member == "Witness" ||
+        member == "ProverOutputs" || member == "VerifierOutputs") {
+      auto selected = entryFamilyFields(*decl, type.arguments, span);
+      if (!selected)
+        return {};
+      for (auto &field : *selected)
+        result.push_back({field.name, std::move(field.type), true, span});
+      return result;
+    }
   }
   auto bindings = substitution(*decl, type.arguments);
   if (type.kind == Type::Kind::Associated) {
@@ -80,6 +94,12 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
       field.maximumRows =
           substitute(*source.maximumRows, bindings, span, depth + 1);
       if (!field.maximumRows)
+        return {};
+    }
+    if (source.placement) {
+      field.placement = placement(field.type, *source.placement,
+                                  decl->roles.size(), field.span, depth + 1);
+      if (!field.placement)
         return {};
     }
     if (type.kind == Type::Kind::LogicalRecord && !oracleField(field))
@@ -128,12 +148,20 @@ bool Semantics::logicalRecord(const Type &type, Span span) {
   if (type.kind != Type::Kind::LogicalRecord || !decl ||
       decl->kind != Declaration::Kind::Record || !decl->logical)
     return fail("source.type", "expected a nominal logical record", span);
-  if (decl->resource)
+  if (decl->resource && decl->roles.empty())
     return fail("source.resource", "logical records require Copy and Drop",
                 decl->span);
   auto product = fields(type, span);
   if (!product)
     return false;
+  if (!decl->roles.empty()) {
+    for (const auto &field : *product)
+      if (!field.placement)
+        return fail("source.placement", "distributed field has no placement",
+                    field.span);
+    checkedLogicalRecords.insert(std::move(key));
+    return true;
+  }
   bool logical = false;
   for (const auto &field : *product) {
     if (isOracleHandle(field.type))
@@ -253,9 +281,8 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
     return Permissions{true, true};
-  if (type.kind == K::LogicalRecord)
-    return logicalRecord(type, span) ? std::optional(Permissions{true, true})
-                                     : std::nullopt;
+  if (type.kind == K::LogicalRecord && !logicalRecord(type, span))
+    return {};
   if (type.kind == K::Formal || isOracleHandle(type))
     return Permissions{true, true};
   if (type.kind == K::Builtin) {
@@ -298,7 +325,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   std::vector<Type> children;
   if (type.kind == K::Tuple || type.kind == K::Array)
     children = type.arguments;
-  else if (type.kind == K::Record) {
+  else if (type.kind == K::Record || type.kind == K::LogicalRecord) {
     auto fs = fields(type, span, depth + 1);
     if (!fs)
       return {};
@@ -324,12 +351,13 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   }
   if (auto *decl = typeDeclaration(type)) {
     if (decl->resource) {
-      if (*decl->resource == Resource::Affine && !result.drop) {
+      if (*decl->resource == Resource::Affine && !result.drop &&
+          decl->roles.empty()) {
         fail("source.permission", "affine fields must permit Drop", decl->span);
         return {};
       }
       result.copy = false;
-      result.drop = *decl->resource == Resource::Affine;
+      result.drop = result.drop && *decl->resource == Resource::Affine;
     }
   }
   return result;

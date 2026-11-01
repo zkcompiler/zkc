@@ -43,7 +43,10 @@ in scope, stage, ordered signature, requirements or parameter schema. Update an
 expectation only after its consumer owner accepts that contract. Adding a
 declaration or contribution never enrolls it into an existing profile. The first
 profile, `structured-source-primitives`, preserves the structured exporter's
-sixteen primitive identities and its unselected implementation policy.
+sixteen data primitive identities plus the three nominal resource-unit
+operations, with its unselected implementation policy. Slot roots retain their
+exact nominal identities and do not enroll algebraic domains. Independent
+formal-consumer support is tracked separately.
 
 Build-free source controls and TableGen input regeneration:
 
@@ -58,3 +61,10 @@ configure step runs this projection; the `ZkcContractDeclarationsGen` target
 then regenerates native `Declarations.cpp.inc` using `zkc-tblgen`. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source or belongs under `lean/`.
+
+`frontendAssociations`, `frontendHomes` and `serviceMethods` own source
+intrinsic/service signature rules and semantic constructor homes. Native and
+Rust generation independently reject forged rules, unknown fields, duplicate
+owners and capability drift. Installed source declarations are separately
+checked against their marker signatures; captured homonyms grant no authority.
+See [frontend associations](../../docs/spec/formats/contract-declarations.md#frontend-declaration-associations).

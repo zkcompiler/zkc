@@ -36,6 +36,38 @@ impl EntryError {
         }
     }
     #[cfg(feature = "cpu")]
+    pub(crate) fn boundary(
+        phase: EntryPhase,
+        code: impl ToString,
+        interface: &super::Interface,
+    ) -> Self {
+        Self::boundary_for_role(phase, code, interface, None)
+    }
+    #[cfg(feature = "cpu")]
+    pub(crate) fn boundary_for_role(
+        phase: EntryPhase,
+        code: impl ToString,
+        interface: &super::Interface,
+        role: Option<&str>,
+    ) -> Self {
+        let mut error = Self::new(phase, code);
+        if let Some(r) = interface
+            .outstanding_requirements()
+            .iter()
+            .find(|r| role.is_none_or(|role| r.role == role))
+        {
+            error.path = Some(format!(
+                "{}[{}].path{:?}@{}:{}",
+                if r.output { "outputs" } else { "inputs" },
+                r.port,
+                r.path,
+                r.role,
+                r.reason
+            ));
+        }
+        error
+    }
+    #[cfg(feature = "cpu")]
     pub(crate) fn input(error: super::inputs::InputError) -> Self {
         Self {
             phase: EntryPhase::Request,

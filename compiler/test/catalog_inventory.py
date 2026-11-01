@@ -18,7 +18,8 @@ def main():
     with case("exact current envelope at development version zero"):
         assert catalog.keys() == {"format", "sorts", "types", "operations", "members", "rules",
                                   "capabilities", "exports", "families", "associatedTypes",
-                                  "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles"}
+                                  "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles",
+                                  "frontendAssociations", "frontendHomes", "serviceMethods"}
         assert catalog["format"] == "zkc.contract-declarations/0"
         assert '"commonGeneric"' not in result.stdout
     types = {t["name"]: t for t in catalog["types"]}
@@ -29,17 +30,18 @@ def main():
         assert profile.keys() == {"name", "implementation", "typeConstructors", "parameterValidators", "operations"}
         assert profile["name"] == "structured-source-primitives"
         assert profile["implementation"] == "unselected"
-        assert profile["typeConstructors"] == ["index", "bool", "field", "vector"]
+        assert profile["typeConstructors"] == ["index", "bool", "field", "vector", "resource_unit"]
         assert profile["parameterValidators"] == ["None", "Natural"]
         assert [m["operation"] for m in profile["operations"]] == [
             "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
             "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
-            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"]
+            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed",
+            "resource_unit.create", "resource_unit.pass", "resource_unit.consume"]
         for member in profile["operations"]:
             assert member.keys() == {"operation", "scope", "stage", "parameters", "signature", "requirements"}
             assert all(member[k] == operations[member["operation"]][k] for k in member if k != "operation")
             roots = [t["parameter"] for t in member["scope"] if t["kind"] == "root"]
-            assert roots == ([] if member["operation"].startswith("index.") else [{"kind": "Domain", "sort": "Field"}])
+            assert roots == ([] if member["operation"].startswith("index.") else [{"kind": "Domain", "sort": "Slot" if member["operation"].startswith("resource_unit.") else "Field"}])
         assert operations["field.embed"]["scope"][1] == {"kind": "project", "parent": 0, "member": "BaseField"}
         assert operations["vector.equal"]["requirements"] == [{"capability": "CommRing", "arguments": [0]}]
     meanings = {m["name"]: m for m in catalog["mathematicalIdentities"]}

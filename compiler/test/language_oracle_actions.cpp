@@ -1,7 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -34,8 +33,7 @@ Expected<CheckedProject> check(StringRef code) {
 }
 CheckedOriginal original(StringRef code) {
   auto project = take(check(code));
-  auto source =
-      take(prepareOriginal(take(zkc::test::closeNativeRun(project, "m::Run"))));
+  auto source = take(prepareOriginal(take(closeSubject(project, "m::Run"))));
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -230,13 +228,13 @@ int main() {
     protocol Run roles(P,V)(h:O@P->V)->(ok:bool@V){
       let x=Forward roles(V,P)(h);let ok@V=true;return(ok=ok);
     })"),
-            "source.oracle-role");
+            "source.placement");
   });
   cases.run("refuse a return that reverses the holder", [] {
     refuses(
         check(
             R"(protocol Run roles(P,V)(h:O@P->V)->(out:O@V->P){return(out=h);})"),
-        "source.oracle-role");
+        "source.placement");
   });
   cases.run("refuse an ambiguous query receiver", [] {
     refuses(check(R"(protocol Run roles(P,V,W)(h:O@P->(V,W))->(ok:bool@V){

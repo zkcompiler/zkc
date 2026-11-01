@@ -5,11 +5,13 @@ impl Schema {
     pub fn describe(&self) -> Value {
         let fields = |fs: &[crate::entry::interface::raw::Field]| {
             fs.iter()
-                .map(|f| json!({"name":f.name,"offset":f.offset,"schema":f.schema.describe()}))
+                .map(|f| json!({"name":f.name,"offset":f.offset,"public":f.public,
+                    "placement":f.placement.as_ref().map(|p|p.describe()),"schema":f.schema.describe()}))
                 .collect::<Vec<_>>()
         };
         json!({"kind":format!("{:?}",self.kind).to_lowercase(),"identity":self.identity,
-            "type":self.display_type,"custody":self.custody,"constructible":self.constructible,
+            "type":self.display_type,"generated":self.generated,"custody":self.custody,"sealed":self.sealed,"roles":self.roles,
+            "element":self.element.as_ref().map(|e| e.describe()),"constructible":self.constructible,
             "permissions":self.permissions.iter().map(|p|format!("{p:?}")).collect::<Vec<_>>(),
             "fields":fields(&self.fields),"alternatives":self.alternatives.iter().map(|a|
                 json!({"name":a.name,"fields":fields(&a.fields)})).collect::<Vec<_>>(),"leaves":self.leaves})
@@ -83,12 +85,12 @@ impl FunctionInterface {
                 schemas
                     .check(&p.schema, 0)
                     .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
-                super::require(!p.schema.kind.is_logical(), "entry-host-schema")?;
+                super::require(!p.schema.is_logical(), "entry-host-schema")?;
             }
             schemas
                 .check(&f.result, 0)
                 .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
-            super::require(!f.result.kind.is_logical(), "entry-host-schema")?;
+            super::require(!f.result.is_logical(), "entry-host-schema")?;
         }
         super::require(
             document.functions.len() <= 4096 && symbols.contains(&document.selection.function),

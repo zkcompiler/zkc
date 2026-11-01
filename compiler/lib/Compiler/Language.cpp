@@ -150,8 +150,13 @@ Expected<NativeProofPolicy> proofPolicy(const CheckedOriginal &original) {
   }
   for (auto service : proof.services)
     policy.services.push_back(protocol.services[service].native);
-  for (auto index : proof.publicInputs)
-    append_range(policy.publicInputs, protocol.inputs[index].native);
+  auto remaining = original.admissionLimits().work;
+  auto publicNative = detail::interfacePublicNative(
+      protocol, proof.publicInputs, proof.verifier, remaining,
+      original.admissionLimits());
+  if (!publicNative)
+    return publicNative.takeError();
+  policy.publicInputs = std::move(*publicNative);
   return policy;
 }
 Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,

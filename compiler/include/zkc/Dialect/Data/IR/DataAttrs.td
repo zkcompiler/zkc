@@ -19,8 +19,8 @@ def VariantAlternative : AttrDef<DataDialect, "Alternative"> {
 def LogicalLayoutField : AttrDef<DataDialect, "LayoutField"> {
   let mnemonic = "layout_field";
   let parameters = (ins "::mlir::StringAttr":$name, "uint64_t":$offset,
-    "::zkc::data::LayoutAttr":$layout);
-  let assemblyFormat = "`<` $name `,` $offset `,` $layout `>`";
+    "::zkc::data::LayoutAttr":$layout, "bool":$isPublic);
+  let assemblyFormat = "`<` $name `,` $offset `,` $layout `,` $isPublic `>`";
   let genVerifyDecl = 1;
 }
 def LogicalLayoutAlternative : AttrDef<DataDialect, "LayoutAlternative"> {
@@ -38,16 +38,19 @@ def LogicalLayout : AttrDef<DataDialect, "Layout"> {
   let summary = "complete source value layout with ordered typed children";
   let parameters = (ins "::mlir::StringAttr":$kind,
     "::mlir::StringAttr":$identity, "::mlir::StringAttr":$displayType,
-    "bool":$custody, "bool":$constructible, "bool":$copy, "bool":$drop,
+    "bool":$custody, "bool":$sealed, "bool":$constructible, "bool":$copy, "bool":$drop,
     OptionalArrayRefParameter<"::zkc::data::LayoutFieldAttr">:$fields,
     OptionalArrayRefParameter<"::zkc::data::LayoutAlternativeAttr">:$alternatives,
-    OptionalArrayRefParameter<"::mlir::Type">:$leaves);
+    OptionalArrayRefParameter<"::mlir::Type">:$leaves,
+    OptionalParameter<"::zkc::data::LayoutAttr">:$element,
+    OptionalParameter<"::mlir::StringAttr">:$generated);
   let assemblyFormat = [{
     `<` $kind `,` $identity `,` $displayType `,`
-        $custody `,` $constructible `,` $copy `,` $drop
+        $custody `,` $sealed `,` $constructible `,` $copy `,` $drop
         (`fields` `[` $fields^ `]`)?
         (`alternatives` `[` $alternatives^ `]`)?
-        (`leaves` `[` $leaves^ `]`)? `>`
+        (`leaves` `[` $leaves^ `]`)?
+        (`element` $element^)? (`generated` $generated^)? `>`
   }];
   let genVerifyDecl = 1;
 }

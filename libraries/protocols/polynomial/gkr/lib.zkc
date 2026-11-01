@@ -216,8 +216,12 @@ fn layer_claim<F: Field>(point: Vector<F>, value: F) -> LayerClaim<F> {
   return LayerClaim<F> { point: point, value: value };
 }
 
-fn open_layer<F: Field>(claim: LayerClaim<F>) -> (Vector<F>, F) {
-  return unpack(claim);
+fn open_layer<F: Field>(claim: LayerClaim<F>) -> (LayerClaim<F>, (Vector<F>, F)) {
+  return inspect_record(claim);
+}
+
+fn advance_layer<F: Field>(claim: LayerClaim<F>, point: Vector<F>, value: F) -> LayerClaim<F> {
+  return repack_record(claim, (point, value));
 }
 
 fn check_input<F: Field>(values: Vector<F>, claim: LayerClaim<F>) -> bool {
@@ -387,7 +391,8 @@ where () spec {
   }
   let mut claim @V = layer_claim(pointV, evaluate(outputs, pointV));
   for layer in 0..layers roles(P,V) max MaxLayers {
-    let current @V = open_layer(claim);
+    let opened @V = open_layer(claim);
+    let current = opened.1;
     let below @P = values_below(add, mul, inputs, layers, selector, width, layer);
     let gates @P = layer_gates(select_block(add, layer, selector),
       select_block(mul, layer, selector), pointP, below, width);
@@ -412,7 +417,7 @@ where () spec {
     require final_round.1 == wiring_add * (first + at_one) + wiring_mul * first * at_one;
     #[site(line_challenge)] let t = challenges.draw();
     #[site(line_delivery)] let tp = send V -> P(t);
-    claim = layer_claim(line_point(points.0, points.1, t), evaluate_coefficients(coefficients, t));
+    claim = advance_layer(opened.0, line_point(points.0, points.1, t), evaluate_coefficients(coefficients, t));
     pointP = line_point(leftP, rightP, tp);
   }
   #[site(input)] let accepted = Input<F> roles(V)(inputs, claim);

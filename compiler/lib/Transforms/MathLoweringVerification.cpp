@@ -1,5 +1,6 @@
 #include "Computation/Support.h"
 #include "MathematicalPreservation.h"
+#include "mlir/IR/OperationSupport.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -227,10 +228,20 @@ class LoweringVerifier {
                     sourceAttrs.getDictionary(after.getContext()) ||
                 mathematics->getOperands() != ValueRange(inputs) ||
                 mathematics->getResultTypes() != op->getResultTypes() ||
-                mathematics->getNumRegions())
+                mathematics->getNumRegions() != op->getNumRegions())
               return refuse(
                   call,
                   "actual numerical operation, operands or attributes differ");
+            if (op->getNumRegions() &&
+                (!isa<data::BranchOp>(op) ||
+                 !computation::chargeCopy(op, remaining) ||
+                 !computation::chargeCopy(mathematics, remaining)))
+              return refuse(call, "selected numerical inspection limit");
+            for (auto [before, after] :
+                 zip(op->getRegions(), mathematics->getRegions()))
+              if (!OperationEquivalence::isRegionEquivalentTo(
+                      &before, &after, OperationEquivalence::IgnoreLocations))
+                return refuse(call, "selected numerical arm differs");
             for (auto [source, actual] :
                  zip(op->getResults(), mathematics->getResults())) {
               localValues[source] = actual;
@@ -305,6 +316,14 @@ class LoweringVerifier {
       for (auto [a, b] : zip(action.getOperands(), cursor->getOperands()))
         if (participantValues.lookup(a) != b)
           return refuse(cursor, "lowering changed an action operand");
+      if (auto branch = dyn_cast<protocol_ir::ParticipantBranchOp>(action)) {
+        if (branch.getNumRegions() != cursor->getNumRegions())
+          return refuse(cursor, "lowering changed selected arms");
+        for (auto [index, arm] : enumerate(branch.getArms()))
+          if (failed(
+                  block(arm.front(), cursor->getRegion(index).front(), cursor)))
+            return failure();
+      }
       if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(action)) {
         auto lowered = cast<protocol_ir::ProtocolLoopOp>(cursor);
         if (failed(block(loop.getBody().front(), lowered.getBody().front(),

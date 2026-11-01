@@ -497,12 +497,15 @@ event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["start", original_caller_protocol, original_apply_site]
 step = ["apply", original_caller_protocol, original_apply_site]
      | ["repeat", original_protocol, original_repeat_site]
+     | ["branch", original_protocol, original_branch_site, alternative]
 ```
 
 The tree uses the canonical logical encoding: tag 0 followed by a u64
 little-endian UTF-8 byte count and string bytes, or tag 1 followed by a u64
 little-endian element count and recursively encoded elements. An application
 step precedes its callee's steps; a repeat step precedes every event in its body.
+A branch step retains the exact declared arm label and precedes only events
+in that selected arm. It has four fields; apply and repeat steps have three.
 The path excludes the final event. Roles reflect static application substitution.
 For a child start the path excludes that child's apply step; it records the
 caller's enclosing applications and repeats. The following child events include

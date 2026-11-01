@@ -1342,6 +1342,9 @@ impl Value {
         Ok(Self::Point(values.into()))
     }
 }
+#[path = "value_extent.rs"]
+mod extent;
+
 impl RuntimeValue for Value {
     fn preparation_output(&self) -> bool {
         fn eligible_type(ty: &PhysicalType) -> bool {
@@ -1472,6 +1475,15 @@ impl RuntimeValue for Value {
         }
     }
 
+    fn control_variant_tag(&self) -> Result<usize> {
+        match self {
+            Self::Variant(v) => Ok(v.alternative()),
+            _ => Err(refused("variant-type")),
+        }
+    }
+    fn control_extent(&self, axis: usize) -> Result<u64> {
+        extent::inspect(self, axis)
+    }
     fn control_bool(&self) -> Result<bool> {
         match self {
             Self::Bool(v) => Ok(*v),

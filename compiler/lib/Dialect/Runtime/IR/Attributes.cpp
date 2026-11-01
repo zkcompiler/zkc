@@ -39,9 +39,13 @@ AssetReferenceAttr::verify(llvm::function_ref<InFlightDiagnostic()> emit,
 }
 LogicalResult
 OriginStepAttr::verify(llvm::function_ref<InFlightDiagnostic()> emit,
-                       OriginStepKind kind, StringRef protocol,
-                       StringRef site) {
+                       OriginStepKind kind, StringRef protocol, StringRef site,
+                       StringRef alternative) {
   if (!symbolizeOriginStepKind(static_cast<uint32_t>(kind)))
+    return diagnostics::emit(emit(), "interactive-native-origin");
+  if (kind == OriginStepKind::Branch)
+    return names(emit, {protocol, site, alternative});
+  if (!alternative.empty())
     return diagnostics::emit(emit(), "interactive-native-origin");
   return names(emit, {protocol, site});
 }
@@ -79,10 +83,12 @@ NativeOriginAttr::verify(llvm::function_ref<InFlightDiagnostic()> emit,
     if (!step)
       return refuse();
     if (failed(OriginStepAttr::verify(emit, step.getKind(), step.getProtocol(),
-                                      step.getSite())))
+                                      step.getSite(), step.getAlternative())))
       return failure();
     bytes += 9 + stringBytes(stringifyOriginStepKind(step.getKind())) +
              stringBytes(step.getProtocol()) + stringBytes(step.getSite());
+    if (step.getKind() == OriginStepKind::Branch)
+      bytes += stringBytes(step.getAlternative());
   }
   if (auto query = dyn_cast_or_null<QueryOriginAttr>(event)) {
     if (failed(QueryOriginAttr::verify(

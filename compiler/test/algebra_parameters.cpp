@@ -1,6 +1,6 @@
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Builders.h"
-#include "support/NativeCases.h"
+#include "support/Formation.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Support/Json.h"
@@ -150,9 +150,21 @@ int main() {
         nodes, builder.getDenseI32ArrayAttr(outputs));
     require(!value && code == expected, "unexpected native refusal: " + code);
   };
+  cases.run("node formation checks indices and arity before graph formation",
+            [&] {
+              for (auto indices : {builder.getDenseI32ArrayAttr({-1}),
+                                   builder.getDenseI32ArrayAttr({})})
+                refusesFormation<RingNodeAttr>(&context, "ring-node-shape",
+                                               RingNodeKind::Input, indices,
+                                               FieldLiteralAttr{}, FieldType{});
+              refusesFormation<RingNodeAttr>(&context, "ring-node-shape",
+                                             RingNodeKind::Add,
+                                             builder.getDenseI32ArrayAttr({}),
+                                             FieldLiteralAttr{}, FieldType{});
+            });
   cases.run("actual graph formation checks every structural obligation", [&] {
     refuse("ring-input", {field}, {node(RingNodeKind::Input, {1})}, {0});
-    refuse("ring-node-shape", {field}, {node(RingNodeKind::Input, {-1})}, {0});
+    refuse("ring-edge", {field}, {node(RingNodeKind::Add, {0, 0})}, {0});
     refuse("ring-edge", {field},
            {node(RingNodeKind::Input, {0}), node(RingNodeKind::Add, {0, 1})},
            {1});
@@ -173,20 +185,39 @@ int main() {
       chain.push_back(node(RingNodeKind::Negate, {int32_t(i - 1)}));
     refuse("ring-depth", {field}, chain, {int32_t(chain.size() - 1)});
   });
-  cases.run("byte publication rechecks unchecked native construction", [&] {
-    auto malformed = RingExpressionAttr::get(&context, {field},
-                                             {node(RingNodeKind::Add, {0, 0})},
-                                             builder.getDenseI32ArrayAttr({0}));
-    refuses(exportRingExpression(malformed), "ring-attribute");
+  cases.run(
+      "missing graph inventory and malformed literal fail formation", [&] {
+        refusesFormation<RingExpressionAttr>(
+            &context, "ring-limit", ArrayRef<FieldType>{},
+            ArrayRef<RingNodeAttr>{}, DenseI32ArrayAttr{});
+        refusesFormation<FieldLiteralAttr>(&context, "field-literal", field,
+                                           builder.getI64IntegerAttr(1));
+      });
+  cases.run("publication refuses absent native values", [&] {
     refuses(exportRingExpression({}), "ring-attribute");
-    auto wrongArity = RingExpressionAttr::get(
-        &context, {field}, {node(RingNodeKind::Add, {})},
-        builder.getDenseI32ArrayAttr({0}));
-    refuses(exportRingExpression(wrongArity), "ring-attribute");
-    auto wrongLiteral =
-        FieldLiteralAttr::get(&context, field, builder.getI64IntegerAttr(1));
-    refuses(encodeFieldLiteral(wrongLiteral), "field-literal");
     refuses(encodeFieldLiteral({}), "field-literal");
   });
+  cases.run(
+      "publication reads independently authored native graphs exactly", [&] {
+        auto input = node(RingNodeKind::Input, {0});
+        auto native = RingExpressionAttr::get(
+            &context, {field, field}, {input, node(RingNodeKind::Add, {0, 0})},
+            builder.getDenseI32ArrayAttr({1}));
+        auto expected = take(ring::Expression::create(
+            {{"koala-bear"}, {"koala-bear"}},
+            {ring::Node::slot(0), ring::Node::add(0, 0)}, {1}));
+        auto exported = take(exportRingExpression(native));
+        require(exported.identity() == expected.identity() &&
+                    take(encodeRingExpression(native)) ==
+                        printJson(expected.encode()),
+                "publication changed a directly supplied native graph");
+        auto changed = RingExpressionAttr::get(
+            &context, {field, field},
+            {input, node(RingNodeKind::Multiply, {0, 0})},
+            builder.getDenseI32ArrayAttr({1}));
+        require(take(exportRingExpression(changed)).identity() !=
+                    exported.identity(),
+                "publication hid a changed native node");
+      });
   return cases.result();
 }

@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Layout.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
@@ -12,6 +13,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/SHA256.h"
+#include <algorithm>
 #include <set>
 
 using namespace llvm;
@@ -105,14 +107,21 @@ json::Value detail::encodeInterfaceOracle(const InterfaceOracle &oracle) {
 json::Value detail::encodeInterfaceSchema(const InterfaceSchema &s) {
   auto fields = [](ArrayRef<InterfaceField> fields) {
     json::Array result;
-    for (const auto &f : fields)
-      result.push_back(
-          json::Object{{"name", f.name},
-                       {"offset", f.offset},
-                       {"schema", encodeInterfaceSchema(*f.schema)}});
+    for (const auto &f : fields) {
+      json::Object field{
+          {"name", f.name},
+          {"offset", f.offset},
+          {"public", f.isPublic},
+          {"placement", f.placement ? encodeInterfacePlacement(*f.placement)
+                                    : json::Value(nullptr)},
+          {"schema", encodeInterfaceSchema(*f.schema)}};
+      if (f.maximumRows)
+        field["maximum_rows"] = std::to_string(*f.maximumRows);
+      result.push_back(std::move(field));
+    }
     return result;
   };
-  json::Array alternatives, permissions, leaves;
+  json::Array alternatives, permissions, leaves, roles;
   for (const auto &a : s.alternatives)
     alternatives.push_back(
         json::Object{{"name", a.name}, {"fields", fields(a.fields)}});
@@ -122,18 +131,239 @@ json::Value detail::encodeInterfaceSchema(const InterfaceSchema &s) {
     permissions.push_back("Drop");
   for (const auto &l : s.leaves)
     leaves.push_back(l);
+  for (const auto &role : s.roles)
+    roles.push_back(role);
   json::Object result{{"kind", typeKindName(s.kind)},
                       {"identity", s.identity},
                       {"type", s.type},
+                      {"generated", s.generated.empty()
+                                        ? json::Value(nullptr)
+                                        : json::Value(s.generated)},
                       {"custody", s.custody},
+                      {"sealed", s.sealed},
                       {"constructible", s.constructible},
                       {"permissions", std::move(permissions)},
+                      {"roles", std::move(roles)},
+                      {"element", s.element ? encodeInterfaceSchema(*s.element)
+                                            : json::Value(nullptr)},
                       {"fields", fields(s.fields)},
                       {"alternatives", std::move(alternatives)},
                       {"leaves", std::move(leaves)}};
-  if (s.oracle)
+  if (s.oracle) {
     result["oracle"] = encodeInterfaceOracle(*s.oracle);
+    result["data_schema"] = encodeInterfaceSchema(*s.oracleData);
+  }
+  if (s.maximum)
+    result["maximum"] = std::to_string(*s.maximum);
   return result;
+}
+Expected<ValuePlacement>
+detail::sourcePortPlacement(const Port &port,
+                            const ProtocolPortLayout &native) {
+  if (native.placement)
+    return *native.placement;
+  if (port.placement)
+    return *port.placement;
+  // API bridge for the existing ordinary and direct-handle native observer.
+  // Distributed products require the new observer's checked placement/map.
+  if (isLogicalValue(port.type) && !isOracleHandle(port.type))
+    return error("source.interface",
+                 "distributed native placement observation missing");
+  if (!port.oracle)
+    return ValuePlacement(DataPlacement{port.roles});
+  std::vector<unsigned> receivers;
+  for (unsigned role : port.roles)
+    if (role != port.oracle->holder)
+      receivers.push_back(role);
+  return ValuePlacement(
+      OraclePlacement{port.oracle->holder, std::move(receivers)});
+}
+Expected<std::vector<InterfaceComponent>>
+detail::sourcePortComponents(const Port &port, const ProtocolPortLayout &native,
+                             unsigned base, uint64_t &remaining) {
+  std::vector<InterfaceComponent> result;
+  auto append = [&](ArrayRef<unsigned> path, unsigned leaf, unsigned role,
+                    InterfaceComponentFacet facet, unsigned index) -> Error {
+    if (remaining < path.size() + 1)
+      return error("source.limit", "component observation budget exceeded");
+    remaining -= path.size() + 1;
+    result.push_back({std::vector<unsigned>(path.begin(), path.end()), leaf,
+                      role, facet, base + index});
+    return Error::success();
+  };
+  auto finish = [&]() -> std::vector<InterfaceComponent> {
+    for (auto begin = result.begin(); begin != result.end();) {
+      auto end = begin + 1;
+      while (end != result.end() && end->path == begin->path &&
+             end->leaf == begin->leaf)
+        ++end;
+      std::stable_sort(begin, end, [](const auto &a, const auto &b) {
+        return a.role < b.role;
+      });
+      begin = end;
+    }
+    return std::move(result);
+  };
+  for (const auto &c : native.components) {
+    InterfaceComponentFacet facet;
+    switch (c.facet) {
+    case ProtocolComponentFacet::Data:
+      facet = InterfaceComponentFacet::Data;
+      break;
+    case ProtocolComponentFacet::OracleData:
+      facet = InterfaceComponentFacet::OracleData;
+      break;
+    case ProtocolComponentFacet::OracleAnchor:
+      facet = InterfaceComponentFacet::OracleAnchor;
+      break;
+    case ProtocolComponentFacet::Custody:
+      facet = InterfaceComponentFacet::Custody;
+      break;
+    }
+    if (auto e = append(c.fieldPath, c.localLeaf, c.role, facet, c.nativeIndex))
+      return std::move(e);
+  }
+  if (!native.components.empty() || native.leaves.empty())
+    return finish();
+  auto placed = sourcePortPlacement(port, native);
+  if (!placed)
+    return placed.takeError();
+  if (std::holds_alternative<ProductPlacement>(placed->value))
+    return error("source.interface",
+                 "distributed native component observation missing");
+  for (const auto &leaf : native.leaves) {
+    auto selected = native.body;
+    unsigned offset = 0;
+    for (unsigned index : leaf.path) {
+      if (!selected || index >= selected->fields.size())
+        return error("source.interface", "native leaf path differs");
+      offset += selected->fields[index].offset;
+      selected = selected->fields[index].layout;
+    }
+    unsigned local = leaf.bodyOffset - offset;
+    if (auto *data = std::get_if<DataPlacement>(&placed->value)) {
+      for (unsigned role : data->roles)
+        if (auto e = append(leaf.path, local, role,
+                            local < selected->custodyCount
+                                ? InterfaceComponentFacet::Custody
+                                : InterfaceComponentFacet::Data,
+                            leaf.nativeOffset))
+          return std::move(e);
+    } else {
+      auto &oracle = std::get<OraclePlacement>(placed->value);
+      if (auto e =
+              append(leaf.path, local, oracle.holder,
+                     InterfaceComponentFacet::OracleData, leaf.nativeOffset))
+        return std::move(e);
+      for (unsigned role : oracle.receivers)
+        if (auto e = append(leaf.path, local, role,
+                            InterfaceComponentFacet::OracleAnchor,
+                            leaf.nativeOffset + 1))
+          return std::move(e);
+    }
+  }
+  return finish();
+}
+bool detail::logicalLayout(const Layout &s) {
+  if (isOracleHandle(s.type) || s.type.kind == Type::Kind::LogicalRecord)
+    return true;
+  if (s.type.kind == Type::Kind::Array)
+    return s.element && logicalLayout(*s.element);
+  return s.type.kind == Type::Kind::Tuple &&
+         llvm::any_of(s.fields,
+                      [](const auto &f) { return logicalLayout(*f.layout); });
+}
+bool detail::logicalSchema(const InterfaceSchema &s) {
+  if (s.oracle || s.kind == Type::Kind::LogicalRecord)
+    return true;
+  if (s.kind == Type::Kind::Array)
+    return s.element && logicalSchema(*s.element);
+  return s.kind == Type::Kind::Tuple &&
+         llvm::any_of(s.fields,
+                      [](const auto &f) { return logicalSchema(*f.schema); });
+}
+StringRef detail::componentFacetName(InterfaceComponentFacet facet) {
+  switch (facet) {
+  case InterfaceComponentFacet::Data:
+    return "data";
+  case InterfaceComponentFacet::OracleData:
+    return "oracle_data";
+  case InterfaceComponentFacet::OracleAnchor:
+    return "oracle_anchor";
+  case InterfaceComponentFacet::Custody:
+    return "custody";
+  }
+  llvm_unreachable("unknown interface component facet");
+}
+json::Value detail::encodeInterfacePlacement(const ValuePlacement &p) {
+  auto indices = [](ArrayRef<unsigned> values) {
+    json::Array result;
+    for (unsigned value : values)
+      result.push_back(value);
+    return result;
+  };
+  if (auto *data = std::get_if<DataPlacement>(&p.value))
+    return json::Object{{"kind", "data"}, {"roles", indices(data->roles)}};
+  if (auto *oracle = std::get_if<OraclePlacement>(&p.value))
+    return json::Object{{"kind", "oracle"},
+                        {"holder", oracle->holder},
+                        {"receivers", indices(oracle->receivers)}};
+  const auto &product = std::get<ProductPlacement>(p.value);
+  json::Array fields;
+  for (const auto &field : product.fields)
+    fields.push_back(encodeInterfacePlacement(field));
+  return json::Object{{"kind", "product"},
+                      {"instance", product.instance},
+                      {"arguments", indices(product.arguments)},
+                      {"fields", std::move(fields)}};
+}
+Expected<ValuePlacement> detail::externalPlacement(const Layout &layout,
+                                                   const ValuePlacement &p,
+                                                   uint64_t &remaining,
+                                                   const Limits &limits,
+                                                   unsigned depth) {
+  if (depth > limits.typeDepth || remaining == 0)
+    return error("source.limit", "external placement traversal limit exceeded");
+  --remaining;
+  if (!std::holds_alternative<ProductPlacement>(p.value)) {
+    uint64_t cost =
+        std::holds_alternative<DataPlacement>(p.value)
+            ? std::get<DataPlacement>(p.value).roles.size()
+            : std::get<OraclePlacement>(p.value).receivers.size() + 1;
+    if (cost > remaining)
+      return error("source.limit", "external placement role budget exceeded");
+    remaining -= cost;
+    return p;
+  }
+  const auto &product = std::get<ProductPlacement>(p.value);
+  auto identity = typeIdentity(layout.type);
+  if (identity.size() + product.fields.size() + product.arguments.size() >
+      remaining)
+    return error("source.limit", "external placement identity limit exceeded");
+  remaining -=
+      identity.size() + product.fields.size() + product.arguments.size();
+  if (product.instance != identity ||
+      product.fields.size() !=
+          (layout.type.kind == Type::Kind::Array ? 1 : layout.fields.size()))
+    return error("source.interface",
+                 "source placement instance or fields differ");
+  ProductPlacement result{
+      toHex(SHA256::hash(arrayRefFromStringRef(identity)), true),
+      product.arguments,
+      {}};
+  for (unsigned i = 0; i < product.fields.size(); ++i) {
+    const auto &child = layout.type.kind == Type::Kind::Array
+                            ? layout.element
+                            : layout.fields[i].layout;
+    if (!child)
+      return error("source.interface", "array element layout missing");
+    auto normalized = externalPlacement(*child, product.fields[i], remaining,
+                                        limits, depth + 1);
+    if (!normalized)
+      return normalized.takeError();
+    result.fields.push_back(std::move(*normalized));
+  }
+  return ValuePlacement(std::move(result));
 }
 Expected<json::Value> detail::parseInterface(StringRef bytes,
                                              const Limits &limits) {

@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/EntryBoundary.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -47,8 +48,9 @@ bool Checker::entry(DeclarationId id, unsigned depth) {
         for (const auto &part : gate.path)
           if (!types.charge(part.size() + 1, source.span))
             return false;
-      copied += definition.proof()->publicInputs.size() +
-                definition.proof()->acceptance.path.size();
+      for (const auto &input : definition.proof()->publicInputs)
+        copied += input.path.size() + 1;
+      copied += definition.proof()->acceptance.path.size();
       if (definition.proof()->completion)
         copied += definition.proof()->completion->path.size() + 1;
     }
@@ -224,18 +226,36 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
     }
     return found - ports.begin();
   };
-  for (const auto &port : source.publicInputs) {
-    auto index = portIndex(protocol.inputs, port);
+  auto bindings = types.substitution(protocol, entry.staticArguments);
+  for (const auto &input : source.publicInputs) {
+    auto index = portIndex(protocol.inputs, {input.port, input.span});
     if (!index)
       return false;
-    value.publicInputs.push_back(*index);
+    EntryInputSelection selected{*index, {}, value.verifier, input.span};
+    auto current =
+        types.substitute(protocol.inputs[*index].type, bindings, input.span);
+    if (!current)
+      return false;
+    for (const auto &name : input.path) {
+      auto field = types.fieldIndex(entry, *current, name, input.span);
+      if (!field)
+        return false;
+      current =
+          types.projectedType(entry, std::move(*current), {*field}, input.span);
+      if (!current)
+        return false;
+      selected.path.push_back(*field);
+    }
+    value.publicInputs.push_back(std::move(selected));
   }
   llvm::sort(value.publicInputs);
-  if (std::adjacent_find(value.publicInputs.begin(),
-                         value.publicInputs.end()) != value.publicInputs.end())
-    return types.fail("source.entry", "duplicate public logical input",
-                      source.span);
-  auto bindings = types.substitution(protocol, entry.staticArguments);
+  for (unsigned i = 1; i < value.publicInputs.size(); ++i) {
+    const auto &a = value.publicInputs[i - 1], &b = value.publicInputs[i];
+    if (a.port == b.port && a.path.size() <= b.path.size() &&
+        std::equal(a.path.begin(), a.path.end(), b.path.begin()))
+      return types.fail("source.entry", "public selections overlap",
+                        source.span);
+  }
   auto output = [&](const SyntaxSelector &source,
                     unsigned role) -> std::optional<SpecificationSelector> {
     auto index = portIndex(protocol.outputs, {source.port, source.span});
@@ -353,41 +373,20 @@ bool Checker::generatedSignature(Declaration &decl, unsigned depth) {
     decl.fields.push_back({label.str(), nominal(*child), true, decl.span});
     return true;
   };
-  // Setup and managed authority are never ordinary input constructors. A
-  // setup-bearing logical port is supplied by the Host operation context.
-  auto ports = [&](bool inputs, std::optional<unsigned> role, bool publicOnly,
-                   bool witness) {
+  auto ports = [&](std::optional<unsigned> role) {
     decl.generated->role = role;
-    const auto &ports = inputs ? protocol.inputs : protocol.outputs;
-    for (unsigned i = 0; i < ports.size(); ++i) {
-      const auto &port = ports[i];
-      if (!types.charge(port.roles.size() + 1, port.span))
+    std::vector<Type> arguments;
+    for (const auto &parameter : decl.parameters)
+      arguments.push_back(parameterType(parameter));
+    auto selected = types.entryFamilyFields(decl, arguments, decl.span);
+    if (!selected)
+      return false;
+    for (auto &field : *selected) {
+      if (!types.chargeType(field.type, field.selection.span))
         return false;
-      if (role && !llvm::is_contained(port.roles, *role))
-        continue;
-      bool isPublic =
-          proof && llvm::is_contained(owner.proof()->publicInputs, i);
-      if (inputs && ((publicOnly && !isPublic) || (witness && isPublic)))
-        continue;
-      auto type = types.substitute(port.type, subst, port.span);
-      if (!type)
-        return false;
-      if (inputs) {
-        bool setup = llvm::any_of(owner.setups, [&](const SetupSlot &slot) {
-          return llvm::any_of(slot.inputs, [&](const InputSelector &selector) {
-            return selector.port == i;
-          });
-        });
-        auto authority = types.setupAuthority(*type, port.span);
-        if (!authority)
-          return false;
-        if (setup || *authority)
-          continue;
-      }
-      if (!types.chargeType(*type, port.span))
-        return false;
-      decl.generated->ports.push_back({i, {}, port.span});
-      decl.fields.push_back({port.name, std::move(*type), true, port.span});
+      decl.generated->ports.push_back(field.selection);
+      decl.fields.push_back(
+          {field.name, std::move(field.type), true, field.selection.span});
     }
     return true;
   };
@@ -454,14 +453,13 @@ bool Checker::generatedSignature(Declaration &decl, unsigned depth) {
     auto parts = StringRef(member).split(':');
     auto found = llvm::find(protocol.roles, parts.second);
     if (found == protocol.roles.end() ||
-        !ports(parts.first == "Inputs",
-               unsigned(found - protocol.roles.begin()), false, false))
+        !ports(unsigned(found - protocol.roles.begin())))
       return false;
   } else if (member == "Public") {
-    if (!ports(true, {}, true, false))
+    if (!ports({}))
       return false;
   } else if (member == "Witness") {
-    if (!ports(true, owner.proof()->prover, false, true))
+    if (!ports(owner.proof()->prover))
       return false;
   } else if (member == "Proof") {
     auto bytes = builtinType("bytes", {});
@@ -469,10 +467,8 @@ bool Checker::generatedSignature(Declaration &decl, unsigned depth) {
       return types.accept(bytes.takeError(), decl.span);
     decl.fields.push_back({"bytes", *bytes, true, decl.span});
   } else if (member == "ProverOutputs" || member == "VerifierOutputs") {
-    if (!ports(false,
-               member == "ProverOutputs" ? owner.proof()->prover
-                                         : owner.proof()->verifier,
-               false, false))
+    if (!ports(member == "ProverOutputs" ? owner.proof()->prover
+                                         : owner.proof()->verifier))
       return false;
   } else if (member == "ProveResult") {
     if (!addMember("proof", "Proof") || !addMember("outputs", "ProverOutputs"))

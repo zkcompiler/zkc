@@ -3,8 +3,8 @@
 #include "../lib/Target/NativePlanTypes.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/Formation.h"
 #include "support/NativeBindings.h"
-#include "support/NativeCases.h"
 #include "support/ScopedFixture.h"
 #include "support/VariantFixture.h"
 #include "zkc/Compiler/Diagnostics.h"
@@ -441,14 +441,16 @@ int main() {
     reject(small.checkType(physical));
     accept(installation("\"arkworks\"").checkType(physical));
     auto represented = cast<runtime::RepresentedType>(physical);
-    auto broken = runtime::RepresentedType::get(
-        &context, logical, represented.getRepresentation(), ArrayRef<Type>{});
-    reject(CpuTarget().checkType(broken), "binding-representation");
+    refusesFormation<runtime::RepresentedType>(
+        &context, "represented-type-formation", Type(logical),
+        represented.getRepresentation(), ArrayRef<Type>{});
     // CPU contributions cannot declare a new logical domain or a layout law.
-    auto field = algebra::FieldType::get(&context, "forged.field");
-    auto forged = runtime::RepresentedType::get(&context, field, "blst/fr",
-                                                ArrayRef<Type>{});
-    reject(CpuTarget().checkType(forged), "binding-representation");
+    refusesFormation<algebra::FieldType>(&context, "unknown-domain",
+                                         StringRef("forged.field"));
+    auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+    refusesFormation<runtime::RepresentedType>(
+        &context, "represented-type-formation", Type(field),
+        StringRef("foreign/layout"), ArrayRef<Type>{});
   });
   cases.run(
       "native formation and CPU availability do not impose the byte profile",
@@ -527,9 +529,8 @@ int main() {
       return success();
     });
     auto field = algebra::FieldType::get(&context, "bls12-381.fr");
-    auto malformed = runtime::RepresentedType::get(
-        &context, field, "foreign/layout", ArrayRef<Type>{});
-    reject(CpuTarget().checkType(malformed), "binding-representation");
+    reject(CpuTarget().checkType(field),
+           "binding-logical-type-at-physical-stage");
     refuses(formPhysicalType(field, "foreign/layout", {}),
             "binding-representation");
     refuses(planLogicalChildren(Float32Type::get(&context)), "binding-type");

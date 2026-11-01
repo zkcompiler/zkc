@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "CommonRequirements.h"
 #include "ScopedWitness.h"
 #include "WrittenSource.h"
 #include "zkc/Contracts/Declarations.h"
@@ -38,7 +39,7 @@ Error Checker::run() {
     return written.takeError();
   if (auto error = expandLayoutSections(syntax, work))
     return error;
-  if (!collect() || !imports() || !classifyServices() ||
+  if (!collect() || !imports() || !indexDeclarations() || !classifyServices() ||
       !prepareNotationSyntax())
     return types.takeError();
   namesReady = true;
@@ -70,7 +71,8 @@ Error Checker::run() {
     output.writtenSources = std::move(*written);
   }
   for (auto &decl : output.declarations)
-    if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
+    if (!decl.abstract && !output.declarationIndex->association(decl.id) &&
+        !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Oracle ||
          decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
@@ -143,7 +145,7 @@ Error Checker::run() {
   // Preserve the independent signature facts, without running those phases.
   if (failedSignatures)
     return Error::success();
-  if (!prepareOperators())
+  if (!checkInstalledSignatures() || !prepareOperators())
     return types.takeError();
   if (!relationIdentities())
     return types.takeError();
@@ -215,6 +217,9 @@ Error Checker::run() {
   }
   if (recoveryDiagnostics && !recoveryDiagnostics->empty())
     return Error::success();
+  if (auto error = checkCommonControlRequirements(output.declarations,
+                                                  output.assets, work))
+    return error;
   if (!constructions() || !entries() || !sourceClaims())
     return types.takeError();
   inferredContracts.clear();
@@ -389,8 +394,10 @@ bool Checker::collect() {
     decl.completes = source.completes;
     decl.permissions = source.permissions;
     decl.resource = source.resource;
-    decl.logical = source.logical;
-    decl.sealed = source.sealed || source.resource.has_value();
+    decl.logical =
+        source.logical ||
+        (source.kind == Declaration::Kind::Record && !source.roles.empty());
+    decl.sealed = source.sealed;
     if (source.effects)
       decl.effectAllowance = EffectSummary{*source.effects};
     decl.inputOrder = source.inputOrder;
@@ -650,7 +657,21 @@ bool Checker::retainAPI() {
 std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
                                                     ArrayRef<std::string> names,
                                                     Span span) {
-  if (!types.charge(names.size() * (decl.roles.size() + 1), span))
+  auto result = roleArguments(decl, names, span);
+  if (!result)
+    return {};
+  if (result->empty()) {
+    types.fail("source.roles", "role set must be nonempty and distinct", span);
+    return {};
+  }
+  llvm::sort(*result);
+  return result;
+}
+std::optional<std::vector<unsigned>>
+Checker::roleArguments(const Declaration &decl, ArrayRef<std::string> names,
+                       Span span) {
+  if (!types.charge(names.size() * (decl.roles.size() + names.size() + 1),
+                    span))
     return {};
   std::vector<unsigned> result;
   for (auto &name : names) {
@@ -659,13 +680,13 @@ std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
       types.fail("source.roles", "unknown participant: " + name, span);
       return {};
     }
-    result.push_back(found - decl.roles.begin());
-  }
-  llvm::sort(result);
-  if (result.empty() ||
-      std::adjacent_find(result.begin(), result.end()) != result.end()) {
-    types.fail("source.roles", "role set must be nonempty and distinct", span);
-    return {};
+    unsigned role = found - decl.roles.begin();
+    if (llvm::is_contained(result, role)) {
+      types.fail("source.roles", "participant substitution must be injective",
+                 span);
+      return {};
+    }
+    result.push_back(role);
   }
   return result;
 }
@@ -716,6 +737,7 @@ Expected<std::shared_ptr<const AuthoringStorage>> Checker::retainAnalysis() {
   for (unsigned i = 0; i < result->layoutBodies.size(); ++i)
     if (!result->layoutBodies[i])
       result->layoutBodies[i] = output.layoutHeaders[i];
+  result->declarationIndex = output.declarationIndex;
   result->api = output.api;
   result->lexicalResolutions = output.lexicalResolutions;
   result->names = output.names ? output.names

@@ -220,11 +220,18 @@ retained specification selectors.
 Sites use existing `#[site(label)]` annotations. `sites.challenge` selects the
 unique authored static site. `sites.wrapper.challenge` traverses an explicitly
 labelled protocol call named `wrapper`. Loops retain static occurrences, not
-unrolled execution events. Unlabelled calls do not export their descendants.
+unrolled execution events. A labelled branch exposes
+`sites.choice.then.challenge` or the declared match alternative at that
+position. Sibling arms have separate lexical namespaces. Unlabelled calls or
+branches do not export their descendants.
 Site resolution is exact and bounded, and ambiguous paths are refused. Each
 `site_bindings` record includes `native_path`, the array of
-`nativeSiteName(label, 0)` values for labelled calls followed by the selected
-leaf. Query and call sites identify one native operation; aggregate message
+native site values for labelled calls followed by the selected leaf. Outside
+selected arms these are `nativeSiteName(label, 0)`. Inside an arm,
+`nativeSelectedSite(branch, alternative, localSite)` qualifies the site by its
+exact native branch site and alternative; nested branches compose this rule.
+Application edges remain separate array entries. Query and call sites identify
+one native operation; aggregate message
 labels identify their native leaf family and require admitted layout resolution. A site
 binding proposes an occurrence; Lean must check its kind, construction mapping,
 and suitability for the registered quantity. Exported membership alone does not

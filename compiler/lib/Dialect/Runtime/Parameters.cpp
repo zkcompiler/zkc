@@ -20,44 +20,57 @@ importNativeOrigin(MLIRContext *context,
   if (!context || !context->getLoadedDialect<RuntimeDialect>() ||
       origin.entry.size() > 128 || origin.path.size() > 64)
     return zkc::error("interactive-native-origin");
+  auto emit = [&] { return silentDiagnostic(context); };
   SmallVector<OriginStepAttr> path;
   for (const auto &step : origin.path) {
-    if (!bounded({step.protocol, step.site}) ||
+    if (!bounded({step.protocol, step.site, step.alternative}) ||
         (step.kind != protocol::NativeOriginStep::Kind::Apply &&
-         step.kind != protocol::NativeOriginStep::Kind::Repeat))
+         step.kind != protocol::NativeOriginStep::Kind::Repeat &&
+         step.kind != protocol::NativeOriginStep::Kind::Branch))
       return zkc::error("interactive-native-origin");
-    path.push_back(
-        OriginStepAttr::get(context,
-                            step.kind == protocol::NativeOriginStep::Kind::Apply
-                                ? OriginStepKind::Apply
-                                : OriginStepKind::Repeat,
-                            step.protocol, step.site));
+    auto attribute = OriginStepAttr::getChecked(
+        emit, context,
+        step.kind == protocol::NativeOriginStep::Kind::Apply
+            ? OriginStepKind::Apply
+        : step.kind == protocol::NativeOriginStep::Kind::Repeat
+            ? OriginStepKind::Repeat
+            : OriginStepKind::Branch,
+        StringRef(step.protocol), StringRef(step.site),
+        StringRef(step.alternative));
+    if (!attribute)
+      return zkc::error("interactive-native-origin");
+    path.push_back(attribute);
   }
   Attribute event;
   if (auto *query = std::get_if<protocol::NativeQueryOrigin>(&origin.event)) {
     if (!bounded({query->protocol, query->site, query->service, query->method,
                   query->owner}))
       return zkc::error("interactive-native-origin");
-    event = QueryOriginAttr::get(context, query->protocol, query->site,
-                                 query->serviceInput, query->service,
-                                 query->method, query->owner);
+    event = QueryOriginAttr::getChecked(
+        emit, context, StringRef(query->protocol), StringRef(query->site),
+        query->serviceInput, StringRef(query->service),
+        StringRef(query->method), StringRef(query->owner));
   } else if (auto *message =
                  std::get_if<protocol::NativeMessageOrigin>(&origin.event)) {
     if (!bounded({message->protocol, message->site, message->schema,
                   message->sender, message->receiver}))
       return zkc::error("interactive-native-origin");
-    event = MessageOriginAttr::get(context, message->protocol, message->site,
-                                   message->schema, message->sender,
-                                   message->receiver);
+    event = MessageOriginAttr::getChecked(
+        emit, context, StringRef(message->protocol), StringRef(message->site),
+        StringRef(message->schema), StringRef(message->sender),
+        StringRef(message->receiver));
   } else if (auto *start =
                  std::get_if<protocol::NativeStartOrigin>(&origin.event)) {
     if (!bounded({start->protocol, start->site}))
       return zkc::error("interactive-native-origin");
-    event = StartOriginAttr::get(context, start->protocol, start->site);
+    event = StartOriginAttr::getChecked(
+        emit, context, StringRef(start->protocol), StringRef(start->site));
   }
-  auto attribute = NativeOriginAttr::getChecked(
-      [&] { return silentDiagnostic(context); }, context,
-      StringRef(origin.entry), ArrayRef<OriginStepAttr>(path), event);
+  if (!event)
+    return zkc::error("interactive-native-origin");
+  auto attribute =
+      NativeOriginAttr::getChecked(emit, context, StringRef(origin.entry),
+                                   ArrayRef<OriginStepAttr>(path), event);
   if (!attribute)
     return zkc::error("interactive-native-origin");
   return attribute;
@@ -73,8 +86,11 @@ exportNativeOrigin(NativeOriginAttr origin) {
   for (auto step : origin.getPath())
     result.path.push_back({step.getKind() == OriginStepKind::Apply
                                ? protocol::NativeOriginStep::Kind::Apply
-                               : protocol::NativeOriginStep::Kind::Repeat,
-                           step.getProtocol().str(), step.getSite().str()});
+                           : step.getKind() == OriginStepKind::Repeat
+                               ? protocol::NativeOriginStep::Kind::Repeat
+                               : protocol::NativeOriginStep::Kind::Branch,
+                           step.getProtocol().str(), step.getSite().str(),
+                           step.getAlternative().str()});
   auto event = origin.getEvent();
   if (auto query = dyn_cast<QueryOriginAttr>(event))
     result.event = protocol::NativeQueryOrigin{

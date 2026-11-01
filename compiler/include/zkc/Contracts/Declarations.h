@@ -59,6 +59,33 @@ llvm::ArrayRef<SourceAssociatedType> sourceAssociatedTypes();
 llvm::ArrayRef<SourceCapabilityExport> sourceCapabilityExports();
 llvm::ArrayRef<SourceTypeExport> sourceTypeExports();
 
+/// Closed source signature rules. Presence grants no executable authority.
+enum class FrontendSignature {
+  RecordUnpack,
+  RecordInspect,
+  RecordRepack,
+  RandomConstructor
+};
+struct FrontendAssociation {
+  std::string identity, module, name;
+  FrontendSignature signature;
+  bool implicit;
+};
+struct FrontendHome {
+  std::string constructor, module;
+  std::vector<std::string> members;
+};
+enum class ServiceSignature { RandomDraw, RandomIndex, RandomIndices };
+struct ServiceMethodDeclaration {
+  std::string name;
+  ServiceSignature signature;
+  std::string capability;
+};
+llvm::ArrayRef<FrontendAssociation> frontendAssociations();
+llvm::ArrayRef<FrontendHome> frontendHomes();
+llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations();
+const FrontendAssociation *frontendAssociation(llvm::StringRef qualifiedName);
+
 enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 struct TypePermissions {
   bool copy, drop;

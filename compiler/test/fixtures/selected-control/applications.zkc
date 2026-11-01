@@ -1,0 +1,10 @@
+protocol Choose roles(A,B)(flag: bool @(A,B), x: bool @(A,B), y: bool @(A,B)) -> bool @(A,B):
+    #[site(choice)]
+    result = if flag:
+        x
+    else:
+        y
+    return result
+pub protocol Run roles(P,V)(flag: bool @(P,V), x: bool @(P,V), y: bool @(P,V)) -> bool @(P,V):
+    result <- Choose(flag, x, y) @(V,P)
+    return result

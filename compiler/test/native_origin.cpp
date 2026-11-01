@@ -80,6 +80,47 @@ int main() {
       return 1;
     consumeError(bad.takeError());
   }
+  NativeOriginTemplate selected;
+  selected.entry = "main";
+  selected.path.push_back(
+      {NativeOriginStep::Kind::Branch, "main", "choose", "then"});
+  selected.event = NativeMessageOrigin{"main", "message", "message", "P", "V"};
+  auto thenOrigin = encodeNativeOriginTemplate(selected);
+  if (!thenOrigin) {
+    errs() << toString(thenOrigin.takeError());
+    return 1;
+  }
+  auto decoded = decodeNativeOriginTemplate(*thenOrigin);
+  if (!decoded) {
+    consumeError(decoded.takeError());
+    return 1;
+  }
+  if (decoded->path.size() != 1 ||
+      decoded->path[0].kind != NativeOriginStep::Kind::Branch ||
+      decoded->path[0].alternative != "then")
+    return 1;
+  selected.path[0].alternative = "else";
+  auto elseOrigin = encodeNativeOriginTemplate(selected);
+  if (!elseOrigin || *elseOrigin == *thenOrigin) {
+    if (!elseOrigin)
+      consumeError(elseOrigin.takeError());
+    return 1;
+  }
+  selected.path[0].alternative.clear();
+  auto missingArm = encodeNativeOriginTemplate(selected);
+  if (missingArm)
+    return 1;
+  consumeError(missingArm.takeError());
+  selected.path[0].kind = NativeOriginStep::Kind::Repeat;
+  selected.path[0].alternative = "then";
+  auto extraArm = encodeNativeOriginTemplate(selected);
+  if (extraArm)
+    return 1;
+  consumeError(extraArm.takeError());
+  for (size_t end = 0; end < thenOrigin->size(); ++end)
+    if (!refuses(checkNativeOrigin(StringRef(*thenOrigin).take_front(end),
+                                   "message")))
+      return 1;
   // A plain origin header cannot be substituted for the indexed template.
   auto plain = *message;
   const std::string current =

@@ -183,11 +183,21 @@ fn run_bundle(program: &Json) -> String {
     .to_string()
 }
 fn schema(kind: &str, ty: &str, leaves: &[&str]) -> Json {
-    json!({"kind":kind,"identity":sha(ty),"type":ty,"custody":false,"constructible":true,
+    json!({"kind":kind,"identity":sha(ty),"type":ty,"generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,
         "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
-fn port(name: &str, index: u32, native: &[u32], roles: &[&str], schema: Json) -> Json {
-    json!({"name":name,"index":index,"native":native,"roles":roles,"type":schema["type"],"schema":schema})
+fn port(name: &str, index: u32, native: &[u32], roles: &[u32], schema: Json) -> Json {
+    assert_eq!(schema["leaves"].as_array().unwrap().len(), native.len());
+    let components = native
+        .iter()
+        .enumerate()
+        .flat_map(|(leaf, native)| {
+            roles.iter().map(move |role|
+        json!({"path":[],"leaf":leaf,"role":role,"facet":"data","native":native}))
+        })
+        .collect::<Vec<_>>();
+    json!({"name":name,"index":index,"native":native,"placement":{"kind":"data","roles":roles},
+        "components":components,"type":schema["type"],"schema":schema})
 }
 fn interface(protocol: Json, job: Json) -> Json {
     json!({"format":"zkc.language-interface/0","setups":[],"capture":sha("capture"),
@@ -200,8 +210,8 @@ fn run_interface(field: &str) -> Json {
     let index = schema("index", "index", &["index"]);
     interface(
         json!({"symbol":"Assets","roles":["P"],
-            "inputs":[port("x",0,&[0],&["P"],vector.clone()), port("rounds",1,&[1],&["P"],index)],
-            "outputs":[port("result",0,&[0],&["P"],vector)],"services":[],"clauses":[]}),
+            "inputs":[port("x",0,&[0],&[0],vector.clone()), port("rounds",1,&[1],&[0],index)],
+            "outputs":[port("result",0,&[0],&[0],vector)],"services":[],"common_input_requirements":[],"clauses":[]}),
         json!({"kind":"run"}),
     )
 }
@@ -561,9 +571,9 @@ fn proof_interface(field: &str) -> Json {
     let boolean = schema("boolean", "bool", &["bool"]);
     interface(
         json!({"symbol":"Assets","roles":["P","V"],
-            "inputs":[port("x",0,&[0],&["P","V"],vector)],
-            "outputs":[port("accepted",0,&[0],&["V"],boolean)],"services":[],"clauses":[]}),
-        json!({"kind":"proof","prover":"P","verifier":"V","public":[0],
+            "inputs":[port("x",0,&[0],&[0,1],vector)],
+            "outputs":[port("accepted",0,&[0],&[1],boolean)],"services":[],"common_input_requirements":[],"clauses":[]}),
+        json!({"kind":"proof","prover":"P","verifier":"V","public":[{"port":0,"path":[],"role":"V"}],
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
             "completion":null,"target":null,"gates":[],"construction":{"kind":"authored", "format": "zkc.framed/0"}}),
     )

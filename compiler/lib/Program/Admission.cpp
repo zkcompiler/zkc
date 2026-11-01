@@ -490,8 +490,6 @@ class Admission {
         if (!bind({pack->output}, {{pack->type}}, env))
           return false;
       } else if (const auto *match = instruction.get<program::Match>()) {
-        if (!local)
-          return fail("local-control-context");
         std::vector<Port> input, captures;
         if (!operands({match->input}, env, input, consumed) ||
             !operands(match->captures, env, captures, consumed))
@@ -534,8 +532,8 @@ class Admission {
             if (!inner.emplace(capture, port).second)
               return fail("local-control-capture");
           std::vector<Port> yielded;
-          if (!body(arm.body, std::move(inner), {}, def, owner, true, sites,
-                    depth + 1, true, &yielded, true))
+          if (!body(arm.body, std::move(inner), {}, def, owner, local, sites,
+                    depth + 1, true, &yielded, local))
             return false;
           if (arm.body.back().get<program::Yield>()) {
             if (outputs && *outputs != yielded)
@@ -549,8 +547,6 @@ class Admission {
         if (!bind(match->outputs, outputs.value_or(std::vector<Port>{}), env))
           return false;
       } else if (const auto *branch = instruction.get<program::Conditional>()) {
-        if (!local)
-          return fail("local-control-context");
         std::vector<Port> condition, captured;
         if (!operands({branch->condition}, env, condition, consumed) ||
             StringRef(condition[0].type).split('@').first != "bool")
@@ -562,9 +558,9 @@ class Admission {
           if (!inner.emplace(capture, port).second)
             return fail("local-control-capture");
         std::vector<Port> left, right;
-        if (!body(branch->thenBody, inner, {}, def, owner, true, sites,
+        if (!body(branch->thenBody, inner, {}, def, owner, local, sites,
                   depth + 1, true, &left, inMatch) ||
-            !body(branch->elseBody, inner, {}, def, owner, true, sites,
+            !body(branch->elseBody, inner, {}, def, owner, local, sites,
                   depth + 1, true, &right, inMatch))
           return false;
 

@@ -344,6 +344,10 @@ arguments to a `Type` parameter.
 
 ### Logical oracle types
 
+[Distributed records](records.md) separately defines role-bearing struct
+telescopes, placed type applications and recursive field placement. Their
+source checking does not imply complete native lowering or SDK support.
+
 `OracleKind` is a static sort independent of the installed native domain
 catalogue. Library aliases use the existing constructor syntax:
 
@@ -467,6 +471,13 @@ substituted when the selected body closes; a call can therefore pass generic
 checking and fail closing. Symbolic nonlinear exponents and nested symbolic powers
 are unsupported. Closed exponents must be below 64; term, factor and work limits
 bound symbolic expansion.
+Semantic normalization admits each work charge through the enclosing source or
+observer allowance before performing the charged operation. Its local
+normalization ceiling still applies. Successful charges remain spent when a
+later operation refuses, including overflow; an exhausted enclosing allowance
+can therefore refuse with `source.limit` before reaching an arithmetic
+`source.natural` refusal. With sufficient work the arithmetic rules and overflow
+refusals are unchanged. Standalone natural arithmetic uses its own allowance.
 This is a sound set of normalization rules, not a complete procedure for
 exponential arithmetic. Static argument inference does not invert `pow2`.
 
@@ -971,11 +982,50 @@ runtime type definitions. Associated domains
 such as `type F: Field` and `type C: Commitment` cannot carry them: selecting a
 domain does not introduce a nominal runtime wrapper.
 
-A linear record whose complete payload is shared native data has no synthetic
-native resource root. Source move checking, sealing and successful-path use
-obligations still apply. This permits a loop to consume one such value and yield
-a successor; payloads containing native resources retain custody and exact-root
-checks. In a specification, field selectors may observe a sealed record only
+Every explicitly affine or linear ordinary record retains a nominal native
+`resource_unit`, including empty records and records with entirely Copy/Drop
+payloads. Complete instantiated type identity, including phantom arguments,
+distinguishes its custody. Nested restricted wrappers retain separate units.
+Sealing and private payload construction remain separate authority checks.
+
+Two home-authorized operations support explicit record succession when every
+payload field has both Copy and Drop: ordinary records in Local mode, and
+fixed-roster distributed records in Protocol mode.
+
+- `inspect_record(value)` consumes the whole restricted record and returns
+  `(successor, payload)`. The successor forwards the exact whole value; the
+  payload is the tuple of field observations in declaration order (unit when
+  there are no fields). This is a consuming API with a returned obligation,
+  without a borrowing exception or permission to project a sealed input.
+- `repack_record(value, payload)` consumes a restricted record and its new field tuple,
+  returns the same instantiated nominal record type, and transfers the selected
+  old custody through the installed `resource_unit.pass` operation, once per
+  fragment for a distributed wrapper. Old payload fields permit abandonment;
+  new fields retain their exact types and placements.
+
+For a distributed wrapper, inspection returns the unchanged nominal/ordered role
+instance and a payload tuple with the exact declaration-ordered child placements.
+An empty payload is unit at the wrapper's fixed roster. Repacking requires that
+same payload placement, including nested role maps and zero-storage fields, and
+preserves the wrapper placement. It does not union roles, substitute the ambient
+roster or send fields. Every wrapper participant must be active.
+
+These are discoverable declarations in `zkc::records`, associated with typed
+catalog signature rules. Unqualified compatibility lookup considers them only
+after ordinary declaration resolution fails. User helpers, imports, module
+aliases and scoped callbacks with these names retain their authored meaning.
+Qualified calls select the same canonical binding. Both installed operations
+require constructor authority from the lexical authored caller and ordered
+execution in the corresponding mode; their implementation module grants no authority. They
+exclude variants, associated representations, unrestricted/sealed-only records
+and records with non-Copy or non-Drop fields. Existing `unpack` and `consume`
+retire custody, and fresh construction creates new custody. A same-typed
+consume/create pair supplies no exact successor equation. The native repeat
+invariant checks actual pass/call/control bodies and every continuing backedge;
+a zero-trip execution retains the initial unit. Stopped paths supply no returned
+successor. These ownership laws do not establish relation truth or equal payloads.
+
+In a specification, field selectors may observe a sealed record only
 inside the module tree authorized to unpack it. These reads consume nothing
 and do not grant executable projection or constructor access. The current
 surface uses existing relation applications and typed field selectors; it does
@@ -990,7 +1040,10 @@ codec checks remain independent.
 Fields are private unless marked `pub`. A restricted nominal constructor and its
 representation are available in its defining module and descendants. Private associated
 representations are sealed behind module members. `unpack(value)` requires
-that module's authority; it consumes the wrapper and returns its fields (a tuple
+that module's authority. It resolves through the installed record declaration
+association after ordinary name lookup. Restricted custody-retiring unpack and
+custody-retiring restricted record destructuring require an outer `<-` binding in layout source;
+unrestricted unpack remains pure. It consumes the wrapper and returns its fields (a tuple
 for a record, the representation for an associated type). Restricted values do
 not expose ordinary field projection. `consume value;` requires constructor
 authority and cannot discard fields that lack `Drop`. Such fields must be
@@ -1072,6 +1125,41 @@ in source order; participant inference follows its
 
 ### Arguments and inference
 
+A dotted invocation `receiver.name(args)` selects an eligible callable declared
+directly in the canonical home module of the receiver's nominal type. The first
+declared input must be data of that same nominal type; Math, Local and Protocol
+declarations are eligible. Aliases preserve the nominal home, including generic
+aliases in other modules. Imports and reexports never add methods. A callable
+whose first input merely uses a foreign type is not a method of that type.
+The complete home declaration set determines eligibility, independently of
+import order and body success. A field owns its spelling before method lookup;
+private fields cannot fall through to methods. Missing or ambiguous methods
+use `source.method`; inaccessible methods or fields use `source.private`.
+
+The receiver must have a known nominal constructor before method selection;
+its static arguments and the remaining arguments use ordinary inference over
+the selected signature. The receiver evaluates once, before the written
+arguments. Qualification, method spelling and notation selecting the same
+function retain its canonical declaration and semantic binding. The resolved
+callable fixes mode and effects. Written source retains the dotted spelling,
+explicit labels and omitted statics separately from inferred bindings.
+
+Protocol methods derive every declared role from exact receiver placement.
+They do not substitute equal role names or invent missing roles from other
+arguments. A distributed nominal receiver supplies its ordered declaration-role
+map, including roles retained by empty fields. Aliases preserve the target's
+map. Structural participation unions are not ordered role maps. Direct logical
+families distinguish the holder and receiver; an unordered family with several
+possible member correspondences or a receiver that does not determine every
+declared role refuses with `source.roles`. The complete substituted placement
+is checked before invocation. Qualified protocol calls retain independent
+explicit role substitution.
+
+Managed Random service operations remain installed service adapters with their
+existing positional contracts. Their signatures are not yet unified with the
+canonical callable declaration index. This integration seam does not grant
+ordinary user declarations service authority.
+
 User-declared helper and protocol parameters accept positional arguments followed
 by named arguments. A named argument is `parameter = expression`; its name belongs
 to the resolved declaration. For example, `pair(right = n, left = flag)` binds
@@ -1090,6 +1178,18 @@ to maps: `map affine(r = r, high = each ys, low = each xs)` associates `each`
 with its named parameter. Record fields already use their declared names. Variant
 payloads, associated representation constructors and fixed intrinsic,
 kernel and service-method interfaces retain positional arguments.
+
+Independent invocation checking retains immutable resolved source occurrences
+and checks every authored body and callback, including unused definitions.
+It reconstructs argument destinations from written labels and relates source
+children to SSA through lexical inputs, binding patterns and projections.
+Protocol roles follow the written substitution or exact receiver placement;
+managed inputs retain their particular lexical service roots even when field
+and owner types coincide. Installed record invocations retain their caller's
+authority and actual child provenance. Agreement between an operation and its
+call binding alone does not establish any of these source relationships.
+Specialization preserves the occurrence and checks substituted types and value
+mapping against the authenticated source.
 
 Helper and protocol calls infer bare static parameters from data argument types,
 managed-service fields and expected helper results. Static arguments also accept
@@ -1722,8 +1822,17 @@ Requests can lower these ceilings, never raise them. Checks refuse before charge
 work or recursive-depth budgets are exceeded; no truncated result is returned.
 Capture lexing, parsing and definition checking share one work budget.
 Specialization, layouts, emission, comparison, predicate admission and interface
-serialization each have a separate work budget. The capture-wide specification
-inventory has a separate phase budget from per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
+serialization each have a separate work budget. Within the common-input
+interface inventory, retained Protocol derivation, semantic-index setup,
+layout observation and normalization share the enclosing allowance, including
+work preceding a failed observation. Native common-input derivation likewise
+shares one API allowance with its layout and component-mapping stages.
+Nested placement validation, role remapping and alias generation use the current
+remaining allowance and debit performed work on both success and refusal.
+Semantic native-layout and port observations reconcile their bounded work before
+the enclosing query continues, including failed observations.
+The capture-wide specification inventory has a separate phase budget from
+per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
 
 | Quantity | Ceiling |

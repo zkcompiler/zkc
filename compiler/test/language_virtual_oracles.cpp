@@ -1,5 +1,4 @@
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "llvm/ADT/STLExtras.h"
@@ -376,7 +375,7 @@ protocol Run roles(P,V)(source:Oracle<Table<F>>@P->V,rows:index@(P,V))
                     "constructor ABI/evaluation/custody evidence differs");
           }
         require(construction, "constructor action was not retained");
-        auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+        auto closed = take(closeSubject(project, "m::Run"));
         bool found = false;
         for (const auto &decl : closed.declarations())
           if (decl.origin && decl.oracleDefinition && decl.body) {
@@ -423,7 +422,7 @@ protocol Run roles(V,W,P)(source:Oracle<Table<F>>@P->V,rows:index@(V,P))
   return(out=first);
 }
 )"));
-        auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+        auto closed = take(closeSubject(project, "m::Run"));
         unsigned instances = 0;
         std::set<unsigned> predicates;
         for (const auto &operation : closed.root().body->operations)
@@ -464,7 +463,7 @@ protocol Run roles(V,W,P)(source:Oracle<Table<F>>@P->V,rows:index@(V,P))
 protocol Run roles(P,V)(source:O@P->V)->(out:O@P->V){
   let out <- Identity(source);return(out=out);}
 )"));
-          auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+          auto closed = take(closeSubject(project, "m::Run"));
           bool changed = false;
           for (const auto &decl : closed.declarations()) {
             if (!decl.origin || !decl.oracleDefinition || !decl.body)
@@ -512,7 +511,7 @@ protocol Run roles(P,V)(source:Oracle<Table<F>>@P->V,rows:index@(P,V))
   return(out=out);
 }
 )"));
-      auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+      auto closed = take(closeSubject(project, "m::Run"));
       bool changed = false;
       for (const auto &decl : closed.declarations()) {
         if (!decl.origin || !decl.oracleDefinition || !decl.body)
@@ -550,7 +549,7 @@ oracle def Open<T:Field>(source:Oracle<Fixed<T,16>>)->Oracle<Fixed<T,16>> {
   query(p:index){let x <- query source at p;return x;}}
 protocol Run roles(P)(x:bool@P)->(out:bool@P){return(out=x);}
 )"));
-        auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+        auto closed = take(closeSubject(project, "m::Run"));
         bool dormant = false;
         for (const auto &decl : closed.declarations()) {
           if (decl.origin && decl.oracleDefinition && decl.body)

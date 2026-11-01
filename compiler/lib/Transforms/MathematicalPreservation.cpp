@@ -7,6 +7,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -100,7 +101,7 @@ LogicalResult verifyProtocolPreparationPreserved(Operation *before,
       auto meaning = classify(op);
       if (meaning && (meaning->category == Category::Action ||
                       meaning->category == Category::Declaration ||
-                      isa<protocol_ir::RepeatOp>(op)))
+                      isa<protocol_ir::RepeatOp, protocol_ir::BranchOp>(op)))
         result.push_back(op);
     });
     return result;
@@ -126,10 +127,21 @@ LogicalResult verifyProtocolPreparationPreserved(Operation *before,
                            "preparation changed ordered actions or statements");
       auto path = [](Operation *op) {
         SmallVector<Attribute> result;
+        auto *child = op;
         for (auto *parent = op->getParentOp(); parent;
-             parent = parent->getParentOp())
+             child = parent, parent = parent->getParentOp()) {
           if (auto loop = dyn_cast<protocol_ir::RepeatOp>(parent))
             result.push_back(loop.getSiteAttr());
+          if (isSelectedControl(parent)) {
+            result.push_back(StringAttr::get(parent->getContext(),
+                                             parent->getName().getStringRef()));
+            result.push_back(
+                IntegerAttr::get(IntegerType::get(parent->getContext(), 64),
+                                 child->getParentRegion()->getRegionNumber()));
+            if (auto site = parent->getAttr("site"))
+              result.push_back(site);
+          }
+        }
         return result;
       };
       if (path(a) != path(b))
@@ -362,7 +374,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
       for (auto &op : block)
         if (auto meaning = classify(&op);
             meaning && (meaning->category == Category::Action ||
-                        isa<protocol_ir::RepeatOp>(op)))
+                        isa<protocol_ir::RepeatOp, protocol_ir::BranchOp>(op)))
           actions.push_back(&op);
       if (mapped.size() != actions.size())
         return refuse(result,
@@ -379,10 +391,14 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
           return refuse(result, "role projection changed an authored callee");
         if (auto query = dyn_cast<protocol_ir::QueryOp>(action)) {
           auto argument = cast<BlockArgument>(query.getReference());
-          while (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
-                     argument.getOwner()->getParentOp()))
-            argument = cast<BlockArgument>(
-                repeat.getInputs()[argument.getArgNumber()]);
+          while (argument.getOwner()->getParentOp() != program) {
+            if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
+                    argument.getOwner()->getParentOp()))
+              argument = cast<BlockArgument>(
+                  repeat.getInputs()[argument.getArgNumber()]);
+            else
+              argument = cast<BlockArgument>(selectedCapture(argument));
+          }
           auto authority = map.getAs<IntegerAttr>("service");
           if (!authority || authority.getInt() != argument.getArgNumber())
             return refuse(result, "role projection changed a query authority");
@@ -394,8 +410,8 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
               symbolTables.lookupNearestSymbolFrom<protocol_ir::ParticipantOp>(
                   result, target.getAs<FlatSymbolRefAttr>("participant"));
           owners.insert(participant.getRoleAttr());
-          if (isa<protocol_ir::RepeatOp, protocol_ir::ConstructionStartOp>(
-                  action))
+          if (isa<protocol_ir::RepeatOp, protocol_ir::BranchOp,
+                  protocol_ir::ConstructionStartOp>(action))
             continue;
           auto operation = target.getAs<StringAttr>("operation").getValue();
           auto owner = action->getAttrOfType<StringAttr>(
@@ -412,6 +428,24 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
                       [&](Attribute role) { return owners.contains(role); }))
             return refuse(result,
                           "role projection changed construction participants");
+        }
+        if (auto branch = dyn_cast<protocol_ir::BranchOp>(action)) {
+          auto arms = map.getAs<ArrayAttr>("arms");
+          if (!arms || arms.size() != branch.getNumRegions() ||
+              owners.size() != branch.getRoles().size() ||
+              !all_of(branch.getRoles(),
+                      [&](Attribute role) { return owners.contains(role); }))
+            return refuse(
+                result, "role projection changed branch arms or participants");
+          for (auto [index, region] : enumerate(branch.getArms())) {
+            auto arm = dyn_cast<DictionaryAttr>(arms[index]);
+            if (!arm ||
+                arm.get("alternative") != branch.getAlternatives()[index] ||
+                failed(self(self, region.front(), arm.getAs<ArrayAttr>("body"),
+                            depth + 1)))
+              return refuse(
+                  result, "role projection changed an alternative association");
+          }
         }
         if (auto loop = dyn_cast<protocol_ir::RepeatOp>(action)) {
           if (map.get("maximum") != loop.getMaximumAttr() ||

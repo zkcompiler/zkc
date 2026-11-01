@@ -233,13 +233,21 @@ Checker::selector(const Declaration &decl, const SyntaxSelector &source) {
     return {};
   }
   unsigned role;
+  auto available = found->roles;
+  if (found->placement) {
+    auto selected = types.projectedPlacement(found->type, *found->placement,
+                                             result.path, source.span);
+    if (!selected)
+      return {};
+    available = placementRoles(*selected);
+  }
   if (source.role) {
     auto selected = roles(decl, {*source.role}, source.span);
     if (!selected)
       return {};
     role = selected->front();
-  } else if (found->roles.size() == 1)
-    role = found->roles.front();
+  } else if (available.size() == 1)
+    role = available.front();
   else {
     types.fail("source.specification",
                "selector must name one actual participant component",

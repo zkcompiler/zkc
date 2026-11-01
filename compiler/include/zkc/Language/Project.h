@@ -1,5 +1,6 @@
 #ifndef ZKC_LANGUAGE_PROJECT_H
 #define ZKC_LANGUAGE_PROJECT_H
+#include "zkc/Contracts/Declarations.h"
 
 #include "zkc/Contracts/Construction.h"
 #include "zkc/Contracts/Mathematical.h"
@@ -98,9 +99,11 @@ struct OraclePort {
 struct Port {
   std::string name;
   Type type;
+  /// Direct data availability; products retain a participation summary only.
   std::vector<unsigned> roles;
   Span span;
   std::optional<OraclePort> oracle = {};
+  std::optional<ValuePlacement> placement = {};
 };
 /// A managed port is a borrowed service root, never an ordinary data type.
 struct ServicePort {
@@ -112,11 +115,14 @@ struct ServicePort {
 };
 struct Value {
   Type type;
-  /// Protocol: roster indices. Math: input dependencies. Both are sorted sets.
+  /// Protocol: direct component roles, or a product participation summary.
+  /// Product summaries grant no field access. Math: input dependencies.
+  /// Both are sorted sets.
   std::vector<unsigned> components;
   Span span;
   /// Oracle role family: data owner, independent of sorted availability.
   std::optional<unsigned> oracleHolder = {};
+  std::optional<ValuePlacement> placement = {};
 };
 struct MathValue {
   MathematicalIdentity identity;
@@ -395,7 +401,7 @@ struct ProtocolRepeat {
   ClosureLayout regionLayout = {};
 };
 struct Construct {
-  enum class Kind { Aggregate, Variant, Unpack };
+  enum class Kind { Aggregate, Variant, Unpack, Inspect, Repack };
   std::vector<ValueId> operands;
   std::string alternative;
   Kind kind = Kind::Aggregate;
@@ -432,7 +438,8 @@ struct LocalPrimitive {
 struct Consume {
   ValueId input;
 };
-struct LocalControl {
+/// Closed selected arms in their checked mode. Local loops share this record.
+struct Control {
   enum class Kind { If, Match, For } kind;
   std::vector<ValueId> operands;
   std::vector<std::shared_ptr<const Body>> regions;
@@ -441,7 +448,13 @@ struct LocalControl {
   std::vector<unsigned> domainArguments = {};
   std::vector<std::shared_ptr<const DomainShape>> domainShapes;
   std::vector<ClosureLayout> regionLayouts;
+  /// Protocol roster and exact enclosing managed-service roots.
+  std::vector<unsigned> roles;
+  std::vector<ServiceId> services;
 };
+/// Existing SDK clients may still name the Local specialization of Control.
+using LocalControl = Control;
+
 /// Source elaboration evidence retained beside the native operation. Families
 /// contain canonical binding identities, not search order or implementation
 /// cost.
@@ -453,7 +466,7 @@ struct CallBinding {
   std::vector<std::string> family;
   std::optional<Span> origin;
   std::optional<NotationDescriptor> notation;
-  /// Source occurrence and complete authored argument mapping for scoped calls.
+  /// Immutable source occurrence and authored argument mapping for calls.
   /// Scoped and domain indices always refer to the checked source body,
   /// including after closure erases its static binding tables from the
   /// executable body.
@@ -462,6 +475,15 @@ struct CallBinding {
   std::vector<unsigned> scopedArguments = {};
   std::vector<unsigned> domainArguments = {};
   bool filteredReduction = false;
+  /// Authored caller authority for installed schema-dependent invocations.
+  /// Preserved through specialization; never replaced by the intrinsic home.
+  std::optional<DeclarationId> lexicalOwner = {};
+  std::optional<protocol::FrontendSignature> installedSignature = {};
+  std::optional<unsigned> intrinsicSource = {};
+  /// Fixed role substitution in declaration order and separate managed roots.
+  /// Family/member role solving extends this seam without changing Type.
+  std::vector<unsigned> roles = {};
+  std::vector<ServiceId> services = {};
 };
 struct CaptureSlot {
   uint32_t binding;
@@ -493,7 +515,7 @@ struct ScopedBinding {
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
                RoleAssembly, Construct, Projection, LocalPrimitive, Consume,
-               LocalControl, ProtocolApplication, ServiceQuery, Require,
+               Control, ProtocolApplication, ServiceQuery, Require,
                ProtocolRepeat, ProtocolCompletion, ScopedInvoke,
                FiniteApplication, FiniteComputation, HostInvocation, OracleSend,
                OracleQuery, OracleSourceQuery, OracleInstantiation,
@@ -515,8 +537,8 @@ struct Body {
   std::vector<ServicePort> services;
   std::vector<ScopedBinding> scopedBindings;
   std::vector<DomainBinding> domainBindings;
-  /// Source expression results retained for independent scoped extraction
-  /// checks.
+  /// Candidate source expression results, independently checked against lexical
+  /// inputs, bindings and SSA producers before invocation admission.
   std::map<uint32_t, ValueId> expressionValues;
   std::vector<Value> values;
   std::vector<Operation> operations;
@@ -548,6 +570,9 @@ struct TypeField {
   /// Per-element row maximum of an unsized direct logical field. This is
   /// independent of an oracle sequence's capacity.
   std::optional<Type> maximumRows = {};
+  /// Formula in the owning declaration's role telescope; ordinal is the
+  /// position in fields. Retained even for fields without physical storage.
+  std::optional<ValuePlacement> placement = {};
 };
 struct Alternative {
   std::string name;
@@ -559,6 +584,24 @@ struct InputSelector {
   unsigned port = 0;
   std::vector<unsigned> path;
   Span span;
+};
+/// A role-qualified ordinary Entry subtree. Paths retain declaration ordinals;
+/// neither a native coordinate nor a generated alias grants access authority.
+struct EntryInputSelection {
+  unsigned port = 0;
+  std::vector<unsigned> path;
+  unsigned role = 0;
+  Span span;
+  bool operator==(const EntryInputSelection &other) const {
+    return port == other.port && path == other.path && role == other.role;
+  }
+  bool operator<(const EntryInputSelection &other) const {
+    if (port != other.port)
+      return port < other.port;
+    if (path != other.path)
+      return path < other.path;
+    return role < other.role;
+  }
 };
 /// Preconditions on immutable callable inputs. These are distinct from static
 /// natural bounds and from protocol relation clauses.
@@ -723,9 +766,10 @@ struct ProofGate {
   unsigned bits = 0;
   Span span;
 };
-/// Explicit two-participant proof job choices. Public inputs name whole logical
-/// ports; acceptance can select a Boolean product component. Service indices
-/// refer to managed ports, independently of native data flattening.
+/// Explicit two-participant proof job choices. Public inputs name exact
+/// ordinary subtrees at the verifier; acceptance can select a Boolean product
+/// component. Service indices refer to managed ports, independently of native
+/// data flattening.
 struct ProofEntry {
   enum class Construction {
     Authored,
@@ -733,7 +777,7 @@ struct ProofEntry {
     Derived
   } construction = Construction::Authored;
   unsigned prover = 0, verifier = 0;
-  std::vector<unsigned> publicInputs;
+  std::vector<EntryInputSelection> publicInputs;
   SpecificationSelector acceptance;
   std::optional<SpecificationSelector> completion;
   std::optional<unsigned> target;
@@ -806,7 +850,7 @@ struct Declaration {
     bool constructible = true;
     std::optional<HostInvocation::Kind> operation = {};
     /// Field order maps back to the target protocol's logical port roster.
-    std::vector<InputSelector> ports = {};
+    std::vector<EntryInputSelection> ports = {};
     std::optional<unsigned> role = {};
     std::string identity = {};
   };
@@ -820,6 +864,8 @@ struct Declaration {
   /// A domain declaration's catalog or asset term; a definition's elaborated
   /// representation.
   Type domain;
+  /// Alias target placement, abstracted over this declaration's role telescope.
+  std::optional<ValuePlacement> placement = {};
   std::vector<Parameter> parameters;
   std::vector<NaturalBound> bounds;
   std::vector<DataPrecondition> dataPreconditions;
@@ -923,6 +969,7 @@ struct CheckedStorage;
 struct ClosedStorage;
 struct AnalysisStorage;
 struct AuthoringStorage;
+struct DeclarationAccess;
 } // namespace detail
 class CapturedProject;
 class CheckedProject;
@@ -958,10 +1005,11 @@ llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        std::optional<EntryKind> = {});
 /// Close a proof declaration or a protocol specialization for semantic export.
 /// An authored Host Entry function is not a protocol subject.
+/// Subjects retain semantic authority without claiming external supply.
 llvm::Expected<ClosedEntry> closeSubject(const CheckedProject &,
                                          llvm::StringRef, const Limits & = {});
-/// Operation policy is used by generated child deployments; verifier ingress
-/// excludes producer-only ports while retaining the checked comparison graph.
+/// Operation intent is retained by generated child deployments. The complete
+/// checked protocol remains available for source and candidate comparison.
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits &, std::optional<EntryKind>,
                                        std::optional<HostInvocation::Kind>);
@@ -988,8 +1036,10 @@ llvm::Error checkScopedElaboration(const CheckedProject &, const Limits & = {});
 llvm::Error checkScopedSpecialization(const ClosedEntry &, const Limits & = {});
 
 /// Only successful analysis can construct this immutable owning handle.
+class DeclarationIndex;
 class CheckedProject {
 public:
+  const DeclarationIndex &declarationIndex() const;
   /// Includes installation sources; source IDs index this array.
   llvm::ArrayRef<SourceBuffer> sources() const;
   const CapturedProject &capture() const;
@@ -1011,6 +1061,7 @@ public:
 private:
   friend class Authoring;
   friend class Layouts;
+  friend struct detail::DeclarationAccess;
   friend llvm::Error checkScopedElaboration(const CheckedProject &,
                                             const Limits &);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
@@ -1072,6 +1123,18 @@ public:
 
 private:
   friend class Layouts;
+  friend struct detail::DeclarationAccess;
+  enum class ClosureContext { ExternalEntry, HostInvocation, SemanticSubject };
+  static llvm::Expected<ClosedEntry>
+  closeSelected(const CheckedProject &, llvm::StringRef, const Limits &,
+                std::optional<EntryKind>, std::optional<HostInvocation::Kind>,
+                ClosureContext);
+  static llvm::Expected<ClosedEntry> closeProtocol(const CheckedProject &,
+                                                   const HostInvocation &,
+                                                   const Limits &,
+                                                   ClosureContext);
+  friend llvm::Expected<ClosedEntry>
+  closeSubject(const CheckedProject &, llvm::StringRef, const Limits &);
   ClosedEntry(CheckedProject checked, DeclarationId selected,
               std::shared_ptr<const detail::ClosedStorage> storage)
       : checked(std::move(checked)), selected(selected),
@@ -1086,6 +1149,8 @@ private:
   closeEntry(const CheckedProject &, llvm::StringRef, const Limits &,
              std::optional<EntryKind>, std::optional<HostInvocation::Kind>);
 };
+/// Close a native deployment for external supply. Checked Host calls use a
+/// private retained-value context instead of recreating constructor authority.
 llvm::Expected<ClosedEntry> closeInvocation(const CheckedProject &,
                                             const HostInvocation &,
                                             const Limits & = {});

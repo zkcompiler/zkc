@@ -86,6 +86,27 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
 }
+std::string permutedReceiverSource() {
+  return R"mlir(
+#K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
+!H = !protocol.oracle<#K>
+!D = !data.indices
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%data:!D,%anchor:!H):
+  %word = "protocol.oracle_input"(%data,%anchor) {holder="A",receivers=["B","C"],shape_bounds={}} : (!D,!H)->!H
+  %parts:2 = "protocol.oracle_components"(%word) {holder="A",receivers=["B","C"]} : (!H)->(!D,!H)
+  "protocol.return"(%parts#0,%parts#1) : (!D,!H)->()
+ }) {sym_name="relay",function_type=(!D,!H)->(!D,!H),roles=["A","B","C"],input_roles=[["A"],["B","C"]],output_roles=[["A"],["B","C"]]} : ()->()
+ "protocol.func"() ({ ^entry(%data:!D,%anchor:!H):
+  %word = "protocol.oracle_input"(%data,%anchor) {holder="P",receivers=["V","Q"],shape_bounds={}} : (!D,!H)->!H
+  %parts:2 = "protocol.oracle_components"(%word) {holder="P",receivers=["V","Q"]} : (!H)->(!D,!H)
+  %result:2 = "protocol.apply"(%parts#0,%parts#1) {callee=@relay,roles=["P","Q","V"],site="call"} : (!D,!H)->(!D,!H)
+  %returned = "protocol.oracle_input"(%result#0,%result#1) {holder="P",receivers=["V","Q"],shape_bounds={}} : (!D,!H)->!H
+  %output:2 = "protocol.oracle_components"(%returned) {holder="P",receivers=["V","Q"]} : (!H)->(!D,!H)
+  "protocol.return"(%output#0,%output#1) : (!D,!H)->()
+ }) {sym_name="main",function_type=(!D,!H)->(!D,!H),roles=["V","Q","P"],input_roles=[["P"],["V","Q"]],output_roles=[["P"],["V","Q"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })mlir";
+}
 std::string dynamic() {
   auto text = replace(source(), ", 16 : ui64", "");
   size_t position;
@@ -164,6 +185,13 @@ int main() {
     auto module = parse(text, context);
     require(failed(zkc::admitStage(*module)), "invalid oracle ports admitted");
   };
+  cases.run("oracle interface membership survives a permuted role map",
+            [&] { accepted(permutedReceiverSource(), true); });
+  cases.run("oracle interface membership does not admit another receiver", [&] {
+    refused(replace(permutedReceiverSource(),
+                    "callee=@relay,roles=[\"P\",\"Q\",\"V\"]",
+                    "callee=@relay,roles=[\"Q\",\"P\",\"V\"]"));
+  });
   cases.run(
       "typed contracts preserve anchors, residuals and exact selection", [&] {
         auto module = parse(contractSource(), context);

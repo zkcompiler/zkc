@@ -1,4 +1,5 @@
 """Selected deployment forks and common compiler policies cross the EVM driver."""
+import hashlib
 import json
 from pathlib import Path
 
@@ -43,7 +44,8 @@ with case('both deployment forks retain exact source and effective common option
             'fuse_vector_reductions': True, 'fuse_collect_fold': True,
             'calculation_batching': False, 'oracle_realization': oracle,
             'numerical_expressions': 'prefer-native'}
-        assert response['original'] == response['source_sha256']
+        assert response['original'] == response['source_sha256'] == hashlib.sha256(
+            original.encode()).hexdigest()
         assert response['descriptor'][1] == response['policy']
         assert json.loads(response['descriptor'][8]) == oracle
         assert commands.run([compiler, 'language-emit', *inputs]) == original

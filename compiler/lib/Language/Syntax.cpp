@@ -1021,8 +1021,8 @@ private:
           return false;
         if (!at("}"))
           do {
-            SyntaxName port;
-            if (!named(port))
+            SyntaxInputSelector port;
+            if (!inputSelector(port))
               return false;
             value.publicInputs.push_back(std::move(port));
           } while (take(",") && !at("}"));
@@ -2512,12 +2512,19 @@ private:
       if (!condition)
         return {};
       value.children.push_back(*condition);
-      auto first = body(decl, false, true, depth + 1);
+      if (take("roles")) {
+        value.roles.emplace();
+        if (!roleList(*value.roles, true))
+          return {};
+      }
+      auto first =
+          body(decl, decl.kind == Declaration::Kind::Protocol, true, depth + 1);
       if (!first)
         return {};
       value.regions.push_back(*first);
       if (take("else")) {
-        auto second = body(decl, false, true, depth + 1);
+        auto second = body(decl, decl.kind == Declaration::Kind::Protocol, true,
+                           depth + 1);
         if (!second)
           return {};
         value.regions.push_back(*second);
@@ -2536,6 +2543,11 @@ private:
       if (!subject)
         return {};
       value.children.push_back(*subject);
+      if (take("roles")) {
+        value.roles.emplace();
+        if (!roleList(*value.roles, true))
+          return {};
+      }
       if (!expect("{"))
         return {};
       if (!at("}"))
@@ -2553,7 +2565,8 @@ private:
             } while (take(",") && !at(")"));
           if (!expect(")") || !expect("=>"))
             return {};
-          auto arm = body(decl, false, true, depth + 1);
+          auto arm = body(decl, decl.kind == Declaration::Kind::Protocol, true,
+                          depth + 1);
           if (!arm)
             return {};
           value.labels.push_back(std::move(label));
@@ -2799,6 +2812,9 @@ private:
           projection.kind = Expression::Kind::MethodCall;
           if (!at(")"))
             do {
+              if (!argumentLabel(projection.callLabels,
+                                 projection.children.size()))
+                return {};
               auto arg = expression(decl, depth + 1);
               if (!arg)
                 return {};

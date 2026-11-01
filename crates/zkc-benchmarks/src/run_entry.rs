@@ -40,15 +40,11 @@ fn check_output(
 ) -> Result<()> {
     let correct = match check {
         Check::Acceptance { role } => {
-            let output = match value {
-                Value::Record(roles) => roles.get(role),
-                _ => None,
-            };
-            let acceptance = match output {
-                Some(Value::Record(outputs)) => outputs.get("accepted"),
-                _ => None,
-            };
-            accepted(acceptance)
+            let acceptance = value
+                .field(role)
+                .and_then(|output| output.field("accepted"))
+                .ok();
+            accepted(acceptance.as_ref())
         }
         Check::Output { .. } => {
             let bytes = zkc::entry::outputs::function_output_with_cpu(
