@@ -332,7 +332,7 @@ def main():
         if error:
             check_revert(result, *error, [])
         else:
-            check_return(result, word(count + 1).hex(), [])
+            check_return(result, (bytes(range(count)) + bytes([value])).hex(), [])
         receipts.append({"fixture": "bytes", "mode": "append", "count": count,
                          "value": value, "reserved": reserved,
                          "error": error, "code_size": result["code_size"],

@@ -185,10 +185,12 @@ void emitAppend(MLIRContext &context) {
          << "let base := memoryguard(0x400) mstore(0x40, base) "
             "mstore(0x200, base)\n"
          << "let n := calldataload(0) let p := evm_alloc(n)\n"
+         << "for { let i := 0 } lt(i, n) { i := add(i, 1) } { mstore8(add(p, "
+            "i), i) }\n"
          << "if calldataload(64) { pop(evm_alloc(sub(" << limits.memoryBytes
          << ", mload(0x40)))) }\n"
          << "let result, length := " << helper << "(p, n, calldataload(32))\n"
-         << "mstore(0, length) return(0, 32)\n}\n"
+         << "return(result, length)\n}\n"
          << evm::detail::runtimeHelpers(limits) << wire.definitions()
          << "} } }\n";
 }
