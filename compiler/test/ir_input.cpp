@@ -1,5 +1,6 @@
 #include "../lib/Compiler/SourceView.h"
 #include "mlir/Bytecode/BytecodeWriter.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -7,9 +8,11 @@
 #include "zkc/Compiler/SourceCorrespondence.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/InspectionData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SHA256.h"
 #include <future>
 
 using namespace llvm;
@@ -28,14 +31,15 @@ std::string bytecode(StringRef source, MLIRContext &context) {
   require(bool(module), "invalid test source");
   return bytecode(*module);
 }
-zkc::language::CheckedOriginal original() {
+zkc::language::CheckedOriginal original(StringRef expression = "x") {
   using namespace zkc::language;
-  auto project = take(
-      analyze(take(capture({{"source",
-                             "module source;protocol P "
-                             "roles(A)(x:bool@A)->(ok:bool@A){return(ok=x);}",
-                             ""}})))
-          .checkedProject());
+  auto source = ("module source;protocol P "
+                 "roles(A)(x:bool@A)->(ok:bool@A){return(ok=" +
+                 expression + ");}")
+                    .str();
+  auto project =
+      take(analyze(take(capture({{"source", std::move(source), ""}})))
+               .checkedProject());
   return take(prepareOriginal(take(closeSubject(project, "source::P"))));
 }
 } // namespace
@@ -117,6 +121,56 @@ int main() {
     refuses(zkc::language::admitOriginal(value.entry(), binary,
                                          value.interfaceJson()),
             "target.admission");
+  });
+  cases.run("bytecode identity does not authorize a changed actual body", [&] {
+    auto source = original("true");
+    auto symbol = source.entry().protocol().symbol;
+    auto module = parseSourceString<ModuleOp>(source.bytes(), &context);
+    require(bool(module), "could not parse checked source");
+    auto prepared = zkc::mathematical::prepareProtocol(*module, false);
+    require(bool(prepared), "could not prepare checked source");
+    auto candidate = bytecode(*prepared);
+    auto map = take(json::parse(take(zkc::protocol::produceApplicationMap(
+        source.bytes(), candidate, symbol, context))));
+    unsigned changed = 0;
+    prepared->walk([&](arith::ConstantOp constant) {
+      if (constant.getType().isInteger(1)) {
+        constant.setValueAttr(IntegerAttr::get(constant.getType(), 0));
+        ++changed;
+      }
+    });
+    require(changed == 1, "fixture must contain one Boolean constant");
+    candidate = bytecode(*prepared);
+    // Supply the true digest of a well-formed, same-typed candidate. The
+    // correspondence reader must still inspect its changed native property.
+    (*map.getAsObject()->getObject("candidate"))["digest"] =
+        "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(candidate)), true);
+    auto failure = zkc::protocol::checkApplicationMap(
+        source.bytes(), candidate, symbol, zkc::printJson(map), context);
+    require(bool(failure), "identity authorized a changed bytecode body");
+    require(namesIdentifier(toString(std::move(failure)),
+                            "application-map-correspondence"),
+            "changed bytecode did not reach actual-body comparison");
+  });
+  cases.run("frontend publication data outlives its checked source", [] {
+    using namespace zkc::language;
+    std::vector<json::Value> data;
+    std::vector<std::string> expected;
+    {
+      auto source = original();
+      const auto &entry = source.entry();
+      const auto &project = entry.project();
+      data.push_back(take(sourceClaimsData(entry)));
+      data.push_back(take(componentDeclarationsData(entry)));
+      data.push_back(take(writtenSourceData(project)));
+      data.push_back(take(sourceBindingsData(project)));
+      data.push_back(take(sourceInstancesData(entry)));
+      for (const auto &value : data)
+        expected.push_back(zkc::printJson(value));
+    }
+    for (auto [value, bytes] : zip(data, expected))
+      require(zkc::printJson(value) == bytes,
+              "publication data borrowed a destroyed checked source");
   });
   cases.run("native views retain context and isolate mutation", [&] {
     auto view = [] {

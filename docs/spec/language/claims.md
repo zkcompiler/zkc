@@ -517,3 +517,9 @@ resolution errors. The Lean resolver must report their definition/attempt states
 separately. Existing source/token/expression/work limits bound parsing, retained
 claims, site traversal and output. Export returns complete bounded JSON or an
 error, never a partial document.
+
+Compiler claim export and comparison also apply the requested `irBytes` and
+`interfaceBytes` ceilings to the retained checked original and interface before
+deriving a publication. An earlier admission under larger limits does not bypass
+the current request's ceilings. `interfaceBytes` independently bounds the final
+claim publication; exact-limit inputs are accepted.

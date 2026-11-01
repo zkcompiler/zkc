@@ -45,8 +45,13 @@ programs, including well-formed programs with a different meaning.
 Retaining a parsed original has a cost: its context and module stay alive beside
 the authenticated byte buffer, and independent analyses use temporary clones.
 The admitted source-profile visitor still constructs the bounded semantic
-projection and its correspondence coordinates. Eliminating reparsing does not
-mean that projection is free, or establish a net memory or speed improvement.
+projection and its correspondence coordinates. Native consumers of that view
+therefore remain subject to the structured-source profile and publication size
+ceiling, even when they do not publish JSON. Separating native formation from
+publication must preserve explicit profile admission and source coordinates;
+skipping the exporter must not silently admit more programs. Eliminating
+reparsing does not mean that projection is free, or establish a net memory or
+speed improvement.
 The owner is intentionally local to a compilation; no global mutable IR cache is
 introduced. Any later caching or lazy projection must preserve the same admission,
 source-association and invalidation rules.

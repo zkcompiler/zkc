@@ -15,6 +15,11 @@ struct ClaimData {
 };
 Expected<ClaimData> claimData(const CheckedOriginal &original,
                               const Limits &limits) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  if (original.bytes().size() > limits.irBytes ||
+      original.interfaceJson().size() > limits.interfaceBytes)
+    return error("source.limit", "checked original exceeds export byte limits");
   auto value = sourceClaimsData(original.entry(), limits);
   if (!value)
     return value.takeError();

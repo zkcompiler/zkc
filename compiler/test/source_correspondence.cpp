@@ -217,6 +217,24 @@ int main() {
     limits.irBytes = value.bytes().size() - 1;
     refuses(exportSourceCorrespondence(value, limits), "source.limit");
   });
+  cases.run("claim inspection respects retained original byte limits", [] {
+    auto value = original();
+    auto bytes = take(exportSourceClaims(value));
+    auto limits = Limits{};
+    limits.irBytes = value.bytes().size();
+    limits.interfaceBytes = value.interfaceJson().size();
+    require(bytes.size() <= limits.interfaceBytes,
+            "fixture does not separate input and publication limits");
+    require(take(exportSourceClaims(value, limits)) == bytes,
+            "exact retained input limits refused");
+    --limits.irBytes;
+    refuses(exportSourceClaims(value, limits), "source.limit");
+    refused(checkSourceClaims(value, bytes, limits), "source.limit");
+    limits.irBytes = value.bytes().size();
+    --limits.interfaceBytes;
+    refuses(exportSourceClaims(value, limits), "source.limit");
+    refused(checkSourceClaims(value, bytes, limits), "source.limit");
+  });
   cases.run(
       "ordinary Host entries are outside the structured protocol profile", [] {
         auto project = take(

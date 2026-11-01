@@ -138,9 +138,11 @@ port := [source-name, closed-type, [holder...], native-offset, native-count]
 
 The terms use the existing typed origin grammar, including closed static
 arguments. This is declaration context, not a new claim keyword or a routing
-language. It is stored as canonical JSON in the original module's optional
-`source_declarations` string attribute. Frontend correspondence recomputes that
-attribute exactly from the checked closed source. A standalone MLIR export
+language. The original module's optional `source_declarations` inherent
+attribute stores it as a structured MLIR `ArrayAttr` tree. The boundary exporter
+projects that tree to these JSON rows; a JSON string attribute is refused.
+Frontend correspondence recomputes the structured attribute exactly from the
+checked closed source. A standalone MLIR export
 cannot establish its frontend provenance. Projection removes this context
 with the other original-only contracts; provenance uses the retained original.
 
