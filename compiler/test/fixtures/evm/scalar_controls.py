@@ -16,11 +16,11 @@ import sys
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "common/tests/evm"))
 sys.path.insert(0, str(ROOT / "common/tests/support"))
-from abi import encode_verify
-from hash_chain_reference import BLS12_381_R as PRIME, BLS_SUITE, Chain, fr64be
-from logical_tree import decode_tree, encode_tree
-from oracle import chain_trace, check_trace
-from probe import PROFILES, check_solc, compile_request, execute
+from abi import encode_verify  # noqa: E402
+from hash_chain_reference import BLS12_381_R as PRIME, BLS_SUITE, Chain, fr64be  # noqa: E402
+from logical_tree import decode_tree, encode_tree  # noqa: E402
+from oracle import chain_trace, check_trace  # noqa: E402
+from probe import PROFILES, check_solc, compile_request, execute  # noqa: E402
 
 
 def source(expression, *, ordered=False, outputs="accepted:bool@V", returns=None):
