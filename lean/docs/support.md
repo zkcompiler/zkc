@@ -359,7 +359,8 @@ correspondence remains open. Other Entry trials stay visible in the full report.
 |---|---|---|---|---|---|---|
 | chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
 | deferred-rounds | `example::Proof` |  |  |  |  | no-claim |
-| gkr | `example::Proof` |  |  |  |  | no-claim |
+| gkr | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| gkr | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | okamoto-proof | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
