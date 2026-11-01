@@ -483,11 +483,6 @@ pub(crate) fn validate(value: &Value, policy: &Policy) -> Result<()> {
     Ok(())
 }
 
-pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
-    ("plonky3/oracle.open_many", "oracle.open_many"),
-    ("plonky3/oracle.check_many", "oracle.check_many"),
-];
-
 #[cfg(test)]
 mod tests {
     use super::*;

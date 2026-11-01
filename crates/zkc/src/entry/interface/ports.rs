@@ -23,6 +23,8 @@ pub(in crate::entry) struct ProofPorts {
     pub suite: Option<String>,
     #[cfg(feature = "cpu")]
     pub construction: Option<String>,
+    #[cfg(feature = "cpu")]
+    pub gates: Vec<(String, u8)>,
     pub format: zkc_format::proof::ProofFormat,
     pub replaced_services: Vec<usize>,
 }
@@ -122,6 +124,7 @@ impl Ports {
                 acceptance,
                 completion,
                 construction,
+                gates: _gates,
                 ..
             } => {
                 let mut offset = 0;
@@ -173,6 +176,16 @@ impl Ports {
                     suite,
                     #[cfg(feature = "cpu")]
                     construction: _selected,
+                    #[cfg(feature = "cpu")]
+                    gates: _gates
+                        .iter()
+                        .map(|gate| {
+                            (
+                                crate::source_names::native_site_path(&gate.path),
+                                gate.bits as u8,
+                            )
+                        })
+                        .collect(),
                     format,
                     replaced_services,
                 })

@@ -103,7 +103,7 @@ class Encoder {
                      i.site,
                      std::move(count),
                      pairs(op.carried),
-                     names(op.captures),
+                     pairs(op.captures),
                      body(op.body),
                      names(op.outputs)};
           }

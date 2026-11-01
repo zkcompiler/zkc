@@ -2,6 +2,7 @@
 #include "mlir/IR/Builders.h"
 #include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
@@ -2040,7 +2041,7 @@ class Reader {
       return bool(object(value, {"kind"}));
     auto *obj =
         object(value, {"kind", "prover", "verifier", "public", "acceptance",
-                       "completion", "target", "construction"});
+                       "completion", "target", "construction", "gates"});
     if (!obj || *kind != "proof")
       return fail("unknown Entry job");
     current = &view.protocols[view.selected];
@@ -2058,6 +2059,31 @@ class Reader {
     InterfaceProofEntry proof;
     proof.prover = p->second;
     proof.verifier = v->second;
+    auto *gates = array(*obj, "gates");
+    if (!gates || gates->size() > 64)
+      return fail("invalid proof gate count");
+    std::set<std::vector<std::string>> selectedGates;
+    for (const auto &item : *gates) {
+      auto *gate = object(item, {"path", "bits"});
+      auto *path = gate ? array(*gate, "path") : nullptr;
+      auto bits = gate ? gate->getInteger("bits") : std::nullopt;
+      if (!path || path->empty() || path->size() > 64 || !bits || *bits < 0 ||
+          *bits > 64)
+        return fail("invalid proof gate selector");
+      ProofGate selected;
+      selected.bits = unsigned(*bits);
+      size_t bytes = 0;
+      for (const auto &component : *path) {
+        auto part = component.getAsString();
+        if (!part || !charge(part->size() + 1) || !isSourceIdentifier(*part) ||
+            (bytes += part->size() + 1) > 4096)
+          return fail("invalid proof gate path");
+        selected.path.push_back(part->str());
+      }
+      if (!selectedGates.insert(selected.path).second)
+        return fail("duplicate proof gate selector");
+      proof.gates.push_back(std::move(selected));
+    }
     for (const auto &input : *publicInputs) {
       if (!charge(1))
         return false;
@@ -2184,6 +2210,12 @@ class Reader {
       proof.suite = suite;
     } else
       return fail("unknown Entry construction");
+    if (!proof.gates.empty() &&
+        (proof.construction != ProofEntry::Construction::FiatShamir ||
+         !proof.selectedConstruction.empty() ||
+         !protocol::installedDomains().hasFact("IndexBlockTranscript",
+                                               {proof.suite})))
+      return fail("gates require a direct native block construction");
     if (proof.construction != ProofEntry::Construction::Derived &&
         !nativeConstructions.empty())
       return fail("unselected construction record");

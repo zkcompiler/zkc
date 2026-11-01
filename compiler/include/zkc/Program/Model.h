@@ -92,7 +92,7 @@ struct LoopCount {
 struct Loop {
   LoopCount count;
   protocol::Assignments carried;
-  Names captures;
+  protocol::Assignments captures;
   Body body;
   Names outputs;
 };

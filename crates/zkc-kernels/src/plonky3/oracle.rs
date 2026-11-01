@@ -11,7 +11,7 @@ use p3_field::{ExtensionField, PrimeField32, extension::BinomialExtensionField};
 use p3_keccak::Keccak256Hash;
 use p3_koala_bear::KoalaBear;
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
-use p3_merkle_tree::{MerkleCap, MerkleTreeMmcs};
+use p3_merkle_tree::{MerkleCap, MerkleTreeMmcs, PrunedMerklePaths};
 use p3_symmetric::{CryptographicHasher, PseudoCompressionFunction};
 use std::marker::PhantomData;
 
@@ -68,6 +68,7 @@ pub enum Error {
     ByteLimit,
     ValueCount,
     Coordinate,
+    Positions,
     RowWidth,
     PathLength,
     Authentication,
@@ -242,6 +243,18 @@ impl<E: Element> State<E> {
         let mut rows = opening.opened_values;
         Ok((rows.pop().unwrap(), opening.opening_proof))
     }
+    /// Ordered rows, including duplicates, and one pruned proof. The caller
+    /// bounds output allocation before invoking this typed kernel.
+    pub fn open_many(&self, positions: &[usize]) -> Result<(Vec<E>, Vec<Digest>), Error> {
+        checked_positions(self.shape, positions)?;
+        positions
+            .len()
+            .checked_mul(self.shape.width)
+            .ok_or(Error::ElementLimit)?;
+        let (opened, proof) = tree::<E>(self.shape).open_multi_batch(positions, &self.tree);
+        let rows = opened.into_iter().flatten().flatten().collect();
+        Ok((rows, proof.sibling_hashes))
+    }
 }
 
 pub fn commit<E: Element>(
@@ -309,10 +322,101 @@ pub fn verify<E: Element>(
         .map_err(|_| Error::Authentication)
 }
 
+fn checked_positions(shape: Shape, positions: &[usize]) -> Result<(), Error> {
+    if positions.is_empty() {
+        return Err(Error::Positions);
+    }
+    if positions.iter().any(|p| *p >= shape.height) {
+        return Err(Error::Coordinate);
+    }
+    Ok(())
+}
+
+/// The caller supplies the shape and positions. Duplicate positions retain
+/// their ordered rows and upstream rejects inconsistent duplicate responses.
+pub fn verify_many<E: Element>(
+    root: Digest,
+    shape: Shape,
+    positions: &[usize],
+    rows: &[E],
+    path: &[Digest],
+) -> Result<(), Error> {
+    checked_positions(shape, positions)?;
+    if positions.len().checked_mul(shape.width) != Some(rows.len()) {
+        return Err(Error::RowWidth);
+    }
+    // Reject an impossible proof before copying its sibling buffer for the
+    // upstream owned proof carrier. Pruning never exceeds full paths.
+    if positions
+        .len()
+        .checked_mul(shape.depth())
+        .is_none_or(|bound| path.len() > bound)
+    {
+        return Err(Error::PathLength);
+    }
+    let opened: Vec<_> = rows
+        .chunks_exact(shape.width)
+        .map(|row| vec![row])
+        .collect();
+    tree::<E>(shape)
+        .verify_multi_batch(
+            &MerkleCap::new(vec![root]),
+            &[Dimensions {
+                width: shape.width,
+                height: shape.height,
+            }],
+            positions,
+            &opened,
+            &PrunedMerklePaths {
+                sibling_hashes: path.to_vec(),
+            },
+        )
+        .map_err(|_| Error::Authentication)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use p3_field::PrimeCharacteristicRing;
+
+    #[test]
+    fn pruned_openings_preserve_order_duplicates_shape_and_exact_proof_consumption() {
+        fn exercise<E: Element>() {
+            for height in [1, 3, 8, 32] {
+                let shape = Shape::new(2, height, 128).unwrap();
+                let values: Vec<E> = (0..shape.elements()).map(E::from_usize).collect();
+                let (root, state) = commit(values.clone(), shape, 1 << 20).unwrap();
+                for positions in [vec![height - 1, 0, height - 1], (0..height).collect()] {
+                    let (rows, proof) = state.open_many(&positions).unwrap();
+                    let expected: Vec<E> = positions
+                        .iter()
+                        .flat_map(|p| values[p * 2..p * 2 + 2].iter().copied())
+                        .collect();
+                    assert_eq!(rows, expected);
+                    assert!(verify_many(root, shape, &positions, &rows, &proof).is_ok());
+                    let mut trailing = proof.clone();
+                    trailing.push([0; 32]);
+                    assert!(verify_many(root, shape, &positions, &rows, &trailing).is_err());
+                    let mut wrong_rows = rows.clone();
+                    wrong_rows[0] += E::ONE;
+                    assert!(verify_many(root, shape, &positions, &wrong_rows, &proof).is_err());
+                    assert!(verify_many(root, shape, &positions, &rows[1..], &proof).is_err());
+                    if !proof.is_empty() {
+                        assert!(verify_many(root, shape, &positions, &rows, &proof[1..]).is_err());
+                    }
+                }
+                let (row, proof) = state.open_many(&[0]).unwrap();
+                assert_eq!((row.clone(), proof.clone()), state.open(0).unwrap());
+                assert!(verify(root, shape, 0, &row, &proof).is_ok());
+                assert!(state.open_many(&[]).is_err());
+                assert!(state.open_many(&[height]).is_err());
+            }
+        }
+        exercise::<KoalaBear>();
+        exercise::<KoalaBearExt4>();
+        exercise::<Octic>();
+    }
+
     fn exercise<E: Element>() {
         for height in [1, 2, 3, 4, 7, 8, 16, 31, 64] {
             for width in [1, 2, 7, 16] {

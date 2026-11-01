@@ -155,6 +155,31 @@ authors do not supply generated site names. These checks establish supported
 construction, not a security theorem. Native proof admission and its limits still
 apply to the resulting program.
 
+`gate path.to.query bits N;` selects a native block-index request for grinding.
+It may occur more than once. Each path component names an authored
+`#[site(...)]` protocol application, except the last, which names an `indices`
+query. Repeats do not add path components: the selection names one static query
+template, and the existing construction origin carries its dynamic coordinates.
+Unlabelled applications cannot be traversed. Missing, ambiguous and duplicate
+selections refuse. The query must belong to the selected verifier service.
+The compiler orders selections by their source occurrences, independently of
+clause order. `N` is a decimal literal from 0 through 64. The selected native
+suite must provide `IndexBlockTranscript`; named/custom constructions and codecs
+do not inherit this support. Exact query delivery and request bounds remain
+native construction checks.
+
+An absent gate and an explicit zero-bit gate are distinct deployment policies.
+Zero still emits the canonical witness slot; it does not promise identical
+whole-proof bytes to an ungated deployment. Search allowance belongs to runtime
+resource policy, independently of the declared difficulty.
+
+The required proof-job interface field `gates` is an array of objects with exact
+keys `path` (a nonempty array of source identifiers) and `bits` (an integer).
+It is empty when no gate is selected. The checked source/interface comparison
+pins this array; native artifact binding independently checks its encoded static
+sites and difficulties against the existing native policy. No optional-field or
+old-schema reader is provided. This change retains interface version 0.
+
 A named construction associates the protocol specialization with deployment
 choices. It may have ordinary static parameters and requirements. Its contract
 includes the target protocol's completed requirements and boundary obligations.

@@ -124,6 +124,7 @@ struct InterfaceProofEntry {
   std::optional<unsigned> target;
   std::vector<unsigned> services;
   std::string suite, selectedConstruction;
+  std::vector<ProofGate> gates;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
 };
 struct InterfaceFunctionParameter {

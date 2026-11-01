@@ -65,8 +65,9 @@ The STARK profiles use disjoint evaluation domains and retain the fast path.
 
 ## Parameterized single-table argument
 
-`stark::single_table::TableArgument<K, Table, B, LogFinal, Rounds, LogBlowup, Queries>`
-proves the assertions of one present table of Bundle `B`, with the same
+`stark::single_table::ScalarTableArgument<K, Table, B, LogFinal, Rounds, LogBlowup, Queries>`
+and `BlockTableArgument`
+prove the assertions of one present table of Bundle `B`, with the same
 statement, scopes and quotient equations as the [older profile](#single-table-statement-and-supported-relation).
 The trace has height `n = 2^(LogFinal + Rounds)` and is extended to
 `N = n * 2^LogBlowup` points of the configuration's coset. FRI makes `Rounds`
@@ -74,6 +75,12 @@ binary folds, ends with a polynomial of `2^LogFinal` coefficients and checks
 `Queries` positions. The statement holds configuration and public columns
 (row-major) and public slots; the configuration fixes the coset shift, so it is
 not a statement input. Round and query counts are static, not public inputs.
+
+The entrypoints share preparation, DEEP reduction, FRI commitment and opening
+completion. Scalar sampling requires `IndexRandomness`; block sampling requires
+`IndexBlockRandomness` and makes one labelled `fri_queries.positions` request.
+There is no capability fallback. Both bind the exact sequence into common FRI
+query state before completing the same authenticated association check.
 
 ### Configurations
 
@@ -97,7 +104,13 @@ antipodal-pair leaves, with natural or bit-reversed order. Those choices do not
 change the logical FRI component or authorize omitting a sibling value. Folding
 is binary; grouping several folds into one committed layer is not a parameter.
 
-`stark::configurations::koala_bear_quartic::Poseidon2` is the installed configuration:
+`stark::configurations::koala_bear_quartic::Keccak256` uses direct quartic
+challenges and Keccak base/quartic row commitments with pruned multi-openings.
+It supports the installed quartic hash-chain suite, including explicit block
+sampling. Root, leaf and node bytes are unchanged by multi-opening; the proof
+is the exact pruned sibling sequence for the verifier's positions.
+
+`stark::configurations::koala_bear_quartic::Poseidon2` is another installed configuration:
 
 | Choice | Value |
 |---|---|
@@ -131,18 +144,23 @@ natural outer-row layout are shared with the KoalaBear configuration.
 3. Draw one out-of-domain point `zeta`. Both roles stop unless `zeta^n != 1` and
    `zeta^N != shift^N`; rotations by the trace generator then also avoid the coset.
 4. Send the input evaluations at their opening points and the chunk evaluations
-   at `zeta`; the verifier recomputes known inputs and checks the AIR identity.
-5. Draw `gamma` and form the DEEP word: every witness read
-   `(T(X) - v)/(X - zeta*g^r)`, then every chunk `(Q_j(X) - q_j)/(X - zeta)`,
-   weighted by successive powers of `gamma`. It has degree below `n - 1`; FRI
-   tests degree below `n`, with no degree adjustment.
+   at `zeta`. Preserve the AIR input prefix and append a rotation-zero claim for
+   each otherwise unread committed witness column, in column order. The verifier
+   checks the exact extended count, recomputes known inputs and checks the AIR
+   identity using only the original prefix.
+5. Draw `gamma` and then a fresh adjustment `delta`. Form D from every witness
+   read (including the appended coverage claims) `(T(X)-v)/(X-zeta*g^r)`, then
+   every chunk `(Q_j(X)-q_j)/(X-zeta)`, with successive powers of `gamma`.
+   Commit the adjusted word `(1+delta*X)D(X)` to FRI. An honest D has degree
+   below `n-1`; the adjusted word has degree below `n`. The exact meaning and
+   limits are specified in the [reduction contract](../../../docs/spec/domains/stark.md).
 6. Shared `fri::Commit<FriConfiguration<K>,...>` sends each actual layer as a
    logical oracle, draws its folding challenge and constructs the virtual fold
    from that exact layer and challenge. It sends the padded terminal polynomial
    after the last fold.
 7. Draw every query position in `[0, N)`, consecutively, before any opening.
 8. Authenticate the trace and quotient rows at those positions, one pruned
-   multi-opening each, and compute their DEEP values. Call shared
+   multi-opening each, and compute their adjusted DEEP values. Call shared
    `fri::QueryAssociated` with that same FRI state and those values.
 
 For every query, the shared checker authenticates the selected initial-layer

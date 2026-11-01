@@ -112,6 +112,7 @@ add_zkc_component(Language
   lib/Language/Primitives.cpp
   lib/Language/IntrinsicSignatures.cpp
   lib/Language/SemanticContracts.cpp
+  lib/Language/ProofGates.cpp
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
@@ -236,6 +237,7 @@ add_zkc_component(IR
   lib/Analysis/Interactions.cpp
   lib/Analysis/ProtocolConstants.cpp
   lib/Analysis/SuccessfulContinuations.cpp
+  lib/Analysis/ExecutionObservations.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Attributes.cpp
   lib/Dialect/Algebra/Parameters.cpp

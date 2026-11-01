@@ -149,8 +149,14 @@ expressions, claims and declarations:
 
 The remaining kinds are `body`, `port`, `parameter`, `notation`, `selector`,
 `input_selector`, `name`, `requirement`, `clause`, `relation_application`,
-`spec_block`, `claim`, `verify`, `setup`, `alternative`, `proof`, `application`,
+`spec_block`, `claim`, `verify`, `setup`, `alternative`, `proof`, `gate`, `application`,
 `rule`, `import`, `module_link`, finite `binder` and callback `item_from`.
+
+A `proof` node includes a required ordered `gates` list, empty when omitted in
+source. Each `gate` child retains its authored span, identifier `path` array and
+literal `bits` difficulty. This written order is distinct from the checked
+proof-job interface's canonical source-occurrence order. The source AST remains
+version 0; old readers and fixtures do not silently omit the new field.
 
 A notation occurrence retains its parsed expression and written operator symbol. Its
 selected callable is not an AST fact. A callback's omitted effect allowance is

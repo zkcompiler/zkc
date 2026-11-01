@@ -75,14 +75,14 @@ interfaces before their participant semantics are defined. Current
 successful-point bounds remain a query API, not a license for batching to erase
 source guards.
 
-The STARK follow-up must also settle the reduction's degree claim independently
-of FRI's bound. The parameterized single-table caller currently tests its
-unadjusted DEEP word at degree `< n`. A column of degree exactly `n` can yield
-an opening quotient of degree `n-1`, so that subcheck alone does not establish
-the intended column degree `< n`. Before claiming that extraction bound, choose
-and validate a caller-owned degree adjustment or supply an argument for the
-weaker bound. A fresh adjustment challenge changes that caller's transcript;
-it must not change generic FRI's absolute strict-degree meaning. The octic and
+The STARK reduction's degree claim remains distinct from FRI's bound. The
+parameterized single-table caller uses a fresh linear degree adjustment and
+explicit coverage of otherwise unread committed witness columns. Its
+[reduction contract](spec/domains/stark.md) fixes the transcript order and the
+verifier's adjusted query equation. A degree-n source polynomial can produce a
+degree-(n-1) opening quotient; the adjustment addresses that exact-membership
+boundary without changing generic FRI's absolute strict-degree meaning.
+Proximity, extraction and complete composition security remain separate obligations. The octic and
 bundle callers already have explicit adjustments, with separate aggregate-bound
 limitations described in the [STARK library](../libraries/arguments/stark/README.md).
 
@@ -104,8 +104,9 @@ Proceed through these phases inside one PR:
 2. **Source policy and actual construction.** Carry the selected transcript,
    block/gate parameters and witness framing from the frontend checked program
    through construction and independent record consumption. Reuse the installed
-   block/grinding wire and kernels. An explicit native policy already supports
-   gates; source proof declarations and the STARK client still need that path.
+   block/grinding wire and kernels. Source proof declarations now select gates through that path, with scalar,
+   block, zero-bit and positive-gate quartic Keccak STARK controls. The structured
+   verifier analysis and complete selected binding judgments remain in this unit.
    Select gates by authored query labels and labelled application paths, with
    independent source-to-selected-occurrence comparison. Separate FRI's common
    folding/opening implementation from query acquisition: the flagship selects

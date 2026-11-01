@@ -325,6 +325,20 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
       else
         out.value(nullptr);
       out.attributeEnd();
+      out.attributeArray("gates", [&] {
+        for (const auto &gate : proof->gates) {
+          if (!charge(gate.path.size() + 1))
+            return;
+          out.object([&] {
+            out.attributeArray("path", [&] {
+              for (const auto &part : gate.path)
+                if (charge(part.size()))
+                  out.value(part);
+            });
+            out.attribute("bits", gate.bits);
+          });
+        }
+      });
       out.attributeObject("construction", [&] {
         bool native =
             proof->construction == ProofEntry::Construction::FiatShamir;

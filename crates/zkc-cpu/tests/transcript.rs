@@ -305,7 +305,7 @@ fn nested() -> Vec<u8> {
             "rounds",
             ["value", "n", "4", "i"],
             [["cur", "t"], ["answer", "v"]],
-            ["v"],
+            [["v", "v"]],
             [
                 [
                     "local",

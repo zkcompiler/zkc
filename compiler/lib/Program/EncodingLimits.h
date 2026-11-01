@@ -45,7 +45,8 @@ inline bool excessiveDepth(const program::Body &body, unsigned depth = 3) {
         return true;
     }
     if (auto *loop = instruction.get<program::Loop>()) {
-      if (!loop->carried.empty() && recordDepth + 2 >= 64)
+      if ((!loop->carried.empty() || !loop->captures.empty()) &&
+          recordDepth + 2 >= 64)
         return true;
       if (excessiveDepth(loop->body, recordDepth + 1))
         return true;

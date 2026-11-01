@@ -640,10 +640,10 @@ class Admission {
             return fail("interactive-loop-input");
           carried.push_back(values[0]);
         }
-        for (const auto &capture : nested->captures) {
-          auto p = env.find(capture);
-          if (p == env.end() || !duplicable(p->second.type) ||
-              !inner.emplace(p->first, p->second).second)
+        for (const auto &[local, parent] : nested->captures) {
+          auto p = env.find(parent);
+          if (!name(local) || p == env.end() || !duplicable(p->second.type) ||
+              !inner.emplace(local, p->second).second)
             return fail("interactive-loop-capture");
         }
         if (!body(nested->body, std::move(inner), carried, def, owner, false,

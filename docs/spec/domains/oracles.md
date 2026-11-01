@@ -64,6 +64,20 @@ canonical base coordinates in ascending basis order `(1, u, u^2, u^3)`, each as
 an unsigned 32-bit little-endian word. Coordinates at least `p` are rejected.
 The base, quartic and octic scheme identities and leaf codec tags are distinct.
 
+All three schemes support `MultiOpening`. `open_many` requires a nonempty
+verifier-position sequence and returns rows in that order, including duplicates,
+with one pruned sibling sequence. `check_many` uses the verifier's exact
+positions, shape and ordered rows, rejects inconsistent duplicate rows and
+requires exact proof consumption. The root, leaf and node encodings are the same
+as for a single opening. A one-position multi-opening has the full path; opening
+every row can have an empty proof. No serialized position list grants authority.
+
+The `proof<C>` carrier contains an ordered digest sequence subject to native
+vector, byte and work limits. It no longer has a global 24-sibling bound, since
+one multi-opening can need more siblings. Single-opening verification still
+requires exactly the tree depth. Multi-opening output preflight bounds rows and
+at most one full path per requested position before invoking Plonky3.
+
 Non-power-of-two heights are allowed. Checking requires exact row width,
 `index < height` and path length `ceil(log2(height))` before upstream hashing.
 Shape, byte and element limits apply before allocation. Authentication failure

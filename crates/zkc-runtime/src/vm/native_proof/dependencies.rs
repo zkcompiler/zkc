@@ -298,7 +298,11 @@ impl Dependencies<'_> {
                         .collect::<Result<_>>()?;
                     loop {
                         self.charge(carried.len())?;
-                        let mut nested = self.capture(&env, captures)?;
+                        self.charge(captures.len())?;
+                        let mut nested: Environment = captures
+                            .iter()
+                            .map(|(local, parent)| Ok((local.clone(), flag(&env, parent)?)))
+                            .collect::<Result<_>>()?;
                         nested.insert(count.induction.clone(), control);
                         nested.extend(
                             carried
@@ -425,7 +429,10 @@ mod tests {
                 .iter()
                 .map(|(a, b)| ((*a).into(), (*b).into()))
                 .collect(),
-            captures: names(captures),
+            captures: captures
+                .iter()
+                .map(|n| (n.to_string(), n.to_string()))
+                .collect(),
             body: body.into(),
             outputs: names(outputs),
         }

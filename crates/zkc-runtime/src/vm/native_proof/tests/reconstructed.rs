@@ -333,7 +333,7 @@ fn repeated_fixture() -> Fixture {
                 "requests",
                 ["value", "n", "2", "i"],
                 [["loop_state", "t3"]],
-                ["candidate", "n"],
+                [["candidate", "candidate"], ["n", "n"]],
                 [
                     [
                         "local",
@@ -382,6 +382,85 @@ fn reconstructed_repeat_requires_the_actual_induction_operand() {
         f.admit(None).unwrap_err().0,
         "native-proof-helper-coordinates"
     );
+}
+
+#[test]
+fn nested_requests_transport_coordinates_through_renamed_capture_formals() {
+    fn nested() -> Fixture {
+        let mut f = repeated_fixture();
+        let bytes = zkc_format::logical::native_origin_template(
+            std::slice::from_ref(&f.events[3].origin),
+            "message",
+        )
+        .unwrap();
+        let mut origin = zkc_format::logical::decode_tree(&bytes).unwrap();
+        origin[2] = json!([
+            ["repeat", "Outer", "rounds"],
+            ["repeat", "Round", "requests"]
+        ]);
+        f.events[3].origin = zkc_format::logical::encode_tree(&origin)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        let helper = &mut f.program[2][3];
+        helper[2]
+            .as_array_mut()
+            .unwrap()
+            .insert(2, json!(["outer", "index@native.index/0"]));
+        helper[4][2][3] = json!([f.events[3].origin]);
+        helper[4][1][4][0] = json!("outer_coords");
+        helper[4].as_array_mut().unwrap().insert(
+            1,
+            json!([
+                "op",
+                "outer_coordinate",
+                "append",
+                [],
+                ["coords", "outer"],
+                ["outer_coords"]
+            ]),
+        );
+        for participant in f.program[3].as_array_mut().unwrap() {
+            let mut inner = participant[6][5].clone();
+            inner[3][0][1] = json!("outer_state");
+            inner[4] = json!([
+                ["inner_candidate", "candidate"],
+                ["inner_n", "n"],
+                ["outer_coordinate", "outer_i"]
+            ]);
+            inner[5][0][3] = json!(["loop_state", "inner_candidate", "outer_coordinate", "i"]);
+            inner[6] = json!(["inner_result"]);
+            participant[6][5] = json!([
+                "loop",
+                "rounds",
+                ["value", "n", "2", "outer_i"],
+                [["outer_state", "t3"]],
+                [["candidate", "candidate"], ["n", "n"]],
+                [inner, ["yield", ["inner_result"]]],
+                ["final_state"]
+            ]);
+        }
+        f
+    }
+    nested().admit(None).unwrap();
+    for operation in [NativeProofOperation::Prove, NativeProofOperation::Verify] {
+        let mut f = nested().selected(operation);
+        f.admit(Some(operation)).unwrap();
+        // A count has the right type, but cannot replace the captured outer
+        // induction value passed to the actual request helper.
+        f.program[3][0][6][5][5][0][5][0][3][2] = json!("inner_n");
+        assert_eq!(
+            f.admit(Some(operation)).unwrap_err().0,
+            "native-proof-coordinate-operand"
+        );
+        let mut f = nested().selected(operation);
+        f.program[3][0][6][5][5][0][4][2][1] = json!("n");
+        assert_eq!(
+            f.admit(Some(operation)).unwrap_err().0,
+            "native-proof-loop-state"
+        );
+    }
 }
 
 #[test]

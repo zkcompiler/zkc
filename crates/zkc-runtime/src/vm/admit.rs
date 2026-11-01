@@ -911,17 +911,18 @@ impl Check<'_> {
                     for ((arg, _), ty) in carried.iter().zip(&types) {
                         define(&mut child, &mut self.seen, arg, ty.clone())?;
                     }
-                    for capture in captures {
-                        let ty = lookup(&env, capture)?;
+                    for (local, parent) in captures {
+                        let ty = lookup(&env, parent)?;
                         if !ty.is_duplicable() {
                             return Err(err(
                                 ErrorCode::Capture,
                                 "affine values must be loop-carried, not invariant captures",
                             ));
                         }
+                        self.seen.insert(local.clone());
                         if child
                             .insert(
-                                capture.clone(),
+                                local.clone(),
                                 Binding {
                                     ty,
                                     available: true,
@@ -939,7 +940,7 @@ impl Check<'_> {
                         .collect();
                     let captured = captures
                         .iter()
-                        .map(|name| (name.clone(), child[name].ty.clone()))
+                        .map(|(name, _)| (name.clone(), child[name].ty.clone()))
                         .collect::<Vec<_>>();
                     self.loop_inputs.insert(
                         s.clone(),

@@ -70,6 +70,22 @@ pub fn is_source_delimiter_closer(value: u32) -> bool {
 pub fn source_name_profile_identity() -> &'static str {
     data::IDENTITY
 }
+/// Encode an already checked labelled application path. Repeat coordinates are
+/// dynamic construction inputs, not static path segments.
+#[cfg(any(feature = "cpu", test))]
+pub(crate) fn native_site_path(path: &[String]) -> String {
+    let mut site = String::new();
+    for part in path {
+        let label = format!("label_{}", encode_nominal_identity(part));
+        site = if site.is_empty() {
+            label
+        } else {
+            format!("apply_{}_{}_{}", site.len(), site, label)
+        };
+    }
+    site
+}
+
 pub fn native_role_name(index: u32) -> String {
     format!("role{index:08x}")
 }

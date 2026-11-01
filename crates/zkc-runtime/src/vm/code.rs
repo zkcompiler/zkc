@@ -475,7 +475,7 @@ pub(crate) enum Instruction {
         site: String,
         count: LoopCount,
         carried: Vec<(String, String)>,
-        captures: Vec<String>,
+        captures: Vec<(String, String)>,
         body: Body,
         outputs: Vec<String>,
     },

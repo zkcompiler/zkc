@@ -205,7 +205,7 @@ class Decoder {
           }
         }
         loop.carried = pairs((*r)[3]);
-        loop.captures = names((*r)[4]);
+        loop.captures = pairs((*r)[4]);
         loop.body = body((*r)[5], depth + 1);
         loop.outputs = names((*r)[6]);
         out.value = std::move(loop);

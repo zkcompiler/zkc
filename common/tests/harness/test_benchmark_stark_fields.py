@@ -117,7 +117,7 @@ def test_field_panel_names_profiles_and_owning_manifest_closures(bench, profile)
         assert f'use stark::configurations::{configuration}::{{Poseidon2}};' in program.source
         assert f'fiat_shamir("{suite}",coins)' in program.source
         h, _, _, blowup, _ = dimensions(case.shape)
-        assert f'TableArgument<Poseidon2,0,Trace,0,{h.bit_length()-1},{blowup.bit_length()-1},8>' in program.source
+        assert f'ScalarTableArgument<Poseidon2,0,Trace,0,{h.bit_length()-1},{blowup.bit_length()-1},8>' in program.source
 
 
 @pytest.mark.parametrize('profile', PROFILES, ids=[p[0] for p in PROFILES])

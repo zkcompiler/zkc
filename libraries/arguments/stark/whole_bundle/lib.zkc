@@ -21,7 +21,7 @@ use zkc::opening as opening_context;
 use zkc::opening::{opening_claims, deep_columns, deep_row, same_rotation};
 use air::interaction::{Interactions, Layout, Reduction, interactions, no_interactions,
   range_constraints};
-use fri::{Direct, LowDegree};
+use fri::{Direct, ScalarLowDegree};
 
 use zkc::oracle::{commit, open};
 
@@ -624,7 +624,7 @@ pub protocol ThreeTableArgument<B: Bundle, R: Reduction<Extension>,
   let reduced @P = deep_tables<B>(extendedP, tablesP, chunksP, layoutsP, openedP, shiftP, sizeP, zetaP,
     rhoP, adjustmentP);
   let (fri_ok, positionsP, positionsV, valuesV) =
-    LowDegree<Direct<Extension>,LogSize,0,MaxLogHeight,Queries>(reduced, shiftP, shiftV, round_count,
+    ScalarLowDegree<Direct<Extension>,LogSize,0,MaxLogHeight,Queries>(reduced, shiftP, shiftV, round_count,
       query_count, coins);
   require @V fri_ok;
   let base_widthV @V = base_width(layoutsV);

@@ -1,6 +1,6 @@
 # Binary FRI
 
-This client runs the reusable [`fri::LowDegree`](../../../libraries/protocols/polynomial/fri/lib.zkc)
+This client runs the reusable [`fri::ScalarLowDegree`](../../../libraries/protocols/polynomial/fri/lib.zkc)
 protocol over the KoalaBear degree-eight extension field and logical table
 oracles. A deployment selects ideal data or an installed Merkle realization. It tests a word of 32 evaluations on a nonzero two-adic coset for a
 polynomial of degree below 8, using three folds and eight queries. These small

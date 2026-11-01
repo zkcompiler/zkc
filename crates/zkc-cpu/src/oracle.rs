@@ -81,6 +81,33 @@ macro_rules! domains {
                 }),+
             })
         }
+        fn open_many(state: &State, at: &[usize], policy: &Policy, available: usize) -> Result<Vec<Value>> {
+            Ok(match state {
+                $(State::$domain(s) => {
+                    let shape = s.shape();
+                    policy.vector_width(at.len().checked_mul(shape.width())
+                        .ok_or_else(|| exhausted("size-overflow"))?, std::mem::size_of::<$element>())?;
+                    policy.vector_width(at.len().checked_mul(shape.depth())
+                        .ok_or_else(|| exhausted("size-overflow"))?, 32)?;
+                    policy.output(state.opening_bytes()?.checked_mul(at.len())
+                        .ok_or_else(|| exhausted("size-overflow"))?, available)?;
+                    let (rows, path) = s.open_many(at).map_err(failure)?;
+                    vec![Value::$vector(rows.into()), Value::OraclePath(state.domain(), path.into())]
+                }),+
+            })
+        }
+        #[allow(clippy::too_many_arguments)]
+        fn check_many(domain: Domain, root: Digest, width: usize, height: usize,
+            at: &[usize], rows: &Value, path: &[Digest], policy: &Policy) -> Result<bool> {
+            let shape = Shape::new(width, height, policy.max_table_elements.min(1 << 20)).map_err(failure)?;
+            if at.is_empty() { return Err(refused("oracle-positions")); }
+            if at.iter().any(|p| *p >= height) { return Err(refused("oracle-coordinate")); }
+            Ok(match (domain, rows) {
+                $((Domain::$domain, Value::$vector(rows)) =>
+                    tree::verify_many(root, shape, at, rows, path).is_ok(),)+
+                _ => return Err(refused("oracle-operands")),
+            })
+        }
         #[allow(clippy::too_many_arguments)]
         fn check_row(domain: Domain, root: Digest, width: usize, height: usize, at: usize, row: &Value, path: &[Digest], policy: &Policy) -> Result<bool> {
             match (domain, row) {
@@ -98,7 +125,7 @@ domains! {
 impl Domain {
     fn physical(self, kind: Type) -> Option<PhysicalType> {
         let identity = match kind {
-            Type::Index | Type::Bool => Identity::None,
+            Type::Index | Type::Indices | Type::Bool => Identity::None,
             Type::Vector => self.field(),
             _ => self.identity(),
         };
@@ -114,6 +141,7 @@ fn failure(error: Error) -> zkc_runtime::vm::BackendError {
             Error::Shape => "oracle-shape",
             Error::ValueCount => "oracle-value-count",
             Error::Coordinate => "oracle-coordinate",
+            Error::Positions => "oracle-positions",
             Error::RowWidth => "oracle-row-width",
             Error::PathLength => "oracle-path-length",
             Error::Authentication => "oracle-authentication",
@@ -140,6 +168,8 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "oracle.commit" => (&[Vector, Index], &[Commitment, OpeningState]),
         "oracle.open" => (&[OpeningState, Index], &[Vector, Proof]),
         "oracle.check" => (&[Commitment, Index, Index, Index, Vector, Proof], &[Bool]),
+        "oracle.open_many" => (&[OpeningState, Indices], &[Vector, Proof]),
+        "oracle.check_many" => (&[Commitment, Index, Index, Indices, Vector, Proof], &[Bool]),
         "commitments.empty" => (&[], &[Commitments]),
         "commitments.append" => (&[Commitments, Commitment], &[Commitments]),
         "commitments.at" => (&[Commitments, Index], &[Commitment]),
@@ -169,6 +199,16 @@ fn index(v: &Value) -> Result<usize> {
     } else {
         Err(refused("oracle-operands"))
     }
+}
+fn indices(value: &Value) -> Result<Vec<usize>> {
+    let Value::Indices(values) = value else {
+        return Err(refused("oracle-operands"));
+    };
+    let mut result = crate::operations::arithmetic::reserve(values.len())?;
+    for n in values.iter() {
+        result.push(usize::try_from(*n).map_err(|_| refused("oracle-coordinate"))?);
+    }
+    Ok(result)
 }
 fn shape(width: usize, count: usize, policy: &Policy) -> Result<Shape> {
     if width == 0 || !count.is_multiple_of(width) {
@@ -275,6 +315,32 @@ pub(crate) fn apply(
             let valid = check_row(domain, *root, width, height, at, row, path, policy)?;
             vec![Value::Bool(valid)]
         }
+        ("oracle.open_many", [Value::OracleState(state), at]) if state.domain() == domain => {
+            open_many(state, &indices(at)?, policy, available)?
+        }
+        (
+            "oracle.check_many",
+            [
+                Value::OracleRoot(d, root),
+                width,
+                height,
+                at,
+                rows,
+                Value::OraclePath(p, path),
+            ],
+        ) if *d == domain && *p == domain => {
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
+            vec![Value::Bool(check_many(
+                domain,
+                *root,
+                index(width)?,
+                index(height)?,
+                &indices(at)?,
+                rows,
+                path,
+                policy,
+            )?)]
+        }
         ("commitments.empty", []) => {
             policy.output(256, available)?;
             vec![Value::OracleRoots(domain, Arc::from([]))]
@@ -372,10 +438,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         Ok(out)
     })())
 }
-pub(crate) fn validate_hash_count(kind: Type, count: usize, policy: &Policy) -> Result<()> {
-    if kind == Type::Proof && count > 24 {
-        return Err(refused("oracle-path-length"));
-    }
+pub(crate) fn validate_hash_count(_kind: Type, count: usize, policy: &Policy) -> Result<()> {
     policy.vector_width(count, 32)
 }
 
@@ -383,6 +446,8 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("plonky3/oracle.commit", "oracle.commit"),
     ("plonky3/oracle.open", "oracle.open"),
     ("plonky3/oracle.check", "oracle.check"),
+    ("plonky3/oracle.open_many", "oracle.open_many"),
+    ("plonky3/oracle.check_many", "oracle.check_many"),
     ("plonky3/commitments.empty", "commitments.empty"),
     ("plonky3/commitments.append", "commitments.append"),
     ("plonky3/commitments.at", "commitments.at"),

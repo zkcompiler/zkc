@@ -3268,7 +3268,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_input",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3332,7 +3336,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_interaction",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3432,7 +3440,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_interactions",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3488,7 +3500,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_point",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3544,7 +3560,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_points",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3604,7 +3624,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_policy",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3667,7 +3691,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_record_points",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3727,7 +3755,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_rows",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3799,7 +3831,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_scope",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3859,7 +3895,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_shape",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",
@@ -3935,7 +3975,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "relation.table_widths",
       "parameters": {
         "assetFormat": "zkc.relation-bundle/0",

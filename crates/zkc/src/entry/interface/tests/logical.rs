@@ -98,7 +98,7 @@ fn refuses(d: &Value, cases: &[(&str, Value)]) {
 #[test]
 fn actual_fri_retains_internal_state_metadata() {
     let view = Interface::decode(FRI, None).unwrap();
-    assert_eq!(view.document.protocols.len(), 6);
+    assert_eq!(view.document.protocols.len(), 7);
     assert_eq!(view.document.relations.len(), 1);
     view.check_executable_ports().unwrap();
     let p = view
@@ -106,9 +106,35 @@ fn actual_fri_retains_internal_state_metadata() {
         .protocols
         .iter()
         .flat_map(|p| &p.inputs)
-        .find(|p| p.schema.kind == raw::Kind::LogicalRecord)
+        .find(|p| p.display_type.starts_with("fri::QueryState<"))
         .unwrap();
-    assert!(p.display_type.starts_with("fri::State<"));
+    assert_eq!(p.schema.kind, raw::Kind::LogicalRecord);
+    let committed = view
+        .document
+        .protocols
+        .iter()
+        .flat_map(|p| &p.inputs)
+        .find(|p| p.display_type.starts_with("fri::CommitmentState<"))
+        .unwrap();
+    assert_eq!(committed.schema.kind, raw::Kind::LogicalRecord);
+    assert_eq!(committed.native, (0..10).collect::<Vec<_>>());
+    assert_eq!(
+        committed
+            .schema
+            .fields
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "initial",
+            "layers",
+            "folds",
+            "geometry",
+            "coefficients",
+            "round_count"
+        ]
+    );
+    assert_eq!(committed.holder.get().map(String::as_str), Some("P"));
     assert_eq!(p.holder.get().map(String::as_str), Some("P"));
     assert_eq!(p.native, (0..12).collect::<Vec<_>>());
     assert!(p.schema.leaves.is_empty());

@@ -1,4 +1,4 @@
-use super::syntax::{Leaf, service_field, transcript_field};
+use super::syntax::{Leaf, block_transcript, service_field, transcript_field};
 use super::{
     InterfaceError as E, Result, hash, identifier, raw::*, require, schemas::Schemas, text,
 };
@@ -348,6 +348,7 @@ fn job(
         completion,
         target,
         construction,
+        gates,
     } = job
     else {
         return Ok(());
@@ -372,6 +373,31 @@ fn job(
     if let Some(completion) = completion {
         schemas.charge(1 + completion.path.len())?;
         check_decision(protocol, completion, prover)?;
+    }
+    schemas.charge(gates.len())?;
+    require(gates.len() <= 64, E::Selection)?;
+    let mut selected_gates = BTreeSet::new();
+    for gate in gates {
+        require(
+            !gate.path.is_empty() && gate.path.len() <= 64 && gate.bits <= 64,
+            E::Selection,
+        )?;
+        let mut bytes = 0;
+        for part in &gate.path {
+            schemas.charge(part.len() + 1)?;
+            bytes += part.len() + 1;
+            require(
+                crate::source_names::is_source_identifier(part) && bytes <= 4096,
+                E::Selection,
+            )?;
+        }
+        require(selected_gates.insert(&gate.path), E::Selection)?;
+    }
+    if !gates.is_empty() {
+        let Construction::FiatShamir { suite, .. } = construction.as_ref() else {
+            return Err(E::Selection);
+        };
+        require(block_transcript(suite), E::Selection)?;
     }
     match construction.as_ref() {
         Construction::Authored { .. } => (),

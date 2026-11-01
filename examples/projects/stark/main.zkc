@@ -1,7 +1,7 @@
 module example;
 use stark::configurations::koala_bear_octic::{Base, Extension};
 use stark::configurations::koala_bear_quartic::{Poseidon2};
-use stark::single_table::{Statement, TableArgument};
+use stark::single_table::{Statement, ScalarTableArgument};
 use zkc::vector::{Vector};
 use zkc::vector as vec;
 
@@ -23,7 +23,7 @@ protocol Fibonacci<B: Bundle> roles(P,V)
     where B::Tables <= 1, B::Channels <= 0 {
   let statementP @P = statement(initial_x, initial_y, final_x, final_y);
   let statementV @V = statement(initial_x, initial_y, final_x, final_y);
-  let accepted = TableArgument<Poseidon2, 0, B, LogFinal = 0, Rounds = 3, LogBlowup = 2,
+  let accepted = ScalarTableArgument<Poseidon2, 0, B, LogFinal = 0, Rounds = 3, LogBlowup = 2,
     Queries = 8>(trace, statementP, statementV, coins);
   return accepted;
 }

@@ -326,7 +326,7 @@ def main():
     def check_private_edge(component, path, target):
         if target.resolve() in registration_fragments:
             assert path == ROOT / "lib/Dialect/Registry.cpp", f"private dialect registration fragment: {path} -> {target}"
-        semantic_files = {"State.h", "Semantics.h", "Semantics.cpp", "SemanticContracts.cpp",
+        semantic_files = {"State.h", "Semantics.h", "Semantics.cpp", "SemanticContracts.cpp", "ProofGates.cpp",
                           "KernelSignatures.cpp", "IntrinsicSignatures.cpp", "Permissions.cpp",
                           "Capabilities.cpp", "Specialize.cpp", "Layout.cpp", "NotationInspection.cpp"}
         if path.parent == ROOT / "lib/Language" and path.name in semantic_files:

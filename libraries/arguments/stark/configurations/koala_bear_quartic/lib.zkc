@@ -69,3 +69,50 @@ pub module Poseidon2: Configuration {
     return oracle::check_many<QuarticRows>(root, width, height, positions, rows, proof);
   }
 }
+
+// Direct quartic draws and Keccak commitments. Query sampling remains an
+// explicit protocol choice and requires the selected service's capability.
+pub domain KeccakBaseRows = commitment("rows.merkle-keccak256.koala-bear/0");
+pub domain KeccakQuarticRows = commitment("rows.merkle-keccak256.koala-bear.ext4-binomial3/0");
+
+pub module Keccak256: Configuration {
+  type Base: Field = stark::configurations::koala_bear_quartic::Base;
+  type Extension: Field = Quartic;
+  type Challenge: Field = Quartic;
+  type BaseRows: Commitment = KeccakBaseRows;
+  type ExtensionRows: Commitment = KeccakQuarticRows;
+
+  fn challenge(draw: Quartic) -> Quartic effects() where () { return draw; }
+  fn embed(values: Vector<Base>) -> Vector<Quartic> effects(stop) where () {
+    return kernel<Quartic>("vector.embed", values);
+  }
+  fn lift(value: Base) -> Quartic effects(stop) where () { return kernel<Quartic>("field.embed", value); }
+  // A generator of the multiplicative group; no power of it lies in a
+  // proper two-adic subgroup of the field.
+  fn shift() -> Base effects() where () { return 3; }
+
+  fn commit_base(rows: Vector<Base>, width: index)
+      -> (Root<KeccakBaseRows>, State<KeccakBaseRows>) effects(stop) where () {
+    return oracle::commit<KeccakBaseRows>(rows, width);
+  }
+  fn open_base(state: State<KeccakBaseRows>, positions: Indices, height: index)
+      -> (Vector<Base>, Path<KeccakBaseRows>) effects(stop) where () {
+    return oracle::open_many<KeccakBaseRows>(state, positions);
+  }
+  fn check_base(root: Root<KeccakBaseRows>, width: index, height: index,
+      positions: Indices, rows: Vector<Base>,
+      proof: Path<KeccakBaseRows>) -> bool effects(stop) where () {
+    return oracle::check_many<KeccakBaseRows>(root, width, height, positions, rows, proof);
+  }
+  fn commit_extension(rows: Vector<Quartic>, width: index) -> (Root<KeccakQuarticRows>, State<KeccakQuarticRows>) effects(stop) where () {
+    return oracle::commit<KeccakQuarticRows>(rows, width);
+  }
+  fn open_extension(state: State<KeccakQuarticRows>, positions: Indices, height: index)
+      -> (Vector<Quartic>, Path<KeccakQuarticRows>) effects(stop) where () {
+    return oracle::open_many<KeccakQuarticRows>(state, positions);
+  }
+  fn check_extension(root: Root<KeccakQuarticRows>, width: index, height: index, positions: Indices,
+      rows: Vector<Quartic>, proof: Path<KeccakQuarticRows>) -> bool effects(stop) where () {
+    return oracle::check_many<KeccakQuarticRows>(root, width, height, positions, rows, proof);
+  }
+}

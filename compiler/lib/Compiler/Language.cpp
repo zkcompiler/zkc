@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
@@ -131,6 +132,16 @@ Expected<NativeProofPolicy> proofPolicy(const CheckedOriginal &original) {
   policy.suite = proof.suite;
   policy.construction = proof.selectedConstruction;
   policy.format = proof.format;
+  for (const auto &gate : proof.gates) {
+    std::string site;
+    for (const auto &part : gate.path) {
+      auto label = nativeSiteName(part, 0);
+      site = site.empty()
+                 ? label
+                 : mathematical::expandedApplicationSite(site, label);
+    }
+    policy.gates.emplace_back(std::move(site), gate.bits);
+  }
   for (auto service : proof.services)
     policy.services.push_back(protocol.services[service].native);
   for (auto index : proof.publicInputs)

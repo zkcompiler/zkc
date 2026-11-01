@@ -2584,7 +2584,7 @@ fn asset_references_cover_called_functions_and_every_local_region() {
                     "rounds",
                     ["value", "n", "8", "i"],
                     [],
-                    ["x", "flag"],
+                    [["x", "x"], ["flag", "flag"]],
                     [
                         ["local", "inner", "inner", ["x", "flag"], ["r2"]],
                         ["yield", []]

@@ -30,7 +30,7 @@ fn document() -> Value {
             {"name":"s","purpose":"statement","native":[0],"schema":boolean.clone()},
             {"name":"w","purpose":"witness","native":[1],"schema":boolean}],"definition":{"kind":"opaque"}}],
         "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],
-            "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","construction":{"kind":"authored", "format": "zkc.framed/0"}}})
+            "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","gates":[], "construction":{"kind":"authored", "format": "zkc.framed/0"}}})
 }
 fn read_text(interface: &str) -> Result<Interface> {
     let frame = json!({"format":"zkc.entry/0","original":"original","interface":interface,
@@ -164,6 +164,7 @@ fn exact_objects_reject_extra_duplicate_missing_fields_and_unknown_formats() {
     }
     for path in [
         "/job/target",
+        "/job/gates",
         "/job/completion",
         "/protocols/0/clauses/0/residual",
         "/protocols/0/clauses/0/decision",

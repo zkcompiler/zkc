@@ -1093,7 +1093,7 @@ fn captured(count: u64) -> Json {
                 "repeat",
                 ["value", "count", count.to_string(), "iteration"],
                 [],
-                ["v"],
+                [["v", "v"]],
                 [["local", "use", "use", ["v"], ["w"]], ["yield", []]],
                 []
             ],
@@ -1193,6 +1193,42 @@ fn captured_backing_is_retained_once_while_every_read_charges_logical_work() {
         WorkBudget::default(),
     );
     assert!(usage.total_value_bytes > 64 * C);
+}
+
+#[test]
+fn duplicate_copy_captures_preserve_owned_and_shared_storage_accounting() {
+    const C: usize = 4096;
+    for n in [0, 1, 4] {
+        let original = captured(n);
+        let mut aliases = original.clone();
+        aliases[3][0][6][1][4]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(["other", "v"]));
+        for shared in [false, true] {
+            let run = |program: &Json| {
+                drive(
+                    program,
+                    if shared {
+                        StorageBackend::shared(C, 1)
+                    } else {
+                        StorageBackend::new(C, None)
+                    },
+                    count(n),
+                    unbounded(),
+                    WorkBudget::default(),
+                )
+            };
+            let (before, original_usage, _) = run(&original);
+            let (after, alias_usage, _) = run(&aliases);
+            assert_eq!((before.as_str(), after.as_str()), ("returned", "returned"));
+            assert_eq!(alias_usage.logical_bytes, original_usage.logical_bytes);
+            assert_eq!(
+                alias_usage.total_value_bytes - original_usage.total_value_bytes,
+                if shared { 0 } else { n as usize * C }
+            );
+        }
+    }
 }
 
 #[test]

@@ -1,7 +1,7 @@
 # Binary FRI
 
 The [library](lib.zkc) has one logical `Commit` and one private query checker.
-`Query`, `QueryAssociated` and `LowDegree` use that checker. FRI has no commitment
+`Query`, `QueryAssociated`, `ScalarLowDegree` and `BlockLowDegree` use that checker. FRI has no commitment
 parameter, Merkle state, roots, paths, pair layout or automatic realization
 selection. A deployment must select and check its oracle realization.
 
@@ -14,26 +14,30 @@ The verifier still authenticates each response before using its answers. See
 
 ## Public API
 
-Every protocol below has roles `(P,V)`. The common static arguments are
-`<C, LogSize, TerminalLog, Rounds, Queries>`.
+Every protocol below has roles `(P,V)`. Commitment static arguments are
+`<C, LogSize, TerminalLog, Rounds>`; query state adds `Queries`. Samplers use
+`<F, LogSize, Queries>` and have no commitment configuration.
 
 | Export | Contract |
 |---|---|
 | `Configuration` | `Value: Field`, `Challenge: Field`, ordinary `challenge(draw) -> Value effects(stop)`; no commitment members |
 | `Direct<F>` | Value and challenge field `F`, identity conversion |
 | `FieldTable<F>`, `Oracle<K>` | Explicit installed logical table and handle aliases |
-| `State<C,...>` | Private fields and library construction; direct custody `@P->V` |
-| `Commit` | Takes the word at P, a shift component at each role, shared runtime round/query counts and `Random<C::Challenge>` at V; returns one state |
+| `CommitmentState<C,...>`, `QueryState<C,...>` | Distinct types with private fields and library construction; direct custody `@P->V` |
+| `Commit` | Takes the word at P, a shift component at each role, shared runtime round count and `Random<C::Challenge>` at V; returns commitment state after checking terminal coefficients |
+| `ScalarQueries` | Samples an ordered sequence of scalar index requests, delivering each result unchanged |
+| `BlockQueries` | Samples one product block and delivers it unchanged; requires `IndexBlockRandomness` |
+| `BindQueries` | Checks a supplied role-paired sequence's exact count and every position's bound at both roles, then returns query state with the original handles and geometry |
 | `Positions` | Returns the state's exact positions with components at P and V |
 | `Initial` | Returns the state's exact initial handle with its retained row bound |
 | `Query` | Returns acceptance and authenticated first-layer values in position order |
 | `QueryAssociated` | Takes expected first values at V; queries the same state's initial handle at its positions and checks equality before each fold chain |
-| `LowDegree` | Calls the same `Commit` and `Query`; returns `(accepted, positionsP, positionsV, valuesV)` |
+| `ScalarLowDegree`, `BlockLowDegree` | Select the named sampler between `Commit` and `BindQueries`, then call the same `Query`; return `(accepted, positionsP, positionsV, valuesV)` |
 | `power_word`, `fold_value` | Total mathematical helpers; neither authenticates data nor establishes domain membership |
 
-The restricted logical state owns bounded sequences of actual layer handles
-and virtual fold handles, the initial handle, exact coset geometry, terminal
-coefficients, positions and exact runtime counts. Converted challenges live in
+Commitment state owns bounded sequences of actual layer handles and virtual
+fold handles, the initial handle, exact coset geometry, terminal coefficients
+and the round count. Query state adds the checked positions and query count. Converted challenges live in
 their exact fold captures; a second unused challenge vector is not retained. Every
 logical field retains a per-element `rows` bound and the same oriented family.
 There is no nested logical record. Ordinary metadata has components throughout
@@ -61,17 +65,22 @@ continues to use the existing checked `coset::fold` implementation.
 For each actual source, Commit sends its oracle before drawing and exchanging
 its challenge. It constructs a virtual fold from that actual handle and those
 challenge components, then folds the prover word. The final polynomial follows
-the last round. Every query draw precedes every opening. Query acceptance is
+the last round. `Commit` performs no index sampling. The selected sampler runs
+after `Commit` and before `BindQueries`; every query draw precedes every opening. Query acceptance is
 returned only after all chain equalities and terminal evaluations succeed.
 
 The terminal encoding is exactly `2^TerminalLog` coefficients, zero padded
 only after checking that interpolation produced at most that many coefficients.
-The verifier checks exact length before sampling queries. The former standalone
-encoding sent normalized coefficients of any admitted length. Its degree
-meaning is unchanged; its wire encoding and some failure locations change.
-An oversized honest interpolation now stops at the prover's padding guard
+The verifier checks exact length before sampling queries.
+An oversized honest interpolation stops at the prover's padding guard
 before a terminal message is sent. This is also relevant to adversarial tests
-that previously expected a verifier degree guard after that message.
+that distinguish producer refusal from verifier rejection.
+
+The two samplers are explicit laws, with no capability fallback. Scalar sampling
+uses a bounded loop of scalar requests; block sampling uses one ordered product
+request. The selected native transcript must support that method. Duplicates and
+position order are preserved. `BindQueries` checks shape and bounds, not sampling
+uniformity: a caller-supplied sequence needs its own distribution justification.
 
 Joint challenge/query distribution (including conversion pushforward laws),
 the selected gap/proximity relation, authentication security and Fiat-Shamir
@@ -113,18 +122,18 @@ this migration claims no preserved proof size or throughput.
 
 | Source | Shared API and preserved outer schedule |
 |---|---|
-| `examples/projects/fri/main.zkc` | `LowDegree<Direct<E>,5,0,3,8>`; the source no longer selects a row commitment |
-| `libraries/arguments/stark/single_table/lib.zkc` | `Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>`, then trace rows/proof and quotient rows/proof, unchanged DEEP equations, then `QueryAssociated` |
+| `examples/projects/fri/main.zkc` | `ScalarLowDegree<Direct<E>,5,0,3,8>`; the source no longer selects a row commitment |
+| `libraries/arguments/stark/single_table/lib.zkc` | `Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds>`, scalar queries and binding, then trace/quotient openings and degree-adjusted DEEP values, then `QueryAssociated` |
 | `libraries/arguments/stark/single_table/low_degree.zkc` | Only `FriConfiguration<K>`: `Value = K::Extension`, `Challenge = K::Challenge`, `challenge = K::challenge`; no specialized Commit/Open remains |
-| `libraries/arguments/stark/single_table/koala_bear_octic/lib.zkc` | `LowDegree<Direct<Extension>,LogSize,0,LogHeight,Queries>` before trace/quotient openings and the existing DEEP equality |
-| `libraries/arguments/stark/whole_bundle/lib.zkc` | `LowDegree<Direct<Extension>,LogSize,0,MaxLogHeight,Queries>` before base/auxiliary/quotient openings and the existing DEEP equality |
+| `libraries/arguments/stark/single_table/koala_bear_octic/lib.zkc` | `ScalarLowDegree<Direct<Extension>,LogSize,0,LogHeight,Queries>` before trace/quotient openings and the existing DEEP equality |
+| `libraries/arguments/stark/whole_bundle/lib.zkc` | `ScalarLowDegree<Direct<Extension>,LogSize,0,MaxLogHeight,Queries>` before base/auxiliary/quotient openings and the existing DEEP equality |
 
-The inspected application callers need no source or manifest changes:
+The outer application signatures remain:
 `examples/projects/fibonacci/main.zkc` keeps `TableArgument<0,B,3,5,8,8>`;
 `examples/projects/femtocairo/main.zkc` keeps
 `ThreeTableArgument<Execution,LogUp<Extension>,5,7,8,8>`;
 `examples/projects/stark/main.zkc` keeps
 `TableArgument<Poseidon2,0,B,LogFinal=0,Rounds=3,LogBlowup=2,Queries=8>`.
 The quartic configuration's octic challenge conversion is preserved explicitly.
-FRI's manifest adds the traversal owner and removes direct physical oracle
-primitive dependencies. Existing caller manifests already import FRI.
+FRI retains no direct physical commitment dependency. All maintained callers
+select their query policy explicitly; no `LowDegree` compatibility alias remains.

@@ -2,7 +2,8 @@ module stark::single_table;
 pub module low_degree;
 use stark::configurations::contract::{Configuration};
 use stark::single_table::low_degree::{FriConfiguration};
-use fri::{Commit, Positions, QueryAssociated};
+use fri::{CommitmentState, QueryState, Commit, ScalarQueries, BlockQueries, BindQueries, Positions, QueryAssociated};
+use zkc::oracle::{Root, State};
 use zkc::vector::{Vector, length, get, append, empty, fill, transpose};
 use zkc::indices::{Indices, less};
 use zkc::coset::{extend_columns, disjoint_coset, outside_domains};
@@ -10,8 +11,8 @@ use zkc::opening as opening_context;
 use zkc::opening::{opening_claims, deep_columns, deep_row, same_rotation};
 use zkc::coset as coset;
 use air::polynomial::{split_quotient};
-use air::table::{Shape, Inputs, shape, inputs, claims, quotient_values, identity, read_quotients,
-  read_values};
+use air::table::{Shape, Inputs, shape, inputs, quotient_values, identity, read_quotients,
+  read_values, input_values};
 
 // The verifier's statement. Configuration and public columns are row-major,
 // public data in the Bundle's public-slot order. The coset shift is not part of
@@ -20,6 +21,29 @@ pub struct Statement<F: Field> {
   pub configuration: Vector<F>,
   pub public_columns: Vector<F>,
   pub public_data: Vector<F>
+}
+
+// These records stay at their owner. In particular, native commitment state
+// never becomes shared logical metadata or part of the verifier's statement.
+struct ProverOpenings<K: Configuration> {
+  trace: State<K::BaseRows>,
+  quotient: State<K::ExtensionRows>,
+  size: index
+}
+
+struct VerifierOpenings<K: Configuration> {
+  trace: Root<K::BaseRows>,
+  quotient: Root<K::ExtensionRows>,
+  facts: Shape,
+  slots: Inputs,
+  opened: Vector<K::Extension>,
+  opened_quotient: Vector<K::Extension>,
+  height: index,
+  size: index,
+  geometry: coset::CosetDomain<K::Extension>,
+  zeta: K::Extension,
+  gamma: K::Extension,
+  adjustment: K::Extension
 }
 
 fn admissible<F: Field>(facts: Shape, statement: Statement<F>, height: index, size: index,
@@ -31,12 +55,34 @@ fn admissible<F: Field>(facts: Shape, statement: Statement<F>, height: index, si
     length(statement.public_data) == facts.public_slots;
 }
 
+// Preserve the AIR input prefix, then cover every otherwise unread committed
+// witness column at rotation zero, in column order. This is the DEEP inventory,
+// not a second interpretation of the AIR's expression-arena inputs.
+fn degree_inputs(slots: Inputs, width: index) -> Inputs {
+  let mut kind = slots.kind;
+  let mut column = slots.column;
+  let mut rotation = slots.rotation;
+  for candidate in 0..width {
+    let mut covered = false;
+    for slot in 0..zkc::indices::length(slots.kind) {
+      covered = covered || (zkc::indices::get(slots.kind, slot) == 1 &&
+        zkc::indices::get(slots.column, slot) == candidate);
+    }
+    if !covered {
+      kind = zkc::indices::append(kind, 1);
+      column = zkc::indices::append(column, candidate);
+      rotation = zkc::indices::append(rotation, 0);
+    }
+  }
+  return Inputs { kind, column, rotation };
+}
+
 // DEEP quotient values at the queried points: every witness read at its
 // opening point, then every quotient chunk at zeta, with successive powers of
 // gamma. Rows are the authenticated rows in query order.
 fn deep_values<F: Field>(slots: Inputs, chunks: (Indices, Indices), witness_rows: Vector<F>,
     width: index, quotient_rows: Vector<F>, count: index, opened: Vector<F>,
-    opened_quotient: Vector<F>, height: index, geometry: coset::CosetDomain<F>, positions: Indices, zeta: F, gamma: F)
+    opened_quotient: Vector<F>, height: index, geometry: coset::CosetDomain<F>, positions: Indices, zeta: F, gamma: F, adjustment: F)
     -> Vector<F> {
   let mut result = empty<F>();
   let bound = opening_context::bind_openings(geometry, count, height, zeta,
@@ -49,7 +95,8 @@ fn deep_values<F: Field>(slots: Inputs, chunks: (Indices, Indices), witness_rows
     let row = opening_context::query_row(geometry, count, position,
       zkc::vector::slice(quotient_rows, query * count, count));
     let state = opening_context::scalar_accumulator(geometry, position, gamma, reads.0, reads.1);
-    result = append(result, opening_context::scalar_value(deep_row(row, bound, state)));
+    result = append(result, opening_context::scalar_value(deep_row(row, bound, state)) *
+      (1 + adjustment * x));
   }
   return result;
 }
@@ -63,18 +110,20 @@ fn deep_values<F: Field>(slots: Inputs, chunks: (Indices, Indices), witness_rows
 // Order: trace commitment; constraint-composition challenge alpha; quotient
 // commitment; one out-of-domain point zeta, rejected unless outside the trace
 // subgroup and the evaluation coset; trace and quotient evaluations at the
-// opening points, checked against the AIR; DEEP batching challenge gamma; FRI
+// opening points, checked against the AIR; DEEP batching challenge gamma and
+// independent degree-adjustment challenge; FRI
 // commitments, fold challenges and final polynomial; every query position;
 // then the openings: trace and quotient rows, followed by the FRI layers.
-pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: nat, Rounds: nat,
-    LogBlowup: nat, Queries: nat> roles(P,V)
+protocol Prepare<K: Configuration, Table: nat, B: Bundle, LogFinal: nat, Rounds: nat,
+    LogBlowup: nat> roles(P,V)
     (trace: Vector<K::Base> @P, statementP: Statement<K::Base> @P,
      statementV: Statement<K::Base> @V, coins: Random<K::Challenge> @V)
-    -> (accepted: bool @V)
+    -> (committed: CommitmentState<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds> @P->V,
+        prover: ProverOpenings<K> @P, verifier: VerifierOpenings<K> @V)
     where zkc::algebra::TwoAdicField(K::Base), zkc::algebra::TwoAdicField(K::Extension),
-      zkc::algebra::CharacteristicNotTwo(K::Extension), zkc::random::IndexRandomness(K::Challenge),
+      zkc::algebra::CharacteristicNotTwo(K::Extension),
       zkc::oracle::VectorCommitment(K::ExtensionRows),
-      LogFinal+Rounds+LogBlowup <= 63, 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
+      LogFinal+Rounds+LogBlowup <= 63, 1 <= Rounds, 1 <= LogBlowup {
   let heightP @P = index<pow2(LogFinal + Rounds)>();
   let heightV @V = index<pow2(LogFinal + Rounds)>();
   let sizeP @P = index<pow2(LogFinal + Rounds + LogBlowup)>();
@@ -126,20 +175,29 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   let zetaP @P = K::challenge(zetaSent);
   require @V outside_domains(heightV, sizeV, shift_extensionV, zetaV);
   require @P outside_domains(heightP, sizeP, shift_extensionP, zetaP);
-  let proposed @P = claims<K::Extension,Table,B>(K::embed(trace_columns), K::embed(configP),
+  let slotsP @P = degree_inputs(inputs<K::Extension,Table,B>(heightP), factsP.witness);
+  let slotsV @V = degree_inputs(inputs<K::Extension,Table,B>(heightV), factsV.witness);
+  let proposed @P = input_values(slotsP, K::embed(trace_columns), K::embed(configP),
     K::embed(publicP), dataP, heightP, zetaP);
   let proposed_quotient @P = opening_claims(coset::column_batch(geometryP, factsP.chunks, chunks), zetaP);
   let opened = send P -> V(proposed);
   let opened_quotient = send P -> V(proposed_quotient);
-  require @V identity<K::Extension,Table,B>(opened, opened_quotient, K::embed(configV),
+  require @V length(opened) == zkc::indices::length(slotsV.kind);
+  require @V identity<K::Extension,Table,B>(zkc::vector::slice(opened, 0, factsV.inputs),
+    opened_quotient, K::embed(configV),
     K::embed(publicV), dataV, heightV, zetaV, alphaV);
 
-  // DEEP batching of every witness read and quotient chunk, then FRI.
+  // DEEP batching of all covered witness columns and quotient chunks. The
+  // fresh linear factor raises the honest quotient bound < n-1 to FRI's < n;
+  // it is not a deterministic multiplication by X on a coset word.
   let gammaDraw = coins.draw();
   let gammaSent = send V -> P(gammaDraw);
   let gammaV @V = K::challenge(gammaDraw);
   let gammaP @P = K::challenge(gammaSent);
-  let slotsP @P = inputs<K::Extension,Table,B>(heightP);
+  let adjustmentDraw = coins.draw();
+  let adjustmentSent = send V -> P(adjustmentDraw);
+  let adjustmentV @V = K::challenge(adjustmentDraw);
+  let adjustmentP @P = K::challenge(adjustmentSent);
   let chunk_openingsP @P = same_rotation(factsP.chunks, 0);
   let witness_batch @P = coset::column_batch(geometryP, factsP.witness, trace_extension);
   let reads @P = read_quotients(slotsP, witness_batch, proposed, heightP,
@@ -149,17 +207,47 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
     zkc::opening_claims::checked(chunk_openingsP.0, chunk_openingsP.1, proposed_quotient));
   let initial @P = opening_context::vector_accumulator(geometryP, gammaP, reads.0, reads.1);
   let word @P = deep_columns(chunk_batch, chunk_bounds, initial);
-  let fri_state <- Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
-    opening_context::vector_values(word), shift_extensionP, shift_extensionV,
-    index<Rounds>(), index<Queries>(), coins);
-  let positions <- Positions<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
-    fri_state);
+  let adjusted @P = zkc::vector::hadamard(opening_context::vector_values(word),
+    zkc::vector::add(fill<K::Extension>(1, sizeP),
+      zkc::vector::scale(coset::points(shift_extensionP, sizeP), adjustmentP)));
+  let committed <- Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds>(
+    adjusted, shift_extensionP, shift_extensionV, index<Rounds>(), coins);
+  let prover @P = ProverOpenings<K> { trace: trace_tree.1,
+    quotient: quotient_tree.1, size: sizeP };
+  let verifier @V = VerifierOpenings<K> { trace: trace_root, quotient: quotient_root,
+    facts: factsV, slots: slotsV, opened, opened_quotient, height: heightV, size: sizeV,
+    geometry: geometryV, zeta: zetaV, gamma: gammaV, adjustment: adjustmentV };
+  return (committed = committed, prover = prover, verifier = verifier);
+}
+
+protocol Complete<K: Configuration, LogFinal: nat, Rounds: nat, LogBlowup: nat,
+                  Queries: nat> roles(P,V)
+    (fri_state: QueryState<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries> @P->V,
+     prover: ProverOpenings<K> @P, verifier: VerifierOpenings<K> @V)
+    -> (accepted: bool @V)
+    where zkc::algebra::TwoAdicField(K::Extension),
+      zkc::algebra::CharacteristicNotTwo(K::Extension),
+      zkc::oracle::VectorCommitment(K::ExtensionRows),
+      LogFinal+Rounds+LogBlowup <= 63, 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
+  let positions <- Positions<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(fri_state);
   let positionsP @P = positions;
   let positionsV @V = positions;
-
+  let sizeP @P = prover.size;
+  let trace_root @V = verifier.trace;
+  let quotient_root @V = verifier.quotient;
+  let factsV @V = verifier.facts;
+  let slotsV @V = verifier.slots;
+  let opened @V = verifier.opened;
+  let opened_quotient @V = verifier.opened_quotient;
+  let heightV @V = verifier.height;
+  let sizeV @V = verifier.size;
+  let geometryV @V = verifier.geometry;
+  let zetaV @V = verifier.zeta;
+  let gammaV @V = verifier.gamma;
+  let adjustmentV @V = verifier.adjustment;
   // Openings, after every request.
-  let trace_open @P = K::open_base(trace_tree.1, positionsP, sizeP);
-  let quotient_open @P = K::open_extension(quotient_tree.1, positionsP, sizeP);
+  let trace_open @P = K::open_base(prover.trace, positionsP, sizeP);
+  let quotient_open @P = K::open_extension(prover.quotient, positionsP, sizeP);
   let trace_rows = send P -> V(trace_open.0);
   let trace_proof = send P -> V(trace_open.1);
   let quotient_rows = send P -> V(quotient_open.0);
@@ -167,14 +255,55 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   require @V K::check_base(trace_root, factsV.witness, sizeV, positionsV, trace_rows, trace_proof);
   require @V K::check_extension(quotient_root, factsV.chunks, sizeV, positionsV, quotient_rows,
     quotient_proof);
-  let slotsV @V = inputs<K::Extension,Table,B>(heightV);
   let first @V = deep_values(slotsV, same_rotation(factsV.chunks, 0), K::embed(trace_rows),
     factsV.witness, quotient_rows, factsV.chunks, opened, opened_quotient, heightV,
-    geometryV, positionsV, zetaV, gammaV);
+    geometryV, positionsV, zetaV, gammaV, adjustmentV);
   // QueryAssociated reads this state's initial handle at the very positions
   // used above, then checks each authenticated value against the DEEP equation
   // before its fold chain. No supplied sibling replaces that equality.
   let accepted <- QueryAssociated<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
     fri_state, first);
+  return (accepted = accepted);
+}
+
+// The sampler is explicit in the entrypoint. Reduction, commitment, query
+// association and authentication have one implementation shared by both laws.
+pub protocol ScalarTableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: nat,
+    Rounds: nat, LogBlowup: nat, Queries: nat> roles(P,V)
+    (trace: Vector<K::Base> @P, statementP: Statement<K::Base> @P,
+     statementV: Statement<K::Base> @V, coins: Random<K::Challenge> @V)
+    -> (accepted: bool @V)
+    where zkc::algebra::TwoAdicField(K::Base), zkc::algebra::TwoAdicField(K::Extension),
+      zkc::algebra::CharacteristicNotTwo(K::Extension), zkc::random::IndexRandomness(K::Challenge),
+      zkc::oracle::VectorCommitment(K::ExtensionRows),
+      LogFinal+Rounds+LogBlowup <= 63, 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
+  let (committed, prover, verifier) <- Prepare<K,Table,B,LogFinal,Rounds,LogBlowup>(
+    trace, statementP, statementV, coins);
+  #[site(fri_queries)]
+  let positions <- ScalarQueries<K::Challenge,LogFinal+Rounds+LogBlowup,Queries>(index<Queries>(), coins);
+  let fri_state <- BindQueries<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
+    committed, positions);
+  let accepted <- Complete<K,LogFinal,Rounds,LogBlowup,Queries>(fri_state, prover, verifier);
+  return (accepted = accepted);
+}
+
+// The sampler is explicit in the entrypoint. Reduction, commitment, query
+// association and authentication have one implementation shared by both laws.
+pub protocol BlockTableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: nat,
+    Rounds: nat, LogBlowup: nat, Queries: nat> roles(P,V)
+    (trace: Vector<K::Base> @P, statementP: Statement<K::Base> @P,
+     statementV: Statement<K::Base> @V, coins: Random<K::Challenge> @V)
+    -> (accepted: bool @V)
+    where zkc::algebra::TwoAdicField(K::Base), zkc::algebra::TwoAdicField(K::Extension),
+      zkc::algebra::CharacteristicNotTwo(K::Extension), zkc::random::IndexBlockRandomness(K::Challenge),
+      zkc::oracle::VectorCommitment(K::ExtensionRows),
+      LogFinal+Rounds+LogBlowup <= 63, 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
+  let (committed, prover, verifier) <- Prepare<K,Table,B,LogFinal,Rounds,LogBlowup>(
+    trace, statementP, statementV, coins);
+  #[site(fri_queries)]
+  let positions <- BlockQueries<K::Challenge,LogFinal+Rounds+LogBlowup,Queries>(index<Queries>(), coins);
+  let fri_state <- BindQueries<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
+    committed, positions);
+  let accepted <- Complete<K,LogFinal,Rounds,LogBlowup,Queries>(fri_state, prover, verifier);
   return (accepted = accepted);
 }

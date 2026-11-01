@@ -2,7 +2,7 @@
 
 Prove the eight-row Fibonacci AIR of the [Fibonacci project](../fibonacci/README.md)
 with the parameterized single-table STARK library,
-[`stark::single_table::TableArgument`](../../../libraries/arguments/stark/README.md#parameterized-single-table-argument).
+[`stark::single_table::ScalarTableArgument`](../../../libraries/arguments/stark/README.md#parameterized-single-table-argument).
 `CleanProof` imports the Clean table and `Plonky3Proof` the Plonky3 AIR; the
 inputs are the Fibonacci project's.
 

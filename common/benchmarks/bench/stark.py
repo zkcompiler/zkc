@@ -80,11 +80,11 @@ def fri(root, shape):
     public = {'shift': a.encode(shift), 'round_count': str(rounds), 'query_count': str(queries)}
     source = '''module example;
 use zkc::vector::{Vector};
-use fri::{Direct, LowDegree};
+use fri::{Direct, ScalarLowDegree};
 domain E=field("koala-bear.ext8-binomial3");
 protocol Fri roles(P,V)(word:Vector<E>@P,shift:E@(P,V),round_count:index@(P,V),
  query_count:index@(P,V),coins:Random<E>@V)->(accepted:bool@V){
- let (accepted,_,_,_)=LowDegree<Direct<E>,SIZE,0,ROUNDS,QUERIES>(word,shift,shift,round_count,query_count,coins);
+ let (accepted,_,_,_)=ScalarLowDegree<Direct<E>,SIZE,0,ROUNDS,QUERIES>(word,shift,shift,round_count,query_count,coins);
  return accepted;
 }
 proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};accept accepted;
@@ -200,7 +200,7 @@ def library(root, shape):
     source = '''module example;
 use stark::configurations::CHALLENGE_MODULE::{Base,Extension};
 use stark::configurations::CONFIGURATION_MODULE::{Poseidon2};
-use stark::single_table::{Statement,TableArgument};
+use stark::single_table::{Statement,ScalarTableArgument};
 use zkc::vector::{Vector}; use zkc::vector as v;
 domain Trace=bundle(asset trace);
 fn statement(public_data:Vector<Base>)->Statement<Base> {
@@ -208,7 +208,7 @@ fn statement(public_data:Vector<Base>)->Statement<Base> {
 }
 protocol Air roles(P,V)(trace:Vector<Base>@P,public_data:Vector<Base>@(P,V),coins:Random<Extension>@V)->(accepted:bool@V){
  let prover@P=statement(public_data);let verifier@V=statement(public_data);
- let accepted=TableArgument<Poseidon2,0,Trace,0,ROUNDS,BLOWUP,QUERIES>(trace,prover,verifier,coins);
+ let accepted=ScalarTableArgument<Poseidon2,0,Trace,0,ROUNDS,BLOWUP,QUERIES>(trace,prover,verifier,coins);
  return accepted;
 }
 proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;

@@ -35,7 +35,8 @@ records retain their logical-origin definition and argument assignments. The
 `services` field contains `[name, contract, input_index]` rows, including an empty
 list for participants without services. Indices are canonical nonnegative
 decimal strings. Entry maps and instruction records retain their positional
-shapes.
+shapes. Participant-loop capture rows name both the local formal and its parent
+value, preserving distinct Copy aliases and their storage bindings.
 
 Each operation binding has exactly five fields:
 

@@ -422,7 +422,7 @@ impl Decoder<'_> {
                         site: name(&a[1])?,
                         count,
                         carried: pairs(&a[3])?,
-                        captures: names(&a[4])?,
+                        captures: pairs(&a[4])?,
                         body: self.body(&a[5], depth + 1)?,
                         outputs: names(&a[6])?,
                     }

@@ -156,6 +156,14 @@ bool Semantics::checkProofEntry(const Declaration &entry,
   if (!entry.proof())
     return true;
   const auto &value = *entry.proof();
+  auto gates = proofGateOrder(protocol, value);
+  if (!gates)
+    return false;
+  for (unsigned i = 0; i < gates->size(); ++i)
+    if ((*gates)[i] != i)
+      return fail("source.gate",
+                  "gate choices are not in source occurrence order",
+                  value.span);
   if (!charge(protocol.inputs.size() + protocol.services.size() +
                   value.publicInputs.size() + value.acceptance.path.size() + 1,
               value.span))

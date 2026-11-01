@@ -137,6 +137,85 @@ fn authenticated_rows_collections_and_shape_are_independent_of_polynomials() {
     }
 }
 #[test]
+fn keccak_multi_openings_roundtrip_large_pruned_proofs_and_check_native_limits() {
+    for domain in [Domain::Base, Domain::Quartic, Domain::Extension] {
+        let committed = run(
+            domain,
+            "oracle.commit",
+            vec![vector(domain, 512), Value::Index(2)],
+        );
+        let mut positions: Vec<u64> = (0usize..256).step_by(4).rev().map(|v| v as u64).collect();
+        positions.extend([0, 252]);
+        let positions = Value::Indices(positions.into());
+        let opened = run(
+            domain,
+            "oracle.open_many",
+            vec![committed[1].clone(), positions.clone()],
+        );
+        let Value::OraclePath(_, proof) = &opened[1] else {
+            panic!("proof carrier")
+        };
+        assert!(proof.len() > 24);
+        let codec = backend(Policy::default());
+        let bytes = codec.encode_native_value(&opened[1]).unwrap();
+        let decoded = codec
+            .decode_native_value(&opened[1].physical_type(), &bytes)
+            .unwrap();
+        let args = vec![
+            committed[0].clone(),
+            Value::Index(2),
+            Value::Index(256),
+            positions.clone(),
+            opened[0].clone(),
+            decoded,
+        ];
+        assert!(matches!(
+            run(domain, "oracle.check_many", args.clone())[0],
+            Value::Bool(true)
+        ));
+        let mut extra = args.clone();
+        let mut trailing = proof.to_vec();
+        trailing.push([0; 32]);
+        extra[5] = Value::OraclePath(domain, trailing.into());
+        assert!(matches!(
+            run(domain, "oracle.check_many", extra)[0],
+            Value::Bool(false)
+        ));
+        let mut wrong = args;
+        wrong[2] = Value::Index(257);
+        assert!(matches!(
+            run(domain, "oracle.check_many", wrong)[0],
+            Value::Bool(false)
+        ));
+        for invalid in [
+            Value::Indices(vec![256].into()),
+            Value::Indices(vec![].into()),
+        ] {
+            assert!(
+                one(
+                    backend(Policy::default()),
+                    binding(domain, "oracle.open_many"),
+                    &[],
+                    vec![committed[1].clone(), invalid]
+                )
+                .0
+                .is_err()
+            );
+        }
+        let mut limited = support::Controlled::new(support::backend(Policy::default()));
+        limited.output_limit = Some(1);
+        let (result, observed) = one(
+            limited,
+            binding(domain, "oracle.open_many"),
+            &[],
+            vec![committed[1].clone(), positions],
+        );
+        assert!(result.unwrap_err().contains("output-bytes"));
+        assert!(observed.outputs.is_empty());
+    }
+}
+
+#[test]
 fn wire_nominality_canonicality_and_preimport_accounting() {
     for domain in [Domain::Base, Domain::Extension, Domain::Quartic] {
         let committed = run(
@@ -271,6 +350,8 @@ fn cpu_contracts_agree_with_admission_without_promoting_row_authentication_to_pc
             "oracle.commit",
             "oracle.open",
             "oracle.check",
+            "oracle.open_many",
+            "oracle.check_many",
             "commitments.empty",
             "commitments.append",
             "commitments.at",
