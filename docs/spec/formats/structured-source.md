@@ -561,9 +561,9 @@ Current `/0` schema change: `oracle_input` and `oracle_components` replace their
 bare `kind` descriptor field with `logical-sort` for both singleton handles and
 bounded handle sequences. Send and virtual descriptors retain their `kind`
 field. There is one current schema and no alternate reader for the former
-bare-kind input/component rows. The independent formal reader covering these
-changed descriptors is pending adaptation; native export does not establish
-formal admission or native/formal correspondence.
+bare-kind input/component rows. The independent formal reader preserves the
+complete logical sort and rejects the former rows. Wire recognition does not
+establish oracle execution admission or native/formal correspondence.
 
 An owner is absent only for a query inside a virtual declaration. Send and
 query sites remain ordered events, including repeated or unused queries.

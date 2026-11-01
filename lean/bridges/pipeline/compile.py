@@ -17,6 +17,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import ROOT, digest  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
+from bridges.construction import pair  # noqa: E402
 from bridges.pipeline import source_claims  # noqa: E402
 
 
@@ -66,6 +67,15 @@ def proof_artifacts(runner, subject, compiler, directory, executable=False):
                       directory / "candidate.mlir", name="participant")
     (directory / "participant.json").write_text(export_text)
     exported = json.loads(export_text)
+    if subject.generated("pair"):
+        pair_text = run("protocol-constructed-pair", directory / "source.mlir", directory / "policy.json",
+                        directory / "candidate.mlir", name="pair")
+        (directory / "pair.json").write_text(pair_text)
+        pair_export = json.loads(pair_text)
+        _, validator = pair.decode(pair_export)
+        runner.check(f"{prefix}:pair-validator", validator == exported,
+                     "pair validator differs from independently exported participant")
+        artifacts.update(pair=pair_export, pair_text=pair_text)
     original_text = run("protocol-structured", directory / "source.mlir", f"--symbol={policy[1]}",
                         name="original")
     (directory / "original.json").write_text(original_text)

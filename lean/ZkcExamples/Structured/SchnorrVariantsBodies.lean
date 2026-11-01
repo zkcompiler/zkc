@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.ProtocolOperations
+public import Zkc.Protocols.Sigma.Source
 
 @[expose] public section
 
@@ -16,9 +17,7 @@ abbrev responseHelper : Helper :=
     [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"]⟩
 
 def responseBody : Region dialect responseHelper.inputs responseHelper.outputs :=
-  .letOp (.fieldMultiply "bls12-381.fr") (.cons (.there .here) (.cons (.there (.there .here)) .nil)) .nil <|
-  .letOp (.fieldAdd "bls12-381.fr") (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.Sigma.Source.responseBody "bls12-381.fr"
 
 abbrev equationHelper : Helper :=
   ⟨"s13h7363686e6f72725f666f726d738h6571756174696f6e", .math,
@@ -26,11 +25,7 @@ abbrev equationHelper : Helper :=
       .field "bls12-381.fr"], [.boolean]⟩
 
 def equationBody : Region dialect equationHelper.inputs equationHelper.outputs :=
-  .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.groupAdd "bls12-381.g1") (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
-  .letOp (.groupEqual "bls12-381.g1") (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.Sigma.Source.equationBody ⟨"bls12-381.g1", "bls12-381.fr"⟩
 
 def helpersSignature : ProtocolSignature where
   name := "s13h7363686e6f72725f666f726d7315h48656c7065727350726f746f636f6c"

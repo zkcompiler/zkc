@@ -38,6 +38,8 @@ elab "apply_helper_reference " law:term " using " program:term : tactic =>
   withMainContext <| withoutRecover do
     let goal ← getMainGoal
     let target ← whnf (← instantiateMVars (← goal.getType))
+    if target.hasExprMVar then
+      throwError "apply_helper_reference requires the invocation and complete reference to be fixed before law selection"
     let some (_, actual, _) := target.eq? |
       throwError "apply_helper_reference expects an exact helper outcome equation"
     let compiled := actual.isAppOfArity ``Zkc.Construction.Domain.callHelper 5
@@ -99,7 +101,8 @@ partial def applyLibrary (laws : Array (TSyntax `term)) (program : TSyntax `term
         unless ← obligation.isAssigned do
           remaining := remaining ++ (← applyLibrary laws program (fuel - 1) obligation)
       return remaining
-    catch _ => pure ()
+    catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
   saved.restore
   return [goal]
 
@@ -107,6 +110,8 @@ partial def applyLibrary (laws : Array (TSyntax `term)) (program : TSyntax `term
 name selects a formula, and the proposed reference never changes the goal. -/
 elab "derive_helper_reference " "[" laws:term,* "]" " using " program:term : tactic =>
   withMainContext <| Term.withoutErrToSorry <| withoutRecover do
+    if (← instantiateMVars (← getMainTarget)).hasExprMVar then
+      throwError "derive_helper_reference requires the invocation and complete reference to be fixed before law selection"
     let pending := (← getGoals).tail
     let remaining ← applyLibrary laws.getElems program 64 (← getMainGoal)
     setGoals (remaining ++ pending)

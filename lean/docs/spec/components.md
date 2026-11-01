@@ -33,8 +33,7 @@ flowchart TD
 | `ZkcSecurity.Bindings.Source` | Composition and installation of properties on occurrence-preserving source processes |
 | `ZkcSecurity.Families` | Mathematical reference/message laws and reusable family consumers |
 | `ZkcSecurity.Bindings` | Reusable source-template, representation and actual-subject interfaces |
-| `ZkcSecurityExamples` | Exact exported artifacts, root selections and application proofs |
-| `ZkcSecurityExamples` | Exact source-body instances, selected subjects and root proof applications |
+| `ZkcSecurityExamples` | Exact artifacts and source-body instances, selected subjects and root proof applications |
 | `ZkcSecurity.Claims` | Request-owned models and canonical meanings, stage links and receipt admission |
 | `ZkcTools`, `ZkcSecurityTools.Generation` and test generators | Candidate search and ordinary Lean source emission; their output must be checked |
 
@@ -116,6 +115,13 @@ invariants. Unmatched applications and missing laws remain typed goals.
 `source_presentation` handles bind coherence for an already selected source
 reference; its success alone establishes no security property.
 
+The source-template installer, helper-law matcher and property assemblers
+require a fixed expected goal before selecting a law. They cannot fill a hole
+in the requested reference, relation, process or final bound from a candidate
+proof. Composition may infer intermediate relations and costs inside that
+fixed goal. Interrupts and runtime failures propagate; they are not reported
+as missing mathematical lemmas.
+
 `Source.Installation` combines these source laws with the generated producer
 and validator roots. ABI reads and the mathematical terminal predicate remain
 explicit; the root supplies independent route coverage, full-return simulation,
@@ -123,6 +129,11 @@ source reading and acceptance agreement. Companion lookup uses the exact
 expected type. A missing proof is an authoring obligation, and an invalid
 explicit companion does not silently fall back to a different method. These
 reports do not replace canonical receipt admission or its required stage links.
+Authoring diagnostics retain the complete local telescope and its closed
+expected type, including hypotheses not mentioned by the conclusion. An
+optional generated goal declaration is checked against that closed type;
+its name is not proof authority. The reported expected-type constants describe
+syntactic dependencies, not the assumptions discharged by a security receipt.
 
 ## Generated binding and its scope
 

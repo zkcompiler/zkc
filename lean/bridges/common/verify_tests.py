@@ -110,7 +110,8 @@ def main():
     request['wiring']['fieldDomain'] = 'another-field'
     check('different-field', original, request, 'input-domain')
     changed = copy.deepcopy(original)
-    entry(changed)[9][1].append([['field.add','bls12-381.fr'], [4096,4096], [['field','bls12-381.fr']], [], ''])
+    entry(changed)[9][1].append([['field.add','bls12-381.fr'], [4096,4096],
+                               [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], ''])
     check('malformed-dormant-binding', changed, requests['factor-openings'], 'structured-admission')
     # Copying a positive source hash onto an admitted wrong body grants no proof.
     changed = read_json(FIXTURES / 'factor-wrongpoint.json')
@@ -122,7 +123,7 @@ def main():
     for name, operation in [('boolean-extra-field', ['bool.constant', True, 'ignored']),
                             ('constant-extra-field', ['field.constant', 'bls12-381.fr', '1', 'ignored'])]:
         changed = copy.deepcopy(original)
-        entry(changed)[9][1].append([operation, [], [['bool']], [], ''])
+        entry(changed)[9][1].append([operation, [], [['apply', 'bool', []]], [], ''])
         check(name, changed, requests['factor-openings'], 'unsupported-input')
     changed = copy.deepcopy(original)
     changed[2] = 'sha256:not-a-digest'

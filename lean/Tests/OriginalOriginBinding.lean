@@ -116,7 +116,7 @@ def run : IO Unit := do
   let nominal := fun kind => LibraryAssociation.select [nominalInstallation]
     ⟨"test::Nominal", [("T", .nominal kind "test::T" [])]⟩
   expect "record kind retained" ((nominal .record).isOk)
-  for kind in [OriginNominalKind.variant, .associated, .moduleType] do
+  for kind in [OriginNominalKind.variant, .associated, .moduleType, .logicalRecord] do
     refusal "same display path, different nominal kind" "test-library-nominal-kind" (nominal kind)
   let originFor := fun definitions => LibraryAssociation.originFor
     { StructuredOriginFixture.snapshot with definitions } StructuredOriginFixture.checkedLeaf

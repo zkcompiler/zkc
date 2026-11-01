@@ -507,6 +507,18 @@ def entries : List Entry := [
     some `ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies,
     "The admitted source program contains the exact sumcheck, prefix, terminal-check \
     and table-check helper bodies with their complete checked dependencies."⟩,
+  ⟨"wellformed.gkr-round-boundary-bodies", .wellFormedness,
+    some `ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.Bodies,
+    "The linked source contains the exact empty, append and Pending boundary bodies \
+    with their full typed interfaces; this association is proved from the selected source."⟩,
+  ⟨"wellformed.gkr-round-helper-bodies", .wellFormedness,
+    some `ZkcSecurity.Bindings.Gkr.RoundsHelperInstallation.Bodies,
+    "The linked source contains the exact quadratic-round helper closure, including \
+    all helper signatures, typed bodies and transitive helper associations."⟩,
+  ⟨"wellformed.gkr-factor-restriction-bodies", .wellFormedness,
+    some `ZkcSecurity.Bindings.Gkr.RoundsHelperInstallation.RestrictionBodies,
+    "The linked source contains the exact factor-restriction helper bodies used by \
+    the reusable interpretation theorem; source changes must re-establish the association."⟩,
   ⟨"wellformed.honest-pair-pointwise-wp", .wellFormedness,
     some `ZkcSecurity.FiatShamir.HonestCompiled.pairWP,
     "On one fixed shared answer table, the actual producer and validator both return, \

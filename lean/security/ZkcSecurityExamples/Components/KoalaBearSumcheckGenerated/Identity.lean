@@ -2,7 +2,7 @@ module
 
 @[expose] public section
 namespace ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Identity
-def sourceExport : String := "sha256:95406e8e9a719701ab90294f2213cd7dab9b85839e5010a8d587f92c2aacc4ef"
-def validatorExport : String := "sha256:c6a6812226373cf00db357de9b0ab905ac17fb1a5f8c4e53feb120d27ad04e80"
-def producerExport : String := "sha256:e0a2eaa9079183e72f567c246a8481c5cc1c3cab0a662b1be3bc0c8aa6e60de8"
+def sourceExport : String := "sha256:6149c7cabd286ba83c6aab05398de4ea15e50d6194f6aa894e593272e02da1f3"
+def validatorExport : String := "sha256:48ec14c355d775bc830e9e1654010dd00d127e8fd24e59e2781e0d934e8cd56f"
+def producerExport : String := "sha256:239f57490318f1995667f08a1f6c3b34e92a1843c6e21f2da19c876466ddf1a8"
 end ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Identity

@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.MapCombinationData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:96ad621f14f16b573eb0ccb5ef92150c3359ecbe1da2867eb103f5205c904bed"
+  source := "sha256:a157c1c6f00ddd326fa335098eab62ee6d8e450a0623bf755084b3b639a4b0e0"
   entry := "s12h6d61705f6578616d706c657317h4c696e656172436f6d62696e6174696f6e"
   domains := [⟨"zkl_map_40c6231bdcafed97eac948be749084ce0abec13b10621543e354f70698ea9db6_domain", [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"], [.elements 0, .elements 1, .zip [1, 0], .elements 2, .zip [1, 0]], 0⟩]
   relations := []

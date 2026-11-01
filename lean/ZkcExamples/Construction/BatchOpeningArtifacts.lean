@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.BatchOpeningArtifacts.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:c2fdbe1b1b469fad54955196b84c255598f9306aa581805dfd5a55e87136de05"
-  candidate := "sha256:78b901631fd119ae1e51e20d7dad3fcc6003523e9ef6b1b345805db45337c116"
+  source := "sha256:b301e5da262d325f487c44a1ffac953394acfa295b99b53aa800aba89bb1976b"
+  candidate := "sha256:e7750a4b6cbe20a7e2e63007cb6c7b66a4639fa06ee783fd86ef7225169b142f"
   policy := ⟨"zkl_206d594942dc6f123848ad35c8fcdc7017b483db9ccd5c0651d1ad5c850eceab", "role00000000", "role00000001", 0, "", [], [0, 1], [], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.sequence (.product "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e67313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (.cons (.field "koala-bear") (.cons (.field "koala-bear") (.nil)))))]
@@ -24,8 +24,8 @@ namespace ZkcExamples.Construction.BatchOpeningArtifacts.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:c2fdbe1b1b469fad54955196b84c255598f9306aa581805dfd5a55e87136de05"
-  candidate := "sha256:78b901631fd119ae1e51e20d7dad3fcc6003523e9ef6b1b345805db45337c116"
+  source := "sha256:b301e5da262d325f487c44a1ffac953394acfa295b99b53aa800aba89bb1976b"
+  candidate := "sha256:e7750a4b6cbe20a7e2e63007cb6c7b66a4639fa06ee783fd86ef7225169b142f"
   policy := ⟨"zkl_206d594942dc6f123848ad35c8fcdc7017b483db9ccd5c0651d1ad5c850eceab", "role00000000", "role00000001", 0, "", [], [0, 1], [], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.field "koala-bear"), .data (.field "koala-bear")]

@@ -156,7 +156,10 @@ theorem appendWrongOperation_refused : helperRefusal appendWrongOperation append
 rebound name could change what the formal denotes. -/
 def appendRebound : Validator :=
   withFunction actual appendName fun function =>
-    { function with body := [.operation "s0" "zkl_binding_11" [] ["v114", "v115"] ["v114"], .ret ["v114"]] }
+    match function.inputs with
+    | [(first, _), (second, _)] =>
+        { function with body := [.operation "s0" "zkl_binding_11" [] [first, second] [first], .ret [first]] }
+    | _ => function
 
 theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "s0") := by
   decide +kernel
@@ -216,13 +219,18 @@ theorem wrong_round_rejected :
           some ("apply_18_label_726564756365_s27", "_calculation_3")), 23, 2, 2) := by
   decide +kernel
 
+/-- The shape decision's site comes from the retained helper, not its printed spelling. -/
+private def shapeDecisionSite : Option String :=
+  match ZkcExamples.Executable.SumcheckHelpers.checkFunction.body[5] with
+  | .cond site .. => some site
+  | _ => none
+
 /-- Budget 100 stops inside the terminal check's region, as the runtime reports
 for that budget: the stop site is the instruction's, the local call the
 check's. -/
 theorem exhausted_in_check :
     observed (runAt 100 honest) =
-      (some (some "lc_2_s5_68_zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655_3_s11",
-        some ("s9", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc")), 100, 8, 4) := by
+      (some (shapeDecisionSite, some ("s9", checkName)), 100, 8, 4) := by
   decide +kernel
 
 /-- A stop inside a round's local call leaves the call's frame, the iteration's

@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.Generated.Bindings.SampledAbortData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:6737cab668c409b88da52bee9373e0a6e6009832ba1f4210657e7c4b27c790cd"
+  source := "sha256:68ba4ecf737d817ae1fcd0b41a382ae53085f40dcf2d13f17ada57bd589aacf1"
   entry := "s7h6578616d706c6512h53616d706c656441626f7274"
   domains := []
   relations := [⟨"s7h6578616d706c655h457175616c", .publicDef, "zkc.language.formula/0", "s7h6578616d706c655h457175616c", "9c835c1a401867f6466147d6445185c5567b3aebe60ba75d1646dbdee200f4cc", [.field "bls12-381.fr", .field "bls12-381.fr"], [.boolean], ["statement", "witness"], some ("zkf_fe5e2a3c5bbade8b5ce48ffd090142e127cc04ea947d1766a7f847161f657190"), []⟩]

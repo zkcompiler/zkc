@@ -29,9 +29,9 @@ private unsafe def closedInstructions (artifact : Expr) : MetaM (List Zkc.Constr
   let instructions ← instantiateMVars instructions
   if instructions.hasFVar || instructions.hasMVar then
     throwError "connection-view-proposal: the instruction tree must be closed"
-  -- A subject's ordinary imports need not expose executable code to the meta
-  -- phase. Reduce the finite instruction data before compiling the proposal;
-  -- the resulting proof still targets the original artifact, not this value.
+  -- Reflect the exposed data before evaluation so ordinary logical imports
+  -- suffice; authors need not meta-import the artifact's runtime code. This
+  -- reads instruction syntax, never executes the participant.
   let literal ← withTransparency .all <| reduce instructions
   evalExpr (List Zkc.Construction.Instruction)
     (← mkAppM ``List #[mkConst ``Zkc.Construction.Instruction]) literal
@@ -74,13 +74,15 @@ private def deriveConnection (selectedLibrary : Option (TSyntax `term)) : Tactic
     let library ← match selectedLibrary with
       | some selected => pure selected
       | none => `(by derive_connection_library roles [ConnectionAdmission.role $context $mode])
+    -- Let the root builder check the library at its expected type directly.
+    -- An extra local alias would make otherwise closed source indices open
+    -- during normalization and prevent their syntax from being shared.
     evalTactic (← `(tactic| exact (by
-      let library : ConnectionLibrary.Bundle ($program).payload := $library
       let root : ConnectionRoot.RootCertificate $program $routing
           (ConnectionAdmission.role $context $mode) $artifact := by
         derive_root_connection_with_library target $target correspondence $correspondence
           services (ConnectionRootInputs.serviceCapabilities ($program).payload.entry.inputs)
-          library library
+          library $library
       exact ConnectionAdmission.ofRootCertificate root (by kernel_rfl))))
 
 elab "derive_source_connection" : tactic => deriveConnection none

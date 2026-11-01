@@ -61,8 +61,12 @@ placements are shared. Explicit parameterized target-body families additionally
 reuse alignment and extent derivations across different physical offsets,
 caller scopes and occurrence contexts. Focused strict-mode roots cover nested
 repeats and retained current history; input read aliasing has a separate
-all-reply application consumer. Arbitrary closed-certificate transport and GKR
-adoption of these families remain outside this placement coverage.
+all-reply application consumer. The actual GKR producer and validator now use
+automatically discovered checked-body families: two producer applications and
+three validator applications share their alignment and extent declarations,
+without reconstructing the concrete callee bodies. Nested families retain the
+same checked child references. The 1/2/4/8-placement controls audit those
+references independently of the proposer's timing output.
 Public Fiat–Shamir reading and observation coherence follow from the same root
 certificate under the adapter's profile and no-local-service premises. These
 are correspondence results, not cryptographic property receipts or native
@@ -70,6 +74,17 @@ compiler correctness. The same route now checks both complete canonical GKR
 roles. Structural admission no longer contains a second, unproved projection
 walker: canonical receipts require the separate semantic connection evidence.
 The remaining GKR mathematical installation cost is described below.
+
+The [component authoring guide](development/component-authoring.md) describes
+the reusable source/helper installations, counted-loop rules and fixed-goal
+companion interface. A distinct TwoBatches Entry reuses aggregate mathematics
+and generated connections for both roles without handwritten physical slots,
+routing or whole-body interpreter proofs. Randomized, aliased and sequential
+Sigma clients exercise the same machinery; a separate carrier control uses a
+group distinct from the scalar field. These connection results preserve full
+returns, optional inputs, arbitrary replies and stops. Mathematical invariants,
+representation laws, probability bounds and new composition laws remain
+author-owned obligations; family reuse does not supply them automatically.
 
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
@@ -344,7 +359,8 @@ correspondence remains open. Other Entry trials stay visible in the full report.
 |---|---|---|---|---|---|---|
 | chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
 | deferred-rounds | `example::Proof` |  |  |  |  | no-claim |
-| gkr | `example::Proof` |  |  |  |  | no-claim |
+| gkr | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| gkr | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | okamoto-proof | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |

@@ -175,8 +175,12 @@ def auditReceipt (headers records : Array Json) (record requestRecord request : 
     let key := text (get capability "name") ++ "@" ++ text (get capability "version")
     checks := checks.push (add (capabilities.contains key) s!"missing requested capability: {key}")
   let subject := get r "subject"
-  checks := checks.push (add (!recognized || has (get subject "artifacts_head"))
-    "missing actual typed security subject artifact identity")
+  for key in ["original_anchors", "participant_anchors"] do
+    checks := checks.push (add (!recognized || !(strings (get subject key)).isEmpty)
+      s!"missing actual typed security subject artifact identity: {key}")
+  if get subject "producer_source" != .null then
+    checks := checks.push (add (!(strings (get subject "producer_anchors")).isEmpty)
+      "missing actual typed security subject artifact identity: producer_anchors")
   let securitySubject := has subject || security || recognized || securityTypes.contains (str (get detail "type_head"))
   if securitySubject then
     checks := checks.push (add (security && yes (get admission "associated"))
@@ -366,10 +370,14 @@ def auditRequest (input item : Json) : Audit := Id.run do
             s!"mismatched artifact: actual typed subject {key} differs from pipeline")
       checks := checks.push (add (get typed "original_entry" == get (get request "target") "protocol")
         "wrong target protocol: request differs from actual admitted snapshot")
-      let artifactRecord := lookup records (get typed "artifacts_head")
-      checks := checks.push (add (has artifactRecord &&
-        (strings (get input "attached_modules")).contains (str (get artifactRecord "module")))
-        "mismatched artifact: actual typed subject artifacts are outside the regenerated modules")
+      let anchors := ["original_anchors", "participant_anchors"] ++
+        if get typed "producer_source" != .null then ["producer_anchors"] else []
+      for key in anchors do
+        let anchored := (strings (get typed key)).any fun name =>
+          let data := lookup records (Json.str name)
+          has data && (strings (get input "attached_modules")).contains (str (get data "module"))
+        checks := checks.push (add anchored
+          s!"mismatched artifact: actual typed subject {key} have no equal data in regenerated modules")
   else checks := checks.push (add false "no emitted typed receipt proves this request")
   if has r then
     for reason in strings (get item "dependency_reasons") do checks := checks.push (add false reason)

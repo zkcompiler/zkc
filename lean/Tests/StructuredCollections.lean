@@ -45,9 +45,9 @@ def vectorValue (values : List Nat) : Json :=
   .arr #[.str "vector", .str scalarDomain, .arr (values.map fun n => Json.str (toString n)).toArray]
 def indexValue (value : Nat) : Json := .arr #[.str "index", toJson value]
 def sequenceValue (values : List Nat) : Json :=
-  .arr #[.str "sequence", .arr #[.str "index"], .arr (values.map indexValue).toArray]
+  .arr #[.str "sequence", ZkcTools.StructuredSource.wireType .index, .arr (values.map indexValue).toArray]
 def booleanSequence (values : List Bool) : Json :=
-  .arr #[.str "sequence", .arr #[.str "bool"],
+  .arr #[.str "sequence", ZkcTools.StructuredSource.wireType .boolean,
     .arr (values.map fun value => Json.arr #[.str "bool", .bool value]).toArray]
 def returned (value : Json) : Json := .arr #[.str "returned", .arr #[value]]
 def stopped (reason : String) : Json := .arr #[.str "stopped", .str reason]

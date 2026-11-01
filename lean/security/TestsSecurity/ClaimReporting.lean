@@ -22,6 +22,10 @@ open Zkc.Claims Zkc.Construction ZkcSecurity.Claims ZkcSecurity.Endpoint
 
 def artifacts := ZkcSecurity.Examples.Subjects.Schnorr.artifacts
 
+/-- The reporting fixture explicitly admits these complete data values. -/
+def original := artifacts.original
+def participant := artifacts.participant
+
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
   [SampleableType F] [Fintype F] [Inhabited F] [SampleableType G]
 

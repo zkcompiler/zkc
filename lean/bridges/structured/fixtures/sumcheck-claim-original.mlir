@@ -7,7 +7,7 @@
     }) : () -> ()
     "func.func"() <{function_type = (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">, sym_name = "s14h73756d636865636b5f636c61696d5h636c61696d", sym_visibility = "private"}> ({
     ^bb0(%arg2: !algebra.field<"bls12-381.fr">, %arg3: !algebra.field<"bls12-381.fr">, %arg4: !algebra.field<"bls12-381.fr">):
-      %1 = "algebra.constant"() <{value = "1"}> : () -> !algebra.field<"bls12-381.fr">
+      %1 = "algebra.constant"() <{value = #algebra.literal<<"bls12-381.fr">, 1 : ui255> : !algebra.field<"bls12-381.fr">}> : () -> !algebra.field<"bls12-381.fr">
       %2 = "algebra.field_subtract"(%1, %arg4) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       %3 = "func.call"(%arg2, %2) <{callee = @s14h73756d636865636b5f636c61696d8h7765696768746564}> : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       %4 = "func.call"(%arg3, %arg4) <{callee = @s14h73756d636865636b5f636c61696d8h7765696768746564}> : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">

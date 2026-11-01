@@ -85,6 +85,7 @@ def originTermSource : Zkc.Source.Structured.OriginTerm → String
     let kind := match kind with
       | .record => ".record" | .variant => ".variant"
       | .associated => ".associated" | .moduleType => ".moduleType"
+      | .logicalRecord => ".logicalRecord"
     "(.nominal " ++ kind ++ " " ++ quoted path ++ " [" ++
       ", ".intercalate (terms.map originTermSource) ++ "])"
   | .builtin name terms => "(.builtin " ++ quoted name ++ " [" ++

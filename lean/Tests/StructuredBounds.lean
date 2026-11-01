@@ -20,7 +20,7 @@ private def fieldTy : Ty := .field scalarDomain
 private def maximum : Nat := indexLimit - 1
 
 private def binding (name contract : String) (domain : Bool := false) : Binding :=
-  ⟨name, contract, if domain then [scalarDomain] else [], ""⟩
+  ⟨name, contract, if domain then [scalarDomain] else [], "", none⟩
 private def exec (name binding : String) (args : List Nat) (out : List Ty)
     (parameters : List String := []) : Instruction :=
   .instruction (.exec "exec.apply" binding parameters) args out [] name

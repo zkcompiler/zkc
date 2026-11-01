@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render  # noqa: E402
+from bridges.common import lean_render, schema  # noqa: E402
 from bridges.common.lean_render import optional, record  # noqa: E402
 
 # The structured source profile bounds strings at 512 bytes and references at 4096.
@@ -21,6 +21,10 @@ seq = lean_render.seq
 
 
 def ty(value, depth=0):
+    return interpreted_ty(schema.interpreted_type(value), depth)
+
+
+def interpreted_ty(value, depth=0):
     """Render only the admitted aggregate grammar, retaining nominal identity."""
     if depth >= 64 or not isinstance(value, list) or not value:
         raise ValueError("invalid structured type")
@@ -31,25 +35,31 @@ def ty(value, depth=0):
         return f".groups {text(domain)}"
     if value[0] == "oracle":
         _, kind = record(value, 2)
-        return f".oracle ({oracle_kind(kind, depth + 1)})"
+        return f".oracle ({interpreted_oracle_kind(kind, depth + 1)})"
     if value[0] == "oracle_sequence":
         _, kind, maximum = record(value, 3)
-        return f".oracleSequence ({oracle_kind(kind, depth + 1)}) {lean_render.decimal(maximum, 2**64)}"
+        return f".oracleSequence ({interpreted_oracle_kind(kind, depth + 1)}) {lean_render.decimal(maximum, 2**64)}"
     if value[0] == "sequence":
         _, element = record(value, 2)
-        return f".sequence ({ty(element, depth + 1)})"
+        return f".sequence ({interpreted_ty(element, depth + 1)})"
     if value[0] == "product":
         _, identity, constructor, fields = record(value, 4)
         if not isinstance(fields, list) or len(fields) > 512:
             raise ValueError("invalid product fields")
         components = ".nil"
         for field in reversed(fields):
-            components = f".cons ({ty(field, depth + 1)}) ({components})"
+            components = f".cons ({interpreted_ty(field, depth + 1)}) ({components})"
         return f".product {text(identity)} {text(constructor)} ({components})"
-    return lean_render.ty(value)
+    return lean_render.interpreted_ty(value)
 
 
 def oracle_kind(value, depth=0):
+    schema.oracle_kind(value)
+    projected = [value[0], [["type", schema.interpreted_type(value[1][0][1])], *value[1][1:]]]
+    return interpreted_oracle_kind(projected, depth)
+
+
+def interpreted_oracle_kind(value, depth=0):
     if depth >= 64:
         raise ValueError("invalid oracle kind depth")
     tag, arguments = record(value, 2)
@@ -64,7 +74,7 @@ def oracle_kind(value, depth=0):
         if nat_tag != "nat":
             raise ValueError("invalid oracle extent")
         rows = f"some {lean_render.decimal(count, 2**64)}"
-    return f".table ({ty(row, depth + 1)}) ({rows})"
+    return f".table ({interpreted_ty(row, depth + 1)}) ({rows})"
 
 
 def oracle_shape(kind, value):
@@ -78,8 +88,21 @@ def oracle_shape(kind, value):
 
 def oracle_descriptor(tag, args):
     """Render wire data only; no operation receives semantic admission here."""
-    if tag in ("oracle_input", "oracle_send", "oracle_components", "oracle_virtual"):
-        size = {"oracle_input": 4, "oracle_send": 5, "oracle_components": 3, "oracle_virtual": 4}[tag]
+    if tag in ("oracle_input", "oracle_components"):
+        record(args, 4 if tag == "oracle_input" else 3)
+        holder, receivers, sort = args[:3]
+        projected = schema.interpreted_type(sort)
+        if projected[0] not in ("oracle", "oracle_sequence"):
+            raise ValueError("invalid oracle logical sort")
+        # The complete sort retains the singleton/sequence distinction and capacity.
+        rendered = interpreted_ty(projected)
+        extra = ""
+        if tag == "oracle_input":
+            extra = " " + oracle_shape(sort[1:3], args[3])
+        return (f".oracle (.{tag.removeprefix('oracle_')} {text(holder)} {seq(receivers, text, 16)} "
+                f"({rendered}){extra})")
+    if tag in ("oracle_send", "oracle_virtual"):
+        size = {"oracle_send": 5, "oracle_virtual": 4}[tag]
         record(args, size)
         declaration = text(args[0]) + " " if tag == "oracle_virtual" else ""
         holder, receivers, kind = args[1:4] if declaration else args[:3]
@@ -88,8 +111,6 @@ def oracle_descriptor(tag, args):
             if args[3] != ["rows"]:
                 raise ValueError("invalid oracle dimensions")
             extra = f" {seq(args[3], text, 16)} {oracle_shape(kind, args[4])}"
-        elif tag == "oracle_input":
-            extra = " " + oracle_shape(kind, args[3])
         constructor = tag.removeprefix("oracle_")
         return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 16)} "
                 f"({oracle_kind(kind)}){extra})")
@@ -151,7 +172,7 @@ def descriptor(value):
         return f".fieldEmbed {text(extension)} {text(base)}"
     if tag == "exec":
         operation, binding_name, parameters = record(args, 3)
-        return f".exec {text(operation)} {text(binding_name)} {seq(parameters, text)}"
+        return f".exec {text(operation)} {text(binding_name)} {seq(parameters, render_parameter)}"
     if tag == "bool.constant":
         record(args, 1)
         if type(args[0]) is not bool:
@@ -292,12 +313,69 @@ def protocol_contract(value):
     return f"⟨{text(owner)}, {seq(clauses, contract_clause)}⟩"
 
 
-def primitive_binding(value):
-    tag, name, contract, arguments, implementation = record(value, 5)
-    if tag != "binding":
-        raise ValueError("invalid binding")
-    return (f"⟨{text(name)}, {text(contract)}, {seq(arguments, text)}, "
-            f"{text(implementation)}⟩")
+# Independently selected interpreter vocabulary; catalog membership is data only.
+SOURCE_PRIMITIVES = frozenset((
+    "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
+    "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
+    "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"))
+
+
+def render_parameter(value):
+    schema.parameter(value)
+    if value[0] != "natural":
+        raise ValueError("parameter has no installed source interpretation")
+    return text(value[1])
+
+
+def binding_argument(value):
+    """Retain kinded actuals as data after the selected signature was checked."""
+    schema.argument(value, mask=True)
+    if value[0] == "domain":
+        return f".domain {text(value[1])} {text(value[2])}"
+    if value[0] == "type":
+        return f".type ({ty(value[1])})"
+    if value[0] == "nat":
+        return f".natural {lean_render.decimal(value[1], 2**64)}"
+    return f".mask {seq(value[1], lambda bit: str(bit).lower())}"
+
+
+def primitive_binding(value, rows=None):
+    actual = schema.binding(value, source=True)
+    op, terms = schema.resolve_signature(actual, project=member_resolver(rows), allowed=SOURCE_PRIMITIVES)
+    if actual[2] != "":
+        raise ValueError("selected implementation outside source profile")
+    nominals = {row[1]: row for row in rows[0]} if rows else {}
+    for requirement in op["requirements"]:
+        arguments = [terms[i] for i in requirement["arguments"]]
+        if len(arguments) != 1 or arguments[0][0] != "domain":
+            raise ValueError("unsupported source requirement")
+        domain = nominals.get(arguments[0][2])
+        if domain is None or requirement["capability"] not in domain[4]:
+            raise ValueError("missing binding capability")
+    # The installed source primitives have only Field roots. The neutral tree
+    # and supplied ports were checked above before this semantic projection.
+    arguments = [argument[2] for argument in actual[1]]
+    return (f"⟨{text(value[1])}, {text(actual[0])}, {seq(arguments, text)}, "
+            f"{text(actual[2])}, some ⟨{seq(actual[1], binding_argument)}, "
+            f"{seq(actual[3], ty)}, {seq(actual[4], ty)}⟩⟩")
+
+
+def member_resolver(rows):
+    def project(parent, member):
+        if rows is None or parent[0] != "domain":
+            raise ValueError("missing associated domain catalogue")
+        matches = [row for row in rows[0] if row[1] == parent[2] and row[2] == parent[1]]
+        if len(matches) != 1:
+            raise ValueError("unknown associated domain")
+        members = dict(matches[0][3])
+        if member not in members:
+            raise ValueError("missing associated domain member")
+        declarations = [row for row in schema.declarations()["members"]
+                        if row["name"] == member and row["owner"]["sort"] == parent[1]]
+        if len(declarations) != 1:
+            raise ValueError("unknown associated member declaration")
+        return ["domain", declarations[0]["result"]["sort"], members[member]]
+    return project
 
 
 def origin_string(value, limit=512):
@@ -359,9 +437,9 @@ def origin_term(value, depth=0, remaining=None):
         return f"(.array {child(element)} {origin_decimal(length)})"
     if tag == "nominal":
         kind, path, arguments = record(args, 3)
-        if kind not in ("record", "variant", "associated", "module"):
+        if kind not in ("record", "logical_record", "variant", "associated", "module"):
             raise ValueError("invalid origin nominal kind")
-        constructor = "moduleType" if kind == "module" else kind
+        constructor = {"module": "moduleType", "logical_record": "logicalRecord"}.get(kind, kind)
         return (f"(.nominal .{constructor} {origin_path(path)} "
                 f"{seq(arguments, child, limit=512)})")
     if tag in ("builtin", "formal"):
@@ -499,6 +577,26 @@ def render(data, namespace):
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
     lean_render.namespace(namespace)
+    catalogue_term = catalogue(rows)
+    installed = {}
+    for value in bindings:
+        primitive_binding(value, rows)
+        if value[1] in installed:
+            raise ValueError("duplicate source binding")
+        installed[value[1]] = value[2:]
+
+    def invocations(value):
+        if not isinstance(value, list):
+            return
+        if value and value[0] == "exec":
+            _, operation, name, parameters = record(value, 4)
+            if operation != "exec.apply" or name not in installed:
+                raise ValueError("unknown source primitive binding")
+            op, _ = schema.resolve_signature(installed[name], member_resolver(rows), SOURCE_PRIMITIVES)
+            schema.validate_parameters(parameters, op["parameters"])
+        for child in value:
+            invocations(child)
+    invocations(definitions)
     return f'''module
 
 public import Zkc.Source.Structured.Import
@@ -517,10 +615,10 @@ def snapshot : Snapshot where
   entry := {text(entry)}
   domains := {seq(domains, domain)}
   relations := {seq(relations, relation)}
-  bindings := {seq(bindings, primitive_binding)}
+  bindings := {seq(bindings, lambda value: primitive_binding(value, rows))}
   definitions := {seq(definitions, definition)}
   contracts := {seq(contracts, protocol_contract)}
-  catalogue := {catalogue(rows)}
+  catalogue := {catalogue_term}
   sourceDeclarations := {source_declarations(declarations)}
 
 end {namespace}
@@ -528,4 +626,4 @@ end {namespace}
 
 
 if __name__ == "__main__":
-    lean_render.render_main(render, __doc__)
+    lean_render.render_main(render, __doc__, read=lambda path: schema.loads(path.read_bytes()))

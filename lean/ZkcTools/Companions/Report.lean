@@ -1,6 +1,7 @@
 module
 
 public meta import ZkcTools.Companions.Assembly
+public meta import ZkcTools.Companions.Goals
 
 public meta section
 
@@ -26,20 +27,74 @@ structure StubLocation where
   line : Nat
   deriving ToJson
 
+/-- Retained source metadata, not proof authority or a reconstructed source span.
+The capture digest does not attest to the native exporter or dependency closure. -/
+structure SourceIdentity where
+  owner : String
+  symbol : String
+  capture : String
+  deriving ToJson
+
+/-- Frontend canonical instance key for a Lean-owned implementation law. -/
+def SourceIdentity.implementationKey (subject : SourceIdentity) (label : String) : String :=
+  (toJson ([toJson "zkc.companion/0", toJson subject.owner,
+    toJson (["instance", subject.symbol] : List String), toJson "implementation-law",
+    toJson (["label", label] : List String)] : List Json)).compress
+
 structure Obligation where
   identity : String
   source : Option SourceSpan := none
   responsibility : String
   expected : Expr
   stub : Option StubLocation := none
+  stubText : Option String := none
+  /-- An independently generated type declaration, closed over its complete
+  telescope. When supplied, its value must be the requested type. -/
+  goal : Option Name := none
+  subject : Option SourceIdentity := none
+  proofNavigation : Option StubLocation := none
+
+/-- Check the independently fixed goal before attempting any proof method. -/
+def validateGoal (expected : Expr) (goal : Name) : MetaM Unit := do
+  let variables := (← getLCtx).foldl (fun variables declaration =>
+    if declaration.isAuxDecl then variables else variables.push declaration.toExpr) #[]
+  let closed ← instantiateMVars (← mkForallFVars variables (← instantiateMVars expected))
+  if closed.hasFVar || closed.hasMVar then
+    throwError "generated companion goal must have a fixed closed type (free variables: {closed.hasFVar}, expression metavariables: {closed.hasExprMVar}): {closed}"
+  let declaration ← mkConstWithFreshMVarLevels goal
+  unless ← withoutModifyingState <| isDefEq declaration closed do
+    throwError "generated companion goal does not match the complete expected telescope: {goal}\nGenerated: {← whnf declaration}\nExpected: {closed}"
 
 /-- Detailed diagnostics are created on demand, independently of evidence
 selection. The expected type is the input to assembly, not inferred from the
 selected proof or an error message. -/
 def report (obligation : Obligation) (result : Assembly) : MetaM Json := do
   let expected ← instantiateMVars obligation.expected
-  let expected ← withOptions (fun options => options.setBool `pp.fullNames true) do
-    return toString (← ppExpr expected)
+  let render (value : Expr) : MetaM String :=
+    withOptions (fun options => options.setBool `pp.fullNames true) do
+      return toString (← ppExpr value)
+  let mut variables := #[]
+  let mut context := #[]
+  for declaration in ← getLCtx do
+    -- Recursive declaration placeholders are elaborator bookkeeping, not
+    -- premises that may authorize a companion for the enclosing theorem.
+    if declaration.isAuxDecl then continue
+    variables := variables.push declaration.toExpr
+    let value ← declaration.value?.mapM render
+    context := context.push <| Json.mkObj [
+      ("name", toJson declaration.userName.toString),
+      ("type", toJson (← render declaration.type)), ("value", toJson value)]
+  -- Preserve local lets as lets, and include hypotheses even when the result
+  -- does not mention their proof terms. Pretty-printing the bare goal loses them.
+  let closed ← instantiateMVars (← mkForallFVars variables expected)
+  if closed.hasFVar then throwError "companion report has an unclosed expected type"
+  if let some goal := obligation.goal then
+    validateGoal expected goal
+  let expectedText ← render expected
+  let environment ← getEnv
+  let goalModule := obligation.goal.bind fun goal =>
+    (environment.getModuleIdxFor? goal).map fun index =>
+      environment.header.moduleNames[index.toNat]!.toString
   let (status, method, reason, attempts) := match result with
     | .discharged _ method attempts => ("discharged", some method, none, attempts)
     | .openObligation reason attempts => ("open", none, some reason, attempts)
@@ -48,7 +103,14 @@ def report (obligation : Obligation) (result : Assembly) : MetaM Json := do
     ("schema", toJson "zkc.companion-obligation/0"),
     ("status_scope", toJson "authoring only; receipt audit remains authoritative"),
     ("identity", toJson obligation.identity), ("source_span", toJson obligation.source),
-    ("responsibility", toJson obligation.responsibility), ("expected_type", toJson expected),
+    ("source_identity", toJson obligation.subject),
+    ("proof_navigation", toJson obligation.proofNavigation),
+    ("responsibility", toJson obligation.responsibility), ("expected_type", toJson expectedText),
+    ("context", Json.arr context), ("closed_expected_type", toJson (← render closed)),
+    ("expected_constants", toJson (closed.getUsedConstants.toList.map Name.toString)),
+    ("dependency_scope", toJson "direct constants in the full expected telescope; not a transitive proof or receipt audit"),
+    ("goal_declaration", toJson (obligation.goal.map Name.toString)),
+    ("goal_module", toJson goalModule), ("stub_text", toJson obligation.stubText),
     ("status", toJson status), ("method", toJson method), ("reason", toJson reason),
     ("default_attempts", toJson attempts), ("stub", toJson obligation.stub)]
 

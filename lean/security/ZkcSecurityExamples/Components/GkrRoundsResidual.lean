@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurityExamples.Components.GkrRoundsBindingInvocation
+public import ZkcSecurity.Bindings.Source.PropertyAssembly
 
 @[expose] public section
 noncomputable section
@@ -145,12 +146,15 @@ def verifier_residual (service count : Nat) (bounded : count ≤ 4)
   have framed := base.frameReturns (interaction (F := F) (G := G))
     (fun final => Prefix root final) ()
     (returns_prefix service ctx (interaction (F := F) (G := G)) root count root .initial ())
+  have finish (final : GkrRoundsBinding.State F n)
+      (holds : (representation (G := G) service).No final ∧ Prefix root final) :
+      NoReturn (n := n) service root (carried (G := G) final) :=
+    ⟨final, holds.2, prefix_representation root final represented holds.2, holds.1, rfl⟩
   have projected : Derivation absorb (boundedEscape charge)
       (fun _ output => NoReturn (n := n) service root output) history
       (((program service).remaining count ctx root).bind (fun final => .done (carried (G := G) final))) :=
-    framed.bind (fun final => .done (carried (G := G) final))
-    (fun reached final holds => .done
-      ⟨final, holds.2, prefix_representation root final represented holds.2, holds.1, rfl⟩)
+    ZkcSecurity.Source.PropertyAssembly.map (fun final => carried (G := G) final) framed
+      (fun _ final holds => finish final holds)
   exact projected.transport (verifier_binding ctx distinct a m l r claim service count bounded raw reference)
 
 theorem verifier_doomed (service count : Nat) (bounded : count ≤ 4)

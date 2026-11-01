@@ -181,3 +181,13 @@ def test_typed_library_declaration_name_is_validated(tmp_path, library):
     path.write_text(text)
     with pytest.raises(loader.Refused, match="lean.library must be a Lean declaration name"):
         loader.load(path)
+
+
+def test_pair_artifacts_require_construction(tmp_path):
+    loader = manifests()
+    subject = loader.load_all(["gkr"])[0]
+    assert subject.module_name("pair") == "ZkcExamples.Construction.Generated.GkrPair"
+    path = tmp_path / "gkr.toml"
+    path.write_text(subject.path.read_text().replace("construction = true", "construction = false"))
+    with pytest.raises(loader.Refused, match="generated.pair requires the construction profile"):
+        loader.load(path)

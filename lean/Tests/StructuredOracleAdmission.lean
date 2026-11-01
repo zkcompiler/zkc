@@ -63,7 +63,7 @@ private def run : IO Unit := do
     (!(input .indices (.arr #[.str "indices", .arr #[zero]])).isOk)
   test "sequence exact element domain"
     (!(input (.sequence (.groups "g")) (.arr #[.str "sequence",
-      .arr #[.str "groups", .str "other"], .arr #[]])).isOk)
+      ZkcTools.StructuredSource.wireType (.groups "other"), .arr #[]])).isOk)
   for ty in [Ty.oracle kind, .oracleSequence kind 4] do
     test "logical value cannot enter ordinary external input" (!(input ty .null).isOk)
   test "empty sequence cannot hide a logical element type"

@@ -13,44 +13,44 @@ namespace ZkcExamples.Executable.SchnorrProofProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:d01f7638470e602c4a35c0124282a71c88226b9a978d6792bd81a78d5ee08f2c"
+def program : String := "sha256:e0db02fa6103cc3968350491b21e1c65097c91eb942dce990d08fdc993d5e4e5"
 
 /-- The local function `_calculation_2`. -/
 def function0 : Function :=
-  ⟨"_calculation_2", [("v8", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩), ("v9", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v10", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩), ("v11", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v12", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩)], [⟨.data .boolean, "native.bool/0"⟩], [
-    .operation "lc_11_computation_6_kernel_1_0" "_numerical_binding_0" [] ["v8", "v9"] ["v13"],
-    .operation "lc_11_computation_6_kernel_1_1" "_numerical_binding_0" [] ["v10", "v11"] ["v14"],
-    .operation "lc_11_computation_6_kernel_1_2" "_numerical_binding_4" [] ["v12", "v14"] ["v15"],
-    .operation "lc_11_computation_6_kernel_1_3" "_numerical_binding_3" [] ["v13", "v15"] ["v16"],
-    .ret ["v16"]]⟩
+  ⟨"_calculation_2", [("v0", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩), ("v1", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v2", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩), ("v3", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v4", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩)], [⟨.data .boolean, "native.bool/0"⟩], [
+    .operation "lc_11_computation_6_kernel_1_0" "_numerical_binding_0" [] ["v0", "v1"] ["v5"],
+    .operation "lc_11_computation_6_kernel_1_1" "_numerical_binding_0" [] ["v2", "v3"] ["v6"],
+    .operation "lc_11_computation_6_kernel_1_2" "_numerical_binding_4" [] ["v4", "v6"] ["v7"],
+    .operation "lc_11_computation_6_kernel_1_3" "_numerical_binding_3" [] ["v5", "v7"] ["v8"],
+    .ret ["v8"]]⟩
 
 /-- The local function `_transcript_0`. -/
 def function1 : Function :=
-  ⟨"_transcript_0", [("v17", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩), ("v18", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩)], [⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
-    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v19"],
-    .operation "lc_10_transition" "_transcript_2" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["message", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_636f6d6d69746d656e74_0", "label_636f6d6d69746d656e74_0", "role00000000", "role00000001"]⟩] ["v17", "v18", "v19"] ["v20"],
-    .ret ["v20"]]⟩
+  ⟨"_transcript_0", [("v0", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩), ("v1", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩)], [⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
+    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v2"],
+    .operation "lc_10_transition" "_transcript_2" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["message", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_636f6d6d69746d656e74_0", "label_636f6d6d69746d656e74_0", "role00000000", "role00000001"]⟩] ["v0", "v1", "v2"] ["v3"],
+    .ret ["v3"]]⟩
 
 /-- The local function `_transcript_3`. -/
 def function2 : Function :=
-  ⟨"_transcript_3", [("v21", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩)], [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩, ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
-    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v22"],
-    .operation "lc_10_transition" "_transcript_4" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["query", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_6368616c6c656e6765", "input_4", "random.bls12-381.fr/0", "draw", "role00000001"]⟩] ["v21", "v22"] ["v23", "v24"],
-    .ret ["v23", "v24"]]⟩
+  ⟨"_transcript_3", [("v0", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩)], [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩, ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
+    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v1"],
+    .operation "lc_10_transition" "_transcript_4" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["query", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_6368616c6c656e6765", "input_4", "random.bls12-381.fr/0", "draw", "role00000001"]⟩] ["v0", "v1"] ["v2", "v3"],
+    .ret ["v2", "v3"]]⟩
 
 /-- The local function `_transcript_5`. -/
 def function3 : Function :=
-  ⟨"_transcript_5", [("v25", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩), ("v26", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
-    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v27"],
-    .operation "lc_10_transition" "_transcript_6" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["message", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩] ["v25", "v26", "v27"] ["v28"],
-    .ret ["v28"]]⟩
+  ⟨"_transcript_5", [("v0", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩), ("v1", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
+    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v2"],
+    .operation "lc_10_transition" "_transcript_6" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["message", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩] ["v0", "v1", "v2"] ["v3"],
+    .ret ["v3"]]⟩
 
 /-- The local function `_transcript_7`. -/
 def function4 : Function :=
-  ⟨"_transcript_7", [("v29", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩), ("v30", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
-    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v31"],
-    .operation "lc_10_transition" "_transcript_6" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["message", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_726573706f6e7365_0", "label_726573706f6e7365_0", "role00000000", "role00000001"]⟩] ["v29", "v30", "v31"] ["v32"],
-    .ret ["v32"]]⟩
+  ⟨"_transcript_7", [("v0", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩), ("v1", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩], [
+    .operation "lc_11_coordinates" "_transcript_1" [] [] ["v2"],
+    .operation "lc_10_transition" "_transcript_6" [.template ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", [], ["message", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "label_726573706f6e7365_0", "label_726573706f6e7365_0", "role00000000", "role00000001"]⟩] ["v0", "v1", "v2"] ["v3"],
+    .ret ["v3"]]⟩
 
 def validator : Validator where
   entry := "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad"

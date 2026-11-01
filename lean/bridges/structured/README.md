@@ -793,10 +793,10 @@ The suite is registered in `lean-native`. Its Git-free receipts use the shared
 archive, tool capture and report lifecycle. The inventory follows the main
 Lake package's declared library namespaces and executable roots, including
 `ZkcTools` and its local observer dependencies. It also captures the structured
-bridge and fixtures, Python sources in `scripts/`, `common/tests/support/`,
+bridge and fixtures, shared `lean/bridges/common/` readers, Python sources in `scripts/`, `common/tests/support/`,
 `lean/checks/` and `lean/support/`, the common test entry point, compiler source
 owners (`include/`, `lib/`, `tools/`, `test/`, `cmake/`) and their shared
-`common/unicode/` inputs, package manifests and
+`common/catalog/` and `common/unicode/` inputs, package manifests and
 pins, and the authored module/manifests selected through each subject's project
 closure. New modules within those owners enter the inventory automatically;
 adding a dependency in a different owner requires extending this scope.

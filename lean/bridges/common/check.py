@@ -18,6 +18,7 @@ import shutil
 
 from native_entry import native_subject
 from structured import render, entry
+from bridges.common.schema import interpreted_type
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
 
@@ -225,7 +226,7 @@ class Suite:
         self.instructions.update(x[0][0] for x in selected[9][1])
         for _ in range(repetitions):
             for role in range(len(selected[6][1])):
-                inputs = [self.value(ty) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
+                inputs = [self.value(interpreted_type(ty)) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
                 request = ['scalar-control',role,inputs,[]]
                 for _ in range(65):
                     result = self.compare(source,exported,symbol,request)

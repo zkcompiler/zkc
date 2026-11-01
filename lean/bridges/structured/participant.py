@@ -20,6 +20,7 @@ import sys
 
 import check as structured
 from bridges.common.native_entry import native_subject
+from bridges.common.schema import interpreted_type
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
@@ -68,7 +69,9 @@ def projection_binding(text, snapshot):
         role = json.loads(role)
         binding = dict(entry=snapshot[3], role=role, participant=participant,
                        inputs=json.loads(inputs), outputs=json.loads(outputs), service_inputs=json.loads(services),
-                       input_types=root[4], output_types=root[5],
+                       # The sampled Rust probe has a separate scalar relation grammar.
+                       input_types=[interpreted_type(ty) for ty in root[4]],
+                       output_types=[interpreted_type(ty) for ty in root[5]],
                        queries={site:index for site,index in queries.items() if index in json.loads(services)})
         require(role not in result, "duplicate projection role")
         for kind, service in (("inputs", False), ("service_inputs", True)):

@@ -51,7 +51,7 @@ FIELDS = {
     "source": {"modules": TABLE, "project": STRING, "compiler_options": STRINGS},
     "entries": {"proof": STRING, "interactive": STRING, "instantiation": STRING},
     "profiles": {"structured": BOOLEAN, "construction": BOOLEAN, "executable": BOOLEAN, "scalar": BOOLEAN},
-    "generated": {"data": STRING, "bodies": STRING, "participant": STRING, "glue": STRING,
+    "generated": {"data": STRING, "bodies": STRING, "participant": STRING, "pair": STRING, "glue": STRING,
                   "program": STRING, "facts": STRING, "interactive_data": STRING,
                   "interactive_bodies": STRING, "interactive_views": STRING,
                   "interactive_export": STRING, "interactive_source": STRING,
@@ -197,7 +197,7 @@ def load(path):
                 f"{path}: generated.{key} must be a repository path")
         require(subject.generated(key).is_relative_to(ROOT),
                 f"{path}: generated.{key} must resolve inside the repository")
-    for key in ("glue", "data", "participant", "program", "facts", "bodies", "interactive_data",
+    for key in ("glue", "data", "participant", "pair", "program", "facts", "bodies", "interactive_data",
                 "interactive_bodies", "interactive_views", "artifacts", "claims", "lowering"):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
@@ -210,6 +210,8 @@ def load(path):
     require(not subject.generated("lowering") or
             (subject.generated("artifacts") and subject.profile("executable")),
             f"{path}: generated.lowering requires executable generated.artifacts")
+    require(not subject.generated("pair") or subject.profile("construction"),
+            f"{path}: generated.pair requires the construction profile")
     namespace = subject.get("lean", "namespace")
     require(namespace is None or __import__("re").fullmatch(NAMESPACE, namespace) is not None,
             f"{path}: lean.namespace must be a Lean namespace")

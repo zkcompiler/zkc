@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurityExamples.Components.GkrCallerPrefix
 public import ZkcSecurityExamples.Components.GkrRoundsResidual
+public import ZkcSecurity.Bindings.Source.PropertyAssembly
 
 @[expose] public section
 noncomputable section
@@ -116,9 +117,9 @@ def first_left_invocation_conditional
     Derivation absorb (boundedEscape charge) Final history
       (invokeProtocol (payload.plainProtocolTable F G) definition2.signature ctx (ctx.roles 1)
         (callerInput wrongOutputs service)) :=
-  ((first_left_conditional ctx distinct service _ output queries sampling consumer history).bind
-    (fun result => .done (callerMask ctx result))
-    (fun _ _ holds => .done holds)).transport (fixture_invocation ctx distinct wrongOutputs service)
+  (ZkcSecurity.Source.PropertyAssembly.map (callerMask ctx)
+    (first_left_conditional ctx distinct service _ output queries sampling consumer history)
+    (fun _ _ holds => holds)).transport (fixture_invocation ctx distinct wrongOutputs service)
 
 /-- Conditional charged partial safety for the actual invocation. This uses
 the same explicit continuation and sampler premises as the derivation. -/

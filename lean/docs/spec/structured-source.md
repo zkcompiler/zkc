@@ -23,6 +23,10 @@ semantic obligation.
 The strict reader recognizes the logical oracle types, twelve descriptors and
 virtual declaration rows specified by the
 [native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).
+Input and component descriptors retain the complete singleton or sequence sort,
+including capacity; the former bare-kind rows are refused. Logical source
+records retain their distinct nominal origin kind through decoding and generated
+Lean declarations, so they cannot collide with ordinary record identities.
 It retains actual operands, roles, ordered query occurrences, labels, the
 admissibility relation and the entire virtual body. Table kinds derive their
 Data, Query and Answer types and own an ordered list of named dimensions.
@@ -1004,13 +1008,39 @@ The proposer matches all those indices and supplies the shared family's
 alignment and extent projections to the existing `application` or
 `applicationRetainedHistory` constructor. It separately checks exact source-entry
 identity because equality of normalized forms is insufficient. The family body
-is referenced, rather than re-created at each occurrence. This mechanism requires
-an explicitly checked parameterized family; it is not universal relocation of
-arbitrary closed certificates. Unsupported placements use the original prover,
-or explicitly refuse when `zkc.connection.requireReusableBodies` is enabled.
-The strict-mode tests exercise a guard, stopping helper and all-reply receive
-under nested symbolic loops, read-only input aliasing, and retained current
-history. They do not establish GKR adoption or a native catalog association.
+is referenced, rather than re-created at each occurrence.
+
+With `zkc.connection.generateReusableBodies`, the first actual placement supplies
+untrusted constructor choices. The proposer generalizes its finite layout,
+arguments, occurrence context and return selection, then checks a new open body
+against the existing alignment rules. Only this checked declaration is installed;
+the concrete trial body is not retained as evidence. Nested applications refer
+to the checked child family, using that same value for alignment and extent.
+There is no protocol-name dispatch or historical-root input.
+
+Every parameter of the closed family type is audited before installation and
+use. Parameters may contain finite typed syntax and the existing structural
+readback/routing certificates. The exact source entry, routing, selected earlier
+library and actual placement context may be indexed owners. Arbitrary propositions,
+function/process equalities, semantic callbacks and hidden proposition containers
+are refused as telescope parameters. Finite equations additionally undergo a
+bounded inspection of computation dependencies through transparent wrappers;
+the controls reject classical proposition reflection, including reflection hidden
+in Boolean or natural-number results. Compiled computations, runtime primitives,
+typed syntax and the fixed indexed owners are explicit inspection boundaries.
+This policy does not classify all possible encodings into finite data or trace
+the provenance of plain finite parameters. The kernel checks the complete family
+application independently of this authoring policy.
+
+`zkc.connection.requireReusableBodies` refuses an application if a matching
+family cannot be checked. Once an exact entry has an installed family, a
+mismatching placement cannot silently fall back to reconstructing its body.
+A different source entry requires its own checked association. The strict tests
+cover nonempty transitive calls, repeated placements separated by a target
+calculation, nested symbolic loops, read-only aliases and retained current
+history. Negative controls change operand sorts, required cells, history suites,
+pins and transitive libraries. These tests check correspondence and reuse;
+cryptographic properties remain separate consumers.
 
 Internal applications carry a finite typed return selection. The
 `ConnectionReturnProjection.form_denote` theorem proves that projecting a
@@ -1037,14 +1067,13 @@ statically absent operand; arbitrary helper inlining is not claimed. These are
 proposer/derivation coverage limits, not restrictions added to the theorem's
 runtime quantifiers.
 
-Normalized source syntax and templates are checked constants. Successful
-closed body alignments are checked once and referenced by their application;
-an imported exact placement may reuse that declaration. Different argument,
-frame, SSA or occurrence placements still require different alignments. This
-is not a theorem transporting an alignment under arbitrary relocation.
-The proposer may cache closed syntax or discover a prefix from residual target
-syntax. Those hints do not authorize evidence: the ordinary alignment, extent,
-readback and continuation rules check every accepted proposal.
+Normalized source syntax and templates are checked constants. Compatible
+argument, frame, SSA and occurrence placements use the same checked family,
+with finite interface facts discharged at each use. This is a checked
+parameterized body, rather than an arbitrary relocation theorem for every
+closed certificate. The proposer may cache closed syntax or discover a prefix
+from residual target syntax. Those hints do not authorize evidence: the ordinary
+alignment, extent, readback and continuation rules check every accepted proposal.
 
 The pure input-layout and routing proposal functions belong to the core
 construction package because generated certificate types can mention them.

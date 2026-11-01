@@ -118,8 +118,8 @@ private def applicationWire := arr [.str "Equal", arr [selectorWire]]
 private def clauseWire := arr [.str "target", .str "claim", applicationWire, .null,
   arr [.str "output", Lean.toJson (0 : Nat), .str "V"]]
 private def relationWire : List Lean.Json := [.str "relation", .str "Equal", .str "public",
-  .str "zkc.language.formula/0", .str "equality", .str "0", arr [], arr [arr [.str "bool"]],
-  arr [arr [.str "bool"]], arr [.str "statement"], .str "predicate"]
+  .str "zkc.language.formula/0", .str "equality", .str "0", arr [], arr [arr [.str "apply", .str "bool", arr []]],
+  arr [arr [.str "apply", .str "bool", arr []]], arr [.str "statement"], .str "predicate"]
 
 private def runWire : IO Unit := do
   let controls : List (String × Bool) := [

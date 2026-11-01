@@ -37,7 +37,7 @@ class ScopedSuite(Suite):
         if actual != result:
             raise AssertionError({'expected': result, 'actual': actual})
         native_request = request.with_suffix('.native.json')
-        native_inputs = [str(value) if ty == ['index'] else value
+        native_inputs = [str(value) if ty == ['apply', 'index', []] else value
                          for ty, value in zip(entry[4], values, strict=True)]
         write_json(native_request, native_inputs)
         native = json.loads(self.command(label + ':ssa', [self.tools['reference'],
@@ -164,7 +164,7 @@ def run_cases(suite):
     # observer must still reject its unsupported field before evaluating Choose.
     marker = '    "protocol.func"'
     helper = '''    func.func private @dormant_field() -> !algebra.field<"bn254.fr"> {
-      %value = "algebra.constant"() <{value = "1"}> : () -> !algebra.field<"bn254.fr">
+      %value = "algebra.constant"() <{value = #algebra.literal<<"bn254.fr">, 1 : ui254> : !algebra.field<"bn254.fr">}> : () -> !algebra.field<"bn254.fr">
       func.return %value : !algebra.field<"bn254.fr">
     }
 '''
@@ -185,7 +185,7 @@ def run_cases(suite):
     local = next(d for d in snapshot[7] if d[2] == 'local')
     for label, mutate in [
         ('out-of-scope-formal', lambda d: d[9][1][0][3][0][2][2][1].__setitem__(0, 99)),
-        ('wrong-branch-result-sort', lambda d: d[9][1][0][3][0][1].__setitem__(0, ['bool'])),
+        ('wrong-branch-result-sort', lambda d: d[9][1][0][3][0][1].__setitem__(0, ['apply', 'bool', []])),
         ('missing-occurrence', lambda d: d[9][1][0].__setitem__(4, '')),
         ('unchecked-scope-port', lambda d: d[4].insert(0, ['scope'])),
     ]:

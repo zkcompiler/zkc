@@ -138,11 +138,12 @@ def source_variants(suite, combination):
     formula = declaration[4]
     if not (source.count(formula) == 2):
         raise AssertionError('bridges/structured/maps.py:134: source.count(formula) == 2')
-    if not (source.count('value = "3"') == 1):
-        raise AssertionError('bridges/structured/maps.py:135: source.count(\'value = "3"\') == 1')
+    literal = '#algebra.literal<<"bls12-381.fr">, 3 : ui255> : !algebra.field<"bls12-381.fr">'
+    if source.count(literal) != 1:
+        raise AssertionError("expected one typed Fr literal with value 3")
     variants = [
         ("renamed-formula", source.replace(formula, "renamed_formula"), 3),
-        ("changed-formula", source.replace('value = "3"', 'value = "5"'), 5),
+        ("changed-formula", source.replace(literal, literal.replace('3 : ui255', '5 : ui255')), 5),
     ]
     for label, changed, offset in variants:
         subject = suite.export(label, changed, combination[2][3])
@@ -176,7 +177,7 @@ def declaration_controls(suite, combination, realization):
     variants = []
     for label, mutate, code in [
         ("collection-missing-body", lambda row: row.__setitem__(6, "missing_helper"), "structured-unknown-helper"),
-        ("collection-scalar-result", lambda row: row.__setitem__(4, [["field", "bls12-381.fr"]]), "structured-formation"),
+        ("collection-scalar-result", lambda row: row.__setitem__(4, [["apply", "field", [["domain", "Field", "bls12-381.fr"]]]]), "structured-formation"),
         ("collection-extra-field", lambda row: row.append("unrepresented"), "structured-definition"),
         ("collection-truncated-inputs", lambda row: row.__setitem__(3, row[3][:-1]), "structured-formation"),
         ("collection-missing-predicate", lambda row: row.__setitem__(7, "missing_predicate"), "structured-unknown-helper"),

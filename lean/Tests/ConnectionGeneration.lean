@@ -88,6 +88,8 @@ def selections : List (Selection × Output) := [
   | .ok original, .ok renamed =>
       original.replace output.moduleName.toString ("Renamed." ++ output.moduleName.toString) == renamed &&
       original.contains "derive_root_connection_with_library" &&
+      original.contains "set_option zkc.connection.generateReusableBodies true" &&
+      original.contains "set_option zkc.connection.requireReusableBodies true" &&
       original.contains "SourceConnection.ofRootCertificate" &&
       !original.contains "sorry" && !original.contains "\n  admit" &&
       !original.contains "native_decide"

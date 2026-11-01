@@ -94,8 +94,21 @@ private def run : IO Unit := do
   test "dormant unknown field" (!(snapshot.catalogue.checkType admittedCatalogue
     (.sequence (.product "unknown" "value" (.cons (.field "missing") .nil)))).isOk)
   test "exact type round trip" (Structured.Format.type (wireType queries) == .ok queries)
-  test "bounded nesting" (!(Structured.Format.type
-    (List.range 66 |>.foldl (fun type _ => arr [.str "sequence", type]) (wireType field))).isOk)
+  for identity in [arr [.str "atom", .str "query"],
+      arr [.str "tuple", arr [arr [.str "atom", .str "query"],
+        arr [.str "tuple", arr [arr [.str "atom", .str "é\t\x08\x0c\\\""]]]]]] do
+    let .ok encoded := LogicalFormat.identity identity | throw (IO.userError "identity fixture")
+    test "nominal identity tree round trip" (equals (wireIdentity encoded) identity)
+    let type := Ty.product encoded "value" fields
+    test "escaped nominal type round trip" (Structured.Format.type (wireType type) == .ok type)
+  for malformed in ["query", "{}", "17", " [\"query\"]", "\"\\uD800\""] do
+    test "malformed identity is not invented as an atom" (!(wireIdentity malformed).isOk)
+    test "malformed product identity produces a refused type"
+      (!(Structured.Format.type (wireType (.product malformed "value" fields))).isOk)
+  let nested := (List.range 20).foldl (fun type _ => Ty.sequence type) field
+  test "nested type at expanded depth boundary" (Structured.Format.type (wireType nested) == .ok nested)
+  test "bounded nesting" (refuses (Structured.Format.type (wireType (.sequence nested)))
+    "logical-work-limit")
   test "wrong input identity" (refuses (input query
     (arr [.str "product", .str "other", .str "value", arr []])) "structured-input-domain")
   test "wrong input constructor" (refuses (input query

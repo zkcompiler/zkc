@@ -12,6 +12,7 @@ import time
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.structured.snapshot import render
+from bridges.common.schema import interpreted_type
 from request_support import require
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +31,9 @@ def profile(data, field, group=None):
     def walk(value):
         if not isinstance(value, list):
             return
+        if value and value[0] in ("apply", "variant", "oracle", "oracle_sequence"):
+            if value[0] != "apply" or len(value) == 3:
+                value = interpreted_type(value)
         if value and isinstance(value[0], str):
             tag = value[0]
             if tag in ('field', 'group', 'service') and len(value) == 2:

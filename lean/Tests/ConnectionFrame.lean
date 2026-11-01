@@ -6,6 +6,7 @@ namespace Tests.ConnectionFrame
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open Zkc.Construction.ConnectionFrame
 open ZkcTools.ConstructionBindings.Readback
+open Lean Meta Elab Tactic
 
 abbrev scope : NormalForm.Scope := [.value .boolean, .value .index]
 def outputs : Values (NormalForm.Comp [] scope) [.boolean, .index] :=
@@ -53,5 +54,47 @@ example (model : DomainModel) (accepted : Bool) (residual : Nat)
       [.data (.boolean accepted), .data (.index residual), .transcript "suite" before, .indices [1, 2]] := by
   apply Holds.retireHistory (history := before)
   exact .cons ⟨accepted, rfl, rfl⟩ (.cons ⟨residual, rfl, rfl⟩ (.cons rfl (.cons trivial .nil)))
+
+-- Family application creates ordinary metavariable operands before readback.
+-- Inferring an earlier operand must leave later operand holes for the suffix.
+elab "infer_readback_operands" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target ← goal.getType
+  let args := target.getAppArgs
+  let tupleTy ← whnf args[0]!
+  let scope := tupleTy.getAppArgs[1]!
+  let laws ← mkListLit (mkConst ``NormalForm.LawKey) []
+  let head ← mkFreshExprMVar (← mkAppM ``NormalForm.Term #[laws, scope, mkConst ``Ty.boolean])
+  let tail ← mkFreshExprMVar (← mkAppM ``NormalForm.Term #[laws, scope, mkConst ``Ty.index])
+  let empty ← mkAppOptM ``NormalForm.Terms.nil #[some laws, some scope]
+  let tuple ← mkAppM ``NormalForm.Terms.cons #[head, ← mkAppM ``NormalForm.Terms.cons #[tail, empty]]
+  let tupleGoal ← mkFreshExprSyntheticOpaqueMVar ((mkApp args[1]! tuple).headBeta)
+  setGoals [tupleGoal.mvarId!]
+  evalTactic (← `(tactic| derive_source_readback))
+  let proof ← mkAppOptM ``Sigma.mk #[some args[0]!, some args[1]!, some tuple, some tupleGoal]
+  goal.assign proof
+  setGoals []
+
+noncomputable def inferredOperands : Sigma fun terms : NormalForm.Terms [] scope [.boolean, .index] =>
+    Readback layout (ConnectionComputation.components terms) [.data 0, .data 1] := by
+  infer_readback_operands
+
+noncomputable def inferredReceivedOperands : Sigma fun terms :
+    NormalForm.Terms [] (.value .index :: scope) [.boolean, .index] =>
+    Readback (ConnectionCertificate.receiveLayout layout .index)
+      (ConnectionComputation.components terms) [.data 0, .data 4] := by
+  infer_readback_operands
+
+example : inferredOperands.1 =
+    .cons (.var .here) (.cons (.var (.there .here)) .nil) := rfl
+
+example : inferredReceivedOperands.1 =
+    .cons (.var (.there .here)) (.cons (.var .here) .nil) := rfl
+
+-- Spine reduction does not inspect arbitrary term heads.
+example {scope : NormalForm.Scope} {ty : Ty} {types : List Ty}
+    (head : NormalForm.Term [] scope ty) (tail : NormalForm.Terms [] scope types) :
+    ConnectionComputation.components (.cons head tail) =
+      .cons (.present head) (ConnectionComputation.components tail) := rfl
 
 end Tests.ConnectionFrame

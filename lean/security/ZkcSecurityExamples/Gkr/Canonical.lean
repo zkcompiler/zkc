@@ -34,9 +34,9 @@ def subject (model : DomainModel) :
     ZkcSecurity.Claims.HonestPair.Subject model original imported selected := by
   bind_authored_subject "circuit_outputs" with_registry (Relations.registry model)
     connections ZkcExamples.Structured.Generated.Connections.Gkr.producer, ZkcExamples.Structured.Generated.Connections.Gkr.validator
-    exports "sha256:624ace13f9ec65913feab37af7f567746f268585252e9c3bb0708e61e84a70dd",
-      "sha256:f829be33b7fbf7688a97068f3e195f109cc8021bc40f90719a27510f630d25fc",
-      "sha256:fd0bdc7ff8c6e5279e5e0d89df36aa36b3a9180f4ac027c2afb3cd7b9de6bd4b"
+    exports "sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756",
+      "sha256:7906c9ce135594427e53a157741d36b38d7aa26c82f937263902e4238ede3ef5",
+      "sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec"
 
 def sourceInputs (model : DomainModel) (runtime : Source.Invocation (model.Field scalarDomain)) :
     (subject model).Inputs :=

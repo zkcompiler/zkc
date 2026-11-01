@@ -19,6 +19,8 @@ from the goal, retaining every reply, stop and masked output. Only structural
 visibility and scope checks are computed; mathematics stays with the author. -/
 elab "install_source_template " association:term " using_pattern " pattern:term : tactic =>
   Term.withoutErrToSorry <| withoutRecover do
+    if (← instantiateMVars (← getMainTarget)).hasExprMVar then
+      throwError "install_source_template requires the complete source reference to be fixed before installation"
     evalTactic (← `(tactic| apply Zkc.Source.Structured.Template.Association.invoke
       $association (pattern := $pattern)))
     let mut remaining := []

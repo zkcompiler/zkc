@@ -343,6 +343,7 @@ import all Zkc.Construction.ConnectionComputation
 import all Zkc.Construction.ConnectionContext
 import all Zkc.Construction.ConnectionCoordinates
 import all Zkc.Construction.ConnectionFrame
+import all Zkc.Construction.ConnectionFrameLookup
 import all Zkc.Construction.ConnectionHelperCalculation
 import all Zkc.Construction.ConnectionHelperProjection
 import all Zkc.Construction.ConnectionHelpers

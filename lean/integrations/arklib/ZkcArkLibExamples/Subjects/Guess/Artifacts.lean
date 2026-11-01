@@ -49,11 +49,11 @@ theorem sourceConnection : compiled.SourceConnection (F := F) (G := G) where
 /-- Fresh physical attribution, checked against pipeline bytes by reporting.
 Digest attribution is distinct from the kernel checked compiled facts above. -/
 def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
-  ⟨"sha256:7d3891a9d2ba2f7e5b330615b5bc90bd9ddd14ee59b12a7c934aa52745dce5af", "zkl_0b54718f8917b00c23a9aa21bf26256a990c3ad40b71cda5b44d6ecd85e5e748", stage,
+  ⟨"sha256:dea6164686baa075f96720ff33aa38d59a239c82625cad71284ae69a1144ad49", "zkl_0b54718f8917b00c23a9aa21bf26256a990c3ad40b71cda5b44d6ecd85e5e748", stage,
     match stage with
     | .interactive => []
-    | .compiledIdeal => [⟨"constructed-participant", "sha256:58627dd075b34a1f236b8ff703a18631ce9868dd376ebcaf059c2b54896e1e0e"⟩]
-    | .executableBytes => [⟨"constructed-participant", "sha256:58627dd075b34a1f236b8ff703a18631ce9868dd376ebcaf059c2b54896e1e0e"⟩]⟩
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:71e385628aa6bd7e9907e81864a8db7636f1c326a5b103e2813f2bb9c8c3ee2a"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:71e385628aa6bd7e9907e81864a8db7636f1c326a5b103e2813f2bb9c8c3ee2a"⟩]⟩
 
 /-- Actual full construction occurrences selected by native source paths. -/
 def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=

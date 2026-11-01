@@ -49,7 +49,7 @@ private def run : IO Unit := do
   test "query source must be an actual declared handle" (!(derive invalid).isOk)
   let nestedBody : Block := .block [
     .instruction (.restrict ["P"]) [] [] [.region [] [] (.block [
-      .instruction (.oracle (.input "P" ["V"] kind [])) [] [] [] "input",
+      .instruction (.oracle (.input "P" ["V"] (.oracle kind) [])) [] [] [] "input",
       .instruction (.oracle (.send "P" ["V"] kind ["rows"] [])) [] [] [] "send",
       .instruction (.oracle (.virtual "twice" "P" ["V"] kind)) [] [] [] "virtual"]
       (.ret []))] "region"] (.ret [])

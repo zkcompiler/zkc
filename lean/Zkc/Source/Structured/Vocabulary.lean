@@ -103,23 +103,42 @@ structure Domain where
   result : Nat
   deriving DecidableEq, Repr
 
-/-- Non-callable primitive declaration, retained even when unused. -/
+/-- Kinded static values, distinct from the roots used by the existing
+primitive interpreter. A wire reader must check both representations agree. -/
+inductive BindingArgument where
+  | domain (sort identity : String)
+  | type (value : Ty)
+  | natural (value : Nat)
+  | mask (values : List Bool)
+  deriving DecidableEq, Repr
+
+/-- Complete logical declaration data retained by the current wire reader.
+It is checked independently against the selected primitive contract. -/
+structure BindingSchema where
+  arguments : List BindingArgument
+  inputs : List Ty
+  outputs : List Ty
+  deriving DecidableEq, Repr
+
+/-- Typed callable primitive declaration. It installs no source body or
+inlining permission. Internal primitive roots retain their existing meanings. -/
 structure Binding where
   name : String
   contract : String
   arguments : List String
   implementation : String
+  schema : Option BindingSchema := none
   deriving DecidableEq, Repr
 
 /-- Logical operations preserve anchors and query occurrences. This wire
 vocabulary does not grant ordinary Math, message or executable-codec admission. -/
 inductive OracleDescriptor where
-  | input (holder : String) (receivers : List String) (kind : OracleKind) (bounds : List (String × Nat))
+  | input (holder : String) (receivers : List String) (logicalSort : Ty) (bounds : List (String × Nat))
   | send (holder : String) (receivers : List String) (kind : OracleKind)
       (dimensions : List String) (bounds : List (String × Nat))
   | query (owner : Option String) (kind : OracleKind)
   | contents (owner : String) (kind : OracleKind)
-  | components (holder : String) (receivers : List String) (kind : OracleKind)
+  | components (holder : String) (receivers : List String) (logicalSort : Ty)
   | shape (kind : OracleKind) (dimension : String)
   | forgetShape (source target : OracleKind)
   | virtual (declaration holder : String) (receivers : List String) (kind : OracleKind)

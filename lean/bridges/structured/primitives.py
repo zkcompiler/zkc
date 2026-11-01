@@ -114,33 +114,33 @@ def binding_controls(suite, subject):
     if not (data[6]):
         raise AssertionError("expected retained primitive bindings")
     variants = []
-    bad = copy.deepcopy(data); bad[6].append(["binding", "unused_product", "vector.product", ["bls12-381.fr"], ""])
+    bad = copy.deepcopy(data); bad[6].append(["binding", "unused_product", "vector.product", [["domain", "Field", "bls12-381.fr"]], "", [["apply", "index", []], ["apply", "index", []]], [["apply", "index", []]]])
     variants.append(("unsupported-contract", bad))
-    bad = copy.deepcopy(data); bad[6].append(["binding", "unused_impl", "index.add", [], "native/index.add"])
+    bad = copy.deepcopy(data); bad[6].append(["binding", "unused_impl", "index.add", [], "native/index.add", [["apply", "index", []], ["apply", "index", []]], [["apply", "index", []]]])
     variants.append(("selected-implementation", bad))
-    bad = copy.deepcopy(data); bad[6].append(["binding", "unused_bad", "index.add", ["bls12-381.fr"], ""])
+    bad = copy.deepcopy(data); bad[6].append(["binding", "unused_bad", "index.add", [["domain", "Field", "bls12-381.fr"]], "", [["apply", "index", []], ["apply", "index", []]], [["apply", "index", []]]])
     variants.append(("unused-bad-arguments", bad))
     bad = copy.deepcopy(data); bad[6].append(copy.deepcopy(bad[6][0]))
     variants.append(("duplicate-binding", bad))
-    bad = copy.deepcopy(data); bad[6].append(["binding", bad[7][0][1], "index.add", [], ""])
+    bad = copy.deepcopy(data); bad[6].append(["binding", bad[7][0][1], "index.add", [], "", [["apply", "index", []], ["apply", "index", []]], [["apply", "index", []]]])
     variants.append(("cross-category-name", bad))
-    bad = copy.deepcopy(data); bad[6].append(["binding", "slash/name", "index.add", [], ""])
+    bad = copy.deepcopy(data); bad[6].append(["binding", "slash/name", "index.add", [], "", [["apply", "index", []], ["apply", "index", []]], [["apply", "index", []]]])
     variants.append(("binding-name-slash", bad))
-    bad = copy.deepcopy(data); bad[6].append(["binding", "x" * 257, "index.add", [], ""])
+    bad = copy.deepcopy(data); bad[6].append(["binding", "x" * 257, "index.add", [], "", [["apply", "index", []], ["apply", "index", []]], [["apply", "index", []]]])
     variants.append(("binding-name-limit", bad))
     bad = copy.deepcopy(data); del bad[6]
     variants.append(("obsolete-envelope", bad))
     for label, snapshot in variants:
         suite.case(label, lambda n=label, s=snapshot: suite.refuse_snapshot(n, s))
-    # Valid metadata cannot be used as a callable, even if a symbol happens to
-    # have a suggestive name. The malformed call preserves its original ports.
+    # A typed runtime binding has no source helper body. A source local_call
+    # cannot acquire such a body by selecting its symbol; its ports stay fixed.
     bad = copy.deepcopy(data)
     root = definition(bad, bad[3])
     calls = [row for row in root[9][1] if row[0][0] == "local_call"]
     if not (calls):
         raise AssertionError('bridges/structured/primitives.py:137: calls')
     calls[0][0][1] = bad[6][0][1]
-    suite.case("binding-is-not-callable", lambda: suite.refuse_snapshot("binding-is-not-callable", bad))
+    suite.case("binding-is-not-source-helper", lambda: suite.refuse_snapshot("binding-is-not-source-helper", bad))
 
 
 def run_cases(suite):

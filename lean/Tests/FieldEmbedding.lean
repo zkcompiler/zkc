@@ -35,7 +35,7 @@ private def snapshot : Snapshot where
   entry := "main"
   domains := []
   relations := []
-  bindings := [⟨"embed", "field.embed", ["extension"], ""⟩]
+  bindings := [⟨"embed", "field.embed", ["extension"], "", none⟩]
   definitions := []
   catalogue := catalogue
 
@@ -82,7 +82,7 @@ example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
 -- Changing the explicit binding changes the operation; a field equality
 -- cannot retain the embedding's one-input signature.
 example : (checkDefinition { snapshot with
-      bindings := [⟨"embed", "field.equal", ["extension"], ""⟩] } [] []
+      bindings := [⟨"embed", "field.equal", ["extension"], "", none⟩] } [] []
     (helper "extension" "base" .local (.exec "exec.apply" "embed" []))).map (fun _ => ()) =
     .error "structured-formation" := by decide
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .math

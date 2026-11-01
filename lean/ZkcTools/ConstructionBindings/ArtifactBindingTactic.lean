@@ -54,9 +54,9 @@ def applyComponent (goal : MVarId) (rule : TSyntax `term) : TacticM (List MVarId
   let conditions ← head.apply application
   let mut pending := conditions ++ remaining
   for argument in arguments do
-    if argument.isMVar && !(← argument.mvarId!.isAssigned) then
-      unless pending.contains argument.mvarId! do
-        pending := pending ++ [argument.mvarId!]
+    if let .mvar id := argument then
+      unless (← id.isAssigned) || pending.contains id do
+        pending := pending ++ [id]
   return pending
 
 partial def derive (goal : MVarId) (rules : Array (TSyntax `term))

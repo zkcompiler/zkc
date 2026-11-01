@@ -35,7 +35,8 @@ BLS_ROWS = [BLS_NOMINALS, []]
 BLS_SERVICE_ROWS = [BLS_NOMINALS, [["service", "random.bls12-381.fr/0", "bls12-381.fr", ["draw"]]]]
 
 
-def check(output, lake):
+def check(output, lake, artifact_root=HERE):
+    """Render controls; `lake=None` leaves all generated kernel checks pending."""
     output.mkdir(parents=True, exist_ok=True)
     names = ["plain", 'quote"slash\\literal\\u0041', "line\nreturn\rtab\t",
              "\x00\x08\x0c\x1f\x7f", "증명_α_🙂", "α" * 256,
@@ -48,11 +49,11 @@ def check(output, lake):
             continue
         raise AssertionError("renderer accepted a missing function origin")
     for index, name in enumerate(names):
-        helper = ["function", name, "math", "private", [["bool"]], [["bool"]], [], [], [],
+        helper = ["function", name, "math", "private", [["apply", "bool", []]], [["apply", "bool", []]], [], [], [],
                   ["block", [], ["return", [0]]]]
-        entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]],
+        entry = ["function", "main", "protocol", "public", [["apply", "bool", []]], [["apply", "bool", []]],
                  ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []],
-                 ["block", [[["call", name], [0], [["bool"]], [], ""]], ["return", [0]]]]
+                 ["block", [[["call", name], [0], [["apply", "bool", []]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                 "main", [], [], [], [helper, entry], [["main", []]], NO_ROWS, [[], []]]
         namespace = f"RenderedCase{index}"
@@ -83,23 +84,23 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
     # admission. Numeric codepoints are the expected string values; the test
     # does not use the renderer to construct its own expectation.
     name = 'opaque_증명"\\\n'
-    field = ["field", "bls12-381.fr"]
-    group = ["group", "bls12-381.g1"]
+    field = ["apply", "field", [["domain", "Field", "bls12-381.fr"]]]
+    group = ["apply", "group", [["domain", "Group", "bls12-381.g1"]]]
     service = ["service", "random.bls12-381.fr/0"]
     operations = [
-        [["group.identity", group[1]], [], [group], [], ""],
-        [["group.add", group[1]], [0, 0], [group], [], ""],
-        [["group.scale", group[1], field[1]], [0, 2], [group], [], ""],
-        [["group.equal", group[1]], [0, 1], [["bool"]], [], ""],
-        [["restrict", [name]], [0], [["bool"]], [], ""],
-        [["exchange", name, "V"], [0], [["bool"]], [], name],
-        [["draw", "V", field[1]], [7], [field], [], "draw"],
+        [["group.identity", group[2][0][2]], [], [group], [], ""],
+        [["group.add", group[2][0][2]], [0, 0], [group], [], ""],
+        [["group.scale", group[2][0][2], field[2][0][2]], [0, 2], [group], [], ""],
+        [["group.equal", group[2][0][2]], [0, 1], [["apply", "bool", []]], [], ""],
+        [["restrict", [name]], [0], [["apply", "bool", []]], [], ""],
+        [["exchange", name, "V"], [0], [["apply", "bool", []]], [], name],
+        [["draw", "V", field[2][0][2]], [7], [field], [], "draw"],
         [["statement", name, [name], 0, name], [6], [], [], ""],
-        [["field.embed", "extension", "base"], [0], [["field", "extension"]], [], ""],
+        [["field.embed", "extension", "base"], [0], [["apply", "field", [["domain", "Field", "extension"]]]], [], ""],
     ]
     data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
-            [["relation", name, "public", name, name, name, [], [group], [["bool"]], ["statement"], None]], [],
-            [["function", "main", "protocol", "public", [group, field, service], [["bool"]],
+            [["relation", name, "public", name, name, name, [], [group], [["apply", "bool", []]], ["statement"], None]], [],
+            [["function", "main", "protocol", "public", [group, field, service], [["apply", "bool", []]],
               ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], ["main", []],
               ["block", operations, ["return", [1]]]]], [["main", []]], BLS_SERVICE_ROWS, [[], []]]
     source = renderer.render(data, "RenderedOpen").replace("module\n\n", "", 1)
@@ -139,14 +140,14 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     modules.append(source)
     # Logical oracle rows are data only. Rendering them does not authorize
     # ordinary source admission, even when their declaration remains dormant.
-    oracle_kind = ["table", [["type", ["field", "koala-bear"]], ["nat", "16"]]]
-    dynamic_kind = ["table", [["type", ["field", "koala-bear"]]]]
+    oracle_kind = ["table", [["type", ["apply", "field", [["domain", "Field", "koala-bear"]]]], ["nat", "16"]]]
+    dynamic_kind = ["table", [["type", ["apply", "field", [["domain", "Field", "koala-bear"]]]]]]
     oracle_descriptors = [
-        ["oracle_input", "P", ["V"], oracle_kind, []],
+        ["oracle_input", "P", ["V"], ["oracle", *oracle_kind], []],
         ["oracle_send", "P", ["V"], oracle_kind, ["rows"], []],
         ["oracle_query", None, oracle_kind],
         ["oracle_contents", "P", oracle_kind],
-        ["oracle_components", "P", ["V"], oracle_kind],
+        ["oracle_components", "P", ["V"], ["oracle", *oracle_kind]],
         ["oracle_shape", oracle_kind, "rows"],
         ["oracle_forget_shape", oracle_kind, dynamic_kind],
         ["oracle_virtual", "virtual", "P", ["V"], oracle_kind],
@@ -154,9 +155,11 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
         ["oracle_sequence_append", dynamic_kind, "4", ["P", "V"]],
         ["oracle_sequence_at", dynamic_kind, "4", ["P", "V"]],
         ["oracle_sequence_length", dynamic_kind, "4"],
+        ["oracle_input", "P", ["V"], ["oracle_sequence", *dynamic_kind, "4"], [["rows", "32"]]],
+        ["oracle_components", "P", ["V"], ["oracle_sequence", *dynamic_kind, "4"]],
     ]
     oracle_data = copy.deepcopy(data)
-    oracle_data[7] = [["oracle", "virtual", [["oracle", oracle_kind], ["index"]],
+    oracle_data[7] = [["oracle", "virtual", [["oracle", *oracle_kind], ["apply", "index", []]],
                        oracle_kind, "admissible", [], [],
                        ["block", [[descriptor, [], [], [], ""] for descriptor in oracle_descriptors],
                         ["return", []]]]]
@@ -170,16 +173,32 @@ example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
 example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
     match definition with
     | .oracle declaration => declaration.body.storedInstructions.length
-    | _ => 0) = some 12 := by decide +kernel
+    | _ => 0) = some 14 := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
+    match definition with
+    | .oracle declaration => declaration.body.storedInstructions.map fun
+        (Instruction.instruction descriptor _ _ _ _) => descriptor
+    | _ => []).map (·.drop 12) = some
+      [Descriptor.oracle (.input "P" ["V"] (.oracleSequence (.table (.field "koala-bear") none) 4) [("rows", 32)]),
+       .oracle (.components "P" ["V"] (.oracleSequence (.table (.field "koala-bear") none) 4))] :=
+  by decide +kernel
 example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false := by decide +kernel
 """
     modules.append(source)
     malformed_oracles = [(renderer.descriptor, descriptor + [None]) for descriptor in oracle_descriptors]
     malformed_oracles += [
-        (renderer.ty, ["oracle", oracle_kind, "extra"]),
-        (renderer.ty, ["oracle_sequence", oracle_kind, "18446744073709551616"]),
-        (renderer.ty, ["oracle_sequence", oracle_kind, 4]),
-        (renderer.ty, ["oracle", ["unknown", []]]),
+        (renderer.ty, ["oracle", *oracle_kind, "extra"]),
+        (renderer.ty, ["oracle_sequence", *oracle_kind, "18446744073709551616"]),
+        (renderer.ty, ["oracle_sequence", *oracle_kind, 4]),
+        (renderer.ty, ["oracle", "unknown", []]),
+        (renderer.descriptor, ["oracle_input", "P", ["V"], oracle_kind, []]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"], oracle_kind]),
+        (renderer.descriptor, ["oracle_input", "P", ["V"], ["apply", "index", []], []]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"], ["apply", "index", []]]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"], ["oracle_sequence", *dynamic_kind, "04"]]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"],
+                               ["oracle_sequence", *dynamic_kind, "18446744073709551616"]]),
         (renderer.descriptor, ["oracle_send", "P", ["V"], dynamic_kind, ["rows"], []]),
         (renderer.descriptor, ["oracle_send", "P", ["V"], oracle_kind, ["wrong"], []]),
         (renderer.descriptor, ["oracle_shape", oracle_kind, "wrong"]),
@@ -191,14 +210,17 @@ example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false :=
         except ValueError:
             continue
         raise AssertionError("renderer accepted a malformed logical oracle row")
-    # Aggregate names remain escaped data, including inside recursive types.
+    # Aggregate identities remain escaped data, including inside recursive types.
+    # Constructor labels obey the native ASCII grammar independently of identity.
     # Inspect codepoints and typed components independently in the kernel.
     aggregate_identity = 'query_증명"\\\n'
-    constructor = 'make_α"\\\n'
-    sequence = ["sequence", field]
-    product = ["product", aggregate_identity, constructor, [["bool"], sequence]]
-    nested = ["sequence", product]
-    make = ["function", "make", "math", "private", [["bool"], sequence], [product], [], [], [],
+    constructor = "make_alpha"
+    sequence = ["apply", "sequence", [["type", field]]]
+    nominal_identity = ["tuple", [["atom", aggregate_identity],
+                       ["tuple", [["atom", "bls12-381.fr"], ["atom", "phantom.F"]]]]]
+    product = ["variant", nominal_identity, [[constructor, [["apply", "bool", []], sequence]]]]
+    nested = ["apply", "sequence", [["type", product]]]
+    make = ["function", "make", "math", "private", [["apply", "bool", []], sequence], [product], [], [], [],
             ["block", [[["product.make", constructor], [0, 1], [product], [], ""]], ["return", [0]]]]
     get = ["function", "get", "math", "private", [product], [sequence], [], [], [],
            ["block", [[["product.get", 1], [0], [sequence], [], ""]], ["return", [0]]]]
@@ -207,7 +229,8 @@ example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false :=
     aggregate_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                       "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS, [[], []]]
     source = renderer.render(aggregate_data, "RenderedAggregates").replace("module\n\n", "", 1)
-    identity_points = str([ord(char) for char in aggregate_identity])
+    identity_points = str([ord(char) for char in json.dumps(
+        [aggregate_identity, ["bls12-381.fr", "phantom.F"]], ensure_ascii=False, separators=(",", ":"))])
     constructor_points = str([ord(char) for char in constructor])
     source += f'''
 open Zkc.Source.Structured in
@@ -222,16 +245,18 @@ example : (Zkc.Source.Structured.check RenderedAggregates.snapshot).isOk = true 
 '''
     modules.append(source)
     malformed_aggregates = [
-        (renderer.ty, ["sequence"]), (renderer.ty, ["sequence", field, field]),
-        (renderer.ty, ["product", "id", "make", None]),
-        (renderer.ty, ["product", "id", "make", [field] * 513]),
+        (renderer.ty, ["apply", "sequence"]),
+        (renderer.ty, ["apply", "sequence", [["type", field], ["type", field]]]),
+        (renderer.ty, ["variant", ["atom", "id"], [["make", None]]]),
+        (renderer.ty, ["variant", ["atom", "id"], [["make", [field] * 513]]]),
+        (renderer.ty, ["variant", ["atom", "id"], [['make_α"\\\n', [field]]]]),
         (renderer.descriptor, ["product.make", constructor, "extra"]),
         (renderer.descriptor, ["product.get", True]),
         (renderer.descriptor, ["product.get", 512]),
     ]
     too_deep = field
     for _ in range(64):
-        too_deep = ["sequence", too_deep]
+        too_deep = ["apply", "sequence", [["type", too_deep]]]
     malformed_aggregates.append((renderer.ty, too_deep))
     for render, invalid in malformed_aggregates:
         try:
@@ -291,6 +316,17 @@ example : (RenderedDeclarations.snapshot.sourceDeclarations.protocols.map fun pr
     [("main", [({contract_points}, .boolean, ["V"], 1, 1)], [])] := by rfl
 '''
     modules.append(source)
+    logical_declaration_data = copy.deepcopy(declaration_data)
+    logical_declaration_data[10][0][0][0][1] = "logical_record"
+    source = renderer.render(logical_declaration_data, "RenderedLogicalDeclaration").replace("module\n\n", "", 1)
+    source += '''
+open Zkc.Source.Structured in
+example : (RenderedLogicalDeclaration.snapshot.sourceDeclarations.records.map (·.type)) =
+    [.nominal .logicalRecord "sample::Pending" [.field "bls12-381.fr"]] := by rfl
+example : RenderedLogicalDeclaration.snapshot.sourceDeclarations.records !=
+    RenderedDeclarations.snapshot.sourceDeclarations.records := by decide +kernel
+'''
+    modules.append(source)
     anchor_data = copy.deepcopy(contract_data)
     anchor_data[8][0][1][0][2][1] = [["anchor", "input", 0]]
     source = renderer.render(anchor_data, "RenderedAnchor").replace("module\n\n", "", 1)
@@ -331,17 +367,18 @@ example : (RenderedAnchor.snapshot.contracts[0]?.bind fun owner =>
     # Parse the full u64 endpoint through Lean's own string/constructor syntax.
     # Admission, rather than the renderer, checks the primitive contract.
     maximum = "18446744073709551615"
-    binding_rows = [["binding", "max_index", "index.constant", [], ""],
-                    ["binding", "sum", "vector.sum", [field[1]], ""]]
-    limit = ["function", "limit", "local", "private", [], [["index"]], [], [], ["limit", []],
-             ["block", [[["exec", "exec.apply", "max_index", [maximum]],
-                         [], [["index"]], [], "maximum"]], ["return", [0]]]]
-    entry = ["function", "main", "protocol", "public", [], [["bool"]],
+    binding_rows = [["binding", "max_index", "index.constant", [], "", [], [["apply", "index", []]]],
+                    ["binding", "sum", "vector.sum", [["domain", "Field", field[2][0][2]]], "",
+                     [["apply", "vector", [["domain", "Field", field[2][0][2]]]]], [field]]]
+    limit = ["function", "limit", "local", "private", [], [["apply", "index", []]], [], [], ["limit", []],
+             ["block", [[["exec", "exec.apply", "max_index", [["natural", maximum]]],
+                         [], [["apply", "index", []]], [], "maximum"]], ["return", [0]]]]
+    entry = ["function", "main", "protocol", "public", [], [["apply", "bool", []]],
              ["protocol", ["P"], [], [["P"]]], [], ["main", []],
              ["block", [
-                 [["index.constant", maximum], [], [["index"]], [], ""],
-                 [["local_call", "limit", "P"], [], [["index"]], [], "limit_call"],
-                 [["index.equal"], [0, 1], [["bool"]], [], ""],
+                 [["index.constant", maximum], [], [["apply", "index", []]], [], ""],
+                 [["local_call", "limit", "P"], [], [["apply", "index", []]], [], "limit_call"],
+                 [["index.equal"], [0, 1], [["apply", "bool", []]], [], ""],
              ], ["return", [0]]]]
     primitive_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                       "main", [], [], binding_rows, [limit, entry], [["main", []]], BLS_ROWS, [[], []]]
@@ -351,6 +388,12 @@ example : (RenderedPrimitives.snapshot.bindings.map fun binding =>
     (binding.name, binding.contract, binding.arguments, binding.implementation)) =
     [("max_index", "index.constant", [], ""),
      ("sum", "vector.sum", ["bls12-381.fr"], "")] := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedPrimitives.snapshot.bindings.map fun binding =>
+    binding.schema.map fun schema => (schema.arguments, schema.inputs, schema.outputs)) =
+    [some ([], [], [.index]),
+     some ([.domain "Field" "bls12-381.fr"], [.vector "bls12-381.fr"],
+       [.field "bls12-381.fr"])] := by decide +kernel
 example : (RenderedPrimitives.snapshot.definitions[0]?.bind fun definition =>
     match definition with
     | .function function =>
@@ -396,7 +439,7 @@ example : (RenderedPrimitives.snapshot.catalogue.nominals.map fun row =>
         raise AssertionError("renderer accepted an obsolete envelope")
     # Preserve preparation identity and the interleaved scalar/vector mask.
     # The expected constructors below are independent of the Python renderer.
-    vector = ["vector", field[1]]
+    vector = ["apply", "vector", [["domain", "Field", field[2][0][2]]]]
     inputs = [field, vector, field, vector]
     identity = ["function", "identity", "math", "private", [vector], [vector], [], [], [],
                 ["block", [], ["return", [0]]]]
@@ -443,13 +486,13 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
         except ValueError:
             continue
         raise AssertionError("renderer accepted a malformed preparation record")
-    child = ["function", "child", "protocol", "public", [["bool"]], [["bool"]],
+    child = ["function", "child", "protocol", "public", [["apply", "bool", []]], [["apply", "bool", []]],
              ["protocol", ["A", "B"], [["A", "B"]], [["A", "B"]]], [], ["child", []],
              ["block", [], ["return", [0]]]]
-    entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]],
+    entry = ["function", "main", "protocol", "public", [["apply", "bool", []]], [["apply", "bool", []]],
              ["protocol", ["P", "V"], [["P", "V"]], [["P", "V"]]], [], ["main", []],
              ["block", [[["protocol_apply", "child", ["V", "P"]], [0],
-                         [["bool"]], [], "nested"]], ["return", [0]]]]
+                         [["apply", "bool", []]], [], "nested"]], ["return", [0]]]]
     application = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                    "main", [], [], [], [entry, child], [["main", []], ["child", []]], NO_ROWS, [[], []]]
     source = renderer.render(application, "RenderedApplication").replace("module\n\n", "", 1)
@@ -500,10 +543,10 @@ private def renderedRepeatHeaders (snapshot : Snapshot) :=
     | _ => []
 ''')
     for stem, name, carried, maximum, role_count in repeat_subjects:
-        data = json.loads((HERE / f"bridges/structured/fixtures/{stem}.json").read_text())
+        data = json.loads((artifact_root / f"bridges/structured/fixtures/{stem}.json").read_text())
         namespace = f"ZkcExamples.Structured.{name}Data"
         rendered = renderer.render(data, namespace)
-        maintained = HERE / f"ZkcExamples/Structured/{name}Data.lean"
+        maintained = artifact_root / f"ZkcExamples/Structured/{name}Data.lean"
         if not (rendered.encode("utf-8") == maintained.read_bytes()):
             raise AssertionError(maintained)
         roster = [f"role{i:08x}" for i in range(role_count)]
@@ -539,11 +582,12 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
               .replace("@[expose] public section\n", "") for source in modules]
     path = output / "Rendered.lean"
     path.write_text(header + "\n".join(bodies), encoding="utf-8")
-    run = subprocess.run([lake, "lean", path], cwd=HERE,
-                         capture_output=True, encoding="utf-8", timeout=60)
-    (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
-    if run.returncode:
-        raise AssertionError(run.stdout + run.stderr)
+    if lake is not None:
+        run = subprocess.run([lake, "lean", path], cwd=HERE,
+                             capture_output=True, encoding="utf-8", timeout=60)
+        (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
+        if run.returncode:
+            raise AssertionError(run.stdout + run.stderr)
     for invalid in ["α" * 257, "🙂" * 129, "\ud800"]:
         try:
             renderer.text(invalid)
@@ -558,9 +602,9 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
               "aggregate_kernel_cases": 2, "aggregate_refusal_cases": len(malformed_aggregates),
               "contract_metadata_kernel_cases": 2,
               "relation_static_arguments_kernel_cases": 1,
-              "source_declaration_kernel_cases": 2,
+              "source_declaration_kernel_cases": 4,
               "contract_metadata_refusal_cases": len(malformed_contracts),
-              "primitive_metadata_kernel_cases": 4, "obsolete_envelope_refusal_cases": 2,
+              "primitive_metadata_kernel_cases": 5, "obsolete_envelope_refusal_cases": 2,
               "catalogue_refusal_cases": len(malformed_rows),
               "preparation_metadata_kernel_cases": 3, "preparation_refusal_cases": 7,
               "application_metadata_kernel_cases": 2, "application_refusal_cases": 6,
@@ -569,6 +613,10 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
               "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}
+    report["kernel_checked"] = lake is not None
+    if lake is None:
+        report = {key.replace("kernel_cases", "rendered_cases"): value for key, value in report.items()}
+        report["status"] = "rendered"
     (output / "result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
 
@@ -577,5 +625,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=support.evidence.records("structured-renderer"))
     parser.add_argument("--lake", default="lake")
+    parser.add_argument("--artifact-root", type=Path, default=HERE)
+    parser.add_argument("--render-only", action="store_true", help="write scratch controls without running Lean")
     args = parser.parse_args()
-    print(json.dumps(check(args.output.resolve(), support.lake.resolve(args.lake)), indent=2))
+    lake = None if args.render_only else support.lake.resolve(args.lake)
+    print(json.dumps(check(args.output.resolve(), lake, args.artifact_root.resolve()), indent=2))

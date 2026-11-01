@@ -38,7 +38,7 @@
     "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"koala-bear">, ui64, !algebra.field<"koala-bear">) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_f1d7fac3d3ce489e30442c70b43fb2fd1ecf6ba206d6f59492b3f75b72249a66", sym_visibility = "private"}> ({
     ^bb0(%arg0: !runtime.scope, %arg1: !algebra.field_vector<"koala-bear">, %arg2: ui64, %arg3: !algebra.field<"koala-bear">):
       %0 = "exec.compute"(%arg0, %arg1, %arg2, %arg3) <{callee = @zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a, site = "s0"}> : (!runtime.scope, !algebra.field_vector<"koala-bear">, ui64, !algebra.field<"koala-bear">) -> !exec.outcome<(i1)>
-      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+      "exec.dispatch"(%0)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(i1)>) -> ()
     ^bb1(%1: i1):  // pred: ^bb0
       %2 = "exec.returned"(%1) : (i1) -> !exec.outcome<(i1)>
       "func.return"(%2) : (!exec.outcome<(i1)>) -> ()

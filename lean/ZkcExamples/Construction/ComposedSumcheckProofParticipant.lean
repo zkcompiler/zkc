@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.ComposedSumcheckProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:4a9c292ee47234b0287bf3656c845e9603586e6bd62cd1f13a3f507506d5a37c"
-  candidate := "sha256:b2c59c0aa1aae1c70b646a305869434db518f0953cfe25c084aa6d898b90d421"
+  source := "sha256:9dc344ff01dd6c4f394f00fcc428d25296049408ac39004e832650adf9d54b28"
+  candidate := "sha256:5df98ce627b1b33d1ea570e016e78e74a3dfd00a72b1593b8b5ab0ea6c99f926"
   policy := ⟨"zkl_441c117f8000119f8eafff882ba0eaa7842ce440e5d97bb64e08f51893894e2d", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [5], [0, 1, 2, 3, 4], [("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data (.field "bls12-381.fr"), .data .index, .transcript "merlin3.bls12-381.fr64be/0"]
