@@ -206,9 +206,22 @@ def source (program : Program) (output : Output) (bindingModule : String)
     let functions := (named.body, definition.inputs, definition.outputs) ::
       ((callbacks definition.body).zip named.callbacks).map (fun (callback, names) =>
         (names.body, .index :: (callback.spec.state ++ callback.spec.captures), callback.spec.state))
-    for ((callback, hints), callbackIndex) in ((callbacks definition.body).zip named.callbacks).zipIdx do
-      let checked := bindingModule ++ "Callbacks." ++ roleName protocolIndex 0 ++ "Callback" ++ toString callbackIndex
-      text := text ++ "abbrev " ++ hints.body ++ "State : List Ty := " ++ typesText callback.spec.state ++ "\nabbrev " ++ hints.body ++ "Captures : List Ty := " ++ typesText callback.spec.captures ++ "\nabbrev " ++ hints.body ++ "Maximum := " ++ toString callback.spec.maximum ++ "\nabbrev " ++ hints.body ++ "Spec : RepeatSpec := " ++ repeatText callback.spec ++ "\ndef " ++ hints.body ++ "Body := " ++ checked ++ "Body\ntheorem " ++ hints.body ++ "_selected : findRepeat " ++ quoted callback.site ++ " " ++ named.body ++ "Definition.body = some ⟨_, _, " ++ hints.body ++ "Body⟩ := " ++ checked ++ "_selected\n\n"
+    for ((selected, hints), callbackIndex) in ((repeatInventory definition.body).zip named.callbacks).zipIdx do
+      let checked := bindingModule ++ "Callbacks." ++ callbackName protocolIndex callbackIndex
+      text := text ++ "abbrev " ++ hints.body ++ "Site : RepeatSite := " ++ checked ++ "Site\n" ++
+        "abbrev " ++ hints.body ++ "Spec : RepeatSpec := " ++ hints.body ++ "Site.spec\n" ++
+        "abbrev " ++ hints.body ++ "State : List Ty := " ++ hints.body ++ "Spec.state\n" ++
+        "abbrev " ++ hints.body ++ "Captures : List Ty := " ++ hints.body ++ "Spec.captures\n" ++
+        "abbrev " ++ hints.body ++ "Maximum := " ++ hints.body ++ "Spec.maximum\n" ++
+        "abbrev " ++ hints.body ++ "Body := " ++ checked ++ "Body\n" ++
+        "theorem " ++ hints.body ++ "_body : " ++ hints.body ++ "Site.body = " ++ hints.body ++
+        "Body := " ++ checked ++ "_body\n" ++
+        "abbrev " ++ hints.body ++ "Occurrence : RepeatAt " ++ hints.body ++ "Site " ++ named.body ++
+        "Definition.body := " ++ checked ++ "Occurrence\n" ++
+        "theorem " ++ hints.body ++ "_selected : (selectRepeat " ++ toString callbackIndex ++ " " ++
+        named.body ++ "Definition.body).map (·.repeatSite) = some " ++ hints.body ++ "Site := " ++ checked ++ "_selected\n" ++
+        "theorem " ++ hints.body ++ "_position : " ++ hints.body ++ "Occurrence.position = " ++
+        natsText selected.position ++ " := " ++ checked ++ "_position\n\n"
     for (body, inputs, outputs) in functions do
       text := text ++ "def " ++ body ++ "Fn (ctx : ProtocolContext) (self : Nat) : RegionFunction (Component (assignment F G)) (participantInterface F G) (" ++ typesText inputs ++ ", " ++ typesText outputs ++ ") :=\n  fun args => " ++ body ++ "Body.denote (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers payload) self (payload.plainProtocolTable F G) ctx) args.get\n\n"
     for (callback, hints) in (callbacks definition.body).zip named.callbacks do
@@ -223,13 +236,20 @@ def source (program : Program) (output : Output) (bindingModule : String)
         runs := "Runs.uniform (plainHelpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles " ++ toString role ++ ")"
         processes := available
         callee := fun entry => (references.find? (·.1 == entry.val)).map Prod.snd
+        -- A body/spec hint only spells a context-parametric function. It does
+        -- not identify a lexical occurrence: the Site/Occurrence aliases above
+        -- retain that association, including operands and the continuation.
+        -- Nonunique hints fall back to literal syntax, checked by the same
+        -- complete normalizer, process and invocation equations.
         callback := fun spec body => do
-          let (_, hints) ← ((callbacks definition.body).zip named.callbacks).find? fun (callback, _) =>
+          let [(_, hints)] := ((callbacks definition.body).zip named.callbacks).filter fun (callback, _) =>
             repeatText callback.spec == repeatText spec && regionText callback.body == regionText body
+            | none
           pure (hints.body ++ "Fn ctx (ctx.roles " ++ toString role ++ ")")
         callbackBody := fun spec body => do
-          let (_, hints) ← ((callbacks definition.body).zip named.callbacks).find? fun (callback, _) =>
+          let [(_, hints)] := ((callbacks definition.body).zip named.callbacks).filter fun (callback, _) =>
             repeatText callback.spec == repeatText spec && regionText callback.body == regionText body
+            | none
           pure (hints.body ++ "Body")
         repeatHead := fun spec => some ("denoteRepeat " ++ repeatText spec ++ " ctx (ctx.roles " ++ toString role ++ ")") }
       for (_, callbackIndex) in (callbacks definition.body).zipIdx do

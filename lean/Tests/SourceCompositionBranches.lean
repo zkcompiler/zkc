@@ -44,3 +44,27 @@ example (process : PIR.Process I (Values Value [ty])) :
     (process.bind fun out => .done (.cons (out.get .here) .nil)) = process := by
   source_composition_equation atoms []
 end
+
+/- The actual template matcher's recovery boundary permits ordinary mismatch,
+rolls back speculative assignments, and propagates implementation failures. -/
+open Lean Meta Elab Command ZkcTools.StructuredSource.Composition in
+run_elab do
+  let failureId ← Lean.registerInternalExceptionId `sourceCompositionControl
+  let pending ← mkFreshExprMVar (mkConst ``Nat)
+  let missing ← attemptTemplate (α := Nat) do
+    pending.mvarId!.assign (mkNatLit 7)
+    throwError "ordinary template mismatch"
+  unless missing.isNone && !(← pending.mvarId!.isAssigned) do
+    throwError "template mismatch did not restore speculative assignments"
+  let selected ← attemptTemplate (pure (11 : Nat))
+  unless selected == some 11 do throwError "matching template was not retained"
+  let propagated ← try
+    let _ ← attemptTemplate (α := Nat) do
+      throw (.internal failureId)
+    pure false
+  catch error =>
+    match error with
+    | .internal id _ =>
+      if id == failureId then pure true else throw error
+    | .error .. => throw error
+  unless propagated do throwError "internal template failure was swallowed"

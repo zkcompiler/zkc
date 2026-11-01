@@ -96,8 +96,8 @@ outcome of the actual helper. Its bridge below preserves the whole execution. -/
 def presented (statement : Statement) (_initial : Domain.History carriers) :
     PIR.Process (Domain.Actions carriers) (Domain.Result carriers) :=
   let fields := ABI.statementData statement
-  if Admissible fields.1 fields.2.1 then
-    .done (ZkcExamples.Construction.TableMembership.result fields.1 fields.2.1)
+  if Admissible fields.input0 fields.input1 then
+    .done (ZkcExamples.Construction.TableMembership.result fields.input0 fields.input1)
   else .halt .exhausted
 
 def absorb := Domain.interface (carriers := carriers) subject.selection.context

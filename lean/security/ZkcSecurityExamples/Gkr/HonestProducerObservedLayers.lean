@@ -18,6 +18,7 @@ open Zkc Source Structured Construction
 open Zkc.Polynomial Zkc.Polynomial.Multilinear CoefficientRows
 open ZkcExamples.Structured
 open ZkcSecurity.Examples.Components
+open GkrRoundsRealization (encode encode_decodes cast_decodes)
 open ZkcSecurity.Source HonestProducerRounds
 open HonestProducerPackets HonestProducerSource HonestProducerOccurrences
 
@@ -30,36 +31,27 @@ structure Sites where
   right : String
   coefficients : String
 
-def producerCoefficients (ctx : ProtocolContext) (site : String) : Nat → List F →
-    PIR.Process (Signature F G) Unit
-  | _, [] => .done ()
-  | index, value :: rest =>
-    (Occurrence.iterations.within site index
-      ((@PIR.Process.call (participantInterface F G) Unit (.send (ty := .field "bls12-381.fr")
-        (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) .done).interpret
-          Occurrence.actions)).bind fun _ => producerCoefficients ctx site (index + 1) rest
+def producerCoefficients (ctx : ProtocolContext) (site : String) (index : Nat) (values : List F) :
+    PIR.Process (Signature F G) Unit :=
+  ObservedLoop.forEach Occurrence.iterations site (fun _ value _ =>
+    (@PIR.Process.call (participantInterface F G) Unit (.send (ty := .field "bls12-381.fr")
+      (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) .done).interpret Occurrence.actions)
+    index values ()
 
-def validatorCoefficients (ctx : ProtocolContext) (site : String) : Nat → Nat → List F →
-    PIR.Process (Signature F G) (List F)
-  | _, 0, values => .done values
-  | index, count + 1, values =>
-    (Occurrence.iterations.within site index
-      (((GkrVerifier.lineCoefficient ctx values).interpret CommonAdapter.embed).interpret
-        Occurrence.actions)).bind fun next => validatorCoefficients ctx site (index + 1) count next
+def validatorCoefficients (ctx : ProtocolContext) (site : String) (index count : Nat) (values : List F) :
+    PIR.Process (Signature F G) (List F) :=
+  ObservedLoop.counted Occurrence.iterations site (fun values _ =>
+    ((GkrVerifier.lineCoefficient ctx values).interpret CommonAdapter.embed).interpret Occurrence.actions)
+    index count values
 
 omit [Field F] [DecidableEq F] in
 theorem producerCoefficients_erase (ctx : ProtocolContext) (site : String) (index : Nat) (values : List F) :
     (producerCoefficients (G := G) ctx site index values).interpret Occurrence.erase = sendTail ctx values := by
-  induction values generalizing index with
-  | nil => rfl
-  | cons value rest ih =>
-    rw [producerCoefficients, PIR.Process.interpret_bind,
-      IterationObservations.within_interpret _ Occurrence.iterations_erase,
-      IterationObservations.silent_within, actions_erase]
-    simp only [PIR.Process.bind, sendTail]
-    congr 1
-    funext _
-    exact ih (index + 1)
+  exact ObservedLoop.interpret_forEach Occurrence.erase Occurrence.iterations_erase site _
+    (fun (_ : Unit) value _ => @PIR.Process.call (participantInterface F G) Unit
+      (.send (ty := .field "bls12-381.fr") (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) .done)
+    (fun _ _ _ => actions_erase _) (fun _ values (_ : Unit) => sendTail ctx values)
+    (fun _ state => by cases state; rfl) (fun _ _ _ state => by cases state; rfl) index values ()
 
 omit [Field F] [DecidableEq F] in
 theorem coefficient_pair (ctx : ProtocolContext) (scope : PairScope)
@@ -71,7 +63,8 @@ theorem coefficient_pair (ctx : ProtocolContext) (scope : PairScope)
   induction values generalizing index coefficients with
   | nil => exact .done (by simp)
   | cons value rest ih =>
-    rw [producerCoefficients, List.length_cons, validatorCoefficients]
+    rw [producerCoefficients, ObservedLoop.forEach_cons, List.length_cons,
+      validatorCoefficients, ObservedLoop.counted_succ]
     have one : Pair scope (fun (_ : Unit) next => next = coefficients ++ [value])
         ((@PIR.Process.call (participantInterface F G) Unit (.send (ty := .field "bls12-381.fr")
           (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) .done).interpret Occurrence.actions)
@@ -86,6 +79,7 @@ theorem coefficient_pair (ctx : ProtocolContext) (scope : PairScope)
         exact .done rfl
     exact (one.within site index).bind _ _ (by
       rintro ignored received rfl
+      cases ignored
       apply (ih (index + 1) (coefficients ++ [value])).mono
       intro _ result same
       simpa only [List.append_assoc, List.singleton_append] using same)
@@ -95,15 +89,8 @@ theorem validatorCoefficients_erase (ctx : ProtocolContext) (site : String)
     (index count : Nat) (coefficients : List F) :
     (validatorCoefficients (G := G) ctx site index count coefficients).interpret Occurrence.erase =
       (PIR.repeatN count (GkrVerifier.lineCoefficient ctx) coefficients).interpret CommonAdapter.embed := by
-  induction count generalizing index coefficients with
-  | zero => rfl
-  | succ count ih =>
-    rw [validatorCoefficients, PIR.Process.interpret_bind,
-      IterationObservations.within_interpret _ Occurrence.iterations_erase,
-      IterationObservations.silent_within, actions_erase, PIR.repeatN, PIR.Process.interpret_bind]
-    apply congrArg (PIR.Process.bind _)
-    funext next
-    exact ih (index + 1) next
+  exact ObservedLoop.interpret_repeated Occurrence.erase Occurrence.iterations_erase site _
+    (GkrVerifier.lineCoefficient ctx) CommonAdapter.embed (fun _ => actions_erase _) index count coefficients
 
 noncomputable def producerLayer (ctx : ProtocolContext) (sites : Sites) {width : Nat}
     (circuit : Families.Gkr.Circuit F width) (remaining index : Nat) (point : List F) :

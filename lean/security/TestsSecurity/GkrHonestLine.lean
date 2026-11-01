@@ -52,7 +52,8 @@ theorem actual_scalar :
 theorem unequal_slope_rows :
     invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper70Helper
       (.cons [1, 2] (.cons [3] (.cons 4 .nil))) = .halt .refused := by
-  rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked, HonestLine.slope_map_body]
+  rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked]
+  named_equation HonestLine.Goals.Slopes over ℚ ℚ
   have stopped : Evaluation.denoteCollect (helpers (F := ℚ) (G := ℚ)) HonestLine.slopeCollection
       (.cons ([1, 2] : List ℚ) (.cons [3] (.cons 4 .nil))) = .halt .refused :=
     Evaluation.denoteCollect_admission_stop (carriers := uniformCarriers ℚ ℚ)

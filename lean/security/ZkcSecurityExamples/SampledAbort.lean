@@ -6,7 +6,7 @@ public import ZkcSecurityExamples.Generated.Components.SampledAbortABI
 public import ZkcExamples.Structured.Generated.Constructed.SampledAbortProducer
 public import ZkcExamples.Structured.Generated.Constructed.SampledAbortValidator
 public import Zkc.Construction.DomainCalculations
-public meta import ZkcTools.ConstructionBindings.ProcessViewTactic
+public meta import ZkcSecurityTools.Bindings.ExecutionReadback
 
 @[expose] public section
 
@@ -63,49 +63,27 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
     ZkcExamples.Structured.Generated.Constructed.SampledAbortValidator.participant_eq]
   unfold_component_bodies [ZkcExamples.Structured.Generated.Constructed.SampledAbortProducer.view,
     ZkcExamples.Structured.Generated.Constructed.SampledAbortValidator.view]
-  conv_lhs => simp [context_eq, producerInputs, validatorInputs, blsScalarModel,
-    ZkcSecurity.Domains.PrimeField.model,
-    Domain.View.participant, Domain.View.sequence, Domain.View.localService,
-    Domain.View.receive, Domain.View.send, Domain.View.indicesEmpty,
-    Domain.View.observe, Domain.View.challenge, Domain.View.calculation, Domain.View.append,
-    Domain.View.empty, Domain.View.guard, Domain.read, Domain.localCoordinates,
-    Domain.sortsMatch, Domain.Value.sort, Domain.Value.encode,
-    Domain.Payload.value, Domain.Payload.ofValue, Domain.dataType,
-    Domain.localOrigin, Domain.templateOrigin, Domain.queryOrigin,
-    Domain.Calculations.fieldEqual, Domain.Calculations.fieldConstant,
-    Domain.Calculations.booleanConstant, Domain.Calculations.booleanEqual,
-    List.mapM_cons, List.mapM_nil, Option.bind, Option.pure_def,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.cons_append, List.nil_append,
-    List.map_cons, List.map_nil, PIR.Process.bind, beq_self_eq_true, ite_true,
-    decide_true, decide_false, Bool.false_beq, and_true, true_and, and_self,
-    Template.origin, Template.qualify, Template.applicationPrefix, Template.repeats,
-    Context.query, Context.role, Origin.query, Origin.message, Domain.atCoordinates,
-    Request.draw, Context.fiatShamir, Context.replacement?, Context.request, Context.contract,
-    Context.suite, Ty.isHandle, dite_true]
-  conv_lhs => simp [PIR.Process.runM, Domain.handler, PIR.Execution.followM,
-    SampledCompiled.services, SampledCompiled.privateServices, SampledCompiled.allowed,
+  normalize_domain_process [context_eq,
+    Domain.Calculations.fieldConstant (F := Scalar) (G := Scalar),
+    Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
+    Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
+    Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar)] unfolding
+    [producerInputs, validatorInputs, blsScalarModel, ZkcSecurity.Domains.PrimeField.model]
+  normalize_domain_execution [] unfolding [
     ZkcExamples.Construction.Generated.SampledAbortPair.Producer.participant,
-    ZkcExamples.Construction.Generated.SampledAbortPair.Validator.participant,
-    Context.role, Domain.Raw]
+    ZkcExamples.Construction.Generated.SampledAbortPair.Validator.participant]
   apply failure_after_private (Raw := @Domain.Raw subject.domainModel.toCarriers)
     (F := Scalar) (0 : Scalar) (success := subject.Success)
   intro sample cache
   by_cases zero : sample = 0
-  · simp [zero, Domain.Calculations.fieldConstant (F := Scalar) (G := Scalar),
-      Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
-      Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
-      Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar),
-      Domain.Value.sort, PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
-      Subject.Success, Domain.PairExecution.Success]
-  · simp [zero, Domain.Calculations.fieldConstant (F := Scalar) (G := Scalar),
-      Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
-      Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
-      Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar),
-      Domain.Value.sort, Domain.Raw,
-      PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
-      Domain.drawRequest, SampledCompiled.oracle, HonestCompiled.oracle,
-      Domain.Payload.value, Domain.Value.sort, Subject.Success, Domain.PairExecution.Success, Domain.acceptanceAt, acceptance_position,
-      simulateQ_bind, simulateQ_map, StateT.run_bind, StateT.run_map]
+  · normalize_domain_process [zero] unfolding []
+    normalize_domain_execution [] unfolding []
+    simp [zero, Subject.Success, Domain.PairExecution.Success]
+  · normalize_domain_process [zero] unfolding []
+    normalize_domain_execution [] unfolding []
+    simp [zero, SampledCompiled.oracle, HonestCompiled.oracle,
+      Subject.Success, Domain.PairExecution.Success, Domain.acceptanceAt, acceptance_position,
+      simulateQ_map, StateT.run_map]
     rw [← map_bind, prEvent_false]
 
 theorem exact_failure_of_honest (values : subject.Inputs) (honest : subject.HonestInput values) :

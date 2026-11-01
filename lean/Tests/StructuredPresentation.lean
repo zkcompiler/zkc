@@ -224,6 +224,14 @@ def reject (directory : System.FilePath) (name source : String) : IO Unit := do
 
 def run (directory : System.FilePath) : IO Unit := do
   IO.FS.createDirAll directory
+  let .arr callbackSlots := callbackRequest | throw (IO.userError "callback request shape")
+  for locator in [.bool false, .bool true, .num 0, .arr #[], .mkObj [], .str "missing"] do
+    let request := Json.arr (callbackSlots.set! 1 locator)
+    require ((ZkcTools.StructuredSource.NormalForms.run program request).toOption.isNone &&
+      (select program request).toOption.isNone) "malformed or missing repeat locator accepted"
+  let invalidStrictRequest := Json.arr (callbackSlots.set! 6 .null)
+  require ((ZkcTools.StructuredSource.NormalForms.run program invalidStrictRequest).toOption.isNone &&
+    (select program invalidStrictRequest).toOption.isNone) "malformed strict flag accepted"
   let strict ← expectOk (ZkcTools.StructuredSource.Presentation.run program (rootRequest false)
     (declaration := fun selected => genericDeclaration selected.signature.laws selected.signature.callees "strict")
     (bodyExpression := some "admittedRootBody"))

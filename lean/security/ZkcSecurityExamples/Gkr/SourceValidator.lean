@@ -32,7 +32,7 @@ def body (runtime : Source.Invocation F) :=
 theorem admitted_body (runtime : Source.Invocation F) (admitted : runtime.Admitted) :
     body (G := G) runtime =
       (HonestProducerObserved.validator {} runtime.handle HonestProducerSource.currentSites
-        runtime.encoding runtime.outputs).bind (fun accepted => .done (.cons accepted .nil)) :=
+        runtime.encoding runtime.outputs).bind (fun accepted => .done (SourceRows.Decision.pack (Value := Component (assignment F G)) ⟨accepted⟩)) :=
   CanonicalVerifier.reads runtime.encoding runtime.outputs admitted runtime.handle
 
 theorem invalid_erasure (runtime : Source.Invocation F) (invalid : ¬ runtime.Admitted) :
@@ -59,8 +59,8 @@ def rejected (runtime : Source.Invocation F) (wrong : ¬ runtime.Correct)
   · rw [admitted_body runtime admitted]
     have noTable : runtime.outputTable ≠ runtime.encoding.circuit.wires runtime.layers 0 :=
       fun same => wrong ((Source.admitted_correct_iff runtime admitted).mpr same)
-    exact PropertyAssembly.map (fun accepted : Option Bool => (.cons accepted .nil :
-      Values (Component (ringModel F G).Value) GkrSourceViews.program.payload.entry.outputs))
+    exact PropertyAssembly.map (fun accepted : Option Bool => SourceRows.Decision.pack
+      (Value := Component (ringModel F G).Value) ⟨accepted⟩)
       (SourceRoot.rejected {} HonestProducerSource.currentSites runtime.handle runtime.encoding runtime.outputs
         noTable (price (F := F))
         (ENNReal.div_le_div (by norm_num) le_rfl)

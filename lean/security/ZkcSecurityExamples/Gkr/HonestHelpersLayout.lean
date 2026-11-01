@@ -30,11 +30,12 @@ theorem layout_encodes {width : Nat} (add mul below point : List F)
     let state := GkrRoundsLayout.state
       (fixPrefix width a (coordinates width point)) (fixPrefix width m (coordinates width point)) v v
     invoke (helpers (G := G)) GkrSourceBodies.helper36Helper
-      (.cons add (.cons mul (.cons point (.cons below (.cons width .nil))))) =
-        .done (.cons (GkrRoundsLayout.encode state.add)
-          (.cons (GkrRoundsLayout.encode state.mul)
-            (.cons (GkrRoundsLayout.encode state.left)
-              (.cons (GkrRoundsLayout.encode state.right) .nil)))) := by
+      (CollectionGoals.LayoutArguments.pack { add, mul, point, below, width }) =
+        .done (CollectionGoals.Layout.encode (ringModel F G)
+          { addValues := GkrRoundsLayout.encode state.add,
+            mulValues := GkrRoundsLayout.encode state.mul,
+            leftValues := GkrRoundsLayout.encode state.left,
+            rightValues := GkrRoundsLayout.encode state.right }) := by
   dsimp only
   have widthSmall : width < 64 := by omega
   have powerSmall : 2 ^ (width + width + width) < indexLimit :=

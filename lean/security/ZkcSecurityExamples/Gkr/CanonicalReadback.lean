@@ -20,7 +20,7 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 abbrev ValuesResult := Values (Component (assignment F G)) [.boolean]
 
 def Post (left right : ValuesResult (F := F) (G := G)) : Prop :=
-  left = .cons none .nil ∧ right = .cons (some true) .nil
+  left = SourceRows.Decision.pack ⟨none⟩ ∧ right = SourceRows.Decision.pack ⟨some true⟩
 
 theorem actual (encoding : CircuitEncoding F) (outputs : List F)
     (admitted : encoding.Admitted 4 4 outputs) (correct : encoding.Outputs outputs)
@@ -33,14 +33,14 @@ theorem actual (encoding : CircuitEncoding F) (outputs : List F)
       GkrVerifier.deliverySite (GkrVerifier.rightContext {})) ∈ scope.deliveries)
     (lineDelivery : (GkrVerifier.lineChallengeSite {}, GkrVerifier.lineDeliverySite {}) ∈ scope.deliveries) :
     Pair scope Post
-      (Occurrence.participant (ringModel F G) GkrSourceViews.program 0 (currentInputs encoding outputs service))
-      (Occurrence.participant (ringModel F G) GkrSourceViews.program 1 (currentInputs encoding outputs (some handle))) := by
+      (Occurrence.participant (ringModel F G) GkrSourceViews.program 0 (SourceRows.circuitInputs encoding outputs service))
+      (Occurrence.participant (ringModel F G) GkrSourceViews.program 1 (SourceRows.circuitInputs encoding outputs (some handle))) := by
   rw [HonestProducerSource.observed encoding outputs admitted service,
     CanonicalVerifier.reads encoding outputs admitted handle]
   have paired := HonestProducerObserved.pair (G := G) {} scope ⟨roles.1.symm, roles.2.symm⟩
     handle currentSites encoding outputs correct outputDelivery leftDelivery rightDelivery lineDelivery
   simpa only [PIR.Process.bind_done] using paired.bind (Final := Post) PIR.Process.done
-    (fun accepted => .done (.cons accepted .nil : ValuesResult (F := F) (G := G))) (by
+    (fun accepted => .done (SourceRows.Decision.pack (Value := Component (assignment F G)) ⟨accepted⟩)) (by
       rintro p v ⟨rfl, rfl⟩
       exact .done ⟨rfl, rfl⟩)
 

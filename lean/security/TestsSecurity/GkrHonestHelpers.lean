@@ -1,7 +1,7 @@
 import ZkcSecurityExamples.Gkr.HonestHelpersSource
 import Zkc.Protocols.Gkr.Source.VerifierProcess
-import ZkcSecurityExamples.Gkr.HonestRound
-import ZkcSecurityExamples.Gkr.HonestPackets
+import ZkcSecurityExamples.Gkr.HonestProducerRounds
+import ZkcSecurityExamples.Gkr.HonestProducerPackets
 import ZkcSecurityExamples.Components.GkrFiniteCircuit
 
 set_option autoImplicit false
@@ -65,7 +65,7 @@ theorem line_packet (ctx : ProtocolContext) :
       .call (.send (ty := .field scalarDomain) (GkrVerifier.lineCoefficientSite ctx)
         (ctx.roles 1) 7) fun _ => .done () := by
   simpa only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some] using
-    HonestPackets.line_coefficient (G := ℚ) ctx ([8, 7] : List ℚ) 0
+    HonestProducerPackets.line_coefficient (G := ℚ) ctx ([8, 7] : List ℚ) 0
     (by norm_num [indexLimit]) (by norm_num [indexLimit])
 
 /-- A test delivery script for the existing runner; it retains all actions. -/
@@ -104,8 +104,8 @@ theorem round_run (ctx : ProtocolContext) (point suffix : List ℚ) :
       (some (GkrCallerRealization.raw 0).add) (some (GkrCallerRealization.raw 0).mul)
       (some (GkrCallerRealization.raw 0).left) (some (GkrCallerRealization.raw 0).right)
       (some point)).run handler (0 :: suffix) =
-      ⟨.returned (HonestRound.result (GkrCallerRealization.raw 0) point 0), suffix, events ctx⟩ := by
-  rw [HonestRound.run ctx _ (GkrCallerRealization.reference 0)
+      ⟨.returned (HonestProducerRounds.round_result (GkrCallerRealization.raw 0) point 0), suffix, events ctx⟩ := by
+  rw [HonestProducerRounds.round_run ctx _ (GkrCallerRealization.reference 0)
     (GkrCallerRealization.represented 0).1 (by norm_num [indexLimit]) point handler (0 :: suffix),
     first_message]
   rfl
@@ -117,7 +117,7 @@ theorem missing_delivery (ctx : ProtocolContext) (point : List ℚ) :
       (some (GkrCallerRealization.raw 0).add) (some (GkrCallerRealization.raw 0).mul)
       (some (GkrCallerRealization.raw 0).left) (some (GkrCallerRealization.raw 0).right)
       (some point)).run handler [] = ⟨.stopped .refused, [], events ctx⟩ := by
-  rw [HonestRound.run ctx _ (GkrCallerRealization.reference 0)
+  rw [HonestProducerRounds.round_run ctx _ (GkrCallerRealization.reference 0)
     (GkrCallerRealization.represented 0).1 (by norm_num [indexLimit]) point handler [], first_message]
   rfl
 
@@ -155,10 +155,10 @@ theorem malformed_round :
 #print axioms HonestHelpers.element_equation
 #print axioms HonestHelpers.element_after_equation
 #print axioms HonestHelpers.layout_plain
-#print axioms HonestRound.process
-#print axioms HonestRound.run
-#print axioms HonestPackets.output_point
-#print axioms HonestPackets.line_coefficient
+#print axioms HonestProducerRounds.round_process
+#print axioms HonestProducerRounds.round_run
+#print axioms HonestProducerPackets.output_point
+#print axioms HonestProducerPackets.line_coefficient
 #print axioms round_run
 #print axioms changed_message
 #print axioms changed_readback

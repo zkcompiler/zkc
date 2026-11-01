@@ -40,3 +40,29 @@ run_elab do
       "requires the complete expected type before proof selection")
   unless refused && !(← unknown.mvarId!.isAssigned) do
     throwError "proof selection chose the requested proposition"
+
+elab "companion_internal_failure%" : term =>
+  throw (.internal Tests.Companions.proposalFailureId)
+
+/- An implementation failure is not a missing mathematical method. Neither
+ordered defaults nor an explicit companion may turn it into fallback/open. -/
+run_elab do
+  let expected := Lean.mkConst ``True
+  let good : DefaultMethod := ⟨"truth", ← `(term| True.intro)⟩
+  let broken : DefaultMethod := ⟨"internal-failure", ← `(term| companion_internal_failure%)⟩
+  for explicit in [false, true] do
+    let propagated ← try
+      if explicit then
+        let target ← elabTerm (← `(term| 3 + 0 = (3 : Nat))) none
+        let _ ← assemble #[⟨"Counter.base", #[← `(term| companion_internal_failure%)]⟩]
+          target #[good]
+        pure false
+      else
+        let _ ← assemble #[] expected #[broken, good]
+        pure false
+    catch error =>
+      match error with
+      | .internal id _ =>
+          if id == Tests.Companions.proposalFailureId then pure true else throw error
+      | _ => throw error
+    unless propagated do throwError "internal proposal failure was converted into a method result"

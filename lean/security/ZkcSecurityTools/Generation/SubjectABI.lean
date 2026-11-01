@@ -29,6 +29,9 @@ structure Output where
   /-- Optional installation modules; the fixed subject need not import proofs. -/
   imports : List String := []
   clauseInterpretation : Option ClauseInterpretation := none
+  /-- Display labels in retained source order; empty selects neutral labels.
+  Types, optionality and visibility are always read from the admitted subject. -/
+  fieldNames : List String := []
 
 def inputName (index : Nat) : String := "input" ++ toString index
 def call (name : String) (arguments : List String) : String :=
@@ -154,6 +157,11 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
       let ref := (List.range argument).foldl (fun ref _ => "(.there " ++ ref ++ ")") ".here"
       pure ("(witness _ (validatorSubject.target.application.selectors.get " ++ ref ++ "))")
   let n := names types
+  let fieldNames := if output.fieldNames.isEmpty then n else output.fieldNames
+  unless fieldNames.length == types.length do throw "subject-abi-field-names"
+  let publicFieldNames := publicPositions.map (fun index => fieldNames[index]!)
+  let namedRecord := fun labels arguments => "{ " ++
+    ", ".intercalate (labels.zip arguments |>.map fun (label, argument) => label ++ " := " ++ argument) ++ " }"
   let all := call "sourceInputs" n
   let present := call "inputs" n
   let presentSource := call "sourceInputs" ((types.zip n).map fun (ty, name) =>
@@ -205,15 +213,15 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     else "(" ++ representable ++ ") ∧ " ++
       (if output.clauseInterpretation.isNone then "(source_input_condition subject on " ++ present ++ ")"
        else "inputCondition " ++ present)
-  let unpacked := (List.range types.length).map fun index =>
-    "(TypedABI.unpack data)" ++ String.join (List.replicate index ".2") ++ ".1"
+  let unpacked := fieldNames.map fun name => "(SourceView.unpack data)." ++ name
   let dataPair := "(" ++ call "producerInputs" (producerArgumentPositions.map (fun index => unpacked[index]!)) ++ ", " ++
     call "validatorInputs" (publicPositions.map (fun index => unpacked[index]!)) ++ ")"
   let producerDataName := if producerArgumentPositions.isEmpty then "_data" else "data"
   let validatorDataName := if publicPositions.isEmpty then "_data" else "data"
   let pairDataName := if producerArgumentPositions.isEmpty && publicPositions.isEmpty then "_data" else "data"
-  let imports := ([output.subjectModule, "ZkcSecurityTools.SubjectABI", "ZkcSecurityTools.SourceInputClauses"] ++ output.imports).eraseDups
+  let imports := ([output.subjectModule, "ZkcSecurityTools.SubjectABI", "ZkcSecurityTools.SourceInputClauses", "ZkcTools.StructuredSource.NamedValues"] ++ output.imports).eraseDups
   let mut text := "module\n\n" ++ String.join (imports.map ("public import " ++ · ++ "\n")) ++
+    "public meta import ZkcTools.StructuredSource.NamedValues\n" ++
     "\n@[expose] public section\nnoncomputable section\n\n" ++
     "/-! Generated from the actual admitted subject, source ABI, input clauses\n" ++
     "and retained selectors. Regenerate; do not hand edit. Input formula semantics\n" ++
@@ -224,7 +232,17 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "open ZkcSecurity.Claims.HonestPair ZkcSecurity.Tools.SubjectABI\n" ++
     "open " ++ output.subjectNamespace ++ "\n\n" ++
     "abbrev model := subject.domainModel\n" ++
-    "abbrev Data := Values (TypedABI.Slot Domain.dataType model.Value) subject.target.owner.protocol.inputs\n\n" ++
+    "named_values SourceView [" ++ ", ".intercalate fieldNames ++ "] := subject.target.owner.protocol.inputs\n\n" ++
+    "named_values PublicView [" ++ ", ".intercalate publicFieldNames ++ "] := validatorArtifacts.publics\n\n" ++
+    "abbrev RawInputs := SourceView.View (Component model.Value)\n" ++
+    "abbrev Data := Values (TypedABI.Slot Domain.dataType model.Value) subject.target.owner.protocol.inputs\n" ++
+    "abbrev DataFields := SourceView.View (TypedABI.Slot Domain.dataType model.Value)\n\n" ++
+    "def fields (values : Data) : DataFields := SourceView.unpack values\n" ++
+    "def fromFields (fields : DataFields) : Data := SourceView.pack fields\n\n" ++
+    "theorem fromFields_fields (values : Data) : fromFields (fields values) = values :=\n" ++
+    "  SourceView.pack_unpack values\n\n" ++
+    "theorem fields_fromFields (record : DataFields) : fields (fromFields record) = record :=\n" ++
+    "  SourceView.unpack_pack record\n\n" ++
     "theorem source_types : subject.target.owner.protocol.inputs = " ++ literal types ++ " := rfl\n" ++
     "theorem public_positions : selected.policy.publicInputs = " ++ literal publicPositions ++ " := rfl\n" ++
     "theorem public_types : validatorArtifacts.publics = " ++ literal publicTypes ++ " := rfl\n" ++
@@ -232,23 +250,23 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "theorem artifact_identities :\n" ++
     "    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = " ++ literal metadata.producerIdentity ++ " ∧\n" ++
     "    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = " ++ literal metadata.validatorIdentity ++ " := by decide +kernel\n\n" ++
-    "def sourceInputs" ++ rawBinders ++ " : subject.Inputs :=\n  " ++ values n ++ "\n\n" ++
-    "def data" ++ dataBinders ++ " : Data :=\n  " ++ values n ++ "\n\n" ++
+    "def sourceInputs" ++ rawBinders ++ " : subject.Inputs :=\n  SourceView.pack " ++ namedRecord fieldNames n ++ "\n\n" ++
+    "def data" ++ dataBinders ++ " : Data :=\n  SourceView.pack " ++ namedRecord fieldNames n ++ "\n\n" ++
     "def inputs" ++ dataBinders ++ " : subject.Inputs :=\n  TypedABI.optional Domain.dataType " ++ call "data" n ++ "\n\n" ++
     "theorem sourceInputs_surjective (values : subject.Inputs) :\n    " ++ existential types (fun _ => true) ++
       "values = " ++ all ++ " := by subject_abi_surjective\n\n" ++
     "theorem data_surjective (values : Data) :\n    " ++ existential types isService ++
       "values = " ++ call "data" n ++ " := by subject_abi_surjective\n\n" ++
-    "def statement" ++ publicBinders ++ " : validatorArtifacts.Statement model :=\n  " ++ values publicNames ++ "\n\n" ++
+    "def statement" ++ publicBinders ++ " : validatorArtifacts.Statement model :=\n  PublicView.pack " ++ namedRecord publicFieldNames publicNames ++ "\n\n" ++
     "theorem statement_surjective (values : validatorArtifacts.Statement model) :\n    " ++
       existentialBinders publicBinders ++ "values = " ++ call "statement" publicNames ++ " := by subject_abi_surjective\n\n" ++
-    "abbrev StatementData := TypedABI.Fields model.Value validatorArtifacts.publics\n\n" ++
-    "def statementData (values : validatorArtifacts.Statement model) : StatementData := TypedABI.unpack values\n" ++
-    "def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := TypedABI.pack fields\n\n" ++
+    "abbrev StatementData := PublicView.View model.Value\n\n" ++
+    "def statementData (values : validatorArtifacts.Statement model) : StatementData := PublicView.unpack values\n" ++
+    "def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := PublicView.pack fields\n\n" ++
     "theorem statementOfData_statementData (values : validatorArtifacts.Statement model) :\n" ++
-    "    statementOfData (statementData values) = values := TypedABI.pack_unpack values\n\n" ++
+    "    statementOfData (statementData values) = values := PublicView.pack_unpack values\n\n" ++
     "theorem statementData_statementOfData (fields : StatementData) :\n" ++
-    "    statementData (statementOfData fields) = fields := TypedABI.unpack_pack fields\n\n" ++
+    "    statementData (statementOfData fields) = fields := PublicView.unpack_pack fields\n\n" ++
     "def initialHistory" ++ publicBinders ++ " : Domain.History model.toCarriers :=\n" ++
     "  Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs\n" ++
     "    " ++ call "statement" publicNames ++ " subject.publicBindingArity subject.publicBindingData\n\n" ++
@@ -284,7 +302,7 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "theorem representable_iff" ++ dataBinders ++ " :\n" ++
     "    inputsRepresentable " ++ present ++ " ↔ (" ++ representable ++ ") := by\n" ++
     "  change inputsRepresentable " ++ presentSource ++ " ↔ _\n" ++
-    "  simp [inputsRepresentable, inputRepresentable, sourceInputs]\n\n" ++
+    "  simp [inputsRepresentable, inputRepresentable, sourceInputs, SourceView.pack]\n\n" ++
     "theorem honestInput_iff" ++ dataBinders ++ " :\n" ++
     "    subject.HonestInput " ++ present ++ " ↔ (" ++ honestCondition ++ ") := by\n" ++
     "  exact (abi.honest_pack_iff " ++ call "data" n ++ ").trans\n" ++

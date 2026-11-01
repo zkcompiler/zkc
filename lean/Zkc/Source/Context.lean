@@ -133,3 +133,4 @@ end Zkc.Source
 -- private proof helpers, leaving its stored provider ambiguous to an audit.
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Source.Environment.prepend
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Source.Var.weakenPrefix

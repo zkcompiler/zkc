@@ -173,7 +173,7 @@ theorem current_digest : GkrSourceData.snapshot.source =
 theorem malformed_gate_map :
     invoke (helpers (G := ℚ)) GkrSourceBodies.scopedHelper44Helper
       (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) = .halt .refused := by
-  rw [HonestCircuit.scopedHelper44_association.invoke GkrSourceViews.unit.linked]
+  rw [HonestCircuit.gate_bodies.map.invoke GkrSourceViews.unit.linked]
   change (Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
     (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil))))).bind _ = _
   have stopped := Evaluation.denoteCollect_admission_stop (helpers (F := ℚ) (G := ℚ)) HonestCircuit.gateCollection
@@ -187,8 +187,13 @@ theorem refused_layer_index :
     invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
       (.cons ([] : List ℚ) (.cons [] (.cons []
         (.cons 2 (.cons 1 (.cons 1 (.cons 2 .nil))))))) = .halt .refused := by
-  rw [HonestCircuit.helper34_association.invoke GkrSourceViews.unit.linked, HonestCircuit.values_body]
-  simp [Primitive.evaluate, primitiveOutcome, checkedIndices, indexLimit, PIR.Process.bind, Values.get]
+  rw [HonestCircuit.circuit_bodies.values.invoke GkrSourceViews.unit.linked]
+  simp only [meaning]
+  rw [Evaluation.denote_meaning_eq_meaningOn, HonestCircuit.Goals.valuesProcess_equation]
+  dsimp only [HonestCircuit.Goals.valuesProcess, HonestCircuit.Goals.valuesProcess_certificate]
+  norm_num [Primitive.evaluateOn, primitiveOutcome, checkedIndices, indexLimit,
+    PIR.Process.bind, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
 
 /-- The complete present value is returned by the actual component table. -/
 theorem read_output :
@@ -196,8 +201,9 @@ theorem read_output :
       GkrSourceBodies.helper57Helper
       (.cons (some ([120, 30] : List ℚ)) (.cons (some 1) .nil)) =
       .done (.cons (some 30) .nil) := by
-  simpa using HonestHelpers.element_component (G := ℚ) ([120, 30] : List ℚ) 1
-    (by norm_num [indexLimit]) (by norm_num [indexLimit])
+  convert HonestHelpers.element_component (G := ℚ) ([120, 30] : List ℚ) 1
+    (by norm_num [indexLimit]) (by norm_num [indexLimit]) using 1
+  kernel_rfl
 
 theorem changed_readback :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
@@ -214,8 +220,9 @@ theorem read_after :
       GkrSourceBodies.helper70Helper
       (.cons (some ([120, 30] : List ℚ)) (.cons (some 0) .nil)) =
       .done (.cons (some 30) .nil) := by
-  simpa using HonestHelpers.element_after_component (G := ℚ) ([120, 30] : List ℚ) 0
-    (by norm_num [indexLimit]) (by norm_num [indexLimit])
+  convert HonestHelpers.element_after_component (G := ℚ) ([120, 30] : List ℚ) 0
+    (by norm_num [indexLimit]) (by norm_num [indexLimit]) using 1
+  kernel_rfl
 
 theorem read_past_end :
     invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
@@ -266,7 +273,9 @@ theorem actual_translated :
         .done (.cons (some [32, 78, 48]) .nil) := by
   rw [HonestLine.coefficients_component 2 cubeValues [2, 3] [5, 7] cubeTable decoded
     rfl rfl (by norm_num [indexLimit]), translated_line]
-  norm_num [row, List.range_succ, coeff_add, coeff_mul_X, coeff_X_pow]
+  norm_num [row, List.range_succ, coeff_add, coeff_mul_X, coeff_X_pow,
+    HonestLine.Goals.Line.encode, _root_.Zkc.Source.Values.present]
+  rfl
 
 theorem actual_scalar :
     invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
@@ -278,7 +287,8 @@ theorem actual_scalar :
 theorem unequal_slope_rows :
     invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper70Helper
       (.cons [1, 2] (.cons [3] (.cons 4 .nil))) = .halt .refused := by
-  rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked, HonestLine.slope_map_body]
+  rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked]
+  named_equation HonestLine.Goals.Slopes over ℚ ℚ
   have stopped := Evaluation.denoteCollect_admission_stop (helpers (F := ℚ) (G := ℚ)) HonestLine.slopeCollection
     (.cons ([1, 2] : List ℚ) (.cons [3] .nil)) (.cons 4 .nil) .refused (by rfl)
   simp only [Values.append] at stopped

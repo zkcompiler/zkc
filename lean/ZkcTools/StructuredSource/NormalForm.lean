@@ -183,6 +183,34 @@ def decodeLaw (definitions : List CheckedDefinition) (json : Json) : Except Stri
 /-- A protocol body, or the callback of one of its repeats. -/
 abbrev Body := Σ inputs outputs, Region protocolDialect inputs outputs
 
+/-- Retain the structural certificate until after selection. A label is only
+a format locator; equal labels at distinct lexical positions are refused. -/
+inductive BodySelection {inputs outputs : List Ty} (source : Region protocolDialect inputs outputs) where
+  | protocol
+  | callback (selected : Zkc.Source.Structured.Bindings.RepeatOccurrence source)
+
+def BodySelection.body {inputs outputs : List Ty} {source : Region protocolDialect inputs outputs} :
+    BodySelection source → Body
+  | .protocol => ⟨_, _, source⟩
+  | .callback selected => ⟨_, _, selected.repeatSite.body⟩
+
+/-- Address of the selected callback, rather than the enclosing repeat node. -/
+def BodySelection.path {inputs outputs : List Ty} {source : Region protocolDialect inputs outputs} :
+    BodySelection source → List Nat
+  | .protocol => []
+  | .callback selected => selected.position ++ [0]
+
+def selectBody {inputs outputs : List Ty} (source : Region protocolDialect inputs outputs)
+    (locator : Json) : Except String (BodySelection source) := do
+  match locator with
+  | .null => pure .protocol
+  | .str label =>
+    match (Zkc.Source.Structured.Bindings.repeatInventory source).filter (·.repeatSite.site == label) with
+    | [selected] => pure (.callback selected)
+    | [] => throw "normal-form-repeat"
+    | _ => throw "normal-form-repeat-ambiguous"
+  | _ => throw "normal-form-repeat"
+
 /-- Whether every law use presents a call of the law's own helper, and every
 application is of its callee's signature. -/
 def callsMatch {laws : List LawKey} {callees : List CalleeKey} {Δ : Scope} {out : List Ty}
@@ -215,22 +243,18 @@ def run (program : Program) (request : Json) : Except String Json := do
   let [protocolName, repeatSite, role, roster, pattern, laws, strict, kept, callees] ← Format.array request
     | throw "normal-form-request"
   let protocolName ← Format.string protocolName
-  let some definition := program.payload.protocols.find? (·.name == protocolName)
+  let [definition] := program.payload.protocols.filter (·.name == protocolName)
     | throw "normal-form-protocol"
-  let body : Body ← match repeatSite with
-    | .str site => match Zkc.Source.Structured.Bindings.findRepeat site definition.body with
-      | some found => pure found
-      | none => throw "normal-form-repeat"
-    | _ => pure ⟨_, _, definition.body⟩
+  let selection ← selectBody definition.body repeatSite
   let role ← Format.decimal (← Format.string role)
   let roster ← Format.decimal (← Format.string roster)
   let laws ← (← Format.array laws).mapM (decodeLaw program.payload.definitions)
-  let strict := strict == .bool true
+  let .bool strict := strict | throw "normal-form-request"
   let kept ← (← Format.array kept).mapM fun name => do
     let name ← Format.string name
     let some definition := program.payload.definitions.find? (·.name == name) | throw "normal-form-helper"
     pure definition.helper
-  let ⟨inputs, _, region⟩ := body
+  let ⟨inputs, _, region⟩ := selection.body
   let pattern ← decodePattern inputs (← Format.array pattern)
   let callees ← (← Format.array callees).mapM (decodeCallee program)
   let byName := normalize ⟨laws, strict, true, kept, callees⟩ region role roster pattern

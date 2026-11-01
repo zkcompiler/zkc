@@ -352,6 +352,42 @@ private def dependencyPolicyJson : String := r##"
       "proof-tools"
     ],
     [
+      "ZkcTools.Generation.Commands",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.HelperCallbacks",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.HelperPresentation",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.NamedEquations",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.NamedValues",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.ProcessReference",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.SourceCalls",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.ReferenceComposition",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.CollectionProofs",
+      "proof-tools"
+    ],
+    [
       "ZkcTools",
       "tools"
     ],
@@ -1275,6 +1311,7 @@ abbrev RegistryEntry := String × Option Name × Bool
 /-- Audit a registry of named hypotheses, models and trusted links.
 
 * Identifiers are nonempty and distinct.
+* Each schema belongs to one registry entry.
 * Every schema constant exists, and a schema the entry declares
   proposition-valued is a definition, inductive type or class whose type ends in
   `Prop`.
@@ -1301,6 +1338,7 @@ def checkRegistry (entries : List RegistryEntry) (families : List Name)
     if identifiers.contains identifier then throwError "duplicate registry identifier: {identifier}"
     identifiers := identifiers.insert identifier
     if let some schema := schema? then
+      if schemas.contains schema then throwError "duplicate registry schema: {schema}"
       let some info := env.find? schema
         | throwError "registry entry {identifier} names a missing constant: {schema}"
       if proposition && !ZkcTools.Statements.propositionValued info then

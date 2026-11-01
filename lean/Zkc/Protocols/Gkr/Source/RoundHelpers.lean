@@ -4,7 +4,7 @@ public import Zkc.Source.Structured.ProtocolOperations
 
 @[expose] public section
 
-/-! Literal GKR helper templates and collection layouts. Exact source selection is a client. -/
+/-! Literal helper templates and collection layouts. -/
 namespace ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
 open Zkc.Source Zkc.Source.Structured
 set_option smartUnfolding false

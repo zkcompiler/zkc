@@ -34,14 +34,14 @@ theorem coefficient_reads (ctx : ProtocolContext) (coefficients : List F) :
 theorem coefficients_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (site : String) (count : Nat) (bounded : count ≤ 4) (coefficients : List F) :
     denoteRepeatOn (carriers := uniformCarriers F G) coefficientSpec ctx (ctx.roles 1) (some count)
-      (verifierCoefficientState (some coefficients)) (.cons none .nil)
+      (verifierCoefficientState (some coefficients)) ((SourceRows.CoefficientCaptures.pack { line := none }))
       (fun args => coefficientBody.denote (participantMeaningWithOn (ringModel F G) (.silent _)
         Occurrence.actions observedHelpers (ctx.roles 1) [] ctx Occurrence.iterations) args.get)
       Occurrence.iterations site =
       (validatorCoefficients ctx (qualifyProtocolSite ctx.applicationPrefix site) 0 count coefficients).bind
         (fun next => .done (verifierCoefficientState (some next))) := by
   have repeated := Zkc.Source.Structured.LoopPresentation.present (carriers := uniformCarriers F G) coefficientSpec ctx (ctx.roles 1) (by simp)
-    (.cons none .nil)
+    ((SourceRows.CoefficientCaptures.pack { line := none }))
     (fun args => coefficientBody.denote (participantMeaningWithOn (ringModel F G) (.silent _)
       Occurrence.actions observedHelpers (ctx.roles 1) [] ctx Occurrence.iterations) args.get)
     Occurrence.iterations site
@@ -51,11 +51,13 @@ theorem coefficients_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ 
       Occurrence.actions)) (by
       intro coefficients index
       erw [coefficient_occurrence (F := F) (G := G) ctx (ctx.roles 1) []
-        (.cons (some index) ((verifierCoefficientState (some coefficients)).append (.cons (none) .nil))), verifierCoefficient_process ctx _ rfl (.ofSeparate separate (by decide)),
+        ((SourceRows.CoefficientArguments.pack {
+            index := some index,
+            coefficients := some coefficients,
+            line := none
+          })), verifierCoefficient_process ctx _ rfl (.ofSeparate separate (by decide)) index (some coefficients) none,
         PIR.Process.interpret_bind, coefficient_reads, PIR.Process.bind_assoc]) count bounded _ coefficients (verifierCoefficientState_masked ctx _ rfl _)
   rw [repeated]
-  rw [Zkc.Source.Structured.LoopPresentation.foldCounted _
-    (validatorCoefficients (G := G) ctx (qualifyProtocolSite ctx.applicationPrefix site))
-    (fun _ _ => rfl) (fun _ _ _ => rfl)]
+  rfl
 
 end ZkcSecurity.Realizations.Gkr.CanonicalVerifier

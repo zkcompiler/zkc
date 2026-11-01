@@ -53,33 +53,4 @@ theorem line_coefficient (ctx : ProtocolContext) (line : List F) (index : Nat)
   rfl
 
 
-/-- All indexed sends are extracted by the actual checked readback helper. -/
-theorem coefficient_fold (ctx : ProtocolContext) (line : List F) (start count : Nat)
-    (lineBound : line.length < indexLimit) (indexBound : start + count < indexLimit) :
-    Finite.fold (fun (_ : Unit) index => proverCoefficientProcess (G := G) ctx index (some line))
-      (List.range' start count) () = sendTail ctx (tail line start count) := by
-  induction count generalizing start with
-  | zero => rfl
-  | succ count ih =>
-    rw [List.range'_succ, Finite.fold, line_coefficient ctx line start
-      lineBound (by omega), tail_succ]
-    simp only [PIR.Process.bind, sendTail]
-    congr 1
-    funext _
-    exact ih (start + 1) (by omega)
-
-/-- The admitted actual repeat emits the entire coefficient suffix. -/
-theorem coefficients (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
-    (line : List F) (count : Nat) (bounded : count ≤ 4)
-    (lineBound : line.length < indexLimit) :
-    denoteRepeat coefficientSpec ctx (ctx.roles 0) (some count) (.cons none .nil)
-      (.cons (some line) .nil) (coefficientFn (F := F) (G := G) ctx (ctx.roles 0)) =
-      (sendTail ctx (tail line 0 count)).bind fun _ => .done (proverCoefficientState) := by
-  change denoteRepeat coefficientSpec ctx (ctx.roles 0) (some count) proverCoefficientState
-    (.cons (some line) .nil) (coefficientFn (F := F) (G := G) ctx (ctx.roles 0)) = _
-  rw [proverCoefficient_fold ctx (.ofSeparate separate (by decide)) (some line) count bounded _ ()
-    (proverCoefficientState_masked ctx _ rfl)]
-  rw [coefficient_fold ctx line 0 count lineBound (by
-    simp only [indexLimit]; omega)]
-
 end ZkcSecurity.Realizations.Gkr.HonestProducerPackets

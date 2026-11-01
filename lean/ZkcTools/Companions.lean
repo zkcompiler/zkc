@@ -118,7 +118,8 @@ def resolve (selections : Array Selection) (expected : Expr) : TermElabM Resolut
         return .incomplete selection.identity declaration "unproved companion stub"
       return .matched selection.identity declaration value
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       let message ← error.toMessageData.toString
       saved.restore
       return .refused selection.identity message

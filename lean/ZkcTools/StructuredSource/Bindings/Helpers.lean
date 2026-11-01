@@ -29,6 +29,36 @@ def uniqueHelper (program : Program) (kind : HelperKind) (inputs outputs : List 
     | throw "helper-association-ambiguous-or-missing"
   pure (definition, index)
 
+/-- Require exactly one candidate. Neither ordering nor a name breaks ties. -/
+def uniqueCandidate {α : Type} (reason : String) (candidates : List α) : Except String α :=
+  match candidates with
+  | [candidate] => pure candidate
+  | _ => throw reason
+
+/-- Select by an ordinary predicate on the existing checked definition. This
+is retrieval only; every installed candidate still needs its body equation. -/
+def uniqueHelperWhere (program : Program) (predicate : CheckedDefinition → Bool) :
+    Except String (CheckedDefinition × Nat) :=
+  uniqueCandidate "helper-association-ambiguous-or-missing"
+    (program.payload.definitions.zipIdx.filter fun (definition, _) => predicate definition)
+
+/-- Resolve a complete helper reference, including its kind and ordered ABI. -/
+def helperIndex (program : Program) (helper : Helper) : Except String Nat := do
+  return (← uniqueHelperWhere program (·.helper == helper)).2
+
+/-- Keep actual direct call occurrences in source order, including duplicates.
+Unlike dependency closure, this can distinguish two placements of one helper. -/
+def helperOccurrences (helpers : List Helper) (kind : HelperKind) (inputs outputs : List Ty) :
+    List Helper :=
+  helpers.filter fun helper => helper.kind == kind && helper.inputs == inputs && helper.outputs == outputs
+
+/-- Retrieve a single primitive body, ignoring observation markers only. The
+generated template still retains those markers and the exact operand routing. -/
+def singlePrimitive (definition : CheckedDefinition) (primitive : Primitive) : Bool :=
+  match definition.raw.operations.filter (fun | .mark _ => false | _ => true) with
+  | [.exec found] => found == primitive
+  | _ => false
+
 /-- The import identity and declaration namespace of reusable helper templates. -/
 structure HelperTemplateOutput where
   moduleName : String
@@ -68,5 +98,25 @@ def helperTemplateAssociationSource (program : Program) (name : String) (index :
     (table observations : String) : Except String String := do
   let template ← helperTemplateSource program name index
   helperAssociationText program name index table observations (template.dropEnd 1).toString
+
+/-- Expose the actual checked body rather than an independently owned template.
+The invocation equation retains the complete results and all stops. -/
+def helperBodySource (program : Program) (name : String) (index : Nat) : Except String String := do
+  let some definition := program.payload.definitions[index]? | throw "helper-association-index"
+  return "abbrev " ++ name ++ "Definition : CheckedDefinition := payload.definitions.get ⟨" ++
+    toString index ++ ", by decide +kernel⟩\n" ++
+    "abbrev " ++ name ++ "Helper := " ++ name ++ "Definition.helper\n" ++
+    "theorem " ++ name ++ "_body (args : Values (assignment F G) " ++ name ++ "Helper.inputs) :\n" ++
+    "    invoke (closedMeanings payload.definitions) " ++ name ++ "Helper args =\n" ++
+    "      " ++ name ++ "Definition.body.denote (meaning F G (closedMeanings payload.definitions)) args.get :=\n" ++
+    "  Evaluation.definitions_invoke_body_view_as SiteObservations.closed payload.definitions payload.linked\n" ++
+    "    " ++ name ++ "Definition (List.get_mem _ _) " ++ helperText definition.helper ++ " rfl " ++
+    name ++ "Definition.body rfl args\n\n"
+
+/-- A checked table alias used by generated seams. It asserts no body law. -/
+def helperAliasSource (program : Program) (name : String) (index : Nat) : Except String String := do
+  let some _ := program.payload.definitions[index]? | throw "helper-association-index"
+  return "abbrev " ++ name ++ "Definition : CheckedDefinition := payload.definitions.get ⟨" ++
+    toString index ++ ", by decide +kernel⟩\nabbrev " ++ name ++ "Helper := " ++ name ++ "Definition.helper\n\n"
 
 end ZkcTools.StructuredSource.Bindings

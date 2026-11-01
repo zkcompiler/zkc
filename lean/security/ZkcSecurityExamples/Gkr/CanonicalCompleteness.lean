@@ -39,31 +39,31 @@ theorem abi_readback (values : Data) (related : subject.Relation (abi.pack value
     (by decide +kernel) (by decide +kernel)
   let producerValues := (ZkcExamples.Structured.Generated.Connections.Gkr.producer.inputs.abi.read (abi.producer values)
     imported.program.payload.entry.inputs).getD
-      (HonestProducerSource.currentInputs runtime.encoding runtime.outputs none)
+      (SourceRows.circuitInputs runtime.encoding runtime.outputs none)
   have readP : ZkcExamples.Structured.Generated.Connections.Gkr.producer.inputs.abi.read (abi.producer values)
       imported.program.payload.entry.inputs = some producerValues := by
-    obtain ⟨initial, outputs, add, mul, layers, selector, width, service, rfl⟩ := data_surjective values
+    obtain ⟨fields, rfl⟩ := Canonical.InputView.pack_surjective values
     kernel_rfl
   have sourceP : Occurrence.participant model imported.program 0 producerValues =
       Occurrence.participant model imported.program 0
-        (HonestProducerSource.currentInputs runtime.encoding runtime.outputs none) := by
+        (SourceRows.circuitInputs runtime.encoding runtime.outputs none) := by
     apply Occurrence.participant_mask_congr
-    obtain ⟨initial, outputs, add, mul, layers, selector, width, service, rfl⟩ := data_surjective values
+    obtain ⟨fields, rfl⟩ := Canonical.InputView.pack_surjective values
     rfl
   change ZkcSecurity.Source.Pair CanonicalConnection.scope CanonicalReadback.Post
     (Occurrence.participant model imported.program 0
-      (HonestProducerSource.currentInputs runtime.encoding runtime.outputs none))
+      (SourceRows.circuitInputs runtime.encoding runtime.outputs none))
     (Occurrence.participant model imported.program 1
-      (HonestProducerSource.currentInputs runtime.encoding runtime.outputs (some 7))) at source
+      (SourceRows.circuitInputs runtime.encoding runtime.outputs (some 7))) at source
   rw [← sourceP] at source
   apply ZkcSecurity.Source.Installation.accepted validatorCompiled
     ZkcExamples.Structured.Generated.Connections.Gkr.producer ZkcExamples.Structured.Generated.Connections.Gkr.validator rfl model
     (abi.producer values) (abi.validator values) producerValues
-    (HonestProducerSource.currentInputs runtime.encoding runtime.outputs (some 7)) readP ?_
+    (SourceRows.circuitInputs runtime.encoding runtime.outputs (some 7)) readP ?_
     CanonicalConnection.scope CanonicalConnection.foldLaws CanonicalReadback.Post source ?_ ?_
-  · obtain ⟨initial, outputs, add, mul, layers, selector, width, service, rfl⟩ := data_surjective values
+  · obtain ⟨fields, rfl⟩ := Canonical.InputView.pack_surjective values
     kernel_rfl
-  · obtain ⟨initial, outputs, add, mul, layers, selector, width, service, rfl⟩ := data_surjective values
+  · obtain ⟨fields, rfl⟩ := Canonical.InputView.pack_surjective values
     kernel_rfl
   · rintro p v ⟨_, rfl⟩
     rfl

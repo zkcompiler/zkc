@@ -1,5 +1,5 @@
 import Tests.Generators.SumcheckBindings
-import ZkcTools.StructuredSource.Bindings.Gkr
+import Tests.Generators.SourceConfigurations.Gkr
 import ZkcTools.StructuredSource.Root
 import ZkcTools.StructuredSource.Bindings.Inputs
 import ZkcTools.StructuredSource.Bindings.PresentInputs
@@ -17,22 +17,22 @@ No old Python execution AST or evaluator participates in this route. -/
 
 open Zkc.Source.Structured ZkcTools.StructuredSource.Bindings
 
-private def clients : List (Snapshot × Output × Bool × Option String) := [
+private def clients : List (Snapshot × Output × Option (Program → Except String SourceInstallation) × Option String) := [
   (ZkcExamples.Structured.SumcheckSourceData.snapshot,
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheck"
       sourceModule := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs"
       programExpression := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program"
-      importedExpression := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported" }, false, some "ZkcExamples.Structured.SumcheckSourceData"),
+      importedExpression := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported" }, none, some "ZkcExamples.Structured.SumcheckSourceData"),
   (ZkcExamples.Structured.Generated.Bindings.TwoSumsData.snapshot,
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.TwoSums"
       sourceModule := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs"
       programExpression := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program"
-      importedExpression := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported" }, false, some "ZkcExamples.Structured.Generated.Bindings.TwoSumsData"),
+      importedExpression := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported" }, none, some "ZkcExamples.Structured.Generated.Bindings.TwoSumsData"),
   (ZkcExamples.Structured.GkrSourceData.snapshot,
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.GkrRounds"
       sourceModule := "ZkcExamples.Structured.GkrSourceViews"
       programExpression := "ZkcExamples.Structured.GkrSourceViews.program"
-      importedExpression := "ZkcExamples.Structured.GkrSourceViews.imported" }, true, none)]
+      importedExpression := "ZkcExamples.Structured.GkrSourceViews.imported" }, some Tests.Generators.SourceConfigurations.Gkr.configure, none)]
 
 private def require (result : Except String String) : IO String :=
   match result with
@@ -63,34 +63,32 @@ def main (args : List String) : IO Unit := do
       { genericOutput with moduleName := "Tests.Generated.StructuredBindingsGenericPresent" } 0))
     IO.FS.writeFile (genericPath.withExtension "callbacks.lean") (← require (callbacksSource generic genericOutput))
     IO.println "generated no-helper default callback fixture"
-  for (snapshot, output, gate, dataModule) in clients do
+  for (snapshot, output, configuration, dataModule) in clients do
     if selected.any (fun client => !output.moduleName.endsWith ("." ++ client)) then continue
     let program ← match check snapshot with
       | .ok program => pure program
       | .error reason => throw (IO.userError reason)
-    let output ← if gate then do
-      let selected ← match gkrProtocols program with
-        | .ok indices => pure indices
+    let installation ← match configuration with
+      | none => pure none
+      | some configure => match configure program with
+        | .ok installation => pure (some installation)
         | .error reason => throw (IO.userError reason)
-      pure { output with protocols := selected }
-      else pure output
+    let output := installation.map (fun selected => { output with protocols := selected.protocols }) |>.getD output
     let path := System.FilePath.mk directory / (output.moduleName.replace "." "/" ++ ".lean")
     IO.FS.createDirAll path.parent.get!
     if let some dataModule := dataModule then
       IO.FS.writeFile (path.withExtension "inputs.lean") (inputsSource program output.sourceModule dataModule)
     IO.FS.writeFile path (← require (source program output))
-    IO.FS.writeFile (path.withExtension "callbacks.lean") (← require (if gate then callbacksSource program output else
-      Tests.Generators.SumcheckBindings.sumcheckCallbacksSource program output))
-    let templates : HelperTemplateOutput := {
-      moduleName := "Zkc.Protocols.Gkr.Source.RoundHelpers"
-      namespaceName := output.moduleName ++ "Gate" }
-    let template ← require (if gate then do gateSource program output (← gkrGateOutput program) templates else
-      Tests.Generators.SumcheckBindings.sumcheckSource program output)
-    if gate then
-      let templatePath := System.FilePath.mk directory / (templates.moduleName.replace "." "/" ++ ".lean")
+    IO.FS.writeFile (path.withExtension "callbacks.lean") (← require (if installation.isSome then
+      callbacksSource program output else Tests.Generators.SumcheckBindings.sumcheckCallbacksSource program output))
+    let template ← require (match installation with
+      | some selected => helperAssociationsSource program output selected.templates selected.namespaceSuffix selected.associations
+      | none => Tests.Generators.SumcheckBindings.sumcheckSource program output)
+    if let some selected := installation then
+      let templatePath := System.FilePath.mk directory / (selected.templates.moduleName.replace "." "/" ++ ".lean")
       IO.FS.createDirAll templatePath.parent.get!
-      IO.FS.writeFile templatePath (← require (do gateTemplatesSource program templates (← gkrGateOutput program)))
-      IO.FS.writeFile (path.withExtension "caller.lean") (← require (gkrCallerSource program output))
+      IO.FS.writeFile templatePath (← require (helperTemplatesSource program selected.templates selected.associations))
+      IO.FS.writeFile (path.withExtension "caller.lean") (← require (selected.callerSource output))
     IO.FS.writeFile (path.withExtension "template.lean") template
     IO.FS.writeFile (path.withExtension "obligations.json") ((obligationLedger program output).pretty ++ "\n")
     IO.println s!"generated {output.moduleName}"

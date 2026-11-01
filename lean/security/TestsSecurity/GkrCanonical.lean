@@ -95,9 +95,9 @@ example (encoding : CircuitEncoding ℚ) (outputs : List ℚ)
       ZkcExamples.Structured.GkrVerifier.lineDeliverySite {}) ∈ scope.deliveries) :
     ZkcSecurity.Source.Pair scope CanonicalReadback.Post
       (Occurrence.participant (ringModel ℚ ℚ) ZkcExamples.Structured.GkrSourceViews.program 0
-        (HonestProducerSource.currentInputs encoding outputs service))
+        (SourceRows.circuitInputs encoding outputs service))
       (Occurrence.participant (ringModel ℚ ℚ) ZkcExamples.Structured.GkrSourceViews.program 1
-        (HonestProducerSource.currentInputs encoding outputs (some handle))) :=
+        (SourceRows.circuitInputs encoding outputs (some handle))) :=
   CanonicalReadback.actual encoding outputs admitted correct handle service scope roles
     outputDelivery leftDelivery rightDelivery lineDelivery
 

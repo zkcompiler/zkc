@@ -3,6 +3,8 @@ module
 public import ZkcSecurityExamples.TableMembership.Subject
 public import ZkcSecurityTools.SubjectABI
 public import ZkcSecurityTools.SourceInputClauses
+public import ZkcTools.StructuredSource.NamedValues
+public meta import ZkcTools.StructuredSource.NamedValues
 
 @[expose] public section
 noncomputable section
@@ -19,7 +21,22 @@ open ZkcSecurity.Claims.HonestPair ZkcSecurity.Tools.SubjectABI
 open ZkcSecurity.Examples.TableMembership.Subject
 
 abbrev model := subject.domainModel
+named_values SourceView [input0, input1] := subject.target.owner.protocol.inputs
+
+named_values PublicView [input0, input1] := validatorArtifacts.publics
+
+abbrev RawInputs := SourceView.View (Component model.Value)
 abbrev Data := Values (TypedABI.Slot Domain.dataType model.Value) subject.target.owner.protocol.inputs
+abbrev DataFields := SourceView.View (TypedABI.Slot Domain.dataType model.Value)
+
+def fields (values : Data) : DataFields := SourceView.unpack values
+def fromFields (fields : DataFields) : Data := SourceView.pack fields
+
+theorem fromFields_fields (values : Data) : fromFields (fields values) = values :=
+  SourceView.pack_unpack values
+
+theorem fields_fromFields (record : DataFields) : fields (fromFields record) = record :=
+  SourceView.unpack_pack record
 
 theorem source_types : subject.target.owner.protocol.inputs = ([Zkc.Source.Structured.Ty.vector "koala-bear",  Zkc.Source.Structured.Ty.sequence    (Zkc.Source.Structured.Ty.product      "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"      "case00000000"      (Zkc.Source.Structured.ProductFields.cons        (Zkc.Source.Structured.Ty.boolean)        (Zkc.Source.Structured.ProductFields.cons          (Zkc.Source.Structured.Ty.field "koala-bear")          (Zkc.Source.Structured.ProductFields.nil))))]) := rfl
 theorem public_positions : selected.policy.publicInputs = ([0, 1]) := rfl
@@ -30,10 +47,10 @@ theorem artifact_identities :
     (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:89cc0e253b6ad518ad6ee07c7628472536123e62a55669a4757cbba709bc4def",  "sha256:03f0b6aeaf6f69bddcd89d8679de3a25e11002b046405325d6c34697d0ff4976",  "_math_1")) := by decide +kernel
 
 def sourceInputs (input0 : Option (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : Option (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) : subject.Inputs :=
-  (.cons input0 (.cons input1 .nil))
+  SourceView.pack { input0 := input0, input1 := input1 }
 
 def data (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) : Data :=
-  (.cons input0 (.cons input1 .nil))
+  SourceView.pack { input0 := input0, input1 := input1 }
 
 def inputs (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) : subject.Inputs :=
   TypedABI.optional Domain.dataType (data input0 input1)
@@ -45,21 +62,21 @@ theorem data_surjective (values : Data) :
     ∃ (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))), values = (data input0 input1) := by subject_abi_surjective
 
 def statement (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) : validatorArtifacts.Statement model :=
-  (.cons input0 (.cons input1 .nil))
+  PublicView.pack { input0 := input0, input1 := input1 }
 
 theorem statement_surjective (values : validatorArtifacts.Statement model) :
     ∃ (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))), values = (statement input0 input1) := by subject_abi_surjective
 
-abbrev StatementData := TypedABI.Fields model.Value validatorArtifacts.publics
+abbrev StatementData := PublicView.View model.Value
 
-def statementData (values : validatorArtifacts.Statement model) : StatementData := TypedABI.unpack values
-def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := TypedABI.pack fields
+def statementData (values : validatorArtifacts.Statement model) : StatementData := PublicView.unpack values
+def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := PublicView.pack fields
 
 theorem statementOfData_statementData (values : validatorArtifacts.Statement model) :
-    statementOfData (statementData values) = values := TypedABI.pack_unpack values
+    statementOfData (statementData values) = values := PublicView.pack_unpack values
 
 theorem statementData_statementOfData (fields : StatementData) :
-    statementData (statementOfData fields) = fields := TypedABI.unpack_pack fields
+    statementData (statementOfData fields) = fields := PublicView.unpack_pack fields
 
 def initialHistory (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) : Domain.History model.toCarriers :=
   Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs
@@ -85,7 +102,7 @@ theorem runtimeInputs_eq (input0 : (model.Value (Zkc.Source.Structured.Ty.vector
 
 theorem preparation (values : subject.Inputs) :
     subject.runtimeInputs values = (TypedABI.complete Domain.dataType values).map
-      (fun (data : Data) => ((producerInputs), (validatorInputs (TypedABI.unpack data).1 (TypedABI.unpack data).2.1))) := by
+      (fun (data : Data) => ((producerInputs), (validatorInputs (SourceView.unpack data).input0 (SourceView.unpack data).input1))) := by
   rw [Subject.runtime_layout subject values ([]) (by rfl)]
   subject_abi_options
 
@@ -95,10 +112,10 @@ def abi : Subject.ABI subject where
   complete := TypedABI.complete Domain.dataType
   complete_iff := TypedABI.complete_eq_some_iff Domain.dataType
   producer := fun _data => (producerInputs)
-  validator := fun data => (validatorInputs (TypedABI.unpack data).1 (TypedABI.unpack data).2.1)
+  validator := fun data => (validatorInputs (SourceView.unpack data).input0 (SourceView.unpack data).input1)
   preparation := preparation
   producerSorts := fun _data => producer_sorts
-  validatorSorts := fun data => validator_sorts (TypedABI.unpack data).1 (TypedABI.unpack data).2.1
+  validatorSorts := fun data => validator_sorts (SourceView.unpack data).input0 (SourceView.unpack data).input1
 
 theorem source_clauses (values : subject.Inputs) :
     ∀ index isInput, subject.inputClause values index isInput :=
@@ -108,7 +125,7 @@ set_option backward.isDefEq.respectTransparency false in
 theorem representable_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) :
     inputsRepresentable (inputs input0 input1) ↔ (input0.length < indexLimit ∧ inputRepresentable (carriers := model.toCarriers) (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))) (some input1)) := by
   change inputsRepresentable (sourceInputs (some input0) (some input1)) ↔ _
-  simp [inputsRepresentable, inputRepresentable, sourceInputs]
+  simp [inputsRepresentable, inputRepresentable, sourceInputs, SourceView.pack]
 
 theorem honestInput_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) :
     subject.HonestInput (inputs input0 input1) ↔ (input0.length < indexLimit ∧ inputRepresentable (carriers := model.toCarriers) (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))) (some input1)) := by

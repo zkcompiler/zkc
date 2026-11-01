@@ -1,4 +1,5 @@
 import ZkcSecurity.ProgramLogic.RepeatedComponent
+import ZkcSecurityTools.SourceProperties.Loops
 import Tests.Obligations
 
 set_option autoImplicit false
@@ -107,8 +108,37 @@ theorem once_cost (count : Nat) (history : List Unit) (pending : Bool) :
       history (onceBudget count history pending) :=
   cost_repeatN once (fun _ _ => True) onceBudget onceFrame onceAllocation count history pending trivial
 
+/-- The same ordinary contract is installed with its actual reached-history
+budget. No initial-history reset or uniform maximum enters the proof. -/
+theorem installed_history_cost (count : Nat) (history : List Unit) (runtime : Nat × Nat) :
+    Typed.ChargedCostBound queryBit price (PIR.repeatN count counter.body runtime)
+      history (budget count history.length) := by
+  install_source_loop_cost using_component counter
+    using_frame (frame runtime.2) using_steps (allocation runtime.2)
+  rfl
+
+theorem installed_state_cost (count : Nat) (history : List Unit) (pending : Bool) :
+    Typed.ChargedCostBound queryBit price (PIR.repeatN count once.body pending)
+      history (onceBudget count history pending) := by
+  install_source_loop_cost using_component once using_frame onceFrame using_steps onceAllocation
+  trivial
+
+/-- An installed stateful component cannot authorize another body or replace
+the reached-history allowance with a smaller initial-history allowance. -/
+example : True := by
+  fail_if_success
+    have : Typed.ChargedCostBound queryBit price (PIR.repeatN 2 counter.body (0, 9)) [] 2 := by
+      install_source_loop_cost using_component counter
+        using_frame (frame 9) using_steps (allocation 9)
+  fail_if_success
+    have : Typed.ChargedCostBound queryBit price (PIR.repeatN 2 counter.body (0, 9)) [] 3 := by
+      install_source_loop_cost using_component once using_frame onceFrame using_steps onceAllocation
+  trivial
+
 #print axioms cost_repeatN
 #print axioms symbolic_cost
 #print axioms history_reset_refused
 #print axioms once_cost
+#print axioms installed_history_cost
+#print axioms installed_state_cost
 end TestsSecurity.PropertyCost

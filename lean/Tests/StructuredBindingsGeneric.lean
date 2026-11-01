@@ -39,8 +39,8 @@ example : (check snapshot).isOk = true := by decide +kernel
 def program : Program := (check snapshot).toOption.get (by decide +kernel)
 
 example : program.payload.definitions = [] := by kernel_rfl
-example : (Zkc.Source.Structured.Bindings.findRepeat "round"
+example : (Zkc.Source.Structured.Bindings.selectRepeat 0
     (program.payload.protocols.get ⟨0, by decide +kernel⟩).body).isSome = true := by kernel_rfl
-example : Zkc.Source.Structured.Bindings.findRepeat "missing"
+example : Zkc.Source.Structured.Bindings.selectRepeat 1
     (program.payload.protocols.get ⟨0, by decide +kernel⟩).body = none := by kernel_rfl
 end Tests.StructuredBindingsGeneric

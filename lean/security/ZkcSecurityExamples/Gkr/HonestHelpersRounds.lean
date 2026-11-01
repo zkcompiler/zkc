@@ -3,6 +3,7 @@ module
 public import ZkcSecurityExamples.Gkr.HonestHelpersLayout
 public import ZkcSecurityExamples.Components.GkrRoundsRealization
 public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+public meta import ZkcTools.StructuredSource.NamedValues
 
 @[expose] public section
 
@@ -17,6 +18,12 @@ open Zkc.Polynomial.Multilinear
 open ZkcSecurity.Examples.Components
 
 set_option maxRecDepth 20000
+
+named_values CoefficientResults [constant, linear, quadratic] := GkrSourceBodies.helper41Helper.outputs
+named_values RestrictionArguments [add, mul, left, right, challenge] := GkrSourceBodies.helper45Helper.inputs
+named_values EmptyResults [values] := GkrSourceBodies.emptyHelper.outputs
+named_values AppendArguments [point, challenge] := GkrSourceBodies.appendHelper.inputs
+named_values AppendResults [point] := GkrSourceBodies.appendHelper.outputs
 
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -42,9 +49,10 @@ theorem round_coefficients {n : Nat} (raw : GkrRoundsRealization.RawState F)
     (capacity : 2 ^ n < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper41Helper raw.values =
-      .done (.cons (GkrRoundsReference.message state).constant
-        (.cons (GkrRoundsReference.message state).linear
-          (.cons (GkrRoundsReference.message state).quadratic .nil))) := by
+      .done (CoefficientResults.pack (Value := assignment F G)
+        { constant := (GkrRoundsReference.message state).constant,
+          linear := (GkrRoundsReference.message state).linear,
+          quadratic := (GkrRoundsReference.message state).quadratic }) := by
   rw [round_message_table]
   exact GkrRoundsRealization.round_success raw state decoded capacity
 
@@ -54,7 +62,8 @@ theorem round_restriction {n : Nat} (raw : GkrRoundsRealization.RawState F)
     (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ n < indexLimit) (challenge : F) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper45Helper (raw.values.append (.cons challenge .nil)) =
+      GkrSourceBodies.helper45Helper (RestrictionArguments.pack (Value := assignment F G)
+        { add := raw.add, mul := raw.mul, left := raw.left, right := raw.right, challenge }) =
       .done (raw.restrict challenge).values := by
   rw [round_restriction_table]
   exact GkrRoundsRealization.fixGates_success raw state decoded capacity challenge

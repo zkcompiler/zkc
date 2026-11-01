@@ -19,11 +19,11 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 
 abbrev Result (F G : Type) := Values (Component (uniformCarriers F G).Value)
   GkrSourceViews.program.payload.entry.outputs × Original.State (uniformCarriers F G)
-def output : Var GkrSourceViews.program.payload.entry.outputs .boolean := .here
 abbrev root := ZkcExamples.Structured.Generated.Connections.Gkr.validator
 abbrev routing := ZkcExamples.Structured.Generated.Connections.Gkr.validatorRouting
 
-def inputs (runtime : Source.Invocation F) := SourceValidator.inputs (G := G) { runtime with handle := 7 }
+def inputs (runtime : Source.Invocation F) :=
+  Canonical.sourceInputs (ringModel F G) { runtime with handle := 7 }
 def occurrence (runtime : Source.Invocation F) :=
   Occurrence.participant (ringModel F G) GkrSourceViews.program 1 (inputs (G := G) runtime)
 def physical (runtime : Source.Invocation F) (history : Domain.History (uniformCarriers F G)) :=
@@ -33,7 +33,8 @@ def physical (runtime : Source.Invocation F) (history : Domain.History (uniformC
 def presented (runtime : Source.Invocation F) (history : Domain.History (uniformCarriers F G)) :=
   RootConnection.publicPresentation root (ringModel F G) (physical runtime history)
 
-def acceptance (result : Result F G) : Option Bool := result.1.get output
+def acceptance (result : Result F G) : Option Bool :=
+  (Canonical.OutputView.unpack result.1).accepted
 
 variable [Fintype F] [SampleableType F]
 attribute [local instance] OccurrenceReading.rawSampleable
@@ -50,7 +51,7 @@ def rejected
   let runtime := Canonical.invocation (ringModel F G) statement 7
   exact RootPublic.rejects_inputFrame root rfl (ringModel F G) (inputs runtime) (price (F := F))
     ((Domain.encodeValues (Canonical.statement (ringModel F G) runtime)).getD []) history _ rfl
-    (by rfl) (fun result => result.get output ≠ some true) []
+    (by rfl) (fun result => (Canonical.OutputView.unpack result).accepted ≠ some true) []
     (CanonicalSource.rejected statement 7 wrong [])
 
 omit [SampleableType F] in

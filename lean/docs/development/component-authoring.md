@@ -79,6 +79,139 @@ the admitted source to its checked normal form. That theorem covers the selected
 available-input pattern. Adversarial claims must use the appropriate optional
 input pattern and cannot infer universal input availability from this view.
 
+## Author a helper through its mathematical interface
+
+A goal module can derive the complete interface from an existing typed helper
+body. It imports the selected source, but no companion:
+
+```lean
+helper_presentation Gate
+  inputs [addWeight, mulWeight, left, right] outputs [value] := selectedBody
+```
+
+Here `selectedBody` is a closed, retained `Region dialect inputs outputs` term.
+The labels describe its ordered coordinates; the command reads their types
+from the body. It produces ordinary declarations:
+
+- `Gate.Inputs.View Value`, with complete named input packing for any carrier;
+- `Gate.Output model`, with every returned coordinate;
+- `Gate.run model table`, a curried readable computation;
+- `Gate.run_eq` and `Gate.equation`, checked structural correspondences;
+- `Gate.Goal model reference condition`, the complete mathematical obligation;
+- `Gate.law`, which assembles a proof into the existing `ReferenceLaw`.
+
+The reference returns `PIR.Outcome (Gate.Output model)`. It describes stops as
+well as successful returns. The condition states actual mathematical or helper
+requirements; it does not discharge them. The generated goal quantifies over
+an arbitrary helper table, so a dependency must be justified in that table.
+Applying `Gate.law` at an imported helper additionally requires its exact
+`BodyIn` association and the condition at the actual arguments.
+
+The implemented [GKR gate companion](../../ZkcExamples/Structured/GkrGateCompanion.lean)
+uses the following form for its scalar mathematics:
+
+```lean
+def valueReference (model : DomainModel)
+    (addWeight mulWeight left right : model.Field scalarDomain) :
+    PIR.Outcome (Value.Output model) :=
+  .returned ⟨Zkc.Protocols.AlgebraicRounds.Gate.value addWeight mulWeight left right⟩
+
+theorem value (model : DomainModel) :
+    Value.Goal model (valueReference model) (fun _ _ _ _ _ => True) := by
+  intro table addWeight mulWeight left right _
+  rfl
+```
+
+A companion can instead use `Gate.of_law` with an installed library theorem.
+That transport checks the actual body, the full encoded reference and its
+premises. Forwarding and ordered collection constructors live in
+`Zkc.Source.Structured.CollectionReference`; the corresponding proof-producing
+terms are in `ZkcTools.StructuredSource.ReferenceComposition`. They retain the
+callee's complete return row and collection admission, order and captures.
+`Values.curry` and named rows keep heterogeneous packing outside the
+mathematical formula.
+
+Direct use and companion discovery share this same goal. Use the existing
+`companion_goal` header and `@[zkc ...]` registration when discovery is useful;
+a plain theorem application needs neither. An invalid explicit companion
+cannot fall back to another method. Ordinary mathematical mismatches can try an
+ordered alternative; unexpected internal errors and resource failures propagate. Goal generation introduces no new request
+meaning, assumption, registry or trusted evaluator.
+
+## Present rows and reuse checked process equations
+
+`named_values` derives a record from a closed ordered row:
+
+```lean
+named_values InputView [inputs, outputs, add, mul, layers, selector, width, handle] :=
+  imported.program.payload.entry.inputs
+```
+
+`InputView.pack` and `unpack` are inverses on the complete row. Instantiate the
+carrier with `Component model.Value` to preserve missing coordinates. The same
+command accepts a normal-form `Scope`, with `Slot.Value model` as its carrier;
+there is no separate author-written adapter for binder tuples. A visibility
+projection has its own preservation premise and is never treated as an
+unconditional inverse. `named_values_bridge` checks both directions against an
+existing mathematical record. Reordering equally typed coordinates still
+changes the packed value.
+
+A checked source equation can also supply the process definition itself:
+
+```lean
+source_reference rootPresentation from_equation @Root.prover_observed
+  using [] atoms [invoke, denoteRepeatOn]
+```
+
+The command shares one certificate between its readable value and the
+correspondence theorem. `atoms` selects calls that remain visible in the
+presentation; `using` selects ordinary rewrite laws. Neither selects a security
+property. The generated theorem retains the original equation's entire
+telescope. A roster, masking or other applicability premise can disappear from
+the value's arguments when unused by that value, but it remains a premise of
+the correspondence. A reference generated under a condition is not an
+unconditional equation for the source.
+
+For a process without an existing checked equation, `source_reference name
+from @source using [...]` constructs the equation by proof-producing
+simplification. It preserves effects, arbitrary reply continuations, stopped
+branches and all outputs. It does not infer a missing mathematical invariant.
+The generated declarations are transactional: a failed command leaves no
+partially installed interface.
+
+A callee's site and role map can also come from its retained typed occurrence:
+
+```lean
+protocol_call inputCall from rootBody to inputSignature
+```
+
+The selection requires the complete signature and a unique occurrence. `at
+[path...]` disambiguates multiple calls. It produces a materialized `CallSite`
+with a checked occurrence equation, so downstream proofs use `inputCall.site`
+and `inputCall.roles` without repeating source strings. Occurrences after a
+stopped prefix are still lexical occurrences; this facility never claims that
+they execute. A same-typed operand swap changes the selected header.
+
+Source equations can be reused by honest execution, adversarial rejection and
+cost proofs. Those property proofs still supply different premises and
+postconditions. An honest-only equation cannot prove the malformed-input
+soundness branch. Shared observed-loop definitions and the existing loop
+presentation laws remove recursive execution wrappers; mathematical state
+invariants and history-dependent allocation remain author or library facts.
+
+New named precondition contracts used by public library theorems also need
+classification in `ZkcSecurity.Claims.Registry`. Reusing an existing registered
+contract needs no additional entry. A shared predicate has one schema entry,
+including when honest and adversarial proofs both use it. This metadata is
+explicit author work; it classifies the condition and does not discharge it.
+
+A complete closed-helper result transfers into the participant's closed or
+present-component table through `closed_invoke_returned` and
+`component_invoke_returned`. Both are parameterized by the actual unit, helper
+and complete arguments. The latter deliberately covers present inputs only;
+an all-input adversarial consumer still needs the optional-input equation.
+Clients do not need to repeat the silent interpretation proof.
+
 ## Install source presentations and counted loops
 
 An installed source family binds exact helper bodies, including the helpers
@@ -121,8 +254,11 @@ same reusable family with different bounds.
 A counted reference can expose checked zero/successor equations ending in
 `index`, `count` and the complete state. The callback must be independent of the
 remaining count, and the continuation must increment the index by one. The
-installer reads the existing recursion equation and applies the corresponding
-`LoopContracts` theorem; it does not interpret a second loop language.
+installer returns the reference, callback, and checked zero/successor equations,
+then applies the corresponding `LoopContracts` theorem. It accepts recursive
+presentations and definitional wrappers around `ObservedLoop.counted`, using the
+library equations for the latter. Both laws are checked at the original
+reference, including its complete continuation; there is no second loop language.
 
 - `install_source_loop_no using_invariant invariant using_rules [rules]` carries
   the actual reached history, current index, remaining count and complete-state
@@ -140,6 +276,28 @@ proofs now use this shared induction, while retaining their existing polynomial
 and Sumcheck mathematics. Representation equations remain separate from the
 compiled connection: the former explain the mathematics of a representation,
 while the latter checks the actual source and target instructions.
+
+For deterministic loops, choose a library equation before writing an induction:
+
+| Computation | Shared theorem | Mathematical input |
+| --- | --- | --- |
+| Append a transformed element at each iteration | `Finite.fold_append_encode` | Complete callback equation and state encoding |
+| Repeat a whole chunk, including zero iterations | `Finite.fold_repeat_encode` | Chunk and complete callback equation |
+| Carry an index and a value through a scan | `Finite.fold_cursor_encode` | Cursor transition and complete state encoding |
+| Observe each reached iteration | `ObservedLoop.counted_eq` or `forEach_eq` | Callback equation with the actual reached state |
+| Shrink a type-indexed mathematical state | `ObservedLoop.descending_eq` | Dependent transition and its mathematical invariant |
+
+The source adapters in `CollectionFold` and `CursorFold` apply these laws to the
+existing evaluator. They do not introduce a second loop semantics. The callback
+equation must retain captures and every returned coordinate. Admission belongs
+at its actual source position: for example, zero repetitions may still check a
+vector before a loop, whereas a check inside an unexecuted callback is skipped.
+
+The GKR companions use these interfaces for replication, tiling, indexed
+readback, line coefficients and backward circuit traversal. The family-specific
+work is still the polynomial identity, encoding relation or loop invariant.
+Named row labels, helper selections and dependency installations remain visible
+configuration; generating their packing does not make that configuration free.
 
 ## Generate the compiled connection
 
