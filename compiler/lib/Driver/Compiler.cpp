@@ -95,10 +95,12 @@ int zkc::runCompiler(int argc, char **argv,
            "[--no-finite-bulk]\n"
            "  protocol-public-coin SOURCE.mlir REQUIREMENT.json "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
-           "[--no-finite-bulk]\n"
+           "[--no-finite-bulk] [--no-calculation-batching] "
+           "[--oracle-realization=JSON]\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
            "REPORT.json [--fuse-vector-reductions] [--fuse-collect-fold] "
-           "[--no-finite-bulk]\n"
+           "[--no-finite-bulk] [--no-calculation-batching] "
+           "[--oracle-realization=JSON]\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
            "[--fuse-collect-fold] [--no-finite-bulk]\n"
@@ -269,6 +271,7 @@ int zkc::runCompiler(int argc, char **argv,
     if (argc < required)
       return fail(error("public-coin-options"));
     MathematicalSelectionPolicy mathematicalSelection;
+    protocol::OracleRealizationPolicy oraclePolicy;
     std::set<std::string> seen;
     for (int i = required; i < argc; ++i) {
       StringRef option(argv[i]);
@@ -278,9 +281,19 @@ int zkc::runCompiler(int argc, char **argv,
         mathematicalSelection.vectorReductionFusion = true;
       else if (option == "--fuse-collect-fold")
         mathematicalSelection.collectFoldFusion = true;
+      else if (option == "--no-calculation-batching")
+        mathematicalSelection.calculationBatching = false;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
-      else
+      else if (option.consume_front("--oracle-realization=")) {
+        auto parsed = protocol::parseOracleRealizationPolicy(option);
+        if (!parsed || !seen.insert("oracle-policy").second) {
+          if (!parsed)
+            return fail(parsed.takeError());
+          return fail(error("public-coin-options"));
+        }
+        oraclePolicy = std::move(*parsed);
+      } else
         return fail(error("public-coin-options"));
     }
     auto source = readInput(argv[2], 16 * 1024 * 1024);
@@ -301,12 +314,12 @@ int zkc::runCompiler(int argc, char **argv,
       if (!report)
         return fail(report.takeError());
       if (auto error = checkPublicCoin(*original, *requirement, *report,
-                                       mathematicalSelection))
+                                       mathematicalSelection, oraclePolicy))
         return fail(std::move(error));
       outs() << "{\"format\":\"zkc.public-coin-checked/0\"}\n";
     } else {
-      auto report =
-          analyzePublicCoin(*original, *requirement, mathematicalSelection);
+      auto report = analyzePublicCoin(*original, *requirement,
+                                      mathematicalSelection, oraclePolicy);
       if (!report)
         return fail(report.takeError());
       outs() << *report << '\n';
@@ -369,6 +382,11 @@ int zkc::runCompiler(int argc, char **argv,
         if (!target)
           return fail(target.takeError());
         options.cpuTarget = *target;
+      } else if (argument.consume_front("--oracle-realization=")) {
+        auto policy = protocol::parseOracleRealizationPolicy(argument);
+        if (!policy)
+          return fail(policy.takeError());
+        options.oracleRealization = std::move(*policy);
       } else if (argument.consume_front("--entry="))
         options.entry = argument.str();
       else if (argument == "--no-simplify")

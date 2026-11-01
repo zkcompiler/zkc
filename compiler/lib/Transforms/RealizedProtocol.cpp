@@ -37,7 +37,10 @@ RealizedProtocol::realize(PreparedProtocol prepared,
                                                       *record, policy))
     return std::move(failure);
   return RealizedProtocol(std::move(prepared), std::move(actual->module),
-                          std::move(*record), std::move(selectionText));
+                          std::move(*record), std::move(selectionText), policy);
+}
+OwningOpRef<ModuleOp> RealizedProtocol::authoredSnapshot() const {
+  return prepared.originalSnapshot();
 }
 OwningOpRef<ModuleOp> RealizedProtocol::preparedSnapshot() const {
   return prepared.snapshot();

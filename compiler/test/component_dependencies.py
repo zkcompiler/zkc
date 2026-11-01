@@ -278,6 +278,8 @@ def main():
         ROOT / "lib/Compiler/ApplicationMapData.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/LanguagePackageReader.h",
+        ROOT / "lib/Compiler/PublicCoin.h",
+        ROOT / "lib/Compiler/PublicCoinGraph.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",

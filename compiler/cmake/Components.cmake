@@ -426,6 +426,7 @@ add_zkc_component(Compiler
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp
+  lib/Compiler/PublicCoinGraph.cpp
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
   lib/Compiler/NativeProof.cpp

@@ -35,8 +35,9 @@ Installed primitives require the `DeterministicData` facet and immutable logical
 data types recursively. Copyable public-value constructors include commitments,
 proofs and finite polynomial carriers; mathematical-expression eligibility is
 not the criterion for immutability. Private immutable support is explicitly
-limited to sequences, fixed vectors and SHAKE snapshots, with all Type children
-and variant payloads checked recursively. Private setup keys, opening-state
+limited to sequences, finite field arrays, fixed vectors and SHAKE snapshots, with all Type children
+and variant payloads checked recursively. Formal polynomials and quotient-ring elements are immutable algebraic values
+without executable ports; observation grants no wire encoding. Private setup keys, opening-state
 handles and affine services are excluded; Copy alone grants no data authority.
 Generic Type formals do not grant or deny this interpretation: the explicit
 facet is checked on the actual recursively immutable input/output types. A

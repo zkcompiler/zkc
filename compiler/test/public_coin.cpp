@@ -26,7 +26,7 @@ constexpr StringLiteral fixture = R"(module { "protocol.module"() ({
 {sym_name="main",function_type=(!protocol.service_ref<"random.bls12-381.fr/0">)->i1,roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })";
 constexpr StringLiteral requirement =
-    R"({"format":"zkc.public-coin-requirement/0","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
+    R"({"format":"zkc.public-coin-requirement/0","subject":"authored","deployment_entries":["main"],"entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
 constexpr StringLiteral policyFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
@@ -177,6 +177,8 @@ json::Value analyze(StringRef source = fixture,
   consumeError(std::move(bad));
   auto prepared = mathematical::PreparedProtocol::prepare(*module, policy);
   require(bool(prepared), "independent preparation failed");
+  require(succeeded(prepared->selectEntries({"main"})),
+          "entry selection failed");
   auto snapshot = prepared->snapshot();
   auto printed = print(*snapshot);
   auto hash = toHex(SHA256::hash(arrayRefFromStringRef(printed)), true);
@@ -385,7 +387,8 @@ int main() {
   raw_string_ostream(printed) << report;
   auto decoded = json::parse(printed);
   require(bool(decoded) && *decoded == report, "report ownership");
-  auto *draw = (*report.getAsObject()->getArray("draws"))[0].getAsObject();
+  auto *draw = (*report.getAsObject()->getObject("graph")->getArray("draws"))[0]
+                   .getAsObject();
   require(draw->getString("site") == "draw" &&
               draw->getObject("delivery")->getString("site") == "coin",
           "owned sites");
@@ -393,7 +396,7 @@ int main() {
   require(request &&
               request->getString("contract") == "random.bls12-381.fr/0" &&
               request->getString("method") == "draw" &&
-              request->getArray("arguments")->empty(),
+              request->getString("law") == "uniform-field",
           "request metadata did not outlive its source context");
   mlir::DialectRegistry registry;
   RunOptions options;
@@ -430,9 +433,9 @@ int main() {
                         collect,
                 "compiled public-coin record lost preparation choice");
         auto *passes =
-            compiled->getAsObject()->getArray("post_analysis_passes");
+            compiled->getAsObject()->getArray("subject_to_bundle_stages");
         require(passes && !passes->empty() &&
-                    passes->front().getAsString() == "zkc-prepare-protocol",
+                    passes->front().getAsString() == "checked-preparation",
                 "compiled view omitted preparation before projection");
       }
   require(preparedHashes[0].size() == 1 &&
@@ -452,14 +455,16 @@ int main() {
       require(bool(result) && result->publicCoin, "reported pipeline refused");
       auto compiled = json::parse(*result->publicCoin);
       require(bool(compiled), "compiled pipeline report is not JSON");
-      json::Array expected{"zkc-prepare-protocol", "zkc-project-protocol"};
+      json::Array expected{"checked-preparation", "checked-oracle-realization",
+                           "zkc-project-protocol"};
       if (simplify)
         expected.push_back("zkc-simplify-participant");
       if (fix)
         expected.push_back("zkc-fix-polynomial-factors");
       expected.push_back("zkc-lower-closed-participant");
       expected.push_back("zkc-select-physical");
-      auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
+      auto *passes =
+          compiled->getAsObject()->getArray("subject_to_bundle_stages");
       require(passes && *passes == expected,
               "compiled report differs from selected pipeline stages");
     }

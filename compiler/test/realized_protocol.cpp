@@ -164,6 +164,20 @@ int main(int argc, char **argv) {
       auto entry = SymbolTable(unit(*actual))
                        .lookup<protocol_ir::MathematicalOp>(argv[2]);
       require(bool(entry), "realization lost observation entry");
+      // Bounded diagnostic inventory for independently writing a requirement.
+      // This is not a coverage judgment and never selects a service for it.
+      for (auto [port, type] : enumerate(entry.getFunctionType().getInputs()))
+        outs() << "input " << port << ": " << type << " "
+               << entry.getInputRoles()[port] << '\n';
+      entry.walk([&](Operation *op) {
+        if (auto query = dyn_cast<protocol_ir::QueryOp>(op);
+            query && query.getOwner() == argv[3])
+          outs() << "query: " << query.getSite() << '\n';
+        if (auto send = dyn_cast<protocol_ir::ExchangeOp>(op);
+            send && send.getSender() == argv[3] &&
+            !is_contained(snapshot.dataExchanges, op))
+          outs() << "delivery: " << send.getSite() << '\n';
+      });
       ProtocolObservationAnalysis analysis(*actual, snapshot.dataExchanges);
       uint64_t remaining = 1000000;
       facts::Work work(remaining);

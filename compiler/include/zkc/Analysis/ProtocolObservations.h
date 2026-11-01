@@ -116,6 +116,10 @@ public:
   llvm::Expected<const ProtocolObservationSummary *>
   get(protocol_ir::MathematicalOp, llvm::StringRef observer, facts::Work &);
 
+  /// Read a numerical premise through the same owner/cache and cumulative work.
+  llvm::Expected<const ExecutionObservationSummary *>
+  numerical(mlir::func::FuncOp, facts::Work &);
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

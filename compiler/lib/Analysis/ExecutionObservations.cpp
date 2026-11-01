@@ -77,6 +77,13 @@ struct ExecutionObservationAnalysis::Impl {
     auto policy = types.get(type);
     if (!policy || policy->affine)
       return unsupported("observation requires immutable logical data");
+    // Formal polynomials and quotient-ring elements have no wire encoding,
+    // but their exact algebraic values are immutable. This does not permit
+    // exporting them or turn private native handles into mathematical data.
+    if (mathematical::isFormalType(type)) {
+      immutableTypes.insert(type);
+      return true;
+    }
     if (auto variant = dyn_cast<data::VariantType>(type)) {
       for (auto arm : variant.getAlternatives())
         for (Type child : arm.getPayload())
@@ -93,8 +100,8 @@ struct ExecutionObservationAnalysis::Impl {
       // Mathematical eligibility is not immutability: commitments, proofs
       // and finite polynomial carriers are public data too. Conversely Copy
       // alone would admit private setup keys and opaque opening handles.
-      bool snapshot = kind == "sequence" || kind == "fixed_vector" ||
-                      kind == "shake128_state";
+      bool snapshot = kind == "sequence" || kind == "field_array" ||
+                      kind == "fixed_vector" || kind == "shake128_state";
       if (!permissions || !permissions->copy ||
           (permissions->custody != protocol::Custody::PublicValue && !snapshot))
         return unsupported("observation type carries private authority");

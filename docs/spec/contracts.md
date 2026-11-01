@@ -46,9 +46,13 @@ interpretation remains an independent consumer obligation.
 The [execution observation summary](ir/execution-observations.md) is a borrowed
 native analysis of actual numerical bodies, including logical stops and closed
 finite callbacks. It retains exact primitive occurrences as interpretation
-premises and is not a transcript-binding or security certificate. The structured
-public-coin consumer is being migrated separately in this unit. No serialized
-formal consumer or Lean interpretation is claimed by this summary.
+premises and is not a transcript-binding or security certificate. The
+[structured public-coin consumer](ir/public-coin.md) selects the authored
+or checked realized subject explicitly and serializes shared definition DAGs.
+Its required deployment inventory and independent policies reproduce the same
+checked owner as compilation. All verifier data inputs are binding obligations,
+including unused and generated shape inputs. No serialized formal consumer or
+Lean interpretation is claimed by this native summary.
 
 The [protocol observation summary](ir/protocol-observations.md) composes those
 numerical facts through actual Protocol definitions, role maps and retained

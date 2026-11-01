@@ -199,6 +199,43 @@ int main(int argc, char **argv) {
     observe(*take(analysis.get(caller, work)), {bits(1, {})}, bits(1, {}),
             false, true);
   });
+  cases.run("finite field arrays retain immutable data dependence", [] {
+    Source source;
+    Type array =
+        parseType("!algebra.field_array<\"bls12-381.fr\", 4>", &source.context);
+    require(bool(array), "field array type");
+    auto caller = source.function("identity", array, array);
+    exec::ScopedExecutionBuilder control(source.builder, caller);
+    control.returned(caller.getArgument(1));
+    admitted(source);
+    ExecutionObservationAnalysis analysis(*source.module);
+    uint64_t remaining = 100000;
+    facts::Work work(remaining);
+    observe(*take(analysis.get(caller, work)), {bits(1, {0})}, bits(1, {}),
+            true, false);
+  });
+  for (StringRef spelling :
+       {"!poly.polynomial<\"bls12-381.fr\", 2>", "!poly.quotient<17, 8>"})
+    cases.run("formal algebra identity " + spelling.str(), [&] {
+      Source source;
+      auto type = parseType(spelling, &source.context);
+      require(bool(type), "formal algebra type");
+      source.builder.setInsertionPointToEnd(&source.owner.getBody().front());
+      auto helper =
+          func::FuncOp::create(source.builder, source.location, "formal",
+                               source.builder.getFunctionType(type, type));
+      helper.setPrivate();
+      source.builder.setInsertionPointToEnd(helper.addEntryBlock());
+      func::ReturnOp::create(source.builder, source.location,
+                             helper.getArgument(0));
+      require(succeeded(zkc::admitStage(*source.module)),
+              "formal source admission");
+      ExecutionObservationAnalysis analysis(*source.module);
+      uint64_t remaining = 100000;
+      facts::Work work(remaining);
+      observe(*take(analysis.get(helper, work)), {bits(1, {0})}, bits(1, {}),
+              true, false);
+    });
   cases.run("resource authority is not deterministic data", [] {
     Source source;
     auto caller = source.function("identity", source.rng, source.rng);

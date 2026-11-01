@@ -557,7 +557,11 @@ struct ProtocolObservationAnalysis::Impl {
         return nullptr;
       }
       transfer.atoms.emplace(op, summary.atoms.size());
-      unsigned added = isa<pir::QueryOp, pir::ExchangeOp>(op) ? 1
+      auto query = dyn_cast<pir::QueryOp>(op);
+      auto exchange = dyn_cast<pir::ExchangeOp>(op);
+      bool observedQuery = query && query.getOwner() == observer;
+      bool received = exchange && exchange.getReceiver() == observer;
+      unsigned added = observedQuery || received ? 1
                        : isa<pir::ApplyOp, pir::RepeatOp>(op)
                            ? op->getNumResults() + 1
                            : 0;
@@ -565,9 +569,9 @@ struct ProtocolObservationAnalysis::Impl {
         capacity(work, "protocol observation atom limit exceeded");
         return nullptr;
       }
-      if (isa<pir::QueryOp>(op))
+      if (observedQuery)
         summary.atoms.push_back({Atom::Kind::Query, op, 0});
-      else if (isa<pir::ExchangeOp>(op))
+      else if (received)
         summary.atoms.push_back({Atom::Kind::Receive, op, 0});
       else if (isa<pir::ApplyOp, pir::RepeatOp>(op)) {
         bool repeat = isa<pir::RepeatOp>(op);
@@ -699,5 +703,17 @@ ProtocolObservationAnalysis::get(pir::MathematicalOp function,
   if (!summary)
     return impl_->failure();
   return summary;
+}
+Expected<const ExecutionObservationSummary *>
+ProtocolObservationAnalysis::numerical(func::FuncOp function,
+                                       facts::Work &work) {
+  if (!impl_->failureCode.empty())
+    return impl_->failure();
+  auto result = impl_->numerical.get(function, work);
+  if (!result) {
+    impl_->capture(result.takeError(), work);
+    return impl_->failure();
+  }
+  return *result;
 }
 } // namespace zkc
