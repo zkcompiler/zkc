@@ -1,6 +1,10 @@
 #include "zkc/Compiler/Language.h"
 #include "LanguageDiagnostics.h"
 #include "LanguageInterface.h"
+#include "SourceView.h"
+#include "mlir/AsmParser/AsmParser.h"
+#include "mlir/AsmParser/AsmParserState.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
@@ -93,7 +97,10 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
 struct CheckedOriginal::Storage {
   explicit Storage(ClosedEntry entry) : selected(std::move(entry)) {}
   ClosedEntry selected;
-  std::string original;
+  std::unique_ptr<mlir::MLIRContext> context;
+  std::unique_ptr<SourceMgr> sourceManager;
+  std::unique_ptr<mlir::AsmParserState> parser;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
   std::string identity, interface, toolchain, locationsIdentity;
   Correspondence report;
   LanguageInterface interfaceView;
@@ -188,7 +195,9 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
     return parsedInterface.takeError();
   mlir::DialectRegistry registry;
   registerDialects(registry);
-  mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
+  auto ownedContext = std::make_unique<mlir::MLIRContext>(
+      registry, mlir::MLIRContext::Threading::DISABLED);
+  auto &context = *ownedContext;
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
   std::string diagnostics;
@@ -206,12 +215,21 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
         });
         return mlir::success();
       });
-  SourceMgr manager;
+  auto ownedManager = std::make_unique<SourceMgr>();
+  auto &manager = *ownedManager;
   manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(original, filename),
                              SMLoc());
   // Parsing verifies syntax only; whole-module admission runs once below.
   mlir::ParserConfig config(&context, false);
-  auto module = mlir::parseSourceFile<mlir::ModuleOp>(manager, config);
+  auto parser = std::make_unique<mlir::AsmParserState>();
+  mlir::Block parsed;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
+  if (mlir::succeeded(
+          mlir::parseAsmSourceFile(manager, &parsed, config, parser.get())))
+    module =
+        mlir::detail::constructContainerOpForParserIfNecessary<mlir::ModuleOp>(
+            &parsed, &context,
+            mlir::FileLineColLoc::get(&context, filename, 1, 1));
   if (!module)
     return make_error<CompilationError>(
         diagnostics,
@@ -254,9 +272,8 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
     return located(std::move(e), true);
   auto storage = std::make_shared<CheckedOriginal::Storage>(entry);
   storage->limits = limits;
-  storage->original = original.str();
   storage->report = std::move(*compared);
-  storage->identity = digest(storage->original);
+  storage->identity = digest(original);
   storage->toolchain = compilerToolchainIdentity();
   storage->interface = interface.str();
   std::string mapIdentity;
@@ -298,10 +315,48 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
       return error("source.interface", "interface encoding is not canonical");
   }
   storage->interfaceView = std::move(*interfaceView);
+  // Retained immutable originals may be read concurrently. Clones still share
+  // MLIR's uniqued types/attributes, so their context must support those
+  // readers.
+  context.enableMultithreading();
+  storage->context = std::move(ownedContext);
+  storage->sourceManager = std::move(ownedManager);
+  storage->parser = std::move(parser);
+  storage->module = std::move(module);
   return CheckedOriginal(std::move(storage));
 }
+mlir::OwningOpRef<mlir::ModuleOp>
+detail::OriginalAccess::clone(const CheckedOriginal &original,
+                              mlir::IRMapping *mapping) {
+  auto source = original.storage->module.get();
+  return mlir::OwningOpRef<mlir::ModuleOp>(mlir::cast<mlir::ModuleOp>(
+      mapping ? source->clone(*mapping) : source->clone()));
+}
+Expected<protocol::SourceView>
+detail::OriginalAccess::read(const CheckedOriginal &original) {
+  if (!original.entry().protocolOrNull())
+    return error("source.entry", "structured source requires a protocol");
+  const auto &storage = *original.storage;
+  mlir::IRMapping mapping;
+  auto copy = clone(original, &mapping);
+  llvm::DenseMap<mlir::Operation *, mlir::Operation *> written;
+  storage.module.get()->walk([&](mlir::Operation *op) {
+    if (auto *copy = mapping.lookupOrNull(op))
+      written[copy] = op;
+  });
+  auto result = protocol::readSourceView(
+      std::move(copy), original.bytes(), original.entry().protocol().symbol,
+      storage.parser.get(), storage.sourceManager.get(), &written);
+  if (!result)
+    return result.takeError();
+  result->originalOwner = original;
+  return std::move(*result);
+}
 const ClosedEntry &CheckedOriginal::entry() const { return storage->selected; }
-StringRef CheckedOriginal::bytes() const { return storage->original; }
+StringRef CheckedOriginal::bytes() const {
+  const auto &manager = *storage->sourceManager;
+  return manager.getMemoryBuffer(manager.getMainFileID())->getBuffer();
+}
 StringRef CheckedOriginal::identity() const { return storage->identity; }
 StringRef CheckedOriginal::interfaceJson() const { return storage->interface; }
 const LanguageInterface &CheckedOriginal::interface() const {

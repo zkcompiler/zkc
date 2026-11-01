@@ -6,6 +6,20 @@ declarations. It performs no preparation, participant projection, finite
 selection or realization. `original` names this export boundary; it does not
 prove how an externally supplied module was produced.
 
+The input may be MLIR assembly or upstream MLIR bytecode. Both use the same
+native stage and structured-profile admission after parsing. The input byte
+limit applies to either encoding; textual nesting preflight applies only to
+assembly. MLIR owns bytecode decoding and resource allocation; this API does
+not claim a parser-wide resident-memory bound. Bytecode checkpoints require
+compatible dialect definitions and do not establish a stable zkc IR ABI.
+
+The digest always hashes the supplied encoding. Equivalent assembly and
+bytecode have different identities. Bytecode has no written operation ranges:
+all association `original` fields are absent, even if its operations carry
+`loc` annotations. Canonical frontend `CheckedOriginal` admission continues to
+require the exact authenticated assembly and interface; a bytecode checkpoint
+cannot substitute for it.
+
 Each `protocol.func` retains its own ordered participant roster and port scopes.
 The complete unit is checked: supported unused
 definitions are retained, and unsupported definitions are refused. Symbol names
@@ -124,9 +138,11 @@ port := [source-name, closed-type, [holder...], native-offset, native-count]
 
 The terms use the existing typed origin grammar, including closed static
 arguments. This is declaration context, not a new claim keyword or a routing
-language. It is stored as canonical JSON in the original module's optional
-`source_declarations` string attribute. Frontend correspondence recomputes that
-attribute exactly from the checked closed source. A standalone MLIR export
+language. The original module's optional `source_declarations` inherent
+attribute stores it as a structured MLIR `ArrayAttr` tree. The boundary exporter
+projects that tree to these JSON rows; a JSON string attribute is refused.
+Frontend correspondence recomputes the structured attribute exactly from the
+checked closed source. A standalone MLIR export
 cannot establish its frontend provenance. Projection removes this context
 with the other original-only contracts; provenance uses the retained original.
 

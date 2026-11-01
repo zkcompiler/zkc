@@ -22,7 +22,7 @@ struct StructuredSourceAssociation {
   std::vector<unsigned> row;
   std::string operation;
   StructuredSourceDerivation derivation;
-  /// Absent for a parser-inserted operation without a written definition.
+  /// Absent for bytecode or a parser-inserted operation without a definition.
   std::optional<StructuredSourceTextRange> original;
 };
 struct StructuredSource {
@@ -36,7 +36,8 @@ struct StructuredSource {
 /// This profile changes only site bounds; all other admission and export limits
 /// remain identical. Selecting it is not evidence that preparation is correct.
 enum class StructuredSourceProfile { Original, Prepared };
-/// Verify the whole supplied original, then export the bounded structured
+/// Parse assembly or upstream bytecode and verify the whole original, then
+/// export the bounded structured
 /// profile without preparation, projection or helper expansion. Associations
 /// address the actual rows of this export, including reconstructed regions.
 /// The digest binds the supplied bytes; it is not a correspondence proof.

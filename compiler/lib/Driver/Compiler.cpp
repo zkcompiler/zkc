@@ -3,6 +3,7 @@
 #include "CpuTarget.h"
 #include "Language.h"
 #include "Relations.h"
+#include "mlir/Bytecode/BytecodeReader.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/ApplicationMap.h"
 #include "zkc/Compiler/Compilation.h"
@@ -19,6 +20,7 @@
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Protocol.h"
+#include "llvm/Support/MemoryBufferRef.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <filesystem>
@@ -572,7 +574,8 @@ int zkc::runCompiler(int argc, char **argv,
     auto text = readInput(argv[2], 16 * 1024 * 1024);
     if (!text)
       return fail(text.takeError());
-    if (!mlirNestingWithinLimit(*text))
+    if (!mlir::isBytecode(MemoryBufferRef(*text, "input")) &&
+        !mlirNestingWithinLimit(*text))
       return fail(error("mlir-depth-limit"));
     mlir::MLIRContext context(registry);
     if (mode == "protocol-structured") {

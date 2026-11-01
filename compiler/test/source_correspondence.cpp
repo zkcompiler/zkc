@@ -1,4 +1,5 @@
 #include "../lib/Compiler/ComponentContracts.h"
+#include "../lib/Compiler/SourceView.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
@@ -141,8 +142,9 @@ int main() {
             "component claims acquired a different association");
     require(!claims.getAsObject()->getArray("seams")->empty(),
             "component seams disappeared during integration");
-    cantFail(
-        checkComponentContracts(*root.get("snapshot"), *claims.getAsObject()));
+    cantFail(checkComponentContracts(
+        take(zkc::language::detail::OriginalAccess::read(value)),
+        *claims.getAsObject()));
     const auto &declarations = *(*root.getArray("snapshot"))[10].getAsArray();
     std::set<std::string> expected, actual;
     for (unsigned table : {0, 1})
@@ -214,6 +216,24 @@ int main() {
     limits = Limits{};
     limits.irBytes = value.bytes().size() - 1;
     refuses(exportSourceCorrespondence(value, limits), "source.limit");
+  });
+  cases.run("claim inspection respects retained original byte limits", [] {
+    auto value = original();
+    auto bytes = take(exportSourceClaims(value));
+    auto limits = Limits{};
+    limits.irBytes = value.bytes().size();
+    limits.interfaceBytes = value.interfaceJson().size();
+    require(bytes.size() <= limits.interfaceBytes,
+            "fixture does not separate input and publication limits");
+    require(take(exportSourceClaims(value, limits)) == bytes,
+            "exact retained input limits refused");
+    --limits.irBytes;
+    refuses(exportSourceClaims(value, limits), "source.limit");
+    refused(checkSourceClaims(value, bytes, limits), "source.limit");
+    limits.irBytes = value.bytes().size();
+    --limits.interfaceBytes;
+    refuses(exportSourceClaims(value, limits), "source.limit");
+    refused(checkSourceClaims(value, bytes, limits), "source.limit");
   });
   cases.run(
       "ordinary Host entries are outside the structured protocol profile", [] {

@@ -206,6 +206,26 @@ int main(int argc, char **argv) {
   auto frozen = prepared.snapshot();
   auto owner = take(RealizedProtocol::realize(std::move(prepared)));
   Cases cases;
+  cases.run("native realization checks actual bodies without a record", [&] {
+    auto actual = take(protocol::emitOracleRealization(*frozen));
+    auto facts = take(protocol::checkOracleRealization(*frozen, actual));
+    for (Operation *op : facts.openingRequests)
+      require(op->getParentOfType<ModuleOp>() == *actual.module &&
+                  isa<protocol_ir::ExchangeOp>(op),
+              "native fact refers outside its checked candidate");
+    // The proposal is typed, but its inventory still carries no authority.
+    actual.entries.clear();
+    refuses(protocol::checkOracleRealization(*frozen, actual),
+            "oracle-common-body");
+  });
+  cases.run("native realization rejects handles into another candidate", [&] {
+    auto actual = take(protocol::emitOracleRealization(*frozen));
+    auto retained = std::move(actual.module);
+    actual.module = OwningOpRef<ModuleOp>(cast<ModuleOp>(retained->clone()));
+    // Structurally equal modules do not have the same operation identities.
+    refuses(protocol::checkOracleRealization(*frozen, actual),
+            "oracle-controller-body");
+  });
   cases.run(
       "observation transport associations come from the checked owner", [&] {
         auto source = fixture(context, "query-blocks");

@@ -1,9 +1,8 @@
 #include "RealizedProtocol.h"
 #include "OracleCommonRealization.h"
-#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "mlir/IR/IRMapping.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
-#include "llvm/ADT/StringSet.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -24,20 +23,22 @@ RealizedProtocol::realize(PreparedProtocol prepared,
     return selection.takeError();
   // Use the selection codec's sorted inventory and deterministic compact JSON
   // printer, matching the C++/Rust wire policy rather than object iteration.
+  ownJsonStrings(*selection);
   auto selectionText = printJson(*selection);
   auto actual = protocol::emitOracleRealization(original, policy);
   if (!actual)
     return actual.takeError();
-  auto record = protocol::serializeOracleRealization(original, *actual, policy);
+  auto facts = protocol::checkOracleRealization(original, *actual, policy);
+  if (!facts)
+    return facts.takeError();
+  // Retain a bounded external publication, not an input to native checking.
+  auto record = protocol::exportOracleRealization(original, *actual, policy);
   if (!record)
     return record.takeError();
-  // Consume the serialized proposal through the separate reader, including
-  // rederived interfaces/contracts, actual common SSA and every helper body.
-  if (auto failure = protocol::checkOracleRealization(original, *actual->module,
-                                                      *record, policy))
-    return std::move(failure);
   return RealizedProtocol(std::move(prepared), std::move(actual->module),
-                          std::move(*record), std::move(selectionText), policy);
+                          std::move(*facts), std::move(record->data),
+                          std::move(*selection), std::move(record->bytes),
+                          std::move(selectionText), policy);
 }
 OwningOpRef<ModuleOp> RealizedProtocol::authoredSnapshot() const {
   return prepared.originalSnapshot();
@@ -52,46 +53,17 @@ OwningOpRef<ModuleOp> RealizedProtocol::candidateSnapshot() const {
 }
 Expected<RealizedProtocol::ObservationSnapshot>
 RealizedProtocol::observationSnapshot() const {
-  ObservationSnapshot result{candidateSnapshot(), {}};
-  if (!result.module)
+  if (!candidate)
     return error("oracle-realization-source");
-  // This record is the private owner's checked edge, never caller-supplied
-  // evidence. Its exact vocabulary and all candidate bodies were rederived by
-  // checkOracleRealization before this owner could be constructed.
-  auto decoded = json::parse(record);
-  if (!decoded)
-    return decoded.takeError();
-  auto *root = decoded->getAsObject();
-  auto *entries = root ? root->getArray("entries") : nullptr;
-  if (!entries)
-    return error("oracle-realization-record");
-  auto unit =
-      cast<protocol_ir::ProtocolModuleOp>(result.module->getBody()->front());
-  SymbolTable symbols(unit);
-  for (const auto &entry : *entries) {
-    auto *row = entry.getAsObject();
-    auto name = row ? row->getString("entry") : std::nullopt;
-    auto *occurrences = row ? row->getArray("occurrences") : nullptr;
-    if (!name || !occurrences)
-      return error("oracle-realization-record");
-    auto function = symbols.lookup<protocol_ir::MathematicalOp>(*name);
-    if (!function)
-      return error("oracle-realization-record");
-    llvm::StringSet<> requests;
-    for (const auto &occurrence : *occurrences) {
-      auto *item = occurrence.getAsObject();
-      if (item && item->getString("purpose") == "opening_request") {
-        auto site = item->getString("site");
-        if (!site || !requests.insert(*site).second)
-          return error("oracle-realization-record");
-      }
-    }
-    function.walk([&](protocol_ir::ExchangeOp exchange) {
-      if (requests.erase(exchange.getSite()))
-        result.dataExchanges.push_back(exchange);
-    });
-    if (!requests.empty())
-      return error("oracle-realization-record");
+  IRMapping mapping;
+  ObservationSnapshot result{
+      OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate.get()->clone(mapping))),
+      {}};
+  for (Operation *request : facts.openingRequests) {
+    auto *copy = mapping.lookupOrNull(request);
+    if (!copy)
+      return error("oracle-common-body", "missing cloned opening request");
+    result.dataExchanges.push_back(copy);
   }
   return result;
 }

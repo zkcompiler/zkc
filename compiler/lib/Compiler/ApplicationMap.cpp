@@ -1,5 +1,7 @@
 #include "zkc/Compiler/ApplicationMap.h"
 #include "ApplicationMapData.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "llvm/ADT/STLExtras.h"
 #include <optional>
 
@@ -38,9 +40,8 @@ class Producer {
     for (unsigned i = 0; i < definition.roles.size(); ++i) {
       unsigned actual = i;
       if (call) {
-        auto name = (*(*call->descriptor.getAsArray())[2].getAsArray())[i]
-                        .getAsString();
-        auto found = llvm::find(caller.roles, name->str());
+        auto name = mlir::cast<mlir::StringAttr>(applicationRoles(*call)[i]);
+        auto found = llvm::find(caller.roles, name.str());
         if (found == caller.roles.end())
           return error("application-map-carrier");
         actual = found - caller.roles.begin();
@@ -135,8 +136,7 @@ class Producer {
         // A retained helper call stays a direct association. An expanded
         // helper is role-free and has its own occurrence, even if empty.
         expand = cursor == actual.instructions.size() ||
-                 !equalNaturalJson(instruction.descriptor,
-                                   actual.instructions[cursor].descriptor);
+                 !sameDescriptor(instruction, actual.instructions[cursor]);
       }
       if (expand) {
         const auto *calleeDefinition = source.find(callee(instruction));
@@ -207,13 +207,13 @@ public:
   Producer(const View &source, const View &candidate, Budget &budget)
       : source(source), candidate(candidate), budget(budget) {}
   Expected<json::Value> run() {
-    const auto &a = *source.wire.getAsArray();
-    const auto &b = *candidate.wire.getAsArray();
     json::Value record = json::Object{
         {"format", "zkc.application-map/0"},
-        {"source",
-         json::Object{{"format", a[0]}, {"digest", a[2]}, {"entry", a[3]}}},
-        {"candidate", json::Object{{"format", b[0]}, {"digest", b[2]}}},
+        {"source", json::Object{{"format", "zkc.structured-source/0"},
+                                {"digest", source.identity},
+                                {"entry", source.entry}}},
+        {"candidate", json::Object{{"format", "zkc.structured-source/0"},
+                                   {"digest", candidate.identity}}},
         {"applications", json::Array{}},
         {"instructions", json::Array{}}};
     size_t framing = printJson(record).size() + 1;
@@ -222,10 +222,12 @@ public:
     remainingBytes -= framing;
     // Domain constructors have a separate logical row grammar and are retained
     // exactly. Their instruction-count ordinal addresses the domain yield.
-    for (const auto &value : *(*source.wire.getAsArray())[4].getAsArray()) {
-      const auto &domain = *value.getAsArray();
-      auto name = *domain[1].getAsString();
-      for (unsigned i = 0; i <= domain[3].getAsArray()->size(); ++i)
+    auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
+        source.native.get().getBody()->front());
+    for (auto domain : unit.getBody().front().getOps<data::DomainOp>()) {
+      auto name = domain.getSymName();
+      for (unsigned i = 0; i < domain.getBody().front().getOperations().size();
+           ++i)
         if (auto e = row(name, {i}, std::nullopt, name, {i}))
           return std::move(e);
     }

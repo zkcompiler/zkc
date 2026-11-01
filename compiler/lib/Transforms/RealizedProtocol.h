@@ -1,9 +1,11 @@
 #ifndef ZKC_TRANSFORMS_REALIZED_PROTOCOL_H
 #define ZKC_TRANSFORMS_REALIZED_PROTOCOL_H
 
+#include "OracleRealizationFacts.h"
 #include "PreparedProtocol.h"
 #include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/JSON.h"
 #include <string>
 
 namespace zkc::mathematical {
@@ -19,14 +21,21 @@ namespace zkc::mathematical {
 class RealizedProtocol {
   PreparedProtocol prepared;
   mlir::OwningOpRef<mlir::ModuleOp> candidate;
+  protocol::OracleRealizationFacts facts;
+  llvm::json::Value recordData, selectionData;
   std::string record, selection;
   protocol::OracleRealizationPolicy requestedPolicy;
   RealizedProtocol(PreparedProtocol prepared,
                    mlir::OwningOpRef<mlir::ModuleOp> candidate,
-                   std::string record, std::string selection,
+                   protocol::OracleRealizationFacts facts,
+                   llvm::json::Value recordData,
+                   llvm::json::Value selectionData, std::string record,
+                   std::string selection,
                    protocol::OracleRealizationPolicy requestedPolicy)
       : prepared(std::move(prepared)), candidate(std::move(candidate)),
-        record(std::move(record)), selection(std::move(selection)),
+        facts(std::move(facts)), recordData(std::move(recordData)),
+        selectionData(std::move(selectionData)), record(std::move(record)),
+        selection(std::move(selection)),
         requestedPolicy(std::move(requestedPolicy)) {}
 
 public:
@@ -50,6 +59,14 @@ public:
   // The observation consumer must recompute after any snapshot mutation.
   llvm::Expected<ObservationSnapshot> observationSnapshot() const;
   llvm::StringRef realizationRecord() const { return record; }
+  // Boundary data is exposed only to compose external publications.
+  const llvm::json::Value &realizationData() const { return recordData; }
+  const llvm::json::Value &normalizedSelectionData() const {
+    return selectionData;
+  }
+  llvm::ArrayRef<protocol::OracleEntryFacts> realizationFacts() const {
+    return facts.entries;
+  }
   // Canonical exact inventory of actual prepared roots, with the requested
   // query order and authentication. The view borrows this owner's lifetime.
   llvm::StringRef normalizedSelection() const { return selection; }

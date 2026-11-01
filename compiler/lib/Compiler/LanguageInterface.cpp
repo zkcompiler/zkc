@@ -1,4 +1,5 @@
 #include "LanguageInterface.h"
+#include "SourceView.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Variant.h"
@@ -213,20 +214,9 @@ Error detail::withInterface(
                          [&](mlir::ModuleOp module, LanguageInterface &&view) {
                            return visit(module, view);
                          });
-  mlir::DialectRegistry registry;
-  registerDialects(registry);
-  mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
-  context.loadAllAvailableDialects();
-  context.printOpOnDiagnostic(false);
-  mlir::ScopedDiagnosticHandler handler(
-      &context, [](mlir::Diagnostic &) { return mlir::success(); });
-  // The handle owns these exact admitted bytes. Reparse to keep visitor-owned
-  // mutable MLIR out of the handle, without re-admitting its immutable facts.
-  mlir::ParserConfig config(&context, false);
-  auto module =
-      mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), config);
-  if (!module)
-    return error("source.internal", "admitted original no longer parses");
+  // The checked handle retains its parsed source and context. Inspect an
+  // independent clone without reconstructing the admitted program from bytes.
+  auto module = OriginalAccess::clone(original);
   return visit(*module, original.interface());
 }
 Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,

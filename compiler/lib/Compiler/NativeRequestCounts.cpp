@@ -1,8 +1,9 @@
 #include "../Transforms/RealizedProtocol.h"
 #include "NativeRequest.h"
 #include "mlir/IR/OperationSupport.h"
-#include "zkc/Support/Json.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringMap.h"
+#include <map>
 
 using namespace mlir;
 using namespace llvm;
@@ -11,38 +12,24 @@ namespace {
 namespace pir = protocol_ir;
 Error refuse() { return error("native-request-count-correspondence"); }
 struct Occurrence {
-  std::string site, role, path;
+  std::string site, role;
+  std::vector<unsigned> path;
 };
-std::string pathKey(const json::Array &path) {
-  return printJson(json::Value(json::Array(path)));
-}
 } // namespace
 Expected<SmallVector<NativeRequestCountPair>>
 readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
                         pir::ProtocolModuleOp projected,
                         const NativeProofPolicy &policy) {
-  auto source = owner.preparedSnapshot();
   auto common = owner.candidateSnapshot();
   auto ordinary = owner.project(false);
-  if (!source || !common || !ordinary ||
-      !hasSingleElement(*ordinary->getBody()) ||
+  if (!common || !ordinary || !hasSingleElement(*ordinary->getBody()) ||
       !OperationEquivalence::isEquivalentTo(
           &ordinary->getBody()->front(), projected,
           OperationEquivalence::IgnoreLocations))
     return refuse();
-  // Construction of the immutable owner uses the independent realization
-  // reader to check actual allocation
-  // order, child lookup operands, stored construction counts, multiplicity,
-  // overflow bounds and the per-block ceiling calculation. The record below
-  // supplies association only, after those actual-body premises have passed.
-  auto record = json::parse(owner.realizationRecord());
-  auto *object = record ? record->getAsObject() : nullptr;
-  auto *entries = object ? object->getArray("entries") : nullptr;
-  if (!entries) {
-    if (!record)
-      consumeError(record.takeError());
-    return refuse();
-  }
+  // The immutable owner's independent reader established actual allocation,
+  // count, multiplicity and ceiling arithmetic. Its typed associations retain
+  // source coordinates without decoding the external realization publication.
   auto unit = cast<pir::ProtocolModuleOp>(common->getBody()->front());
   auto program = dyn_cast_or_null<pir::MathematicalOp>(
       SymbolTable::lookupSymbolIn(unit, policy.entry));
@@ -76,30 +63,17 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
   if (!valid)
     return refuse();
   SmallVector<NativeRequestCountPair> result;
-  for (const auto &entryValue : *entries) {
-    auto *entry = entryValue.getAsObject();
-    if (!entry || entry->getString("entry") != policy.entry)
+  for (const auto &entry : owner.realizationFacts()) {
+    if (entry.entry != policy.entry)
       continue;
-    auto *occurrences = entry->getArray("occurrences");
-    auto *blocks = entry->getArray("query_blocks");
-    if (!occurrences || !blocks || occurrences->size() > 100000)
-      return refuse();
-    StringMap<SmallVector<Occurrence>> rounds;
+    std::map<std::vector<unsigned>, SmallVector<Occurrence>> rounds;
     SmallVector<Occurrence> loops;
-    for (const auto &row : *occurrences) {
-      auto *occurrence = row.getAsObject();
-      auto purpose =
-          occurrence ? occurrence->getString("purpose") : std::nullopt;
-      if (!purpose ||
-          (*purpose != "query_round_count" && *purpose != "query_requests"))
+    for (const auto &occurrence : entry.occurrences) {
+      if (occurrence.purpose != "query_round_count" &&
+          occurrence.purpose != "query_requests")
         continue;
-      auto site = occurrence->getString("site"),
-           role = occurrence->getString("role");
-      auto *path = occurrence->getArray("path");
-      if (!site || !role || !path)
-        return refuse();
-      Occurrence value{site->str(), role->str(), pathKey(*path)};
-      if (*purpose == "query_round_count")
+      Occurrence value{occurrence.site, occurrence.role, occurrence.sourcePath};
+      if (occurrence.purpose == "query_round_count")
         rounds[value.path].push_back(value);
       else
         loops.push_back(value);
@@ -149,14 +123,12 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
       // Source query-block inventory is ordered and multiplicity preserving.
       // Its first occurrence is the lexical identity of this generated loop.
       bool blockFound = false;
-      for (const auto &value : *blocks) {
-        auto *block = value.getAsObject();
-        auto *queries = block ? block->getArray("queries") : nullptr;
-        if (!queries || queries->empty() || !queries->front().getAsArray())
+      for (const auto &block : entry.queryBlocks) {
+        if (block.queries.empty())
           return refuse();
-        if (pathKey(*queries->front().getAsArray()) == item.path) {
-          auto capacity = block->getInteger("packet_capacity");
-          if (blockFound || !capacity || *capacity <= 0 || *capacity >= 1048576)
+        if (block.queries.front() == item.path) {
+          if (blockFound || !block.packetCapacity ||
+              *block.packetCapacity == 0 || *block.packetCapacity >= 1048576)
             return refuse();
           blockFound = true;
         }

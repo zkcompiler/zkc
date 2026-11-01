@@ -5,7 +5,9 @@
 #include "zkc/Dialect/Protocol/OraclePorts.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Dialect/TypeFormation.h"
+#include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/JSON.h"
@@ -775,10 +777,10 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
       {"declarations", declarations(candidate)}};
 }
 } // namespace
-Expected<std::string>
-serializeOracleRealization(ModuleOp prepared,
-                           const OracleCommonRealization &actual,
-                           const OracleRealizationPolicy &policy) {
+Expected<OracleRealizationPublication>
+exportOracleRealization(ModuleOp prepared,
+                        const OracleCommonRealization &actual,
+                        const OracleRealizationPolicy &policy) {
   auto selections = resolveOracleRealizationSelection(prepared, policy);
   if (!selections)
     return selections.takeError();
@@ -787,16 +789,24 @@ serializeOracleRealization(ModuleOp prepared,
   if (!record)
     return record.takeError();
   std::string text;
-  raw_string_ostream(text) << *record;
-  // Complete type trees can increase lexical JSON depth beyond native type
-  // depth. Publication must satisfy the same complete envelope bounds as its
-  // reader, including the distinction between semantic and lexical nesting.
-  auto bounded =
-      parseNaturalJson(text, byteLimit, 64, "oracle-realization-record",
-                       "oracle-realization-record-limit");
-  if (!bounded)
-    return bounded.takeError();
-  return text;
+  BoundedStream out(text, byteLimit);
+  out << *record;
+  // The closed encoder already constrains object keys and natural values.
+  // Check the wire envelope without allocating a second parsed record. Its
+  // lexical container depth differs from the native type depth.
+  if (out.overflow() || !mlirNestingWithinLimit(text, 64))
+    return error("oracle-realization-record-limit");
+  ownJsonStrings(*record);
+  return OracleRealizationPublication{std::move(*record), std::move(text)};
+}
+Expected<std::string>
+serializeOracleRealization(ModuleOp prepared,
+                           const OracleCommonRealization &actual,
+                           const OracleRealizationPolicy &policy) {
+  auto publication = exportOracleRealization(prepared, actual, policy);
+  if (!publication)
+    return publication.takeError();
+  return std::move(publication->bytes);
 }
 Error checkOracleRealization(ModuleOp prepared, ModuleOp candidate,
                              StringRef text,

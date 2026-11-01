@@ -203,6 +203,22 @@ direct realization loads the same dialect dependencies as its pass entry.
 Native binding installation checks, physical candidate choices, numerical
 recipes and storage permissions inspect native types and kinded attributes.
 Neutral declaration conversion occurs only at explicit program boundaries.
+Compiler source analyses now read bounded native views of admitted MLIR.
+Checked originals retain their parsed module and textual associations, with
+independent clones for analysis and no shared mutable module handle. Application
+maps, oracle obligations and component provenance no longer decode structured
+source JSON. Realization checking accepts typed proposals; native observation,
+request counts and event origins use facts derived from the actual-body reader.
+External reports compose owned data and retain their strict record readers.
+
+The structured-source and application-map ingress accepts MLIR assembly or
+upstream bytecode. Equal IR in different encodings has different byte identities;
+bytecode carries no fabricated original-text offsets. Canonical authenticated
+originals remain assembly. The input ceiling and post-parse admission bounds do
+not bound every allocation in the upstream parser. Independent runtime and
+semantic formats remain `/0`; bytecode does not replace their meaning. See
+[compiler serialization boundaries](compiler/serialization.md).
+
 Structured export preserves actual SSA binding positions and checked control.
 The independent formal reader must separately adopt the foundation's changed
 structured contracts; native checks do not establish that adoption. Preparation and

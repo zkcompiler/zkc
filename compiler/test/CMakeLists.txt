@@ -96,6 +96,10 @@ add_zkc_test(oracle_common_realization CpuTarget oracle-common-realization)
 target_compile_definitions(zkc-oracle_common_realization-test PRIVATE
   ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
 mlir_target_link_libraries(zkc-oracle_query_capacity-test PRIVATE MLIRParser)
+add_zkc_test(ir_input Compiler ir-input)
+mlir_target_link_libraries(zkc-ir_input-test PRIVATE MLIRBytecodeWriter)
+target_compile_definitions(zkc-ir_input-test PRIVATE
+  ZKC_INPUT_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_zkc_test(source_correspondence Compiler source-correspondence)
 add_zkc_test(language_authoring Language language-authoring)
 add_zkc_test(language_layout_oracles Compiler language-layout-oracles)

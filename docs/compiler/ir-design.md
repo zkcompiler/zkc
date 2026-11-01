@@ -272,6 +272,15 @@ requires a shared consumer of those relations, not wrappers around existing
 bindings. Data owns logical collections; Poly retains nominal polynomial
 domains and bases.
 
+[Serialization boundaries](serialization.md) apply to every new owner. Native
+Constraint analyses must consume assignment operations and typed facts directly;
+Clean/LLZK adapters translate at their ingress, and independent consumers receive
+explicit semantic projections. MLIR bytecode is the compiler checkpoint format.
+An interchange report must not become a second canonical assignment program or
+an input to a native optimization. Any new external format needs a named consumer,
+strict admission and cross-boundary tests. Existing Bundle/runtime/formal contracts
+are replaced only together with their consumers, without a fallback route.
+
 Delivery order does not impose representation order. Constraints consume exact
 logical assignments and relation assets before information-erasing physical
 lowering even though their migration follows represented execution. The STARK

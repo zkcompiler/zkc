@@ -27,6 +27,15 @@ and comparison against the actual emitted IR. Lean owns its interpretation and
 receipt audit. Consumer requirement coverage does not change an independently
 valid receipt's meaning or proof status.
 
+Compiler representation ownership follows [serialization boundaries](../compiler/serialization.md).
+Native source analyses now consume retained MLIR and bounded operation views;
+structured source, claims and source correspondence remain external projections.
+Oracle realization checks typed proposals against actual bodies before record
+publication. Upstream bytecode is accepted at the structured IR input boundary,
+with exact-encoding identities and no claimed textual ranges. Canonical source
+admission and all owned wire schemas remain at their current version-0 forms.
+No independent formal consumer is changed by this native ownership migration.
+
 ## Contract inventory
 
 The [interaction analysis contract](ir/interactions.md) fixes shared structural

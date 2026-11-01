@@ -433,6 +433,7 @@ add_zkc_component(Compiler
   lib/Compiler/ApplicationMapData.cpp
   lib/Compiler/ApplicationMapVerification.cpp
   lib/Compiler/StructuredSource.cpp
+  lib/Compiler/SourceView.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp

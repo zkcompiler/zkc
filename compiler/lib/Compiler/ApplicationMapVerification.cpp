@@ -1,6 +1,8 @@
 #include "ApplicationMapData.h"
 #include "zkc/Compiler/ApplicationMap.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "llvm/ADT/STLExtras.h"
 #include <optional>
 
@@ -8,7 +10,6 @@ using namespace llvm;
 namespace zkc::protocol::application_map {
 namespace {
 using Terms = std::deque<unsigned>;
-using Roles = std::map<std::string, std::string>;
 bool shape(const json::Object *object,
            std::initializer_list<StringRef> fields) {
   return object && object->size() == fields.size() &&
@@ -24,9 +25,8 @@ bool treeField(const json::Object &object, StringRef field,
                const json::Value &expected) {
   return same(object.get(field), expected);
 }
-bool sameTypes(ArrayRef<json::Value> a, ArrayRef<json::Value> b) {
-  return a.size() == b.size() &&
-         std::equal(a.begin(), a.end(), b.begin(), equalNaturalJson);
+bool sameTypes(ArrayRef<mlir::Type> a, ArrayRef<mlir::Type> b) {
+  return a == b;
 }
 class Checker {
   View &source, &candidate;
@@ -60,44 +60,6 @@ class Checker {
   std::string role(StringRef name, const Roles &roles) {
     auto found = roles.find(name.str());
     return found == roles.end() ? name.str() : found->second;
-  }
-  json::Value mappedDescriptor(const Instruction &instruction,
-                               const Roles &roles) {
-    auto result = instruction.descriptor;
-    auto &row = *result.getAsArray();
-    auto one = [&](json::Value &value) {
-      if (auto name = value.getAsString())
-        value = role(*name, roles);
-    };
-    auto set = [&](json::Value &value) {
-      for (auto &name : *value.getAsArray())
-        one(name);
-    };
-    auto code = opcode(instruction);
-    if (code == "protocol_repeat") {
-      set(row[3]);
-      for (auto &scope : *row[4].getAsArray())
-        set(scope);
-    } else if (code == "exchange") {
-      one(row[1]);
-      one(row[2]);
-    } else if (code == "draw" || code == "guard" || code == "oracle_query" ||
-               code == "oracle_contents")
-      one(row[1]);
-    else if (code == "local_call")
-      one(row[2]);
-    else if (code == "assemble" || code == "restrict")
-      set(row[1]);
-    else if (code == "oracle_send" || code == "oracle_input" ||
-             code == "oracle_components") {
-      one(row[1]);
-      set(row[2]);
-    } else if (code == "oracle_virtual") {
-      one(row[2]);
-      set(row[3]);
-    } else if (code == "oracle_sequence_append" || code == "oracle_sequence_at")
-      set(row[3]);
-    return result;
   }
   Error instruction(StringRef target, const Path &targetPath,
                     std::optional<unsigned> application, StringRef original,
@@ -165,9 +127,8 @@ class Checker {
     for (unsigned r = 0; r < definition.roles.size(); ++r) {
       unsigned callerRole = r;
       if (call) {
-        auto actual = (*(*call->descriptor.getAsArray())[2].getAsArray())[r]
-                          .getAsString();
-        auto found = llvm::find(caller.roles, actual->str());
+        auto actual = mlir::cast<mlir::StringAttr>(applicationRoles(*call)[r]);
+        auto found = llvm::find(caller.roles, actual.str());
         if (found == caller.roles.end())
           return mismatch("source application role");
         callerRole = found - caller.roles.begin();
@@ -226,20 +187,24 @@ class Checker {
                                  const Block &target, const Path &region,
                                  unsigned &cursor, Terms &targetValues,
                                  unsigned app, const Definition &definition,
-                                 unsigned input, const json::Value &type,
+                                 unsigned input, mlir::Type type,
                                  const std::vector<std::string> &owners,
                                  const Roles &roles) {
     if (cursor >= target.instructions.size())
       return mismatch("missing port restriction");
     unsigned index = cursor++;
     const auto &actual = target.instructions[index];
-    json::Array scope;
+    llvm::SmallVector<mlir::Attribute> scope;
     for (const auto &owner : owners)
-      scope.push_back(role(owner, roles));
-    json::Value descriptor = json::Array{"restrict", std::move(scope)};
-    if (!equalNaturalJson(actual.descriptor, descriptor) ||
+      scope.push_back(mlir::StringAttr::get(actual.operation->getContext(),
+                                            role(owner, roles)));
+    auto restriction =
+        mlir::dyn_cast<protocol_ir::RestrictRolesOp>(actual.operation);
+    if (!restriction ||
+        restriction.getRoles() !=
+            mlir::ArrayAttr::get(actual.operation->getContext(), scope) ||
         actual.operands.size() != 1 || actual.results.size() != 1 ||
-        !equalNaturalJson(actual.results[0], type) || !actual.regions.empty() ||
+        actual.results[0] != type || !actual.regions.empty() ||
         !actual.site.empty())
       return mismatch("port restriction rule");
     auto operands = select(targetValues, actual.operands);
@@ -265,22 +230,17 @@ class Checker {
     if (depth > 64 || sourceRegion.size() > 62 || targetRegion.size() > 62 ||
         !budget.charge())
       return error("application-map-limit");
-    for (const auto &type : original.inputs)
-      if (auto e = chargeTree(type, budget))
-        return std::move(e);
-    for (const auto &type : original.outputs)
-      if (auto e = chargeTree(type, budget))
-        return std::move(e);
+    if (auto e = chargeTypes(original.inputs, budget))
+      return std::move(e);
+    if (auto e = chargeTypes(original.outputs, budget))
+      return std::move(e);
     ValueContext sourceValues =
         arguments(definition.name, sourceRegion, original.inputs.size());
     for (auto [i, op] : enumerate(original.instructions)) {
       if (!budget.charge(1 + op.results.size()))
         return error("application-map-limit");
-      if (auto e = chargeTree(op.descriptor, budget))
+      if (auto e = chargeInstruction(op, budget))
         return std::move(e);
-      for (const auto &type : op.results)
-        if (auto e = chargeTree(type, budget))
-          return std::move(e);
       auto inputs = select(values, op.operands);
       if (!inputs)
         return inputs.takeError();
@@ -301,9 +261,9 @@ class Checker {
           return nested.takeError();
         Roles substitution;
         for (unsigned r = 0; r < calleeDefinition->roles.size(); ++r) {
-          auto name =
-              (*(*op.descriptor.getAsArray())[2].getAsArray())[r].getAsString();
-          substitution[calleeDefinition->roles[r]] = role(*name, roles);
+          auto name = mlir::cast<mlir::StringAttr>(applicationRoles(op)[r]);
+          substitution[calleeDefinition->roles[r]] =
+              role(name.getValue(), roles);
         }
         for (unsigned p = 0; p < calleeDefinition->restrictInputs.size(); ++p)
           if (calleeDefinition->restrictInputs[p]) {
@@ -354,7 +314,7 @@ class Checker {
             prefix.empty() || op.site.empty()
                 ? op.site
                 : mathematical::expandedApplicationSite(prefix, op.site);
-        if (!equalNaturalJson(mappedDescriptor(op, roles), actual.descriptor) ||
+        if (!sameDescriptor(op, actual, roles) ||
             !sameTypes(op.results, actual.results) ||
             *inputs != *actualInputs || site != actual.site ||
             op.regions.size() != actual.regions.size())
@@ -394,26 +354,23 @@ class Checker {
     if (!returned)
       return returned.takeError();
     if (inlined) {
-      if ((*original.terminator.getAsArray())[0].getAsString() != "return")
+      if (original.terminator != SourceTerminator::Return)
         return mismatch("expanded body lacks structured outer return");
       return returned;
     }
     if (cursor != target.instructions.size())
       return mismatch("unaccounted actual candidate instruction");
-    auto expectedTerminal = *original.terminator.getAsArray();
-    auto actualTerminal = *target.terminator.getAsArray();
-    bool stop = expectedTerminal[0].getAsString() == "stop";
-    if (!stop) {
+    if (original.terminator != SourceTerminator::Stop) {
       auto actualReturned = select(targetValues, target.returned);
       if (!actualReturned)
         return actualReturned.takeError();
       if (*returned != *actualReturned)
         return mismatch("actual terminator SSA producer");
-      expectedTerminal[1] = nullptr;
-      actualTerminal[1] = nullptr;
     }
-    if (!equalNaturalJson(json::Value(std::move(expectedTerminal)),
-                          json::Value(std::move(actualTerminal))))
+    if (original.terminator != target.terminator ||
+        original.terminal->getName() != target.terminal->getName() ||
+        original.terminal->getAttrDictionary() !=
+            target.terminal->getAttrDictionary())
       return mismatch("actual terminator");
     if (auto e = instruction(
             targetDefinition.name, instructionPath(targetRegion, cursor), app,
@@ -431,10 +388,12 @@ public:
   Error run() {
     // Enumerate the actual candidate inventory, including every domain
     // constructor and every terminal row. Inventory equality was checked first.
-    for (const auto &value : *(*candidate.wire.getAsArray())[4].getAsArray()) {
-      const auto &domain = *value.getAsArray();
-      auto name = *domain[1].getAsString();
-      for (unsigned i = 0; i <= domain[3].getAsArray()->size(); ++i)
+    auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
+        candidate.native->getBody()->front());
+    for (auto domain : unit.getBody().front().getOps<data::DomainOp>()) {
+      auto name = domain.getSymName();
+      for (unsigned i = 0; i < domain.getBody().front().getOperations().size();
+           ++i)
         if (auto e = instruction(name, {i}, {}, name, {i}))
           return e;
     }
@@ -479,15 +438,13 @@ Error checkRecord(View &source, View &candidate, const json::Value &record,
     return error("application-map-schema");
   const auto *sourceIdentity = root->getObject("source");
   const auto *candidateIdentity = root->getObject("candidate");
-  const auto &a = *source.wire.getAsArray();
-  const auto &b = *candidate.wire.getAsArray();
   if (!shape(sourceIdentity, {"format", "digest", "entry"}) ||
       !shape(candidateIdentity, {"format", "digest"}) ||
-      !same(sourceIdentity->get("format"), a[0]) ||
-      !same(sourceIdentity->get("digest"), a[2]) ||
-      !same(sourceIdentity->get("entry"), a[3]) ||
-      !same(candidateIdentity->get("format"), b[0]) ||
-      !same(candidateIdentity->get("digest"), b[2]))
+      sourceIdentity->getString("format") != "zkc.structured-source/0" ||
+      sourceIdentity->getString("digest") != source.identity ||
+      sourceIdentity->getString("entry") != source.entry ||
+      candidateIdentity->getString("format") != "zkc.structured-source/0" ||
+      candidateIdentity->getString("digest") != candidate.identity)
     return error("application-map-identity");
   const auto *applications = root->getArray("applications");
   const auto *instructions = root->getArray("instructions");

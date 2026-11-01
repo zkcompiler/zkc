@@ -44,6 +44,13 @@ llvm::Expected<llvm::json::Value>
 parseJson(llvm::StringRef text, size_t byteLimit,
           std::optional<size_t> *invalidStringOffset = nullptr);
 std::string printJson(const llvm::json::Value &value);
+/// Detach a bounded publication from borrowed StringRef values and object keys.
+/// Call before its source/context is released. The caller owns depth/work
+/// limits; this changes storage ownership only, not schema or numeric carriers.
+void ownJsonStrings(llvm::json::Value &value);
+/// Measure the exact printJson encoding without allocating a serialized copy.
+/// The caller owns depth/work limits on the supplied data tree.
+bool jsonWithinByteLimit(const llvm::json::Value &value, uint64_t limit);
 llvm::Expected<std::string> natural(const llvm::json::Value &value);
 llvm::json::Value naturalValue(llvm::StringRef digits);
 } // namespace zkc

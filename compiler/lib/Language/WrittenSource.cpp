@@ -2,7 +2,8 @@
 #include "FormalSourceWriter.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
-#include "zkc/Support/BoundedStream.h"
+#include "zkc/Language/InspectionData.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <tuple>
@@ -1163,8 +1164,8 @@ Expected<json::Array> encodeWrittenAddresses(ArrayRef<WrittenAddress> values,
   return result;
 }
 } // namespace detail
-Expected<std::string> inspectWrittenSource(const CheckedProject &project,
-                                           const Limits &limits) {
+Expected<json::Value> writtenSourceData(const CheckedProject &project,
+                                        const Limits &limits) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (project.checkedWork() > limits.work ||
@@ -1178,16 +1179,21 @@ Expected<std::string> inspectWrittenSource(const CheckedProject &project,
   auto value = Writer(project, work).run(*project.storage->writtenSources);
   if (!value)
     return value.takeError();
-  std::string bytes;
-  BoundedStream out(bytes, limits.apiInspectionBytes);
-  out << *value;
-  if (out.overflow())
+  if (!jsonWithinByteLimit(*value, limits.apiInspectionBytes))
     return detail::failure("source.limit", "source AST byte limit exceeded");
-  return bytes;
+  ownJsonStrings(*value);
+  return std::move(*value);
+}
+Expected<std::string> inspectWrittenSource(const CheckedProject &project,
+                                           const Limits &limits) {
+  auto value = writtenSourceData(project, limits);
+  if (!value)
+    return value.takeError();
+  return printJson(*value);
 }
 
-Expected<std::string> inspectSourceBindings(const CheckedProject &project,
-                                            const Limits &limits) {
+Expected<json::Value> sourceBindingsData(const CheckedProject &project,
+                                         const Limits &limits) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (project.checkedWork() > limits.work ||
@@ -1283,12 +1289,17 @@ Expected<std::string> inspectSourceBindings(const CheckedProject &project,
                    {"locals", std::move(references)},
                    {"unassociated_locals", std::move(unassociated)},
                    {"declarations", std::move(declarations)}};
-  std::string bytes;
-  BoundedStream out(bytes, limits.apiInspectionBytes);
-  out << value;
-  if (out.overflow())
+  if (!jsonWithinByteLimit(value, limits.apiInspectionBytes))
     return detail::failure("source.limit",
                            "source binding export byte limit exceeded");
-  return bytes;
+  ownJsonStrings(value);
+  return value;
+}
+Expected<std::string> inspectSourceBindings(const CheckedProject &project,
+                                            const Limits &limits) {
+  auto value = sourceBindingsData(project, limits);
+  if (!value)
+    return value.takeError();
+  return printJson(*value);
 }
 } // namespace zkc::language

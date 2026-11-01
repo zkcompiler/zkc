@@ -1,9 +1,7 @@
 #include "zkc/Compiler/SourceCorrespondence.h"
 #include "SourceArtifacts.h"
-#include "zkc/Compiler/StructuredSource.h"
-#include "zkc/Dialect/Registry.h"
-#include "zkc/Language/Inspection.h"
-#include "zkc/Support/BoundedStream.h"
+#include "SourceView.h"
+#include "zkc/Language/InspectionData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
@@ -138,9 +136,8 @@ public:
   }
 };
 } // namespace
-Expected<std::string>
-exportSourceCorrespondence(const CheckedOriginal &original,
-                           const Limits &limits) {
+static Expected<json::Value> correspondenceData(const CheckedOriginal &original,
+                                                const Limits &limits) {
   if (auto e = checkLimits(limits))
     return std::move(e);
   const auto &entry = original.entry();
@@ -151,33 +148,17 @@ exportSourceCorrespondence(const CheckedOriginal &original,
   if (original.bytes().size() > limits.irBytes ||
       original.interfaceJson().size() > limits.interfaceBytes)
     return error("source.limit", "checked original exceeds export byte limits");
-  auto astBytes = inspectWrittenSource(entry.project(), limits);
-  if (!astBytes)
-    return astBytes.takeError();
-  auto ast = json::parse(*astBytes);
+  auto ast = writtenSourceData(entry.project(), limits);
   if (!ast)
     return ast.takeError();
-  auto bindingBytes = inspectSourceBindings(entry.project(), limits);
-  if (!bindingBytes)
-    return bindingBytes.takeError();
-  auto bindings = json::parse(*bindingBytes);
+  auto bindings = sourceBindingsData(entry.project(), limits);
   if (!bindings)
     return bindings.takeError();
-  mlir::DialectRegistry registry;
-  zkc::registerDialects(registry);
-  mlir::MLIRContext context(registry);
-  context.loadAllAvailableDialects();
-  auto structured = protocol::exportStructuredSource(
-      original.bytes(), entry.protocol().symbol, context);
+  auto structured = detail::OriginalAccess::read(original);
   if (!structured)
     return structured.takeError();
-  auto snapshot = json::parse(structured->bytes);
-  if (!snapshot)
-    return snapshot.takeError();
-  auto instanceBytes = inspectSourceInstances(entry, limits);
-  if (!instanceBytes)
-    return instanceBytes.takeError();
-  auto instances = json::parse(*instanceBytes);
+  auto &snapshot = structured->publication;
+  auto instances = sourceInstancesData(entry, limits);
   if (!instances)
     return instances.takeError();
   // Symbols select actual rows of this snapshot, never a decoded name/hash.
@@ -190,7 +171,7 @@ exportSourceCorrespondence(const CheckedOriginal &original,
     return true;
   };
   for (unsigned table : {4, 5, 6, 7}) {
-    const auto &rows = *(*snapshot->getAsArray())[table].getAsArray();
+    const auto &rows = *(*snapshot.getAsArray())[table].getAsArray();
     for (unsigned i = 0; i < rows.size(); ++i) {
       auto symbol = *(*rows[i].getAsArray())[1].getAsString();
       if (!charge(1 + symbol.size()))
@@ -225,15 +206,21 @@ exportSourceCorrespondence(const CheckedOriginal &original,
                    {"bindings", std::move(*bindings)},
                    {"instances", std::move(*instances)},
                    {"instance_rows", std::move(instanceRows)},
-                   {"snapshot", std::move(*snapshot)},
+                   {"snapshot", std::move(snapshot)},
                    {"rows", std::move(*rows)}};
-  std::string bytes;
-  BoundedStream out(bytes, limits.apiInspectionBytes);
-  out << document;
-  if (out.overflow())
+  if (!jsonWithinByteLimit(document, limits.apiInspectionBytes))
     return error("source.limit",
                  "source correspondence export byte limit exceeded");
-  return bytes;
+  ownJsonStrings(document);
+  return document;
+}
+Expected<std::string>
+exportSourceCorrespondence(const CheckedOriginal &original,
+                           const Limits &limits) {
+  auto data = correspondenceData(original, limits);
+  if (!data)
+    return data.takeError();
+  return printJson(*data);
 }
 Error checkSourceCorrespondenceExport(const CheckedOriginal &original,
                                       StringRef bytes, const Limits &limits) {
@@ -242,13 +229,10 @@ Error checkSourceCorrespondenceExport(const CheckedOriginal &original,
       "source.correspondence.export", "source.limit");
   if (!actual)
     return actual.takeError();
-  auto expected = exportSourceCorrespondence(original, limits);
+  auto expected = correspondenceData(original, limits);
   if (!expected)
     return expected.takeError();
-  auto canonical = json::parse(*expected);
-  if (!canonical)
-    return canonical.takeError();
-  if (!zkc::equalNaturalJson(*actual, *canonical))
+  if (!zkc::equalNaturalJson(*actual, *expected))
     return error("source.correspondence.export",
                  "publication differs from the checked source export");
   return Error::success();

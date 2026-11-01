@@ -1091,7 +1091,7 @@ their own explicit interpretation.
 
 ## Retained frontend declarations
 
-An original protocol module may carry the `source_declarations` string
+An original protocol module may carry the structured `source_declarations`
 attribute specified by the [structured export](../formats/structured-source.md#retained-source-declarations).
 It retains checked closed source records and protocol port boundaries for
 component association. It has no execution meaning, is checked exactly by
