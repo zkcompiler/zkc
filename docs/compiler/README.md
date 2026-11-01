@@ -11,6 +11,7 @@ publication.
 | Authored source, partial analysis, catalogs and proof integration | [Frontend architecture](frontend-architecture.md) |
 | Profiles, dialects and lowering | [Pipeline](pipeline.md) |
 | Formation and source-relative comparisons | [Verification](verification.md) |
+| Native state, snapshots and external contracts | [Serialization boundaries](serialization.md) |
 | Algebra, polynomials and structured values | [Mathematics and data](mathematics.md) |
 | Local control and participant completion | [Control](control.md) |
 | Affine identity through branches and calls | [Resource origins](resource-origins.md) |

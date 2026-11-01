@@ -163,3 +163,13 @@ The source uses the `Original` structured export profile. The candidate uses
 retaining all other original metadata bounds. This is a bounded view of the
 candidate, not authority for its preparation; the map checker independently
 checks each expanded occurrence and its source-relative path.
+
+## Compiler input and ownership
+
+Source and candidate may use MLIR assembly or bytecode under the structured
+source input contract. Their identities bind each supplied byte sequence;
+changing encoding requires a newly checked map. The native producer and
+checker traverse actual operations, MLIR types and checked closed-region SSA
+coordinates. They do not interpret the serialized structured-source export.
+The record remains a bounded proposal for external checking, not a replacement
+IR or an authority attached to a mutable module.

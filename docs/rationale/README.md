@@ -11,6 +11,7 @@ the alternatives, the reason for choosing, and the cost that remains.
 | Why own a residue boundary while using standard MLIR? | [Represented arithmetic](represented-arithmetic.md) |
 | Why keep mathematics in ordinary SSA? | [Mathematical IR](mathematical-ir.md) |
 | Why check actual transformation results? | [Validation](validation.md) |
+| Why retain external formats while removing internal serialization? | [Compiler and contract boundaries](serialization.md) |
 | Why must projection preserve explicit communication? | [Participant generation](participant-generation.md) |
 | Why use sequences alongside numeric collections? | [Nested data](nested-sequences.md) |
 | Why distinguish artifact identity, live resources and authority? | [Identity](identity-purposes.md) |
