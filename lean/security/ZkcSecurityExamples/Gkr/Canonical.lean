@@ -9,6 +9,7 @@ public import ZkcSecurityTools.PairConstruction
 public import ZkcSecurity.Bindings.Subjects.PairValidator
 public import ZkcSecurity.Bindings.Subjects.ABI
 public import ZkcSecurity.Bindings.Subjects.ChargeSites
+public meta import ZkcTools.StructuredSource.NamedValues
 
 @[expose] public section
 
@@ -38,41 +39,43 @@ def subject (model : DomainModel) :
       "sha256:7906c9ce135594427e53a157741d36b38d7aa26c82f937263902e4238ede3ef5",
       "sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec"
 
+/- Complete raw views share the retained source schema for every carrier,
+including optional components and preparation data. Labels carry no authority. -/
+named_values InputView [inputs, outputs, add, mul, layers, selector, width, handle] :=
+  imported.program.payload.entry.inputs
+
+named_values StatementView [inputs, outputs, add, mul, layers, selector, width] :=
+  selected.policy.publicInputs.filterMap (imported.program.payload.entry.inputs[·]?)
+
+named_values OutputView [accepted] := imported.program.payload.entry.outputs
+
+named_values_bridge InputInvocation (model : DomainModel) : Source.Invocation (model.Field scalarDomain) :=
+  InputView model.Value with [inputs, outputs, add, mul, layers, selector, width, handle]
+
+named_values_bridge StatementInvocation (model : DomainModel) : Source.Invocation (model.Field scalarDomain) :=
+  StatementView model.Value with [inputs, outputs, add, mul, layers, selector, width] (handle : Nat)
+
+named_values_projection publicData (model : DomainModel) :=
+  InputView (TypedABI.Slot Domain.dataType model.Value) => StatementView model.Value
+  with [inputs, outputs, add, mul, layers, selector, width]
+
 def sourceInputs (model : DomainModel) (runtime : Source.Invocation (model.Field scalarDomain)) :
     (subject model).Inputs :=
-  .cons (some runtime.inputs) (.cons (some runtime.outputs) (.cons (some runtime.add)
-    (.cons (some runtime.mul) (.cons (some runtime.layers) (.cons (some runtime.selector)
-      (.cons (some runtime.width) (.cons (some runtime.handle) .nil)))))))
+  InputView.pack (InputView.map (fun _ => some) (InputInvocation.toView model runtime))
 
 /-- The retained output selectors read the independent registered predicate.
 No evidence-selected circuit or representation is an argument of this law. -/
 theorem relation_exact (model : DomainModel) (runtime : Source.Invocation (model.Field scalarDomain)) :
     (subject model).Relation (sourceInputs model runtime) ↔ runtime.Correct := by
-  change (∃ arguments : Values model.Value (Relations.outputInputs scalarDomain),
-    some (.cons runtime.inputs (.cons runtime.add (.cons runtime.mul (.cons runtime.layers
-      (.cons runtime.selector (.cons runtime.width (.cons runtime.outputs .nil))))))) = some arguments ∧
-      Relations.outputMeaning model scalarDomain arguments) ↔ _
-  constructor
-  · rintro ⟨arguments, same, correct⟩
-    cases Option.some.inj same
-    exact correct
-  · intro correct
-    exact ⟨_, rfl, correct⟩
+  exact ((subject model).relation_iff_of_read _ _ (by rfl)).trans (by rfl)
 
 theorem input_clause_exact (model : DomainModel)
     (runtime : Source.Invocation (model.Field scalarDomain)) :
     (subject model).inputClause (sourceInputs model runtime) ⟨0, by change 0 < 2; decide⟩ rfl ↔
       runtime.Admitted := by
-  change (∃ arguments : Values model.Value (Relations.shapeInputs scalarDomain),
-    some (.cons runtime.inputs (.cons runtime.outputs (.cons runtime.add (.cons runtime.mul
-      (.cons runtime.layers (.cons runtime.selector (.cons runtime.width .nil))))))) = some arguments ∧
-      Relations.shapeMeaning model scalarDomain 4 4 arguments) ↔ _
-  constructor
-  · rintro ⟨arguments, same, admitted⟩
-    cases Option.some.inj same
-    exact admitted
-  · intro admitted
-    exact ⟨_, rfl, admitted⟩
+  exact (((subject model).inputMeanings ⟨0, by change 0 < 2; decide⟩ rfl).holds_iff_of_read {}
+    ((subject model).boundary (sourceInputs model runtime))
+    ((subject model).assignments (sourceInputs model runtime)) _ (by rfl)).trans (by rfl)
 
 theorem honest_admitted (model : DomainModel)
     (runtime : Source.Invocation (model.Field scalarDomain))
@@ -96,51 +99,35 @@ def validatorSubject (model : DomainModel) := (subject model).validatorSubject (
 
 def statement (model : DomainModel) (runtime : Source.Invocation (model.Field scalarDomain)) :
     (subject model).validatorArtifacts.Statement model :=
-  .cons runtime.inputs (.cons runtime.outputs (.cons runtime.add (.cons runtime.mul
-    (.cons runtime.layers (.cons runtime.selector (.cons runtime.width .nil))))))
+  StatementView.pack (StatementInvocation.toView model runtime)
 
-/-- Every typed public statement supplies exactly the actual validator's
-seven public inputs. Its service handle is separate from target truth. -/
+/-- Readback is total on every typed statement, including malformed tables.
+The separate service handle never enters the fixed circuit predicate. -/
 def invocation (model : DomainModel)
     (values : (subject model).validatorArtifacts.Statement model) (handle : Nat) :
-    Source.Invocation (model.Field scalarDomain) where
-  inputs := values.get .here
-  outputs := values.get (.there .here)
-  add := values.get (.there (.there .here))
-  mul := values.get (.there (.there (.there .here)))
-  layers := values.get (.there (.there (.there (.there .here))))
-  selector := values.get (.there (.there (.there (.there (.there .here)))))
-  width := values.get (.there (.there (.there (.there (.there (.there .here))))))
-  handle := handle
+    Source.Invocation (model.Field scalarDomain) :=
+  StatementInvocation.fromView model (StatementView.unpack values) handle
 
 theorem statement_invocation (model : DomainModel)
     (values : (subject model).validatorArtifacts.Statement model) (handle : Nat) :
     statement model (invocation model values handle) = values := by
-  cases values with | cons inputs rest =>
-    cases rest with | cons outputs rest =>
-      cases rest with | cons add rest =>
-        cases rest with | cons mul rest =>
-          cases rest with | cons layers rest =>
-            cases rest with | cons selector rest =>
-              cases rest with | cons width rest =>
-                cases rest
-                rfl
+  exact (congrArg StatementView.pack
+    (StatementInvocation.toView_fromView model (StatementView.unpack values) handle)).trans
+      (StatementView.pack_unpack values)
 
 theorem invocation_statement (model : DomainModel)
     (runtime : Source.Invocation (model.Field scalarDomain)) :
     invocation model (statement model runtime) runtime.handle = runtime := by
-  cases runtime
-  rfl
+  exact (congrArg (fun view => StatementInvocation.fromView model view runtime.handle)
+    (StatementView.unpack_pack (StatementInvocation.toView model runtime))).trans
+      (StatementInvocation.fromView_toView model runtime)
 
 /-- Soundness reads the actual validator inputs, independently of any honest
 producer or honest-input policy. All target selectors are published inputs. -/
 theorem holds_exact (model : DomainModel) (runtime : Source.Invocation (model.Field scalarDomain))
     (witness : (validatorSubject model).Witness) :
     (validatorSubject model).Holds (statement model runtime) witness ↔ runtime.Correct := by
-  apply ((validatorSubject model).holds_iff_of_read _ witness
-    (.cons runtime.inputs (.cons runtime.add (.cons runtime.mul (.cons runtime.layers
-      (.cons runtime.selector (.cons runtime.width (.cons runtime.outputs .nil))))))) (by rfl)).trans
-  rfl
+  exact ((validatorSubject model).holds_iff_of_read _ witness _ (by rfl)).trans (by rfl)
 
 theorem false_statement_exact (model : DomainModel)
     (runtime : Source.Invocation (model.Field scalarDomain)) :

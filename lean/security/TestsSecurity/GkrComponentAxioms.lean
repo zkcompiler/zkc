@@ -1,6 +1,5 @@
 import ZkcSecurityExamples.Gkr.SourceValidator
 import ZkcSecurityExamples.Gkr.CanonicalReadback
-import ZkcSecurityExamples.Gkr.ProducerHelpers
 import TestsSecurity.GkrComponentContracts
 import ZkcTools.DeclarationAudit
 
@@ -17,4 +16,3 @@ run_cmd do
 #print axioms ZkcSecurity.Realizations.Gkr.SourceValidator.rejected
 #print axioms ZkcSecurity.Realizations.Gkr.SourceValidator.costs
 #print axioms ZkcSecurity.Realizations.Gkr.CanonicalReadback.actual
-#print axioms ZkcSecurity.Realizations.Gkr.ProducerHelpers.producer_binding

@@ -4,7 +4,6 @@ public import ZkcSecurityExamples.Gkr.HonestProducerCurrent
 public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import ZkcExamples.Structured.GkrSourceVerifier
-public import ZkcSecurityExamples.Gkr.OccurrenceVerifier
 
 @[expose] public section
 
@@ -37,14 +36,14 @@ theorem output_reads (ctx : ProtocolContext) (handle : Nat) (point : List F) :
 theorem output_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (site : String) (handle count : Nat) (bounded : count ≤ 4) (point : List F) :
     denoteRepeatOn (carriers := uniformCarriers F G) outputSpec ctx (ctx.roles 1) (some count)
-      (verifierOutputState (some point)) (.cons (some handle) .nil)
+      (verifierOutputState (some point)) ((SourceRows.OutputCaptures.pack { service := some handle }))
       (fun args => outputBody.denote (participantMeaningWithOn (ringModel F G) (.silent _)
         Occurrence.actions observedHelpers (ctx.roles 1) [] ctx Occurrence.iterations) args.get)
       Occurrence.iterations site =
       (validatorOutput ctx handle (qualifyProtocolSite ctx.applicationPrefix site) 0 count point).bind
         (fun next => .done (verifierOutputState (some next))) := by
   have repeated := Zkc.Source.Structured.LoopPresentation.present (carriers := uniformCarriers F G) outputSpec ctx (ctx.roles 1) (by simp)
-    (.cons (some handle) .nil)
+    ((SourceRows.OutputCaptures.pack { service := some handle }))
     (fun args => outputBody.denote (participantMeaningWithOn (ringModel F G) (.silent _)
       Occurrence.actions observedHelpers (ctx.roles 1) [] ctx Occurrence.iterations) args.get)
     Occurrence.iterations site
@@ -54,30 +53,46 @@ theorem output_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.ro
       Occurrence.actions)) (by
       intro point index
       erw [output_occurrence (F := F) (G := G) ctx (ctx.roles 1) []
-        (.cons (some index) ((verifierOutputState (some point)).append (.cons (some handle) .nil))), verifierOutput_process ctx _ rfl (.ofSeparate separate (by decide)),
+        ((SourceRows.OutputArguments.pack {
+            index := some index,
+            verifierPoint := some point,
+            proverPoint := none,
+            service := some handle
+          })), verifierOutput_process ctx _ rfl (.ofSeparate separate (by decide)) index (some point) (some handle),
         PIR.Process.interpret_bind, output_reads, PIR.Process.bind_assoc]) count bounded _ point (verifierOutputState_masked ctx _ rfl _)
   rw [repeated]
-  rw [Zkc.Source.Structured.LoopPresentation.foldCounted _
-    (validatorOutput (G := G) ctx handle (qualifyProtocolSite ctx.applicationPrefix site))
-    (fun _ _ => rfl) (fun _ _ _ => rfl)]
+  rfl
 
 /-- The actual single-role input application is silent and returns precisely
 its checked multilinear-extension comparison. -/
-theorem input_reads (encoding : CircuitEncoding F) (outputs : List F)
-    (admitted : encoding.Admitted 4 4 outputs) (point : List F) (claim : F)
+theorem input_reads (encoding : CircuitEncoding F) («outputs» : List F)
+    (admitted : encoding.Admitted 4 4 «outputs») (point : List F) (claim : F)
     (pointSize : point.length = encoding.width) :
     invokeProtocol (beforeRoot (F := F) (G := G)) GkrSourceBodies.sourceProtocol80Signature
-      (({} : ProtocolContext).enter "label_696e707574" [1]) 1
-      (.cons (some encoding.inputs) (.cons (some point) (.cons (some claim) .nil))) =
-      .done (.cons (some (decide (extension encoding.width encoding.circuit.inputs
-        (coordinates encoding.width point) = claim))) .nil) := by
+      (SourceRows.inputContext {}) 1
+      ((SourceRows.InputInputs.pack {
+          «inputs» := some encoding.inputs,
+          point := some point,
+          claim := some claim
+        })) =
+      .done ((SourceRows.InputResults.pack {
+          accepted := some (decide (extension encoding.width encoding.circuit.inputs (coordinates encoding.width point) = claim))
+        })) := by
   have body : invokeProtocol (beforeRoot (F := F) (G := G))
-      GkrSourceBodies.sourceProtocol80Signature (({} : ProtocolContext).enter "label_696e707574" [1]) 1
-      (.cons (some encoding.inputs) (.cons (some point) (.cons (some claim) .nil))) =
+      GkrSourceBodies.sourceProtocol80Signature (SourceRows.inputContext {}) 1
+      ((SourceRows.InputInputs.pack {
+          «inputs» := some encoding.inputs,
+          point := some point,
+          claim := some claim
+        })) =
       Generated.Presentations.Gkr.Input.inputBody.denote
         (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers
-          1 beforeInput (({} : ProtocolContext).enter "label_696e707574" [1]) Occurrence.iterations)
-        ((.cons (some encoding.inputs) (.cons (some point) (.cons (some claim) .nil))) :
+          1 beforeInput (SourceRows.inputContext {}) Occurrence.iterations)
+        (((SourceRows.InputInputs.pack {
+            «inputs» := some encoding.inputs,
+            point := some point,
+            claim := some claim
+          })) :
           Values (Component (assignment F G)) Generated.Presentations.Gkr.Input.inputInputs).get := by
     change invokeProtocol (⟨GkrSourceViews.sourceProtocol80Definition.signature, _⟩ :: beforeInput)
       GkrSourceViews.sourceProtocol80Definition.signature _ _ _ = _
@@ -86,8 +101,12 @@ theorem input_reads (encoding : CircuitEncoding F) (outputs : List F)
     erw [GkrSourceViews.sourceProtocol80Definition.body_eq_of_raw _ Generated.Presentations.Gkr.Input.inputBody_raw]
     change (Generated.Presentations.Gkr.Input.inputBody.denote
       (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers
-        1 beforeInput (({} : ProtocolContext).enter "label_696e707574" [1]) Occurrence.iterations)
-        ((.cons (some encoding.inputs) (.cons (some point) (.cons (some claim) .nil))) :
+        1 beforeInput (SourceRows.inputContext {}) Occurrence.iterations)
+        (((SourceRows.InputInputs.pack {
+            «inputs» := some encoding.inputs,
+            point := some point,
+            claim := some claim
+          })) :
           Values (Component (assignment F G)) Generated.Presentations.Gkr.Input.inputInputs).get).bind
         (fun result => .done (maskValues 1 [[1]] result)) = _
     have out (result : Values (Component (assignment F G)) [.boolean]) :
@@ -99,14 +118,12 @@ theorem input_reads (encoding : CircuitEncoding F) (outputs : List F)
   have inputBound : encoding.inputs.length < indexLimit := by
     rw [admitted.1.1]
     exact Nat.pow_lt_pow_right (by decide) small
-  have normalized := Generated.Presentations.Gkr.Input.verifier_observed (F := F) (G := G)
-    (({} : ProtocolContext).enter "label_696e707574" [1]) (.only _) beforeInput beforeInput_masked
+  have normalized := inputPresentation_equation (F := F) (G := G)
+    (SourceRows.inputContext {}) (.only _) beforeInput beforeInput_masked
     (some encoding.inputs) (some point) (some claim)
   refine normalized.trans ?_
-  simp only [Generated.Presentations.Gkr.Input.verifierForm, NormalForm.Form.denoteOn,
-    NormalForm.Form.denoteWithOn, NormalForm.Comps.eval, NormalForm.Comp.eval,
-    NormalForm.Term.eval, NormalForm.Terms.eval, NormalForm.entryAt,
-    NormalForm.firstEntry, NormalForm.laterEntries, Op.evalTotal,
+  dsimp only [inputPresentation, inputPresentation_certificate]
+  simp only [
     Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program,
     Region.denote, participantMeaningWithOn, protocolOperationWithOn,
     Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push,

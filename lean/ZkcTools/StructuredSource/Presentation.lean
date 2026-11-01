@@ -246,7 +246,7 @@ def processText (naming : Naming laws callees initial) {out : List Ty} (finish :
     let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
     return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming helper.outputs true ++ ") =>\n" ++
       tail
-  | _, names, .repeat spec _ callback count state captures next, indent => do
+  | _, names, .repeat spec site callback count state captures next, indent => do
     let name ← fresh naming
     let callback := (naming.callback spec callback).map paren |>.getD
       (app (paren naming.runs ++ ".callback") [repeatText spec, regionText callback])
@@ -254,7 +254,7 @@ def processText (naming : Naming laws callees initial) {out : List Ty} (finish :
       valuesText (compsText naming names state), valuesText (compsText naming names captures), callback]
     let process := match naming.repeatHead spec with
       | some head => app head arguments
-      | none => app (paren naming.runs ++ ".run") (repeatText spec :: arguments)
+      | none => app (paren naming.runs ++ ".run") (repeatText spec :: arguments ++ [quoted site])
     let tail ← processText naming finish (name :: names) next indent
     let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
     return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming spec.state true ++ ") =>\n" ++
@@ -398,26 +398,19 @@ def genericDeclaration (laws : List LawKey) (callees : List CalleeKey) (name : S
 the original region (0/1 for bind body/continuation, 0/1 for repeat callback/
 continuation). It is independent of the paths inside the resulting Form. -/
 structure Selected where
-  inputs : List Ty
-  outputs : List Ty
-  body : Region protocolDialect inputs outputs
-  pattern : InputPattern inputs
+  definition : CheckedProtocol
+  selection : NormalForms.BodySelection definition.body
+  pattern : InputPattern selection.body.1
   signature : Signature
   role : Nat
   roster : Nat
   protocolName : String
-  path : List Nat
 
-def repeatPath (site : String) : {Γ out : List Ty} → Region protocolDialect Γ out → Option (List Nat)
-  | _, _, .ret _ | _, _, .stop _ => none
-  | _, _, .bind body next =>
-    ((repeatPath site body).map (0 :: ·)).orElse fun _ => (repeatPath site next).map (1 :: ·)
-  | _, _, .letOp op _ bodies next =>
-    let inner := match op, bodies with
-      | .repeat _ found, .cons callback .nil =>
-        if found == site then some [0] else (repeatPath site callback).map (0 :: ·)
-      | _, _ => none
-    inner.orElse fun _ => (repeatPath site next).map (1 :: ·)
+def Selected.inputs (selected : Selected) : List Ty := selected.selection.body.1
+def Selected.outputs (selected : Selected) : List Ty := selected.selection.body.2.1
+def Selected.body (selected : Selected) : Region protocolDialect selected.inputs selected.outputs :=
+  selected.selection.body.2.2
+def Selected.path (selected : Selected) : List Nat := selected.selection.path
 
 /-- Decode the existing nine-slot normal-form request using the existing tool's
 decoders. No new normal-form or semantic wire representation is introduced. -/
@@ -425,15 +418,9 @@ def select (program : Program) (request : Json) : Except String Selected := do
   let [protocolName, repeatSite, role, roster, pattern, laws, strict, kept, callees] ← Format.array request
     | throw "normal-form-request"
   let protocolName ← Format.string protocolName
-  let some definition := program.payload.protocols.find? (·.name == protocolName)
+  let [definition] := program.payload.protocols.filter (·.name == protocolName)
     | throw "normal-form-protocol"
-  let (body, path) : NormalForms.Body × List Nat ← match repeatSite with
-    | .str site =>
-      let some body := Zkc.Source.Structured.Bindings.findRepeat site definition.body | throw "normal-form-repeat"
-      let some path := repeatPath site definition.body | throw "normal-form-repeat"
-      pure (body, path)
-    | .null => pure (⟨_, _, definition.body⟩, [])
-    | _ => throw "normal-form-repeat"
+  let selection ← NormalForms.selectBody definition.body repeatSite
   let role ← Format.decimal (← Format.string role)
   let roster ← Format.decimal (← Format.string roster)
   let laws ← (← Format.array laws).mapM (NormalForms.decodeLaw program.payload.definitions)
@@ -443,9 +430,8 @@ def select (program : Program) (request : Json) : Except String Selected := do
     let some definition := program.payload.definitions.find? (·.name == name) | throw "normal-form-helper"
     pure definition.helper
   let callees ← (← Format.array callees).mapM (NormalForms.decodeCallee program)
-  let ⟨inputs, outputs, body⟩ := body
-  let pattern ← NormalForms.decodePattern inputs (← Format.array pattern)
-  return ⟨inputs, outputs, body, pattern, ⟨laws, strict, false, kept, callees⟩, role, roster, protocolName, path⟩
+  let pattern ← NormalForms.decodePattern selection.body.1 (← Format.array pattern)
+  return ⟨definition, selection, pattern, ⟨laws, strict, false, kept, callees⟩, role, roster, protocolName⟩
 
 def signatureLiteral (signature : Signature) : String :=
   "(⟨" ++ ", ".intercalate [listText (signature.laws.map lawText), boolText signature.strict,

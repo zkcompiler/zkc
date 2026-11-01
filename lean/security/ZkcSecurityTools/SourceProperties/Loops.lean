@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Bindings.Source.LoopContracts
+public import ZkcSecurity.ProgramLogic.RepeatedComponent
 public meta import ZkcSecurityTools.SourceProperties.Builder
 public meta import ZkcTools.StructuredSource.CountedShape
 
@@ -14,15 +15,28 @@ set_option autoImplicit false
 namespace ZkcSecurity.Tools.SourceProperties
 open Lean Meta Elab Tactic
 
-private def loopShape (cost : Bool) : TacticM (TSyntax `term × TSyntax `term) := withMainContext do
+private structure LoopShape where
+  reference : TSyntax `term
+  step : TSyntax `term
+  zero : TSyntax `term
+  succ : TSyntax `term
+
+private def countedShape (process : Expr) : TacticM LoopShape := do
+  let shape ← ZkcTools.StructuredSource.CountedShape.extract process
+  return {
+    reference := ← Term.exprToSyntax shape.reference
+    step := ← Term.exprToSyntax shape.step
+    zero := ← Term.exprToSyntax shape.zero
+    succ := ← Term.exprToSyntax shape.succ }
+
+private def loopShape (cost : Bool) : TacticM LoopShape := withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
   let args := target.getAppArgs
   let index ← if cost && target.isAppOf ``ZkcSecurity.FiatShamir.Typed.ChargedCostBound then
       pure (args.size - 3)
     else if !cost && target.isAppOf ``Zkc.Obligations.Derivation then pure (args.size - 1)
     else throwError "expected a source rejection or charged-cost loop obligation"
-  let (reference, step) ← ZkcTools.StructuredSource.CountedShape.extract args[index]!
-  return (← Term.exprToSyntax reference, ← Term.exprToSyntax step)
+  countedShape args[index]!
 
 private def callback (rules : Array (TSyntax `term)) : TacticM Unit := do
   for rule in rules do
@@ -33,11 +47,24 @@ private def callback (rules : Array (TSyntax `term)) : TacticM Unit := do
       unless (← getGoals).isEmpty do throwError "open callback premise"
       return
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       saved.restore
   throwError "open counted source callback at the actual typed process: {← getMainTarget}"
 
 elab "source_loop_callback " "[" rules:term,* "]" : tactic => callback rules.getElems
+
+/-- Install the existing history-dependent cost contract without replacing it
+by a uniform per-iteration envelope. The frame is an independent all-replies
+law; the remaining initial-frame premise stays visible to the companion. The
+component body and complete repeated process must match the fixed goal. -/
+syntax "install_source_loop_cost " "using_component " term
+  " using_frame " term " using_steps " term : tactic
+elab_rules : tactic
+  | `(tactic| install_source_loop_cost using_component $component
+      using_frame $frame using_steps $steps) => do
+    evalTactic (← `(tactic| apply ZkcSecurity.Obligations.RepeatedComponent.cost_repeatN
+      (component := $component) (preserves := $frame) (steps := $steps)))
 
 /-- No carries the actual history, current index and remaining-state invariant.
 Selected callback rules are consumed by the existing property assembler.
@@ -45,12 +72,12 @@ Unsupported mathematics remains a typed callback goal. -/
 syntax "install_source_loop_no " "using_invariant " term " using_rules " "[" term,* "]" : tactic
 elab_rules : tactic
   | `(tactic| install_source_loop_no using_invariant $invariant using_rules [$rules:term,*]) => do
-    let (reference, step) ← loopShape false
+    let shape ← loopShape false
     let pending := (← getGoals).tail
     setGoals [(← getMainGoal)]
     evalTactic (← `(tactic| apply ZkcSecurity.Source.LoopContracts.counted_no
-      (reference := $reference) (step := $step) (invariant := $invariant)
-      (zero := by intros; rfl) (succ := by intros; rfl)))
+      (reference := $(shape.reference)) (step := $(shape.step)) (invariant := $invariant)
+      (zero := $(shape.zero)) (succ := $(shape.succ))))
     let obligations ← getGoals
     let mut remaining : List MVarId := []
     for goal in obligations do
@@ -72,7 +99,7 @@ for every typed callback reply, full state and reached history. -/
 syntax "install_source_loop_cost " "per_iteration " term " using_rules " "[" term,* "]" : tactic
 elab_rules : tactic
   | `(tactic| install_source_loop_cost per_iteration $price using_rules [$rules:term,*]) => do
-    let (reference, step) ← loopShape true
+    let shape ← loopShape true
     let pending := (← getGoals).tail
     setGoals [(← getMainGoal)]
     let target := (← getMainTarget).consumeMData
@@ -84,8 +111,8 @@ elab_rules : tactic
     let some bounded := obligations[0]? | throwError "missing counted cost obligation"
     setGoals [bounded]
     evalTactic (← `(tactic| apply ZkcSecurity.Source.LoopContracts.counted_cost
-      (reference := $reference) (step := $step) (price := $price)
-      (zero := by intros; rfl) (succ := by intros; rfl)))
+      (reference := $(shape.reference)) (step := $(shape.step)) (price := $price)
+      (zero := $(shape.zero)) (succ := $(shape.succ))))
     evalTactic (← `(tactic| intros; first
       | (solve | source_loop_callback [$rules,*])
       | (solve | assemble_source_cost [$rules,*] simplifying [])
@@ -113,18 +140,15 @@ elab_rules : tactic
     unless target.isAppOf ``ZkcSecurity.Source.Pair do
       throwError "expected a paired source loop obligation"
     let args := target.getAppArgs
-    let (left, stepLeft) ← ZkcTools.StructuredSource.CountedShape.extract args[args.size - 2]!
-    let (right, stepRight) ← ZkcTools.StructuredSource.CountedShape.extract args.back!
-    let left ← Term.exprToSyntax left
-    let right ← Term.exprToSyntax right
-    let stepLeft ← Term.exprToSyntax stepLeft
-    let stepRight ← Term.exprToSyntax stepRight
+    let left ← countedShape args[args.size - 2]!
+    let right ← countedShape args.back!
     let pending := (← getGoals).tail
     setGoals [(← getMainGoal)]
     evalTactic (← `(tactic| apply ZkcSecurity.Source.LoopContracts.counted_pair
-      (left := $left) (right := $right) (stepLeft := $stepLeft) (stepRight := $stepRight)
-      (zeroLeft := by intros; rfl) (zeroRight := by intros; rfl)
-      (succLeft := by intros; rfl) (succRight := by intros; rfl)
+      (left := $(left.reference)) (right := $(right.reference))
+      (stepLeft := $(left.step)) (stepRight := $(right.step))
+      (zeroLeft := $(left.zero)) (zeroRight := $(right.zero))
+      (succLeft := $(left.succ)) (succRight := $(right.succ))
       (invariant := $invariant)))
     let obligations ← getGoals
     let mut remaining : List MVarId := []

@@ -96,7 +96,8 @@ private partial def assemblePairs (rules rewrites : Array (TSyntax `term)) (dept
       first | rfl | (solve | repeat' first | assumption | constructor) | (simp_all only [$lemmas,*]; aesop))))
     return
   catch error =>
-    if error.isRuntime || error.isInterrupt then throw error
+    if error.isRuntime then throw error
+    if let .internal _ _ := error then throw error
     saved.restore
   let mut lastReason := "no selected head matched"
   for rule in rules do
@@ -125,7 +126,8 @@ private partial def assemblePairs (rules rewrites : Array (TSyntax `term)) (dept
       assemblePairs rules rewrites (depth - 1)
       return
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       let reason ← error.toMessageData.toString
       saved.restore
       lastReason := lastReason ++ "\n" ++ reason
@@ -153,7 +155,8 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
       first | rfl | (solve | repeat' first | assumption | constructor) | (simp_all only [$lemmas,*]; aesop))))
     return
   catch error =>
-    if error.isRuntime || error.isInterrupt then throw error
+    if error.isRuntime then throw error
+    if let .internal _ _ := error then throw error
     terminalReason ← error.toMessageData.toString
     saved.restore
   let mut lastReason := terminalReason
@@ -163,7 +166,8 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
       withTransparency .reducible <| evalTactic (← `(tactic| exact ($rule _)))
       return
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       saved.restore
     try
       let target := (← instantiateMVars (← getMainTarget)).headBeta.consumeMData
@@ -178,7 +182,8 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
       assembleNo rules rewrites (depth - 1)
       return
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       let reason ← error.toMessageData.toString
       saved.restore
       lastReason := lastReason ++ "\n" ++ reason
@@ -200,7 +205,8 @@ private partial def assembleCost (rules rewrites : Array (TSyntax `term)) (depth
     evalTactic (← `(tactic| exact ZkcSecurity.FiatShamir.CostComposition.done _))
     return
   catch error =>
-    if error.isRuntime || error.isInterrupt then throw error
+    if error.isRuntime then throw error
+    if let .internal _ _ := error then throw error
     saved.restore
   let mut reasons := ""
   for rule in rules do
@@ -231,7 +237,8 @@ private partial def assembleCost (rules rewrites : Array (TSyntax `term)) (depth
       assembleCost rules rewrites (depth - 1)
       return
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       reasons := reasons ++ "\n" ++ (← error.toMessageData.toString)
       saved.restore
   throwError "open source cost seam: {reasons}\nExpected: {← getMainTarget}"

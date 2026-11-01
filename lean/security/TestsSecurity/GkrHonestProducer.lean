@@ -148,9 +148,9 @@ theorem actual_generated_proof (scope : ZkcSecurity.Source.PairScope)
     (lineDelivery : (GkrVerifier.lineChallengeSite {}, GkrVerifier.lineDeliverySite {}) ∈ scope.deliveries) :
     ZkcSecurity.Source.Pair scope CanonicalReadback.Post
       (Occurrence.participant (ringModel ℚ (ℚ × ℚ)) GkrSourceViews.program 0
-        (currentInputs mixed [4352, 4352] none))
+        (SourceRows.circuitInputs mixed [4352, 4352] none))
       (Occurrence.participant (ringModel ℚ (ℚ × ℚ)) GkrSourceViews.program 1
-        (currentInputs mixed [4352, 4352] (some handle))) :=
+        (SourceRows.circuitInputs mixed [4352, 4352] (some handle))) :=
   CanonicalReadback.actual mixed [4352, 4352] admitted correct handle none scope roles
     outputDelivery leftDelivery rightDelivery lineDelivery
 

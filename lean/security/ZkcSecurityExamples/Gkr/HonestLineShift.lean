@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurityExamples.Gkr.HonestLineHelpers
+public import ZkcSecurityExamples.Gkr.HonestLineCompanion
 
 @[expose] public section
 
@@ -14,30 +15,13 @@ open Zkc.Polynomial.Multilinear CoefficientRows
 
 set_option backward.isDefEq.respectTransparency false
 set_option maxRecDepth 20000
+set_option linter.unusedSimpArgs false
+attribute [local implicit_reducible] Collection.type Collection.element Op.arguments Op.results Op.regions
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-abbrev shiftFold : FoldSpec :=
-  (fold? GkrSourceBodies.scopedHelper86Body).get (by decide +kernel)
-
-theorem shift_step_expansion (table : Meanings F G) (xs : List F)
-    (previous value : F) (offset count : Nat) :
-    GkrSourceBodies.helper62Body.denote (meaning F G table)
-      (Values.cons xs (.cons previous (.cons offset (.cons value (.cons count .nil))))).get =
-      (primitiveOutcome (Primitive.evaluate (F := F) (G := G) .indexMod
-        (.cons offset (.cons count .nil)))).bind fun remainder =>
-      (primitiveOutcome (Primitive.evaluate (F := F) (G := G) .indexEqual
-        (.cons (remainder.get .here) (.cons 0 .nil)))).bind fun boundary =>
-      ((if boundary.get .here then
-        (invoke table GkrSourceBodies.scopedHelper74Helper .nil).bind fun zero =>
-          .done (.cons (zero.get .here) .nil)
-       else .done (.cons previous .nil)) :
-         PIR.Process _ (Values (assignment F G) [.field "bls12-381.fr"])).bind fun emitted =>
-      (primitiveOutcome (Primitive.evaluate (F := F) (G := G) .indexAdd
-        (.cons offset (.cons 1 .nil)))).bind fun next =>
-      .done (.cons (xs ++ [emitted.get .here]) (.cons value (.cons (next.get .here) .nil))) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+noncomputable abbrev shiftFold : FoldSpec := Goals.shiftSpec
 
 theorem shift_step_body (table : Meanings F G)
     (zero : invoke table GkrSourceBodies.scopedHelper74Helper .nil = .done (.cons 0 .nil))
@@ -45,108 +29,86 @@ theorem shift_step_body (table : Meanings F G)
     (bound : offset + 1 < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
     GkrSourceBodies.helper62Body.denote (meaning F G table)
-      (Values.cons xs (.cons previous (.cons offset (.cons value (.cons count .nil))))).get =
-      .done (.cons (xs ++ [if offset % count = 0 then 0 else previous])
-        (.cons value (.cons (offset + 1) .nil))) := by
+      (Goals.ShiftStep.Inputs.pack (Value := assignment F G) { initial := xs, previous, offset, value, count }).get =
+      .done (Goals.ShiftStep.encode (ringModel F G)
+        { values := xs ++ [if offset % count = 0 then 0 else previous],
+          previous := value, offset := offset + 1 }) := by
   have offsetBound : offset < indexLimit := by omega
   have remainderBound : offset % count < indexLimit :=
     lt_trans (Nat.mod_lt _ positive) countBound
   have nonzero : count ≠ 0 := Nat.ne_of_gt positive
-  rw [shift_step_expansion]
+  named_equation Goals.ShiftStep over F G
   by_cases boundary : offset % count = 0 <;>
-    simp only [Values.get, PIR.Process.bind, Primitive.evaluate, primitiveOutcome, checkedIndices,
+    simp only [Evaluation.invokeCallbackOn, Values.get, PIR.Process.bind, Primitive.evaluateOn, primitiveOutcome, checkedIndices,
       show 1 < indexLimit by decide +kernel, show 0 < indexLimit by decide +kernel,
       zero, nonzero, offsetBound, countBound, remainderBound,
-      bound, boundary, ↓reduceIte, and_self, Bool.decide_true, decide_false, Bool.false_eq_true]
+      Environment.prepend, Environment.push, Values.get_cons, bound, boundary, ↓reduceIte, and_self, Bool.decide_true, decide_false, Bool.false_eq_true]
 
 theorem shift_step (xs : List F) (previous value : F) (offset count : Nat) (source : List F)
     (bound : offset + 1 < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
     invoke (helpers (G := G)) shiftFold.stepHelper
-      (.cons xs (.cons previous (.cons offset (.cons value (.cons source (.cons count .nil)))))) =
-      .done (.cons (xs ++ [if offset % count = 0 then 0 else previous])
-        (.cons value (.cons (offset + 1) .nil))) := by
+      (Goals.ShiftCallback.Inputs.pack (Value := assignment F G) { initial := xs, previous, offset, value, source, count }) =
+      .done (Goals.ShiftStep.encode (ringModel F G)
+        { values := xs ++ [if offset % count = 0 then 0 else previous],
+          previous := value, offset := offset + 1 }) := by
   change invoke (helpers (G := G)) GkrSourceBodies.helper63Helper _ = _
   rw [helper63_association.invoke unit.linked]
-  change (invoke (helpers (G := G)) GkrSourceBodies.helper62Helper
-    (.cons xs (.cons previous (.cons offset (.cons value (.cons count .nil)))))).bind _ = _
+  named_equation Goals.ShiftCallback over F G
   rw [helper62_association.invoke unit.linked,
     shift_step_body (helpers (F := F) (G := G)) HonestHelpers.zero_equation
       xs previous value offset count bound countBound positive]
   rfl
 
-theorem shift_finite (values source xs : List F) (previous : F) (offset count : Nat)
-    (bound : offset + values.length < indexLimit) (countBound : count < indexLimit)
-    (positive : 0 < count) :
-    Finite.fold (Evaluation.foldTransition (helpers (F := F) (G := G)) shiftFold
-      (.cons source .nil) (.cons count .nil)) (values.map fun value => .cons value .nil)
-      (.cons xs (.cons previous (.cons offset .nil))) =
-      .done (.cons (xs ++ shiftAux count offset previous values)
-        (.cons (values.getLastD previous) (.cons (offset + values.length) .nil))) := by
-  induction values generalizing xs previous offset with
-  | nil => simp [Finite.fold, shiftAux, List.getLastD]
-  | cons value rest ih =>
-    simp only [List.map_cons]
-    rw [Finite.fold, Evaluation.foldTransition_unfiltered _ _ rfl]
-    change (invoke (helpers (G := G)) shiftFold.stepHelper
-      (.cons xs (.cons previous (.cons offset (.cons value (.cons source (.cons count .nil))))))).bind _ = _
-    rw [shift_step xs previous value offset count source
-      (by simp only [List.length_cons] at bound; omega) countBound positive]
-    change Finite.fold _ (rest.map fun value => (Values.cons value .nil : Values (assignment F G) [.field "bls12-381.fr"]))
-      (Values.cons (xs ++ [if offset % count = 0 then 0 else previous])
-        (.cons value (.cons (offset + 1) .nil)) : Values (assignment F G) shiftFold.state) = _
-    rw [ih _ value (offset + 1) (by simp only [List.length_cons] at bound; omega)]
-    simp only [shiftAux, List.append_assoc, List.singleton_append, List.length_cons]
-    have last : (value :: rest).getLastD previous = rest.getLastD value := by
-      cases rest <;> rfl
-    rw [last, show offset + 1 + rest.length = offset + (rest.length + 1) by omega]
-
 theorem shift_fold (values xs : List F) (previous : F) (offset count : Nat)
     (bound : offset + values.length < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
     invoke (helpers (G := G)) GkrSourceBodies.scopedHelper86Helper
-      (.cons values (.cons xs (.cons previous (.cons offset (.cons count .nil))))) =
-      .done (.cons (xs ++ shiftAux count offset previous values)
-        (.cons (values.getLastD previous) (.cons (offset + values.length) .nil))) := by
+      (Goals.ShiftFold.Inputs.pack (Value := assignment F G) { source := values, initial := xs, previous, offset, count }) =
+      .done (Goals.ShiftFold.encode (ringModel F G)
+        { values := xs ++ shiftAux count offset previous values,
+          previous := values.getLastD previous, offset := offset + values.length }) := by
   rw [scopedHelper86_association.invoke unit.linked]
-  change (Evaluation.denoteFold _ shiftFold
-    ((Values.cons values .nil).append
-      ((Values.cons xs (.cons previous (.cons offset .nil))).append (.cons count .nil)))).bind _ = _
-  rw [Evaluation.denoteFold_pack,
-    show shiftFold.domain.admit (Values.cons values (.nil : Values (assignment F G) [])) =
-      .returned (values.map fun value => .cons value .nil) from Evaluation.elements_admit _ _ _ _ _
-        (by simpa only [Values.get] using (show values.length < indexLimit by omega)), Finite.admitThen,
-    shift_finite values values xs previous offset count bound countBound positive]
+  named_equation Goals.ShiftFold over F G
+  let encode := fun state : Companion.ShiftState F => Goals.ShiftState.pack
+    (Value := assignment F G) { values := state.values, previous := state.previous, offset := state.offset }
+  have admitted : shiftFold.domain.admit (Goals.ShiftDomain.pack (Value := assignment F G) ⟨values⟩) =
+      .returned (values.map fun value => Goals.ShiftItem.pack ⟨value⟩) := by
+    simp [shiftFold, Goals.shiftSpec, Goals.ShiftFold.body, GkrSourceLaws.fold?, GkrSourceBodies.scopedHelper86Body,
+      DomainSpec.admit, DomainBody.admit, DomainNode.admit, Collection.values,
+      Goals.ShiftDomain.pack, Goals.ShiftItem.pack, Values.get,
+      show values.length < indexLimit by omega, Finite.continueWith]
+  have folded := Evaluation.denoteFoldOn_cursor_encode (carriers := uniformCarriers F G)
+    (helpers (F := F) (G := G)) shiftFold (Goals.ShiftDomain.pack ⟨values⟩)
+    (Goals.ShiftCaptures.pack ⟨count⟩) values (fun value => Goals.ShiftItem.pack ⟨value⟩)
+    encode ⟨xs, previous, offset⟩ admitted
+    (Companion.shiftTransition count) Companion.ShiftState.offset indexLimit
+    (by intros; rfl) (by
+      intro state value small
+      rw [← Evaluation.foldTransition_eq_foldTransitionOn (F := F) (G := G),
+        Evaluation.foldTransition_unfiltered _ _ rfl]
+      exact shift_step state.values state.previous value state.offset count values
+        small countBound positive)
+    bound
+  erw [folded]
+  rw [Companion.shift_fold]
   rfl
-
-theorem shift_body (table : Meanings F G) (values : List F) (count : Nat) :
-    GkrSourceBodies.helper66Body.denote (meaning F G table)
-      (Values.cons values (.cons count .nil)).get =
-      (invoke table GkrSourceBodies.scopedHelper74Helper .nil).bind fun zero =>
-      (invoke table GkrSourceBodies.helper65Helper
-        (.cons [] (.cons (zero.get .here) (.cons 0 (.cons count (.cons values .nil)))))).bind fun result =>
-      .done (.cons (result.get .here) .nil) := by
-  derive_process
-
-theorem shift_wrapper_body (table : Meanings F G) (values xs : List F) (previous : F)
-    (offset count : Nat) :
-    GkrSourceBodies.helper65Body.denote (meaning F G table)
-      (Values.cons xs (.cons previous (.cons offset (.cons count (.cons values .nil))))).get =
-      (invoke table GkrSourceBodies.scopedHelper86Helper
-        (.cons values (.cons xs (.cons previous (.cons offset (.cons count .nil)))))).bind
-        fun result => .done (.cons (result.get .here)
-          (.cons (result.get (.there .here)) (.cons (result.get (.there (.there .here))) .nil))) := by
-  derive_process
 
 /-- Exact success law for the actual `shift_rows`, not an assumed callback. -/
 theorem shift_rows (values : List F) (count : Nat)
     (bound : values.length < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper66Helper (.cons values (.cons count .nil)) =
-      .done (.cons (shiftAux count 0 0 values) .nil) := by
-  rw [helper66_association.invoke unit.linked, shift_body, HonestHelpers.zero_equation]
-  simp only [PIR.Process.bind, Values.get]
-  rw [helper65_association.invoke unit.linked, shift_wrapper_body,
+    invoke (helpers (G := G)) GkrSourceBodies.helper66Helper (Goals.Shift.Inputs.pack (Value := assignment F G) { source := values, count }) =
+      .done (Goals.Shift.encode (ringModel F G) ⟨shiftAux count 0 0 values⟩) := by
+  rw [helper66_association.invoke unit.linked]
+  named_equation Goals.Shift over F G
+  rw [HonestHelpers.zero_equation]
+  simp only [Primitive.evaluateOn, primitiveOutcome,
+    show 0 < indexLimit by decide +kernel, ↓reduceIte,
+    PIR.Process.bind, Environment.prepend, Environment.push, Values.get_cons, Values.get]
+  rw [helper65_association.invoke unit.linked]
+  named_equation Goals.ShiftWrapper over F G
+  rw [
     shift_fold values [] 0 0 count (by simpa using bound) countBound positive]
   rfl
 

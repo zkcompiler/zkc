@@ -87,7 +87,8 @@ run_cmd do
     (subject, fixedSubjectSource fixed),
     (modulePrefix ++ "ABI", ← require <| SubjectABI.source metadata {
       moduleName := modulePrefix ++ "ABI", namespaceName := namespacePrefix ++ "ABI",
-      subjectModule := subject, subjectNamespace }),
+      subjectModule := subject, subjectNamespace,
+      fieldNames := ["inputs", "outputs", "add", "mul", "layers", "selector", "width", "handle"] }),
     (selection.moduleName, RootCompleteness.directSource selection
       "ZkcSecurityExamples.Gkr.CanonicalCompleteness"
       "ZkcSecurity.Realizations.Gkr.CanonicalCompleteness.compiled_ideal_complete" sampling),

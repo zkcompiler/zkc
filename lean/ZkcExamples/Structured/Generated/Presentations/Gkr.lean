@@ -48,12 +48,16 @@ abbrev roundsBody := roundsDefinition.body
 theorem roundsBody_checked : roundsDefinition.body = roundsBody := rfl
 theorem roundsBody_raw : roundsDefinition.raw = roundsBody.erase := by kernel_rfl
 
-abbrev roundState : List Ty := [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]
-abbrev roundCaptures : List Ty := [(.service "random.bls12-381.fr/0")]
-abbrev roundMaximum := 4
-abbrev roundSpec : RepeatSpec := (⟨[(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.service "random.bls12-381.fr/0")], [0, 1], [[0], [0], [0], [0], [0], [1], [1]], 4⟩ : RepeatSpec)
-def roundBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Role0Callback0Body
-theorem round_selected : findRepeat "s9" roundsDefinition.body = some ⟨_, _, roundBody⟩ := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Role0Callback0_selected
+abbrev roundSite : RepeatSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Callback0Site
+abbrev roundSpec : RepeatSpec := roundSite.spec
+abbrev roundState : List Ty := roundSpec.state
+abbrev roundCaptures : List Ty := roundSpec.captures
+abbrev roundMaximum := roundSpec.maximum
+abbrev roundBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Callback0Body
+theorem round_body : roundSite.body = roundBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Callback0_body
+abbrev roundOccurrence : RepeatAt roundSite roundsDefinition.body := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Callback0Occurrence
+theorem round_selected : (selectRepeat 0 roundsDefinition.body).map (·.repeatSite) = some roundSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Callback0_selected
+theorem round_position : roundOccurrence.position = [1, 1, 1, 1, 1] := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol0Callback0_position
 
 def roundsFn (ctx : ProtocolContext) (self : Nat) : RegionFunction (Component (assignment F G)) (participantInterface F G) ([(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
   fun args => roundsBody.denote (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers payload) self (payload.plainProtocolTable F G) ctx) args.get
@@ -515,26 +519,38 @@ abbrev gkrBody := gkrDefinition.body
 theorem gkrBody_checked : gkrDefinition.body = gkrBody := rfl
 theorem gkrBody_raw : gkrDefinition.raw = gkrBody.erase := by kernel_rfl
 
-abbrev outputState : List Ty := [(.vector "bls12-381.fr"), (.vector "bls12-381.fr")]
-abbrev outputCaptures : List Ty := [(.service "random.bls12-381.fr/0")]
-abbrev outputMaximum := 4
-abbrev outputSpec : RepeatSpec := (⟨[(.vector "bls12-381.fr"), (.vector "bls12-381.fr")], [(.service "random.bls12-381.fr/0")], [0, 1], [[1], [0]], 4⟩ : RepeatSpec)
-def outputBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Role0Callback0Body
-theorem output_selected : findRepeat "s37" gkrDefinition.body = some ⟨_, _, outputBody⟩ := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Role0Callback0_selected
+abbrev outputSite : RepeatSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback0Site
+abbrev outputSpec : RepeatSpec := outputSite.spec
+abbrev outputState : List Ty := outputSpec.state
+abbrev outputCaptures : List Ty := outputSpec.captures
+abbrev outputMaximum := outputSpec.maximum
+abbrev outputBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback0Body
+theorem output_body : outputSite.body = outputBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback0_body
+abbrev outputOccurrence : RepeatAt outputSite gkrDefinition.body := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback0Occurrence
+theorem output_selected : (selectRepeat 0 gkrDefinition.body).map (·.repeatSite) = some outputSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback0_selected
+theorem output_position : outputOccurrence.position = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback0_position
 
-abbrev layerState : List Ty := [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]
-abbrev layerCaptures : List Ty := [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, .index, (.service "random.bls12-381.fr/0")]
-abbrev layerMaximum := 4
-abbrev layerSpec : RepeatSpec := (⟨[(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, .index, (.service "random.bls12-381.fr/0")], [0, 1], [[0], [1], [1]], 4⟩ : RepeatSpec)
-def layerBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Role0Callback1Body
-theorem layer_selected : findRepeat "s57" gkrDefinition.body = some ⟨_, _, layerBody⟩ := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Role0Callback1_selected
+abbrev layerSite : RepeatSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback1Site
+abbrev layerSpec : RepeatSpec := layerSite.spec
+abbrev layerState : List Ty := layerSpec.state
+abbrev layerCaptures : List Ty := layerSpec.captures
+abbrev layerMaximum := layerSpec.maximum
+abbrev layerBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback1Body
+theorem layer_body : layerSite.body = layerBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback1_body
+abbrev layerOccurrence : RepeatAt layerSite gkrDefinition.body := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback1Occurrence
+theorem layer_selected : (selectRepeat 1 gkrDefinition.body).map (·.repeatSite) = some layerSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback1_selected
+theorem layer_position : layerOccurrence.position = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback1_position
 
-abbrev coefficientState : List Ty := [(.vector "bls12-381.fr")]
-abbrev coefficientCaptures : List Ty := [(.vector "bls12-381.fr")]
-abbrev coefficientMaximum := 4
-abbrev coefficientSpec : RepeatSpec := (⟨[(.vector "bls12-381.fr")], [(.vector "bls12-381.fr")], [0, 1], [[1]], 4⟩ : RepeatSpec)
-def coefficientBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Role0Callback2Body
-theorem coefficient_selected : findRepeat "s91" gkrDefinition.body = some ⟨_, _, coefficientBody⟩ := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Role0Callback2_selected
+abbrev coefficientSite : RepeatSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback2Site
+abbrev coefficientSpec : RepeatSpec := coefficientSite.spec
+abbrev coefficientState : List Ty := coefficientSpec.state
+abbrev coefficientCaptures : List Ty := coefficientSpec.captures
+abbrev coefficientMaximum := coefficientSpec.maximum
+abbrev coefficientBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback2Body
+theorem coefficient_body : coefficientSite.body = coefficientBody := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback2_body
+abbrev coefficientOccurrence : RepeatAt coefficientSite gkrDefinition.body := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback2Occurrence
+theorem coefficient_selected : (selectRepeat 2 gkrDefinition.body).map (·.repeatSite) = some coefficientSite := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback2_selected
+theorem coefficient_position : coefficientOccurrence.position = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] := ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks.protocol2Callback2_position
 
 def gkrFn (ctx : ProtocolContext) (self : Nat) : RegionFunction (Component (assignment F G)) (participantInterface F G) ([(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, .index, (.service "random.bls12-381.fr/0")], [.boolean]) :=
   fun args => gkrBody.denote (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers payload) self (payload.plainProtocolTable F G) ctx) args.get

@@ -123,6 +123,18 @@ def callInventory {Γ out} (body : Region protocolDialect Γ out) : List (CallOc
   | .bind body next => (callInventory body).map (CallOccurrence.bindBody body next) ++
       (callInventory next).map (CallOccurrence.bindNext body next)
 
+/-- Select one complete lexical occurrence by its exact callee signature and,
+when needed, source path. Ambiguous matches remain unresolved. This query does
+not assert that execution reaches the selected call. -/
+def selectCall {Γ out} (body : Region protocolDialect Γ out)
+    (signature : ProtocolSignature) (position : Option (List Nat) := none) :
+    Option (CallOccurrence body) :=
+  match (callInventory body).filter (fun call =>
+      call.callSite.signature == signature &&
+        position.all (fun path => call.position == path)) with
+  | [call] => some call
+  | _ => none
+
 /-- Every canonical occurrence is in the computable inventory. -/
 theorem callInventory_complete {Γ out} {body : Region protocolDialect Γ out}
     (call : CallOccurrence body) : call ∈ callInventory body := by

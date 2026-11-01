@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurityExamples.Gkr.HonestProducerOccurrences
+public import ZkcSecurityExamples.Gkr.SourceRows
 public import ZkcSecurity.Bindings.Sumcheck.Residual
 public import ZkcSecurity.Bindings.Source.PublicUniform
 
@@ -31,7 +32,7 @@ def program (ctx : ProtocolContext) (site : String) (handle : Nat) :
     .call (.action (.receive (.field "bls12-381.fr") (GkrVerifier.roundSite ctx "1") (ctx.roles 0))) fun b =>
     .call (.action (.receive (.field "bls12-381.fr") (GkrVerifier.roundSite ctx "2") (ctx.roles 0))) fun c =>
     .done (some (a,b,c))
-  query _ _ _ := .action (.query (GkrVerifier.challengeSite ctx) "bls12-381.fr" (.cons handle .nil))
+  query _ _ _ := .action (.query (GkrVerifier.challengeSite ctx) "bls12-381.fr" (SourceRows.RoundCaptures.pack { service := handle }))
   challenge _ _ _ r := r
   deliver _ state _ r :=
     .call (.action (.send (ty := (.field "bls12-381.fr")) (GkrVerifier.deliverySite ctx) (ctx.roles 0) r)) fun _ =>
@@ -52,7 +53,7 @@ theorem binding (ctx : ProtocolContext) (site : String) (handle count : Nat) {n 
   induction count with
   | zero => rfl
   | succ count ih =>
-    rw [Program.remaining, HonestProducerOccurrences.validatorRounds]
+    rw [Program.remaining, HonestProducerOccurrences.validatorRounds, ObservedLoop.counted_succ]
     simp only [program, IterationObservations.within_eq, Occurrence.iterations,
       IterationObservations.enter, IterationObservations.leave,
       GkrVerifier.round, GkrVerifier.roundFirst, GkrVerifier.roundSecond,
@@ -68,7 +69,11 @@ theorem binding (ctx : ProtocolContext) (site : String) (handle count : Nat) {n 
         GkrVerifier.roundChallenge, PIR.Process.bind, PIR.Process.interpret,
         CommonAdapter.embed, Occurrence.actions]
       congr 1; funext r; congr 1; funext sent; congr 1; funext left
-      simpa only [program, Rounds.advance, Rounds.project, evaluation] using
+      simpa only [program, Rounds.advance, Rounds.project, evaluation,
+        HonestProducerOccurrences.validatorRounds, Occurrence.iterations,
+        GkrVerifier.round, GkrVerifier.roundFirst, GkrVerifier.roundSecond,
+        GkrVerifier.roundCheck, GkrVerifier.roundChallenge,
+        PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind] using
         ih (state.1+1, Rounds.advance state.2 (a,b,c) r)
     · simp only [boundary, Rounds.project, GkrVerifier.roundCheck, checked, Ne.symm checked,
         ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]

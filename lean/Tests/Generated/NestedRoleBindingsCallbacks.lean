@@ -25,11 +25,34 @@ theorem callbackLaws_hold {inputs : List Ty} (input : Values (Component (assignm
   intro entry
   exact entry.elim0
 
-def protocol0Role0Callback0Body : Region protocolDialect [.index, .index] [.index] :=
+def protocol0Callback0Selection : RepeatOccurrence definition0.body :=
+  checkedRepeat 0 definition0.body (by kernel_rfl)
+
+def protocol0Callback0Body : Region protocolDialect [.index, .index] [.index] :=
   (.ret (.cons (.there .here) .nil))
 
-theorem protocol0Role0Callback0_selected : Zkc.Source.Structured.Bindings.findRepeat "round" definition0.body = some ⟨_, _, protocol0Role0Callback0Body⟩ := by
+abbrev protocol0Callback0Site : RepeatSite :=
+  ⟨[.index, .index], [.index], (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec), "round", (.cons .here (.cons (.there .here) .nil)), protocol0Callback0Body, (Eq.mp (show Region protocolDialect (protocol0Callback0Selection.repeatSite.spec.state ++ protocol0Callback0Selection.repeatSite.context) protocol0Callback0Selection.repeatSite.outputs = Region protocolDialect [.index, .index, .index] [.index] from by kernel_rfl) protocol0Callback0Selection.repeatSite.next)⟩
+
+theorem protocol0Callback0_body : protocol0Callback0Site.body = protocol0Callback0Body := rfl
+
+theorem protocol0Callback0_selected : (selectRepeat 0 definition0.body).map (·.repeatSite) = some protocol0Callback0Site := by
   kernel_rfl
+
+def protocol0Callback0Occurrence : RepeatAt protocol0Callback0Site definition0.body :=
+  selectedRepeat protocol0Callback0_selected
+
+theorem protocol0Callback0_position : protocol0Callback0Occurrence.position = [1] := by
+  kernel_rfl
+
+abbrev protocol0Role0Callback0Body := protocol0Callback0Body
+abbrev protocol0Role0Callback0Site := protocol0Callback0Site
+abbrev protocol0Role0Callback0Occurrence := protocol0Callback0Occurrence
+theorem protocol0Role0Callback0_body : protocol0Role0Callback0Site.body = protocol0Role0Callback0Body := protocol0Callback0_body
+theorem protocol0Role0Callback0_selected : (selectRepeat 0 definition0.body).map (·.repeatSite) = some protocol0Role0Callback0Site :=
+  protocol0Callback0_selected
+
+theorem protocol0Role0Callback0_position : protocol0Role0Callback0Occurrence.position = [1] := protocol0Callback0_position
 
 def protocol0Role0Callback0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol0Role0Callback0Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
@@ -81,7 +104,7 @@ theorem protocol0Role0Callback0_function (ctx : ProtocolContext)
 
 noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role0Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role0Callback0Process ctx (input.get .here) (input.get (.there .here)))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol0Role0_readable (ctx : ProtocolContext)
@@ -89,7 +112,7 @@ theorem protocol0Role0_readable (ctx : ProtocolContext)
     (protocol0Role0Process (F := F) (G := G) ctx b0 b1) = (protocol0Role0ReadableProcess (F := F) (G := G) ctx b0 b1) := by
   have equation := Eq.refl (protocol0Role0Process (F := F) (G := G) ctx b0 b1)
   have callback0 := protocol0Role0Callback0_function (F := F) (G := G) ctx distinct
-  unfold protocol0Role0Callback0Body at callback0
+  unfold protocol0Role0Callback0Body protocol0Callback0Body at callback0
   conv_rhs at equation => unfold protocol0Role0Process; simp only [callback0]
   exact equation
 
@@ -108,11 +131,14 @@ theorem protocol0Role0_readable_invocation (ctx : ProtocolContext)
   exact congrArg (fun p => p.bind fun out => .done (maskValues (ctx.roles 0) (ctx.mapScopes definition0.outputScopes) out))
     (protocol0Role0_readable (F := F) (G := G) ctx distinct ((maskValues (ctx.roles 0) (ctx.mapScopes definition0.inputScopes) input).get .here) ((maskValues (ctx.roles 0) (ctx.mapScopes definition0.inputScopes) input).get (.there .here)))
 
-def protocol0Role1Callback0Body : Region protocolDialect [.index, .index] [.index] :=
-  (.ret (.cons (.there .here) .nil))
+abbrev protocol0Role1Callback0Body := protocol0Callback0Body
+abbrev protocol0Role1Callback0Site := protocol0Callback0Site
+abbrev protocol0Role1Callback0Occurrence := protocol0Callback0Occurrence
+theorem protocol0Role1Callback0_body : protocol0Role1Callback0Site.body = protocol0Role1Callback0Body := protocol0Callback0_body
+theorem protocol0Role1Callback0_selected : (selectRepeat 0 definition0.body).map (·.repeatSite) = some protocol0Role1Callback0Site :=
+  protocol0Callback0_selected
 
-theorem protocol0Role1Callback0_selected : Zkc.Source.Structured.Bindings.findRepeat "round" definition0.body = some ⟨_, _, protocol0Role1Callback0Body⟩ := by
-  kernel_rfl
+theorem protocol0Role1Callback0_position : protocol0Role1Callback0Occurrence.position = [1] := protocol0Callback0_position
 
 def protocol0Role1Callback0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol0Role1Callback0Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
@@ -164,7 +190,7 @@ theorem protocol0Role1Callback0_function (ctx : ProtocolContext)
 
 noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role1Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role1Callback0Process ctx (input.get .here) (input.get (.there .here)))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol0Role1_readable (ctx : ProtocolContext)
@@ -172,7 +198,7 @@ theorem protocol0Role1_readable (ctx : ProtocolContext)
     (protocol0Role1Process (F := F) (G := G) ctx b0 b1) = (protocol0Role1ReadableProcess (F := F) (G := G) ctx b0 b1) := by
   have equation := Eq.refl (protocol0Role1Process (F := F) (G := G) ctx b0 b1)
   have callback0 := protocol0Role1Callback0_function (F := F) (G := G) ctx distinct
-  unfold protocol0Role1Callback0Body at callback0
+  unfold protocol0Role1Callback0Body protocol0Callback0Body at callback0
   conv_rhs at equation => unfold protocol0Role1Process; simp only [callback0]
   exact equation
 
@@ -295,22 +321,65 @@ theorem protocol2Role1_readable_invocation (ctx : ProtocolContext)
   exact congrArg (fun p => p.bind fun out => .done (maskValues (ctx.roles 1) (ctx.mapScopes definition2.outputScopes) out))
     (protocol2Role1_readable (F := F) (G := G) ctx distinct ((maskValues (ctx.roles 1) (ctx.mapScopes definition2.inputScopes) input).get .here) ((maskValues (ctx.roles 1) (ctx.mapScopes definition2.inputScopes) input).get (.there .here)))
 
-def protocol3Role0Callback0Body : Region protocolDialect [.index, .index] [.index] :=
+def protocol3Callback0Selection : RepeatOccurrence definition3.body :=
+  checkedRepeat 0 definition3.body (by kernel_rfl)
+
+def protocol3Callback0Body : Region protocolDialect [.index, .index] [.index] :=
   (.letOp (.mark "before") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "before") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "inner") .nil .nil (.letOp (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "inner") (.cons (.there .here) (.cons .here .nil)) (.cons (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) .nil) (.ret (.cons .here .nil))))))
 
-theorem protocol3Role0Callback0_selected : Zkc.Source.Structured.Bindings.findRepeat "outer" definition3.body = some ⟨_, _, protocol3Role0Callback0Body⟩ := by
+abbrev protocol3Callback0Site : RepeatSite :=
+  ⟨[.index, .index, .index, .index, .boolean], [.index], (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec), "outer", (.cons (.there (.there .here)) (.cons .here .nil)), protocol3Callback0Body, (Eq.mp (show Region protocolDialect (protocol3Callback0Selection.repeatSite.spec.state ++ protocol3Callback0Selection.repeatSite.context) protocol3Callback0Selection.repeatSite.outputs = Region protocolDialect [.index, .index, .index, .index, .index, .boolean] [.index] from by kernel_rfl) protocol3Callback0Selection.repeatSite.next)⟩
+
+theorem protocol3Callback0_body : protocol3Callback0Site.body = protocol3Callback0Body := rfl
+
+theorem protocol3Callback0_selected : (selectRepeat 0 definition3.body).map (·.repeatSite) = some protocol3Callback0Site := by
   kernel_rfl
+
+def protocol3Callback0Occurrence : RepeatAt protocol3Callback0Site definition3.body :=
+  selectedRepeat protocol3Callback0_selected
+
+theorem protocol3Callback0_position : protocol3Callback0Occurrence.position = [1, 1, 1, 1, 1] := by
+  kernel_rfl
+
+def protocol3Callback1Selection : RepeatOccurrence definition3.body :=
+  checkedRepeat 1 definition3.body (by kernel_rfl)
+
+def protocol3Callback1Body : Region protocolDialect [.index, .index] [.index] :=
+  (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))
+
+abbrev protocol3Callback1Site : RepeatSite :=
+  ⟨[.index, .index, .index], [.index], (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec), "inner", (.cons (.there .here) (.cons .here .nil)), protocol3Callback1Body, (Eq.mp (show Region protocolDialect (protocol3Callback1Selection.repeatSite.spec.state ++ protocol3Callback1Selection.repeatSite.context) protocol3Callback1Selection.repeatSite.outputs = Region protocolDialect [.index, .index, .index, .index] [.index] from by kernel_rfl) protocol3Callback1Selection.repeatSite.next)⟩
+
+theorem protocol3Callback1_body : protocol3Callback1Site.body = protocol3Callback1Body := rfl
+
+theorem protocol3Callback1_selected : (selectRepeat 1 definition3.body).map (·.repeatSite) = some protocol3Callback1Site := by
+  kernel_rfl
+
+def protocol3Callback1Occurrence : RepeatAt protocol3Callback1Site definition3.body :=
+  selectedRepeat protocol3Callback1_selected
+
+theorem protocol3Callback1_position : protocol3Callback1Occurrence.position = [1, 1, 1, 1, 1, 0, 1, 1, 1] := by
+  kernel_rfl
+
+abbrev protocol3Role0Callback0Body := protocol3Callback0Body
+abbrev protocol3Role0Callback0Site := protocol3Callback0Site
+abbrev protocol3Role0Callback0Occurrence := protocol3Callback0Occurrence
+theorem protocol3Role0Callback0_body : protocol3Role0Callback0Site.body = protocol3Role0Callback0Body := protocol3Callback0_body
+theorem protocol3Role0Callback0_selected : (selectRepeat 0 definition3.body).map (·.repeatSite) = some protocol3Role0Callback0Site :=
+  protocol3Callback0_selected
+
+theorem protocol3Role0Callback0_position : protocol3Role0Callback0Occurrence.position = [1, 1, 1, 1, 1] := protocol3Callback0_position
 
 def protocol3Role0Callback0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol3Role0Callback0Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
 
 noncomputable def protocol3Role0Callback0Form : (Form [] [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
-  (.apply ⟨1, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "before" (by change (Values (Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "inner" (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.input (.there .here)) (.cons (.read .here .here) .nil) .nil (.done (.cons (.read .here .here) .nil))))
+  (.apply ⟨1, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "before" (by change (Zkc.Source.Values (Zkc.Source.Structured.NormalForm.Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "inner" (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.input (.there .here)) (.cons (.read .here .here) .nil) .nil (.done (.cons (.read .here .here) .nil))))
 
 noncomputable def protocol3Role0Callback0Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   ((actualCallees payload calleeKeys ⟨1, by decide⟩) ((ctx).enter "before" [1, 0]) (by change (Binders (ringModel F G) [(.component .index), (.component .index)]); exact (.cons (b0) (.cons (b1) .nil)))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b2).get .here) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))))).bind fun (b3 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b2).get .here) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))) "inner").bind fun (b3 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b3).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol3Role0Callback0_calls : protocol3Role0Callback0Form.CallsMatch := by
@@ -351,17 +420,20 @@ theorem protocol3Role0Callback0_function (ctx : ProtocolContext)
   funext input
   exact protocol3Role0Callback0_source ctx distinct input
 
-def protocol3Role0Callback1Body : Region protocolDialect [.index, .index] [.index] :=
-  (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))
+abbrev protocol3Role0Callback1Body := protocol3Callback1Body
+abbrev protocol3Role0Callback1Site := protocol3Callback1Site
+abbrev protocol3Role0Callback1Occurrence := protocol3Callback1Occurrence
+theorem protocol3Role0Callback1_body : protocol3Role0Callback1Site.body = protocol3Role0Callback1Body := protocol3Callback1_body
+theorem protocol3Role0Callback1_selected : (selectRepeat 1 definition3.body).map (·.repeatSite) = some protocol3Role0Callback1Site :=
+  protocol3Callback1_selected
 
-theorem protocol3Role0Callback1_selected : Zkc.Source.Structured.Bindings.findRepeat "inner" definition3.body = some ⟨_, _, protocol3Role0Callback1Body⟩ := by
-  kernel_rfl
+theorem protocol3Role0Callback1_position : protocol3Role0Callback1Occurrence.position = [1, 1, 1, 1, 1, 0, 1, 1, 1] := protocol3Callback1_position
 
 def protocol3Role0Callback1Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol3Role0Callback1Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
 
 noncomputable def protocol3Role0Callback1Form : (Form [] [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
-  (.apply ⟨0, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside" (by change (Values (Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.apply ⟨1, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again" (by change (Values (Argument [] [(.tuple [.index]), (.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input (.there .here)) (.cons (.read .here .here) .nil))) (.done (.cons (.read .here .here) .nil))))
+  (.apply ⟨0, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside" (by change (Zkc.Source.Values (Zkc.Source.Structured.NormalForm.Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.apply ⟨1, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again" (by change (Zkc.Source.Values (Zkc.Source.Structured.NormalForm.Argument [] [(.tuple [.index]), (.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input (.there .here)) (.cons (.read .here .here) .nil))) (.done (.cons (.read .here .here) .nil))))
 
 noncomputable def protocol3Role0Callback1Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
@@ -411,7 +483,7 @@ noncomputable def protocol3Role0ReadableProcess (ctx : ProtocolContext) (b0 : (O
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   ((protocol3Role0Callees ⟨5, by decide⟩) ((ctx).enter "first" [1, 0]) (by change (Binders (ringModel F G) [(.component .index), (.component .index)]); exact (.cons (b0) (.cons (b1) .nil)))).bind fun (b3 : (Values (Component (assignment F G)) [.index])) =>
   ((protocol3Role0Callees ⟨4, by decide⟩) ((ctx).enter "second" [0, 1]) (by change (Binders (ringModel F G) [(.component .index), (.component .index)]); exact (.cons ((b3).get .here) (.cons (b1) .nil)))).bind fun (b4 : (Values (Component (assignment F G)) [.index])) =>
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b4).get .here) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol3Role0Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b5 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b4).get .here) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol3Role0Callback0Process ctx (input.get .here) (input.get (.there .here)))) "outer").bind fun (b5 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b5).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol3Role0_readable (ctx : ProtocolContext)
@@ -419,7 +491,7 @@ theorem protocol3Role0_readable (ctx : ProtocolContext)
     (protocol3Role0Process (F := F) (G := G) ctx b0 b1 b2) = (protocol3Role0ReadableProcess (F := F) (G := G) ctx b0 b1 b2) := by
   have equation := Eq.refl (protocol3Role0Process (F := F) (G := G) ctx b0 b1 b2)
   have callback0 := protocol3Role0Callback0_function (F := F) (G := G) ctx distinct
-  unfold protocol3Role0Callback0Body at callback0
+  unfold protocol3Role0Callback0Body protocol3Callback0Body at callback0
   conv_rhs at equation => unfold protocol3Role0Process; simp only [callback0]
   exact equation
 
@@ -438,22 +510,25 @@ theorem protocol3Role0_readable_invocation (ctx : ProtocolContext)
   exact congrArg (fun p => p.bind fun out => .done (maskValues (ctx.roles 0) (ctx.mapScopes definition3.outputScopes) out))
     (protocol3Role0_readable (F := F) (G := G) ctx distinct ((maskValues (ctx.roles 0) (ctx.mapScopes definition3.inputScopes) input).get .here) ((maskValues (ctx.roles 0) (ctx.mapScopes definition3.inputScopes) input).get (.there .here)) ((maskValues (ctx.roles 0) (ctx.mapScopes definition3.inputScopes) input).get (.there (.there .here))))
 
-def protocol3Role1Callback0Body : Region protocolDialect [.index, .index] [.index] :=
-  (.letOp (.mark "before") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "before") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "inner") .nil .nil (.letOp (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "inner") (.cons (.there .here) (.cons .here .nil)) (.cons (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) .nil) (.ret (.cons .here .nil))))))
+abbrev protocol3Role1Callback0Body := protocol3Callback0Body
+abbrev protocol3Role1Callback0Site := protocol3Callback0Site
+abbrev protocol3Role1Callback0Occurrence := protocol3Callback0Occurrence
+theorem protocol3Role1Callback0_body : protocol3Role1Callback0Site.body = protocol3Role1Callback0Body := protocol3Callback0_body
+theorem protocol3Role1Callback0_selected : (selectRepeat 0 definition3.body).map (·.repeatSite) = some protocol3Role1Callback0Site :=
+  protocol3Callback0_selected
 
-theorem protocol3Role1Callback0_selected : Zkc.Source.Structured.Bindings.findRepeat "outer" definition3.body = some ⟨_, _, protocol3Role1Callback0Body⟩ := by
-  kernel_rfl
+theorem protocol3Role1Callback0_position : protocol3Role1Callback0Occurrence.position = [1, 1, 1, 1, 1] := protocol3Callback0_position
 
 def protocol3Role1Callback0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol3Role1Callback0Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
 
 noncomputable def protocol3Role1Callback0Form : (Form [] [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
-  (.apply ⟨0, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "before" (by change (Values (Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "inner" (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.input (.there .here)) (.cons (.read .here .here) .nil) .nil (.done (.cons (.read .here .here) .nil))))
+  (.apply ⟨0, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "before" (by change (Zkc.Source.Values (Zkc.Source.Structured.NormalForm.Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "inner" (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.input (.there .here)) (.cons (.read .here .here) .nil) .nil (.done (.cons (.read .here .here) .nil))))
 
 noncomputable def protocol3Role1Callback0Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   ((actualCallees payload calleeKeys ⟨0, by decide⟩) ((ctx).enter "before" [1, 0]) (by change (Binders (ringModel F G) [(.component .index), (.component .index)]); exact (.cons (b0) (.cons (b1) .nil)))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b2).get .here) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))))).bind fun (b3 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b2).get .here) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))) "inner").bind fun (b3 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b3).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol3Role1Callback0_calls : protocol3Role1Callback0Form.CallsMatch := by
@@ -494,17 +569,20 @@ theorem protocol3Role1Callback0_function (ctx : ProtocolContext)
   funext input
   exact protocol3Role1Callback0_source ctx distinct input
 
-def protocol3Role1Callback1Body : Region protocolDialect [.index, .index] [.index] :=
-  (.letOp (.mark "inside") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside") (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.mark "again") .nil .nil (.letOp (.protocolApply (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again") (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))
+abbrev protocol3Role1Callback1Body := protocol3Callback1Body
+abbrev protocol3Role1Callback1Site := protocol3Callback1Site
+abbrev protocol3Role1Callback1Occurrence := protocol3Callback1Occurrence
+theorem protocol3Role1Callback1_body : protocol3Role1Callback1Site.body = protocol3Role1Callback1Body := protocol3Callback1_body
+theorem protocol3Role1Callback1_selected : (selectRepeat 1 definition3.body).map (·.repeatSite) = some protocol3Role1Callback1Site :=
+  protocol3Callback1_selected
 
-theorem protocol3Role1Callback1_selected : Zkc.Source.Structured.Bindings.findRepeat "inner" definition3.body = some ⟨_, _, protocol3Role1Callback1Body⟩ := by
-  kernel_rfl
+theorem protocol3Role1Callback1_position : protocol3Role1Callback1Occurrence.position = [1, 1, 1, 1, 1, 0, 1, 1, 1] := protocol3Callback1_position
 
 def protocol3Role1Callback1Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol3Role1Callback1Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
 
 noncomputable def protocol3Role1Callback1Form : (Form [] [(⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 0, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"booleanLeaf", ["Alice", "Bob"], [.boolean], [.boolean], [[1]], [[1]]⟩ : ProtocolSignature), 1, (.cons .optional .nil), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"middle", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey), (⟨(⟨"root", ["Alice", "Bob"], [.index, .index, .boolean], [.index], [[0, 1], [0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional (.cons .optional .nil))), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
-  (.apply ⟨1, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside" (by change (Values (Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.apply ⟨0, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again" (by change (Values (Argument [] [(.tuple [.index]), (.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input (.there .here)) (.cons (.read .here .here) .nil))) (.done (.cons (.read .here .here) .nil))))
+  (.apply ⟨1, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [0, 1] "inside" (by change (Zkc.Source.Values (Zkc.Source.Structured.NormalForm.Argument [] [(.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input .here) (.cons (.input (.there .here)) .nil))) (.apply ⟨0, by decide⟩ (⟨"leaf", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature) [1, 0] "again" (by change (Zkc.Source.Values (Zkc.Source.Structured.NormalForm.Argument [] [(.tuple [.index]), (.component .index), (.component .index)]) [(.component .index), (.component .index)]); exact (.cons (.input (.there .here)) (.cons (.read .here .here) .nil))) (.done (.cons (.read .here .here) .nil))))
 
 noncomputable def protocol3Role1Callback1Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
@@ -554,7 +632,7 @@ noncomputable def protocol3Role1ReadableProcess (ctx : ProtocolContext) (b0 : (O
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   ((protocol3Role1Callees ⟨4, by decide⟩) ((ctx).enter "first" [1, 0]) (by change (Binders (ringModel F G) [(.component .index), (.component .index)]); exact (.cons (b0) (.cons (b1) .nil)))).bind fun (b3 : (Values (Component (assignment F G)) [.index])) =>
   ((protocol3Role1Callees ⟨5, by decide⟩) ((ctx).enter "second" [0, 1]) (by change (Binders (ringModel F G) [(.component .index), (.component .index)]); exact (.cons ((b3).get .here) (.cons (b1) .nil)))).bind fun (b4 : (Values (Component (assignment F G)) [.index])) =>
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b4).get .here) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol3Role1Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b5 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons ((b4).get .here) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol3Role1Callback0Process ctx (input.get .here) (input.get (.there .here)))) "outer").bind fun (b5 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b5).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol3Role1_readable (ctx : ProtocolContext)
@@ -562,7 +640,7 @@ theorem protocol3Role1_readable (ctx : ProtocolContext)
     (protocol3Role1Process (F := F) (G := G) ctx b0 b1 b2) = (protocol3Role1ReadableProcess (F := F) (G := G) ctx b0 b1 b2) := by
   have equation := Eq.refl (protocol3Role1Process (F := F) (G := G) ctx b0 b1 b2)
   have callback0 := protocol3Role1Callback0_function (F := F) (G := G) ctx distinct
-  unfold protocol3Role1Callback0Body at callback0
+  unfold protocol3Role1Callback0Body protocol3Callback0Body at callback0
   conv_rhs at equation => unfold protocol3Role1Process; simp only [callback0]
   exact equation
 

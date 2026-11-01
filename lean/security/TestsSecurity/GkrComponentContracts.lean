@@ -89,6 +89,9 @@ example : verifier.run consumerHandler (messages ++ [99], 0, 0) =
 example : (SourceValidator.body (G := ℚ) runtime).run occurrenceHandler (messages ++ [99], 0, 0) =
     ⟨.returned (.cons (some true) .nil), ([99], 7, 7), []⟩ := by
   rw [SourceValidator.admitted_body runtime admitted]
+  -- This handler ignores occurrence labels. Keep them abstract instead of
+  -- evaluating the source inventory merely to discard their strings.
+  generalize HonestProducerSource.currentSites = sites
   cbv
 
 example : verifier.run consumerHandler (121 :: messages.tail, 0, 0) =

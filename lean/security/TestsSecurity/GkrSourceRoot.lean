@@ -53,7 +53,7 @@ theorem malformed_mul_rejects : (SourceValidator.body (G := ℚ) malformedZeroLa
 layer stays open, and the unused proof suffix is preserved. -/
 theorem missing_service :
     (Occurrence.participant (ringModel ℚ ℚ) GkrSourceViews.program 1
-      (HonestProducerSource.currentInputs oneLayer.encoding oneLayer.outputs none)).run handler [3, 99] =
+      (SourceRows.circuitInputs oneLayer.encoding oneLayer.outputs none)).run handler [3, 99] =
       ⟨.stopped .incomplete, [99], ["enter:s57", GkrVerifier.lineConstantSite {}]⟩ := by
   kernel_rfl
 

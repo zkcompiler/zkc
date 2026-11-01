@@ -193,6 +193,8 @@ def main():
              'not proposition-valued'),
             ('registry-duplicate-identifier', complete + ', ("registry.open", none, false)',
              'duplicate registry identifier'),
+            ('registry-duplicate-schema', complete + ', ("registry.second-open", some `Registry.Open, true)',
+             'duplicate registry schema: Registry.Open'),
         ]
         for name, entries, diagnostic in registry_cases:
             (directory / 'Audit.lean').write_text('import Registry.Subject\n'

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurityExamples.Gkr.HonestCircuit
+public import ZkcSecurityExamples.Gkr.HonestTraversalGoals
 
 @[expose] public section
 
@@ -17,6 +18,7 @@ open ZkcSecurity.Examples.Components
 
 set_option backward.isDefEq.respectTransparency false
 set_option linter.unusedSimpArgs false
+attribute [local implicit_reducible] Op.arguments Op.results Op.regions
 
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -70,42 +72,6 @@ theorem block_append_tail (xs tail : List F) (position size : Nat)
   simp only [block, List.drop_append_of_le_length before,
     List.take_append_of_le_length remaining]
 
-/-- The literal loop callback of helper34. -/
-def valuesLoopBody : Region dialect
-    [.index, .vector "bls12-381.fr", .index, .vector "bls12-381.fr",
-      .vector "bls12-381.fr", .index, .index]
-    [.vector "bls12-381.fr", .index, .vector "bls12-381.fr",
-      .vector "bls12-381.fr", .index, .index] :=
-    .letOp (.mark "s11") .nil .nil <|
-    .letOp (.exec (.indexConstant 1)) .nil .nil <|
-    .letOp (.mark "s12") .nil .nil <|
-    .letOp (.exec (.indexSub)) (.cons (.there (.there (.there .here))) (.cons .here .nil)) .nil <|
-    .letOp (.mark "s14") .nil .nil <|
-    .letOp (.invoke ⟨"zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))) .nil <|
-    .letOp (.mark "s15") .nil .nil <|
-    .letOp (.invoke ⟨"zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil))) .nil <|
-    .letOp (.mark "s16") .nil .nil <|
-    .letOp (.invoke ⟨"zkl_3a99bc0fa1dab7cb27c9ec80754c3782b0a32e76ddc961a50e12c24c6cbff683", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index], [.vector "bls12-381.fr"]⟩) (.cons (.there .here) (.cons .here (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))) .nil <|
-    .ret (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .nil))))))
-
-/-- Structural callback expansion, with its checked decrement still visible. -/
-theorem values_step_body (table : Meanings F G) (iteration current width selector : Nat)
-    (below add mul : List F) :
-    valuesLoopBody.denote (meaning F G table)
-      (Values.cons iteration (.cons below (.cons current (.cons add (.cons mul
-        (.cons selector (.cons width .nil))))))).get =
-      (primitiveOutcome (Primitive.evaluate (F := F) (G := G) .indexSub
-        (.cons current (.cons 1 .nil)))).bind fun next =>
-      (invoke table GkrSourceBodies.selectBlockHelper
-        (.cons add (.cons (next.get .here) (.cons selector .nil)))).bind fun a =>
-      (invoke table GkrSourceBodies.selectBlockHelper
-        (.cons mul (.cons (next.get .here) (.cons selector .nil)))).bind fun m =>
-      (invoke table GkrSourceBodies.helper33Helper
-        (.cons (a.get .here) (.cons (m.get .here) (.cons below (.cons width .nil))))).bind fun result =>
-      .done (.cons (result.get .here) (.cons (next.get .here)
-        (.cons add (.cons mul (.cons selector (.cons width .nil)))))) := by
-  derive_process
-
 /-- One reached traversal step maintains the mathematical evaluator and the
 backward layer index. This covers arbitrary raw stacks and active wiring. -/
 theorem values_step {width : Nat} (add mul : List F) (layers selector : Nat)
@@ -115,12 +81,13 @@ theorem values_step {width : Nat} (add mul : List F) (layers selector : Nat)
     (capacity : layers ≤ 2 ^ selector)
     (small : width + width + width + selector < 64)
     (layersBound : layers < indexLimit) (iteration : Nat) (inside : iteration < layers) :
-    valuesLoopBody.denote (meaning F G (helpers (G := G)))
-      (Values.cons iteration
-        (.cons (GkrRoundsLayout.encode (circuit.wires iteration (layers - iteration)))
-          (.cons (layers - iteration) (.cons add (.cons mul (.cons selector (.cons width .nil))))))).get =
-      .done (.cons (GkrRoundsLayout.encode (circuit.wires (iteration + 1) (layers - (iteration + 1))))
-        (.cons (layers - (iteration + 1)) (.cons add (.cons mul (.cons selector (.cons width .nil)))))) := by
+    Goals.TraversalStep.body.denote (meaning F G (helpers (G := G)))
+      (Goals.TraversalStepArguments.pack (Value := assignment F G)
+        { iteration, values := GkrRoundsLayout.encode (circuit.wires iteration (layers - iteration)),
+          current := layers - iteration, addWeights := add, mulWeights := mul, selector, width }).get =
+      .done (Goals.TraversalStep.encode (ringModel F G)
+        { values := GkrRoundsLayout.encode (circuit.wires (iteration + 1) (layers - (iteration + 1))),
+          current := layers - (iteration + 1), addWeights := add, mulWeights := mul, selector, width }) := by
   have currentBound : layers - iteration < indexLimit := by omega
   have positive : 1 ≤ layers - iteration := by omega
   have nextBound : layers - iteration - 1 < indexLimit := by omega
@@ -134,82 +101,90 @@ theorem values_step {width : Nat} (add mul : List F) (layers selector : Nat)
   have mulBound : mul.length < indexLimit := by
     rw [dm.1, ← Nat.pow_add]
     simpa [Nat.add_comm] using powerSmall
-  rw [values_step_body]
-  simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, currentBound,
+  dsimp only [Goals.TraversalStepArguments.pack]
+  simp only [meaning]
+  rw [Evaluation.denote_meaning_eq_meaningOn, Goals.traversalStepProcess_equation]
+  dsimp only [Goals.traversalStepProcess, Goals.traversalStepProcess_certificate,
+    Op.arguments, Op.results, Op.regions]
+  simp only [Primitive.evaluateOn, primitiveOutcome, checkedIndices, currentBound,
     show 1 < indexLimit by decide +kernel, positive, nextBound, and_self, ite_true,
-    PIR.Process.bind, Values.get]
+    PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
+    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
   rw [selectBlock_equation add _ selector _ da.1 (by positivity) position addBound]
-  simp only [PIR.Process.bind, Values.get]
+  simp only [PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
+    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
   rw [selectBlock_equation mul _ selector _ dm.1 (by positivity) position mulBound]
-  simp only [PIR.Process.bind, Values.get]
+  simp only [PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
+    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
   rw [layer_encodes _ _ _ (circuit.add _) (circuit.mul _)
     (circuit.wires iteration (layers - iteration))
     (da.2 _ (by omega)) (dm.2 _ (by omega)) (GkrRoundsLayout.decode_encode _) (by omega)]
-  simp only [PIR.Process.bind, Values.get, next]
+  simp only [PIR.Process.bind, Values.get, next, Goals.TraversalStep.encode,
+    Op.arguments, Op.results, Op.regions,
+    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
   have belowIndex : layers - (iteration + 1) + 1 = layers - iteration := by omega
   simp only [Families.Gkr.Circuit.wires, Zkc.Protocols.Gkr.values_succ, belowIndex]
-
-/-- Helper34's structural expansion, including both guarded subtractions. -/
-theorem values_body (table : Meanings F G) (add mul inputs : List F)
-    (layers selector width layerIndex : Nat) :
-    GkrSourceBodies.helper34Body.denote (meaning F G table)
-      (Values.cons add (.cons mul (.cons inputs (.cons layers
-        (.cons selector (.cons width (.cons layerIndex .nil))))))).get =
-      (primitiveOutcome (Primitive.evaluate (F := F) (G := G) .indexSub
-        (.cons layers (.cons layerIndex .nil)))).bind fun remaining =>
-      (primitiveOutcome (Primitive.evaluate (F := F) (G := G) .indexSub
-        (.cons (remaining.get .here) (.cons 1 .nil)))).bind fun count =>
-      (Evaluation.denoteLoop [.vector "bls12-381.fr", .index]
-        [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index]
-        (fun args => valuesLoopBody.denote (meaning F G table) args.get) 0 (count.get .here)
-        (.cons inputs (.cons layers .nil))
-        (.cons add (.cons mul (.cons selector (.cons width .nil))))).bind fun result =>
-        .done (.cons (result.get .here) .nil) := by
-  simp only [GkrSourceBodies.helper34Body, valuesLoopBody, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_two,
-    Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
-    show 0 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
-    ite_true, Values.split]
-  rfl
 
 /-- Actual helper34 equals the independent recursive circuit evaluator. Its
 requested layer is strictly below `layers`; the result is the layer below that
 request, at index `layerIndex + 1`, after `layers - layerIndex - 1` steps. -/
-theorem values_below {width : Nat} (add mul inputs : List F) (layers selector layerIndex : Nat)
+theorem values_below {width : Nat} (add mul inputValues : List F) (layers selector layerIndex : Nat)
     (circuit : Families.Gkr.Circuit F width)
     (da : StackedEncoding add layers selector circuit.add)
     (dm : StackedEncoding mul layers selector circuit.mul)
-    (di : ofList? width inputs = some circuit.inputs)
+    (di : ofList? width inputValues = some circuit.inputs)
     (capacity : layers ≤ 2 ^ selector)
     (small : width + width + width + selector < 64)
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
     invoke (helpers (G := G)) GkrSourceBodies.helper34Helper
-      (.cons add (.cons mul (.cons inputs (.cons layers
-        (.cons selector (.cons width (.cons layerIndex .nil))))))) =
-      .done (.cons (GkrRoundsLayout.encode
-        (circuit.wires (layers - layerIndex - 1) (layerIndex + 1))) .nil) := by
+      (Goals.Traversal.Inputs.pack (Value := assignment F G)
+        { addWeights := add, mulWeights := mul, inputValues, layers, selector, width, layerIndex }) =
+      .done (Goals.Traversal.encode (ringModel F G)
+        ⟨GkrRoundsLayout.encode (circuit.wires (layers - layerIndex - 1) (layerIndex + 1))⟩) := by
   have indexBound : layerIndex < indexLimit := by omega
   have remainingBound : layers - layerIndex < indexLimit := by omega
   have countBound : layers - layerIndex - 1 < indexLimit := by omega
-  rw [helper34_association.invoke unit.linked, values_body]
-  simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, layersBound, indexBound,
-    remainingBound, countBound, show 1 < indexLimit by decide +kernel,
+  dsimp only [Goals.Traversal.Inputs.pack]
+  rw [circuit_bodies.values.invoke unit.linked]
+  simp only [meaning]
+  rw [Evaluation.denote_meaning_eq_meaningOn, Goals.valuesProcess_equation]
+  dsimp only [Goals.valuesProcess, Goals.valuesProcess_certificate, Op.arguments, Op.results, Op.regions]
+  simp only [Primitive.evaluateOn, primitiveOutcome, checkedIndices, layersBound, indexBound,
+    remainingBound, countBound, show 0 < indexLimit by decide +kernel,
+    show 1 < indexLimit by decide +kernel,
     show layerIndex ≤ layers by omega, show 1 ≤ layers - layerIndex by omega,
-    and_self, ite_true, PIR.Process.bind, Values.get]
-  rw [denoteLoop_states (F := F) (G := G) [.vector "bls12-381.fr", .index]
-    [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index] _ (layers - layerIndex - 1) _
-    (.cons add (.cons mul (.cons selector (.cons width .nil))))
-    (fun i => .cons (GkrRoundsLayout.encode (circuit.wires i (layers - i)))
-      (.cons (layers - i) .nil)) ?_ ?_]
-  · simp only [PIR.Process.bind, Values.get]
+    and_self, ite_true, PIR.Process.bind, Values.get,
+    Op.arguments, Op.results, Op.regions,
+    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.split]
+  rw [← Evaluation.denoteLoop_eq_denoteLoopOn]
+  erw [denoteLoop_states (F := F) (G := G) Goals.TraversalState.types Goals.TraversalCaptures.types
+    _ (layers - layerIndex - 1) _
+    (Goals.TraversalCaptures.pack (Value := assignment F G)
+      { addWeights := add, mulWeights := mul, selector, width })
+    (fun i => Goals.TraversalState.pack (Value := assignment F G)
+      { values := GkrRoundsLayout.encode (circuit.wires i (layers - i)), current := layers - i }) ?_ ?_]
+  · simp only [PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
+      SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+      Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
     rw [show layers - (layers - layerIndex - 1) = layerIndex + 1 by omega]
-  · rw [← HonestHelpers.encode_of_decodes inputs circuit.inputs di]
+  · rw [← HonestHelpers.encode_of_decodes inputValues circuit.inputs di]
     rfl
   · intro i bound
-    simp only [Evaluation.invokeCallback, Values.append]
-    exact values_step add mul layers selector circuit da dm capacity small layersBound i (by omega)
-
+    have iteration := values_step (G := G) add mul layers selector circuit da dm capacity small layersBound i (by omega)
+    simp only [Goals.TraversalStepArguments.pack, meaning] at iteration
+    rw [Evaluation.denote_meaning_eq_meaningOn, Goals.traversalStepProcess_equation] at iteration
+    dsimp only [Goals.traversalStepProcess, Goals.traversalStepProcess_certificate] at iteration
+    simp only [Evaluation.invokeCallback, Goals.TraversalState.pack, Goals.TraversalCaptures.pack,
+      Values.append, PIR.Process.bind_assoc, Goals.TraversalStep.encode,
+      Op.arguments, Op.results, Op.regions,
+      SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+      Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get,
+      Primitive.evaluateOn, primitiveOutcome, checkedIndices, PIR.Process.bind, Goals.TraversalStep.decode,
+      show 1 < indexLimit by decide +kernel, ite_true] at iteration ⊢
+    exact iteration
 end ZkcSecurity.Realizations.Gkr.HonestCircuit

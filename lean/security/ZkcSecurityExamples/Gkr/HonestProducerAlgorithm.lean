@@ -24,6 +24,7 @@ open Zkc Source Structured
 open Zkc.Polynomial Zkc.Polynomial.Multilinear CoefficientRows
 open ZkcExamples.Structured GkrSourceLaws SumcheckVerifierHelpers Generated.Presentations.Gkr.Root
 open ZkcSecurity.Examples.Components
+open ZkcSecurity.Examples.Components.GkrRoundsRealization
 open HonestProducerRounds HonestProducerPackets
 
 variable {F G : Type} [Field F] [DecidableEq F]

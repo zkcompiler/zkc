@@ -26,21 +26,16 @@ structure Sites where
   layers : String
   layer : HonestProducerObservedLayers.Sites
 
-def producerOutput (ctx : ProtocolContext) (site : String) : Nat → Nat → List F →
-    PIR.Process (Signature F G) (List F)
-  | _, 0, point => .done point
-  | index, count + 1, point =>
-    (Occurrence.iterations.within site index
-      ((output (G := G) ctx 1 point).interpret Occurrence.actions)).bind fun next =>
-    producerOutput ctx site (index + 1) count next
+def producerOutput (ctx : ProtocolContext) (site : String) (index count : Nat) (point : List F) :
+    PIR.Process (Signature F G) (List F) :=
+  ObservedLoop.counted Occurrence.iterations site
+    (fun point _ => (output (G := G) ctx 1 point).interpret Occurrence.actions) index count point
 
-def validatorOutput (ctx : ProtocolContext) (handle : Nat) (site : String) : Nat → Nat → List F →
-    PIR.Process (Signature F G) (List F)
-  | _, 0, point => .done point
-  | index, count + 1, point =>
-    (Occurrence.iterations.within site index
-      (((GkrVerifier.outputRound (G := G) ctx handle point).interpret CommonAdapter.embed).interpret
-        Occurrence.actions)).bind fun next => validatorOutput ctx handle site (index + 1) count next
+def validatorOutput (ctx : ProtocolContext) (handle : Nat) (site : String)
+    (index count : Nat) (point : List F) : PIR.Process (Signature F G) (List F) :=
+  ObservedLoop.counted Occurrence.iterations site (fun point _ =>
+    ((GkrVerifier.outputRound (G := G) ctx handle point).interpret CommonAdapter.embed).interpret Occurrence.actions)
+    index count point
 
 omit [Field F] [DecidableEq F] in
 theorem output_pair (ctx : ProtocolContext) (scope : PairScope)
@@ -53,7 +48,7 @@ theorem output_pair (ctx : ProtocolContext) (scope : PairScope)
   induction count generalizing index point with
   | zero => exact .done ⟨rfl, by omega⟩
   | succ count ih =>
-    rw [producerOutput, validatorOutput]
+    rw [producerOutput, validatorOutput, ObservedLoop.counted_succ, ObservedLoop.counted_succ]
     have one : Pair scope (fun (next value : List F) => value = next ∧ next.length = point.length + 1)
         ((output (G := G) ctx 1 point).interpret Occurrence.actions)
         (((GkrVerifier.outputRound (G := G) ctx handle point).interpret CommonAdapter.embed).interpret Occurrence.actions) :=
@@ -65,23 +60,17 @@ theorem output_pair (ctx : ProtocolContext) (scope : PairScope)
       rintro result value ⟨rfl, finalSize⟩
       exact ⟨rfl, by omega⟩)
 
-noncomputable def producerLayers (ctx : ProtocolContext) (sites : Sites) (encoding : CircuitEncoding F) :
-    Nat → Nat → List F → PIR.Process (Signature F G) (List F)
-  | _, 0, point => .done point
-  | index, count + 1, point =>
-    (Occurrence.iterations.within sites.layers index
-      (HonestProducerObservedLayers.producerLayer ctx sites.layer encoding.circuit
-        (encoding.layers - index - 1) index point)).bind fun next =>
-    producerLayers ctx sites encoding (index + 1) count next
+noncomputable def producerLayers (ctx : ProtocolContext) (sites : Sites) (encoding : CircuitEncoding F)
+    (index count : Nat) (point : List F) : PIR.Process (Signature F G) (List F) :=
+  ObservedLoop.counted Occurrence.iterations sites.layers (fun point index =>
+    HonestProducerObservedLayers.producerLayer ctx sites.layer encoding.circuit
+      (encoding.layers - index - 1) index point) index count point
 
-def validatorLayers (ctx : ProtocolContext) (handle : Nat) (sites : Sites) (encoding : CircuitEncoding F) :
-    Nat → Nat → (Nat × List F × F) → PIR.Process (Signature F G) (Nat × List F × F)
-  | _, 0, value => .done value
-  | index, count + 1, value =>
-    (Occurrence.iterations.within sites.layers index
-      (HonestProducerObservedLayers.validatorLayer ctx handle encoding.width sites.layer
-        encoding.circuit.add encoding.circuit.mul value)).bind fun next =>
-    validatorLayers ctx handle sites encoding (index + 1) count next
+def validatorLayers (ctx : ProtocolContext) (handle : Nat) (sites : Sites) (encoding : CircuitEncoding F)
+    (index count : Nat) (value : Nat × List F × F) : PIR.Process (Signature F G) (Nat × List F × F) :=
+  ObservedLoop.counted Occurrence.iterations sites.layers (fun value _ =>
+    HonestProducerObservedLayers.validatorLayer ctx handle encoding.width sites.layer
+      encoding.circuit.add encoding.circuit.mul value) index count value
 
 theorem layers_pair (ctx : ProtocolContext) (scope : PairScope)
     (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
@@ -108,7 +97,7 @@ theorem layers_pair (ctx : ProtocolContext) (scope : PairScope)
     exact .done ⟨rfl, pointSize⟩
   | succ count ih =>
     have remaining : encoding.layers - index - 1 = count := by omega
-    rw [producerLayers, validatorLayers, remaining]
+    rw [producerLayers, validatorLayers, ObservedLoop.counted_succ, ObservedLoop.counted_succ, remaining]
     have one := HonestProducerObservedLayers.layer_pair (G := G) ctx scope roles handle sites.layer
       encoding.circuit count index point pointSize leftDelivery rightDelivery lineDelivery
     exact (one.within sites.layers index).bind _ _ (by
@@ -132,31 +121,38 @@ noncomputable def validator (ctx : ProtocolContext) (handle : Nat) (sites : Site
 omit [Field F] [DecidableEq F] in
 theorem producerOutput_erase (ctx : ProtocolContext) (site : String) (index count : Nat) (point : List F) :
     (producerOutput (G := G) ctx site index count point).interpret Occurrence.erase = output ctx count point := by
-  induction count generalizing index point with
-  | zero => rfl
-  | succ count ih =>
-    rw [producerOutput, PIR.Process.interpret_bind,
-      IterationObservations.within_interpret _ Occurrence.iterations_erase,
-      IterationObservations.silent_within, actions_erase]
-    simp only [output, PIR.Process.bind]
-    congr 1
-    funext r
-    exact ih (index + 1) (point ++ [r])
+  exact ObservedLoop.interpret_counted Occurrence.erase Occurrence.iterations_erase site _
+    (fun point _ => output ctx 1 point) (fun _ _ => actions_erase _)
+    (fun _ count point => output ctx count point) (fun _ _ => rfl)
+    (fun _ _ _ => rfl) index count point
+
+omit [Field F] [DecidableEq F] in
+theorem validatorOutput_erase (ctx : ProtocolContext) (handle : Nat) (site : String)
+    (index count : Nat) (point : List F) :
+    (validatorOutput (G := G) ctx handle site index count point).interpret Occurrence.erase =
+      (PIR.repeatN count (GkrVerifier.outputRound ctx handle) point).interpret CommonAdapter.embed := by
+  exact ObservedLoop.interpret_repeated Occurrence.erase Occurrence.iterations_erase site _
+    (GkrVerifier.outputRound ctx handle) CommonAdapter.embed (fun _ => actions_erase _) index count point
 
 omit [DecidableEq F] in
 theorem producerLayers_erase (ctx : ProtocolContext) (sites : Sites) (encoding : CircuitEncoding F)
     (index count : Nat) (point : List F) :
     (producerLayers (G := G) ctx sites encoding index count point).interpret Occurrence.erase =
       layers ctx encoding index count point := by
-  induction count generalizing index point with
-  | zero => rfl
-  | succ count ih =>
-    rw [producerLayers, PIR.Process.interpret_bind,
-      IterationObservations.within_interpret _ Occurrence.iterations_erase,
-      IterationObservations.silent_within, HonestProducerObservedLayers.producerLayer_erase, layers]
-    apply congrArg (PIR.Process.bind _)
-    funext next
-    exact ih (index + 1) next
+  exact ObservedLoop.interpret_counted Occurrence.erase Occurrence.iterations_erase sites.layers _
+    (fun point index => layer ctx encoding.circuit (encoding.layers - index - 1) index point)
+    (fun _ _ => HonestProducerObservedLayers.producerLayer_erase _ _ _ _ _ _)
+    (layers ctx encoding) (fun _ _ => rfl) (fun _ _ _ => rfl) index count point
+
+theorem validatorLayers_erase (ctx : ProtocolContext) (handle : Nat) (sites : Sites)
+    (encoding : CircuitEncoding F) (index count : Nat) (value : Nat × List F × F) :
+    (validatorLayers (G := G) ctx handle sites encoding index count value).interpret Occurrence.erase =
+      (PIR.repeatN count (GkrVerifier.layerStep ctx handle encoding.width
+        encoding.circuit.add encoding.circuit.mul) value).interpret CommonAdapter.embed := by
+  exact ObservedLoop.interpret_repeated Occurrence.erase Occurrence.iterations_erase sites.layers _
+    (GkrVerifier.layerStep ctx handle encoding.width encoding.circuit.add encoding.circuit.mul)
+    CommonAdapter.embed (fun _ => HonestProducerObservedLayers.validatorLayer_erase _ _ _ _ _ _ _)
+    index count value
 
 omit [DecidableEq F] in
 theorem producer_erase (ctx : ProtocolContext) (sites : Sites) (encoding : CircuitEncoding F) :

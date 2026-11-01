@@ -25,11 +25,34 @@ theorem callbackLaws_hold {inputs : List Ty} (input : Values (Component (assignm
   intro entry
   exact entry.elim0
 
-def protocol0Role0Callback0Body : Region protocolDialect [.index, .index] [.index] :=
+def protocol0Callback0Selection : RepeatOccurrence definition0.body :=
+  checkedRepeat 0 definition0.body (by kernel_rfl)
+
+def protocol0Callback0Body : Region protocolDialect [.index, .index] [.index] :=
   (.ret (.cons (.there .here) .nil))
 
-theorem protocol0Role0Callback0_selected : Zkc.Source.Structured.Bindings.findRepeat "round" definition0.body = some ⟨_, _, protocol0Role0Callback0Body⟩ := by
+abbrev protocol0Callback0Site : RepeatSite :=
+  ⟨[.index, .index], [.index], (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec), "round", (.cons .here (.cons (.there .here) .nil)), protocol0Callback0Body, (Eq.mp (show Region protocolDialect (protocol0Callback0Selection.repeatSite.spec.state ++ protocol0Callback0Selection.repeatSite.context) protocol0Callback0Selection.repeatSite.outputs = Region protocolDialect [.index, .index, .index] [.index] from by kernel_rfl) protocol0Callback0Selection.repeatSite.next)⟩
+
+theorem protocol0Callback0_body : protocol0Callback0Site.body = protocol0Callback0Body := rfl
+
+theorem protocol0Callback0_selected : (selectRepeat 0 definition0.body).map (·.repeatSite) = some protocol0Callback0Site := by
   kernel_rfl
+
+def protocol0Callback0Occurrence : RepeatAt protocol0Callback0Site definition0.body :=
+  selectedRepeat protocol0Callback0_selected
+
+theorem protocol0Callback0_position : protocol0Callback0Occurrence.position = [1] := by
+  kernel_rfl
+
+abbrev protocol0Role0Callback0Body := protocol0Callback0Body
+abbrev protocol0Role0Callback0Site := protocol0Callback0Site
+abbrev protocol0Role0Callback0Occurrence := protocol0Callback0Occurrence
+theorem protocol0Role0Callback0_body : protocol0Role0Callback0Site.body = protocol0Role0Callback0Body := protocol0Callback0_body
+theorem protocol0Role0Callback0_selected : (selectRepeat 0 definition0.body).map (·.repeatSite) = some protocol0Role0Callback0Site :=
+  protocol0Callback0_selected
+
+theorem protocol0Role0Callback0_position : protocol0Role0Callback0Occurrence.position = [1] := protocol0Callback0_position
 
 def protocol0Role0Callback0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol0Role0Callback0Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
@@ -81,7 +104,7 @@ theorem protocol0Role0Callback0_function (ctx : ProtocolContext)
 
 noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role0Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role0Callback0Process ctx (input.get .here) (input.get (.there .here)))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol0Role0_readable (ctx : ProtocolContext)
@@ -89,7 +112,7 @@ theorem protocol0Role0_readable (ctx : ProtocolContext)
     (protocol0Role0Process (F := F) (G := G) ctx b0 b1) = (protocol0Role0ReadableProcess (F := F) (G := G) ctx b0 b1) := by
   have equation := Eq.refl (protocol0Role0Process (F := F) (G := G) ctx b0 b1)
   have callback0 := protocol0Role0Callback0_function (F := F) (G := G) ctx distinct
-  unfold protocol0Role0Callback0Body at callback0
+  unfold protocol0Role0Callback0Body protocol0Callback0Body at callback0
   conv_rhs at equation => unfold protocol0Role0Process; simp only [callback0]
   exact equation
 
@@ -108,11 +131,14 @@ theorem protocol0Role0_readable_invocation (ctx : ProtocolContext)
   exact congrArg (fun p => p.bind fun out => .done (maskValues (ctx.roles 0) (ctx.mapScopes definition0.outputScopes) out))
     (protocol0Role0_readable (F := F) (G := G) ctx distinct ((maskValues (ctx.roles 0) (ctx.mapScopes definition0.inputScopes) input).get .here) ((maskValues (ctx.roles 0) (ctx.mapScopes definition0.inputScopes) input).get (.there .here)))
 
-def protocol0Role1Callback0Body : Region protocolDialect [.index, .index] [.index] :=
-  (.ret (.cons (.there .here) .nil))
+abbrev protocol0Role1Callback0Body := protocol0Callback0Body
+abbrev protocol0Role1Callback0Site := protocol0Callback0Site
+abbrev protocol0Role1Callback0Occurrence := protocol0Callback0Occurrence
+theorem protocol0Role1Callback0_body : protocol0Role1Callback0Site.body = protocol0Role1Callback0Body := protocol0Callback0_body
+theorem protocol0Role1Callback0_selected : (selectRepeat 0 definition0.body).map (·.repeatSite) = some protocol0Role1Callback0Site :=
+  protocol0Callback0_selected
 
-theorem protocol0Role1Callback0_selected : Zkc.Source.Structured.Bindings.findRepeat "round" definition0.body = some ⟨_, _, protocol0Role1Callback0Body⟩ := by
-  kernel_rfl
+theorem protocol0Role1Callback0_position : protocol0Role1Callback0Occurrence.position = [1] := protocol0Callback0_position
 
 def protocol0Role1Callback0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)]⟩ : Signature)
 def protocol0Role1Callback0Pattern : InputPattern [.index, .index] := (.cons .optional (.cons .optional .nil))
@@ -164,7 +190,7 @@ theorem protocol0Role1Callback0_function (ctx : ProtocolContext)
 
 noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role1Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role1Callback0Process ctx (input.get .here) (input.get (.there .here)))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol0Role1_readable (ctx : ProtocolContext)
@@ -172,7 +198,7 @@ theorem protocol0Role1_readable (ctx : ProtocolContext)
     (protocol0Role1Process (F := F) (G := G) ctx b0 b1) = (protocol0Role1ReadableProcess (F := F) (G := G) ctx b0 b1) := by
   have equation := Eq.refl (protocol0Role1Process (F := F) (G := G) ctx b0 b1)
   have callback0 := protocol0Role1Callback0_function (F := F) (G := G) ctx distinct
-  unfold protocol0Role1Callback0Body at callback0
+  unfold protocol0Role1Callback0Body protocol0Callback0Body at callback0
   conv_rhs at equation => unfold protocol0Role1Process; simp only [callback0]
   exact equation
 

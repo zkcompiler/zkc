@@ -38,8 +38,7 @@ def coefficients (ctx : ProtocolContext) (site : String) (start count : Nat)
   | zero => exact .done ⟨rfl,rfl⟩
   | succ count ih =>
     rw [validatorCoefficients]
-    simp only [IterationObservations.within_eq, Occurrence.iterations,
-      IterationObservations.enter, IterationObservations.leave, GkrVerifier.lineCoefficient,
+    simp only [Occurrence.iterations, GkrVerifier.lineCoefficient,
       PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind]
     apply Derivation.send rfl
     apply Derivation.receive rfl
