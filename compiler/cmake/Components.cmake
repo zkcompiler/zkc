@@ -237,6 +237,7 @@ add_zkc_component(IR
   lib/Analysis/Interactions.cpp
   lib/Analysis/ProtocolConstants.cpp
   lib/Analysis/SuccessfulContinuations.cpp
+  lib/Analysis/CanonicalEncoding.cpp
   lib/Analysis/ExecutionObservations.cpp
   lib/Analysis/ProtocolObservations.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
@@ -429,6 +430,7 @@ add_zkc_component(Compiler
   lib/Compiler/PublicCoinGraph.cpp
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
+  lib/Compiler/ConstructionBinding.cpp
   lib/Compiler/NativeProof.cpp
   lib/Compiler/NativeProofOrigins.cpp
   lib/Compiler/NativeRequest.cpp

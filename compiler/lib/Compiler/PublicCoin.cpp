@@ -1,4 +1,5 @@
 #include "zkc/Compiler/PublicCoin.h"
+#include "IRFingerprint.h"
 #include "PublicCoin.h"
 #include "PublicCoinGraph.h"
 #include "zkc/Analysis/NativeTypes.h"
@@ -101,31 +102,8 @@ Expected<Requirement> parseRequirement(StringRef text) {
 std::string digest(StringRef value) {
   return toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
 }
-// Stream the identity rather than retaining another complete copy of the IR.
-class Fingerprint : public raw_ostream {
-  SHA256 hash;
-  uint64_t bytes = 0;
-  void write_impl(const char *data, size_t size) override {
-    bytes += size;
-    if (bytes <= 16 * 1024 * 1024)
-      hash.update(StringRef(data, size));
-  }
-  uint64_t current_pos() const override { return bytes; }
-
-public:
-  Fingerprint() { SetBufferSize(4096); }
-  ~Fingerprint() override { flush(); }
-  Expected<std::string> finish() {
-    flush();
-    if (bytes > 16 * 1024 * 1024)
-      return error("public-coin-limit");
-    return toHex(hash.final(), true);
-  }
-};
 Expected<std::string> fingerprint(ModuleOp module) {
-  Fingerprint stream;
-  module.print(stream);
-  return stream.finish();
+  return detail::fingerprintIR(module, "public-coin-limit");
 }
 template <typename T> std::string spelling(T type) {
   std::string text;

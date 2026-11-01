@@ -960,8 +960,9 @@ execution, framing, failures, capacity and installed consumers. The
 Optional polynomial checks cover `boolean-sum-to-point/0` and relation-pinned
 `r1cs-sum-to-point/0`. [Public-coin analysis](compiler/public-coin.md) checks a
 selected verifier's dependencies against bound public context, challenges and
-receives. Field and scalar `UniformIndex` requests retain exact methods and
-static domains; atomic block draws remain pending. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
+receives. Field, scalar `UniformIndex` and atomic product `UniformIndices` requests retain
+exact methods and static domains. Shared helper/repeat summaries retain
+verifier observations and the selected checked realization. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)

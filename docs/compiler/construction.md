@@ -123,3 +123,12 @@ structured, setup-backed and authored clients and their references.
 A new delivery recipe or suite needs explicit admission, encoding, sampling and
 failure contracts. A domain's presence in the operation catalog does not extend a
 construction's allow-list. See the [roadmap](../roadmap.md) for assurance work.
+
+## Separate binding judgments
+
+The [closed binding profiles](../spec/ir/construction-binding.md) inspect actual
+canonical encodings and state successors after source/candidate correspondence.
+They distinguish installed native history, canonical hash history and explicit
+hash inputs. The corresponding report is separate from executable admission and
+from [verifier observation](public-coin.md). In particular, an executable authored
+transcript or an input dependency does not imply a binding or security theorem.

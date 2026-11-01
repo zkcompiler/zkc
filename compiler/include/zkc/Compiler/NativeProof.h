@@ -64,6 +64,26 @@ checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                  const NativeProofPolicy &policy,
                  MathematicalSelectionPolicy mathematicalSelection = {},
                  const protocol::OracleRealizationPolicy &oracleSelection = {});
+/// Requested structural binding profiles, separate from executable admission.
+enum class NativeProofBindingProfile {
+  NativeHistory,
+  CanonicalHashHistory,
+  ExplicitInput
+};
+/// Recheck the complete candidate, then inspect actual encodings and state
+/// successors under the selected closed profile. No cryptographic theorem or
+/// primitive uniformity follows from this report.
+llvm::Expected<llvm::json::Value> analyzeNativeProofBinding(
+    mlir::ModuleOp source, mlir::ModuleOp candidate, const NativeProofPolicy &,
+    NativeProofBindingProfile,
+    MathematicalSelectionPolicy mathematicalSelection = {},
+    const protocol::OracleRealizationPolicy &oracleSelection = {});
+/// Recompute the complete view; supplied coverage facts never grant authority.
+llvm::Error checkNativeProofBinding(
+    mlir::ModuleOp source, mlir::ModuleOp candidate, const NativeProofPolicy &,
+    NativeProofBindingProfile, llvm::StringRef report,
+    MathematicalSelectionPolicy mathematicalSelection = {},
+    const protocol::OracleRealizationPolicy &oracleSelection = {});
 enum class ConstructedParticipantRole { Producer, Validator };
 /// Check the supplied candidate as `checkNativeProof` does, then export its
 /// explicitly selected policy role as a flat `zkc.constructed-participant/0`

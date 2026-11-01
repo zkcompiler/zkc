@@ -282,6 +282,8 @@ def main():
         ROOT / "lib/Compiler/PublicCoinGraph.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
+        ROOT / "lib/Compiler/IRFingerprint.h",
+        ROOT / "lib/Compiler/ConstructionBinding.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",
         ROOT / "lib/Compiler/NativeProofOrigins.h",
         ROOT / "lib/Compiler/NativeRequest.h",

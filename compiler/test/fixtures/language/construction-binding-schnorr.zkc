@@ -1,0 +1,65 @@
+module m;
+domain G=group("bls12-381.g1");
+type F=G::Scalar;
+type Bytes=builtin("bytes");
+fn empty()->Bytes=primitive("bytes.empty");
+fn append(x:Bytes,b:index)->Bytes=primitive("bytes.append");
+fn concat(x:Bytes,y:Bytes)->Bytes=primitive("bytes.concat");
+fn hash(x:Bytes)->Bytes=primitive("hash.sha256");
+fn scalar(x:F)->Bytes=primitive("encoding.field_be");
+fn point(x:G)->Bytes=primitive("encoding.group_compressed");
+fn sample(x:Bytes)->F=primitive("encoding.field_reduce_be");
+fn tag(x:index)->Bytes{return append(empty(),x);}
+interface Chain {
+  type State:Copy+Drop;
+  fn initialize()->State effects(stop,opaque);
+  fn start(t:State,base:G,public_point:G)->State effects(stop,opaque);
+  fn commitment(t:State,v:G)->State effects(stop,opaque);
+  fn response(t:State,v:F)->State effects(stop,opaque);
+  fn draw(t:State)->(State,F) effects(stop,opaque);
+}
+protocol Schnorr roles(P,V)
+  (base:G@(P,V),public_point:G@(P,V),secret:F@P,nonce:F@P,
+   challenges:Random<F>@V)->(ok:bool@V){
+  let local @P=base*nonce;
+  #[site(commitment)] let first=send P->V(local);
+  #[site(challenge)] let c=challenges.draw();
+  #[site(delivery)] let actual=send V->P(c);
+  #[site(response)] let last=send P->V(nonce+actual*secret);
+  return base*last==first+public_point*c;
+}
+construction Derived<H:Chain> for Schnorr {
+  transcript H; replace challenges;
+  on start(t,base,public_point){return H::start(t,base,public_point);}
+  on message commitment(t,value){return H::commitment(t,value);}
+  on message response(t,value){return H::response(t,value);}
+  on message delivery(t,value){return t;}
+  on query challenge(t){return H::draw(t);}
+}
+module History:Chain {
+  type State:Copy+Drop=Bytes;
+  fn initialize()->State{return State(hash(tag(1)));}
+  fn start(t:State,base:G,public_point:G)->State {
+    return State(hash(concat(tag(2),concat(unpack(t),concat(point(base),point(public_point))))));
+  }
+  fn commitment(t:State,v:G)->State {
+    return State(hash(concat(tag(3),concat(unpack(t),point(v)))));
+  }
+  fn response(t:State,v:F)->State {
+    return State(hash(concat(tag(4),concat(unpack(t),scalar(v)))));
+  }
+  fn draw(t:State)->(State,F) {
+    let next=hash(concat(tag(5),unpack(t)));
+    return (State(next),sample(next));
+  }
+}
+module Explicit:Chain {
+  type State:Copy+Drop=Bytes;
+  fn initialize()->State{return State(empty());}
+  fn start(t:State,base:G,public_point:G)->State{return State(concat(point(base),point(public_point)));}
+  fn commitment(t:State,v:G)->State{return State(concat(unpack(t),point(v)));}
+  fn response(t:State,v:F)->State{return State(concat(unpack(t),scalar(v)));}
+  fn draw(t:State)->(State,F){return (t,sample(hash(concat(tag(6),unpack(t)))));}
+}
+proof Demo=Schnorr {prover P;verifier V;public{base,public_point};accept ok;
+  construction Derived<History>;}

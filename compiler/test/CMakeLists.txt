@@ -303,6 +303,11 @@ add_zkc_test(language_specifications Language language-specifications)
 add_zkc_test(language_bundle_relations CpuTarget language-bundle-relations)
 add_zkc_test(language_entries Language language-entries)
 add_zkc_test(language_sites CpuTarget language-sites)
+add_zkc_test(construction_binding Compiler construction-binding)
+target_compile_definitions(zkc-construction_binding-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-construction_binding-test PRIVATE MLIRParser)
+
 add_zkc_test(language_constructions CpuTarget language-constructions)
 add_zkc_test(language_modules Compiler language-modules)
 add_zkc_test(language_layout Compiler language-layout)
