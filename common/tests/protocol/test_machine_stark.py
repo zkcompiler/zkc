@@ -18,7 +18,7 @@ import pytest
 from logical_tree import decode_tree
 from message_frames import tag
 from test_air_stark import (FRI_REALIZATION, alter_octic_frame, check_fri_frames,
-                            frames, packet_mutations, packet_rejected)
+                            frames, packet_mutations, packet_rejected, terminal_rejected)
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / 'common/tests/fixtures/projects/accumulator-machine'
@@ -225,7 +225,9 @@ def test_machine_authenticates_all_commitment_phases(toolchain, journal, directo
         candidate.write_bytes(repack(original, altered))
         report = assert_refused(journal.attempt(
             [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}']))
-        if 7 <= position < fri_end:
+        if position == 12:
+            terminal_rejected(report, package)
+        elif 7 <= position < fri_end:
             assert report['code'] == 'rejected:require', (position, report)
             packet_rejected(report)
         else:
