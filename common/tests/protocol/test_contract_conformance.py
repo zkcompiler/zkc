@@ -859,7 +859,7 @@ def test_bounded_json_lines_protocol(physical_drivers, directory):
     # EOF without a newline is one request; an exactly-full line is not oversized.
     wire = json.dumps(good).encode()
     for consumer, executable in physical_drivers.items():
-        for suffix in (b"", b" " * (16384 - len(wire))):
+        for suffix in (b"", b" " * (4 * 1024 * 1024 - len(wire))):
             reply = json.loads(run([executable], wire + suffix))
             assert reply["accepted"], (consumer, reply)
 
@@ -1244,7 +1244,7 @@ def test_actual_parameter_and_program_admission(drivers, directory):
     finish(directory, admission_failures(cases, replies))
 
 
-def test_numerical_expression_independent_admission(drivers, directory):
+def test_numerical_plan_independent_admission(drivers, directory):
     cases = []
     for field, provider in [
         ("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
@@ -1254,14 +1254,21 @@ def test_numerical_expression_independent_admission(drivers, directory):
         ("gf2-64.pentanomial-4-3-1.ext3-trinomial1", "plonky3"),
     ]:
         body = ["zkc.ring/0", [field, field], [["input", 0], ["input", 1], ["mul", 0, 1]], [2]]
-        canonical = json.dumps(body, separators=(",", ":"))
-        wrong_field = deepcopy(body)
-        wrong_field[1][1] = "bn254.fr" if field != "bn254.fr" else "koala-bear"
-        wrong_outputs = deepcopy(body)
-        wrong_outputs[3] = [2, 2]
+        plan = ["zkc.numerical-plan/0", body, 8, 2, [0, 1, 1]]
+        canonical = json.dumps(plan, separators=(",", ":"))
+        fresh_slots = ["zkc.numerical-plan/0", body, 1, 3, [0, 1, 2]]
+        wrong_field = deepcopy(plan)
+        wrong_field[1][1][1] = "bn254.fr" if field != "bn254.fr" else "koala-bear"
+        wrong_outputs = deepcopy(plan)
+        wrong_outputs[1][3] = [2, 2]
+        clobbered_capture = ["zkc.numerical-plan/0", body, 8, 2, [0, 1, 0]]
         for mode in ("map", "sum", "product"):
             for attributes, admitted in [
-                ([canonical], True), ([], False), ([canonical, canonical], False),
+                ([canonical], True),
+                ([json.dumps(fresh_slots, separators=(",", ":"))], True),
+                ([json.dumps(clobbered_capture, separators=(",", ":"))], False),
+                ([json.dumps(body, separators=(",", ":"))], False),
+                ([], False), ([canonical, canonical], False),
                 ([canonical + " "], False), (["{}"], False),
                 ([json.dumps(wrong_field, separators=(",", ":"))], False),
                 ([json.dumps(wrong_outputs, separators=(",", ":"))], False),
@@ -1295,7 +1302,8 @@ def test_actual_origin_template_admission(drivers, directory):
                  ("query", "missing", [], False), ("query", "extra", [q, q], False),
                  ("query", "uppercase", [q.upper()], False), ("query", "truncated", [q[:-2]], False),
                  ("query", "odd-hex", [q[:-1]], False), ("query", "trailing-byte", [q + "00"], False),
-                 ("query", "size-ceiling", ["00" * 2049], False)]
+                 ("query", "malformed-large", ["00" * 2049], False),
+                 ("query", "size-ceiling", ["00" * 8193], False)]
     for port in ("input_0", "input_18446744073709551615", "input_01", "input_", "service_2",
                  "input_18446744073709551616"):
         specimens.append(("query", port, [origin_tree(template("query", port=port)).hex()],

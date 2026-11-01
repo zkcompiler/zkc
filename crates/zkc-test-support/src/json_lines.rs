@@ -1,7 +1,9 @@
 //! Bounded JSON-lines transport for cross-reader probes, without semantic rules.
 use serde_json::{Map, Value, json};
 use std::io::{self, BufRead, Write};
-const LINE_LIMIT: usize = 16384;
+// Match the C++ probe envelope and leave room for complete parameter/type
+// carriers, so transport refusal cannot stand in for semantic admission.
+const LINE_LIMIT: usize = 4 * 1024 * 1024;
 
 fn envelope(line: &[u8]) -> Option<usize> {
     let (mut quoted, mut escaped, mut depth, mut fields) = (false, false, 0_u32, 0);

@@ -197,7 +197,8 @@ json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
     if (attributeDrift && binding.contract == "field.add")
       attributes.push_back("0");
     if (auto error = checkParameters(binding, attributes,
-                                     zkc::protocol::ParameterStage::Logical))
+                                     *physical ? ParameterStage::Physical
+                                               : ParameterStage::Logical))
       return json::Object{{"accepted", true},
                           {"admitted", false},
                           {"error", toString(std::move(error))}};
