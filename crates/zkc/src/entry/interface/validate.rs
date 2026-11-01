@@ -98,7 +98,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
         }
         let mut roles = BTreeMap::new();
         require(
-            !protocol.roles.is_empty() && protocol.roles.len() <= 16,
+            !protocol.roles.is_empty() && protocol.roles.len() <= 1024,
             E::Schema,
         )?;
         for (index, role) in protocol.roles.iter().enumerate() {

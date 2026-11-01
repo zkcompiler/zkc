@@ -171,6 +171,28 @@ fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
         );
     }
 }
+#[test]
+fn protocol_rosters_are_not_bounded_by_record_role_telescopes() {
+    // A record has at most 16 role parameters; a protocol roster shares the
+    // joint runtime's 1,024-role ceiling. Admission work bounds what remains.
+    for (count, accepted) in [(17, true), (256, true), (1025, false)] {
+        let mut value = document();
+        // Proof jobs separately require exactly a prover and a verifier.
+        value["job"] = json!({"kind":"run"});
+        let roles: Vec<String> = ["P".to_string(), "V".to_string()]
+            .into_iter()
+            .chain((2..count).map(|i| format!("R{i}")))
+            .collect();
+        value["protocols"][0]["roles"] = json!(roles);
+        match read(&value) {
+            Ok(_) => assert!(accepted, "{count} roles"),
+            Err(error) => {
+                assert!(!accepted, "{count} roles: {error:?}");
+                assert_eq!(error, InterfaceError::Schema);
+            }
+        }
+    }
+}
 fn changed(path: &str, value: Value, error: InterfaceError) {
     let mut original = document();
     *original.pointer_mut(path).unwrap() = value;
