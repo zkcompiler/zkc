@@ -174,13 +174,19 @@ def repeatSplitSource {laws : List LawKey} {callees : List CalleeKey} {scope : S
   let afterParameters := explicitParameters
     ("(ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (result : " ++ stateType ++ ")")
     ["ctx", "frame", "result"] continuation
+  let resumeBody := "Repeat.loop " ++ repeatText spec ++ " ctx (ctx.roles " ++ toString role ++ ") " ++
+    paren capturesText ++ " (" ++ name ++ "Callback ctx) 1 count (maskValues (ctx.roles " ++
+    toString role ++ ") (ctx.mapScopes (" ++ repeatText spec ++ ").stateScopes) result)"
+  let resumeParameters := explicitParameters
+    ("(ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (count : Nat) (result : " ++ stateType ++ ")")
+    ["ctx", "frame", "count", "result"] resumeBody
   return "abbrev " ++ name ++ "Frame := " ++ frameType ++ "\n\n" ++
     "def " ++ name ++ "MakeFrame " ++ frameParams ++ " : " ++ name ++ "Frame (F := F) (G := G) :=\n  " ++ valuesText cursor.names ++ "\n\n" ++
     "def " ++ name ++ "Count (frame : " ++ name ++ "Frame (F := F) (G := G)) : Option Nat :=\n  " ++ compText naming frameNames count ++ "\n\n" ++
     "noncomputable def " ++ name ++ "Callback (ctx : ProtocolContext) : " ++ inputType ++ " → PIR.Process (participantInterface F G) " ++ stateType ++ " :=\n  " ++ callback ++ "\n\n" ++
     "def " ++ name ++ "FirstInput (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) : " ++ inputType ++ " :=\n  .cons (some 0) ((maskValues (ctx.roles " ++ toString role ++ ") (ctx.mapScopes (" ++ repeatText spec ++ ").stateScopes) " ++ paren stateText ++ ").append " ++ paren capturesText ++ ")\n\n" ++
     "noncomputable def " ++ name ++ "First (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) : PIR.Process (participantInterface F G) " ++ stateType ++ " :=\n  " ++ name ++ "Callback ctx (" ++ name ++ "FirstInput ctx frame)\n\n" ++
-    "noncomputable def " ++ name ++ "Resume (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (count : Nat) (result : " ++ stateType ++ ") : PIR.Process (participantInterface F G) " ++ stateType ++ " :=\n  Repeat.loop " ++ repeatText spec ++ " ctx (ctx.roles " ++ toString role ++ ") " ++ paren capturesText ++ " (" ++ name ++ "Callback ctx) 1 count (maskValues (ctx.roles " ++ toString role ++ ") (ctx.mapScopes (" ++ repeatText spec ++ ").stateScopes) result)\n\n" ++
+    "noncomputable def " ++ name ++ "Resume " ++ resumeParameters ++ " : PIR.Process (participantInterface F G) " ++ stateType ++ " :=\n  " ++ resumeBody ++ "\n\n" ++
     "noncomputable def " ++ name ++ "Prefix " ++ prefixParameters ++ " :\n  PIR.Process (participantInterface F G) (" ++ name ++ "Frame (F := F) (G := G)) :=\n" ++ prefixText ++ "\n\n" ++
     "noncomputable def " ++ name ++ "Loop (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) :\n  PIR.Process (participantInterface F G) (" ++ valuesType naming spec.state true ++ ") :=\n  " ++ loop ++ "\n\n" ++
     "noncomputable def " ++ name ++ "After " ++ afterParameters ++ " :\n  " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++

@@ -519,6 +519,23 @@ def entries : List Entry := [
     some `ZkcSecurity.Bindings.Gkr.RoundsHelperInstallation.RestrictionBodies,
     "The linked source contains the exact factor-restriction helper bodies used by \
     the reusable interpretation theorem; source changes must re-establish the association."⟩,
+  ⟨"wellformed.gkr-readback-bodies", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.HonestHelpers.ReadbackGoals.Bodies,
+    "The linked source contains every selected readback helper body with its complete \
+    typed interface; the installation proves its laws in that same helper table."⟩,
+  ⟨"wellformed.gkr-collection-bodies", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.HonestHelpers.CollectionGoals.Bodies,
+    "The linked source contains the selected repetition, replication, append and tile \
+    helper bodies; their exact dependency associations are checked before installation."⟩,
+  ⟨"wellformed.gkr-line-scalar-bodies", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.HonestLine.Goals.ScalarBodies,
+    "The linked source contains the selected line scalar helpers and wrappers, including \
+    all ordered argument and output interfaces used by their mathematical laws."⟩,
+  ⟨"family.gkr-circuit-helper-laws", .familyProperty,
+    some `ZkcSecurity.Realizations.Gkr.HonestCircuit.Companion.Dependencies,
+    "The circuit's selected block, power, replication, tiling and gate helpers \
+    satisfy their complete mathematical contracts in one common helper table; \
+    the actual source installation discharges these dependencies."⟩,
   ⟨"wellformed.honest-pair-pointwise-wp", .wellFormedness,
     some `ZkcSecurity.FiatShamir.HonestCompiled.pairWP,
     "On one fixed shared answer table, the actual producer and validator both return, \
@@ -581,10 +598,6 @@ def entries : List Entry := [
     some `ZkcSecurity.Realizations.Gkr.HonestCircuit.StackedEncoding,
     "The raw wiring stack has the declared size, and every active layer block decodes to \
     the specified mathematical wiring table."⟩,
-  ⟨"wellformed.gkr-honest-round-decoding", .wellFormedness,
-    some `ZkcSecurity.Realizations.Gkr.HonestProducerRounds.Decodes,
-    "All four raw factor vectors decode at the selected dimension to the honest round \
-    state."⟩,
   ⟨"event.gkr-residual-relation", .event,
     some `ZkcSecurity.Realizations.Gkr.Relations.Residual,
     "The raw factors decode at one common dimension, and the claim equals their Boolean sum \

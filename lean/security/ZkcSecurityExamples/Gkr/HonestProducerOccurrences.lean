@@ -3,11 +3,12 @@ module
 public import ZkcSecurityExamples.Gkr.HonestProducerRoundAlgorithm
 public import ZkcSecurity.Bindings.Source.PairFrames
 public import Zkc.Source.Structured.CommonAdapter
+public import Zkc.Source.Structured.ObservedLoop
 
 @[expose] public section
 
 /-! The complete honest round loop with real source occurrence boundaries.
-The existing Original.fold handles enter/leave; no protocol evaluator is added.
+The shared finite fold retains enter/leave; no protocol evaluator is added.
 Erasure identifies the same algorithmic source view proved in HonestProducerRounds. -/
 
 set_option autoImplicit false
@@ -18,64 +19,52 @@ open Zkc Source Structured Construction
 open ZkcExamples.Structured
 open ZkcSecurity.Examples.Components
 open ZkcSecurity.Source HonestProducerRounds
+open GkrRoundsRealization (RawState)
 
 variable {F G : Type} [Field F] [DecidableEq F]
 
 abbrev Signature (F G : Type) := Occurrence.signature (uniformCarriers F G)
 
-def producerRounds (ctx : ProtocolContext) (site : String) : (start count : Nat) → {n : Nat} →
-    GkrRoundsReference.State F (n + count) → Raw F → List F → PIR.Process (Signature F G) (Output F n)
-  | _, 0, _, reference, raw, point => .done ⟨reference, raw, point⟩
-  | start, count + 1, _, reference, raw, point =>
-    (Occurrence.iterations.within site start
-      ((execute ctx 1 reference raw point).interpret Occurrence.actions)).bind fun result =>
-    producerRounds ctx site (start + 1) count result.reference result.raw result.point
+/-- The shrinking reference dimension is logical state in the same observed
+fold. No runtime factor, delivered reply or complete point prefix is dropped. -/
+def producerRounds (ctx : ProtocolContext) (site : String) (start count : Nat) {n : Nat}
+    (reference : GkrRoundsReference.State F (n + count)) (raw : RawState F) (point : List F) :
+    PIR.Process (Signature F G) (Output F n) :=
+  ObservedLoop.descending (State := fun remaining => Output F (n + remaining)) Occurrence.iterations site
+    (fun _ state _ => (execute ctx 1 state.reference state.raw state.point).interpret Occurrence.actions)
+    start count ⟨reference, raw, point⟩
 
-def validatorRounds (ctx : ProtocolContext) (handle : Nat) (site : String) :
-    Nat → Nat → List F × F → PIR.Process (Signature F G) (List F × F)
-  | _, 0, value => .done value
-  | start, count + 1, value =>
-    (Occurrence.iterations.within site start
-      (((GkrVerifier.round ctx handle value).interpret CommonAdapter.embed).interpret Occurrence.actions)).bind fun result =>
-    validatorRounds ctx handle site (start + 1) count result
+def validatorRounds (ctx : ProtocolContext) (handle : Nat) (site : String)
+    (start count : Nat) (value : List F × F) : PIR.Process (Signature F G) (List F × F) :=
+  ObservedLoop.counted Occurrence.iterations site (fun value _ =>
+    ((GkrVerifier.round ctx handle value).interpret CommonAdapter.embed).interpret Occurrence.actions)
+    start count value
 
 omit [Field F] [DecidableEq F] in
 theorem actions_erase {A : Type} (source : PIR.Process (participantInterface F G) A) :
     (source.interpret Occurrence.actions).interpret Occurrence.erase = source := by
-  induction source with
-  | done => rfl
-  | halt => rfl
-  | call operation next ih =>
-    simp only [PIR.Process.interpret, Occurrence.actions, Occurrence.erase, PIR.Process.bind, ih]
+  rw [PIR.Process.interpret_interchange Occurrence.actions Occurrence.erase
+    (fun operation => .call operation .done) (fun _ => rfl)]
+  exact PIR.Process.interpret_identity source
 
 omit [DecidableEq F] in
 theorem producerRounds_erase (ctx : ProtocolContext) (site : String) (start count : Nat) {n : Nat}
-    (reference : GkrRoundsReference.State F (n + count)) (raw : Raw F) (point : List F) :
+    (reference : GkrRoundsReference.State F (n + count)) (raw : RawState F) (point : List F) :
     (producerRounds (G := G) ctx site start count reference raw point).interpret Occurrence.erase =
       execute ctx count reference raw point := by
-  induction count generalizing start raw point with
-  | zero => rfl
-  | succ count ih =>
-    rw [producerRounds, PIR.Process.interpret_bind,
-      IterationObservations.within_interpret _ Occurrence.iterations_erase,
-      IterationObservations.silent_within, actions_erase]
-    simp only [execute, PIR.Process.bind]
-    congr 1; funext _; congr 1; funext _; congr 1; funext _; congr 1; funext r
-    exact ih (start + 1) (GkrRoundsReference.restrict reference r) (raw.restrict r) (point ++ [r])
+  rw [producerRounds, ObservedLoop.descending_interpret _ Occurrence.iterations_erase]
+  simp only [actions_erase]
+  exact ObservedLoop.descending_eq (State := fun remaining => Output F (n + remaining))
+    IterationObservations.silent site _
+    (fun _ count state => execute ctx count (n := n) state.reference state.raw state.point)
+    (fun _ _ => rfl) (fun _ _ _ => rfl) start count ⟨reference, raw, point⟩
 
 theorem validatorRounds_erase (ctx : ProtocolContext) (handle : Nat) (site : String)
     (start count : Nat) (value : List F × F) :
     (validatorRounds (G := G) ctx handle site start count value).interpret Occurrence.erase =
       (PIR.repeatN count (GkrVerifier.round ctx handle) value).interpret CommonAdapter.embed := by
-  induction count generalizing start value with
-  | zero => rfl
-  | succ count ih =>
-    rw [validatorRounds, PIR.Process.interpret_bind,
-      IterationObservations.within_interpret _ Occurrence.iterations_erase,
-      IterationObservations.silent_within, actions_erase, PIR.repeatN, PIR.Process.interpret_bind]
-    apply congrArg (PIR.Process.bind _)
-    funext next
-    exact ih (start + 1) next
+  exact ObservedLoop.interpret_repeated Occurrence.erase Occurrence.iterations_erase site _
+    (GkrVerifier.round ctx handle) CommonAdapter.embed (fun _ => actions_erase _) start count value
 
 omit [Field F] [DecidableEq F] in
 /-- All-return facts are insensitive to observation boundaries, while the
@@ -97,14 +86,14 @@ omit [DecidableEq F] in
 changing its computed messages or any actual iteration boundary. -/
 theorem producerRounds_prefix (ctx : ProtocolContext) (site : String)
     (start count : Nat) {n : Nat} (reference : GkrRoundsReference.State F (n + count))
-    (raw : Raw F) (precedingPoint point : List F) :
+    (raw : RawState F) (precedingPoint point : List F) :
     producerRounds (G := G) ctx site start count reference raw (precedingPoint ++ point) =
       (producerRounds ctx site start count reference raw point).bind fun result =>
         .done { result with point := precedingPoint ++ result.point } := by
   induction count generalizing start raw point with
   | zero => rfl
   | succ count ih =>
-    simp only [producerRounds, IterationObservations.within, Occurrence.iterations,
+    simp only [producerRounds, ObservedLoop.descending_succ, IterationObservations.within, Occurrence.iterations,
       execute, PIR.Process.interpret, Occurrence.actions, PIR.Process.bind]
     congr 1
     funext _
@@ -119,7 +108,8 @@ theorem producerRounds_prefix (ctx : ProtocolContext) (site : String)
     change F at r
     congr 1
     funext _
-    simpa only [List.append_assoc] using ih (start + 1)
+    simpa only [List.append_assoc, producerRounds, Occurrence.iterations, execute,
+      PIR.Process.interpret, Occurrence.actions, PIR.Process.bind] using ih (start + 1)
       (GkrRoundsReference.restrict reference r) (raw.restrict r) (point ++ [r])
 
 /-- Pending claims carry their complete input prefix. Adding that prefix is
@@ -132,7 +122,7 @@ theorem validatorRounds_prefix (ctx : ProtocolContext) (handle : Nat) (site : St
   induction count generalizing start point claim with
   | zero => rfl
   | succ count ih =>
-    simp only [validatorRounds, IterationObservations.within, Occurrence.iterations,
+    simp only [validatorRounds, ObservedLoop.counted_succ, IterationObservations.within, Occurrence.iterations,
       GkrVerifier.round, GkrVerifier.roundFirst, GkrVerifier.roundSecond,
       PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind]
     congr 1
@@ -154,7 +144,10 @@ theorem validatorRounds_prefix (ctx : ProtocolContext) (handle : Nat) (site : St
       funext _
       congr 1
       funext _
-      simpa only [List.append_assoc] using ih (start + 1) (point ++ [r]) (c0 + r * (c1 + r * c2))
+      simpa only [List.append_assoc, validatorRounds, Occurrence.iterations,
+        GkrVerifier.round, GkrVerifier.roundFirst, GkrVerifier.roundSecond, GkrVerifier.roundCheck,
+        PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind] using
+        ih (start + 1) (point ++ [r]) (c0 + r * (c1 + r * c2))
     · simp only [check, ite_false, PIR.Process.interpret, PIR.Process.bind]
 
 omit [Field F] [DecidableEq F] in
@@ -170,7 +163,7 @@ message and restriction laws are used by the degree-two Sumcheck reference. -/
 theorem rounds (ctx : ProtocolContext) (scope : PairScope)
     (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
     (handle : Nat) (site : String) (start count : Nat) {n : Nat}
-    (reference : GkrRoundsReference.State F (n + count)) (raw : Raw F) (point : List F)
+    (reference : GkrRoundsReference.State F (n + count)) (raw : RawState F) (point : List F)
     (allowed : GkrRoundsReference.admissible reference)
     (delivery : (GkrVerifier.challengeSite ctx,
       GkrVerifier.deliverySite ctx) ∈ scope.deliveries) :
@@ -181,7 +174,7 @@ theorem rounds (ctx : ProtocolContext) (scope : PairScope)
   induction count generalizing start raw point with
   | zero => exact .done rfl
   | succ count ih =>
-    rw [producerRounds, validatorRounds]
+    rw [producerRounds, ObservedLoop.descending_succ, validatorRounds, ObservedLoop.counted_succ]
     have boundary : GkrRoundsReference.total reference =
         (GkrRoundsReference.message reference).constant +
         (GkrRoundsReference.message reference).constant +

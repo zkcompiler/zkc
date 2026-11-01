@@ -4,6 +4,11 @@ import Batteries.Util.ProofWanted
 set_option autoImplicit false
 namespace Tests.Companions
 
+-- Imported controls use a distinct internal exception, initialized before their
+-- elaborators run. It must never become a missing-mathematics result.
+initialize proposalFailureId : Lean.InternalExceptionId ←
+  Lean.registerInternalExceptionId `Tests.Companions.proposalFailure
+
 @[zkc "Counter.base"] theorem base (n : Nat) : n + 0 = n := Nat.add_zero n
 @[zkc "Counter<7>.base"] theorem seven : 7 + 0 = 7 := rfl
 

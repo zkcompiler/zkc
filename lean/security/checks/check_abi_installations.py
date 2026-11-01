@@ -129,7 +129,7 @@ example (values : WitnessOnly.validatorArtifacts.Statement Fixtures.model) :
     values = WitnessOnlyABI.statement := WitnessOnlyABI.statement_surjective values
 example (values : NoData.validatorArtifacts.Statement Fixtures.model) :
     values = NoDataABI.statement := NoDataABI.statement_surjective values
-example : NoDataABI.StatementData = Unit := rfl
+example (fields : NoDataABI.StatementData) : fields = {} := by cases fields; rfl
 -- The public-binding event survives even when its public row is empty.
 example : WitnessOnlyABI.initialHistory =
     [Zkc.Construction.Domain.Event.publicBinding ⟨WitnessOnly.subject.originalExport, []⟩] := rfl
@@ -193,6 +193,8 @@ example : TestsSecurity.ABIInstallations.Constrained.subject.HonestInput (inputs
     zero = r'''
 module
 public import ZkcSecurityTools.SubjectABI
+public import ZkcTools.StructuredSource.NamedValues
+public meta import ZkcTools.StructuredSource.NamedValues
 public import TestsSecurity.ABIInstallations.Fixtures
 @[expose] public section
 noncomputable section
@@ -207,6 +209,8 @@ namespace validatorArtifacts
 abbrev Statement (model : DomainModel) := Values model.Value []
 end validatorArtifacts
 '''
+    zero += "named_values SourceView [] := ([] : List Ty)\n"
+    zero += "named_values PublicView [] := ([] : List Ty)\n"
     zero += rows
     zero += "def subject.HonestInput (_values : subject.Inputs) : Prop := True\n"
     zero += "namespace abi\n"

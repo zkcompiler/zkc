@@ -63,12 +63,27 @@ private def compactHead (head : Expr) : MetaM Expr := do
     else pure arg
   return mkAppN head.getAppFn args
 
+/-- Try one component template, restoring speculative assignments on ordinary
+mismatch. Internal failures, including resource limits and interrupts, are never
+reported as a missing template. -/
+def attemptTemplate {α : Type} (attempt : MetaM α) : MetaM (Option α) := do
+  let saved ← saveState
+  try
+    return some (← attempt)
+  catch error =>
+    match error with
+    | .internal .. => throw error
+    | .error .. =>
+      -- Dependent-process diagnostics are formatted only when tracing is enabled.
+      trace[Elab.debug] "{error.toMessageData}"
+      saved.restore
+      return none
+
 private partial def factor (atoms : Array Name) (patterns : Array Expr) (source : Expr)
     (fuel : Nat) : MetaM Expr := do
   if fuel == 0 then throwError "source composition exceeds structural proposal depth"
   for pattern in patterns do
-    let saved ← saveState
-    try
+    let result? ← attemptTemplate do
       let (arguments, _, _) ← forallMetaTelescopeReducing (← inferType pattern)
       let selected := mkAppN pattern arguments
       let rec matchPrefix (template actual : Expr) (matched : Nat) : MetaM Expr := do
@@ -100,11 +115,7 @@ private partial def factor (atoms : Array Name) (patterns : Array Expr) (source 
               matchPrefix done (mkApp actualRest returned) (matched + 1)
       let result ← matchPrefix selected source 0
       return ← instantiateMVars result
-    catch error =>
-      -- Formatting a failed match can traverse a whole dependent process.
-      -- Keep that work inside the lazy trace so ordinary proposals avoid it.
-      trace[Elab.debug] "{error.toMessageData}"
-      saved.restore
+    if let some result := result? then return result
   match ← viewProcess atoms source with
   | .returned value =>
       let type ← whnf (← inferType source)
@@ -240,6 +251,18 @@ private partial def presentation (atoms : Array Name) (left right : Expr) (fuel 
   | _, _ => throwError "source presentation has different process constructors:\n{a.process}\nand\n{b.process}"
   let joined ← mkAppM ``Eq.trans #[a.proof, middle]
   mkAppM ``Eq.trans #[joined, ← mkAppM ``Eq.symm #[b.proof]]
+
+/-- Produce a structural presentation together with its equation. The same
+factoring and proof procedures serve the term/tactic frontends; callers can
+share the checked result without restating its complete process. -/
+def checkedPresentation (atoms : Array Name) (source : Expr)
+    (templates : Array Expr := #[]) (depth : Nat := 128) : MetaM (Expr × Expr) := do
+  let process ← factor atoms templates source depth
+  let process ← instantiateMVars process
+  if process.hasMVar then throwError "source composition has unassociated template arguments"
+  unless ← isDefEq (← inferType process) (← inferType source) do
+    throwError "source composition changed the complete process return type"
+  return (process, ← presentation atoms source process depth)
 
 elab "source_composition_equation " " atoms " "[" atomNames:ident,* "]" : tactic =>
   Lean.Elab.Tactic.withMainContext do

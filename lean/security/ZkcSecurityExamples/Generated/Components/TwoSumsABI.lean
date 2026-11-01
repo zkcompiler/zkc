@@ -3,6 +3,8 @@ module
 public import ZkcSecurityExamples.Generated.TwoSums
 public import ZkcSecurityTools.SubjectABI
 public import ZkcSecurityTools.SourceInputClauses
+public import ZkcTools.StructuredSource.NamedValues
+public meta import ZkcTools.StructuredSource.NamedValues
 
 @[expose] public section
 noncomputable section
@@ -19,7 +21,22 @@ open ZkcSecurity.Claims.HonestPair ZkcSecurity.Tools.SubjectABI
 open ZkcSecurity.Examples.Generated.TwoSums
 
 abbrev model := subject.domainModel
+named_values SourceView [input0, input1, input2, input3, input4, input5] := subject.target.owner.protocol.inputs
+
+named_values PublicView [input0, input1, input2, input3, input4] := validatorArtifacts.publics
+
+abbrev RawInputs := SourceView.View (Component model.Value)
 abbrev Data := Values (TypedABI.Slot Domain.dataType model.Value) subject.target.owner.protocol.inputs
+abbrev DataFields := SourceView.View (TypedABI.Slot Domain.dataType model.Value)
+
+def fields (values : Data) : DataFields := SourceView.unpack values
+def fromFields (fields : DataFields) : Data := SourceView.pack fields
+
+theorem fromFields_fields (values : Data) : fromFields (fields values) = values :=
+  SourceView.pack_unpack values
+
+theorem fields_fromFields (record : DataFields) : fields (fromFields record) = record :=
+  SourceView.unpack_pack record
 
 theorem source_types : subject.target.owner.protocol.inputs = ([Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.field "bls12-381.fr",  Zkc.Source.Structured.Ty.field "bls12-381.fr",  Zkc.Source.Structured.Ty.index,  Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"]) := rfl
 theorem public_positions : selected.policy.publicInputs = ([0, 1, 2, 3, 4]) := rfl
@@ -30,10 +47,10 @@ theorem artifact_identities :
     (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:9dc344ff01dd6c4f394f00fcc428d25296049408ac39004e832650adf9d54b28",  "sha256:5df98ce627b1b33d1ea570e016e78e74a3dfd00a72b1593b8b5ab0ea6c99f926",  "_math_1")) := by decide +kernel
 
 def sourceInputs (input0 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : Option (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : Option (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : Option (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) : subject.Inputs :=
-  (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons input4 (.cons input5 .nil))))))
+  SourceView.pack { input0 := input0, input1 := input1, input2 := input2, input3 := input3, input4 := input4, input5 := input5 }
 
 def data (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) : Data :=
-  (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons input4 (.cons input5 .nil))))))
+  SourceView.pack { input0 := input0, input1 := input1, input2 := input2, input3 := input3, input4 := input4, input5 := input5 }
 
 def inputs (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) : subject.Inputs :=
   TypedABI.optional Domain.dataType (data input0 input1 input2 input3 input4 input5)
@@ -45,21 +62,21 @@ theorem data_surjective (values : Data) :
     ∃ (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))), values = (data input0 input1 input2 input3 input4 input5) := by subject_abi_surjective
 
 def statement (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) : validatorArtifacts.Statement model :=
-  (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons input4 .nil)))))
+  PublicView.pack { input0 := input0, input1 := input1, input2 := input2, input3 := input3, input4 := input4 }
 
 theorem statement_surjective (values : validatorArtifacts.Statement model) :
     ∃ (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))), values = (statement input0 input1 input2 input3 input4) := by subject_abi_surjective
 
-abbrev StatementData := TypedABI.Fields model.Value validatorArtifacts.publics
+abbrev StatementData := PublicView.View model.Value
 
-def statementData (values : validatorArtifacts.Statement model) : StatementData := TypedABI.unpack values
-def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := TypedABI.pack fields
+def statementData (values : validatorArtifacts.Statement model) : StatementData := PublicView.unpack values
+def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := PublicView.pack fields
 
 theorem statementOfData_statementData (values : validatorArtifacts.Statement model) :
-    statementOfData (statementData values) = values := TypedABI.pack_unpack values
+    statementOfData (statementData values) = values := PublicView.pack_unpack values
 
 theorem statementData_statementOfData (fields : StatementData) :
-    statementData (statementOfData fields) = fields := TypedABI.unpack_pack fields
+    statementData (statementOfData fields) = fields := PublicView.unpack_pack fields
 
 def initialHistory (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) : Domain.History model.toCarriers :=
   Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs
@@ -85,7 +102,7 @@ theorem runtimeInputs_eq (input0 : (model.Value (Zkc.Source.Structured.Ty.vector
 
 theorem preparation (values : subject.Inputs) :
     subject.runtimeInputs values = (TypedABI.complete Domain.dataType values).map
-      (fun (data : Data) => ((producerInputs (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1), (validatorInputs (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1))) := by
+      (fun (data : Data) => ((producerInputs (SourceView.unpack data).input0 (SourceView.unpack data).input1 (SourceView.unpack data).input2 (SourceView.unpack data).input3 (SourceView.unpack data).input4), (validatorInputs (SourceView.unpack data).input0 (SourceView.unpack data).input1 (SourceView.unpack data).input2 (SourceView.unpack data).input3 (SourceView.unpack data).input4))) := by
   rw [Subject.runtime_layout subject values ([0, 1, 4]) (by rfl)]
   subject_abi_options
 
@@ -94,11 +111,11 @@ def abi : Subject.ABI subject where
   pack := TypedABI.optional Domain.dataType
   complete := TypedABI.complete Domain.dataType
   complete_iff := TypedABI.complete_eq_some_iff Domain.dataType
-  producer := fun data => (producerInputs (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1)
-  validator := fun data => (validatorInputs (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1)
+  producer := fun data => (producerInputs (SourceView.unpack data).input0 (SourceView.unpack data).input1 (SourceView.unpack data).input2 (SourceView.unpack data).input3 (SourceView.unpack data).input4)
+  validator := fun data => (validatorInputs (SourceView.unpack data).input0 (SourceView.unpack data).input1 (SourceView.unpack data).input2 (SourceView.unpack data).input3 (SourceView.unpack data).input4)
   preparation := preparation
-  producerSorts := fun data => producer_sorts (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1
-  validatorSorts := fun data => validator_sorts (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1
+  producerSorts := fun data => producer_sorts (SourceView.unpack data).input0 (SourceView.unpack data).input1 (SourceView.unpack data).input2 (SourceView.unpack data).input3 (SourceView.unpack data).input4
+  validatorSorts := fun data => validator_sorts (SourceView.unpack data).input0 (SourceView.unpack data).input1 (SourceView.unpack data).input2 (SourceView.unpack data).input3 (SourceView.unpack data).input4
 
 def inputCondition (values : subject.Inputs) : Prop :=
   source_input_condition subject on values
@@ -111,7 +128,7 @@ set_option backward.isDefEq.respectTransparency false in
 theorem representable_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     inputsRepresentable (inputs input0 input1 input2 input3 input4 input5) ↔ (input0.length < indexLimit ∧ input1.length < indexLimit ∧ input4 < indexLimit) := by
   change inputsRepresentable (sourceInputs (some input0) (some input1) (some input2) (some input3) (some input4) input5) ↔ _
-  simp [inputsRepresentable, inputRepresentable, sourceInputs]
+  simp [inputsRepresentable, inputRepresentable, sourceInputs, SourceView.pack]
 
 theorem honestInput_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     subject.HonestInput (inputs input0 input1 input2 input3 input4 input5) ↔ ((input0.length < indexLimit ∧ input1.length < indexLimit ∧ input4 < indexLimit) ∧ (source_input_condition subject on (inputs input0 input1 input2 input3 input4 input5))) := by

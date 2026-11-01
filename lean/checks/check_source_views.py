@@ -43,8 +43,14 @@ def main() -> None:
     # every generated proof a second time in the same validation run.
     proofs = [*(module for selection in SELECTIONS for module in modules(selection)),
               "Tests.StructuredNormalFormComponents", "Tests.StructuredNormalForms",
-              "Tests.ScalarSourcePresentations", "Tests.RoleViewGeneration"]
+              "Tests.ScalarSourcePresentations", "Tests.RoleViewGeneration",
+              "Tests.RepeatOccurrences", "Tests.SourceConfigurationSelection"]
     run("proofs", ["lake", "build", *proofs])
+    # Imported fixture definitions do not execute their scratch compilation or
+    # refusal checks. Keep those checks in this maintained source-view lane.
+    for name, driver in (("repeat-occurrences", "CheckRepeatOccurrences"),
+                         ("source-configurations", "CheckSourceConfigurationSelection")):
+        run(name, ["lake", "env", "lean", "--run", f"checks/{driver}.lean", str(records / name)])
     print(f"source-views: exact regeneration and kernel controls passed; {records}")
 
 

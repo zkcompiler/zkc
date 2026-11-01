@@ -10,6 +10,7 @@ import ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedValidato
 import ZkcSecurityTools.SigmaReadback
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Module.Prod
+import Tests.MathematicalCompanionSigma
 
 /-! Actual randomized artifacts on a bounded heterogeneous module. The retained
 source relations supply the mathematical premises. These are honest sampled
@@ -101,9 +102,18 @@ theorem acceptance (firstBase firstPoint secondBase secondPoint : Group)
          .data ⟨.group domains.group, by decide, secondBase⟩,
          .data ⟨.group domains.group, by decide, secondPoint⟩,
          .transcript "merlin3.bls12-381.fr64be/0" history]) := by
-  obtain ⟨firstRelated, secondRelated⟩ := (independent_accepts_iff domains randomizedAndRelation.val _
-    SchnorrAndRandomizedInputs.program.payload.linked randomizedAndRelation.property
-    firstBase firstPoint secondBase secondPoint firstWitness secondWitness).mp related
+  let mathematical : Tests.MathematicalCompanionSigmaGoals.RelationInputs.View model.Value :=
+    { firstBase, firstPoint, secondBase, secondPoint, firstWitness, secondWitness }
+  have actualRelated : invoke (SchnorrAndRandomizedInputs.program.payload.definitions.foldl
+      (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
+      SchnorrAndRandomizedInputs.helper0Helper
+      (Tests.MathematicalCompanionSigmaGoals.RelationInputs.pack mathematical) =
+      .done (Tests.MathematicalCompanionSigmaGoals.Relation.encode model
+        { decision := true }) := related
+  obtain ⟨firstRelated, secondRelated⟩ :=
+    (Tests.MathematicalCompanionSigma.related_iff mathematical).mp actualRelated
+  change firstPoint = firstWitness • firstBase at firstRelated
+  change secondPoint = secondWitness • secondBase at secondRelated
   subst firstPoint secondPoint
   rw [SchnorrAndRandomizedProducer.participant_eq, SchnorrAndRandomizedValidator.participant_eq]
   unfold_component_bodies [SchnorrAndRandomizedProducer.view, SchnorrAndRandomizedValidator.view]

@@ -5,7 +5,7 @@ public import ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks
 
 @[expose] public section
 
-/-! Generated actual-helper gate equations. This is not a full GKR theorem. -/
+/-! Generated full-body helper associations. -/
 namespace ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm Zkc.Source.Structured.Bindings
 open ZkcExamples.Structured.Generated.Bindings.GkrRounds

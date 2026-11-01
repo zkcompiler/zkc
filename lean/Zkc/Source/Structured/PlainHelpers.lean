@@ -29,6 +29,39 @@ theorem closed_invoke_plain (U : UnitPayload) (helper : Helper)
     (Evaluation.foldMeanings_closedLift (F := F) (G := G)
       (I := participantInterface F G) U.definitions helper arguments).symm
 
+/-- A proved complete closed result is reusable at the participant table.
+The unit and helper arguments are unchanged by the transport. -/
+theorem closed_invoke_returned (U : UnitPayload) (helper : Helper)
+    (arguments : Values (assignment F G) helper.inputs)
+    (result : Values (assignment F G) helper.outputs)
+    (equation : invoke (closedMeanings (F := F) (G := G) U.definitions)
+      helper arguments = .done result) :
+    invoke (plainHelpers (F := F) (G := G) U).closed helper arguments = .done result := by
+  rw [closed_invoke_plain, equation]
+  rfl
+
+/-- Present input transport retains every result coordinate. This is a law
+for present inputs; it makes no claim about missing optional coordinates. -/
+theorem component_invoke_present (U : UnitPayload) (helper : Helper)
+    (arguments : Values (assignment F G) helper.inputs) :
+    invoke (plainHelpers (F := F) (G := G) U).components helper arguments.present =
+      (invoke (plainHelpers (F := F) (G := G) U).closed helper arguments).bind
+        (fun result => .done result.present) :=
+  Evaluation.ComponentTables.adequate_fold (.silent _) ⟨[], []⟩
+    Evaluation.ComponentTables.adequate_empty U.definitions helper arguments
+
+/-- Compose the two established transports without repeating an interpretation
+proof at each mathematical helper. -/
+theorem component_invoke_returned (U : UnitPayload) (helper : Helper)
+    (arguments : Values (assignment F G) helper.inputs)
+    (result : Values (assignment F G) helper.outputs)
+    (equation : invoke (closedMeanings (F := F) (G := G) U.definitions)
+      helper arguments = .done result) :
+    invoke (plainHelpers (F := F) (G := G) U).components helper arguments.present =
+      .done result.present := by
+  rw [component_invoke_present, closed_invoke_returned U helper arguments result equation]
+  rfl
+
 /-- Full-body association transports optional component evaluation as well. -/
 theorem component_body_plain (U : UnitPayload) (helper : Helper)
     (body : Region dialect helper.inputs helper.outputs)

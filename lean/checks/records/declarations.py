@@ -21,6 +21,7 @@ FORMAT = "zkc.declarations/0"
 PACKAGES = {
     "main": (LEAN, ["Zkc", "ZkcExamples", "Tests", "ZkcTools/ProcessView.lean", "ZkcTools/Companions.lean",
                     "ZkcTools/Companions",
+                    "ZkcTools/Generation",
                     "ZkcTools/JsonSupport.lean", "ZkcTools/ProofAccount.lean",
                     "ZkcTools/StructuredSource",
                     "ZkcTools/ConstructionBindings"]),

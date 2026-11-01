@@ -3,6 +3,7 @@ module
 public import ZkcSecurityExamples.Gkr.CanonicalVerifier
 public import ZkcSecurityExamples.Gkr.SourceAdmission
 public import ZkcSecurity.Bindings.Source.OccurrenceProperties
+public meta import ZkcSecurityTools.SourceProperties.Loops
 
 @[expose] public section
 
@@ -46,32 +47,20 @@ theorem rounds (ctx : ProtocolContext) (site : String) (handle start count : Nat
     (price : ENNReal) (history : List (PublicProperties.Event (uniformCarriers F G))) :
     Typed.ChargedCostBound PublicProperties.interface (fun _ _ => price)
       (validatorRounds ctx handle site start count value) history (count * price) := by
-  induction count generalizing start value history with
-  | zero => trivial
-  | succ count ih =>
-    rw [validatorRounds]
-    convert CostComposition.bind _ _ price (count * price)
-      (OccurrenceProperties.within_cost price price site start _ (round_step ctx handle value price) history)
-      (fun next reached => ih (start+1) next reached) using 1
-    simp only [Nat.cast_add,Nat.cast_one,add_mul,one_mul,add_comm]
+  install_source_loop_cost per_iteration price using_rules [round_step ctx handle]
 
 omit [Field F] [DecidableEq F] in
 theorem coefficients (ctx : ProtocolContext) (site : String) (start count : Nat) (values : List F)
     (price : ENNReal) (history : List (PublicProperties.Event (uniformCarriers F G))) :
     Typed.ChargedCostBound PublicProperties.interface (fun _ _ => price)
       (validatorCoefficients ctx site start count values) history 0 := by
-  induction count generalizing start values history with
-  | zero => trivial
-  | succ count ih =>
-    rw [validatorCoefficients]
-    have one : ∀ reached, Typed.ChargedCostBound PublicProperties.interface (fun _ _ => price)
+  have step : ∀ (values : List F) reached,
+      Typed.ChargedCostBound PublicProperties.interface (fun _ _ => price)
         (((GkrVerifier.lineCoefficient (G := G) ctx values).interpret CommonAdapter.embed).interpret Occurrence.actions)
-        reached 0 := fun _ => by
-      intro payload value decoded
-      trivial
-    simpa only [zero_add] using CostComposition.bind _ _ 0 0
-      (OccurrenceProperties.within_cost price 0 site start _ one history)
-      (fun next reached => ih (start+1) next reached)
+        reached 0 := by
+    intro values reached payload value decoded
+    trivial
+  install_source_loop_cost per_iteration 0 using_rules [step]
 
 private theorem line_step (ctx : ProtocolContext) (handle width : Nat)
     (add mul : Zkc.Protocols.Gkr.Wiring F width) (value : Nat × List F × F)
@@ -111,14 +100,7 @@ theorem output (ctx : ProtocolContext) (site : String) (handle start count : Nat
     (price : ENNReal) (history : List (PublicProperties.Event (uniformCarriers F G))) :
     Typed.ChargedCostBound PublicProperties.interface (fun _ _ => price)
       (validatorOutput ctx handle site start count point) history (count*price) := by
-  induction count generalizing start point history with
-  | zero => trivial
-  | succ count ih =>
-    rw [validatorOutput]
-    convert CostComposition.bind _ _ price (count*price)
-      (OccurrenceProperties.within_cost price price site start _ (output_step ctx handle point price) history)
-      (fun next reached => ih (start+1) next reached) using 1
-    simp only [Nat.cast_add,Nat.cast_one,add_mul,one_mul,add_comm]
+  install_source_loop_cost per_iteration price using_rules [output_step ctx handle]
 
 theorem layers (ctx : ProtocolContext) (sites : HonestProducerObserved.Sites) (handle : Nat)
     (encoding : CircuitEncoding F) (start count : Nat) (value : Nat × List F × F)
@@ -126,15 +108,8 @@ theorem layers (ctx : ProtocolContext) (sites : HonestProducerObserved.Sites) (h
     Typed.ChargedCostBound PublicProperties.interface (fun _ _ => price)
       (validatorLayers ctx handle sites encoding start count value) history
       (count*((2*encoding.width+1)*price)) := by
-  induction count generalizing start value history with
-  | zero => trivial
-  | succ count ih =>
-    rw [validatorLayers]
-    convert CostComposition.bind _ _ ((2*encoding.width+1)*price) (count*((2*encoding.width+1)*price))
-      (OccurrenceProperties.within_cost price _ sites.layers start _
-        (layer ctx sites.layer handle encoding.width encoding.circuit.add encoding.circuit.mul value price) history)
-      (fun next reached => ih (start+1) next reached) using 1
-    simp only [Nat.cast_add,Nat.cast_one,add_mul,one_mul,add_comm]
+  install_source_loop_cost per_iteration ((2 * encoding.width + 1) * price)
+    using_rules [layer ctx sites.layer handle encoding.width encoding.circuit.add encoding.circuit.mul]
 
 theorem validator (ctx : ProtocolContext) (sites : HonestProducerObserved.Sites) (handle : Nat)
     (encoding : CircuitEncoding F) (outputs : List F) (price : ENNReal)

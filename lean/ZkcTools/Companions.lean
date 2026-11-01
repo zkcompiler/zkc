@@ -95,7 +95,9 @@ def resolve (selections : Array Selection) (expected : Expr) : TermElabM Resolut
       return .incomplete selection.identity declaration "the companion depends on sorry"
     let saved ← saveState
     try
-      let function := mkIdent declaration
+      -- Registration selects a declaration, not a spelling that a local binder
+      -- or an opened namespace may capture during application elaboration.
+      let function := mkCIdent declaration
       let arguments := selection.arguments
       let application ← `(term| $function:ident $arguments*)
       let placeholder ← placeholderWrapper? (← getConstInfo declaration).type
@@ -118,7 +120,8 @@ def resolve (selections : Array Selection) (expected : Expr) : TermElabM Resolut
         return .incomplete selection.identity declaration "unproved companion stub"
       return .matched selection.identity declaration value
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       let message ← error.toMessageData.toString
       saved.restore
       return .refused selection.identity message

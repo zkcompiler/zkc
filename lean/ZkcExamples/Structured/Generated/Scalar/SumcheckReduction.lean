@@ -48,12 +48,16 @@ abbrev bodyBody := bodyDefinition.body
 theorem bodyBody_checked : bodyDefinition.body = bodyBody := rfl
 theorem bodyBody_raw : bodyDefinition.raw = bodyBody.erase := by kernel_rfl
 
-abbrev roundState : List Ty := [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]
-abbrev roundCaptures : List Ty := [(.service "random.bls12-381.fr/0")]
-abbrev roundMaximum := 4
-abbrev roundSpec : RepeatSpec := (⟨[(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.service "random.bls12-381.fr/0")], [0, 1], [[0], [0], [0], [0], [1], [1]], 4⟩ : RepeatSpec)
-def roundBody := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Role0Callback0Body
-theorem round_selected : findRepeat "s18" bodyDefinition.body = some ⟨_, _, roundBody⟩ := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Role0Callback0_selected
+abbrev roundSite : RepeatSite := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Callback0Site
+abbrev roundSpec : RepeatSpec := roundSite.spec
+abbrev roundState : List Ty := roundSpec.state
+abbrev roundCaptures : List Ty := roundSpec.captures
+abbrev roundMaximum := roundSpec.maximum
+abbrev roundBody := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Callback0Body
+theorem round_body : roundSite.body = roundBody := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Callback0_body
+abbrev roundOccurrence : RepeatAt roundSite bodyDefinition.body := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Callback0Occurrence
+theorem round_selected : (selectRepeat 0 bodyDefinition.body).map (·.repeatSite) = some roundSite := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Callback0_selected
+theorem round_position : roundOccurrence.position = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] := ZkcExamples.Structured.Generated.Scalar.SumcheckReductionBindingsCallbacks.protocol0Callback0_position
 
 def bodyFn (ctx : ProtocolContext) (self : Nat) : RegionFunction (Component (assignment F G)) (participantInterface F G) ([(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
   fun args => bodyBody.denote (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers payload) self (payload.plainProtocolTable F G) ctx) args.get

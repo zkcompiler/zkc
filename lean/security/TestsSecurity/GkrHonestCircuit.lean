@@ -167,7 +167,7 @@ theorem unchanged_suffix (suffix : List ℚ) :
 theorem malformed_gate_map :
     invoke (helpers (G := ℚ)) GkrSourceBodies.scopedHelper44Helper
       (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) = .halt .refused := by
-  rw [HonestCircuit.scopedHelper44_association.invoke GkrSourceViews.unit.linked]
+  rw [HonestCircuit.gate_bodies.map.invoke GkrSourceViews.unit.linked]
   change (Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
     (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil))))).bind _ = _
   have stopped : Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
@@ -184,8 +184,13 @@ theorem refused_layer_index :
     invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
       (.cons ([] : List ℚ) (.cons [] (.cons []
         (.cons 2 (.cons 1 (.cons 1 (.cons 2 .nil))))))) = .halt .refused := by
-  rw [HonestCircuit.helper34_association.invoke GkrSourceViews.unit.linked, HonestCircuit.values_body]
-  simp [Primitive.evaluate, primitiveOutcome, checkedIndices, indexLimit, PIR.Process.bind, Values.get]
+  rw [HonestCircuit.circuit_bodies.values.invoke GkrSourceViews.unit.linked]
+  simp only [meaning]
+  rw [Evaluation.denote_meaning_eq_meaningOn, HonestCircuit.Goals.valuesProcess_equation]
+  dsimp only [HonestCircuit.Goals.valuesProcess, HonestCircuit.Goals.valuesProcess_certificate]
+  norm_num [Primitive.evaluateOn, primitiveOutcome, checkedIndices, indexLimit,
+    PIR.Process.bind, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
+    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
 
 #print axioms HonestCircuit.index_point
 #print axioms HonestCircuit.block_encode

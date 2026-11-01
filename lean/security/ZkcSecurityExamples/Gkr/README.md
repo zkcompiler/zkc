@@ -69,14 +69,44 @@ or native byte association is claimed here.
 This migration preserves the circuit/layer and Sumcheck mathematics. Scalar
 mathematical presentations are derived from the single Structured meaning;
 the independent Common frontend is retired. Shared Lean role-view generation
-replaces the four Python GKR presentations. Remaining helper, reference and
-honest-source proofs still count as authored work: removing the compiled
-linkage and generator does not establish zero mechanical proof overhead.
+replaces the four Python GKR presentations.
 Core connection generation is selected
 in `Tests.ConnectionGeneration`; both artifact views use
 `Tests.Constructed.Generate`. The common printers own the emitted proof syntax.
 The retired GKR-specific generator manifests are no longer current ownership
 records; the landing account measures authored and generated work separately.
+
+## Mathematical companions and shared connections
+
+Helper goal modules select retained bodies and derive their complete input,
+output and stop interface. Their companions prove mathematical references under
+explicit dependency and admission conditions. The scalar gate and ordered gate
+map use `GkrGateGoals` and `GkrGateCompanion` in the core examples package.
+The readback, collection, line and circuit helper goals follow the same path.
+They reuse ordinary list, collection and fold laws; their definitions do not
+reimplement an evaluator or assign a new meaning to the source.
+
+`SourceReferences` derives readable processes and correspondence equations from
+the existing checked role equations. `SourceRows` supplies complete named views
+of their typed rows. `SourceCalls` derives the terminal input application's site
+and roles from its retained occurrence. Missing components, false results and
+stopped executions remain observable. A conditional correspondence retains its
+roster, masking and other premises even when the readable value does not need
+them as computational arguments.
+
+`CanonicalVerifier.reads` is shared by honest pairing in `CanonicalReadback` and
+adversarial rejection and cost proofs in `SourceValidator`. Completeness does
+not supply honest-message assumptions to soundness. The latter still quantifies
+over arbitrary replies and reached histories. The source equation is shared;
+the honest invariant, falsity invariant, bad-event bound and cost proof are
+separate obligations.
+
+Authors still choose the mathematical circuit representation and prove its
+decoding laws, prefix and line invariants, and component connection theorems.
+They also select source templates and label the generated interfaces. These
+choices, assembly modules and any remaining source-specific proof work count
+in authoring cost alongside the companion mathematics. The generators remove
+repeated structural work; they do not establish zero authoring overhead.
 
 ## Generated endpoints
 

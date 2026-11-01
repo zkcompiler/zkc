@@ -52,7 +52,8 @@ def assemble (selections : Array Selection) (expected : Expr)
           throwError "default method depends on sorry"
       return .discharged value method.name attempts
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      if error.isRuntime then throw error
+      if let .internal _ _ := error then throw error
       let reason ← error.toMessageData.toString
       saved.restore
       attempts := attempts.push ⟨method.name, reason⟩

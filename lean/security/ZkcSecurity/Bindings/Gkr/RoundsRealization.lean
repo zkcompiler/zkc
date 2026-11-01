@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import ZkcSecurity.Bindings.Gkr.RoundsProcesses
 public import Zkc.Polynomial.Multilinear.ListRestriction
 
@@ -20,6 +23,8 @@ noncomputable section
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
+/-- Ordered finite representation of the four independent mathematical factors.
+No source helper identity or execution-success premise is part of this API. -/
 structure RawState (F : Type) where
   add : List F
   mul : List F
@@ -42,6 +47,24 @@ def RawState.prefix : (count : Nat) → RawState F → (Fin count → F) → Raw
   | 0, raw, _ => raw
   | count + 1, raw, challenges =>
     RawState.prefix count (raw.restrict (challenges 0)) (challenges ∘ Fin.succ)
+
+/-- Encode each factor separately in the existing MSB-first table order. -/
+def encode {n : Nat} (reference : GkrRoundsReference.State F n) : RawState F :=
+  ⟨GkrRoundsLayout.encode reference.add, GkrRoundsLayout.encode reference.mul,
+    GkrRoundsLayout.encode reference.left, GkrRoundsLayout.encode reference.right⟩
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem encode_decodes {n : Nat} (reference : GkrRoundsReference.State F n) :
+    Decodes (encode reference) reference :=
+  ⟨GkrRoundsLayout.decode_encode _, GkrRoundsLayout.decode_encode _,
+    GkrRoundsLayout.decode_encode _, GkrRoundsLayout.decode_encode _⟩
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem cast_decodes {n m : Nat} (same : n = m) (reference : GkrRoundsReference.State F n)
+    (raw : RawState F) (decoded : Decodes raw reference) :
+    Decodes raw (same ▸ reference) := by
+  subst m
+  exact decoded
 
 omit [DecidableEq F] in
 theorem restriction_decodes {n : Nat} (raw : RawState F) (s : State F (n + 1))
@@ -138,3 +161,9 @@ theorem get_there {Value : Structured.Ty → Type} {types : List Structured.Ty} 
 
 end
 end ZkcSecurity.Examples.Components.GkrRoundsRealization
+
+-- Keep the shared unfolding equation with its definition, so independent
+-- clients do not generate competing stored providers during simplification.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getUnfoldEqnFor?
+    ``ZkcSecurity.Examples.Components.GkrRoundsRealization.RawState.prefix

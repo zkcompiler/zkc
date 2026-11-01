@@ -22,13 +22,11 @@ theorem coefficients_plain (width : Nat) (values start finish : List F)
     (capacity : 2 ^ width * (width + 1) < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper69Helper
-      (.cons values (.cons start (.cons finish (.cons width .nil)))) =
-      .done (.cons (row (width + 1)
-        (linePolynomial width table (coordinates width start) (coordinates width finish))) .nil) := by
-  rw [closed_invoke_plain]
-  change (invoke (helpers (G := G)) GkrSourceBodies.helper69Helper _).interpret _ = _
-  rw [coefficients_correspond width values start finish table decoded startSize finishSize capacity]
-  rfl
+      (Goals.Line.Inputs.pack (Value := assignment F G) { values, start, finish, width }) =
+      .done (Goals.Line.encode (ringModel F G) ⟨row (width + 1)
+        (linePolynomial width table (coordinates width start) (coordinates width finish))⟩) := by
+  exact closed_invoke_returned GkrSourceViews.unit _ _ _
+    (coefficients_correspond width values start finish table decoded startSize finishSize capacity)
 
 /-- A complete reusable result for the actual helper: exact output, exact
 length, polynomial equality and evaluation at every field point. -/
@@ -39,8 +37,8 @@ theorem actual_line_polynomial (width : Nat) (values start finish : List F)
     ∃ coefficients : List F,
       invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
         GkrSourceBodies.helper69Helper
-        (.cons values (.cons start (.cons finish (.cons width .nil)))) =
-          .done (.cons coefficients .nil) ∧
+        (Goals.Line.Inputs.pack (Value := assignment F G) { values, start, finish, width }) =
+          .done (Goals.Line.encode (ringModel F G) ⟨coefficients⟩) ∧
       coefficients.length = width + 1 ∧
       coefficientPolynomial coefficients =
         linePolynomial width table (coordinates width start) (coordinates width finish) ∧
@@ -60,15 +58,10 @@ theorem coefficients_component (width : Nat) (values start finish : List F)
     (capacity : 2 ^ width * (width + 1) < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
       GkrSourceBodies.helper69Helper
-      (.cons (some values) (.cons (some start) (.cons (some finish) (.cons (some width) .nil)))) =
-      .done (.cons (some (row (width + 1)
-        (linePolynomial width table (coordinates width start) (coordinates width finish)))) .nil) := by
-  change invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-    GkrSourceBodies.helper69Helper
-    (Values.cons values (.cons start (.cons finish (.cons width .nil)))).present = _
-  rw [HonestHelpers.component_present GkrSourceBodies.helper69Helper
-    (.cons values (.cons start (.cons finish (.cons width .nil)))),
-    coefficients_plain width values start finish table decoded startSize finishSize capacity]
-  rfl
+      (Goals.Line.Inputs.pack (Value := Component (assignment F G)) { values := some values, start := some start, finish := some finish, width := some width }) =
+      .done (Goals.Line.encode (ringModel F G) ⟨row (width + 1)
+        (linePolynomial width table (coordinates width start) (coordinates width finish))⟩).present := by
+  exact component_invoke_returned GkrSourceViews.unit _ _ _
+    (coefficients_correspond width values start finish table decoded startSize finishSize capacity)
 
 end ZkcSecurity.Realizations.Gkr.HonestLine

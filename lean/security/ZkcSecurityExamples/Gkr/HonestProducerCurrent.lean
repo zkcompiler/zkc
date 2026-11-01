@@ -2,7 +2,6 @@ module
 public import ZkcSecurityExamples.Gkr.HonestProducerCurrentLayer
 public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import Zkc.Source.Structured.OccurrenceYields
-public meta import ZkcTools.StructuredSource.Composition
 
 @[expose] public section
 
@@ -28,9 +27,15 @@ theorem observed_layer_yields (sites : HonestProducerObservedLayers.Sites) (enco
 
 abbrev layerCapturesValues (encoding : CircuitEncoding F) :
     Values (Component (assignment F G)) layerSpec.captures :=
-  .cons (some encoding.inputs) (.cons (some encoding.add) (.cons (some encoding.mul)
-    (.cons (some encoding.layers) (.cons (some encoding.selector) (.cons (some encoding.width)
-      (.cons none .nil))))))
+  (SourceRows.LayerCaptures.pack {
+      «inputs» := some encoding.inputs,
+      add := some encoding.add,
+      mul := some encoding.mul,
+      layers := some encoding.layers,
+      selector := some encoding.selector,
+      width := some encoding.width,
+      service := none
+    })
 
 abbrev observedLayerBody : RegionFunction (Component (assignment F G))
     (Occurrence.signature (uniformCarriers F G)) (.index :: (layerSpec.state ++ layerSpec.captures), layerSpec.state) :=
@@ -40,7 +45,19 @@ abbrev observedLayerBody : RegionFunction (Component (assignment F G))
 theorem observed_layers_fold (encoding : CircuitEncoding F) (sites : HonestProducerObserved.Sites)
     (equation : ∀ index point, index < encoding.layers → point.length = encoding.width →
       observedLayerBody (F := F) (G := G)
-        (.cons (some index) ((proverLayerState (some point)).append (layerCapturesValues encoding))) =
+        (SourceRows.LayerArguments.pack {
+            index := some index,
+            proverPoint := some point,
+            point := none,
+            claim := none,
+            «inputs» := some encoding.inputs,
+            add := some encoding.add,
+            mul := some encoding.mul,
+            layers := some encoding.layers,
+            selector := some encoding.selector,
+            width := some encoding.width,
+            service := none
+          }) =
       (HonestProducerObservedLayers.producerLayer {} sites.layer encoding.circuit
         (encoding.layers - index - 1) index point).bind fun result => .done (proverLayerState (some result)))
     (index count : Nat) (inside : index + count ≤ encoding.layers)
@@ -60,45 +77,19 @@ theorem observed_layers_fold (encoding : CircuitEncoding F) (sites : HonestProdu
     (fun _ point => point.length = encoding.width) encoding.layers
     (by
       intro index point inside sized
-      simp only [Repeat.stepOn, proverLayerState_masked {} 0 rfl, equation index point inside sized,
-        IterationObservations.within_eq, PIR.Process.bind_assoc, PIR.Process.bind, qualifyProtocolSite])
+      simp only [Repeat.stepOn, proverLayerState_masked {} 0 rfl]
+      have callback := equation index point inside sized
+      dsimp only [SourceRows.LayerArguments.pack] at callback
+      simp only [layerCapturesValues, SourceRows.LayerCaptures.pack, proverLayerState, Values.append]
+      rw [callback]
+      simp only [IterationObservations.within_eq, PIR.Process.bind_assoc, PIR.Process.bind,
+        qualifyProtocolSite, proverLayerState_masked {} 0 rfl]
+      rfl)
     (fun index point _ _ => Zkc.Source.Structured.OccurrenceYields.within _ _ _
       (observed_layer_yields (G := G) sites.layer encoding index point))
     index count inside point pointSize
-  rw [translated, Zkc.Source.Structured.LoopPresentation.foldCounted _
-    (HonestProducerObserved.producerLayers (G := G) {} sites encoding)
-    (fun _ _ => rfl) (fun _ _ _ => rfl)]
-
-def rootPresentation (tables : Evaluation.ComponentTablesOn (uniformCarriers F G) (Occurrence.signature (uniformCarriers F G))) (protocols : ProtocolTable (assignment F G) (Occurrence.signature (uniformCarriers F G))) (initial add mul : List F) (layers selector width : Nat) :
-    PIR.Process (Occurrence.signature (uniformCarriers F G))
-      (Values (Component (assignment F G)) [.boolean]) :=
-  (invoke tables.closed GkrSourceBodies.emptyHelper .nil).bind fun empty =>
-  (denoteRepeatOn (carriers := uniformCarriers F G) outputSpec {} 0 (some width)
-    (proverOutputState (some (empty.get .here))) (.cons none .nil)
-    (fun args => outputBody.denote
-      (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions tables 0 protocols {} Occurrence.iterations) args.get)
-    Occurrence.iterations "s37").bind fun output =>
-  (denoteRepeatOn (carriers := uniformCarriers F G) layerSpec {} 0 (some layers)
-    (proverLayerState (output.get (.there .here)))
-    (.cons (some initial) (.cons (some add) (.cons (some mul) (.cons (some layers)
-      (.cons (some selector) (.cons (some width) (.cons none .nil)))))))
-    (fun args => layerBody.denote
-      (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions tables 0 protocols {} Occurrence.iterations) args.get)
-    Occurrence.iterations "s57").bind fun _ => .done (.cons none .nil)
-
-
-set_option maxHeartbeats 2000000 in
-theorem root_occurrence (initial add mul : List F) (layers selector width : Nat) :
- gkrBody.denote (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers 0 (beforeRoot (F := F) (G := G)) {} Occurrence.iterations)
- ((.cons (some initial) (.cons none (.cons (some add) (.cons (some mul) (.cons (some layers) (.cons (some selector) (.cons (some width) (.cons none .nil)))))))) : Values (Component (assignment F G)) gkrInputs).get =
- rootPresentation observedHelpers beforeRoot initial add mul layers selector width := by
-  have normalized := prover_observed (F := F) (G := G) {} (NormalForm.RosterDistinct.root _ _)
-    beforeRoot beforeRoot_masked (some initial) (some add) (some mul)
-    (some layers) (some selector) (some width)
-  refine normalized.trans ?_
-  source_composition_equation atoms [invoke, denoteRepeatOn]
-
-
+  rw [translated]
+  rfl
 
 theorem output_protocols (ctx : ProtocolContext) (self : Nat)
     (protocols : ProtocolTable (assignment F G) (Occurrence.signature (uniformCarriers F G))) :
@@ -107,63 +98,76 @@ theorem output_protocols (ctx : ProtocolContext) (self : Nat)
     outputBody.denote (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
       observedHelpers self [] ctx Occurrence.iterations) := by rfl
 
-theorem root_body (encoding : CircuitEncoding F) (outputs : Option (List F)) (service : Option Nat) :
+theorem root_body (encoding : CircuitEncoding F) («outputs» : Option (List F)) (service : Option Nat) :
     Occurrence.participant (ringModel F G) GkrSourceViews.program 0
-      (.cons (some encoding.inputs) (.cons outputs (.cons (some encoding.add) (.cons (some encoding.mul)
-        (.cons (some encoding.layers) (.cons (some encoding.selector) (.cons (some encoding.width)
-          (.cons service .nil)))))))) =
-    rootPresentation observedHelpers beforeRoot encoding.inputs encoding.add encoding.mul
-      encoding.layers encoding.selector encoding.width := by
+      ((SourceRows.Inputs.pack {
+          «inputs» := some encoding.inputs,
+          «outputs» := «outputs»,
+          add := some encoding.add,
+          mul := some encoding.mul,
+          layers := some encoding.layers,
+          selector := some encoding.selector,
+          width := some encoding.width,
+          service := service
+        })) =
+    rootPresentation {} beforeRoot (some encoding.inputs) (some encoding.add) (some encoding.mul)
+      (some encoding.layers) (some encoding.selector) (some encoding.width) := by
   rw [participant_body]
   unfold CheckedProtocol.denoteWithOn
   erw [GkrSourceViews.gkrDefinition.body_eq_of_raw _ gkrBody_raw]
-  have masked : maskValues 0 (({} : ProtocolContext).mapScopes GkrSourceViews.gkrDefinition.inputScopes)
-      (.cons (some encoding.inputs) (.cons outputs (.cons (some encoding.add) (.cons (some encoding.mul)
-        (.cons (some encoding.layers) (.cons (some encoding.selector) (.cons (some encoding.width)
-          (.cons service .nil)))))))) =
-      GkrProverContinuation.inputs (G := G) encoding.inputs encoding.add encoding.mul
-        encoding.layers encoding.selector encoding.width := by
-    simp [maskValues, Participant.restrict, ProtocolContext.mapScopes, ProtocolContext.roles,
-      GkrSourceViews.gkrDefinition, GkrSourceBodies.gkrSignature, GkrProverContinuation.inputs]
-    rfl
-  rw [masked]
-  erw [root_occurrence (F := F) (G := G) encoding.inputs encoding.add encoding.mul
-    encoding.layers encoding.selector encoding.width]
-  unfold rootPresentation
-  simp only [PIR.Process.bind_assoc]
-  apply congrArg (PIR.Process.bind _)
-  funext empty
-  apply congrArg (PIR.Process.bind _)
-  funext output
-  apply congrArg (PIR.Process.bind _)
-  funext layers
-  rfl
+  erw [rootPresentation_equation (F := F) (G := G) {} (.root _ _)
+    beforeRoot beforeRoot_masked (some encoding.inputs) (some encoding.add) (some encoding.mul)
+    (some encoding.layers) (some encoding.selector) (some encoding.width)]
+  dsimp only [rootPresentation, rootPresentation_certificate]
+  have resultMask : maskValues 0 (({} : ProtocolContext).mapScopes GkrSourceViews.gkrDefinition.outputScopes)
+      ((SourceRows.Decision.pack { accepted := none }) : Values (Component (assignment F G)) [.boolean]) = (SourceRows.Decision.pack { accepted := none }) := rfl
+  dsimp only [SourceRows.Decision.pack] at resultMask
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, resultMask]
 
-theorem observed_from_layer (encoding : CircuitEncoding F) (outputs : List F)
-    (admitted : encoding.Admitted 4 4 outputs) (service : Option Nat)
+theorem observed_from_layer (encoding : CircuitEncoding F) («outputs» : List F)
+    (admitted : encoding.Admitted 4 4 «outputs») (service : Option Nat)
     (layerSites : HonestProducerObservedLayers.Sites)
     (equation : ∀ index point, index < encoding.layers → point.length = encoding.width →
       observedLayerBody (F := F) (G := G)
-        (.cons (some index) ((proverLayerState (some point)).append (layerCapturesValues encoding))) =
+        (SourceRows.LayerArguments.pack {
+            index := some index,
+            proverPoint := some point,
+            point := none,
+            claim := none,
+            «inputs» := some encoding.inputs,
+            add := some encoding.add,
+            mul := some encoding.mul,
+            layers := some encoding.layers,
+            selector := some encoding.selector,
+            width := some encoding.width,
+            service := none
+          }) =
       (HonestProducerObservedLayers.producerLayer {} layerSites encoding.circuit
         (encoding.layers - index - 1) index point).bind fun result => .done (proverLayerState (some result))) :
     Occurrence.participant (ringModel F G) GkrSourceViews.program 0
-      (.cons (some encoding.inputs) (.cons (some outputs) (.cons (some encoding.add) (.cons (some encoding.mul)
-        (.cons (some encoding.layers) (.cons (some encoding.selector) (.cons (some encoding.width)
-          (.cons service .nil)))))))) =
-    HonestProducerObserved.producer {} ⟨"s37", "s57", layerSites⟩ encoding := by
+      ((SourceRows.Inputs.pack {
+          «inputs» := some encoding.inputs,
+          «outputs» := some «outputs»,
+          add := some encoding.add,
+          mul := some encoding.mul,
+          layers := some encoding.layers,
+          selector := some encoding.selector,
+          width := some encoding.width,
+          service := service
+        })) =
+    HonestProducerObserved.producer {} ⟨(outputSite.site), (layerSite.site), layerSites⟩ encoding := by
   rw [root_body]
-  unfold rootPresentation
-  rw [OccurrencePresentation.closed_helper, HonestProducerRounds.empty_plain]
+  dsimp only [rootPresentation, rootPresentation_certificate, NormalForm.runsAtOn, NormalForm.meaningAtOn]
+  erw [OccurrencePresentation.closed_helper, HonestProducerRounds.empty_plain]
   dsimp only [PIR.Process.interpret, PIR.Process.bind, Values.get, TypedABI.get_cons_here]
-  rw [output_protocols]
-  erw [output_repeat (F := F) (G := G) ({} : ProtocolContext) (by decide) "s37"
+  erw [output_protocols]
+  erw [output_repeat (F := F) (G := G) ({} : ProtocolContext) (by decide) (outputSite.site)
     encoding.width admitted.2.2.1 []]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind, proverOutputState,
     TypedABI.get_cons_here, TypedABI.get_cons_there]
   unfold HonestProducerObserved.producer
   apply (show PIR.Yields (fun point : List F => point.length = encoding.width)
-      (HonestProducerObserved.producerOutput (G := G) {} "s37" 0 encoding.width []) from by
+      (HonestProducerObserved.producerOutput (G := G) {} (outputSite.site) 0 encoding.width []) from by
     apply HonestProducerOccurrences.erased_yields
     rw [HonestProducerObserved.producerOutput_erase]
     simpa only [List.length_nil, Nat.zero_add] using output_yields (F := F) (G := G) {} encoding.width []).bind_congr
@@ -172,25 +176,27 @@ theorem observed_from_layer (encoding : CircuitEncoding F) (outputs : List F)
     show encoding.layers ≤ layerSpec.maximum from admitted.2.2.2.1,
     ite_true, Finite.execute, Finite.Domain.admit, Finite.admitThen, List.range_eq_range',
     proverLayerState_masked {} 0 rfl]
-  erw [observed_layers_fold encoding ⟨"s37", "s57", layerSites⟩ equation 0 encoding.layers
+  erw [observed_layers_fold encoding ⟨(outputSite.site), (layerSite.site), layerSites⟩ equation 0 encoding.layers
     (by omega) point pointSize]
-  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
+  simp [PIR.Process.bind_assoc, PIR.Process.bind]
 
 /-- The current root sites and nested iteration sites come from its checked callbacks. -/
-abbrev currentSites : HonestProducerObserved.Sites := ⟨"s37", "s57", currentLayerSites⟩
-
-/-- Ordered public circuit inputs, independent output claim and verifier capability. -/
-abbrev currentInputs (encoding : CircuitEncoding F) (outputs : List F) (service : Option Nat) :
-    Values (Component (assignment F G)) GkrSourceBodies.gkrSignature.inputs :=
-  .cons (some encoding.inputs) (.cons (some outputs) (.cons (some encoding.add) (.cons (some encoding.mul)
-    (.cons (some encoding.layers) (.cons (some encoding.selector) (.cons (some encoding.width)
-      (.cons service .nil)))))))
+abbrev currentSites : HonestProducerObserved.Sites := ⟨(outputSite.site), (layerSite.site), currentLayerSites⟩
 
 /-- Universal association with the actual current source. Circuit admission is
 independent of the producer, all helper results and every challenge reply. -/
-theorem observed (encoding : CircuitEncoding F) (outputs : List F)
-    (admitted : encoding.Admitted 4 4 outputs) (service : Option Nat) :
-    Occurrence.participant (ringModel F G) GkrSourceViews.program 0 (currentInputs encoding outputs service) =
+theorem observed (encoding : CircuitEncoding F) («outputs» : List F)
+    (admitted : encoding.Admitted 4 4 «outputs») (service : Option Nat) :
+    Occurrence.participant (ringModel F G) GkrSourceViews.program 0 (SourceRows.Inputs.pack {
+        «inputs» := some encoding.inputs,
+        «outputs» := some «outputs»,
+        add := some encoding.add,
+        mul := some encoding.mul,
+        layers := some encoding.layers,
+        selector := some encoding.selector,
+        width := some encoding.width,
+        service := service
+      }) =
       HonestProducerObserved.producer {} currentSites encoding := by
   have shape := admitted.1
   have widthBound := admitted.2.2.1
@@ -213,26 +219,53 @@ theorem observed (encoding : CircuitEncoding F) (outputs : List F)
     calc
       _ ≤ 16 * 5 := Nat.mul_le_mul this (by omega)
       _ < indexLimit := by decide
-  exact observed_from_layer encoding outputs admitted service currentLayerSites (by
+  exact observed_from_layer encoding «outputs» admitted service currentLayerSites (by
     intro index point inside pointSize
     exact layer_actual encoding shape index inside point pointSize widthBound layersSmall
       (by omega) addBound mulBound roundsCapacity lineCapacity)
 
 /-- Erasing the actual source occurrence boundaries recovers the same producer
 association on the ordinary participant interface, including arbitrary private slots. -/
-theorem original (encoding : CircuitEncoding F) (outputs : List F)
-    (admitted : encoding.Admitted 4 4 outputs) (service : Option Nat) :
-    GkrSourceViews.program.participant F G 0 (currentInputs encoding outputs service) =
+theorem original (encoding : CircuitEncoding F) («outputs» : List F)
+    (admitted : encoding.Admitted 4 4 «outputs») (service : Option Nat) :
+    GkrSourceViews.program.participant F G 0 (SourceRows.Inputs.pack {
+        «inputs» := some encoding.inputs,
+        «outputs» := some «outputs»,
+        add := some encoding.add,
+        mul := some encoding.mul,
+        layers := some encoding.layers,
+        selector := some encoding.selector,
+        width := some encoding.width,
+        service := service
+      }) =
       producer {} encoding := by
   calc
     _ = GkrSourceViews.program.participantOn (ringModel F G) 0
-        (currentInputs encoding outputs service) :=
+        (SourceRows.Inputs.pack {
+            «inputs» := some encoding.inputs,
+            «outputs» := some «outputs»,
+            add := some encoding.add,
+            mul := some encoding.mul,
+            layers := some encoding.layers,
+            selector := some encoding.selector,
+            width := some encoding.width,
+            service := service
+          }) :=
       Program.participant_eq_participantOn _ _ _
     _ = (Occurrence.participant (ringModel F G) GkrSourceViews.program 0
-        (currentInputs encoding outputs service)).interpret Occurrence.erase :=
+        (SourceRows.Inputs.pack {
+            «inputs» := some encoding.inputs,
+            «outputs» := some «outputs»,
+            add := some encoding.add,
+            mul := some encoding.mul,
+            layers := some encoding.layers,
+            selector := some encoding.selector,
+            width := some encoding.width,
+            service := service
+          })).interpret Occurrence.erase :=
       (Occurrence.participant_erase _ _ _ _).symm
     _ = (HonestProducerObserved.producer (G := G) {} currentSites encoding).interpret Occurrence.erase :=
       congrArg (fun process => process.interpret Occurrence.erase)
-        (observed (G := G) encoding outputs admitted service)
+        (observed (G := G) encoding «outputs» admitted service)
     _ = _ := HonestProducerObserved.producer_erase {} currentSites encoding
 end ZkcSecurity.Realizations.Gkr.HonestProducerSource

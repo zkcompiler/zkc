@@ -48,12 +48,16 @@ abbrev bodyBody := bodyDefinition.body
 theorem bodyBody_checked : bodyDefinition.body = bodyBody := rfl
 theorem bodyBody_raw : bodyDefinition.raw = bodyBody.erase := by kernel_rfl
 
-abbrev callback0State : List Ty := [.index]
-abbrev callback0Captures : List Ty := []
-abbrev callback0Maximum := 3
-abbrev callback0Spec : RepeatSpec := (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec)
-def callback0Body := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Role0Callback0Body
-theorem callback0_selected : findRepeat "round" bodyDefinition.body = some ⟨_, _, callback0Body⟩ := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Role0Callback0_selected
+abbrev callback0Site : RepeatSite := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Callback0Site
+abbrev callback0Spec : RepeatSpec := callback0Site.spec
+abbrev callback0State : List Ty := callback0Spec.state
+abbrev callback0Captures : List Ty := callback0Spec.captures
+abbrev callback0Maximum := callback0Spec.maximum
+abbrev callback0Body := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Callback0Body
+theorem callback0_body : callback0Site.body = callback0Body := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Callback0_body
+abbrev callback0Occurrence : RepeatAt callback0Site bodyDefinition.body := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Callback0Occurrence
+theorem callback0_selected : (selectRepeat 0 bodyDefinition.body).map (·.repeatSite) = some callback0Site := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Callback0_selected
+theorem callback0_position : callback0Occurrence.position = [1] := Tests.Generated.CounterRoleBindingsCallbacks.protocol0Callback0_position
 
 def bodyFn (ctx : ProtocolContext) (self : Nat) : RegionFunction (Component (assignment F G)) (participantInterface F G) ([.index, .index], [.index]) :=
   fun args => bodyBody.denote (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers payload) self (payload.plainProtocolTable F G) ctx) args.get
