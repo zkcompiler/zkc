@@ -17,6 +17,7 @@ from hash_chain_reference import BLS12_381_R, BLS_SUITE, Chain, fr64be
 from logical_tree import decode_tree, encode_tree
 from oracle import chain_trace, check_trace
 from probe import PROFILES, check_solc, compile_request, execute
+from validate import check_revert
 
 ROOT = Path(__file__).resolve().parents[3]
 FIELDS = PLONKY3_FIELDS | {
@@ -114,6 +115,20 @@ def static_trace(fixture):
     return trace + chain_trace(chain)
 
 
+def check_native_outcome(fixture, expected, error):
+    """A stopped native execution must have the specified cause, not just None."""
+    if (expected is None) != (error is not None):
+        raise ValueError("stopped native controls require an exact error")
+    # The SDK reports a completed Boolean false as artifact-rejected; it is
+    # distinct from a stopped execution whose decision is None.
+    if expected is False:
+        error = "artifact-rejected"
+    if (type(fixture["decision"]) is not type(expected) or fixture["decision"] != expected
+            or fixture["native_error"] != error):
+        raise AssertionError(f"native outcome {(fixture['decision'], fixture['native_error'])} "
+                             f"differs from {(expected, error)}")
+
+
 class Subjects:
     def __init__(self, args):
         self.args, self.cases = args, []
@@ -146,8 +161,10 @@ class Subjects:
             raise AssertionError(f"{name}: deployment size exceeds frozen ceilings")
         return path, json.loads(package["artifact"]), compiled, artifact
 
-    def run(self, subject, name, wires, *, expected=True, proof=None, source_stop=None,
-            target_resource=None):
+    def run(self, subject, name, wires, *, expected=True, proof=None, native_error=None,
+            evm_revert=None):
+        if expected is None and evm_revert is None:
+            raise ValueError("stopped controls require an exact EVM refusal")
         path, envelope, compiled, artifact = subject
         descriptor, policy = envelope[2], envelope[2][1]
 
@@ -171,8 +188,10 @@ class Subjects:
             raise AssertionError(f"{path.name}/{name} native: {process.stderr}")
         fixture = json.loads(process.stdout)
         (path / f"{name}.native.json").write_text(json.dumps(fixture, indent=2) + "\n")
-        if fixture["decision"] != expected:
-            raise AssertionError(f"{path.name}/{name}: native decision {fixture['decision']} != {expected}")
+        try:
+            check_native_outcome(fixture, expected, native_error)
+        except AssertionError as error:
+            raise AssertionError(f"{path.name}/{name}: {error}") from error
         if fixture["source"] != compiled["source_sha256"] or descriptor != compiled["descriptor"]:
             raise AssertionError("native and EVM checked subjects differ")
         public = list(map(bytes.fromhex, fixture["public"]))
@@ -182,27 +201,25 @@ class Subjects:
         result_path.write_text(json.dumps(execution, indent=2) + "\n")
         outcome = {key: execution[key] for key in ("status", "reason", "output", "runtime_gas")}
         failure = f"{path.name}/{name}: {outcome}; full execution: {result_path}"
-        if expected is None or target_resource is not None:
-            if execution["status"] != "revert":
-                raise AssertionError(failure)
-            code = target_resource if target_resource is not None else source_stop
-            kind = b"ZKCR" if target_resource is not None else b"ZKCS"
-            if code is not None and execution["output"] != (kind + code.to_bytes(32, "big")).hex():
-                raise AssertionError(failure)
+        if evm_revert is not None:
             # These stopping subjects use authored, unobserved framed messages;
             # the header hash is the complete executed primitive frontier.
             root = invocation_root(fixture)
             trace = [{"kind": "sha256", "input": root.hex(),
                       "output": hashlib.sha256(root).hexdigest(), "status": "return"}]
+            try:
+                check_revert(execution, *evm_revert, trace)
+            except AssertionError as error:
+                raise AssertionError(f"{failure}: {error}") from error
         else:
             if execution["status"] != "return" or int(execution["output"], 16) != expected:
                 raise AssertionError(failure)
             trace = static_trace(fixture)
-        check_trace(execution["trace"], trace)
+            check_trace(execution["trace"], trace)
         self.cases.append({"subject": path.name, "case": name, "decision": expected,
                            "runtime_bytes": len(artifact["runtime"]) // 2,
                            "gas": execution["runtime_gas"], "hashes": len(trace),
-                           "target_resource": target_resource})
+                           "native_error": native_error, "evm_revert": evm_revert})
         return fixture, execution
 
 
@@ -236,11 +253,13 @@ def arithmetic(subjects):
             subjects.run(subject, "wrong-result", inputs | {2: field_wire(name, wrong)}, expected=False)
             if operation == "inverse":
                 subjects.run(subject, "zero", inputs | {0: field_wire(name, field.ZERO)},
-                             expected=None, source_stop=2)
+                             expected=None, native_error="refused:zero-inverse",
+                             evm_revert=("source", 2))
             # EOF is checked even when the chosen non-first acceptance is false.
             if name == "koala-bear.ext4-binomial3" and operation == "multiply":
                 subjects.run(subject, "trailing-proof", inputs,
-                             proof=bytes.fromhex(fixture["proof"]) + b"\x00", expected=None)
+                             proof=bytes.fromhex(fixture["proof"]) + b"\x00", expected=None,
+                             native_error="proof-trailing", evm_revert=("decode", 13))
 
 
 def structured(subjects):
@@ -299,7 +318,9 @@ def vectors(subjects):
             subjects.run(subject, f"length-{count}", {
                 0: vector_wire(name, values), 1: field_wire(name, expected),
                 2: frame(5, bytes([count == 2])), 3: index_wire(count // 2)},
-                expected=True if count else None, source_stop=None if count else 5)
+                expected=True if count else None,
+                native_error=None if count else "refused:split-length",
+                evm_revert=None if count else ("source", 5))
 
 
 def finite(subjects):
@@ -331,10 +352,12 @@ def finite(subjects):
             if count == 0:
                 # Admission is eager even when the first zipped input is empty.
                 subjects.run(subject, "empty-zip-mismatch", wires | {
-                    1: vector_wire(field, [f.ONE])}, expected=None, source_stop=5)
+                    1: vector_wire(field, [f.ONE])}, expected=None,
+                    native_error="rejected:require", evm_revert=("source", 5))
             if count == 3 and lower == 1:
                 subjects.run(subject, "range-one-over", wires | {
-                    4: index_wire(1048577)}, expected=None)
+                    4: index_wire(1048577)}, expected=None,
+                    native_error="exhausted:local-bound-limit", evm_revert=("resource", 13))
 
 
 def filtered(subjects):
@@ -367,14 +390,17 @@ def filtered(subjects):
                          6: field_wire(field, third)}
                 stopping = case == "stopping-zero"
                 fixture, _ = subjects.run(subject, case, wires, expected=None if stopping else True,
-                                          source_stop=2 if stopping else None)
+                                          native_error="refused:zero-inverse" if stopping else None,
+                                          evm_revert=("source", 2) if stopping else None)
                 if case in ("skipped-zero", "stopping-zero"):
                     proof = bytearray.fromhex(fixture["proof"])
                     # Damage the second reached-or-unreached canonical frame.
                     offset = 48 + int.from_bytes(proof[40:48], "little") + 8
                     proof[offset] ^= 0xff
                     subjects.run(subject, case + "-malformed-later", wires, proof=bytes(proof),
-                                 expected=None, source_stop=2 if stopping else None)
+                                 expected=None, native_error="refused:zero-inverse" if stopping
+                                 else "artifact-stopped:Decode(Header)",
+                                 evm_revert=("source", 2) if stopping else ("decode", 3))
 
 
 def capacity(subjects):
@@ -396,8 +422,9 @@ def capacity(subjects):
                      2: index_wire(body_stop), 3: index_wire(predicate_stop),
                      4: field_wire(field, [selected, 0, 0, 0])}
             subjects.run(subject, name, wires, expected=None if stopping else True,
-                         source_stop=2 if stopping else None,
-                         target_resource=2 if name == "over-cap" else None)
+                         native_error="refused:zero-inverse" if stopping else None,
+                         evm_revert=("source", 2) if stopping else
+                         ("resource", 2) if name == "over-cap" else None)
 
 
 def bytes_access(subjects):
@@ -412,7 +439,8 @@ def bytes_access(subjects):
         subjects.run(subject, name, {0: raw_bytes(data), 1: index_wire(position),
                                     2: index_wire(expected or 0)},
                      expected=True if expected is not None else None,
-                     source_stop=3 if expected is None else None)
+                     native_error="refused:bytes-bounds" if expected is None else None,
+                     evm_revert=("source", 3) if expected is None else None)
 
 
 def main():

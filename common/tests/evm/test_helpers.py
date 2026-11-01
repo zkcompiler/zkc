@@ -1,9 +1,30 @@
 import unittest
 
 from abi import SELECTOR, decode_verify, encode_verify, keccak256, malformed_cases, word
+from foundation_controls import check_native_outcome
 from hash_chain_reference import BLS_SUITE, Chain
 from oracle import chain_trace, check_trace
 from validate import ABI_REFUSALS, REVERT_CLASSES, check_revert
+
+
+class NativeOutcomeTests(unittest.TestCase):
+    def test_exact_stopped_outcome(self):
+        fixture = {"decision": None, "native_error": "refused:bytes-bounds"}
+        check_native_outcome(fixture, None, "refused:bytes-bounds")
+        for error in (None, "refused:zero-inverse", "artifact-stopped:Decode(Header)"):
+            with self.subTest(error=error), self.assertRaises(AssertionError):
+                check_native_outcome(fixture | {"native_error": error}, None, "refused:bytes-bounds")
+        with self.assertRaises(ValueError):
+            check_native_outcome(fixture, None, None)
+
+    def test_complete_outcome_cannot_hide_an_error(self):
+        for decision in (True, False):
+            fixture = {"decision": decision, "native_error": None if decision else "artifact-rejected"}
+            check_native_outcome(fixture, decision, None)
+            with self.assertRaises(AssertionError):
+                check_native_outcome(fixture | {"native_error": "refused:bytes-bounds"}, decision, None)
+            with self.assertRaises(AssertionError):
+                check_native_outcome(fixture | {"decision": int(decision)}, decision, None)
 
 
 class AbiTests(unittest.TestCase):
