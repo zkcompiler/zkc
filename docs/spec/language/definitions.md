@@ -1858,11 +1858,13 @@ Bodies in one source file share its filtered token stream, with a separate
 notation environment for each module.
 
 The work ceiling accommodates composed source libraries while preserving charges
-for each traversal. Project checking now also derives every concrete
-Protocol's common-input requirements and checks record placement; the largest
-maintained closure, the STARK library with its AIR relations, charges about
-16.5 million units, and the ceiling keeps twice that margin. File, type, instance, operation and output ceilings remain
-independent; a higher work allowance does not admit a larger type or deeper call.
+for each traversal. Project checking derives every concrete Protocol's
+common-input requirements and checks record placement; the ceiling is twice the
+work of the largest maintained closure, the STARK library with its AIR
+relations. Each parse invocation stays within the
+[layout syntax ceiling](layout-syntax.md#syntax-environments-and-recovery) and is charged to the phase. File,
+type, instance, operation and output ceilings remain independent; a higher work
+allowance does not admit a larger type or deeper call.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
 trees, including operator chains. [Notation limits](notation.md#bounds) also

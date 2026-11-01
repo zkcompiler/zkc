@@ -10,6 +10,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include <algorithm>
 #include <map>
 #include <set>
 using namespace llvm;
@@ -370,7 +371,7 @@ class Comparison {
         budget.tokenBytes = limits.tokenBytes;
         budget.identifierBytes = limits.identifierBytes;
         budget.depth = limits.parseDepth;
-        budget.work = remaining;
+        budget.work = std::min(remaining, syntax::Budget{}.work);
         auto tree = syntax::parseHeaders(source::Revision(sources[module]),
                                          {module}, budget);
         if (!charge(tree.workUsed()) ||

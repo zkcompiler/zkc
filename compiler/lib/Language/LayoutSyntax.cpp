@@ -19,7 +19,9 @@ syntax::Budget budget(const Work &work) {
   result.tokenBytes = work.limits.tokenBytes;
   result.identifierBytes = work.limits.identifierBytes;
   result.depth = work.limits.parseDepth;
-  result.work = work.remaining();
+  // One parse stays within the syntax invocation ceiling; the phase
+  // allowance bounds the sum of parses and every other traversal.
+  result.work = std::min(work.remaining(), syntax::Budget{}.work);
   return result;
 }
 Error acceptSnapshot(const syntax::Snapshot &tree, Work &work) {
