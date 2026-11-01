@@ -377,12 +377,16 @@ struct ExecutionObservationAnalysis::Impl {
             binding ? protocol::operationContracts(binding.getContract())
                     : nullptr;
         if (!contract || !contract->deterministicData ||
-            protocol::hasUnclassifiedProviderEffect(binding.getContract()) ||
             !data(ValueRange(step.inputs).getTypes(), work) ||
             !data(ValueRange(step.outputs).getTypes(), work))
           return unsupported(
               Twine("primitive lacks a deterministic data interpretation: ") +
               (binding ? binding.getContract() : StringRef("missing binding")));
+        // Generic Type formals need not have a Copy bound. The declaration's
+        // conservative provider-effect classifier therefore cannot decide a
+        // concrete sequence/variant application. The explicit facet plus the
+        // recursive actual-port checks above establish this data-only case;
+        // an affine or private-authority instantiation still refuses.
         summary.primitives.push_back(op);
         // No totality facet is inferred. An eager ignored call can still stop.
         summary.mayStop = true;

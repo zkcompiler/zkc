@@ -38,6 +38,11 @@ not the criterion for immutability. Private immutable support is explicitly
 limited to sequences, fixed vectors and SHAKE snapshots, with all Type children
 and variant payloads checked recursively. Private setup keys, opening-state
 handles and affine services are excluded; Copy alone grants no data authority.
+Generic Type formals do not grant or deny this interpretation: the explicit
+facet is checked on the actual recursively immutable input/output types. A
+declaration-level conservative effect classification cannot substitute for
+that instantiation check. In particular, an immutable sequence of public data
+is accepted while a sequence containing private authority remains refused.
 This facet is partial: all inputs can affect a logical
 stop. The direct primitive occurrences are retained as actual IR references,
 including their binding, parameters and selected implementation. The summary

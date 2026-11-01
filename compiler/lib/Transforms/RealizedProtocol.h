@@ -27,6 +27,10 @@ class RealizedProtocol {
         record(std::move(record)), selection(std::move(selection)) {}
 
 public:
+  struct ObservationSnapshot {
+    mlir::OwningOpRef<mlir::ModuleOp> module;
+    llvm::SmallVector<mlir::Operation *> dataExchanges;
+  };
   static llvm::Expected<RealizedProtocol>
   realize(PreparedProtocol prepared,
           const protocol::OracleRealizationPolicy &policy = {});
@@ -34,6 +38,10 @@ public:
   // owner has no snapshots. The record view borrows this owner's lifetime.
   mlir::OwningOpRef<mlir::ModuleOp> preparedSnapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> candidateSnapshot() const;
+  // An independent clone with exact generated opening-request associations
+  // from this checked edge. This grants no new public-coin premise by itself.
+  // The observation consumer must recompute after any snapshot mutation.
+  llvm::Expected<ObservationSnapshot> observationSnapshot() const;
   llvm::StringRef realizationRecord() const { return record; }
   // Canonical exact inventory of actual prepared roots, with the requested
   // query order and authentication. The view borrows this owner's lifetime.

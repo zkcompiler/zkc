@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/ProtocolObservations.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/Construction.h"
@@ -135,11 +136,51 @@ void changeRelation(ModuleOp module) {
   require(succeeded(verify(module)), "mutation must remain well formed");
 }
 } // namespace
-int main() {
+int main(int argc, char **argv) {
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  // Inspect a real checked candidate without truncating it through diagnostic
+  // dump limits. This optional integration probe does not publish a public-coin
+  // or construction judgment; the ordinary CTest mode runs the owner controls.
+  if (argc == 5) {
+    try {
+      auto source = parseSourceFile<ModuleOp>(argv[1], &context);
+      require(bool(source), "invalid observation source");
+      auto prepared = prepare(*source);
+      require(succeeded(prepared.selectEntries({argv[2]})),
+              "invalid observation entry");
+      protocol::OracleRealizationPolicy policy;
+      policy.roots = protocol::OracleTableRealization{
+          StringRef(argv[4]) == "ideal" ? "" : argv[4],
+          protocol::OracleLeafGrouping::Individual,
+          protocol::OracleLeafOrder::Natural};
+      policy.order = protocol::OracleQueryOrder::AfterFinalDraw;
+      policy.authentication = protocol::OracleAuthentication::AtomicBlocks;
+      auto owner = take(RealizedProtocol::realize(std::move(prepared), policy));
+      auto snapshot = take(owner.observationSnapshot());
+      auto actual = std::move(snapshot.module);
+      auto entry = SymbolTable(unit(*actual))
+                       .lookup<protocol_ir::MathematicalOp>(argv[2]);
+      require(bool(entry), "realization lost observation entry");
+      ProtocolObservationAnalysis analysis(*actual, snapshot.dataExchanges);
+      uint64_t remaining = 1000000;
+      facts::Work work(remaining);
+      const auto *summary = take(analysis.get(entry, argv[3], work));
+      outs() << "query families: " << summary->queryFamilies
+             << ", generated data exchanges: " << snapshot.dataExchanges.size()
+             << ", work used: " << 1000000 - remaining
+             << ", pending input/output: " << unsigned(summary->pending.input)
+             << '/' << unsigned(summary->pending.output) << '\n';
+      return 0;
+    } catch (const std::exception &failure) {
+      errs() << failure.what() << '\n';
+      return 1;
+    }
+  }
+  if (argc != 1)
+    return 2;
   ScopedDiagnosticHandler silence(&context,
                                   [](Diagnostic &) { return success(); });
   auto file = MemoryBuffer::getFile(ZKC_REALIZED_FIXTURES "/common-input.mlir");
@@ -151,6 +192,44 @@ int main() {
   auto frozen = prepared.snapshot();
   auto owner = take(RealizedProtocol::realize(std::move(prepared)));
   Cases cases;
+  cases.run(
+      "observation transport associations come from the checked owner", [&] {
+        auto source = fixture(context, "query-blocks");
+        protocol::OracleRealizationPolicy policy;
+        policy.roots = protocol::OracleTableRealization{
+            "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+            protocol::OracleLeafGrouping::Individual,
+            protocol::OracleLeafOrder::Natural};
+        policy.authentication = protocol::OracleAuthentication::AtomicBlocks;
+        auto owner = take(RealizedProtocol::realize(prepare(*source), policy));
+        auto snapshot = take(owner.observationSnapshot());
+        auto entry = SymbolTable(unit(*snapshot.module))
+                         .lookup<protocol_ir::MathematicalOp>("main");
+        require(bool(entry) && !snapshot.dataExchanges.empty(),
+                "missing generated data transport");
+        for (Operation *op : snapshot.dataExchanges)
+          require(op->getParentOfType<ModuleOp>() == *snapshot.module &&
+                      isa<protocol_ir::ExchangeOp>(op),
+                  "transport refers to another snapshot");
+        ProtocolObservationAnalysis strict(*snapshot.module);
+        uint64_t remaining = 1000000;
+        facts::Work work(remaining);
+        refuses(strict.get(entry, "V", work),
+                "protocol-observation-unsupported");
+        ProtocolObservationAnalysis selected(*snapshot.module,
+                                             snapshot.dataExchanges);
+        const auto *summary = take(selected.get(entry, "V", work));
+        require(
+            summary->queryFamilies == 0 && summary->mayStop &&
+                summary->pending.output ==
+                    ProtocolPendingTransfer::Output::Empty,
+            "checked data transport acquired a challenge law or lost stops");
+        auto fresh = take(owner.observationSnapshot());
+        require(
+            fresh.dataExchanges.front() != snapshot.dataExchanges.front() &&
+                equivalent(*fresh.module, *snapshot.module),
+            "observation snapshot aliases its owner or changes the subject");
+      });
   cases.run(
       "preparation retains authored calls and exact application starts", [&] {
         auto source = constructionSource(context);

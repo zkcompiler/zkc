@@ -50,6 +50,12 @@ premises and is not a transcript-binding or security certificate. The structured
 public-coin consumer is being migrated separately in this unit. No serialized
 formal consumer or Lean interpretation is claimed by this summary.
 
+The [protocol observation summary](ir/protocol-observations.md) composes those
+numerical facts through actual Protocol definitions, role maps and retained
+repeats. Its dependency DAG and exact pending-challenge transfer are distinct:
+arithmetic dependence never establishes exact delivery. This is an internal
+borrowed analysis, not a new artifact format or an additional execution route.
+
 ### Participant-loop capture bindings
 
 Participant `loop` captures in `zkc.program/0` are ordered

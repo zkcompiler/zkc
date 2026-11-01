@@ -515,6 +515,8 @@ add_zkc_test(native_closure_admission IR native-closure-admission)
 mlir_target_link_libraries(zkc-native_closure_admission-test PRIVATE MLIRParser MLIRAsmParser)
 add_zkc_test(native_resource_origins IR native-resource-origins)
 add_zkc_test(execution_observations IR execution-observations)
+add_zkc_test(protocol_observations IR protocol-observations)
+mlir_target_link_libraries(zkc-protocol_observations-test PRIVATE MLIRParser MLIRAsmParser)
 mlir_target_link_libraries(zkc-execution_observations-test PRIVATE MLIRAsmParser MLIRParser)
 target_compile_definitions(zkc-execution_observations-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

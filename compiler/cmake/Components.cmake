@@ -238,6 +238,7 @@ add_zkc_component(IR
   lib/Analysis/ProtocolConstants.cpp
   lib/Analysis/SuccessfulContinuations.cpp
   lib/Analysis/ExecutionObservations.cpp
+  lib/Analysis/ProtocolObservations.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Attributes.cpp
   lib/Dialect/Algebra/Parameters.cpp

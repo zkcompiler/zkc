@@ -4,6 +4,7 @@
 #include "support/ResourceSources.h"
 #include "zkc/Analysis/ExecutionObservations.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "llvm/Support/MemoryBuffer.h"
 
@@ -235,6 +236,37 @@ int main(int argc, char **argv) {
                     observe(*take(analysis.get(caller, work)), {bits(1, {0})},
                             bits(1, {}), true, false);
                 });
+  for (StringRef kind : {"field", "proof", "opening_state"})
+    cases.run(
+        "generic data facet checks actual sequence element " + kind.str(), [&] {
+          Source source;
+          Type element = source.field;
+          if (kind != "field")
+            element = parseType("!commitment.vector<\"rows.merkle-keccak256."
+                                "koala-bear/0\", \"" +
+                                    kind.str() + "\">",
+                                &source.context);
+          auto spelling =
+              take(protocol::encodeBoundType(element, false)).spelling();
+          source.binding("sequence_length", "sequence.length", {spelling});
+          auto sequence = data::SequenceType::get(&source.context, element);
+          auto caller = source.function("length", sequence, source.index);
+          exec::ScopedExecutionBuilder control(source.builder, caller);
+          auto result =
+              source.invoke(control, "sequence_length", caller.getArgument(1),
+                            source.index, "length");
+          control.returned(result);
+          admitted(source);
+          ExecutionObservationAnalysis analysis(*source.module);
+          uint64_t remaining = 100000;
+          facts::Work work(remaining);
+          if (kind == "opening_state")
+            refuses(analysis.get(caller, work),
+                    "execution-observation-unsupported");
+          else
+            observe(*take(analysis.get(caller, work)), {bits(1, {0})},
+                    bits(1, {0}), true, true);
+        });
   cases.run("owner and sticky capacity are checked on cache hits", [] {
     Source source;
     auto caller = source.function("identity", source.field, source.field);
