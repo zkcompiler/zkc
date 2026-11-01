@@ -20,7 +20,14 @@ exact arity; unknown fields or tags refuse. Defaults are 65,536 elements,
 4,096 collection/aggregate group points, 16 MiB wire, 64 MiB per value/live
 values, 256 MiB cumulative fresh allocation, one million instructions,
 100,000 iterations and 4 GiB of logical work. Element/group counts may rise to
-1,048,576/32,768. Other ceilings may only be lowered. Numeric elements and group
+1,048,576/32,768, and instructions and iterations to 2^32 (4,294,967,296) each.
+Other ceilings may only be lowered. The instruction and iteration counters are
+64-bit and charged one unit at a time after their bound check, so no selected
+budget can overflow them; loop indices and origin iterations are 64-bit too. The
+maximum of 2^32 matches the logical-work ceiling and keeps every reported counter
+an exact integer for JSON readers, including JavaScript Hosts. The one million
+instruction and 100,000 iteration figures are defaults, not limits of meaning: a
+Host authorizes more work explicitly in this record. Numeric elements and group
 points are counted across a complete nested message, not separately for each
 child collection. For
 the QAP matrix sequence, the nonzeros across A, B and C share the element ceiling:
@@ -156,9 +163,10 @@ instruction, iteration, logical-byte and cumulative fresh-byte allowances. Each
 runner keeps its own limits and backend-local retention/validation ledger.
 Every participant of a joint invocation, every proof attempt and every numerical
 child must receive a clone of the same handle from the Host. Creating a child
-never replenishes shared capacity. Native sequence, external and ring work,
-wire/proof transport, loading and scratch retain their existing owners; Hosts
-must apply cumulative policy to those counters separately.
+never replenishes shared capacity. Native sequence, external and Ring work are
+[Host allowances](#host-allowances); wire/proof transport, loading and scratch
+retain their existing owners. Hosts apply cumulative policy to those counters
+separately.
 
 Before loading inputs, each shared runner reserves its entire selected live-byte
 allowance. Simultaneously live parent and child runners therefore count together,
@@ -203,8 +211,30 @@ cumulative work. Borrowing or cloning a value grants no new live allowance.
 
 Shared accounting carries no `Retained` backend-validation evidence. Another
 backend must independently validate every incoming value, setup and capability;
-allocation identity cannot transfer authority. Ordinary constructors without a
-shared ledger retain their existing installation and resource behavior.
+allocation identity cannot transfer authority.
+
+## Invocation ledgers
+
+Every Entry kind creates one invocation ledger with the selected capacity record
+and charges the Host-side allocation and encoding it performs to that ledger:
+
+| Entry kind | Invocation ledger | Host-side charges |
+|---|---|---|
+| Run | Created at preparation; a run started by an outer invocation uses the outer ledger | Common-input inspection and canonical encoding for all roles; result encoding through `RunReport::encode_results` |
+| Proof | The publication allowance of each call, which first replays the call's native usage, retained material and proof bytes | Result encoding through `ProofResult::encode_results` |
+| Function | Created at preparation and shared with every reached child | Context, argument, journal, request, transport and result reservations; result encoding through `FunctionResultEncoder::encode_report` |
+| Backend participant | `InputBoundBackendRun::start_role` builds it from the selected value and work budgets and attaches it to the started Runner | Common-input inspection and canonical encoding |
+
+Common-input inspection charges each inspected value's retained bytes as logical
+work before validating it. A value observation charges its canonical encoding
+bound as fresh allocation and holds that live allowance until the comparison
+ends. All roles checked for one invocation draw on the same allowance; no
+allowance restarts per role. Child material is charged once, when a reached
+child loads it: Function preparation validates every deployment's context,
+including dormant ones, against a separate allowance with the same capacity
+that it discards before the call. Participants of a standalone run keep their
+per-runner budgets beside the invocation ledger, so the live allowance is not
+partitioned across a roster. Input loading keeps its own admission ledger.
 
 ## Byte construction
 
@@ -216,17 +246,46 @@ while the full operand-read charge accounts for reading its fragments.
 
 ## Host allowances
 
+The Host policy record owns each native work allowance that is not an
+instruction, iteration or retained-value budget. Each has one default and one
+maximum, defined once (`run::Allowances`); a selection above the maximum
+refuses without clamping:
+
+| Allowance | Unit | Default | Maximum | Selected by |
+|---|---|---|---|---|
+| Ring work | Ring expression substitution work per role | 2^28 | 2^28 | `HostLimits::ring_work`, `ProofOptions::ring_work` |
+| Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
+| External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | `HostLimits::external_work`, `ProofOptions::external_work` |
+| Service draws | Draws of one managed service or transcript | 1,000,000 | 1,000,000 | Request service budgets and `transcript_budget` |
+
+A Function takes the same record in `FunctionOptions::limits`. Each reached child receives what remains of each
+allowance after earlier children, divided equally across a joint roster; a child
+never replenishes the parent's allowance.
+
 [Numerical calls](numerical.md#managed-construction) additionally bound managed
 scratch, result-construction overlap and numerical work in their migrated native
 handlers. These per-call backend policy ceilings are separate from the CLI
 capacity record and the VM's retained-value ledgers.
 
 [Joint dispatch](joint.md#joint-dispatch-and-handoff) owns dispatch, message
-and cumulative wire limits; the [joint Host](joint.md#installed-host-and-authority)
-owns its external-work allowance. [Proof transport](../formats/proof.md) owns
-proof framing limits, and [attempts](attempts.md) own retry counts and cumulative
+and cumulative wire limits. [Proof transport](../formats/proof.md) owns proof
+framing limits, and [attempts](attempts.md) own retry counts and cumulative
 budgets. Loading, setup and backend scratch retain their own limits. These
 units do not establish one global peak-memory or elapsed-time bound.
+
+## Maintained scale controls
+
+The STARK library's maintained 256-row, 100-query clients
+(`common/tests/protocol/test_stark_library.py`), quartic Keccak with block
+sampling and Poseidon2 with octic Merlin challenges, run under the default
+record. Each control records its verifier's `execution.instructions` and
+`total_value_bytes` from the verify report, with the retained expectation and the
+margin to the default budget. A measured count may differ from its expectation by
+at most 0.2% in either direction; a change that moves it further updates the
+expectation in the same change, so the margin to the default budget is always a
+reviewed number. The benchmark execution-count lane keeps the trend of the
+Poseidon2 client as case `stark-h256-w1-b2-q100`, with the same LogFinal,
+LogBlowup, query count, suite and table realization.
 
 ## Loading and capacity
 

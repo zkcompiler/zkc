@@ -1,6 +1,6 @@
 //! In-process invocation data. These descriptions confer no execution authority.
 /// Maximum allowance for a managed provider or transcript invocation.
-pub(crate) const RESOURCE_BUDGET_LIMIT: u64 = 1_000_000;
+pub(crate) const RESOURCE_BUDGET_LIMIT: u64 = super::capacity::Allowances::SERVICE_DRAWS.maximum;
 use super::material::ProverMaterial;
 use std::sync::Arc;
 use zkc_cpu::Value;

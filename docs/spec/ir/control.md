@@ -68,8 +68,10 @@ observable effects. Each bound must be at most 1,048,576 in this executable
 profile, including an inverted interval. This magnitude limit is deliberately
 stronger than a trip-count limit and is not the mathematical meaning of index.
 
-The native machine permits at most 100,000 total entered iterations across
-protocol and local loops and 1,000,000 executed instructions. Each executed
+The native machine counts total entered iterations across protocol and local
+loops and executed instructions against the Host's selected budgets: by default
+100,000 iterations and 1,000,000 instructions, and at most 2^32 of each (see
+[runtime capacity](../runtime/capacity.md#application-capacity)). Each executed
 operation, conditional, loop, yield and return costs one instruction. Each entered
 local region creates a backend child frame and charges its explicit inputs under
 the [retained-value ledgers](../runtime/capacity.md#retained-values-and-logical-work):

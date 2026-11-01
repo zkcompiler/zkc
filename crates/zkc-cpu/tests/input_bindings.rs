@@ -15,6 +15,10 @@ use zkc_runtime::{
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+/// A default-capacity invocation ledger for one inspection.
+fn ledger() -> zkc_runtime::vm::ExecutionLedger {
+    zkc_runtime::vm::ExecutionLedger::new(Default::default(), Default::default())
+}
 fn backend() -> CpuBackend {
     CpuBackend::new(
         Policy::default(),
@@ -107,7 +111,9 @@ fn cpu_extent_observation_binds_metadata_without_contents_or_wire_support() {
     .collect();
     let context = pinned(ty, Observation::Extent { axis: 0 }, b"2");
     for (role, value) in ["P", "V"].into_iter().zip(sequences) {
-        context.check_role(role, &backend, &[value]).unwrap();
+        context
+            .check_role(role, &backend, &[value], &ledger())
+            .unwrap();
     }
     for (left, right, expected) in [
         (vec![], vec![], b"0".as_slice()),
@@ -124,8 +130,12 @@ fn cpu_extent_observation_binds_metadata_without_contents_or_wire_support() {
             Observation::Extent { axis: 0 },
             expected,
         );
-        context.check_role("P", &backend, &[left]).unwrap();
-        context.check_role("V", &backend, &[right]).unwrap();
+        context
+            .check_role("P", &backend, &[left], &ledger())
+            .unwrap();
+        context
+            .check_role("V", &backend, &[right], &ledger())
+            .unwrap();
     }
     let fixed_ty =
         PhysicalType::default_for(LogicalType::parse("fixed_vector<field:koala-bear,0>").unwrap())
@@ -134,7 +144,7 @@ fn cpu_extent_observation_binds_metadata_without_contents_or_wire_support() {
         Value::FixedVector(zkc_cpu::FixedVector::new(fixed_ty.clone(), vec![].into()).unwrap());
     assert!(!backend.supports_wire(&fixed_ty));
     pinned(fixed_ty, Observation::Extent { axis: 0 }, b"0")
-        .check_role("P", &backend, &[fixed])
+        .check_role("P", &backend, &[fixed], &ledger())
         .unwrap();
 }
 
@@ -147,14 +157,14 @@ fn cpu_matrix_extent_keeps_rows_columns_and_contents_distinct() {
     for (axis, expected) in [(0, b"2"), (1, b"3")] {
         let context = pinned(left.physical_type(), Observation::Extent { axis }, expected);
         context
-            .check_role("P", &backend, std::slice::from_ref(&left))
+            .check_role("P", &backend, std::slice::from_ref(&left), &ledger())
             .unwrap();
         context
-            .check_role("V", &backend, std::slice::from_ref(&right))
+            .check_role("V", &backend, std::slice::from_ref(&right), &ledger())
             .unwrap();
         let transposed_shape = Value::matrix(3, 2, &[], &policy).unwrap();
         assert_eq!(
-            context.check_role("V", &backend, &[transposed_shape]),
+            context.check_role("V", &backend, &[transposed_shape], &ledger()),
             Err(BindingError::Value)
         );
     }
@@ -172,5 +182,7 @@ fn empty_variant_value_is_active_canonical_data_and_not_an_inactive_path() {
     let backend = backend();
     let encoded = backend.encode_wire(&value).unwrap();
     let context = pinned(ty, Observation::Value, &encoded);
-    context.check_role("P", &backend, &[value]).unwrap();
+    context
+        .check_role("P", &backend, &[value], &ledger())
+        .unwrap();
 }

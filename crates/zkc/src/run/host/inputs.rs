@@ -397,9 +397,9 @@ pub(super) fn prepare<'a>(
         .map_err(|e| e.to_string())?
         .with_relation_assets(host.relation_assets.clone())
         .map_err(|e| e.to_string())?
-        .with_ring_work_limit(host.ring_work_limit)
+        .with_ring_work_limit(host.limits.ring_work)
         .with_external_work_limit(host.limits.external_work)
-        .with_sequence_work_limit(host.sequence_work_limit);
+        .with_sequence_work_limit(host.limits.sequence_work);
         let mut pending = Vec::new();
         for (i, (value, (_, ty))) in row.inputs.iter().zip(&role.entry.inputs).enumerate() {
             let selected = host
@@ -479,5 +479,6 @@ pub(super) fn prepare<'a>(
         roles,
         loaded,
         loading,
+        invocation: host.invocation_ledger(),
     })
 }

@@ -2526,3 +2526,114 @@ fn selected_installation_reaches_nested_proof_program_decoding() {
     assert_eq!(failure.phase, EntryPhase::Admission);
     assert_eq!(failure.code(), "Backend: installation-binding");
 }
+
+fn identity_entry(options: FunctionOptions) -> FunctionEntry {
+    let doc = document(vec![("flag", boolean())], boolean(), json!([]), json!([0]));
+    FunctionEntry::admit(capture(&doc), options, BTreeMap::new()).unwrap()
+}
+#[test]
+fn result_encoding_charges_the_function_invocation_ledger() {
+    let encoder = crate::entry::outputs::FunctionResultEncoder {
+        installation: Default::default(),
+        setups: Default::default(),
+        capacity: Default::default(),
+    };
+    let cpu = CpuExecution::serial().unwrap();
+    let report = identity_entry(FunctionOptions::default())
+        .prepare(request(vec![("flag", true.into())]))
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{}", report.diagnostics());
+    let ledger = report.invocation_ledger().clone();
+    let before = ledger.snapshot();
+    assert_eq!(
+        before.total_value_bytes,
+        report.usage.execution.total_value_bytes
+    );
+    let encoded = encoder.encode_report(&report, cpu.clone()).unwrap();
+    let document: Json = serde_json::from_slice(encoded.as_bytes()).unwrap();
+    assert_eq!(
+        document,
+        json!({"format":"zkc.entry-outputs/0","value":true})
+    );
+    let held = ledger.snapshot();
+    assert!(held.live_reserved_bytes >= before.live_reserved_bytes + encoded.as_bytes().len());
+    assert!(held.total_value_bytes > before.total_value_bytes);
+    drop(encoded);
+    assert_eq!(
+        ledger.snapshot().live_reserved_bytes,
+        before.live_reserved_bytes
+    );
+    // Leave the execution's own work and less than the encoder's first
+    // 512-byte buffer reservation: execution completes, encoding refuses.
+    let mut options = FunctionOptions::default();
+    options.limits.capacity.work.logical_bytes = before.logical_bytes + 511;
+    let report = identity_entry(options)
+        .prepare(request(vec![("flag", true.into())]))
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{}", report.diagnostics());
+    assert_eq!(
+        encoder.encode_report(&report, cpu).err().unwrap(),
+        "entry-output-limit"
+    );
+}
+#[test]
+fn function_policy_owns_child_ring_sequence_and_attempt_settings() {
+    use crate::host::capacity::Allowances;
+    let defaults = FunctionOptions::default();
+    assert_eq!(defaults.limits.ring_work, Allowances::RING_WORK.default);
+    assert_eq!(
+        defaults.limits.sequence_work,
+        Allowances::SEQUENCE_WORK.default
+    );
+    assert!(defaults.attempts.is_empty());
+    for (ring, sequence, code) in [
+        (
+            Allowances::RING_WORK.maximum + 1,
+            0,
+            "bundle-ring-work-limit",
+        ),
+        (
+            0,
+            Allowances::SEQUENCE_WORK.maximum + 1,
+            "bundle-sequence-work-limit",
+        ),
+    ] {
+        let mut options = FunctionOptions::default();
+        options.limits.ring_work = ring;
+        options.limits.sequence_work = sequence;
+        let error = FunctionEntry::admit(
+            capture(&proof_document(true)),
+            options,
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.code(), code);
+    }
+    // Explicit retries follow the standalone proof Entry: only a producing
+    // deployment with a completion choice accepts them.
+    let attempts = |deployment: &str, producing| {
+        let options = FunctionOptions {
+            binding: crate::entry::BindingPolicy::AllowAuthored,
+            attempts: BTreeMap::from([(
+                deployment.into(),
+                crate::entry::AttemptOptions::default(),
+            )]),
+            ..FunctionOptions::default()
+        };
+        FunctionEntry::admit(
+            capture(&proof_document(producing)),
+            options,
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .unwrap()
+        .code()
+        .to_owned()
+    };
+    assert_eq!(attempts("absent", true), "entry-host-attempts");
+    assert_eq!(attempts("proof", false), "entry-attempt-operation");
+    assert_eq!(attempts("proof", true), "entry-attempt-completion");
+}

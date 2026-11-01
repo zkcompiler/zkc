@@ -707,3 +707,62 @@ fn independent_backend_cannot_expose_an_opaque_source_output_as_raw_storage() {
         "entry-backend-opaque"
     );
 }
+
+#[test]
+fn pinned_entry_inspection_and_its_runner_share_one_participant_allowance() {
+    let (run, backend) = paired_run();
+    let (bytes, pin) = trusted_context(&run, &backend);
+    let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
+    let input = |backend: Arithmetic| joint::RoleInput {
+        role: "role00000001".into(),
+        values: [20, 22]
+            .map(|value| Number {
+                value,
+                ty: backend.ty.clone(),
+            })
+            .to_vec(),
+        backend,
+    };
+    let logical = |logical_bytes| WorkBudget {
+        logical_bytes,
+        ..Default::default()
+    };
+    // Starts the participant and reports whether it returned the sum, with
+    // the participant's own logical work.
+    let execute = |backend, work| match bound.start_role(
+        "pinned",
+        input(backend),
+        ValueBudget::default(),
+        work,
+    ) {
+        Err(error) => Err(Box::new(error)),
+        Ok(mut runner) => {
+            let Action::Local(local) = runner.poll() else {
+                panic!("local computation");
+            };
+            let returned = runner.execute_local(&local.cut).is_ok()
+                && matches!(runner.poll(), Action::Returned(values) if values[0].value == 42);
+            let usage = runner.usage().logical_bytes;
+            Ok((returned, usage, runner.into_backend()))
+        }
+    };
+    // Inspection reads the component root and the selected value, 64 bytes
+    // each, and encodes its four-byte canonical frame.
+    let inspection = 2 * 64 + 4;
+    let error = *execute(backend, logical(inspection - 1)).err().unwrap();
+    assert!(matches!(error.error, RuntimeError::Limit));
+    assert_eq!(error.backend.frames, 0);
+    let (returned, runner_work, backend) =
+        execute(error.backend, WorkBudget::default()).ok().unwrap();
+    assert!(returned && runner_work > 0);
+    // The runner's own budget would admit its work, but inspection already
+    // drew on the same participant allowance.
+    let (returned, _, backend) = execute(backend, logical(runner_work + inspection - 1))
+        .ok()
+        .unwrap();
+    assert!(!returned);
+    let (returned, _, _) = execute(backend, logical(runner_work + inspection))
+        .ok()
+        .unwrap();
+    assert!(returned);
+}

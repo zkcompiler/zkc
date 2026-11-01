@@ -112,7 +112,7 @@ cryptographic retry probability.
 |---|---|
 | Attempt count | Whole host invocation; 1 through 1024. |
 | Proof bytes | Each tentative proof, including framing, enforced by the writer during production. |
-| Instructions and iterations | Cumulative across all runners in the invocation, bounded by interpreter hard ceilings. |
+| Instructions and iterations | Cumulative across all runners in the invocation, bounded by the selected capacity; by default one million instructions and 100,000 iterations, at most 2^32 of each. |
 | Retained payload charge | Live limit per runner and cumulative total charge across attempts; counts bindings, not process RSS. |
 | RNG and service draws | One persistent root budget; failed scalar consumes can increment generation/debit before refusal. |
 | Transcript transitions | Per freshly issued attempt transcript; observations remain in the attempt record. |

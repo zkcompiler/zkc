@@ -60,9 +60,12 @@ variant path on every component, never an unconditional root.
 
 Before constructing a participant runner, `InputBindings::check_role` checks all
 that role's required components against the pinned expectations. It bounds each
-value, descriptor path and canonical encoding and applies a cumulative 64 MiB
-inspection/encoding allowance. Failure creates no runtime frame or semantic
-action. Ordinary runner loading still independently admits complete inputs,
+value, descriptor path and canonical encoding, and charges inspection and
+encoding to the caller's [invocation ledger](../runtime/capacity.md#invocation-ledgers):
+each inspected value's retained bytes as logical work, and each canonical
+encoding bound as fresh allocation held live until its comparison ends. All
+roles of one invocation share that ledger. Failure creates no runtime frame or
+semantic action. Ordinary runner loading still independently admits complete inputs,
 backend authority, services, custody and budgets.
 
 The Runtime utility checks pins, exact inventories and actual values. It cannot

@@ -60,6 +60,7 @@ impl Write for Buffer {
         Ok(())
     }
 }
+#[cfg(test)]
 fn encode(value: impl Serialize) -> Result<Vec<u8>> {
     encode_reserved(value, None).map(|encoded| encoded.bytes)
 }
@@ -192,6 +193,18 @@ pub fn run_outputs_with_installation(
     cpu: crate::execution::CpuExecution,
     installation: zkc_cpu::CpuInstallation,
 ) -> Result<Vec<u8>> {
+    run_outputs_reserved(values, capacity, setups, cpu, installation, None)
+        .map(|encoded| encoded.bytes)
+}
+/// Encode role results, charging buffer growth to an invocation ledger.
+pub(crate) fn run_outputs_reserved(
+    values: &RoleValues,
+    capacity: Capacity,
+    setups: zkc_cpu::SetupRegistry,
+    cpu: crate::execution::CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
+    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+) -> Result<EncodedBuffer> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
@@ -224,13 +237,16 @@ pub fn run_outputs_with_installation(
         }
     }
     cpu.enter(|| {
-        encode(Document {
-            format: "zkc.entry-outputs/0",
-            roles: Roles {
-                values,
-                backend: &backend,
+        encode_reserved(
+            Document {
+                format: "zkc.entry-outputs/0",
+                roles: Roles {
+                    values,
+                    backend: &backend,
+                },
             },
-        })
+            ledger,
+        )
     })
 }
 /// Encode one proof participant's named results without changing runtime state.
@@ -327,6 +343,18 @@ pub fn function_output_with_installation(
     cpu: crate::execution::CpuExecution,
     installation: zkc_cpu::CpuInstallation,
 ) -> Result<Vec<u8>> {
+    function_output_reserved(value, capacity, setups, cpu, installation, None)
+        .map(|encoded| encoded.bytes)
+}
+/// Encode a function result, charging buffer growth to an invocation ledger.
+pub(crate) fn function_output_reserved(
+    value: &Value,
+    capacity: Capacity,
+    setups: zkc_cpu::SetupRegistry,
+    cpu: crate::execution::CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
+    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+) -> Result<EncodedBuffer> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
@@ -335,14 +363,17 @@ pub fn function_output_with_installation(
     super::value::check_readable(value)?;
     let backend = backend(capacity, setups, cpu.clone(), installation)?;
     cpu.enter(|| {
-        encode(Document {
-            format: "zkc.entry-outputs/0",
-            value: Item {
-                value,
-                backend: &backend,
-                depth: 1,
+        encode_reserved(
+            Document {
+                format: "zkc.entry-outputs/0",
+                value: Item {
+                    value,
+                    backend: &backend,
+                    depth: 1,
+                },
             },
-        })
+            ledger,
+        )
     })
 }
 struct Named<'a> {
@@ -651,6 +682,49 @@ impl FunctionResultEncoder {
             cpu,
             self.installation.clone(),
         )
+    }
+    /// Encode a successful report's source result under the invocation ledger
+    /// that charged its execution. The buffer keeps its live allowance until
+    /// it is dropped; encoding failure publishes no partial buffer.
+    pub fn encode_report<'a>(
+        &self,
+        report: &'a crate::entry::FunctionReport,
+        cpu: crate::execution::CpuExecution,
+    ) -> Result<EncodedFunctionResult<'a>> {
+        let value = report
+            .value
+            .as_ref()
+            .filter(|_| report.is_success())
+            .ok_or("entry-function-incomplete")?;
+        let buffer = function_output_reserved(
+            &value.clone().into_value(),
+            self.capacity,
+            self.setups.clone(),
+            cpu,
+            self.installation.clone(),
+            Some(report.invocation_ledger().clone()),
+        )?;
+        Ok(EncodedFunctionResult {
+            buffer,
+            _report: report,
+        })
+    }
+}
+/// An encoded Function result that keeps its charged live allowance in the
+/// invocation ledger until it is dropped.
+#[must_use = "retain the encoded result through publication or transport copy"]
+pub struct EncodedFunctionResult<'a> {
+    buffer: EncodedBuffer,
+    _report: &'a crate::entry::FunctionReport,
+}
+impl EncodedFunctionResult<'_> {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer.bytes
+    }
+}
+impl AsRef<[u8]> for EncodedFunctionResult<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
     }
 }
 

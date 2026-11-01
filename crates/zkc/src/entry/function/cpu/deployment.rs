@@ -194,11 +194,16 @@ pub(super) fn verify_value(outputs: Option<NamedValues>) -> crate::entry::Value 
             .unwrap_or_default(),
     }
 }
-pub(super) fn context_check(
-    host: &EntryHost,
-    context: &InvocationContext,
-    ledger: &zkc_runtime::vm::ExecutionLedger,
-) -> Result<()> {
+/// Validate every deployment's context, including dormant ones, before any
+/// call. Material is charged to the invocation ledger once, when a reached
+/// child loads it; this check has its own allowance with the same capacity,
+/// discarded when it returns.
+pub(super) fn context_check(host: &EntryHost, context: &InvocationContext) -> Result<()> {
+    let validation = zkc_runtime::vm::ExecutionLedger::new(
+        host.options.limits.capacity.values,
+        host.options.limits.capacity.work,
+    );
+    let ledger = &validation;
     fn check_role(
         interface: &crate::entry::Interface,
         role: &crate::entry::interface::RolePorts,

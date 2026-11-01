@@ -2,6 +2,7 @@
 use crate::execution::{Capacity, CpuExecution};
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
+    capacity::Allowances,
     setups::needs_input_setup,
 };
 use crate::io::bytes::*;
@@ -21,6 +22,8 @@ pub use report::{EncodedOutput, HostReport, RoleOutputEncoding};
 
 /// Bundle structure, native value/operation capacity and joint dispatch are separate
 /// budgets. The latter counts dispatch occurrences, including repeated loop steps.
+/// External, Ring and sequence work are per-role allowances whose defaults and
+/// maxima are the installed [`Allowances`](crate::host::capacity::Allowances).
 #[derive(Clone, Debug)]
 pub struct HostLimits {
     pub installation: zkc_cpu::CpuInstallation,
@@ -30,6 +33,8 @@ pub struct HostLimits {
     pub message_bytes: usize,
     pub total_wire_bytes: usize,
     pub external_work: u64,
+    pub ring_work: u64,
+    pub sequence_work: u64,
 }
 impl Default for HostLimits {
     fn default() -> Self {
@@ -41,7 +46,9 @@ impl Default for HostLimits {
             steps: run.steps,
             message_bytes: run.wire_bytes,
             total_wire_bytes: run.total_wire_bytes,
-            external_work: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work: Allowances::EXTERNAL_WORK.default,
+            ring_work: Allowances::RING_WORK.default,
+            sequence_work: Allowances::SEQUENCE_WORK.default,
         }
     }
 }
@@ -77,16 +84,22 @@ impl HostLimits {
             work: self.capacity.work,
         }
     }
-    /// Existing per-role external primitive work ceiling, independent of instructions.
-    pub const MAX_EXTERNAL_WORK_PER_ROLE: u64 = CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT;
+    /// Per-role external primitive work ceiling, independent of instructions.
+    pub const MAX_EXTERNAL_WORK_PER_ROLE: u64 = Allowances::EXTERNAL_WORK.maximum;
     /// Validate the requested values without silently changing application policy.
     pub fn validate(&self) -> Result<()> {
         self.capacity.validate()?;
         self.bundle.validate().map_err(|e| e.to_string())?;
-        if self.external_work > Self::MAX_EXTERNAL_WORK_PER_ROLE
+        if !Allowances::EXTERNAL_WORK.admits(self.external_work)
             || self.execution().validate().is_err()
         {
             return Err("bundle-limits".into());
+        }
+        if !Allowances::RING_WORK.admits(self.ring_work) {
+            return Err("bundle-ring-work-limit".into());
+        }
+        if !Allowances::SEQUENCE_WORK.admits(self.sequence_work) {
+            return Err("bundle-sequence-work-limit".into());
         }
         Ok(())
     }
@@ -95,7 +108,8 @@ impl HostLimits {
             "roles":self.bundle.roles,"steps":self.bundle.steps,"depth":self.bundle.depth,
             "nodes":self.bundle.nodes,"string_bytes":self.bundle.string_bytes},
             "capacity":self.capacity.record(),"execution":{"steps":self.steps,
-            "message_bytes":self.message_bytes,"total_wire_bytes":self.total_wire_bytes,"external_work_per_role":self.external_work}})
+            "message_bytes":self.message_bytes,"total_wire_bytes":self.total_wire_bytes,"external_work_per_role":self.external_work,
+            "ring_work_per_role":self.ring_work,"sequence_work_per_role":self.sequence_work}})
     }
 }
 /// Exact byte identity is supplied independently of invocation and bundle data.
@@ -105,8 +119,6 @@ pub struct RunHost {
     cpu: CpuExecution,
     ring_assets: zkc_cpu::ring::Registry,
     relation_assets: zkc_cpu::relation::Registry,
-    ring_work_limit: u64,
-    sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     retained_inputs: bool,
     bundle: Bundle,
@@ -190,8 +202,6 @@ impl RunHost {
             cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
-            sequence_work_limit: 16_777_216,
             shared_ledger: None,
             retained_inputs: false,
             bundle,
@@ -239,28 +249,24 @@ impl RunHost {
         self.relation_assets = assets;
         self
     }
+    /// Select the policy record's per-role Ring work allowance.
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_cpu::ring::DEFAULT_WORK_LIMIT {
+        if !Allowances::RING_WORK.admits(limit) {
             return Err("bundle-ring-work-limit".into());
         }
-        self.ring_work_limit = limit;
+        self.limits.ring_work = limit;
         Ok(self)
     }
-    /// Attach one outer ledger before constructing any joint runner.
+    /// Attach one outer ledger before constructing any joint runner. It is
+    /// also the invocation ledger of every later preparation.
     pub fn with_shared_ledger(mut self, ledger: zkc_runtime::vm::ExecutionLedger) -> Self {
         self.shared_ledger = Some(ledger);
         self
     }
-    pub(crate) fn with_invocation_limits(
-        mut self,
-        mut limits: HostLimits,
-        ring: u64,
-        sequence: u64,
-    ) -> Self {
+    /// Replace the policy for one child invocation; the installation stays.
+    pub(crate) fn with_invocation_limits(mut self, mut limits: HostLimits) -> Self {
         limits.installation = self.limits.installation.clone();
         self.limits = limits;
-        self.ring_work_limit = ring;
-        self.sequence_work_limit = sequence;
         self
     }
     /// Positional interface. Candidate SSA and generated service names are not
@@ -297,6 +303,18 @@ impl RunHost {
         imports.set_ledger(self.shared_ledger.clone());
         self.cpu.enter(|| inputs::prepare(self, request, imports))
     }
+    /// The ledger that charges this invocation's Host-side inspection and
+    /// encoding: the outer invocation's ledger when one is attached, otherwise a
+    /// new ledger with the selected capacity. Participant runners of a
+    /// standalone run keep their separate per-runner budgets.
+    fn invocation_ledger(&self) -> zkc_runtime::vm::ExecutionLedger {
+        self.shared_ledger.clone().unwrap_or_else(|| {
+            zkc_runtime::vm::ExecutionLedger::new(
+                self.limits.capacity.values,
+                self.limits.capacity.work,
+            )
+        })
+    }
 }
 struct PreparedRole {
     entry: EntryRole,
@@ -310,9 +328,11 @@ pub struct PreparedRun<'a> {
     roles: Vec<PreparedRole>,
     loaded: Vec<Value>,
     loading: Option<zkc_runtime::vm::LiveReservation>,
+    invocation: zkc_runtime::vm::ExecutionLedger,
 }
 impl PreparedRun<'_> {
     /// Check all prepared ordinary data before issuing any invocation resource.
+    /// Every role's inspection and encoding charge the one invocation ledger.
     pub(crate) fn check_common_inputs(
         &self,
         bindings: &zkc_runtime::host::input_binding::InputBindings,
@@ -323,10 +343,19 @@ impl PreparedRun<'_> {
                     &role.entry.role,
                     &role.backend,
                     &entry_values(&role.values, &self.loaded),
+                    &self.invocation,
                 )
                 .map_err(|e| e.to_string())?;
         }
         Ok(())
+    }
+    pub(crate) fn host(&self) -> &RunHost {
+        self.host
+    }
+    /// The invocation ledger shared by preparation, execution reports and
+    /// result encoding.
+    pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
+        &self.invocation
     }
 
     /// Every ordinary exit after issuance retires issued roots and preserves the
@@ -416,7 +445,7 @@ impl PreparedRun<'_> {
                 .live_bytes
                 .saturating_sub(loading.bytes().div_ceil(roles));
         }
-        let mut report = HostReport::new(self.host, &self.session);
+        let mut report = HostReport::new(self.host, &self.session, self.invocation);
         if let Some(error) = failure {
             report.phase = "issuance";
             report.failure = Some(error);

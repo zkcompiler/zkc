@@ -825,6 +825,57 @@ fn instruction_exhaustion_does_not_execute_suffix_or_next_iteration() {
 }
 
 #[test]
+fn a_raised_instruction_budget_runs_past_the_default() {
+    // Eleven guards and a yield per iteration: 100,000 iterations need about
+    // 1.3 million instructions, more than the default budget admits.
+    let mut body = vec![];
+    for i in 0..11 {
+        body.push(json!([
+            "op",
+            format!("guard{i}"),
+            "control.require",
+            [],
+            ["ok"],
+            []
+        ]));
+    }
+    body.push(json!(["yield", []]));
+    let bytes = candidate(
+        json!([["lo", "index"], ["hi", "index"], ["ok", "bool"]]),
+        json!([]),
+        json!([
+            ["for", "bounded", "i", "lo", "hi", [], ["ok"], body, []],
+            ["return", []]
+        ]),
+    );
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).unwrap();
+    let mut r = Runner::new_with_budgets(
+        &admitted,
+        "main",
+        "P",
+        "session",
+        ark_backend(None),
+        vec![
+            Value::Index(0),
+            Value::Index(Limits::ITERATIONS),
+            Value::Bool(true),
+        ],
+        ValueBudget::default(),
+        zkc_runtime::vm::WorkBudget {
+            instructions: 2 * Limits::INSTRUCTIONS,
+            ..Default::default()
+        },
+    )
+    .unwrap_or_else(|e| panic!("load failed: {}", e.error));
+    let Action::Local(a) = r.poll() else { panic!() };
+    r.execute_local(&a.cut).unwrap();
+    assert!(matches!(r.poll(), Action::Returned(_)));
+    assert!(r.usage().instructions > Limits::INSTRUCTIONS);
+    assert!(r.usage().instructions <= 2 * Limits::INSTRUCTIONS);
+    assert_eq!(r.usage().iterations, Limits::ITERATIONS);
+}
+
+#[test]
 fn recursive_installation_inventory_and_reinstallation_cover_nested_operations() {
     let bytes = random_loop();
     let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())

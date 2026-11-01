@@ -625,6 +625,85 @@ fn requirement(
         },
     }
 }
+/// A default-capacity invocation ledger.
+fn ledger() -> zkc_runtime::vm::ExecutionLedger {
+    zkc_runtime::vm::ExecutionLedger::new(Default::default(), Default::default())
+}
+fn limited_ledger(logical_bytes: u64, total_bytes: usize) -> zkc_runtime::vm::ExecutionLedger {
+    zkc_runtime::vm::ExecutionLedger::new(
+        zkc_runtime::vm::ValueBudget {
+            total_bytes,
+            ..Default::default()
+        },
+        zkc_runtime::vm::WorkBudget {
+            logical_bytes,
+            ..Default::default()
+        },
+    )
+}
+#[test]
+fn inspection_and_encoding_charge_one_invocation_ledger_across_roles() {
+    use joint_input::{BindingError as E, InputBindings};
+    let bundle = admit(&fixture(false)).unwrap();
+    let program = bundle.admitted();
+    let required = [requirement(
+        PhysicalType::parse(BOOL).unwrap(),
+        false,
+        vec![],
+    )];
+    let (bytes, pin) = binding_context(program, &required, &[json!(["active", "5a4b4356000501"])]);
+    let context = InputBindings::admit_pinned(program, "main", &required, &bytes, &pin).unwrap();
+    use zkc_runtime::vm::Value as _;
+    let backend = Host::default();
+    let inputs = [TestValue::Bool(true), TestValue::Bool(false)];
+    // The observed root is read once as the component root and once as the
+    // selected value; its canonical frame is a 7-byte encoding.
+    let read = 2 * inputs[0].retained_bytes() as u64;
+    let encoded = 7;
+    let invocation = ledger();
+    context
+        .check_role("P", &backend, &inputs, &invocation)
+        .unwrap();
+    let after_one = invocation.snapshot();
+    assert_eq!(after_one.logical_bytes, read + encoded as u64);
+    assert_eq!(after_one.total_value_bytes, encoded);
+    assert_eq!(after_one.live_reserved_bytes, 0);
+    context
+        .check_role("V", &backend, &inputs, &invocation)
+        .unwrap();
+    let after_two = invocation.snapshot();
+    assert_eq!(after_two.logical_bytes, 2 * after_one.logical_bytes);
+    assert_eq!(after_two.total_value_bytes, 2 * encoded);
+    // One role fits the allowance; the second role draws on what remains
+    // instead of a fresh per-role allowance.
+    let one_role = limited_ledger(after_one.logical_bytes, usize::MAX);
+    context
+        .check_role("P", &backend, &inputs, &one_role)
+        .unwrap();
+    assert_eq!(
+        context.check_role("V", &backend, &inputs, &one_role),
+        Err(E::Limit)
+    );
+    assert_eq!(backend.encodes.get(), 3);
+    // Inspection reads charge logical work before the value is encoded.
+    let short_read = limited_ledger(read - 1, usize::MAX);
+    assert_eq!(
+        context.check_role("P", &backend, &inputs, &short_read),
+        Err(E::Limit)
+    );
+    assert_eq!(backend.encodes.get(), 3);
+    // Canonical encoding charges its bound as fresh allocation before encoding.
+    let short_fresh = limited_ledger(u64::MAX, encoded - 1);
+    assert_eq!(
+        context.check_role("P", &backend, &inputs, &short_fresh),
+        Err(E::Limit)
+    );
+    assert_eq!(backend.encodes.get(), 3);
+    assert_eq!(short_fresh.snapshot().live_reserved_bytes, 0);
+    context
+        .check_role("P", &backend, &inputs, &limited_ledger(u64::MAX, encoded))
+        .unwrap();
+}
 #[test]
 fn independent_input_bindings_require_exact_externally_pinned_context() {
     use joint_input::{BindingError as E, InputBindings};
@@ -645,13 +724,15 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
                 role,
                 &backend,
                 &[TestValue::Bool(true), TestValue::Bool(false)],
+                &ledger(),
             )
             .unwrap();
         assert_eq!(
             context.check_role(
                 role,
                 &backend,
-                &[TestValue::Bool(false), TestValue::Bool(false)]
+                &[TestValue::Bool(false), TestValue::Bool(false)],
+                &ledger()
             ),
             Err(E::Value)
         );
@@ -660,7 +741,8 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
         context.check_role(
             "P",
             &backend,
-            &vec![TestValue::Bool(true); zkc_runtime::vm::Limits::PORTS + 1]
+            &vec![TestValue::Bool(true); zkc_runtime::vm::Limits::PORTS + 1],
+            &ledger()
         ),
         Err(E::Limit)
     );
@@ -668,18 +750,18 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
     // Preparation has holes for capabilities that have not been issued. Only
     // an unobserved slot can be absent; required data must already be present.
     context
-        .check_role_prepared("P", &backend, &[Some(&yes), None])
+        .check_role_prepared("P", &backend, &[Some(&yes), None], &ledger())
         .unwrap();
     assert_eq!(
-        context.check_role_prepared("P", &backend, &[None, Some(&yes)]),
+        context.check_role_prepared("P", &backend, &[None, Some(&yes)], &ledger()),
         Err(E::Input)
     );
     assert_eq!(
-        context.check_role_prepared("P", &backend, &[Some(&yes)]),
+        context.check_role_prepared("P", &backend, &[Some(&yes)], &ledger()),
         Err(E::Input)
     );
     assert_eq!(
-        context.check_role_prepared("absent", &backend, &[Some(&yes), None]),
+        context.check_role_prepared("absent", &backend, &[Some(&yes), None], &ledger()),
         Err(E::Input)
     );
     assert!(backend.frames.is_empty());
@@ -691,7 +773,8 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
         context.check_role(
             "P",
             &disabled,
-            &[TestValue::Bool(true), TestValue::Bool(false)]
+            &[TestValue::Bool(true), TestValue::Bool(false)],
+            &ledger()
         ),
         Err(E::Codec)
     );
@@ -746,7 +829,12 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
         E::Subject
     );
     assert_eq!(
-        context.check_role("P", &backend, &[TestValue::Index(1), TestValue::Bool(true)]),
+        context.check_role(
+            "P",
+            &backend,
+            &[TestValue::Index(1), TestValue::Bool(true)],
+            &ledger()
+        ),
         Err(E::Input)
     );
     let mut changed = zkc_format::logical::decode_tree(&bytes).unwrap();
@@ -787,6 +875,7 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
                 "P",
                 &Host::default(),
                 &[selector(0, payload), TestValue::Bool(false)],
+                &ledger(),
             )
             .unwrap();
     }
@@ -794,7 +883,8 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
         context.check_role(
             "P",
             &Host::default(),
-            &[selector(1, false), TestValue::Bool(false)]
+            &[selector(1, false), TestValue::Bool(false)],
+            &ledger()
         ),
         Err(E::Value)
     );
@@ -810,13 +900,15 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
             "P",
             &Host::default(),
             &[selector(0, true), TestValue::Bool(false)],
+            &ledger(),
         )
         .unwrap();
     assert_eq!(
         context.check_role(
             "P",
             &Host::default(),
-            &[selector(0, false), TestValue::Bool(false)]
+            &[selector(0, false), TestValue::Bool(false)],
+            &ledger()
         ),
         Err(E::Value)
     );
@@ -827,13 +919,15 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
             "P",
             &Host::default(),
             &[selector(1, false), TestValue::Bool(false)],
+            &ledger(),
         )
         .unwrap();
     assert_eq!(
         context.check_role(
             "P",
             &Host::default(),
-            &[selector(0, true), TestValue::Bool(false)]
+            &[selector(0, true), TestValue::Bool(false)],
+            &ledger()
         ),
         Err(E::Value)
     );
@@ -841,7 +935,8 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
         context.check_role(
             "P",
             &Host::default(),
-            &[selector(99, false), TestValue::Bool(false)]
+            &[selector(99, false), TestValue::Bool(false)],
+            &ledger()
         ),
         Err(E::Value)
     );
@@ -917,6 +1012,7 @@ fn extent_binding_observes_exact_axis_without_encoding_contents_including_zero()
                         TestValue::Bytes(actual.into()),
                         TestValue::Bytes(vec![].into()),
                     ],
+                    &ledger(),
                 )
                 .unwrap();
         }
@@ -927,7 +1023,8 @@ fn extent_binding_observes_exact_axis_without_encoding_contents_including_zero()
                 &[
                     TestValue::Bytes(vec![0; contents.len() + 1].into()),
                     TestValue::Bytes(vec![].into())
-                ]
+                ],
+                &ledger()
             ),
             Err(E::Value)
         );
@@ -1001,7 +1098,10 @@ fn inventories_are_exact_even_when_components_have_equal_types() {
             fault,
             ..Host::default()
         };
-        assert_eq!(context.check_role("P", &backend, &actual), Err(expected));
+        assert_eq!(
+            context.check_role("P", &backend, &actual, &ledger()),
+            Err(expected)
+        );
         assert!(backend.frames.is_empty());
         if matches!(fault, host::Fault::EncodeOversizeBound) {
             assert_eq!(backend.encodes.get(), 0);
@@ -1034,7 +1134,12 @@ fn equal_typed_variant_paths_and_inactive_extent_paths_keep_exact_associations()
         payload: vec![TestValue::Bytes(vec![1, 2, 3].into())],
     };
     context
-        .check_role("P", &Host::default(), &[dormant.clone(), dormant])
+        .check_role(
+            "P",
+            &Host::default(),
+            &[dormant.clone(), dormant],
+            &ledger(),
+        )
         .unwrap();
     let active_empty = TestValue::Variant {
         ty,
@@ -1042,7 +1147,12 @@ fn equal_typed_variant_paths_and_inactive_extent_paths_keep_exact_associations()
         payload: vec![TestValue::Bytes(vec![].into())],
     };
     assert_eq!(
-        context.check_role("P", &Host::default(), &[active_empty.clone(), active_empty]),
+        context.check_role(
+            "P",
+            &Host::default(),
+            &[active_empty.clone(), active_empty],
+            &ledger()
+        ),
         Err(E::Value)
     );
     let mut swapped = required.clone();
@@ -1071,6 +1181,7 @@ fn self_selected_inventory_and_pin_do_not_independently_certify_source_coverage(
                 role,
                 &Host::default(),
                 &[TestValue::Bool(selector), TestValue::Bool(false)],
+                &ledger(),
             )
             .unwrap();
     }

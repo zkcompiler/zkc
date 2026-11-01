@@ -219,7 +219,7 @@ fn load_refusal_precedence_preserves_custody_and_zero_work() {
     let program = program();
     for (work, session, unavailable, entry, role, expected) in [
         (
-            Limits::INSTRUCTIONS + 1,
+            Limits::MAX_INSTRUCTIONS + 1,
             "",
             true,
             "absent",

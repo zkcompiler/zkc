@@ -235,6 +235,14 @@ run does not imply a protocol acceptance predicate: the caller must inspect its
 explicit result values. No source evaluation or protocol-specific execution loop
 is added.
 
+Each preparation creates the run's [invocation ledger](capacity.md#invocation-ledgers)
+with the admitted capacity. `InputBoundRunEntry::prepare` charges every role's
+common-input inspection and canonical encoding to it, and
+`RunReport::encode_results` charges the `zkc.entry-outputs/0` buffer to it; the
+encoded buffer keeps its live allowance until it is dropped. `HostLimits`
+selects the run's external, Ring and sequence work; `with_ring_work_limit` sets
+the same Ring allowance.
+
 Retained Host calls transport already typed ordinary values from admitted
 outputs or calculations without repeating external constructor checks. They
 still check exact schemas, Copy/Drop permissions and custody. A whole sealed ordinary
@@ -369,9 +377,11 @@ logical selector to its checked original native output and delegates to the
 existing attempt controller. `AttemptOptions` supplies count (default one) and
 per-attempt proof-byte ceiling (default the native proof limit). The admitted
 `ProofOptions::capacity` supplies cumulative interpreter work and payload limits;
-external work keeps its existing Host ceiling. Native policy admission checks all
-limits before loading resources. No raw native port policy is needed in the
-source API; direct IR callers retain the native API.
+external, Ring and sequence work keep their [Host allowances](capacity.md#host-allowances).
+Native policy admission checks all limits before loading resources. No raw native
+port policy is needed in the source API; direct IR callers retain the native API.
+A producing proof child of a Function takes the same explicit authorization from
+`FunctionOptions::attempts`, keyed by its static deployment.
 
 The authenticated Entry interface and independent source comparison own the
 completion selection. It is an application policy, so the native artifact does
@@ -387,7 +397,8 @@ RNG input/successor pairs. Extending that ingress needs its own custody mapping.
 Neither the final proof nor the policy digest establishes the retry distribution.
 
 An omitted declared service budget uses `entry::DEFAULT_DRAW_BUDGET` (1,000,000),
-the current native admission ceiling. `ProofRequest::transcript_budget` is optional:
+the default and maximum of the [service-draw allowance](capacity.md#host-allowances).
+`ProofRequest::transcript_budget` is optional:
 omission uses that allowance for derived construction and zero for authored jobs.
 Explicit values, including zero, override defaults. A nonzero explicit transcript
 budget for an authored job still refuses. Unknown service names and attempts to
@@ -715,9 +726,25 @@ while native result constructors and service/setup authority remain restricted.
 uses `LocalRunner`; native joint/proof work uses its existing Host. One shared
 `ExecutionLedger` charges work and conservative retained payload reservations
 before effects across the outer invocation and child VM instances. Parent values
-remain reserved while children run. Native wire/proof, sequence, Ring and external
-work retain their native owners and invocation-wide remaining allowances. This
-is payload/work policy, not a process RSS guarantee.
+remain reserved while children run. This is payload/work policy, not a process
+RSS guarantee. `FunctionReport::invocation_ledger` exposes the ledger, and
+`FunctionResultEncoder::encode_report` charges result encoding to it.
+
+`FunctionOptions::limits` is the same Host policy record a standalone run
+admits. Each reached child receives what remains of its dispatch, wire, external,
+Ring and sequence allowances after earlier children, divided equally across a
+joint roster. A producing proof child applies the explicit attempt authorization
+that `FunctionOptions::attempts` names for its deployment, exactly as
+`ProofEntry::prove_attempts` does; admission refuses an authorization for an
+unknown deployment (`entry-host-attempts`), a verifying deployment
+(`entry-attempt-operation`) or a proof without a completion choice
+(`entry-attempt-completion`). Proof children retain and reuse the deployment's
+admitted setup material across calls under the standalone proof Entry's rules,
+and observe setup replacement the same way.
+
+Preparation validates every deployment's context, including deployments the
+call never reaches, against its own allowance with the selected capacity. Child
+material is charged to the invocation ledger once, when a reached child loads it.
 
 The selected live-byte limit covers the whole Entry invocation. Before starting
 one native child, the Host subtracts live parent reservations and assigns half

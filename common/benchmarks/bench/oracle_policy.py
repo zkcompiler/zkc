@@ -12,6 +12,7 @@ class OracleProfile(Enum):
     KOALA_POSEIDON = 'fri-poseidon2-16-koala-bear-quartic'
     BABY_POSEIDON = 'fri-poseidon2-16-baby-bear-quartic'
     GOLDILOCKS_POSEIDON = 'fri-poseidon2-8-goldilocks-quadratic'
+    KOALA_POSEIDON_BLOCKS = 'fri-poseidon2-16-koala-bear-quartic-atomic-blocks'
 
 
 SCHEMES = {
@@ -20,6 +21,13 @@ SCHEMES = {
     OracleProfile.KOALA_POSEIDON: 'rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0',
     OracleProfile.BABY_POSEIDON: 'rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0',
     OracleProfile.GOLDILOCKS_POSEIDON: 'rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0',
+    OracleProfile.KOALA_POSEIDON_BLOCKS: 'rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0',
+}
+# Commitment order and authentication granularity. Other profiles authenticate
+# per query in unrestricted order; the atomic-block profile is the deployment of
+# the maintained STARK scale controls (common/tests/protocol/test_stark_library.py).
+AUTHENTICATION = {
+    OracleProfile.KOALA_POSEIDON_BLOCKS: ('after-final-draw', 'atomic-blocks'),
 }
 
 
@@ -31,10 +39,11 @@ class OraclePolicy:
         require(isinstance(self.profile, OracleProfile), 'invalid oracle profile')
 
     def selection(self):
+        order, authentication = AUTHENTICATION.get(self.profile, ('unrestricted', 'per-query'))
         return {'format': 'zkc.oracle-selection/0',
                 'roots': {'kind': 'uniform', 'table': {'scheme': SCHEMES[self.profile],
                           'grouping': 'individual', 'order': 'natural'}},
-                'order': 'unrestricted', 'authentication': 'per-query'}
+                'order': order, 'authentication': authentication}
 
     def flag(self):
         return '--oracle-realization=' + json.dumps(self.selection(), separators=(',', ':'))
@@ -50,6 +59,7 @@ LIBRARY_POLICIES = {
     'baby-bear': OraclePolicy(OracleProfile.BABY_POSEIDON),
     'goldilocks': OraclePolicy(OracleProfile.GOLDILOCKS_POSEIDON),
 }
+KOALA_POSEIDON_BLOCKS = OraclePolicy(OracleProfile.KOALA_POSEIDON_BLOCKS)
 
 
 def read_policy(record):
@@ -73,6 +83,10 @@ def workload_policy(family, shape):
         configuration = {'koala-bear': 'koala_bear_quartic', 'baby-bear': 'baby_bear_quartic',
                          'goldilocks': 'goldilocks_quadratic'}[field]
         require(shape.get('profile', configuration) == configuration, 'STARK field and configuration must match')
+        if shape.get('authentication', 'per-query') == 'atomic-blocks':
+            require(field == 'koala-bear', 'atomic-block authentication requires the KoalaBear profile')
+            return KOALA_POSEIDON_BLOCKS
+        require(shape.get('authentication', 'per-query') == 'per-query', 'unsupported STARK authentication')
         return LIBRARY_POLICIES[field]
     return OraclePolicy()
 

@@ -84,8 +84,8 @@ impl RunLimits {
             total_bytes: Limits::TOTAL_VALUE_BYTES,
         },
         work: WorkBudget {
-            instructions: Limits::INSTRUCTIONS,
-            iterations: Limits::ITERATIONS,
+            instructions: Limits::MAX_INSTRUCTIONS,
+            iterations: Limits::MAX_ITERATIONS,
             logical_bytes: Limits::LOGICAL_BYTES,
         },
     };

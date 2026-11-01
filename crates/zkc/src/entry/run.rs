@@ -170,18 +170,19 @@ impl RunEntry {
     pub fn limits(&self) -> HostLimits {
         self.native.limits()
     }
+    /// Run as a child of an outer invocation whose ledger charges this run's
+    /// preparation, runners and Host-side work. `limits` carries the remaining
+    /// allowances the parent selected for this child.
     pub(crate) fn execute_shared(
         &self,
         request: RunRequest,
         limits: HostLimits,
-        ring: u64,
-        sequence: u64,
         ledger: zkc_runtime::vm::ExecutionLedger,
     ) -> EntryResult<RunReport> {
         let native = self
             .native
             .clone()
-            .with_invocation_limits(limits, ring, sequence)
+            .with_invocation_limits(limits)
             .with_shared_ledger(ledger);
         let inputs = self.inputs(request).map_err(|e| E::new(P::Request, e))?;
         let prepared = native
@@ -295,8 +296,55 @@ pub struct RunReport {
     pub native: HostReport,
     pub outputs: Option<RoleValues>,
     pub output_error: Option<String>,
+    encoding: ResultEncoding,
+}
+/// The admitted policy that encodes this run's results.
+struct ResultEncoding {
+    capacity: crate::execution::Capacity,
+    cpu: crate::execution::CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
+}
+/// Encoded named results. The buffer keeps its charged live allowance in the
+/// run's invocation ledger until it is dropped.
+#[must_use = "retain the encoded results through publication or transport copy"]
+pub struct EncodedRunResults<'a> {
+    buffer: super::outputs::EncodedBuffer,
+    _report: &'a RunReport,
+}
+impl EncodedRunResults<'_> {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer.bytes
+    }
+}
+impl AsRef<[u8]> for EncodedRunResults<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
 }
 impl RunReport {
+    /// Encode the complete named results as `zkc.entry-outputs/0` under the
+    /// invocation ledger that charged this run's Host-side inspection. The
+    /// setup registry authenticates result codecs only. Encoding failure
+    /// publishes no partial buffer.
+    pub fn encode_results(&self, setups: zkc_cpu::SetupRegistry) -> Result<EncodedRunResults<'_>> {
+        let values = self
+            .outputs
+            .as_ref()
+            .filter(|_| self.is_success())
+            .ok_or("entry-run-incomplete")?;
+        let buffer = super::outputs::run_outputs_reserved(
+            values,
+            self.encoding.capacity,
+            setups,
+            self.encoding.cpu.clone(),
+            self.encoding.installation.clone(),
+            Some(self.native.invocation_ledger().clone()),
+        )?;
+        Ok(EncodedRunResults {
+            buffer,
+            _report: self,
+        })
+    }
     /// A completed run with successful cleanup and decoded outputs. Protocol
     /// acceptance remains an explicit value, unlike ProofReport::is_success.
     #[must_use]
@@ -321,12 +369,23 @@ impl RunReport {
     }
 }
 impl PreparedRun<'_> {
+    /// The ledger that charges this invocation's Host-side work.
+    pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
+        self.native.invocation_ledger()
+    }
     pub fn execute(self) -> RunReport {
+        let host = self.native.host();
+        let encoding = ResultEncoding {
+            capacity: host.limits().capacity,
+            cpu: host.cpu().clone(),
+            installation: host.installation().clone(),
+        };
         let native = self.native.execute();
         let mut report = RunReport {
             native,
             outputs: None,
             output_error: None,
+            encoding,
         };
         if report.native.failure.is_some() || !report.native.cleanup_errors.is_empty() {
             return public_report(report);
@@ -375,4 +434,93 @@ fn collect(interface: &Interface, execution: &Report<zkc_cpu::CpuBackend>) -> Re
         outputs.insert(role.name.clone(), values);
     }
     Ok(outputs)
+}
+
+#[cfg(test)]
+mod encoding_tests {
+    use super::*;
+    use serde_json::json;
+    use sha2::{Digest, Sha256};
+
+    fn entry(limits: HostLimits) -> RunEntry {
+        let boolean: crate::entry::interface::raw::Schema = serde_json::from_value(json!({
+            "kind":"boolean","identity":crate::io::bytes::hex(&Sha256::digest(b"bool")),
+            "type":"bool","generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],"fields":[],"alternatives":[],
+            "leaves":["bool"]}))
+        .unwrap();
+        let (document, artifact) = crate::entry::interface::tests::unicode::run_fixture(
+            &boolean.describe(),
+            &["P"],
+            &["role00000000"],
+        );
+        let frame = json!({"format":"zkc.entry/0","original":"original",
+            "interface":document.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,
+                "oracle_realization":crate::entry::OracleSelection::default()}})
+        .to_string();
+        let package = Package::capture(
+            frame.as_bytes(),
+            &Sha256::digest(frame.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap();
+        RunEntry::admit(package, limits, Default::default()).unwrap()
+    }
+    fn completed(limits: HostLimits) -> RunReport {
+        let report = entry(limits)
+            .prepare(RunRequest {
+                session: "encoding".into(),
+                roles: [(
+                    "P".into(),
+                    RoleInputs {
+                        inputs: [("入力".into(), true.into())].into(),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+                setups: Default::default(),
+            })
+            .unwrap()
+            .execute();
+        assert!(report.is_success(), "{:?}", report.output_error);
+        report
+    }
+
+    #[test]
+    fn result_encoding_charges_the_run_invocation_ledger() {
+        let report = completed(HostLimits::default());
+        let ledger = report.native.invocation_ledger().clone();
+        let before = ledger.snapshot();
+        let encoded = report.encode_results(Default::default()).unwrap();
+        let document: serde_json::Value = serde_json::from_slice(encoded.as_bytes()).unwrap();
+        assert_eq!(document["format"], "zkc.entry-outputs/0");
+        assert_eq!(document["roles"]["P"]["結果"], true);
+        let held = ledger.snapshot();
+        assert!(held.live_reserved_bytes >= encoded.as_bytes().len());
+        assert!(held.total_value_bytes > before.total_value_bytes);
+        assert!(held.logical_bytes > before.logical_bytes);
+        drop(encoded);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        assert_eq!(ledger.snapshot().total_value_bytes, held.total_value_bytes);
+        // The participant does no logical work, so the run completes under an
+        // allowance smaller than the first 512-byte buffer reservation, and
+        // encoding refuses without a partial buffer.
+        let mut limits = HostLimits::default();
+        limits.capacity.work.logical_bytes = 511;
+        let report = completed(limits);
+        assert_eq!(
+            report.encode_results(Default::default()).err().unwrap(),
+            "entry-output-limit"
+        );
+        assert_eq!(
+            report
+                .native
+                .invocation_ledger()
+                .snapshot()
+                .live_reserved_bytes,
+            0
+        );
+    }
 }

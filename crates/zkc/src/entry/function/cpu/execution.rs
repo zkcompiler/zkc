@@ -42,10 +42,16 @@ pub struct FunctionReport {
     /// Optional native observations merged across reached children only.
     pub execution_counts: zkc_runtime::vm::ExecutionCounts,
     _journal_live: Vec<zkc_runtime::vm::LiveReservation>,
+    invocation: ExecutionLedger,
 }
 impl FunctionReport {
     pub fn is_success(&self) -> bool {
         self.failure.is_none() && self.value.is_some()
+    }
+    /// The one ledger that charged this invocation, including its children;
+    /// result encoding charges it too.
+    pub fn invocation_ledger(&self) -> &ExecutionLedger {
+        &self.invocation
     }
     pub fn into_result(self) -> std::result::Result<Self, Box<Self>> {
         if self.is_success() {
@@ -88,7 +94,7 @@ impl EntryHost {
             deployment::context_bytes(&request.context),
         )
         .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
-        deployment::context_check(self, &request.context, &ledger)?;
+        deployment::context_check(self, &request.context)?;
         let arguments = self
             .signature()
             .parameters
@@ -151,6 +157,7 @@ impl PreparedFunction<'_> {
             journal_truncated: execution.truncated,
             _journal_live: execution.journal_live,
             execution_counts: execution.execution_counts,
+            invocation: execution.ledger,
         }
     }
 }
@@ -412,6 +419,28 @@ impl Execution<'_> {
             / runners.max(1);
         capacity
     }
+    /// The policy record a child receives: the partitioned capacity and what
+    /// remains of each invocation-wide allowance, divided equally across the
+    /// child's runners. Children never replenish a parent allowance.
+    fn child_limits(&self, runners: usize) -> crate::run::HostLimits {
+        let divisor = runners.max(1) as u64;
+        let mut limits = self.host.options.limits.clone();
+        limits.capacity = self.child_capacity(runners);
+        limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
+        limits.total_wire_bytes = limits
+            .total_wire_bytes
+            .saturating_sub(self.usage.wire_bytes);
+        limits.external_work = limits
+            .external_work
+            .saturating_sub(self.usage.external_work)
+            / divisor;
+        limits.ring_work = limits.ring_work.saturating_sub(self.usage.ring_work) / divisor;
+        limits.sequence_work = limits
+            .sequence_work
+            .saturating_sub(self.usage.sequence_work)
+            / divisor;
+        limits
+    }
     fn numeric(&mut self, id: &str, values: Vec<TypedValue>) -> ExecResult<Vec<TypedValue>> {
         let index = self.begin(id, "numeric")?;
         self.dispatch()?;
@@ -421,7 +450,8 @@ impl Execution<'_> {
             values.iter().map(|v| v.schema().leaves.len() * 512).sum(),
         )
         .map_err(|e| self.fail(e))?;
-        let capacity = self.child_capacity(1);
+        let remaining = self.child_limits(1);
+        let capacity = remaining.capacity;
         let mut inputs = Vec::new();
         for v in values {
             v.flatten(&mut inputs).map_err(|e| self.fail(e))?;
@@ -432,17 +462,9 @@ impl Execution<'_> {
             .map_err(|e| self.fail(e))?
             .with_relation_assets(self.host.assets.relation_registry().clone())
             .map_err(|e| self.fail(e))?
-            .with_external_work_limit(
-                self.host
-                    .options
-                    .limits
-                    .external_work
-                    .saturating_sub(self.usage.external_work),
-            )
-            .with_ring_work_limit(
-                zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
-            )
-            .with_sequence_work_limit(16_777_216u64.saturating_sub(self.usage.sequence_work));
+            .with_external_work_limit(remaining.external_work)
+            .with_ring_work_limit(remaining.ring_work)
+            .with_sequence_work_limit(remaining.sequence_work);
         let result = LocalRunner::new_with_ledger(
             &c.program,
             &c.function,
@@ -555,22 +577,9 @@ impl Execution<'_> {
                     })
                     .collect::<Vec<_>>();
                 self.reserve_services(service_budgets.into_iter())?;
-                let mut limits = self.host.options.limits.clone();
-                limits.capacity = self.child_capacity(entry.interface().roles().len());
-                limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
-                limits.total_wire_bytes = limits
-                    .total_wire_bytes
-                    .saturating_sub(self.usage.wire_bytes);
-                limits.external_work = limits
-                    .external_work
-                    .saturating_sub(self.usage.external_work)
-                    / entry.interface().roles().len() as u64;
-                let ring = zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work)
-                    / entry.interface().roles().len() as u64;
-                let sequence = 16_777_216u64.saturating_sub(self.usage.sequence_work)
-                    / entry.interface().roles().len() as u64;
+                let limits = self.child_limits(entry.interface().roles().len());
                 let report = entry
-                    .execute_shared(request, limits, ring, sequence, self.ledger.clone())
+                    .execute_shared(request, limits, self.ledger.clone())
                     .map_err(|e| self.fail(e))?;
                 if let Some(execution) = &report.native.execution {
                     for role in &execution.roles {
@@ -637,14 +646,8 @@ impl Execution<'_> {
                     .execute_shared(
                         request,
                         proof,
-                        self.child_capacity(1),
-                        self.host
-                            .options
-                            .limits
-                            .external_work
-                            .saturating_sub(self.usage.external_work),
-                        zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
-                        16_777_216u64.saturating_sub(self.usage.sequence_work),
+                        self.host.options.attempts.get(id).copied(),
+                        &self.child_limits(1),
                         proof_limit,
                         self.ledger.clone(),
                     )

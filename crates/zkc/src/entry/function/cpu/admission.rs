@@ -127,6 +127,8 @@ pub(super) fn admit(
                         crate::entry::ProofOptions {
                             capacity: options.limits.capacity,
                             external_work: options.limits.external_work,
+                            ring_work: options.limits.ring_work,
+                            sequence_work: options.limits.sequence_work,
                             binding: options.binding,
                             installation: options.limits.installation.clone(),
                         },
@@ -148,6 +150,18 @@ pub(super) fn admit(
                 kind: native,
             },
         );
+    }
+    // Retry authorization follows the standalone proof Entry: only a producing
+    // deployment with a completion choice accepts it.
+    for (id, attempts) in &options.attempts {
+        match native_deployments.get(id).map(|d| &d.kind) {
+            Some(super::DeploymentKind::Proof {
+                entry,
+                operation: crate::entry::ProofOperation::Prove,
+            }) => entry.check_attempts(*attempts)?,
+            Some(_) => return Err(error("entry-attempt-operation")),
+            None => return Err(error("entry-host-attempts")),
+        }
     }
     let mut schema_pool = BTreeMap::new();
     fn intern(s: &Schema, pool: &mut BTreeMap<String, std::sync::Arc<Schema>>) {

@@ -107,7 +107,7 @@ fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
     child_limits.capacity.values.live_bytes /= 4;
     let configured = configured
         .clone()
-        .with_invocation_limits(child_limits, zkc_cpu::ring::DEFAULT_WORK_LIMIT, 16_777_216)
+        .with_invocation_limits(child_limits)
         .with_shared_ledger(ledger);
     let prepared = configured
         .prepare(&serde_json::to_vec(&request).unwrap())
@@ -839,4 +839,149 @@ fn independent_concurrent_hosts_charge_the_same_ledger_before_execution() {
     assert_eq!(success, 1);
     assert_eq!(ledger.snapshot().instructions, 1);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+/// The two-role Boolean fixture with an externally pinned value agreement.
+fn bound_bool_run(
+    limits: HostLimits,
+) -> (
+    RunHost,
+    Vec<u8>,
+    zkc_runtime::host::input_binding::InputBindings,
+) {
+    use zkc_runtime::host::input_binding::{
+        InputBindings, InputComponent, InputRequirement, Observation,
+    };
+    let (raw, request) = fixture("bool");
+    let host = host(&raw, limits);
+    let program = host.bundle().admitted();
+    let ty = program.entry("main").unwrap()[0].inputs[0].1.clone();
+    let required = [InputRequirement {
+        components: ["Alice", "Bob"]
+            .map(|role| InputComponent {
+                role: role.into(),
+                input: 0,
+                path: vec![],
+            })
+            .to_vec(),
+        ty: ty.clone(),
+        observation: Observation::Value,
+    }];
+    // Both roles receive the canonical false frame from the fixture request.
+    let context = zkc_format::logical::encode_tree(&json!([
+        "zkc.input-bindings/0",
+        hex(&Sha256::digest(program.bytes())),
+        "main",
+        [[
+            [["Alice", "0", []], ["Bob", "0", []]],
+            ty.spelling(),
+            "value",
+            ["active", "5a4b4356000500"]
+        ]]
+    ]))
+    .unwrap();
+    let bindings = InputBindings::admit_pinned(
+        program,
+        "main",
+        &required,
+        &context,
+        &Sha256::digest(&context).into(),
+    )
+    .unwrap();
+    (host, serde_json::to_vec(&request).unwrap(), bindings)
+}
+
+#[test]
+fn common_input_inspection_charges_one_invocation_ledger_for_all_roles() {
+    let (host, request, bindings) = bound_bool_run(HostLimits::default());
+    let prepared = host.prepare(&request).unwrap();
+    assert_eq!(prepared.invocation_ledger().snapshot(), Default::default());
+    prepared.check_common_inputs(&bindings).unwrap();
+    let both = prepared.invocation_ledger().snapshot();
+    assert!(both.logical_bytes > 0 && both.total_value_bytes > 0);
+    assert_eq!(both.live_reserved_bytes, 0);
+    assert_eq!(both.logical_bytes % 2, 0);
+    // The invocation's selected logical-work allowance bounds the inspection.
+    // Half of it admits the first role only: nothing restarts per role.
+    for (allowance, admitted) in [
+        (both.logical_bytes, true),
+        (both.logical_bytes - 1, false),
+        (both.logical_bytes / 2, false),
+    ] {
+        let mut limits = HostLimits::default();
+        limits.capacity.work.logical_bytes = allowance;
+        let (host, request, bindings) = bound_bool_run(limits);
+        let prepared = host.prepare(&request).unwrap();
+        let result = prepared.check_common_inputs(&bindings);
+        assert_eq!(result.is_ok(), admitted, "{allowance}");
+        if !admitted {
+            assert_eq!(result.unwrap_err(), "input-binding-Limit");
+        }
+    }
+}
+
+#[test]
+fn a_child_run_charges_inspection_to_the_outer_ledger() {
+    let (host, request, bindings) = bound_bool_run(HostLimits::default());
+    let outer = zkc_runtime::vm::ExecutionLedger::new(Default::default(), Default::default());
+    let host = host.with_shared_ledger(outer.clone());
+    let prepared = host.prepare(&request).unwrap();
+    let before = outer.snapshot();
+    prepared.check_common_inputs(&bindings).unwrap();
+    let after = outer.snapshot();
+    assert!(after.logical_bytes > before.logical_bytes);
+    assert!(after.total_value_bytes > before.total_value_bytes);
+    assert_eq!(prepared.invocation_ledger().snapshot(), outer.snapshot());
+}
+
+#[test]
+fn host_policy_owns_ring_sequence_and_external_allowances() {
+    use crate::host::capacity::Allowances;
+    let limits = HostLimits::default();
+    assert_eq!(limits.ring_work, Allowances::RING_WORK.default);
+    assert_eq!(limits.sequence_work, Allowances::SEQUENCE_WORK.default);
+    assert_eq!(limits.external_work, Allowances::EXTERNAL_WORK.default);
+    assert_eq!(
+        HostLimits::MAX_EXTERNAL_WORK_PER_ROLE,
+        Allowances::EXTERNAL_WORK.maximum
+    );
+    let record = limits.record();
+    assert_eq!(
+        record["execution"]["ring_work_per_role"],
+        json!(Allowances::RING_WORK.default)
+    );
+    assert_eq!(
+        record["execution"]["sequence_work_per_role"],
+        json!(Allowances::SEQUENCE_WORK.default)
+    );
+    for (field, code) in [
+        ("ring", "bundle-ring-work-limit"),
+        ("sequence", "bundle-sequence-work-limit"),
+        ("external", "bundle-limits"),
+    ] {
+        let mut lowered = HostLimits::default();
+        let mut raised = HostLimits::default();
+        match field {
+            "ring" => {
+                lowered.ring_work = 0;
+                raised.ring_work = Allowances::RING_WORK.maximum + 1;
+            }
+            "sequence" => {
+                lowered.sequence_work = 0;
+                raised.sequence_work = Allowances::SEQUENCE_WORK.maximum + 1;
+            }
+            _ => {
+                lowered.external_work = 0;
+                raised.external_work = Allowances::EXTERNAL_WORK.maximum + 1;
+            }
+        }
+        assert!(lowered.validate().is_ok(), "{field}");
+        assert_eq!(raised.validate().unwrap_err(), code, "{field}");
+    }
+    // The builder selects the same record field the policy owns.
+    let (raw, _) = fixture("bool");
+    let host = host(&raw, HostLimits::default())
+        .with_ring_work_limit(7)
+        .unwrap();
+    assert_eq!(host.limits().ring_work, 7);
 }

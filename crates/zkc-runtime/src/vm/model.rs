@@ -24,8 +24,20 @@ impl Limits {
     pub const BLOCK_DEPTH: usize = 64;
     pub const STACK_DEPTH: usize = 64;
     pub const LOOP_COUNT: u64 = 1_048_576;
+    /// Default per-runner instruction budget. A Host may select any budget up
+    /// to [`Self::MAX_INSTRUCTIONS`].
     pub const INSTRUCTIONS: u64 = 1_000_000;
+    /// Default per-runner budget of entered loop iterations. A Host may select
+    /// any budget up to [`Self::MAX_ITERATIONS`].
     pub const ITERATIONS: u64 = 100_000;
+    /// Hard instruction budget. The counter is 64-bit and charged one unit at a
+    /// time after its bound check, so no budget can overflow it. The maximum
+    /// equals the logical-work ceiling, 2^32: every counter a report publishes
+    /// stays an exact integer for JSON readers, including JavaScript Hosts.
+    pub const MAX_INSTRUCTIONS: u64 = 1 << 32;
+    /// Hard iteration budget, bounded for the same reasons as instructions.
+    /// Loop indices and origin path iterations are 64-bit as well.
+    pub const MAX_ITERATIONS: u64 = 1 << 32;
     pub const LIVE_VALUES: usize = 16_384;
     /// Hard per-value ceiling and default live-value budget.
     pub const VALUE_BYTES: usize = 64 * 1024 * 1024;

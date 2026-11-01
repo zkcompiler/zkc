@@ -374,11 +374,11 @@ fn excessive_work_budget_refuses_before_leasing_and_retains_backend_custody() {
     use zkc_runtime::vm::{Limits, RuntimeError, Usage, WorkBudget};
     for work in [
         WorkBudget {
-            instructions: Limits::INSTRUCTIONS + 1,
+            instructions: Limits::MAX_INSTRUCTIONS + 1,
             ..WorkBudget::default()
         },
         WorkBudget {
-            iterations: Limits::ITERATIONS + 1,
+            iterations: Limits::MAX_ITERATIONS + 1,
             ..WorkBudget::default()
         },
         WorkBudget {

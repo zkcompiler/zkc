@@ -302,11 +302,12 @@ replacement, and 16 MiB accumulated original plus replacement bytes. Hosts may
 lower these caps. `ValueBudget` separately controls runner retention; the joint
 driver requires its live and cumulative charges to fit 64 MiB and 256 MiB.
 `RunLimits.work` separately selects instruction, iteration and logical-work
-ceilings, the last at most 4 GiB. Requests above
+budgets: by default one million instructions, 100,000 iterations and 4 GiB, and
+at most 2^32 instructions, 2^32 iterations and 4 GiB. Requests above
 any installed driver ceiling refuse before entry and preserve caller-owned inputs.
 `Report.limits` records the requested policy without silent clamping. The lower-level
-`Runner` refuses instruction, iteration and logical-work allowances above its hard
-ceilings but permits configurable live and cumulative retained-value budgets. Its 64 MiB
+`Runner` refuses instruction, iteration and logical-work allowances above those
+maxima but permits configurable live and cumulative retained-value budgets. Its 64 MiB
 individual-value ceiling remains independent of those aggregate budgets.
 The driver reserves reached-step and result-port capacity before any entry.
 Cancellation includes the bounded host reason and can occur between send and
@@ -471,7 +472,10 @@ The dispatch/wire file is
 `["zkc.bundle-limits/0", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
 Defaults/hard ceilings are 32768 dispatched occurrences, 4096 bytes per message
 and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work units
-per role. Both API and CLI refuse requests above these ceilings without clamping.
+per role. `HostLimits` also selects Ring and sequence work per role; external,
+Ring and sequence work take their defaults and maxima from the
+[Host allowances](capacity.md#host-allowances). Both API and CLI refuse requests
+above these ceilings without clamping.
 Structural bundle and native-capacity requests likewise refuse above their own
 installed bounds. Reports retain the requested admission, capacity and execution
 limits. Per-runner instruction, iteration, logical-work and retained-value

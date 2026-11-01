@@ -509,15 +509,15 @@ impl NativeDeployment {
             cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
-            sequence_work_limit: 16_777_216,
+            ring_work_limit: crate::host::capacity::Allowances::RING_WORK.default,
+            sequence_work_limit: crate::host::capacity::Allowances::SEQUENCE_WORK.default,
             shared_ledger: None,
             retained_inputs,
             operation,
             proof_bytes_limit: MAX_PROOF_BYTES,
             publication: expected_sha256.to_owned(),
             choices,
-            external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work_limit: crate::host::capacity::Allowances::EXTERNAL_WORK.default,
             capacity: Capacity::default(),
             setups,
             preparation: PreparedComputations::new(
@@ -608,7 +608,7 @@ impl NativeDeployment {
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_cpu::ring::DEFAULT_WORK_LIMIT {
+        if !crate::host::capacity::Allowances::RING_WORK.admits(limit) {
             return Err("native-proof-ring-work-limit".into());
         }
         self.ring_work_limit = limit;
@@ -654,7 +654,7 @@ impl NativeDeployment {
     /// from deployment and attempt-policy identities. The CLI exposes the same
     /// cap through `--external-work`. Zero permits only zero-work transitions.
     pub fn with_external_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+        if !crate::host::capacity::Allowances::EXTERNAL_WORK.admits(limit) {
             return Err("native-proof-external-work-limit".into());
         }
         self.external_work_limit = limit;

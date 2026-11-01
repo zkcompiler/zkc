@@ -24,9 +24,14 @@ fn strict_capacity_record_and_hard_ceilings() {
             assert!(parse(&at).is_err());
         }
     }
+    // Instructions and iterations may rise above their defaults to the hard
+    // maxima; live and total bytes may only be lowered.
+    let hard = Capacity::HARD_MAX.record();
     for (field, index) in [(5, 0), (5, 1), (6, 0), (6, 1)] {
         let mut at = default.clone();
-        let limit: u64 = at[field][index].as_str().unwrap().parse().unwrap();
+        let limit: u64 = hard[field][index].as_str().unwrap().parse().unwrap();
+        at[field][index] = json!(limit.to_string());
+        assert!(parse(&at).is_ok());
         at[field][index] = json!((limit + 1).to_string());
         assert_eq!(parse(&at).unwrap_err(), "native-capacity-limit");
         at[field][index] = json!("0");

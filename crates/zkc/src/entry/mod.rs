@@ -47,14 +47,14 @@ pub use function::{
 mod run;
 #[cfg(feature = "cpu")]
 pub use run::{
-    InputBoundRunEntry, NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport,
-    RunRequest,
+    EncodedRunResults, InputBoundRunEntry, NamedValues, PreparedRun, RoleInputs, RoleValues,
+    RunEntry, RunReport, RunRequest,
 };
 
 /// Operational allowance for an omitted service or selected transcript budget.
 /// Explicit budgets, including zero, override it; native hard limits still apply.
 #[cfg(feature = "cpu")]
-pub const DEFAULT_DRAW_BUDGET: u64 = crate::host::request::RESOURCE_BUDGET_LIMIT;
+pub const DEFAULT_DRAW_BUDGET: u64 = crate::host::capacity::Allowances::SERVICE_DRAWS.default;
 #[cfg(feature = "cpu")]
 mod arguments;
 #[cfg(feature = "cpu")]

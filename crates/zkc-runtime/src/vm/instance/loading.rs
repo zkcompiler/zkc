@@ -70,8 +70,8 @@ impl<B: Backend> Instance<B> {
         shared: Option<ExecutionLedger>,
     ) -> std::result::Result<Self, LoadError<B>> {
         let start = (|| {
-            if work_budget.instructions > Limits::INSTRUCTIONS
-                || work_budget.iterations > Limits::ITERATIONS
+            if work_budget.instructions > Limits::MAX_INSTRUCTIONS
+                || work_budget.iterations > Limits::MAX_ITERATIONS
                 || work_budget.logical_bytes > Limits::LOGICAL_BYTES
             {
                 return Err(RuntimeError::Limit);

@@ -10,7 +10,10 @@ pub use zkc_runtime::host::input_binding::{
 use zkc_runtime::{
     host::{joint, wire::WireBackend},
     interpreter::Runner,
-    vm::{BackendError, Contracts, LoadError, RuntimeError, Usage, ValueBudget, WorkBudget},
+    vm::{
+        BackendError, Contracts, ExecutionLedger, LoadError, RuntimeError, Usage, ValueBudget,
+        WorkBudget,
+    },
 };
 
 /// A source package bound to a portable backend's admitted executable.
@@ -148,6 +151,10 @@ impl InputBoundBackendRun {
     /// Start one participant with the bound Program, entry and context. Refusal
     /// retains backend custody with zero execution usage. Runner admission still
     /// independently checks installations, capabilities, inputs and budgets.
+    ///
+    /// The selected budgets form this participant's invocation ledger. Common
+    /// input inspection and encoding charge it before the Runner exists, and
+    /// the Runner shares it, so both draw on one allowance.
     pub fn start_role<B: WireBackend>(
         &self,
         session: &str,
@@ -155,9 +162,10 @@ impl InputBoundBackendRun {
         value_budget: ValueBudget,
         work_budget: WorkBudget,
     ) -> Result<Runner<B>, LoadError<B>> {
-        if let Err(error) = self
-            .bindings
-            .check_role(&input.role, &input.backend, &input.values)
+        let ledger = ExecutionLedger::new(value_budget, work_budget);
+        if let Err(error) =
+            self.bindings
+                .check_role(&input.role, &input.backend, &input.values, &ledger)
         {
             // Capacity exhaustion keeps its own class; a refused binding keeps
             // its exact code.
@@ -180,7 +188,7 @@ impl InputBoundBackendRun {
             input.values,
             value_budget,
             work_budget,
-            None,
+            Some(ledger),
         )
     }
 }

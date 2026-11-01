@@ -1,7 +1,7 @@
 //! Explicit externally pinned admission context. This is neither source
 //! requirement derivation nor a certificate that peers used the same pin.
-use super::wire::WireBackend;
-use crate::vm::{Limits, PhysicalType, Program, Type, Value};
+use super::wire::{WireBackend, reserve_allocation};
+use crate::vm::{ExecutionLedger, Limits, PhysicalType, Program, Type, Value, WorkBudget};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -270,28 +270,54 @@ impl InputBindings {
     }
     /// Check actual input components before loading a runner. Uses the same
     /// independently installed canonical data codec as public proof binding.
+    /// Inspection and encoding are charged to the invocation's ledger.
     /// This never grants service/custody authority or changes Program admission.
     pub fn check_role<B: WireBackend>(
         &self,
         role: &str,
         backend: &B,
         inputs: &[B::Value],
+        ledger: &ExecutionLedger,
     ) -> Result<()> {
         if inputs.len() > Limits::PORTS {
             return Err(BindingError::Limit);
         }
-        self.check_role_prepared(role, backend, &inputs.iter().map(Some).collect::<Vec<_>>())
+        self.check_role_prepared(
+            role,
+            backend,
+            &inputs.iter().map(Some).collect::<Vec<_>>(),
+            ledger,
+        )
     }
 
     /// Inspect prepared ordinary inputs before capability/service issuance.
     /// Holes are allowed only outside observed components. This does not admit
     /// missing Runner inputs or confer capability custody.
+    ///
+    /// Each inspected value charges its retained bytes to the ledger's logical
+    /// work before it is validated or selected. A value observation charges its
+    /// canonical encoding bound as fresh allocation and holds that live
+    /// allowance until the comparison ends. Every role checked for one
+    /// invocation shares the same ledger; nothing restarts per role.
     pub fn check_role_prepared<B: WireBackend>(
         &self,
         role: &str,
         backend: &B,
         inputs: &[Option<&B::Value>],
+        ledger: &ExecutionLedger,
     ) -> Result<()> {
+        let inspect = |value: &B::Value| {
+            ledger
+                .charge(
+                    WorkBudget {
+                        instructions: 0,
+                        iterations: 0,
+                        logical_bytes: value.retained_bytes() as u64,
+                    },
+                    0,
+                )
+                .map_err(|_| BindingError::Limit)
+        };
         let ports = &self
             .roles
             .iter()
@@ -306,7 +332,6 @@ impl InputBindings {
         {
             return Err(BindingError::Input);
         }
-        let mut remaining = Limits::VALUE_BYTES;
         for group in &self.groups {
             for component in group
                 .requirement
@@ -315,18 +340,14 @@ impl InputBindings {
                 .filter(|c| c.role == role)
             {
                 let root = inputs[component.input].ok_or(BindingError::Input)?;
-                remaining = remaining
-                    .checked_sub(root.retained_bytes())
-                    .ok_or(BindingError::Limit)?;
+                inspect(root)?;
                 backend
                     .validate_value(root)
                     .map_err(|_| BindingError::Value)?;
                 let mut selected = Some(root.clone());
                 for &(alternative, payload) in &component.path {
                     let value = selected.take().ok_or(BindingError::Input)?;
-                    remaining = remaining
-                        .checked_sub(value.retained_bytes())
-                        .ok_or(BindingError::Limit)?;
+                    inspect(&value)?;
                     let tag = value
                         .control_variant_tag()
                         .map_err(|_| BindingError::Value)?;
@@ -350,15 +371,15 @@ impl InputBindings {
                     continue;
                 };
                 let expected = group.expected.as_ref().ok_or(BindingError::Value)?;
-                remaining = remaining
-                    .checked_sub(value.retained_bytes())
-                    .ok_or(BindingError::Limit)?;
+                inspect(&value)?;
                 if !value.has_type(&group.requirement.ty) {
                     return Err(BindingError::Value);
                 }
                 backend
                     .validate_value(&value)
                     .map_err(|_| BindingError::Value)?;
+                // Holds the encoded buffer's live allowance through comparison.
+                let mut _encoded = None;
                 let bytes = match group.requirement.observation {
                     Observation::Tag => {
                         let tag = value
@@ -397,7 +418,8 @@ impl InputBindings {
                         let bound = backend
                             .encoding_bound(&value)
                             .map_err(|_| BindingError::Codec)?;
-                        remaining = remaining.checked_sub(bound).ok_or(BindingError::Limit)?;
+                        _encoded = reserve_allocation(Some(ledger), bound)
+                            .map_err(|_| BindingError::Limit)?;
                         let bytes = backend
                             .encode_wire(&value)
                             .map_err(|_| BindingError::Codec)?;

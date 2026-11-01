@@ -14,11 +14,14 @@ pub struct HostReport {
     session: String,
     limits: Json,
     layout: Json,
+    invocation: zkc_runtime::vm::ExecutionLedger,
 }
 impl HostReport {
-    pub(super) fn new(host: &RunHost, session: &str) -> Self {
-        let mut limits = host.limits.record();
-        limits["execution"]["ring_work_per_role"] = json!(host.ring_work_limit);
+    pub(super) fn new(
+        host: &RunHost,
+        session: &str,
+        invocation: zkc_runtime::vm::ExecutionLedger,
+    ) -> Self {
         Self {
             execution: None,
             unstarted: Vec::new(),
@@ -29,9 +32,15 @@ impl HostReport {
             cleanup_errors: Vec::new(),
             identity: host.identity.clone(),
             session: session.into(),
-            limits,
+            limits: host.limits.record(),
             layout: host.layout(),
+            invocation,
         }
+    }
+    /// The ledger that charged this invocation's Host-side inspection; result
+    /// encoding charges it too.
+    pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
+        &self.invocation
     }
     pub(super) fn finalize(
         &mut self,

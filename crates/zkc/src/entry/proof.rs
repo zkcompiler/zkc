@@ -5,9 +5,9 @@ use super::{
     value,
 };
 use crate::execution::Capacity;
+use crate::host::capacity::Allowances;
 use crate::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 use std::collections::BTreeMap;
-use zkc_cpu::CpuBackend;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -27,18 +27,25 @@ pub enum BindingScope {
     /// Binding is entirely defined by the authored protocol; there is no Host header.
     Authored,
 }
+/// Proof policy. External, Ring and sequence work are the same per-role Host
+/// allowances a run admits, with defaults and maxima from
+/// [`Allowances`](crate::host::capacity::Allowances).
 #[derive(Clone, Debug)]
 pub struct ProofOptions {
     pub installation: zkc_cpu::CpuInstallation,
     pub capacity: Capacity,
     pub external_work: u64,
+    pub ring_work: u64,
+    pub sequence_work: u64,
     pub binding: BindingPolicy,
 }
 impl Default for ProofOptions {
     fn default() -> Self {
         Self {
             capacity: Capacity::default(),
-            external_work: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work: Allowances::EXTERNAL_WORK.default,
+            ring_work: Allowances::RING_WORK.default,
+            sequence_work: Allowances::SEQUENCE_WORK.default,
             binding: BindingPolicy::default(),
             installation: Default::default(),
         }
@@ -49,6 +56,20 @@ impl ProofOptions {
     pub fn with_installation(mut self, installation: zkc_cpu::CpuInstallation) -> Self {
         self.installation = installation;
         self
+    }
+    /// Refuse a selection above an installed maximum, without clamping it.
+    pub fn validate(&self) -> Result<()> {
+        self.capacity.validate()?;
+        if !Allowances::EXTERNAL_WORK.admits(self.external_work) {
+            return Err("native-proof-external-work-limit".into());
+        }
+        if !Allowances::RING_WORK.admits(self.ring_work) {
+            return Err("native-proof-ring-work-limit".into());
+        }
+        if !Allowances::SEQUENCE_WORK.admits(self.sequence_work) {
+            return Err("native-proof-sequence-work-limit".into());
+        }
+        Ok(())
     }
 }
 /// Explicit retry authorization. Count defaults to one; all cumulative work
@@ -301,8 +322,19 @@ impl ProofEntry {
                 options.installation.clone(),
             ),
         }
-        .and_then(|n| n.with_capacity(options.capacity))
-        .and_then(|n| n.with_external_work_limit(options.external_work))
+        .and_then(|n| {
+            options.validate()?;
+            n.with_capacity(options.capacity)
+        })
+        .map(|n| {
+            n.with_invocation_limits(
+                options.capacity,
+                options.external_work,
+                options.ring_work,
+                options.sequence_work,
+                zkc_format::proof::MAX_PROOF_BYTES,
+            )
+        })
         .map_err(|e| E::new(P::Admission, e))?;
         interface
             .check_proof(&native)
@@ -472,20 +504,26 @@ impl ProofEntry {
             producer,
         ))
     }
-    #[allow(clippy::too_many_arguments)]
+    /// Run as a child of an outer invocation. The child takes the same
+    /// explicit attempt policy and retained setup material as a standalone
+    /// call; the outer ledger charges its work and storage, and `limits`
+    /// carries the remaining allowances the parent selected for it.
     pub(crate) fn execute_shared(
         &self,
         request: ProofRequest,
         proof: Option<&[u8]>,
-        capacity: Capacity,
-        external: u64,
-        ring: u64,
-        sequence: u64,
+        attempts: Option<AttemptOptions>,
+        limits: &crate::run::HostLimits,
         proof_bytes: usize,
         ledger: zkc_runtime::vm::ExecutionLedger,
     ) -> EntryResult<ProofReport> {
+        self.observe_setups(&request.setups);
         let producer = proof.is_none();
-        let attempts = self.attempt_policy(producer, None, capacity)?;
+        if !producer && attempts.is_some() {
+            return Err(E::new(P::Request, "entry-attempt-operation"));
+        }
+        let capacity = limits.capacity;
+        let attempts = self.attempt_policy(producer, attempts, capacity)?;
         // Public binding owns one wire copy per verifier-key port. Reserve all
         // copies before argument construction, under the effective child limit.
         let key_bytes = setups::material_bytes(&self.interface, &request.setups, capacity)
@@ -498,20 +536,39 @@ impl ProofEntry {
         let native = self
             .native
             .clone()
-            .with_invocation_limits(capacity, external, ring, sequence, proof_bytes)
+            .with_invocation_limits(
+                capacity,
+                limits.external_work,
+                limits.ring_work,
+                limits.sequence_work,
+                proof_bytes,
+            )
             .with_shared_ledger(ledger);
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            capacity.backend().ark_bounds(),
+            self.installation().clone(),
+        )
+        .with_material(self.material.clone());
         Ok(self.report(
             native
-                .execute(
+                .execute_prepared(
                     &inputs,
                     attempts.as_ref().map_or_else(
                         || crate::proof::Invocation::one_shot(proof),
                         crate::proof::Invocation::Attempts,
                     ),
+                    &mut imports,
                 )
                 .map_err(|e| E::new(P::Preparation, e))?,
             producer,
         ))
+    }
+    /// Check that this Entry accepts an explicit retry authorization.
+    /// Admission of a Host that holds this Entry checks the same rule.
+    pub(crate) fn check_attempts(&self, attempts: AttemptOptions) -> EntryResult<()> {
+        self.attempt_policy(true, Some(attempts), self.native.capacity())
+            .map(drop)
+            .map_err(|e| E::new(P::Admission, e.code()))
     }
     /// Validate and load inputs under the same setup, shape and capacity rules
     /// as execution. No randomness, transcript or proof parsing occurs here.
@@ -908,7 +965,7 @@ impl ProofResult {
 
 impl ProofOptions {
     pub fn with_external_work(mut self, work: u64) -> Result<Self> {
-        if work > CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+        if !Allowances::EXTERNAL_WORK.admits(work) {
             return Err("native-proof-external-work-limit".into());
         }
         self.external_work = work;
@@ -986,6 +1043,54 @@ mod publication_tests {
         assert!(weak.upgrade().is_none());
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         assert_eq!(ledger.snapshot().total_value_bytes, fresh);
+    }
+    #[test]
+    fn result_encoding_is_refused_over_the_invocation_allowance() {
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
+        let prove = |capacity: Capacity| {
+            let package = Package::capture(
+                frame.as_bytes(),
+                &Sha256::digest(frame.as_bytes()).into(),
+                Package::MAX_BYTES,
+            )
+            .unwrap();
+            ProofEntry::admit(
+                package,
+                ProofOptions {
+                    capacity,
+                    binding: BindingPolicy::AllowAuthored,
+                    ..Default::default()
+                },
+                Default::default(),
+            )
+            .unwrap()
+            .preflight_memory_call(
+                ProofOperation::Prove,
+                Some(r#"{"公開":true}"#.as_bytes()),
+                Some(r#"{"秘密":false}"#.as_bytes()),
+                &Default::default(),
+                Default::default(),
+                None,
+                true,
+            )
+            .unwrap()
+            .execute(None)
+            .unwrap()
+        };
+        let result = prove(Capacity::default());
+        let work = result.report.native.usage.logical_bytes;
+        assert!(result.encode_results().unwrap().is_some());
+        // The execution's own work fits; the first 512-byte result buffer
+        // does not, so encoding refuses without a partial buffer.
+        let mut capacity = Capacity::default();
+        capacity.work.logical_bytes = work + 511;
+        let result = prove(capacity);
+        assert!(result.report.is_success());
+        assert_eq!(result.encode_results().err().unwrap(), "entry-output-limit");
     }
 }
 

@@ -5,7 +5,7 @@ import importlib.util
 
 from . import algebra as a
 from .programs import Program
-from .oracle_policy import OCTIC_KECCAK, LIBRARY_POLICIES
+from .oracle_policy import OCTIC_KECCAK, workload_policy
 
 
 @dataclass(frozen=True)
@@ -191,10 +191,12 @@ proof Proof=Air {prover P;verifier V;public {public_data,shift,round_count,query
 
 
 def library(root, shape):
-    """The same AIR through an explicit library configuration and transcript,
-    with the final polynomial a constant. KoalaBear remains the default."""
+    """The same AIR through an explicit library configuration and transcript.
+    The final polynomial is a constant unless the shape selects `final`, its
+    log2 length; KoalaBear remains the default."""
     field, profile = library_profile(shape)
     height, size = shape['height'], shape['evaluation_size']
+    log_final = shape.get('final', 0)
     bundle, initial, final, trace = recurrence(root, shape)
     public = {'public_data': list(map(str, initial+final))}
     source = '''module example;
@@ -208,12 +210,12 @@ fn statement(public_data:Vector<Base>)->Statement<Base> {
 }
 protocol Air roles(P,V)(trace:Vector<Base>@P,public_data:Vector<Base>@(P,V),coins:Random<Extension>@V)->(accepted:bool@V){
  let prover@P=statement(public_data);let verifier@V=statement(public_data);
- let accepted=ScalarTableArgument<Poseidon2,0,Trace,0,ROUNDS,BLOWUP,QUERIES>(trace,prover,verifier,coins);
+ let accepted=ScalarTableArgument<Poseidon2,0,Trace,FINAL,ROUNDS,BLOWUP,QUERIES>(trace,prover,verifier,coins);
  return accepted;
 }
 proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;
  construction fiat_shamir("TRANSCRIPT_SUITE",coins);}
-'''.replace('CHALLENGE_MODULE', profile.challenge_configuration).replace('CONFIGURATION_MODULE', profile.configuration).replace('TRANSCRIPT_SUITE', profile.transcript).replace('ROUNDS', str(height.bit_length()-1)).replace('BLOWUP', str((size//height).bit_length()-1)).replace('QUERIES', str(shape['queries']))
+'''.replace('CHALLENGE_MODULE', profile.challenge_configuration).replace('CONFIGURATION_MODULE', profile.configuration).replace('TRANSCRIPT_SUITE', profile.transcript).replace('FINAL', str(log_final)).replace('ROUNDS', str(height.bit_length()-1-log_final)).replace('BLOWUP', str((size//height).bit_length()-1)).replace('QUERIES', str(shape['queries']))
     changed = public | {'public_data': [str((initial[0]+1) % profile.modulus), *public['public_data'][1:]]}
     witness = {'trace': list(map(str, trace))}
     configurations = dict.fromkeys((profile.challenge_configuration, profile.configuration))
@@ -223,5 +225,5 @@ proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;
                                         minimum=10+profile.degree*profile.coordinate_bytes,
                                         modulus=profile.modulus, coordinate_bytes=profile.coordinate_bytes),
                    entry='example::Proof', dependencies=dependencies, assets={'trace': bundle}, proof=True,
-                   oracle_policy=LIBRARY_POLICIES[field],
+                   oracle_policy=workload_policy('stark', shape),
                    changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle=trace_oracle(shape))

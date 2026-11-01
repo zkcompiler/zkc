@@ -2,12 +2,56 @@
 use super::admission::LoadLimits;
 use crate::io::bytes::*;
 use serde_json::{Value as Json, json};
-use zkc_cpu::Policy;
+use zkc_cpu::{CpuBackend, Policy};
 use zkc_runtime::vm::{Limits, ValueBudget, WorkBudget};
 
-/// A host may raise the default collection count within installed hard limits,
-/// or lower byte/work ceilings. Neither proof nor deployment data grants this
-/// authority. Setup and provider-specific ceilings keep their existing owners.
+/// One Host work allowance outside the VM ledgers: the value used when the
+/// application selects none, and the most an application may authorize.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Allowance {
+    pub default: u64,
+    pub maximum: u64,
+}
+impl Allowance {
+    /// Check an application selection without clamping it.
+    pub fn admits(self, value: u64) -> bool {
+        value <= self.maximum
+    }
+}
+/// The Host policy owner of every native work allowance that is not an
+/// instruction, iteration or retained-value budget. Run, proof and Function
+/// entries read their defaults and maxima from here; each child of a Function
+/// invocation receives what remains of the parent's selected allowance.
+pub struct Allowances;
+impl Allowances {
+    /// Ring expression substitution work per role.
+    pub const RING_WORK: Allowance = Allowance {
+        default: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
+        maximum: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
+    };
+    /// Nested sequence traversal work per role: three units per examined node
+    /// and call, a retained validated root counting as one node.
+    pub const SEQUENCE_WORK: Allowance = Allowance {
+        default: 16_777_216,
+        maximum: 16_777_216,
+    };
+    /// External construction primitive work per role: one unit per hash call,
+    /// hashed byte, permutation, observe or sample.
+    pub const EXTERNAL_WORK: Allowance = Allowance {
+        default: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+        maximum: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+    };
+    /// Draws granted to one managed service or transcript invocation.
+    pub const SERVICE_DRAWS: Allowance = Allowance {
+        default: 1_000_000,
+        maximum: 1_000_000,
+    };
+}
+
+/// A host may raise the default collection counts and instruction and
+/// iteration budgets within installed hard limits, or lower byte and logical
+/// work ceilings. Neither proof nor deployment data grants this authority.
+/// Setup and provider-specific ceilings keep their existing owners.
 #[derive(Clone, Copy, Debug)]
 pub struct Capacity {
     /// Maximum elements in one numeric collection.
@@ -45,8 +89,8 @@ impl Capacity {
         wire_bytes: INPUT_LIMIT,
         value_bytes: Limits::VALUE_BYTES,
         work: WorkBudget {
-            instructions: Limits::INSTRUCTIONS,
-            iterations: Limits::ITERATIONS,
+            instructions: Limits::MAX_INSTRUCTIONS,
+            iterations: Limits::MAX_ITERATIONS,
             logical_bytes: Limits::LOGICAL_BYTES,
         },
         values: ValueBudget {
@@ -144,5 +188,49 @@ impl Capacity {
             return Err("native-capacity-wire".into());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn record(instructions: u64, iterations: u64) -> Vec<u8> {
+        let mut capacity = Capacity::default();
+        capacity.work.instructions = instructions;
+        capacity.work.iterations = iterations;
+        capacity.record().to_string().into_bytes()
+    }
+    #[test]
+    fn work_defaults_are_separate_from_their_hard_maxima() {
+        let defaults = Capacity::default().work;
+        assert_eq!(defaults, WorkBudget::default());
+        assert_eq!(defaults.instructions, Limits::INSTRUCTIONS);
+        assert_eq!(defaults.iterations, Limits::ITERATIONS);
+        assert_eq!(
+            Capacity::HARD_MAX.work.instructions,
+            Limits::MAX_INSTRUCTIONS
+        );
+        assert_eq!(Capacity::HARD_MAX.work.iterations, Limits::MAX_ITERATIONS);
+        const {
+            assert!(Limits::INSTRUCTIONS < Limits::MAX_INSTRUCTIONS);
+            assert!(Limits::ITERATIONS < Limits::MAX_ITERATIONS);
+        }
+        for (instructions, iterations) in [
+            (2 * Limits::INSTRUCTIONS, 2 * Limits::ITERATIONS),
+            (Limits::MAX_INSTRUCTIONS, Limits::MAX_ITERATIONS),
+        ] {
+            let parsed = Capacity::parse(&record(instructions, iterations)).unwrap();
+            assert_eq!(parsed.work.instructions, instructions);
+            assert_eq!(parsed.work.iterations, iterations);
+        }
+        for (instructions, iterations) in [
+            (Limits::MAX_INSTRUCTIONS + 1, Limits::ITERATIONS),
+            (Limits::INSTRUCTIONS, Limits::MAX_ITERATIONS + 1),
+        ] {
+            assert_eq!(
+                Capacity::parse(&record(instructions, iterations)).unwrap_err(),
+                "native-capacity-limit"
+            );
+        }
     }
 }
