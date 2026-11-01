@@ -330,6 +330,7 @@ proposeNumericalPlan(algebra::FieldType field,
   if (!field || !subject || !mask || !lanes ||
       lanes > protocol::NumericalLimits::lanes)
     return error("numerical-plan-shape");
+  field.getContext()->getOrLoadDialect<runtime::RuntimeDialect>();
   auto source = algebra::exportRingExpression(subject);
   if (!source)
     return source.takeError();

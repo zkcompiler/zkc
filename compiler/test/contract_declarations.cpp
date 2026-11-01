@@ -230,8 +230,7 @@ int main() {
                                           "1048576"};
       if (!operation.ends_with(".indices"))
         parameters.push_back("64");
-      success(checkParameters(operation, parameters,
-                              zkc::protocol::ParameterStage::Logical),
+      success(checkParameters(operation, parameters),
               "maximum block parameters");
       auto invalid = parameters;
       for (auto [slot, value] : {std::pair{1u, "0"},
@@ -242,30 +241,25 @@ int main() {
                                  {2u, "1048577"}}) {
         invalid = parameters;
         invalid[slot] = value;
-        refusal(checkParameters(operation, invalid,
-                                zkc::protocol::ParameterStage::Logical),
+        refusal(checkParameters(operation, invalid),
                 "interactive-kernel-parameters");
       }
       if (parameters.size() == 4) {
         invalid = parameters;
         invalid[3] = "65";
-        refusal(checkParameters(operation, invalid,
-                                zkc::protocol::ParameterStage::Logical),
+        refusal(checkParameters(operation, invalid),
                 "interactive-kernel-parameters");
         invalid[3] = "0";
-        success(checkParameters(operation, invalid,
-                                zkc::protocol::ParameterStage::Logical),
+        success(checkParameters(operation, invalid),
                 "canonical zero difficulty");
       }
       invalid = parameters;
       invalid.pop_back();
-      refusal(checkParameters(operation, invalid,
-                              zkc::protocol::ParameterStage::Logical),
+      refusal(checkParameters(operation, invalid),
               "interactive-kernel-parameters");
       invalid = parameters;
       invalid.push_back("0");
-      refusal(checkParameters(operation, invalid,
-                              zkc::protocol::ParameterStage::Logical),
+      refusal(checkParameters(operation, invalid),
               "interactive-kernel-parameters");
       auto scalar = encodeNativeOriginTemplate(
           "entry", {},
@@ -274,8 +268,7 @@ int main() {
       if (scalar) {
         invalid = parameters;
         invalid[0] = *scalar;
-        refusal(checkParameters(operation, invalid,
-                                zkc::protocol::ParameterStage::Logical),
+        refusal(checkParameters(operation, invalid),
                 "interactive-native-origin");
       } else
         consumeError(scalar.takeError());

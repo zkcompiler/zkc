@@ -7,9 +7,12 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/ResidueTile.h"
+#include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Residue/IR/ResidueOps.h"
 #include "zkc/Transforms/Residue.h"
+#include "llvm/ADT/ScopeExit.h"
+#include <future>
 
 using namespace mlir;
 using namespace zkc;
@@ -34,6 +37,37 @@ int main() {
   auto source = parseSourceString<ModuleOp>(sourceText, &context);
   require(bool(source), "tile source failed to parse");
   Cases cases;
+  cases.run(
+      "tile initialization leaves unrelated registered dialects lazy", [&] {
+        DialectRegistry lazyRegistry;
+        lazyRegistry.insert<residue::ResidueDialect, func::FuncDialect,
+                            data::DataDialect>();
+        MLIRContext lazy(lazyRegistry);
+        auto original = parseSourceString<ModuleOp>(sourceText, &lazy);
+        require(bool(original) && !lazy.getLoadedDialect<data::DataDialect>(),
+                "lazy fixture eagerly loaded Data");
+        auto tile = residue::proposeTile(*original, {true, false}, 8);
+        require(bool(tile) && !lazy.getLoadedDialect<data::DataDialect>(),
+                "tile initialization loaded unrelated Data");
+        require(bool(residue::readTile(*original, {true, false}, *tile)),
+                "lazy tile failed independent admission");
+      });
+  cases.run(
+      "prepared tile dependencies are read-only during parallel calls", [&] {
+        residue::initializeTileDialects(context);
+        context.enterMultiThreadedExecution();
+        auto leave =
+            llvm::scope_exit([&] { context.exitMultiThreadedExecution(); });
+        auto work = [&] {
+          auto tile = residue::proposeTile(*source, {true, false}, 8);
+          return bool(tile) &&
+                 bool(residue::readTile(*source, {true, false}, *tile));
+        };
+        auto first = std::async(std::launch::async, work);
+        auto second = std::async(std::launch::async, work);
+        require(first.get() && second.get(),
+                "parallel tile construction failed");
+      });
   for (unsigned lanes : {1, 8, 256})
     for (unsigned mask : {0, 1, 3})
       cases.run(

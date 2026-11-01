@@ -87,7 +87,6 @@ challenge, change the first failure, or remove a reached charge. Use a shared
 ordering resource alongside finer storage effects if a real consumer needs the
 precision. A new effect-token dialect is not required.
 
-Logical collections need a separate ownership decision in represented execution.
 Data owns both generic `data.sequence<T>` and specialized vectors, matrices and
 arrays. These carry distinct observable admission and layout contracts: a
 mathematical field array is not a private fixed vector, and a matrix retains
@@ -166,7 +165,7 @@ comparison relation; enabling an entire standard dialect is too coarse.
 | DataFlowSolver | Monotone availability/range problems with defined transfer functions; exact custody and resource roots keep their own validators |
 | InferType / shape and integer-range interfaces | Derived result facts with concrete consumers; range facts do not manufacture source premises or security proofs |
 | Transform / PDL | Reusable schedules over an independently admitted payload, when schedule reuse justifies the extra surface |
-| BufferizableOpInterface / destination style | Represented execution after aliasing, allocation, refusal and custody contracts exist |
+| BufferizableOpInterface / destination style | Used by admitted private tiles; broader forms require aliasing, allocation, refusal and custody relations |
 
 Whole-module projection, protocol construction and realization remain structured
 algorithms where their global obligations demand it. They still use standard
@@ -249,7 +248,8 @@ under an explicit maximum; challenge-adaptive shapes require a separately
 specified extension and matching formal consumer. This restriction belongs to
 that oracle profile, not to every Data domain or executable loop.
 
-Three additional semantic owners have concrete prospective consumers:
+Residue is now a concrete owner with checked word/tile and CPU-plan consumers.
+Two additional semantic owners have prospective consumers:
 
 - **Constraint:** assignment predicates, lookup/multiset and chronological-memory
   structure. Move existing assignment-level ownership here when the encoding
@@ -260,17 +260,17 @@ Three additional semantic owners have concrete prospective consumers:
   witness computation is separate from validity for arbitrary assignments.
   Public/fixed/witness/auxiliary projections, ensemble interactions, row scopes
   and padding remain semantic data, not adapter annotations.
-- **Residue:** represented modular arithmetic, ranges, limbs and overflow laws
-  needed before Arith/Vector can implement nominal field and ring operations.
 - **Codec:** exact logical-value/byte relations shared by transcript, commitment,
   wire and recursive-verification consumers. Runtime still implements the
   independently installed physical codecs.
 
 These are ownership decisions; a new dialect namespace requires an actual
-operation set and checked consumers. Decide the Residue/Codec split with the
-represented-execution migration, rather than keeping duplicate meaning merely
-to match a planned dialect list. Ordinary collection shape converges on Data;
-nominal polynomial domains and bases remain Poly responsibilities.
+operation set and checked consumers. The represented-execution decision keeps
+Residue projection/lifts separate from strict codecs, whose current owners
+remain the installed runtime and exact encoding contracts. A later Codec IR
+requires a shared consumer of those relations, not wrappers around existing
+bindings. Data owns logical collections; Poly retains nominal polynomial
+domains and bases.
 
 Delivery order does not impose representation order. Constraints consume exact
 logical assignments and relation assets before information-erasing physical
@@ -307,7 +307,8 @@ explicit-vector mode does not restore a withheld provider. See the
 [CPU installation contract](../../crates/zkc-cpu/README.md#provider-composition).
 
 External dialects remain useful at bounded adapters where their semantics match.
-HEIR reuse should be evaluated against represented polynomial/modular workloads;
+The [represented-arithmetic decision](../rationale/represented-arithmetic.md)
+selects an owned Residue boundary after a bounded HEIR comparison;
 Clean and LLZK are acceptance clients of the constraint/relation redesign;
 CirC remains a comparison point. Clean's ensemble obligations must survive
 extraction, and LLZK's mutable object identity cannot be treated as an immutable

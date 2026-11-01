@@ -23,19 +23,9 @@
 
 using namespace mlir;
 namespace zkc::residue {
-OwningOpRef<ModuleOp> proposeTile(ModuleOp source, ArrayRef<bool> rowwise,
-                                  unsigned lanes) {
-  if (!source || !lanes || lanes > 256)
-    return {};
-  auto words = lowerArithmetic(source);
-  if (!words || !consumeArithmetic(source, *words))
-    return {};
-  auto scalar = *words->getOps<func::FuncOp>().begin();
-  if (scalar.getNumArguments() != rowwise.size())
-    return {};
-  auto *context = source.getContext();
-  DialectRegistry registry;
-  registry.insert<linalg::LinalgDialect, tensor::TensorDialect,
+void registerTileDialects(DialectRegistry &registry) {
+  registry.insert<ResidueDialect, arith::ArithDialect, func::FuncDialect,
+                  linalg::LinalgDialect, tensor::TensorDialect,
                   vector::VectorDialect, memref::MemRefDialect,
                   bufferization::BufferizationDialect, ub::UBDialect>();
   arith::registerBufferizableOpInterfaceExternalModels(registry);
@@ -44,8 +34,32 @@ OwningOpRef<ModuleOp> proposeTile(ModuleOp source, ArrayRef<bool> rowwise,
   vector::registerBufferizableOpInterfaceExternalModels(registry);
   bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(
       registry);
-  context->appendDialectRegistry(registry);
-  context->loadAllAvailableDialects();
+}
+void initializeTileDialects(MLIRContext &context) {
+  DialectRegistry dependencies;
+  registerTileDialects(dependencies);
+  auto names = dependencies.getRegisteredDialectNames();
+  if (dependencies.isSubsetOf(context.getDialectRegistry()) &&
+      llvm::all_of(names, [&](StringRef name) {
+        return context.getLoadedDialect(name) != nullptr;
+      }))
+    return;
+  context.appendDialectRegistry(dependencies);
+  for (StringRef name : names)
+    context.getOrLoadDialect(name);
+}
+OwningOpRef<ModuleOp> proposeTile(ModuleOp source, ArrayRef<bool> rowwise,
+                                  unsigned lanes) {
+  if (!source || !lanes || lanes > 256)
+    return {};
+  auto *context = source.getContext();
+  initializeTileDialects(*context);
+  auto words = lowerArithmetic(source);
+  if (!words || !consumeArithmetic(source, *words))
+    return {};
+  auto scalar = *words->getOps<func::FuncOp>().begin();
+  if (scalar.getNumArguments() != rowwise.size())
+    return {};
   auto element = scalar.getResultTypes()[0];
   auto tile = RankedTensorType::get({lanes}, element);
   auto loc = source.getLoc();

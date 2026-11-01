@@ -255,6 +255,17 @@ void checkRealizedRecipe(ModuleOp module, MLIRContext &context) {
 
 int main() {
   Cases cases;
+  cases.run(
+      "physical selection declares represented temporary dependencies", [&] {
+        DialectRegistry dependencies;
+        protocol::createSelectPhysicalPass()->getDependentDialects(
+            dependencies);
+        for (StringRef name : {"residue", "arith", "func", "linalg", "tensor",
+                               "vector", "memref", "bufferization", "ub"})
+          require(bool(dependencies.getDialectAllocator(name)),
+                  "physical selection omitted " + name);
+      });
+
   cases.run("verify polynomial-only arithmetic in a lazy context", [&] {
     withSource<poly::PolynomialDialect, func::FuncDialect>(
         R"mlir(module {
@@ -452,27 +463,26 @@ int main() {
                   : "fix polynomial factors in their input dialects",
         [&] {
           auto participant =
-              project<algebra::AlgebraDialect, poly::PolynomialDialect>(
-                  polynomial);
-          withSource<algebra::AlgebraDialect, poly::PolynomialDialect>(
-              participant, [&](ModuleOp module, MLIRContext &context) {
-                require(count(module, "poly.fix"),
-                        "missing polynomial observation");
-                auto pass = eliminate
-                                ? protocol::createEliminatePolynomialsPass()
-                                : protocol::createFixPolynomialFactorsPass();
-                runChecked(module, std::move(pass), {"algebra", "poly"});
-                require(
-                    !count(module, "poly.fix") &&
+              project<algebra::AlgebraDialect, poly::PolynomialDialect,
+                      data::DataDialect>(polynomial);
+          withSource<algebra::AlgebraDialect, poly::PolynomialDialect,
+                     data::DataDialect>(participant, [&](ModuleOp module,
+                                                         MLIRContext &context) {
+            require(count(module, "poly.fix"),
+                    "missing polynomial observation");
+            auto pass = eliminate ? protocol::createEliminatePolynomialsPass()
+                                  : protocol::createFixPolynomialFactorsPass();
+            runChecked(module, std::move(pass), {"algebra", "poly"});
+            require(!count(module, "poly.fix") &&
                         context.getLoadedDialect<data::DataDialect>() &&
                         !context.getLoadedDialect<func::FuncDialect>(),
                     "polynomial rewrite lost its verification dependency or "
                     "loaded execution dialects");
-                require(eliminate ? !count(module, "poly.evaluate") &&
-                                        count(module, "data.array_at")
-                                  : count(module, "poly.fix_table"),
-                        "polynomial recipe did not execute");
-              });
+            require(eliminate ? !count(module, "poly.evaluate") &&
+                                    count(module, "data.array_at")
+                              : count(module, "poly.fix_table"),
+                    "polynomial recipe did not execute");
+          });
         });
   return cases.result();
 }

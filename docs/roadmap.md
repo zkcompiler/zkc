@@ -61,8 +61,8 @@ what actually landed. The completion criteria below belong inside those units.
 | Catalog and MLIR execution foundation | Landed native baseline: typed invocation, structured types, shared catalog, explicit admission and one default route. Preserve its contract and invalidation controls |
 | Virtual batching and FRI | Landed supported native profile: shared interaction analyses, checked dynamic virtual query blocks and one logical FRI component used by maintained STARK callers. Formal realization closure remains separate |
 | STARK reduction and checked construction | Implemented native profile: caller-owned DEEP adjustment and complete column inventory, phased common FRI, source-selected gates, shared verifier observations, actual-body binding checks and a quartic Keccak STARK client |
-| Represented execution | Next substantial PR: canonical logical collection ownership across Data/Algebra, represented modular arithmetic and codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering |
-| Constraints and semantic consumers | Following substantial PR: complete assignment-level redesign and consumer migration, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
+| Represented execution | Implemented native profile under final validation: Data collection ownership, exact Residue/codec distinction, checked Arith/Vector/private-buffer candidates and actual CPU numerical-plan execution |
+| Constraints and semantic consumers | Next substantial PR: complete assignment-level redesign and consumer migration, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
 
 The remaining units each contain their research, contract changes, implementation,
 review and final validation. Do not reopen the completed foundation or shared FRI
@@ -364,30 +364,33 @@ repeated queries, explicit zero-round refusal, wrong-root/setup failures, use
 before authentication and the declared stop observation. Existing kernels are
 dependencies, not duplicate compiler implementations.
 
-**Represented execution.** Start with a migration inventory: current owner,
-final owner, types/operations/schemas, source/formal/runtime consumers and
-replaced forms to delete. Separate genuine mathematical distinctions from
-collection representation duplicates. Cover exact field and quotient-ring
-work, a resident group/MSM path, value-aware conversions and an opaque
-alternative. Preserve modulus, ranges, integer lifts, widths, bases and exact
-wire semantics. Fix private-scratch aliasing, extent, lifetime, custody,
-allocation/refusal and publication before bufferization; validate stale
-evidence, failed-output withholding and the declared resource relation.
+**Represented execution.** Data now owns logical collections; Algebra owns
+nominal arithmetic and Poly owns polynomial/quotient meaning. The owned Residue
+boundary fixes modulus, canonical ranges, word widths and lifts. Actual upstream
+Linalg vectorization and One-Shot Bufferization produce private candidates;
+independent arithmetic and storage readers admit their meaning. CPU selection
+retains the resulting expression, lane bound and independently checked scratch
+assignment in `zkc.numerical-plan/0`. The reached resident provider consumes that
+plan. Extension/binary fields select an explicit opaque profile with their full
+nominal domain; existing quotient-ring and group/MSM consumers retain their
+value relations. Strict codecs remain distinct from modular projection.
 
-Preserve the landed common-compiler, CPU-target and EVM-target split. Source
-policy, logical construction and checked realization subjects remain common;
-each target owns its supported representations and lowering. A common caller
-must not acquire a CPU handle or link a machine target to derive that policy.
-Keep common-only and EVM-only installed consumers as regression gates while
-collection and buffer ownership changes.
+The common-compiler, CPU-target and EVM-target split remains the ownership
+boundary. Logical construction and checked realization subjects stay common;
+targets own their representations and lowering. Compiler proposal and checking
+allowances are cumulative and distinct from reached runtime work and memory.
+Private buffers retain fallible allocation, release and output withholding.
+Collection aliases and executable bare Ring readers have been removed.
+[Status](status.md#represented-arithmetic-development) records current validation;
+the [rationale](rationale/represented-arithmetic.md) records the HEIR decision.
 
-Define the admitted standard-MLIR transformations, required effect/shape/index/
-range interfaces, analysis invalidation and independent reader coverage before
-enabling them. Check the actual default path and installed consumers, then
-remove replaced collection/representation forms and unresolved conversion
-placeholders. Measure conversion, preparation, checking, kernel and whole-run
-costs separately. Evaluate HEIR at an exact polynomial/modular adapter with
-conversion laws and measured dependency/maintenance cost.
+The next Constraint unit consumes retained logical assignment subjects before
+this physical selection. Do not reconstruct them from scratch slots, limbs or
+program bytes. Broader masked/multidimensional storage transformations, RNS
+lowering and AOT each need a concrete consumer, exact value/resource relations
+and independent readers before expanding the admitted profile. Transform/PDL
+may select producers; neither replaces those readers. These extensions are not
+prerequisites for Constraint redesign.
 
 **Constraints.** Move assignment-level AIR/R1CS definitions and consumers to
 one owner while retaining Relation's statement/declaration interface. Apply

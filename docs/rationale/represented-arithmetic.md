@@ -46,19 +46,13 @@ when its transformations are the intended consumer. Importing only their core
 while maintaining zkc-specific lowering and independent interpretation would
 retain much of the adapter cost while foregoing most of that benefit.
 
-The explored source was
-[`e18c51f3f92a1100cdbce528494a00a30fb49f0f`](https://github.com/google/heir/tree/e18c51f3f92a1100cdbce528494a00a30fb49f0f).
-An isolated core build against MLIR 23 required three assembly-format setting
-edits; this compatibility cost alone did not decide the architecture. The full
-scalar conversion also names HEIR encryption-related conversion utilities.
-zkc still needs its own exact full-width/composite-modulus, codec, non-two-adic
-quotient, refusal and resource contracts, regardless of the imported operations.
-
-The bounded adapter experiment obtained 976 folded results agreeing with an
-independent integer oracle; eight composite products remained unfolded. A
-separate full-width polynomial-addition case exposed an intermediate-width
-mismatch in that pinned path. This limits an unrestricted adapter, not HEIR as
-a whole. It is not an end-to-end HEIR runtime or NTT conformance result.
+An adapter to the [HEIR core](https://github.com/google/heir) must maintain
+upstream assembly and lowering dependencies as well as zkc's interpretations.
+zkc still needs exact full-width/composite-modulus, codec, non-two-adic quotient,
+refusal and resource contracts regardless of imported operations. In particular,
+a polynomial adapter must check intermediate widths at large moduli, and an
+unfolded composite-modulus operation needs a defined next consumer. Passing a
+bounded scalar-folding comparison cannot establish runtime or NTT conformance.
 
 The production decision is therefore an owned narrow boundary and upstream
 MLIR transformations, with no optional HEIR execution route. Reconsider importing

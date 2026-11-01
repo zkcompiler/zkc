@@ -133,16 +133,16 @@ impl Plan {
         if contents[locations[root]] != Some(root) {
             return Err(Error("numerical-plan-schedule"));
         }
-        if serde_json::json!([
+        let canonical = serde_json::json!([
             "zkc.numerical-plan/0",
             expression.encode(),
             lanes,
             slots,
             locations
         ])
-        .to_string()
-            != body
-        {
+        .to_string();
+        // Compare serialized bytes, not Value equality against a JSON string.
+        if canonical.as_bytes() != body.as_bytes() {
             return Err(Error("numerical-plan-canonical"));
         }
         Ok(Self {
