@@ -142,8 +142,10 @@ git diff --check
 
 The [checker](../../common/tests/check_docs.py) checks local inline links, heading fragments,
 whitespace, public/private boundaries and reachability from each reference's
-index. `just test-docs` uses `--all` to include component and fixture guides. It
-does not verify mathematical truth, external websites or commands in code blocks.
+index. `just test-docs` uses `--all` to include component and fixture guides,
+and compares each fixture guide's `Current fixture SHA-256` table with the
+bytes of the files it lists. It does not verify mathematical truth, external
+websites or commands in code blocks.
 
 Review the reading path as well as individual pages. Run changed commands at a
 bounded relevant scope when prerequisites are available, and record commands not

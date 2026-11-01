@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Check this reference's local Markdown links, heading fragments and reachability.
 
-This checks the inline-link/ATX-heading syntax used by these pages. It does not
-fetch external links or check mathematical truth.
+This checks the inline-link/ATX-heading syntax used by these pages and the
+fixture digest tables of fixture guides. It does not fetch external links or
+check mathematical truth.
 """
 
 import argparse
@@ -18,10 +19,11 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def prose(path):
+def unfenced(lines):
+    """Blank fenced code blocks, keeping one output line per input line."""
     kept = []
     fence = None
-    for line in path.read_text().splitlines():
+    for line in lines:
         match = re.match(r"^\s*(`{3,}|~{3,})", line)
         if match:
             if fence is None:
@@ -31,7 +33,72 @@ def prose(path):
             kept.append("")
             continue
         kept.append("" if fence else line)
-    return "\n".join(kept)
+    return kept
+
+
+def prose(path):
+    return "\n".join(unfenced(path.read_text().splitlines()))
+
+
+# A fixture guide records the SHA-256 of its retained bytes under this heading,
+# in a `| File | SHA-256 |` table with one row per file named relative to the
+# guide. check() compares every row with the bytes;
+# scripts/regenerate-interface-fixtures.py rewrites the rows it regenerates.
+FIXTURE_DIGEST_HEADING = "Current fixture SHA-256"
+FIXTURE_DIGEST_ROW = re.compile(r"^\| `([^`]+)` \| `([0-9a-f]{64})` \|$")
+FIXTURE_DIGEST_HEADER = re.compile(r"^\| File \| SHA-256 \|$|^\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|$")
+
+
+def fixture_digest_row(name, digest):
+    return f"| `{name}` | `{digest}` |"
+
+
+def fixture_digest_tables(lines):
+    """Return each fixture digest section of a guide as (heading index, rows).
+
+    A row is (line index, file, recorded digest). Any other table row in the
+    section except the header and its delimiter is (line index, None, None), so
+    readers refuse it rather than skip it. Indices count the given lines.
+    """
+    tables, current = [], None
+    for index, line in enumerate(unfenced(lines)):
+        heading = re.match(r"^#{1,6}\s+(.*?)\s*#*$", line)
+        if heading:
+            current = (index, []) if heading[1] == FIXTURE_DIGEST_HEADING else None
+            if current:
+                tables.append(current)
+        elif current and line.startswith("|") and not FIXTURE_DIGEST_HEADER.match(line):
+            row = FIXTURE_DIGEST_ROW.match(line)
+            current[1].append((index, row[1], row[2]) if row else (index, None, None))
+    return tables
+
+
+def fixture_digest_errors(page, label, public_path):
+    """Compare every fixture digest row of one guide with the file's bytes."""
+    errors, checked = [], 0
+    directory = page.parent.resolve()
+    # Split on "\n" only, as the regeneration script does when it rewrites rows.
+    for heading, rows in fixture_digest_tables(page.read_text().split("\n")):
+        if not rows:
+            errors.append([label, heading + 1, "fixture digest table has no rows"])
+        seen = set()
+        for index, name, recorded in rows:
+            if name is None:
+                errors.append([label, index + 1, "malformed fixture digest row"])
+                continue
+            path = (page.parent / name).resolve()
+            if name in seen:
+                errors.append([label, name, "duplicate fixture digest row"])
+            elif not path.is_relative_to(directory) or not public_path(path):
+                errors.append([label, name, "fixture outside the guide's directory"])
+            elif not path.is_file():
+                errors.append([label, name, "fixture missing"])
+            else:
+                checked += 1
+                if hashlib.sha256(path.read_bytes()).hexdigest() != recorded:
+                    errors.append([label, name, "fixture digest differs"])
+            seen.add(name)
+    return errors, checked
 
 
 def anchors(path):
@@ -112,7 +179,7 @@ def check(include_components=False):
     pages = [p for p in pages if public_path(p)]
     active = [p for p in active if public_path(p)]
     formal_reference = [p for p in formal_reference if public_path(p)]
-    links = fragments = 0
+    links = fragments = digests = 0
     outgoing = collections.defaultdict(set)
     incoming = collections.defaultdict(set)
     for page in pages:
@@ -140,6 +207,9 @@ def check(include_components=False):
         for n, line in enumerate(page.read_text().splitlines(), 1):
             if line.rstrip() != line:
                 errors.append([label, n, "trailing whitespace"])
+        found, checked = fixture_digest_errors(page, label, public_path)
+        errors += found
+        digests += checked
     # Each reference is discoverable from its own index. Links from the other
     # reference do not make an otherwise orphaned page reachable.
     for reference, index_name, owner in (
@@ -165,11 +235,11 @@ def check(include_components=False):
         "status": "pass" if not errors else "fail",
         "pages": len(pages), "reference_pages": len(active),
         "formal_reference_pages": len(formal_reference),
-        "local_links": links, "fragments": fragments, "errors": errors,
+        "local_links": links, "fragments": fragments, "fixture_digests": digests, "errors": errors,
         "page_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                         for p in pages},
         "scope": ("reference and component guides" if include_components else "reference and root/formal guides")
-                 + "; local inline links, ATX heading fragments, native/formal reachability, public boundaries, whitespace and rationale rules",
+                 + "; local inline links, ATX heading fragments, native/formal reachability, public boundaries, whitespace, rationale rules and fixture digest tables",
     }
 
 

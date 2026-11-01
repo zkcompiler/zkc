@@ -7,26 +7,20 @@ checks the independently parsed original and source correspondence before
 publishing it. This is a native interface receipt, not FRI proof execution or
 formal coverage. Private state fields remain private in the emitted schema.
 
-Regenerate from the repository root after rebuilding `zkc-compile`:
+[The interface fixture script](../../../../../../../scripts/regenerate-interface-fixtures.py)
+regenerates it with `zkc-compile language-interface`, together with the other
+compiler-produced interface fixtures, from a named compiler build, and
+recomputes the digest table below:
 
 ```sh
-python3 - <<'PYTHON'
-import subprocess
-import sys
-from pathlib import Path
-sys.path.insert(0, 'common/tests/support')
-from project import project_arguments
-command = ['build/compiler/zkc-compile', 'language-interface',
-           '--source-format=zkc', '--entry=example::Proof',
-           *project_arguments(Path('examples/projects/fri/zkc.toml'))]
-result = subprocess.run(command, check=True, capture_output=True)
-Path('crates/zkc/src/entry/interface/tests/fixtures/fri-interface.json').write_bytes(result.stdout)
-PYTHON
+python3 scripts/regenerate-interface-fixtures.py build/compiler
 ```
 
-Current SHA-256: `3aa34332ee4907be2661b1a0733dc53aa08821158c7d11a7a07353b11a77637e`.
-This digest covers the exact retained fixture; its embedded original and
-compiler identities bind different inputs and are not source proofs.
+Its embedded original and compiler identities bind different inputs and are not
+source proofs. The compiler identity records the producing build. The Rust
+reader takes it as a fixture parameter: the consumer tests check the same
+structure with a substituted identity, so a compiler edit that changes only
+that identity needs no regeneration.
 
 `recursive-interface.json` is an independently authored current-schema positive
 specimen for shared reader integration. It has nested ordered role substitution,
@@ -40,3 +34,12 @@ not an authenticated source declaration.
 The recursive specimen explicitly retains `common_input_requirements: []`
 for every Protocol. This establishes strict SDK schema consumption, not newly
 derived source coverage or fresh compiler/native pairing.
+
+## Current fixture SHA-256
+
+These hashes cover the exact retained compiler output from the command above.
+The authored recursive specimen is not compiler output and has no row.
+
+| File | SHA-256 |
+|---|---|
+| `fri-interface.json` | `3aa34332ee4907be2661b1a0733dc53aa08821158c7d11a7a07353b11a77637e` |

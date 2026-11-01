@@ -7,16 +7,22 @@ static declaration metadata without fabricating a checked source project.
 They test independent structural/native admission; they do not claim source
 correspondence or new formal proofs.
 
-Regenerate the exact positive pair with the pinned compiler build:
+`zkc-language_recursive_interface-test` writes the exact positive pairs when
+given this directory. [The interface fixture script](../../../../scripts/regenerate-interface-fixtures.py)
+runs it, together with the other compiler-produced interface fixtures, from a
+named compiler build and recomputes the digest table below:
 
 ```sh
-build/compiler/test/zkc-language_recursive_interface-test compiler/test/fixtures/language-interface
+python3 scripts/regenerate-interface-fixtures.py build/compiler
 ```
 
 The original digest covers the exact `.mlir` bytes, including their printing
-policy. The interface toolchain digest must match the compiler consuming this
-fixture; a consumer testing schema structure independently may take it as a
-fixture parameter, and must not treat that as native/source authentication.
+policy. The toolchain digest records the producing compiler build. The
+compiler's interface reader admits only its own live identity, so a consumer
+testing schema structure independently takes the toolchain digest as a fixture
+parameter, and must not treat that as native/source authentication. A compiler
+edit that changes only that identity needs no regeneration; a change to the
+schema, the native printing or these constructions does.
 
 `schema-digests.json` records full root schema hashes for cross-reader checks;
 `custody-records.*` retains a two-role wrapper prefix and a nested ordinary prefix.

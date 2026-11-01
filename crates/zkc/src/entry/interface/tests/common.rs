@@ -357,20 +357,31 @@ fn compiler_emitted_custody_inventory_selects_the_ordinary_data_facet() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../compiler/test/fixtures/common-inputs/custody-fields.json"
     ));
-    let view = Interface::decode(bytes, None).unwrap();
-    let protocol = &view.document.protocols[0];
-    let requirements = super::super::common::check(protocol, &mut schemas::Schemas::new()).unwrap();
-    assert_eq!(requirements.len(), 1);
-    let requirement = &requirements[0];
-    assert_eq!(requirement.spelling, "bool");
-    assert!(matches!(
-        requirement.observation,
-        raw::CommonObservation::Value {}
-    ));
-    assert_eq!(requirement.components.len(), 2);
-    for (role, component) in requirement.components.iter().enumerate() {
-        assert_eq!(component.role as usize, role);
-        assert_eq!(component.original, 2);
-        assert!(component.path.is_empty());
+    for fixture in toolchain_parameters(bytes) {
+        let view = Interface::decode(&fixture, None).unwrap();
+        let protocol = &view.document.protocols[0];
+        let requirements =
+            super::super::common::check(protocol, &mut schemas::Schemas::new()).unwrap();
+        assert_eq!(requirements.len(), 1);
+        let requirement = &requirements[0];
+        assert_eq!(requirement.spelling, "bool");
+        assert!(matches!(
+            requirement.observation,
+            raw::CommonObservation::Value {}
+        ));
+        assert_eq!(requirement.components.len(), 2);
+        for (role, component) in requirement.components.iter().enumerate() {
+            assert_eq!(component.role as usize, role);
+            assert_eq!(component.original, 2);
+            assert!(component.path.is_empty());
+        }
     }
+    // The identity parameter relaxes nothing else: moving the ordinary field
+    // onto a custody coordinate is still refused.
+    let moved = replace_once(
+        bytes,
+        r#"{"path":[0],"leaf":0,"role":0,"facet":"data","native":2}"#,
+        r#"{"path":[0],"leaf":0,"role":0,"facet":"data","native":0}"#,
+    );
+    assert!(Interface::decode(&moved, None).is_err());
 }

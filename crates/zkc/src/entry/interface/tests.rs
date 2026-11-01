@@ -143,6 +143,25 @@ fn read_text(interface: &str) -> Result<Interface> {
 fn read(value: &Value) -> Result<Interface> {
     read_text(&value.to_string())
 }
+/// Replace the one occurrence of `from` in a retained fixture, keeping every
+/// other byte.
+fn replace_once(fixture: &[u8], from: &str, to: &str) -> Vec<u8> {
+    let text = std::str::from_utf8(fixture).unwrap();
+    assert_eq!(text.matches(from).count(), 1, "{from} is not unique");
+    text.replacen(from, to, 1).into_bytes()
+}
+/// A compiler-emitted fixture records the producing build's toolchain identity.
+/// Structural consumers take that identity as a fixture parameter: they check
+/// the recorded bytes and the same bytes under another identity, so a compiler
+/// edit that changes only the identity leaves them valid.
+fn toolchain_parameters(fixture: &[u8]) -> [Vec<u8>; 2] {
+    let recorded: Value = serde_json::from_slice(fixture).unwrap();
+    let other = json!("0".repeat(64));
+    assert_ne!(recorded["toolchain"], other);
+    let member = |identity: &Value| format!("\"toolchain\":{identity}");
+    let substituted = replace_once(fixture, &member(&recorded["toolchain"]), &member(&other));
+    [fixture.to_vec(), substituted]
+}
 #[test]
 fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
     let original = document().to_string();

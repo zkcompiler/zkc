@@ -10,15 +10,20 @@ This semantic subject supplies no external construction or custody authority. Ge
 source/native association, independent native inventory reconstruction and exact
 source inventory comparison before writing any fixture.
 
-Regenerate with the pinned compiler build:
+`zkc-common_interface-test` writes both triples when given this directory.
+[The interface fixture script](../../../../scripts/regenerate-interface-fixtures.py)
+runs it, together with the other compiler-produced interface fixtures, from a
+named compiler build and recomputes the digest table below:
 
 ```sh
-build/compiler/test/zkc-common_interface-test compiler/test/fixtures/common-inputs
+python3 scripts/regenerate-interface-fixtures.py build/compiler
 ```
 
 The interface original digest binds the exact original bytes. The toolchain
 identity binds the compiler's semantic sources; neither digest independently
-proves source adequacy. Independent SDK tests must consume a fresh emitted
+proves source adequacy. A consumer testing schema structure takes the toolchain
+identity as a fixture parameter, so a compiler edit that changes only that
+identity needs no regeneration. Independent SDK tests must consume a fresh emitted
 package and execute actual participants with an externally pinned input context.
 This fixture supplies no input agreement, execution certificate or formal proof.
 

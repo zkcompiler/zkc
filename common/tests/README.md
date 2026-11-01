@@ -26,7 +26,7 @@ production correctness theorem.
 | SDK discovery and dependency isolation | `just test-sdk` | Small static/shared CMake fixtures; no LLVM installation needed |
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
-| Documentation | `just test-docs` | Links, fragments and reachability |
+| Documentation | `just test-docs` | Links, fragments, reachability and fixture digest tables |
 | Installed Rust SDK | `nix build .#checks.x86_64-linux.rust-consumer` | Staged SDK and Unicode sources, independent normal-feature Rust consumer; prepared execution outside checkout without compiler or CLI |
 | Installed CLI | `nix build .#checks.x86_64-linux.application` | Check source, compile, inspect, prove and verify outside the checkout |
 | Formatting and lint | `just lint` | C++, Rust and Nix formatting; Clippy, Ruff, Just and workflow syntax |
@@ -74,6 +74,28 @@ satisfy them. Build the compiler first, then run them explicitly:
 ```sh
 ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc --features cpu,files --test common_inventory_compiler --test entry_components -- --ignored
 ```
+
+### Compiler-produced interface fixtures
+
+The [language-interface](../../compiler/test/fixtures/language-interface/README.md),
+[Entry component](../../compiler/test/fixtures/entry-components/README.md),
+[common-input](../../compiler/test/fixtures/common-inputs/README.md) and
+[FRI interface](../../crates/zkc/src/entry/interface/tests/fixtures/README.md)
+fixtures are compiler output, and each JSON interface records the producing
+build's toolchain identity. Consumers testing schema structure take that
+identity as a fixture parameter, so a compiler edit that changes only the
+identity needs no regeneration. After a change to the interface schema, the
+native printing or a fixture's construction, regenerate all of them from one
+named build:
+
+```sh
+python3 scripts/regenerate-interface-fixtures.py build/compiler
+```
+
+The [script](../../scripts/regenerate-interface-fixtures.py) runs the compiler
+producers and `zkc-compile`, then recomputes the `Current fixture SHA-256` table
+of each fixture guide. `just test-docs` compares every such table with the
+retained bytes, so an edited fixture or a stale table fails.
 
 ### CPU worker confinement
 

@@ -240,7 +240,11 @@ fn legacy_category_requires_a_direct_handle_and_ordinary_metadata() {
 
 #[test]
 fn actual_fri_retains_internal_state_metadata() {
-    let view = Interface::decode(FRI, None).unwrap();
+    for fri in toolchain_parameters(FRI) {
+        fri_internal_state_metadata(&Interface::decode(&fri, None).unwrap());
+    }
+}
+fn fri_internal_state_metadata(view: &Interface) {
     assert_eq!(view.document.protocols.len(), 7);
     assert_eq!(view.document.relations.len(), 1);
     view.check_executable_ports().unwrap();

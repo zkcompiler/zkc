@@ -15,11 +15,14 @@ outputs contain one verifier Boolean. Fresh emitted fixture hashes and exact
 component associations are retained in `ordinary.json` (proof job) and
 `ordinary-run.json` (joint job), paired with their exact `.mlir` originals. They
 use the strict current schema, including role-qualified public selections and
-required sealing metadata. Regenerate both pairs after building the affected
-compiler tests:
+required sealing metadata. `zkc-language_entry_components_interface-test` writes
+both pairs when given this directory.
+[The interface fixture script](../../../../scripts/regenerate-interface-fixtures.py)
+runs it, together with the other compiler-produced interface fixtures, from a
+named compiler build and recomputes the digest table below:
 
 ```sh
-build/compiler/test/zkc-language_entry_components_interface-test compiler/test/fixtures/entry-components
+python3 scripts/regenerate-interface-fixtures.py build/compiler
 ```
 
 The generator first checks source correspondence, independent interface admission,
@@ -27,6 +30,9 @@ flat proof expansion, setup slices and generated Host families. The identical
 originals deliberately have different authenticated job policies. A consumer
 checks the original digest over the exact bytes; the toolchain digest describes
 the producing build and is not a substitute for native/source authentication.
+A consumer testing schema structure takes the toolchain digest as a fixture
+parameter, so a compiler edit that changes only that identity needs no
+regeneration.
 Fresh package execution uses this same source with `Round`, `Demo`, `Produce`
 and `Check`, exercising Run, proof generation/verification and typed Host calls.
 
