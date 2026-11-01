@@ -39,7 +39,7 @@ def main():
         run("cmake", "-S", source, "-B", output / "build", "-G", "Ninja", *common,
             "-DCMAKE_BUILD_TYPE=Release", f"-DCMAKE_INSTALL_PREFIX={prefix}",
             f"-DBUILD_SHARED_LIBS={'ON' if linkage == 'shared' else 'OFF'}")
-        run("cmake", "--build", output / "build", "--parallel", "4")
+        run("cmake", "--build", output / "build", "--parallel", "2")
         run("ctest", "--test-dir", output / "build", "--output-on-failure")
         run("cmake", "--install", output / "build")
         package = [f"-DZkcCompiler_DIR={prefix}/lib/cmake/ZkcCompiler"]
@@ -53,7 +53,7 @@ def main():
             run("cmake", "-S", source / "consumer", "-B", build, "-G", "Ninja",
                 *common, *package, *flags)
             if scenario == "available":
-                run("cmake", "--build", build, "--parallel", "4")
+                run("cmake", "--build", build, "--parallel", "2")
                 run("ctest", "--test-dir", build, "--output-on-failure")
     print("Static/shared source/syntax exports and six dependency refusal scenarios passed")
 

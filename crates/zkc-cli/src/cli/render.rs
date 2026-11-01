@@ -29,6 +29,8 @@ pub fn human(report: &Value) -> String {
         ("results", "Results"),
         ("package_sha256", "Package SHA-256"),
         ("proof_sha256", "Proof SHA-256"),
+        ("manifest_sha256", "Manifest SHA-256"),
+        ("solc_sha256", "Solc SHA-256"),
     ] {
         if let Some(value) = report[key].as_str() {
             writeln!(text, "{label}: {value}").unwrap();

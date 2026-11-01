@@ -1,3 +1,4 @@
+#include "zkc/Compiler/NativeLanguage.h"
 // Captured relation bundle declarations: the derived ABI, source checking,
 // emitted identity, interface records and the independent readers. Nothing
 // here evaluates the relation; the Entry's acceptance is a verifier input.

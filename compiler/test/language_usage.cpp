@@ -1,6 +1,7 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;

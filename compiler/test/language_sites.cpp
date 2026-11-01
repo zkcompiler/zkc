@@ -2,6 +2,7 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Names.h"

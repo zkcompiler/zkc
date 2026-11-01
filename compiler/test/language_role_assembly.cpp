@@ -3,6 +3,7 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Language/Inspection.h"
 using namespace llvm;

@@ -31,11 +31,4 @@ void buildClosedExecutionPipeline(mlir::OpPassManager &pm, bool simplify,
     pm.addPass(protocol::createFixPolynomialFactorsPass());
   pm.addPass(protocol::createLowerClosedParticipantPass(policy, trace));
 }
-void buildPhysicalPipeline(mlir::OpPassManager &pm,
-                           const PhysicalPipelineOptions &options) {
-  pm.addPass(protocol::createSelectPhysicalPass(
-      options.selections, options.linearContractions, options.releaseStorage,
-      options.statistics, options.functionPorts, options.mathematics,
-      options.cpuTarget));
-}
 } // namespace zkc

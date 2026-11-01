@@ -2,8 +2,10 @@
 #include "../Support/Input.h"
 #include "CpuTarget.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
@@ -155,13 +157,22 @@ int runLanguageCompiler(int argc, char **argv) {
   StringRef command(argv[1]);
   if (command != "language-check" && command != "language-emit" &&
       command != "language-interface" && command != "language-bundle" &&
-      command != "language-package")
+      command != "language-package" && command != "language-evm")
     return refuse(error("source.command", "unknown language command"));
   if (argc > int(limits.files + 13))
     return refuse(error("source.limit", "too many source command arguments"));
   uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
     StringRef arg(argv[i]);
+    if (command == "language-evm" &&
+        (arg.starts_with("--cpu-target=") ||
+         arg.starts_with("--oracle-realization=") ||
+         arg.starts_with("--dump=") || arg == "--no-simplify" ||
+         arg == "--release-storage" || arg == "--no-finite-bulk" ||
+         arg == "--no-calculation-batching" ||
+         arg == "--fuse-vector-reductions" || arg == "--fuse-collect-fold"))
+      return refuse(
+          error("evm.options", "option is not supported by the EVM target"));
     if (arg.starts_with("--observations=") ||
         arg.starts_with("--diagnostics=")) {
       collectObservations = arg.starts_with("--observations=");
@@ -508,6 +519,32 @@ int runLanguageCompiler(int argc, char **argv) {
     if (!publishObservation(true))
       return 1;
     outs() << original->interfaceJson() << '\n';
+    return 0;
+  }
+  if (command == "language-evm") {
+    auto compiled = compileEvmEntry(*original);
+    if (!compiled)
+      return refuse(compiled.takeError());
+    auto result = encodeEvmCompilation(*compiled);
+    auto &record = *result.getAsObject();
+    record["entry"] = selected->name();
+    record["capture"] = captured->identity();
+    record["installation"] = project->installationIdentity();
+    record["original"] = original->identity();
+    auto *manifest = record.getObject("manifest");
+    (*manifest)["entry"] = selected->name();
+    (*manifest)["capture"] = captured->identity();
+    (*manifest)["installation"] = project->installationIdentity();
+    (*manifest)["original"] = original->identity();
+    std::string bytes;
+    BoundedStream out(bytes, 16 * 1024 * 1024);
+    out << result << '\n';
+    if (out.overflow())
+      return refuse(
+          error("evm.source-limit", "EVM response exceeds the SDK ceiling"));
+    if (!publishObservation(true))
+      return 1;
+    outs() << bytes;
     return 0;
   }
   auto compiled = compileEntry(*original, options);

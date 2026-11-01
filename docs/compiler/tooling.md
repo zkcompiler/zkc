@@ -45,6 +45,23 @@ JSON command reports retain effective values and each value's origin. Packages
 retain the published policy. Pinned-package execution rejects source settings;
 it uses the policy of the authenticated package.
 
+## Compile an EVM verifier
+
+`zkc compile Proof --target=evm --solc=/absolute/path/to/solc
+--solc-sha256=TRUSTED_EXECUTABLE_SHA256` compiles the checked verifier to a fresh
+artifact directory. The prover uses ordinary native compilation. The initial
+profile supports Fr scalar/vector arithmetic and the managed Keccak construction;
+reachable unsupported operations refuse. Native optimization flags and profiles
+are not EVM target options.
+
+The compiler emits Yul, then the SDK invokes independently pinned solc 0.8.38
+with fixed Cancun settings. The command reports `manifest_sha256`; retain it
+independently for artifact import or `--reuse=DIR --reuse-sha256=PIN`. Reuse also
+checks the exact source, compiler, tool and settings. It never imports a candidate
+using its own unauthenticated checksum. Existing output directories refuse.
+See the [target contract](../spec/targets/evm.md) and
+[maintained example](../../examples/projects/sumcheck-keccak/README.md).
+
 ## Inspect and explain
 
 `inspect` defaults to the checked Entry interface. `--view=project` shows the

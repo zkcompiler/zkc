@@ -66,7 +66,7 @@ add_executable(zkc-opt tools/zkc-opt.cpp)
 foreach(tool zkc-compile zkc-opt)
   target_compile_definitions(${tool} PRIVATE ZKC_VERSION="${PROJECT_VERSION}")
 endforeach()
-target_link_libraries(zkc-opt PRIVATE ZkcCompiler MLIRMlirOptMain)
+target_link_libraries(zkc-opt PRIVATE ZkcCpuTarget MLIRMlirOptMain)
 target_compile_options(zkc-opt PRIVATE -Wall -Wextra -Werror)
 
 option(ZKC_ENABLE_MLIR_LSP "Build the MLIR language server with zkc dialects" OFF)

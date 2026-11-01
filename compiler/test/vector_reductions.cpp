@@ -5,6 +5,7 @@
 #include "support/ScopedFixture.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"

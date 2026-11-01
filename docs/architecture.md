@@ -6,7 +6,9 @@ logical value assembly and Exec for fallible numerical calls and deployments.
 Exec outcomes explicitly distinguish returned values from terminal stops.
 Protocol IR (PIR) retains participant mathematics and interaction. Both numerical
 Entry helpers and participant computation use the existing numerical, physical
-lowering and VM; the Host does not implement a second arithmetic interpreter.
+lowering and VM on CPU. The Host does not implement a second arithmetic
+interpreter. The EVM target consumes the same checked verifier closure through
+its own machine lowering and does not use the native VM.
 
 ## System map
 
@@ -22,11 +24,13 @@ explicit .zkc modules + Assets
                        ↓                   │                         │
                     participant            │                  proof / joint Host
                        ↓                   ↓                         │
-                    exec / runtime → physical → zkc.program/0 ────────┘
-                                                    │
-                                       interpreter + VM instance
-                                                    │
-                                       installed backend operations
+                    checked exec / runtime
+                       ├── CPU → physical → zkc.program/0 ────────────┘
+                       │                         │
+                       │            interpreter + VM instance
+                       │                         │
+                       │            installed backend operations
+                       └── EVM verifier → words/slices → Yul → solc → bytecode
 
 Lean: independently formalized semantic models and proofs
       (native source/compiler/runtime correspondence remains open)
@@ -47,6 +51,7 @@ relation declarations, library-level multi-table bundles and external adapters.
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
 | `exec` | Scoped Func/CF execution, explicit outcomes and typed mathematical requests; checked numerical realization |
 | `physical` | Admitted representations, installed operations, conversions and storage handling |
+| EVM target | Selected checked verifier closure, bounded words/slices, ordered effects, canonical ABI and Yul publication |
 | `zkc.program/0` | Closed participant or numerical function description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
@@ -70,9 +75,10 @@ judgment.
 | Program | `compiler/include/zkc/Program`: executable model, codec and structural admission |
 | IR | `compiler/include/zkc/Dialect`: mathematical, Data and Exec dialects, interfaces and mandatory verification |
 | Translation | `compiler/include/zkc/Translation`: Language emission/comparison, relation import and checked program export |
-| Transforms and Target | `compiler/include/zkc/Transforms` and `Target`: preparation, projection, realization and physical selection |
-| Compiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |
-| Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; links the Compiler API |
+| Transforms and common Compiler | `compiler/include/zkc/Transforms` and `Compiler`: preparation, projection, realization, proof construction and checked endpoint closure |
+| CPU target | `compiler/include/zkc/Target/Cpu`: physical selection, native compilation, Entry packages, bundles and proof deployments |
+| EVM target | `compiler/include/zkc/Target/Evm`: verifier legality, word/slice lowering and Yul; independent of CPU selection |
+| Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; composes common Compiler and machine targets |
 | Rust VM | [zkc-runtime::vm](../crates/zkc-runtime/src/vm/README.md): admitted code, installed-call contracts, frames and capacity |
 | Rust interpreter | `zkc-runtime::interpreter`: instruction walking, continuations and pending participant actions |
 | Portable formats | [zkc-format](../crates/zkc-format/README.md): canonical logical trees, lazy proof framing and immutable invocation bindings, without execution authority |
@@ -87,8 +93,9 @@ judgment.
 The exported CMake components follow these responsibilities; the
 [compiler package](../compiler/README.md#components-and-ownership) owns the exact installed API.
 MLIR-free services sit below IR. Translation and Transforms depend on IR;
-Compiler composes them. Driver code handles command-line I/O. Component
-checks and installed consumers enforce this direction.
+Common Compiler composes them. CPU and EVM targets consume that boundary;
+common compilation does not depend on either target. Driver code handles
+command-line I/O. Component checks and installed consumers enforce this direction.
 
 ## Runtime and application authority
 

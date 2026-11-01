@@ -12,12 +12,13 @@ struct CompiledRun;
 struct RunOptions;
 struct CompiledNativeProof;
 struct NativeProofOptions;
-/// Independent inspection copies, not checked-stage authority. Both modules
+/// Independent prepared-source/candidate inspection copies, not checked-stage
+/// authority. Both modules
 /// borrow the Compilation's context and must die before it is destroyed or
 /// reassigned. The record owns its bytes. Mutations do not affect the retained
 /// edge and must be rechecked before relying on correspondence.
 struct OracleRealizationSnapshot {
-  mlir::OwningOpRef<mlir::ModuleOp> original, candidate;
+  mlir::OwningOpRef<mlir::ModuleOp> prepared, candidate;
   std::string record;
 };
 /// Owns a native compilation's context and IR. Borrowed module access lasts

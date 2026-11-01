@@ -1,23 +1,26 @@
-#include "../Transforms/PreparedProtocol.h"
-#include "CompilationState.h"
-#include "NativeDeployment.h"
+#include "zkc/Compiler/NativeCompilation.h"
+#include "../../Compiler/CompilationState.h"
+#include "../../Compiler/NativeDeployment.h"
+#include "../../Transforms/PreparedProtocol.h"
 #include "Run.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/Compilation.h"
-#include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Target/Cpu/Stages.h"
+#include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Stages.h"
 #include "zkc/Translation/Protocol.h"
@@ -57,14 +60,13 @@ Expected<OwningOpRef<ModuleOp>> parseNativeSource(StringRef text,
   diagnostics.atRoot(module->getLoc());
   return module;
 }
-LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
-                           bool releaseStorage,
-                           MathematicalSelectionPolicy mathematicalSelection,
-                           LinearContractionStats &statistics,
-                           json::Array *stages = nullptr,
-                           StringRef selectedRole = {},
-                           CompilationObservation *observations = nullptr,
-                           const target::CpuTarget &cpuTarget = {}) {
+LogicalResult lowerProgram(
+    ModuleOp module, bool simplify, bool fixPolynomials, bool releaseStorage,
+    MathematicalSelectionPolicy mathematicalSelection,
+    LinearContractionStats &statistics, json::Array *stages = nullptr,
+    StringRef selectedRole = {}, CompilationObservation *observations = nullptr,
+    const target::CpuTarget &cpuTarget = {},
+    std::shared_ptr<const CheckedEndpoint> *endpoint = nullptr) {
   TimeTraceScope timing("zkc.lower-participants");
   PassManager pipeline(module.getContext());
   mathematical::RealizationTrace trace;
@@ -83,47 +85,13 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   if (failed(outcome))
     return failure();
   if (!selectedRole.empty()) {
-    auto owner = *module.getOps<protocol_ir::ProtocolModuleOp>().begin();
-    SymbolTable table(owner);
-    llvm::StringSet<> reached;
-    SmallVector<Operation *> pending;
-    for (auto endpoint :
-         owner.getBody().front().getOps<protocol_ir::ParticipantOp>())
-      if (endpoint.getRole() == selectedRole)
-        pending.push_back(endpoint);
-    if (pending.size() != 1)
-      return failure();
-    for (auto entry :
-         owner.getBody().front().getOps<protocol_ir::ProtocolEntryOp>()) {
-      SmallVector<Attribute> targets;
-      for (auto value : entry.getTargets()) {
-        auto pair = cast<ArrayAttr>(value);
-        if (cast<StringAttr>(pair[0]).getValue() == selectedRole)
-          targets.push_back(pair);
-      }
-      if (!targets.empty()) {
-        entry.setTargetsAttr(ArrayAttr::get(module.getContext(), targets));
-        pending.push_back(entry);
-      }
-    }
-    while (!pending.empty()) {
-      auto *definition = pending.pop_back_val();
-      auto name = SymbolTable::getSymbolName(definition);
-      if (!name || !reached.insert(name.getValue()).second)
-        continue;
-      auto uses = SymbolTable::getSymbolUses(definition);
-      if (!uses)
-        return failure();
-      for (const auto &use : *uses)
-        if (auto *target =
-                table.lookup(use.getSymbolRef().getRootReference().getValue()))
-          pending.push_back(target);
-    }
-    for (auto &definition : make_early_inc_range(owner.getBody().front())) {
-      auto name = SymbolTable::getSymbolName(&definition);
-      if (!name || !reached.contains(name.getValue()))
-        definition.erase();
-    }
+    auto closed = closeEndpoint(module, selectedRole);
+    if (!closed)
+      return diagnostics::emit(module.emitError(), closed.takeError());
+    auto candidate = closed->candidateSnapshot();
+    module.getBodyRegion().takeBody(candidate->getBodyRegion());
+    if (endpoint)
+      *endpoint = std::make_shared<const CheckedEndpoint>(std::move(*closed));
   }
   PassManager physical(module.getContext());
   if (observations)
@@ -387,7 +355,8 @@ compileNativeProof(StringRef text, StringRef filename,
   if (failed(lowerProgram(*result->module, options.simplify, false,
                           options.releaseStorage, options.mathematicalSelection,
                           result->statistics, nullptr, selectedRole,
-                          options.observations, options.cpuTarget)) ||
+                          options.observations, options.cpuTarget,
+                          &result->endpoint)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto exported = protocol::exportModule(*result->module);

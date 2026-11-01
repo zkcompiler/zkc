@@ -52,7 +52,7 @@ Expected<StringMap<NativeSourceOrigin>>
 realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
                       StringRef entry,
                       const StringMap<NativeSourceOrigin> &authored) {
-  auto original = realization.originalSnapshot();
+  auto original = realization.preparedSnapshot();
   auto candidate = realization.candidateSnapshot();
   auto before = program(original.get(), entry);
   auto after = program(candidate.get(), entry);

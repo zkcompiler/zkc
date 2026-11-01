@@ -26,16 +26,5 @@ void buildClosedExecutionPipeline(mlir::OpPassManager &, bool simplify = false,
                                   bool fixPolynomials = false,
                                   MathematicalSelectionPolicy = {},
                                   mathematical::RealizationTrace * = nullptr);
-struct PhysicalPipelineOptions {
-  protocol::Assignments selections;
-  llvm::SmallVector<target::FunctionPortSelection> functionPorts;
-  target::CpuTarget cpuTarget;
-  MathematicalSelectionPolicy mathematics;
-  bool linearContractions = false;
-  bool releaseStorage = false;
-  LinearContractionStats *statistics = nullptr;
-};
-void buildPhysicalPipeline(mlir::OpPassManager &,
-                           const PhysicalPipelineOptions & = {});
 } // namespace zkc
 #endif

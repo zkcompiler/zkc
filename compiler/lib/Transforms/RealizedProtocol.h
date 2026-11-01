@@ -32,7 +32,7 @@ public:
           const protocol::OracleRealizationPolicy &policy = {});
   // Independent clones cannot mutate the owned checked edge. A moved-from
   // owner has no snapshots. The record view borrows this owner's lifetime.
-  mlir::OwningOpRef<mlir::ModuleOp> originalSnapshot() const;
+  mlir::OwningOpRef<mlir::ModuleOp> preparedSnapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> candidateSnapshot() const;
   llvm::StringRef realizationRecord() const { return record; }
   // Canonical exact inventory of actual prepared roots, with the requested

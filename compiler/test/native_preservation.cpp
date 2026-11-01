@@ -5,6 +5,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "zkc/Compiler/NativeCompilation.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"

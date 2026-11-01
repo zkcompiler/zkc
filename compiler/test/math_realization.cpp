@@ -12,6 +12,7 @@
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"

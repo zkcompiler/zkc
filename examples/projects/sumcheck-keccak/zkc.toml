@@ -1,0 +1,10 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+
+[dependencies]
+sumcheck = { workspace = "protocols.polynomial.sumcheck" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

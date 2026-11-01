@@ -1,0 +1,283 @@
+#include "mlir/IR/Verifier.h"
+#include "zkc/Compiler/Compilation.h"
+#include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/LanguageInspection.h"
+#include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/NativeCompilation.h"
+#include "zkc/Compiler/NativeLanguage.h"
+#include "zkc/Compiler/NativeProof.h"
+#include "zkc/Compiler/Observation.h"
+#include "zkc/Compiler/PublicCoin.h"
+#include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Translation/Protocol.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/raw_ostream.h"
+#include <array>
+
+int main(int argc, char **argv) {
+  auto captured = zkc::language::capture({{"m", R"(module m;
+    relation Same(statement x:bool,witness y:bool){return x==y;}
+    protocol Step roles(P)(x:bool@P)->(r:bool@P)
+      spec {output contract=Same(in.x,out.r);}{return(r=x);}
+    protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=Step(x);return(r=r);}
+    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}
+    protocol Send roles(P,V)(x:bool@P)->(accepted:bool@V){
+      let received=send P->V(x);return(accepted=received);
+    }
+    proof Proof=Send{prover P;verifier V;public{};accept accepted;construction authored;})",
+                                           "consumer.zkc"}});
+  if (!captured) {
+    llvm::errs() << llvm::toString(captured.takeError());
+    return 30;
+  }
+  auto languageChecked = zkc::language::analyze(*captured).checkedProject();
+  if (!languageChecked) {
+    llvm::errs() << llvm::toString(languageChecked.takeError());
+    return 31;
+  }
+  auto entry = zkc::language::closeEntry(*languageChecked, "m::Demo");
+  if (!entry) {
+    llvm::errs() << llvm::toString(entry.takeError());
+    return 32;
+  }
+  auto original = zkc::language::prepareOriginal(*entry);
+  if (!original) {
+    llvm::errs() << llvm::toString(original.takeError());
+    return 33;
+  }
+  auto admitted = zkc::language::admitOriginal(*entry, original->bytes(),
+                                               original->interfaceJson());
+  if (!admitted) {
+    llvm::errs() << llvm::toString(admitted.takeError());
+    return 40;
+  }
+  if (admitted->identity() != original->identity() ||
+      admitted->interfaceJson() != original->interfaceJson())
+    return 41;
+  zkc::language::EntryOptions options;
+  options.mathematicalSelection.vectorReductionFusion = true;
+  auto execution = zkc::language::compileEntry(*admitted, options);
+  if (!execution) {
+    llvm::errs() << llvm::toString(execution.takeError());
+    return 34;
+  }
+  auto package = zkc::language::packageEntry(*execution);
+  if (!package) {
+    llvm::errs() << llvm::toString(package.takeError());
+    return 42;
+  }
+  if (package->bytes().empty() || package->identity().size() != 64)
+    return 43;
+  zkc::CompilationObservation observation({"physical"});
+  options.observations = &observation;
+  auto observed = zkc::language::compileEntry(*admitted, options);
+  if (!observed) {
+    llvm::errs() << llvm::toString(observed.takeError());
+    return 50;
+  }
+  if (observed->options().observations != nullptr)
+    return 51;
+  auto observedPackage = zkc::language::packageEntry(*observed);
+  if (!observedPackage) {
+    llvm::errs() << llvm::toString(observedPackage.takeError());
+    return 52;
+  }
+  auto observations = observation.json();
+  auto *phases = observations.getAsObject()->getArray("phases");
+  const std::array<llvm::StringRef, 6> expectedPhases = {
+      "entry", "protocol", "realized", "participant", "exec", "physical"};
+  if (observedPackage->bytes() != package->bytes()) {
+    llvm::errs() << "observation changed package bytes\n";
+    return 53;
+  }
+  if (!phases || phases->size() != expectedPhases.size()) {
+    llvm::errs() << "expected " << expectedPhases.size()
+                 << " compilation phases, got " << (phases ? phases->size() : 0)
+                 << '\n';
+    return 53;
+  }
+  for (size_t i = 0; i < expectedPhases.size(); ++i) {
+    const auto *phase = (*phases)[i].getAsObject();
+    const auto *unit = phase ? phase->getArray("unit") : nullptr;
+    if (!phase || phase->getString("phase") != expectedPhases[i] || !unit ||
+        unit->empty() || (*unit)[0].getAsString() != "m::Demo")
+      return 54;
+  }
+  if (auto error =
+          zkc::language::checkInterface(*original, original->interfaceJson())) {
+    llvm::errs() << llvm::toString(std::move(error));
+    return 35;
+  }
+  if (entry->invocations().size() != 1 ||
+      !entry->invocations().front().deployment)
+    return 44;
+  const auto &nativeEntry = *entry->invocations().front().deployment;
+  auto nativeOriginal = zkc::language::prepareOriginal(nativeEntry);
+  if (!nativeOriginal) {
+    llvm::errs() << llvm::toString(nativeOriginal.takeError());
+    return 45;
+  }
+  auto interface = zkc::language::readInterface(
+      nativeOriginal->bytes(), nativeOriginal->interfaceJson());
+  if (!interface) {
+    llvm::errs() << llvm::toString(interface.takeError());
+    return 36;
+  }
+  if (interface->selectedProtocol().symbol != nativeEntry.protocol().symbol ||
+      interface->selectedProtocol().inputs.size() != 1 ||
+      nativeOriginal->interface().selectedProtocol().symbol !=
+          interface->selectedProtocol().symbol ||
+      nativeOriginal->interface().selectedProtocol().inputs.size() != 1)
+    return 37;
+  unsigned applications = 0;
+  if (auto error = zkc::language::inspectApplications(
+          nativeOriginal->bytes(), nativeOriginal->interfaceJson(),
+          [&](const zkc::language::ApplicationOccurrence &call) -> llvm::Error {
+            ++applications;
+            if (call.clauses.size() != 1 ||
+                call.clauses[0].subject[1].values[0] !=
+                    call.operation->getResult(0))
+              return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                             "application binding differs");
+            return llvm::Error::success();
+          })) {
+    llvm::errs() << llvm::toString(std::move(error));
+    return 38;
+  }
+  if (applications != 1)
+    return 39;
+  if (argc > 2)
+    return 15;
+  mlir::DialectRegistry registry;
+  auto native = zkc::compileRun(R"(module { "protocol.module"() ({
+    "protocol.func"() ({
+    ^entry(%value: i1):
+      "protocol.return"(%value) : (i1) -> ()
+    }) {sym_name="main", function_type=(i1) -> i1, roles=["Solo"],
+        input_roles=[["Solo"]], output_roles=[["Solo"]]} : () -> ()
+  }) {profile=#protocol.profile<protocol>} : () -> () })",
+                                "native-consumer.mlir", {}, registry);
+  if (!native) {
+    llvm::consumeError(native.takeError());
+    return 6;
+  }
+  if (mlir::failed(mlir::verify(native->compilation.module())))
+    return 7;
+  auto bundle = llvm::json::parse(native->bundle);
+  if (!bundle) {
+    llvm::consumeError(bundle.takeError());
+    return 8;
+  }
+  if (bundle->getAsObject()->getString("format") != "zkc.run/0")
+    return 9;
+  // Installed Compiler exports both view APIs, retaining ordinary source
+  // admission even when a caller presents a compiled physical module.
+  auto view = zkc::analyzePublicCoin(native->compilation.module(), "{}");
+  if (view)
+    return 10;
+  llvm::consumeError(view.takeError());
+  auto checked = zkc::checkPublicCoin(native->compilation.module(), "{}", "{}");
+  if (!checked)
+    return 11;
+  llvm::consumeError(std::move(checked));
+  zkc::NativeProofOptions proofOptions;
+  proofOptions.policy =
+      R"(["zkc.native-proof-policy/0","main","P","V","0","",[],[],[], "zkc.framed/0", "", []])";
+  constexpr llvm::StringLiteral proofSource = R"(module { "protocol.module"() ({
+    "protocol.func"() ({
+    ^entry(%value: i1):
+      %received = protocol.exchange %value {site="message", sender="P", receiver="V"} : i1
+      "protocol.return"(%received) : (i1) -> ()
+    }) {sym_name="main", function_type=(i1) -> i1, roles=["P","V"],
+        input_roles=[["P"]], output_roles=[["V"]]} : () -> ()
+  }) {profile=#protocol.profile<protocol>} : () -> () })";
+  auto proof = zkc::compileNativeProof(proofSource, "proof-consumer.mlir",
+                                       proofOptions, registry);
+  if (!proof) {
+    llvm::consumeError(proof.takeError());
+    return 12;
+  }
+  auto deployment = llvm::json::parse(proof->deployment);
+  if (!deployment) {
+    llvm::consumeError(deployment.takeError());
+    return 13;
+  }
+  if ((*deployment->getAsArray())[0].getAsString() != "zkc.native-proof/0" ||
+      mlir::failed(mlir::verify(proof->compilation.module())))
+    return 14;
+  for (auto operation :
+       {zkc::NativeProofOperation::Prove, zkc::NativeProofOperation::Verify}) {
+    proofOptions.operation = operation;
+    auto endpoint = zkc::compileNativeProof(proofSource, "proof-consumer.mlir",
+                                            proofOptions, registry);
+    if (!endpoint) {
+      llvm::errs() << llvm::toString(endpoint.takeError());
+      return 60;
+    }
+    unsigned count = 0;
+    bool selected = true;
+    endpoint->compilation.module().walk(
+        [&](zkc::protocol_ir::ParticipantOp participant) {
+          ++count;
+          selected &=
+              participant.getRole() ==
+              (operation == zkc::NativeProofOperation::Verify ? "V" : "P");
+        });
+    auto selectedDeployment = llvm::json::parse(endpoint->deployment);
+    if (!selectedDeployment) {
+      llvm::errs() << llvm::toString(selectedDeployment.takeError());
+      return 61;
+    }
+    if (count != 1 || !selected ||
+        (*selectedDeployment->getAsArray())[1] !=
+            (*deployment->getAsArray())[1] ||
+        (*selectedDeployment->getAsArray())[2] !=
+            (*deployment->getAsArray())[2] ||
+        (*selectedDeployment->getAsArray())[8] !=
+            (*deployment->getAsArray())[8])
+      return 62;
+  }
+  auto proofEntry = zkc::language::closeEntry(*languageChecked, "m::Proof");
+  if (!proofEntry) {
+    llvm::errs() << llvm::toString(proofEntry.takeError());
+    return 50;
+  }
+  auto proofOriginal = zkc::language::prepareOriginal(*proofEntry);
+  if (!proofOriginal) {
+    llvm::errs() << llvm::toString(proofOriginal.takeError());
+    return 51;
+  }
+  auto proofExecution = zkc::language::compileEntry(*proofOriginal);
+  if (!proofExecution) {
+    llvm::errs() << llvm::toString(proofExecution.takeError());
+    return 52;
+  }
+  auto proofPackage = zkc::language::packageEntry(*proofExecution);
+  if (!proofPackage) {
+    llvm::errs() << llvm::toString(proofPackage.takeError());
+    return 53;
+  }
+  if (argc == 2) {
+    auto write = [&](llvm::StringRef name, llvm::StringRef bytes) {
+      llvm::SmallString<256> path(argv[1]);
+      llvm::sys::path::append(path, name);
+      std::error_code error;
+      llvm::raw_fd_ostream stream(path, error, llvm::sys::fs::OF_None);
+      if (error)
+        return false;
+      stream << bytes;
+      stream.flush();
+      return !stream.has_error();
+    };
+    if (!write("run.bundle", native->bundle) ||
+        !write("proof.deployment", proof->deployment) ||
+        !write("run.zkpkg", package->bytes()) ||
+        !write("proof.zkpkg", proofPackage->bytes()))
+      return 16;
+  }
+  return 0;
+}

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("ZkcSupport", "ZkcSource", "ZkcSyntax", "ZkcContracts", "ZkcLanguage", "ZkcRelation", "ZkcProgram", "ZkcIR", "ZkcTranslation", "ZkcTransforms", "ZkcCompiler", "ZkcDriver")
+COMPONENTS = ("ZkcSupport", "ZkcSource", "ZkcSyntax", "ZkcContracts", "ZkcLanguage", "ZkcRelation", "ZkcProgram", "ZkcIR", "ZkcTranslation", "ZkcTransforms", "ZkcCompiler", "ZkcCpuTarget", "ZkcEvmTarget", "ZkcDriver")
 ALLOWED = {
     "ZkcLanguage": {"ZkcContracts", "ZkcRelation", "ZkcSyntax"},
     "ZkcSupport": {"LLVMSupport"},
@@ -17,7 +17,9 @@ ALLOWED = {
     "ZkcProgram": {"ZkcContracts"},
     "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils", "MLIRSCFDialect"},
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
-    "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
+    "ZkcDriver": {"ZkcCpuTarget", "ZkcEvmTarget", "MLIRParser"},
+    "ZkcCpuTarget": {"ZkcCompiler"},
+    "ZkcEvmTarget": {"ZkcCompiler", "MLIRControlFlowToSCF"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
     "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRPass", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRSCFDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
 }
@@ -29,13 +31,15 @@ HEADER_ROOTS = {
     "ZkcContracts": ["Contracts"],
     "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Bundle", "BundlePolynomial", "Matrices")],
     "ZkcProgram": ["Program"],
-    "ZkcTransforms": ["Transforms", "Target"],
+    "ZkcTransforms": [f"Transforms/{p.name}" for p in (ROOT / "include/zkc/Transforms").glob("*.h") if p.name not in ("Protocol.h", "PipelineOptions.h")],
+    "ZkcEvmTarget": ["Compiler/Evm.h", "Target/Evm", "Dialect/Evm"],
+    "ZkcCpuTarget": ["Target/Cpu", "Target/CpuTarget.h", "Target/Catalog.h", "Target/Selection.h", "Transforms/Protocol.h", "Transforms/PipelineOptions.h", "Compiler/NativeCompilation.h", "Compiler/NativeLanguage.h", "Compiler/Run.h"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
         "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "StructuredSource", "ApplicationMap", "OracleObligations",
-        "LanguagePackage", "LanguageInspection", "SourceClaims", "SourceCorrespondence", "NativeProof", "Run",
+        "LanguagePackage", "LanguageInspection", "SourceClaims", "SourceCorrespondence", "NativeProof",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
-    "ZkcIR": ["Dialect", "Interfaces", "Analysis"],
+    "ZkcIR": [*(str(p.relative_to(ROOT / "include/zkc")) for p in (ROOT / "include/zkc/Dialect").iterdir() if p.name != "Evm" and (p.is_dir() or p.suffix in (".h", ".def"))), "Interfaces", "Analysis"],
     "ZkcTranslation": ["Translation"],
 }
 
@@ -174,9 +178,9 @@ def main():
         "lib/Transforms/Computation/Verification.cpp": "ZkcTransforms",
         "lib/Transforms/Computation/ScopedSchedule.cpp": "ZkcTransforms",
         "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
-        "lib/Target/Catalog.cpp": "ZkcTransforms",
-        "lib/Target/NativePlanTypes.cpp": "ZkcTransforms",
-        "lib/Conversion/PhysicalVerification.cpp": "ZkcTransforms",
+        "lib/Target/Catalog.cpp": "ZkcCpuTarget",
+        "lib/Target/NativePlanTypes.cpp": "ZkcCpuTarget",
+        "lib/Conversion/PhysicalVerification.cpp": "ZkcCpuTarget",
         "lib/Dialect/Bindings.cpp": "ZkcIR",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
@@ -207,9 +211,6 @@ def main():
     private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Entry/Native.h")
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
     private_headers["ZkcTransforms"] = {
-        ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
-        ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/NativePlanTypes.h", ROOT / "lib/Target/ExecutionPorts.h",
-        ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/MathematicalPreservation.h",
         ROOT / "lib/Transforms/ScopedCandidate.h",
@@ -283,6 +284,9 @@ def main():
         ROOT / "lib/Compiler/NativeProofOrigins.h",
         ROOT / "lib/Compiler/NativeRequest.h",
     }
+    private_headers["ZkcCompiler"].update(ROOT / f"lib/Compiler/{name}.h" for name in ("LanguageDiagnostics", "HostReferences", "MathematicalOptions"))
+    private_headers["ZkcCpuTarget"] = set((ROOT / "lib/Target").glob("*.h")) | set((ROOT / "lib/Target/Cpu").glob("*.h")) | set((ROOT / "lib/Conversion").glob("*.h"))
+    private_headers["ZkcEvmTarget"] = set((ROOT / "lib/Target/Evm").rglob("*.h")) | set((ROOT / "lib/Dialect/Evm").rglob("*.h"))
     private_headers["ZkcDriver"] = set((ROOT / "lib/Driver").glob("*.h"))
     public_headers = {name: header_set(roots) for name, roots in HEADER_ROOTS.items()}
 
@@ -315,6 +319,8 @@ def main():
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
+    bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader"))
+    bridges.update(("ZkcCpuTarget", ROOT / f"lib/Transforms/{name}.h") for name in ("PreparedProtocol", "RealizedProtocol", "MathematicalSupport", "NativeBindingApplication", "MathematicalPassOptions", "Computation/Support", "NumericalSelection", "ScopedPreparation", "FiniteVerification", "MathematicalRecipes", "ScopedCallback"))
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"
 
     def check_private_edge(component, path, target):
@@ -393,7 +399,7 @@ def main():
                     ), f"{name}: input loading belongs to Driver: {path}"
                 # Invocation owns in-memory MLIR parsing; Driver additionally
                 # owns command-line file loading. Lower layers consume IR.
-                if name not in ("ZkcCompiler", "ZkcDriver"):
+                if name not in ("ZkcCompiler", "ZkcCpuTarget", "ZkcEvmTarget", "ZkcDriver"):
                     assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to Compiler or Driver: {path}"
                 if name == "ZkcIR":
                     # Owner-scoped facts use MLIR analysis lifetime/invalidation,

@@ -68,12 +68,17 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
     },
     Command {
         name: "compile",
-        summary: "Compile .zkc source to an authenticated Entry package",
+        summary: "Compile source to a native Entry package or EVM verifier",
         positional: "[ENTRY]",
         options: &[
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--project=FILE"),
-            Opt::new("--output=PACKAGE"),
+            Opt::new("--output=PATH"),
+            Opt::new("--target=TARGET"),
+            Opt::new("--solc=PATH"),
+            Opt::new("--solc-sha256=PIN").hex(Some(32)),
+            Opt::new("--reuse=EVM_DIRECTORY"),
+            Opt::new("--reuse-sha256=PIN").hex(Some(32)),
             Opt::new("--compiler=PATH"),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
@@ -82,8 +87,12 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"),
         ],
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
+--target=cpu is the default. --target=evm requires --solc and --solc-sha256;
+it publishes a fresh verifier directory, defaulting to build/zkc/<entry-stem>.evm.
+The report supplies the manifest SHA-256 for independent artifact authentication.
+--reuse and --reuse-sha256 reuse an authenticated EVM artifact only on an exact build match.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
-Project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
+CPU project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
 Named Entry stems replace :: with dots; generic runs append a full selector digest.
 Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },

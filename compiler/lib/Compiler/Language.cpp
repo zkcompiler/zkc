@@ -1,10 +1,9 @@
 #include "zkc/Compiler/Language.h"
+#include "LanguageDiagnostics.h"
 #include "LanguageInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
-#include "zkc/Compiler/Host.h"
-#include "zkc/Compiler/Observation.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
@@ -117,6 +116,26 @@ std::string compilerToolchainIdentity() {
     return digest(material);
   }();
   return identity;
+}
+Expected<NativeProofPolicy> proofPolicy(const CheckedOriginal &original) {
+  const auto &view = original.interface();
+  if (!view.proof || view.host)
+    return error("source.entry", "expected a checked proof Entry");
+  const auto &protocol = view.selectedProtocol();
+  const auto &proof = *view.proof;
+  NativeProofPolicy policy;
+  policy.entry = protocol.symbol;
+  policy.producer = nativeRoleName(proof.prover);
+  policy.validator = nativeRoleName(proof.verifier);
+  policy.acceptance = proof.acceptance.native.front();
+  policy.suite = proof.suite;
+  policy.construction = proof.selectedConstruction;
+  policy.format = proof.format;
+  for (auto service : proof.services)
+    policy.services.push_back(protocol.services[service].native);
+  for (auto index : proof.publicInputs)
+    append_range(policy.publicInputs, protocol.inputs[index].native);
+  return policy;
 }
 Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
                                           const Limits &limits) {
@@ -288,127 +307,34 @@ ArrayRef<SourceLocation> CheckedOriginal::locations() const {
 const Correspondence &CheckedOriginal::correspondence() const {
   return storage->report;
 }
-StringRef CompiledEntry::bytes() const {
-  if (auto *run = std::get_if<CompiledRun>(&compiled))
-    return run->bundle;
-  if (auto *host = std::get_if<CompiledHost>(&compiled))
-    return host->artifact;
-  return std::get<CompiledNativeProof>(compiled).deployment;
-}
-Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
-                                     const EntryOptions &options) {
-  auto scope =
-      options.observations
-          ? options.observations->scope(original.entry().root().qualifiedName)
-          : CompilationObservation::Scope{};
-  auto located = [&](Error error) -> Error {
-    return handleErrors(
-        std::move(error),
-        [&](const CompilationError &failure) -> Error {
-          auto locations = failure.locations;
-          SourceCoordinates source(original.entry());
-          std::map<std::pair<unsigned, unsigned>, Span> mapping;
-          for (const auto &record : original.locations())
-            mapping.emplace(std::make_pair(record.line, record.column),
-                            record.source);
-          bool mapped = false;
-          for (auto &location : locations)
-            if (location.filename == filename) {
-              auto found = mapping.find({location.line, location.column});
-              if (found != mapping.end()) {
-                location = source.location(found->second);
-                mapped = true;
-              }
+Error locateCompilationFailure(const CheckedOriginal &original, Error error) {
+  return handleErrors(
+      std::move(error),
+      [&](const CompilationError &failure) -> Error {
+        auto locations = failure.locations;
+        SourceCoordinates source(original.entry());
+        std::map<std::pair<unsigned, unsigned>, Span> mapping;
+        for (const auto &record : original.locations())
+          mapping.emplace(std::make_pair(record.line, record.column),
+                          record.source);
+        bool mapped = false;
+        for (auto &location : locations)
+          if (location.filename == filename) {
+            auto found = mapping.find({location.line, location.column});
+            if (found != mapping.end()) {
+              location = source.location(found->second);
+              mapped = true;
             }
-          if (!mapped)
-            locations.push_back(source.location(original.entry().entry().span));
-          return make_error<CompilationError>(failure.message, failure.refusals,
-                                              std::move(locations),
-                                              failure.invocationPreconditions);
-        },
-        [&](const Refusal &failure) -> Error {
-          return make_error<DiagnosticError>(Diagnostic{
-              failure.code, failure.detail, original.entry().entry().span, {}});
-        });
-  };
-  if (original.interface().host) {
-    auto host = compileHost(original, options);
-    if (!host)
-      return located(host.takeError());
-    return CompiledEntry(original, EntryArtifact(std::move(*host)), options);
-  }
-  const auto &view = original.interface();
-  const auto &protocol = view.selectedProtocol();
-  if (view.proof) {
-    const auto &proof = *view.proof;
-    NativeProofPolicy selection;
-    selection.entry = protocol.symbol;
-    selection.producer = nativeRoleName(proof.prover);
-    selection.validator = nativeRoleName(proof.verifier);
-    selection.acceptance = proof.acceptance.native.front();
-    selection.suite = proof.suite;
-    selection.construction = proof.selectedConstruction;
-    selection.format = proof.format;
-    for (auto service : proof.services)
-      selection.services.push_back(protocol.services[service].native);
-    for (auto index : proof.publicInputs)
-      append_range(selection.publicInputs, protocol.inputs[index].native);
-    NativeProofOptions native;
-    native.observations = options.observations;
-    native.cpuTarget = options.cpuTarget;
-    native.policy = NativeProofSelection{selection};
-    if (auto operation = original.entry().invocationKind())
-      native.operation = *operation == HostInvocation::Kind::Verify
-                             ? NativeProofOperation::Verify
-                             : NativeProofOperation::Prove;
-    native.simplify = options.simplify;
-    native.releaseStorage = options.releaseStorage;
-    native.mathematicalSelection = options.mathematicalSelection;
-    native.oracleRealization = options.oracleRealization;
-    auto compiled = compileNativeProof(original.bytes(), filename, native,
-                                       mlir::DialectRegistry());
-    if (!compiled)
-      return located(compiled.takeError());
-    // Native compilation independently checks the full deployment. Pin its
-    // source and policy again at the source-language ownership boundary.
-    auto parsed = json::parse(compiled->deployment);
-    if (!parsed)
-      return parsed.takeError();
-    auto *deployment = parsed->getAsArray();
-    const json::Array *descriptor = deployment && deployment->size() == 9
-                                        ? (*deployment)[2].getAsArray()
-                                        : nullptr;
-    auto selected = compiled->policy;
-    selected.draws.clear();
-    if (!descriptor || descriptor->size() != 9 ||
-        (*deployment)[0].getAsString() != "zkc.native-proof/0" ||
-        (*deployment)[1].getAsString() != original.identity() ||
-        encodeNativeProofPolicy(selected) !=
-            encodeNativeProofPolicy(selection) ||
-        (*descriptor)[1] != encodeNativeProofPolicy(compiled->policy))
-      return error("source.entry",
-                   "compiled proof selected another source or policy");
-    return CompiledEntry(original, EntryArtifact(std::move(*compiled)),
-                         options);
-  }
-  RunOptions run;
-  run.observations = options.observations;
-  run.cpuTarget = options.cpuTarget;
-  run.entry = protocol.symbol;
-  run.simplify = options.simplify;
-  run.releaseStorage = options.releaseStorage;
-  run.mathematicalSelection = options.mathematicalSelection;
-  run.oracleRealization = options.oracleRealization;
-  auto compiled =
-      compileRun(original.bytes(), filename, run, mlir::DialectRegistry());
-  if (!compiled)
-    return located(compiled.takeError());
-  auto bundle = json::parse(compiled->bundle);
-  if (!bundle)
-    return bundle.takeError();
-  auto *object = bundle->getAsObject();
-  if (!object || object->getString("entry") != protocol.symbol)
-    return error("source.entry", "compiled bundle selected another protocol");
-  return CompiledEntry(original, EntryArtifact(std::move(*compiled)), options);
+          }
+        if (!mapped)
+          locations.push_back(source.location(original.entry().entry().span));
+        return make_error<CompilationError>(failure.message, failure.refusals,
+                                            std::move(locations),
+                                            failure.invocationPreconditions);
+      },
+      [&](const Refusal &failure) -> Error {
+        return make_error<DiagnosticError>(Diagnostic{
+            failure.code, failure.detail, original.entry().entry().span, {}});
+      });
 }
 } // namespace zkc::language

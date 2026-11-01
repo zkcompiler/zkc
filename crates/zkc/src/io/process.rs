@@ -50,6 +50,28 @@ pub(crate) fn capture(
     limit: usize,
     capture_stderr: bool,
 ) -> Result<Captured, Error> {
+    capture_input(command, directory, timed_out, limit, capture_stderr, None)
+}
+
+/// A regular temporary input avoids pipe deadlocks and keeps child lifetime and
+/// output bounds under the same owner as ordinary compiler invocations.
+pub(crate) fn capture_input(
+    command: &mut Command,
+    directory: &Path,
+    timed_out: impl Fn(Duration) -> bool,
+    limit: usize,
+    capture_stderr: bool,
+    input: Option<&[u8]>,
+) -> Result<Captured, Error> {
+    use std::io::{Seek, Write};
+    let mut input_file = input
+        .map(|_| tempfile::NamedTempFile::new_in(directory))
+        .transpose()
+        .map_err(Error::Io)?;
+    if let (Some(bytes), Some(file)) = (input, input_file.as_mut()) {
+        file.write_all(bytes).map_err(Error::Io)?;
+        file.rewind().map_err(Error::Io)?;
+    }
     let stdout = tempfile::NamedTempFile::new_in(directory).map_err(Error::Io)?;
     let stderr = if capture_stderr {
         Some(tempfile::NamedTempFile::new_in(directory).map_err(Error::Io)?)
@@ -57,7 +79,10 @@ pub(crate) fn capture(
         None
     };
     command
-        .stdin(Stdio::null())
+        .stdin(match &input_file {
+            Some(file) => Stdio::from(file.reopen().map_err(Error::Io)?),
+            None => Stdio::null(),
+        })
         .stdout(stdout.reopen().map_err(Error::Io)?)
         .stderr(match &stderr {
             Some(file) => Stdio::from(file.reopen().map_err(Error::Io)?),
@@ -173,6 +198,26 @@ mod tests {
                 .status()
                 .unwrap()
                 .success()
+        );
+    }
+
+    #[test]
+    fn regular_stdin_preserves_binary_input_without_a_pipe_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let input: Vec<u8> = (0..131072).map(|n| (n % 256) as u8).collect();
+        let captured = capture_input(
+            &mut Command::new("cat"),
+            dir.path(),
+            |elapsed| elapsed >= Duration::from_secs(5),
+            input.len(),
+            true,
+            Some(&input),
+        )
+        .unwrap();
+        assert!(captured.status.success());
+        assert_eq!(
+            read_regular(captured.stdout.path(), input.len()).unwrap(),
+            input
         );
     }
 }

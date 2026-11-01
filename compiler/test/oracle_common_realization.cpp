@@ -1486,7 +1486,7 @@ int main(int argc, char **argv) {
                   diagnostics);
           auto edge = compiled->compilation.oracleRealizationSnapshot();
           require(bool(edge), "production compilation lost realization");
-          checked(checkOracleRealization(*edge->original, *edge->candidate,
+          checked(checkOracleRealization(*edge->prepared, *edge->candidate,
                                          edge->record));
           OwningOpRef<ModuleOp> selectedSource(
               cast<ModuleOp>(prepared->clone()));
@@ -1497,7 +1497,7 @@ int main(int argc, char **argv) {
           });
           for (Operation *program : omitted)
             program->erase();
-          require(print(*edge->original) == print(*selectedSource),
+          require(print(*edge->prepared) == print(*selectedSource),
                   "production changed the selected prepared subject");
           // Compilation owns a separate MLIR context. Reparse the independent
           // source into that context before comparing uniqued native types.
@@ -1513,7 +1513,7 @@ int main(int argc, char **argv) {
             auto base = std::filesystem::path(argv[1]) / name;
             std::ofstream(base.string() + ".mlir") << print(*edge->candidate);
             std::ofstream(base.string() + ".original.mlir")
-                << print(*edge->original);
+                << print(*edge->prepared);
             std::ofstream(base.string() + ".realization.json") << edge->record;
             std::ofstream(base.string() + ".bundle") << compiled->bundle;
           }

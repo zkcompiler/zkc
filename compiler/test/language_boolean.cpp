@@ -4,6 +4,7 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Registry.h"
 using namespace llvm;
 using namespace zkc::language;

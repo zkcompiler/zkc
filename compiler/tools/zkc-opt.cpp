@@ -7,6 +7,7 @@
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/CommandLine.h"
@@ -23,6 +24,8 @@ int main(int argc, char **argv) {
   zkc::registerDialects(registry);
   zkc::registerCompilerPasses();
   zkc::registerCompilerPipelines();
+  zkc::registerCpuPasses();
+  zkc::registerCpuPipelines();
   mlir::registerTransformsPasses();
   auto [inputPath, outputPath] = mlir::registerAndParseCLIOptions(
       argc, argv, "zkc protocol optimizer\n", registry);

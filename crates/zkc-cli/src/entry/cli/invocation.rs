@@ -105,7 +105,7 @@ impl Invocation {
         Ok(invocation)
     }
 
-    pub fn destinations(&self, target: &Target, args: &Arguments<'_>) -> Result<Outputs> {
+    pub fn destinations(&self, target: &Input, args: &Arguments<'_>) -> Result<Outputs> {
         for path in &self.default_outputs {
             std::fs::create_dir_all(path.parent().ok_or("entry-output-path")?)
                 .map_err(|_| "entry-output-directory")?;

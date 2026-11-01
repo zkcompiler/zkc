@@ -2,6 +2,7 @@
 #define ZKC_COMPILER_LANGUAGEPACKAGE_H
 #include "zkc/Compiler/Language.h"
 namespace zkc::language {
+class CompiledEntry;
 inline constexpr uint64_t entryPackageByteLimit = 64 * 1024 * 1024;
 /// Immutable publication bytes. The application must authorize identity()
 /// independently; a digest received alongside these bytes is not authority.

@@ -15,7 +15,7 @@ Compilation::oracleRealizationSnapshot() const {
   if (!storage || !storage->realization)
     return std::nullopt;
   const auto &edge = *storage->realization;
-  return OracleRealizationSnapshot{edge.originalSnapshot(),
+  return OracleRealizationSnapshot{edge.preparedSnapshot(),
                                    edge.candidateSnapshot(),
                                    edge.realizationRecord().str()};
 }

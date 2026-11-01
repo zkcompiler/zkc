@@ -21,7 +21,7 @@ Expected<SmallVector<NativeRequestCountPair>>
 readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
                         pir::ProtocolModuleOp projected,
                         const NativeProofPolicy &policy) {
-  auto source = owner.originalSnapshot();
+  auto source = owner.preparedSnapshot();
   auto common = owner.candidateSnapshot();
   auto ordinary = owner.project(false);
   if (!source || !common || !ordinary ||

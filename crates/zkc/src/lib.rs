@@ -1,5 +1,7 @@
 //! Authenticated Entry packages, native run bundles and independent proof hosts.
 pub mod entry;
+#[cfg(feature = "evm")]
+pub mod evm;
 #[cfg(feature = "cpu")]
 mod host;
 mod io;

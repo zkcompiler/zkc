@@ -3,6 +3,7 @@
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Target/Cpu/Passes.h"
 int main() {
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
@@ -11,8 +12,12 @@ int main() {
     return 1;
   zkc::registerCompilerPasses();
   zkc::registerCompilerPipelines();
+  zkc::registerCpuPasses();
+  zkc::registerCpuPipelines();
   zkc::registerCompilerPasses();
   zkc::registerCompilerPipelines();
+  zkc::registerCpuPasses();
+  zkc::registerCpuPipelines();
   if (!mlir::PassInfo::lookup("zkc-lower-math") ||
       mlir::PassInfo::lookup("lower-pir-to-plan"))
     return 2;

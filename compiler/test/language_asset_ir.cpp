@@ -1,4 +1,5 @@
 #include "support/ProtocolDeployment.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
 // The closed source body, not the emitted text, decides which arena a kernel
 // evaluates: the digest written into the original MLIR must be the identity of

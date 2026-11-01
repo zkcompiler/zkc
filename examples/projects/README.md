@@ -8,6 +8,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | [Schnorr](schnorr/README.md) | A generic group protocol, interactive execution and independent proofs; a [Spongefish variant](schnorr/spongefish/README.md) selects an external transcript and byte format |
 | [Sigma compositions](sigma/README.md) | Schnorr AND with a shared challenge and Chaum–Pedersen with a shared witness, interactive and noninteractive |
 | [Sumcheck](sumcheck/README.md) | Public-table multilinear Sumcheck, [composition](sumcheck/composed/README.md), and a [product expression](sumcheck/product/README.md) with extension-field challenges |
+| [Keccak Sumcheck](sumcheck-keccak/README.md) | The same native proof verified by a compiled Cancun EVM verifier |
 | [GKR](gkr/README.md) | Layered arithmetic circuits with public wiring: degree-two Sumcheck per layer and the line reduction |
 | [Exact tables](table/README.md) | Retained membership and indexed-read relations, direct evaluation and a separate AIR reciprocal control |
 | [FRI](fri/README.md) | Authenticated folding and a bounded terminal polynomial |

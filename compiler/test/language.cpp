@@ -6,6 +6,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "llvm/Support/CommandLine.h"

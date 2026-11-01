@@ -6,6 +6,7 @@
 #include "mlir/Transforms/RegionUtils.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"

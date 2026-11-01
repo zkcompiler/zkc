@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 zkc-format.workspace = true
-zkc.workspace = true
+zkc = { workspace = true, features = ["evm"] }
 serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true

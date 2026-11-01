@@ -329,3 +329,51 @@ Cargo features are additive; all consumers in that build must preserve the
 nonparallel selection. The [browser adapter](../zkc-web/README.md) supplies a
 small in-memory proof API and browser entropy without changing package bytes
 or importing filesystem capabilities.
+
+## EVM verifier compilation
+
+The optional `evm` feature enables compiler-backed EVM artifacts without a CPU
+runtime or EVM engine dependency. Applications executing those bytes choose their
+own chain client or engine. Compile from the same checked proof Entry:
+
+```rust,ignore
+use zkc::{evm::{Invocation, Solc}, project::{Compiler, Project, Selection}};
+fn compile_verifier(
+    trusted_solc_sha256: &str, public_wires: &[&[u8]], proof: &[u8],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let project = Project::load("examples/projects/sumcheck-keccak/zkc.toml")?;
+    let compiler = Compiler::new("/absolute/path/to/zkc-compile")?;
+    let solc = Solc::new("/absolute/path/to/solc", trusted_solc_sha256)?;
+    let artifact = compiler.build_evm(
+        &project, Selection { name: Some("example::Proof"), kind: None }, &solc, None,
+    )?;
+    let manifest_sha256 = artifact.identity(); // Retain independently.
+    artifact.publish("build/verifier.evm")?;
+    Ok(artifact.calldata(Invocation {
+        public_inputs: public_wires, context: b"application", proof,
+    })?)
+}
+```
+
+On Linux, EVM compilation executes sealed snapshots of the compiler and solc;
+the executable hash describes those exact bytes. Script interpreters and dynamic
+libraries remain trusted, mutable host toolchain inputs. For a compiler resolved
+under `<prefix>/bin`, sealed execution prepends `<prefix>/lib` to the child's
+`LD_LIBRARY_PATH`, followed by any nonempty ambient value. This restores the
+compiler installer's `$ORIGIN/../lib` lookup with installation libraries taking
+priority over ambient libraries. Other loader rules still apply, including
+legacy `DT_RPATH` precedence and expansion of tokens in the ambient value.
+Compiler descendants inherit this search path. An unset or empty ambient value
+adds no current directory search. Installation prefixes containing `:`, `;` or
+`$` refuse with `source-compiler-io` because the loader cannot encode them
+literally here. This compiler layout policy does not apply to solc or other
+executable snapshots.
+
+Retain `manifest_sha256` independently. A later
+`evm::Artifact::capture(directory, expected_manifest)` authenticates the exact
+manifest and validates its file inventory, hashes, source, settings and code-size
+limits. `creation_bytecode()` and `runtime_bytecode()` expose immutable binary
+bytes. `calldata()` encodes `verify(publicInputs, context, proof)` from the existing
+canonical wire values and native framed proof; it does not reinterpret them.
+The [target contract](../../docs/spec/targets/evm.md) defines supported operations,
+outcomes, ceilings, tool pins, authenticated reuse and atomic publication.

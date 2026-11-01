@@ -7,6 +7,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"

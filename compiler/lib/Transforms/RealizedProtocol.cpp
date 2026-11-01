@@ -37,7 +37,7 @@ RealizedProtocol::realize(PreparedProtocol prepared,
   return RealizedProtocol(std::move(prepared), std::move(actual->module),
                           std::move(*record), std::move(selectionText));
 }
-OwningOpRef<ModuleOp> RealizedProtocol::originalSnapshot() const {
+OwningOpRef<ModuleOp> RealizedProtocol::preparedSnapshot() const {
   return prepared.snapshot();
 }
 OwningOpRef<ModuleOp> RealizedProtocol::candidateSnapshot() const {

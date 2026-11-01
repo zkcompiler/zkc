@@ -12,6 +12,7 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Interfaces/Mathematical.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 

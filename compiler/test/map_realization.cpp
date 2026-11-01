@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/Support/MemoryBuffer.h"
 

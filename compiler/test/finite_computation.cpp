@@ -17,6 +17,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
