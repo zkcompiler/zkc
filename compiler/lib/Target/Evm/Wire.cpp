@@ -88,7 +88,7 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
     result.tag = 70;
     break;
   case Kind::FieldArray: {
-    auto array = cast<algebra::FieldArrayType>(type);
+    auto array = cast<data::FieldArrayType>(type);
     if (array.getDomain() != "bls12-381.fr")
       return zkc::error("evm.wire-type",
                         "no native fixed-array codec for this field");
@@ -123,7 +123,7 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
     break;
   case Kind::FieldVector:
     kind = "vector";
-    domain = cast<algebra::FieldVectorType>(type).getDomain();
+    domain = cast<data::FieldVectorType>(type).getDomain();
     break;
   }
   if (!protocol::nativeMessageAtom(kind, domain))
@@ -339,7 +339,7 @@ void WireGenerator::Storage::scan(const Frame &f) {
         kind == Kind::Boolean ? 7
         : kind == Kind::Index ? 14
         : fixed
-            ? 6 + cast<algebra::FieldArrayType>(f.layout->logical).getLength() *
+            ? 6 + cast<data::FieldArrayType>(f.layout->logical).getLength() *
                       uint64_t(width(f))
             : 6 + width(f);
     out << "if iszero(eq(n, " << bytes << ")) { evm_decode(2) }\n";
@@ -355,8 +355,7 @@ void WireGenerator::Storage::scan(const Frame &f) {
   if (kind == Kind::Field && f.field->degree > 1)
     out << "evm_wire_retain(budget, " << f.field->coefficientBytes() << ")\n";
   if (fixed) {
-    uint64_t count =
-        cast<algebra::FieldArrayType>(f.layout->logical).getLength();
+    uint64_t count = cast<data::FieldArrayType>(f.layout->logical).getLength();
     out << "evm_wire_elements(budget, " << count << ")\n"
         << "evm_wire_retain(budget, evm_wire_mul(" << count << ", "
         << f.layout->collection->strideBytes << "))\n";
@@ -423,7 +422,7 @@ void WireGenerator::Storage::canonical(const Frame &f) {
         kind == Kind::Field ? "1"
         : kind == Kind::FieldArray
             ? std::to_string(
-                  cast<algebra::FieldArrayType>(f.layout->logical).getLength())
+                  cast<data::FieldArrayType>(f.layout->logical).getLength())
             : "evm_le(add(p, 6), 4)";
     out << "let count := " << length << "\n"
         << "for { let i := 0 } lt(i, mul(count, " << f.field->degree
@@ -478,9 +477,8 @@ void WireGenerator::Storage::read(const Frame &f) {
     if (!scalar)
       out << "v1 := "
           << (kind == Kind::FieldArray
-                  ? std::to_string(
-                        cast<algebra::FieldArrayType>(f.layout->logical)
-                            .getLength())
+                  ? std::to_string(cast<data::FieldArrayType>(f.layout->logical)
+                                       .getLength())
                   : "evm_le(add(p, 6), 4)")
           << "\n";
     std::string length = scalar ? "1" : "v1";
@@ -555,7 +553,7 @@ void WireGenerator::Storage::size(const Frame &f) {
     std::string length = scalar ? "1" : "v1";
     if (kind == Kind::FieldArray)
       out << "if iszero(eq(v1, "
-          << cast<algebra::FieldArrayType>(f.layout->logical).getLength()
+          << cast<data::FieldArrayType>(f.layout->logical).getLength()
           << ")) { evm_fault(10) }\n";
     out << "evm_wire_elements(budget, " << length << ")\n";
     if (scalar && f.field->degree == 1)

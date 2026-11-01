@@ -1,13 +1,13 @@
 !f = !algebra.field<"bls12-381.fr">
-!v = !algebra.field_vector<"bls12-381.fr">
-!mode = !data.variant<#data.identity<["atom", "Batch"]>, [#data.alternative<"none">, #data.alternative<"plain", [!algebra.field_vector<"bls12-381.fr">]>, #data.alternative<"scaled", [!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">]>]>
-!packet = !data.variant<#data.identity<["atom", "Announcement"]>, [#data.alternative<"record", [!algebra.group<"bls12-381.g1">, !data.variant<#data.identity<["atom", "Batch"]>, [#data.alternative<"none">, #data.alternative<"plain", [!algebra.field_vector<"bls12-381.fr">]>, #data.alternative<"scaled", [!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">]>]>]>]>
+!v = !data.field_vector<"bls12-381.fr">
+!mode = !data.variant<#data.identity<["atom", "Batch"]>, [#data.alternative<"none">, #data.alternative<"plain", [!data.field_vector<"bls12-381.fr">]>, #data.alternative<"scaled", [!data.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">]>]>
+!packet = !data.variant<#data.identity<["atom", "Announcement"]>, [#data.alternative<"record", [!algebra.group<"bls12-381.g1">, !data.variant<#data.identity<["atom", "Batch"]>, [#data.alternative<"none">, #data.alternative<"plain", [!data.field_vector<"bls12-381.fr">]>, #data.alternative<"scaled", [!data.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">]>]>]>]>
 module {
 "protocol.module"() ({
 "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
 "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
-"runtime.binding"() {sym_name="length",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 "runtime.binding"() {sym_name="multiply",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
     func.func @inspect(%arg0: !runtime.scope, %arg1: !mode) -> !exec.outcome<(ui64, !f, ui64)> attributes {no_inline, runtime.origin = ["inspect", []]} {
       "exec.match"(%arg0, %arg1)[^bb2, ^bb3, ^bb4, ^bb5] <{alternatives = ["none", "plain", "scaled"], site = "mode_10", successor_operand_segments = array<i32: 0, 0, 0, 0 >}> : (!runtime.scope, !mode) -> ()

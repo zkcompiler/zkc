@@ -72,7 +72,7 @@ siblings without assuming verification order.
 |---|---|---|
 | `init` | `(ui64, table^k) → state` | All factor arities equal the supplied count; prefix is empty |
 | `arity` | `state → ui64` | Check equal factor arities and return the current arity |
-| `round` | `state → !algebra.field_array<"F", degree+1>` | Require positive common arity; return coefficients of `sum_y P(X,y)` |
+| `round` | `state → !data.field_array<"F", degree+1>` | Require positive common arity; return coefficients of `sum_y P(X,y)` |
 | `bind` | `(state,F) → state` | Require positive common arity; fold every factor at the same scalar and append it to the prefix |
 | `finish` | `state → (point,F)` | Require arity zero; evaluate `R` on singleton factor values |
 | `evaluate` | `(point,table^k) → F` | Check equal arities and `len(point) = arity`; return `R(T1(point),...,Tk(point))` |

@@ -226,13 +226,13 @@ LogicalResult CheckedOp::verify() {
           }))
         return emitOpError("[evm.literal] requires exact collection literals");
       correct = signature({}, layout->lanes);
-      if (auto array = dyn_cast<algebra::FieldArrayType>(type.getValue()))
+      if (auto array = dyn_cast<data::FieldArrayType>(type.getValue()))
         correct &= values.size() == array.getLength();
     } else if (action == "empty") {
       correct = signature({}, layout->lanes);
-      if (auto array = dyn_cast<algebra::FieldArrayType>(type.getValue()))
+      if (auto array = dyn_cast<data::FieldArrayType>(type.getValue()))
         correct &= array.getLength() == 0;
-      if (auto fixed = dyn_cast<algebra::FixedVectorType>(type.getValue()))
+      if (auto fixed = dyn_cast<data::FixedVectorType>(type.getValue()))
         correct &= fixed.getLength() == 0;
     } else if (action == "length")
       correct = signature(layout->lanes, {i64});
@@ -255,8 +255,7 @@ LogicalResult CheckedOp::verify() {
       correct = action == "set" ? signature(inputs, {})
                                 : signature(inputs, layout->lanes);
       if (action == "append" &&
-          isa<algebra::FieldArrayType, algebra::FixedVectorType>(
-              type.getValue()))
+          isa<data::FieldArrayType, data::FixedVectorType>(type.getValue()))
         correct = false;
     }
   } else if (code.starts_with("variant.")) {

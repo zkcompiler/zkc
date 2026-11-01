@@ -8,6 +8,16 @@ state and observations under the [realization laws](../spec/realization/represen
 
 ## Logical structure
 
+Data owns every logical collection, including specialized field/group vectors,
+indices, matrices and exact-length bulk values. Algebra retains their element
+mathematics and algebraic operations. Equal shape and element type alone do not
+identify collection families: field arrays admit mathematical and message uses,
+fixed vectors are local bulk values, and generic sequences retain recursive
+layout and custody rules. These nominal contracts select the existing exact wire
+and runtime representations; none is inferred from a standard Tensor type.
+The former Algebra collection type spellings are refused, with no parser or C++
+compatibility aliases.
+
 Resolved domains identify fields, extension bases, scalar actions and digest
 suites. SSA operands carry actual tables, prefixes, relation inputs and messages.
 A label or matching shape cannot establish their provenance. Structured regions

@@ -89,8 +89,7 @@ int main() {
       refuses(layouts.get(field(name)), "evm.field");
     });
   cases.run("coefficient stride differs from complete lane-cell stride", [&] {
-    auto vector =
-        algebra::FieldVectorType::get(&context, extension.getDomain());
+    auto vector = data::FieldVectorType::get(&context, extension.getDomain());
     auto sequence = data::SequenceType::get(&context, extension);
     auto nested = data::SequenceType::get(&context, vector);
     require(take(layouts.get(vector))->collection->strideBytes == 128 &&
@@ -104,15 +103,14 @@ int main() {
             "bytes were not packed");
   });
   cases.run("fixed collections retain complete empty-element layout", [&] {
-    auto array =
-        algebra::FieldArrayType::get(&context, extension.getDomain(), 0);
-    auto fixed = algebra::FixedVectorType::get(
+    auto array = data::FieldArrayType::get(&context, extension.getDomain(), 0);
+    auto fixed = data::FixedVectorType::get(
         &context, data::SequenceType::get(&context, extension), 0);
     require(take(layouts.get(array))->collection->strideBytes == 128 &&
                 take(layouts.get(fixed))->collection->strideBytes == 64,
             "fixed collection stride ignored empty child");
     auto group = algebra::GroupType::get(&context, "bls12-381.g1");
-    refuses(layouts.get(algebra::FixedVectorType::get(&context, group, 0)),
+    refuses(layouts.get(data::FixedVectorType::get(&context, group, 0)),
             "evm.layout");
     refuses(layouts.get(data::SequenceType::get(&context, group)),
             "evm.layout");
@@ -128,8 +126,7 @@ int main() {
     refuses(layouts.get(affine), "evm.layout");
   });
   cases.run("variant payload and signature use logical value slices", [&] {
-    auto vector =
-        algebra::FieldVectorType::get(&context, extension.getDomain());
+    auto vector = data::FieldVectorType::get(&context, extension.getDomain());
     auto value = variant({alternative("empty", {}),
                           alternative("value", {extension, vector, index})});
     require(take(layouts.get(value))->lanes.size() == 1,
@@ -143,12 +140,12 @@ int main() {
     refuses(layouts.payload(value, 2), "evm.layout");
   });
   cases.run("local representation does not grant a wire codec", [&] {
-    auto fixed = algebra::FixedVectorType::get(&context, base, 0);
+    auto fixed = data::FixedVectorType::get(&context, base, 0);
     take(layouts.get(fixed));
     auto error = evm::verifyWireType(layouts, fixed);
     require(bool(error), "local fixed vector acquired wire permission");
     consumeError(std::move(error));
-    auto scalar = algebra::FieldArrayType::get(&context, "koala-bear", 0);
+    auto scalar = data::FieldArrayType::get(&context, "koala-bear", 0);
     take(layouts.get(scalar));
     error = evm::verifyWireType(layouts, scalar);
     require(bool(error), "unsupported concrete array codec was admitted");
@@ -222,7 +219,7 @@ int main() {
             "out-of-range inactive selector admitted");
   });
   cases.run("construction stores refuse borrowed or mismatched buffers", [&] {
-    auto vector = algebra::FieldVectorType::get(&context, base.getDomain());
+    auto vector = data::FieldVectorType::get(&context, base.getDomain());
     auto borrowed = operation("vector.set", vector, {i64, i64, i64, i256}, {});
     require(failed(borrowed.second.verify()),
             "borrowed immutable vector gained a store");
@@ -253,10 +250,9 @@ int main() {
         auto inverse = operation("field.inverse", extension, {i64}, {i64});
         auto equal = operation("field.equal", extension, {i64, i64},
                                {builder.getI1Type()});
-        auto v4 =
-            algebra::FieldVectorType::get(&context, extension.getDomain());
+        auto v4 = data::FieldVectorType::get(&context, extension.getDomain());
         auto get4 = operation("vector.get", v4, {i64, i64, i64}, {i64});
-        auto v1 = algebra::FieldVectorType::get(&context, base.getDomain());
+        auto v1 = data::FieldVectorType::get(&context, base.getDomain());
         auto get1 = operation("vector.get", v1, {i64, i64, i64}, {i256});
         auto n1 = take(arithmetic.helper(get1.second));
         auto n4 = take(arithmetic.helper(get4.second));

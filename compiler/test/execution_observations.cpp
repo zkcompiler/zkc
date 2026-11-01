@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
   cases.run("finite field arrays retain immutable data dependence", [] {
     Source source;
     Type array =
-        parseType("!algebra.field_array<\"bls12-381.fr\", 4>", &source.context);
+        parseType("!data.field_array<\"bls12-381.fr\", 4>", &source.context);
     require(bool(array), "field array type");
     auto caller = source.function("identity", array, array);
     exec::ScopedExecutionBuilder control(source.builder, caller);

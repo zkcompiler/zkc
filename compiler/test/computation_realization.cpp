@@ -14,6 +14,7 @@
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -1623,7 +1624,7 @@ module {
     if (!changed)
       logical->walk([&](Operation *op) {
         if (!changed &&
-            op->getName().getStringRef() == "algebra.array_from_elements" &&
+            op->getName().getStringRef() == "data.array_from_elements" &&
             op->getNumOperands() == 2) {
           op->setOperand(0, op->getOperand(1));
           changed = true;
@@ -1758,7 +1759,7 @@ module {
         sum.addOperands({entry.getArgument(0), constantOp->getResult(0)});
         sum.addTypes(constantOp->getResultTypes());
         auto *pack = returned.getOperand(0).getDefiningOp();
-        require(pack && isa<algebra::ArrayFromElementsOp>(pack),
+        require(pack && isa<data::ArrayFromElementsOp>(pack),
                 "missing returned pack");
         auto *addition = builder.create(sum);
         constantOp->moveBefore(pack);

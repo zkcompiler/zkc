@@ -163,12 +163,20 @@ public:
   bool application(exec::ApplyOp op) {
     auto binding =
         symbols.lookupSymbolIn<runtime::BindingOp>(module, op.getBindingAttr());
-    auto signature = binding ? binding.getFunctionType() : FunctionType();
+    if (!binding)
+      return fail("missing native binding");
+    auto admitted =
+        readNativeBinding([&] { return op.emitOpError(); }, binding);
+    if (failed(admitted))
+      return fail("invalid native binding");
+    auto signature = binding.getFunctionType();
     return (signature && op.getOperandTypes() == signature.getInputs() &&
             op->getResultTypes() == signature.getResults() &&
             succeeded(verifyInvocationParameters(
                 [&] { return op.emitOpError(); }, binding.getContract(),
-                binding.getArgumentsAttr(), op.getParametersAttr()))) ||
+                binding.getArgumentsAttr(), op.getParametersAttr(),
+                admitted->physical ? protocol::ParameterStage::Physical
+                                   : protocol::ParameterStage::Logical))) ||
            fail("invocation differs from its actual native binding");
   }
   bool body(func::FuncOp function, bool regionBody) {

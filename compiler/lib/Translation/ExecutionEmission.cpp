@@ -120,8 +120,9 @@ public:
       program::Names names;
       if (auto op = instruction.get<program::Operation>()) {
         const auto &binding = bindingParameters.at(op->callee);
-        auto decoded = decodeInvocationParameters(binding.first, binding.second,
-                                                  op->attributes);
+        auto decoded = decodeInvocationParameters(
+            binding.first, binding.second, op->attributes,
+            physical ? ParameterStage::Physical : ParameterStage::Logical);
         if (!decoded) {
           consumeError(decoded.takeError());
           valid = false;

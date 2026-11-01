@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -59,8 +60,8 @@ class FactorFixing {
       auto field =
           algebra::FieldType::get(builder.getContext(), type.getDomain());
       auto data =
-          algebra::FieldArrayType::get(field.getContext(), field.getDomain(),
-                                       uint64_t(1) << type.getArity());
+          data::FieldArrayType::get(field.getContext(), field.getDomain(),
+                                    uint64_t(1) << type.getArity());
       SmallVector<Value> inputs{table.getTable()};
       llvm::append_range(inputs, prefix);
       auto smaller = make(FixTableOp::getOperationName(), data, inputs);
@@ -121,6 +122,9 @@ struct FixPolynomialFactorsPass
   StringRef getDescription() const final {
     return "Fix ordered prefixes through shared polynomial factors and MLE "
            "tables";
+  }
+  void getDependentDialects(DialectRegistry &registry) const final {
+    registry.insert<PolynomialDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();

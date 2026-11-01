@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({
  ^entry(%xs:!V,%other:!V):
@@ -17,7 +17,7 @@ module { "protocol.module"() ({
  }
  "protocol.func"() ({
  ^entry(%xs:!V,%other:!V,%a:!F):
-   %r = "algebra.finite_fold"(%xs,%other,%a) {domain=@items,step=@step} : (!V,!V,!F)->!F
+   %r = "data.finite_fold"(%xs,%other,%a) {domain=@items,step=@step} : (!V,!V,!F)->!F
    "protocol.return"(%r) : (!F)->()
  }) {sym_name="main",origin=["main",[]],function_type=(!V,!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

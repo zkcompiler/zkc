@@ -368,8 +368,16 @@ mod tests {
         use zkc_runtime::vm::{PhysicalType, Representation};
 
         let binding = expression_binding("bls12-381.fr", "arkworks");
-        let attributes =
-            vec![json!(["zkc.ring/0", ["bls12-381.fr"], [["input", 0]], [0]]).to_string()];
+        let attributes = vec![
+            json!([
+                "zkc.numerical-plan/0",
+                ["zkc.ring/0", ["bls12-381.fr"], [["input", 0]], [0]],
+                256,
+                1,
+                [0]
+            ])
+            .to_string(),
+        ];
         let mut slot = None;
         CpuCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
         let storage = slot.as_ref().unwrap().attributes.as_ptr();
@@ -414,8 +422,16 @@ mod tests {
     fn expression_preparation_keys_exact_binding_body_and_representations() {
         use serde_json::json;
         let binding = expression_binding("koala-bear", "plonky3");
-        let attributes =
-            vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string()];
+        let attributes = vec![
+            json!([
+                "zkc.numerical-plan/0",
+                ["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]],
+                256,
+                1,
+                [0]
+            ])
+            .to_string(),
+        ];
         let mut slot = None;
         CpuCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
         let storage = slot.as_ref().unwrap().attributes.as_ptr();
@@ -507,8 +523,16 @@ mod tests {
     fn expression_preparation_rechecks_every_retained_metadata_field() {
         use serde_json::json;
         let binding = expression_binding("koala-bear", "plonky3");
-        let attributes =
-            vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string()];
+        let attributes = vec![
+            json!([
+                "zkc.numerical-plan/0",
+                ["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]],
+                256,
+                1,
+                [0]
+            ])
+            .to_string(),
+        ];
         let mut slot = None;
         CpuCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
         for changed in 0..6 {

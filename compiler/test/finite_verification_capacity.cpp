@@ -131,7 +131,7 @@ mathematical::VerificationDecision check(ModuleOp source, ModuleOp candidate,
 OwningOpRef<ModuleOp> kernelReductions(MLIRContext &context) {
   auto result = parseSourceString<ModuleOp>(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { module @reductions attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -146,8 +146,8 @@ module { module @reductions attributes {exec.computation} {
    func.return %s : !F
  }
  func.func @evaluate(%xs:!V,%zero:!F,%one:!F)->(!F,!F) {
-   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@add} : (!V,!F)->!F
-   %product = "algebra.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
+   %sum = "data.finite_fold"(%xs,%zero) {domain=@items,step=@add} : (!V,!F)->!F
+   %product = "data.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
    func.return %sum,%product : !F,!F
  }
 } }
@@ -160,7 +160,7 @@ module { module @reductions attributes {exec.computation} {
 OwningOpRef<ModuleOp> nestedKernelReductions(MLIRContext &context) {
   auto result = parseSourceString<ModuleOp>(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { module @reductions attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -171,13 +171,13 @@ module { module @reductions attributes {exec.computation} {
    func.return %s : !F
  }
  func.func private @nested(%acc:!F,%x:!F,%xs:!V)->!F {
-   %first = "algebra.finite_fold"(%xs,%acc) {domain=@items,step=@add} : (!V,!F)->!F
-   %second = "algebra.finite_fold"(%xs,%first) {domain=@items,step=@add} : (!V,!F)->!F
+   %first = "data.finite_fold"(%xs,%acc) {domain=@items,step=@add} : (!V,!F)->!F
+   %second = "data.finite_fold"(%xs,%first) {domain=@items,step=@add} : (!V,!F)->!F
    %s = "algebra.field_add"(%second,%x) : (!F,!F)->!F
    func.return %s : !F
  }
  func.func @evaluate(%xs:!V,%zero:!F)->!F {
-   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@nested} : (!V,!F)->!F
+   %sum = "data.finite_fold"(%xs,%zero) {domain=@items,step=@nested} : (!V,!F)->!F
    func.return %sum : !F
  }
 } }

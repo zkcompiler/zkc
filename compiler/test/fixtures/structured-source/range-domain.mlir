@@ -9,7 +9,7 @@ module { "protocol.module"() ({
   }
   "protocol.func"() ({
   ^entry(%lower:ui64,%upper:ui64,%seed:ui64):
-    %result = "algebra.finite_fold"(%lower,%upper,%seed) {domain=@items,step=@step} : (ui64,ui64,ui64)->ui64
+    %result = "data.finite_fold"(%lower,%upper,%seed) {domain=@items,step=@step} : (ui64,ui64,ui64)->ui64
     "protocol.return"(%result) : (ui64)->()
   }) {sym_name="main",origin=["main",[]],function_type=(ui64,ui64,ui64)->ui64,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

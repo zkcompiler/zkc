@@ -17,13 +17,14 @@ conditions, not registered dialects or supported protocol claims.
 | Owner | Abstraction and information retained |
 |---|---|
 | Protocol | Roles, source-relative action occurrences, communication, draws, statements, completion and repeated interaction |
-| Algebra | Nominal field/group values, specialized bulk collections, exact arithmetic and finite mathematical computations; machine integers do not substitute for field semantics |
+| Algebra | Nominal field/group values, exact arithmetic and finite mathematical computations; machine integers do not substitute for field semantics |
 | Poly | Formal polynomial and quotient-ring values, domains, bases and evaluation structure before concrete realization |
-| Data | Logical aggregates, sequences, variants, domains and explicit ordering; no authentication or oracle claim follows from a container |
+| Data | All logical collection types (bulk vectors, matrices, arrays, sequences and bytes), aggregates, variants, domains and explicit ordering; no authentication or oracle claim follows from a container |
 | Relation | Relation declarations/assets, public/witness layout and deterministic interpretation; imported syntax remains an adapter concern |
 | Commitment | Scheme-specific types and attributes with exact setup/domain parameters; installed commitment/opening actions use Exec bindings |
 | Crypto | Cryptographic types and attributes, with installed primitive actions through Exec; a hash invocation is not itself a random-oracle security judgment |
 | Exec | Ordered fallible numerical execution, explicit returned/stopped outcomes, scoped computation invocations and retained finite requests |
+| Residue | Canonical modular representatives with exact modulus, word width, unsigned projection and lifts; distinct from nominal fields and strict byte codecs |
 | Runtime | Logical binding declarations, resource custody and selected installed implementations/representations; Host authorization remains separate |
 
 Computation units are standard modules/functions admitted by
@@ -47,8 +48,8 @@ they do not imply a Local dialect or a second executable route.
 | SCF / CF | Checked structured numerical schedules followed by scoped control flow; explicit outcome values carry stops through nested regions |
 | Arith | Admitted Boolean/index control and arithmetic with its declared widths; nominal field operations stay Algebra until representation is established |
 | Tensor / Linalg | Private rank-one maps and selected exact sums with Algebra payloads, admitted indexing maps and explicit common-extent premises |
-| Vector | Future represented arithmetic with target lane/width/overflow laws and independently checked lowering |
-| MemRef / Bufferization | Future private buffers after aliasing, lifetime, allocation/refusal and scope-ownership contracts are fixed |
+| Vector | Actual pointwise word candidates after exact widening; bounded independent interpretation of lane arithmetic and poison isolation |
+| MemRef / Bufferization | Actual One-Shot private candidates, with independent bounds, initialization, alias, lifetime and fresh-return checks; reached allocation/publication stay in the numerical Call |
 | Transform / PDL | Future transformation selection and matching over admitted payloads; scripts never become evidence that their output is correct |
 
 The current [structured tensor profile](../spec/ir/mathematics.md#structured-tensor-computations)
@@ -86,20 +87,13 @@ challenge, change the first failure, or remove a reached charge. Use a shared
 ordering resource alongside finer storage effects if a real consumer needs the
 precision. A new effect-token dialect is not required.
 
-Logical collections need a separate ownership decision in represented execution.
-Current generic `data.sequence<T>` and specialized Algebra vectors/arrays have
-related element/shape structure but distinct logical schemas, codecs and installed
-operation contracts. `CollectionTypeInterface` already gives analyses a common
-view; it does not make the values interchangeable. The target assigns ordinary
-collection shape to Data, element domains/arithmetic to Algebra, and storage/lane
-choices to representation lowering. Audit which specialized forms express a
-real mathematical distinction and which merely duplicate a collection with a
-different implementation. Merge the latter with their source, layout, codec,
-formal-reader and runtime consumers in one migration, removing replaced forms.
-Keep polynomial axes, coordinate-point meaning and other nominal mathematical
-contracts explicit. Standard Tensor is a private shaped computation view and
-Vector a represented execution tool, not an automatic replacement for every
-logical collection or its wire schema.
+Data owns both generic `data.sequence<T>` and specialized vectors, matrices and
+arrays. These carry distinct observable admission and layout contracts: a
+mathematical field array is not a private fixed vector, and a matrix retains
+both extents. One collection interface exposes element/shape observations;
+Algebra owns scalar domains and arithmetic on them. Runtime and targets select
+physical storage without erasing mathematical distinctions. Old Algebra
+collection classes, operation owners and parser aliases are removed.
 
 ## Transformation and component contracts
 
@@ -171,7 +165,7 @@ comparison relation; enabling an entire standard dialect is too coarse.
 | DataFlowSolver | Monotone availability/range problems with defined transfer functions; exact custody and resource roots keep their own validators |
 | InferType / shape and integer-range interfaces | Derived result facts with concrete consumers; range facts do not manufacture source premises or security proofs |
 | Transform / PDL | Reusable schedules over an independently admitted payload, when schedule reuse justifies the extra surface |
-| BufferizableOpInterface / destination style | Represented execution after aliasing, allocation, refusal and custody contracts exist |
+| BufferizableOpInterface / destination style | Used by admitted private tiles; broader forms require aliasing, allocation, refusal and custody relations |
 
 Whole-module projection, protocol construction and realization remain structured
 algorithms where their global obligations demand it. They still use standard
@@ -254,7 +248,8 @@ under an explicit maximum; challenge-adaptive shapes require a separately
 specified extension and matching formal consumer. This restriction belongs to
 that oracle profile, not to every Data domain or executable loop.
 
-Three additional semantic owners have concrete prospective consumers:
+Residue is now a concrete owner with checked word/tile and CPU-plan consumers.
+Two additional semantic owners have prospective consumers:
 
 - **Constraint:** assignment predicates, lookup/multiset and chronological-memory
   structure. Move existing assignment-level ownership here when the encoding
@@ -265,23 +260,24 @@ Three additional semantic owners have concrete prospective consumers:
   witness computation is separate from validity for arbitrary assignments.
   Public/fixed/witness/auxiliary projections, ensemble interactions, row scopes
   and padding remain semantic data, not adapter annotations.
-- **Residue:** represented modular arithmetic, ranges, limbs and overflow laws
-  needed before Arith/Vector can implement nominal field and ring operations.
 - **Codec:** exact logical-value/byte relations shared by transcript, commitment,
   wire and recursive-verification consumers. Runtime still implements the
   independently installed physical codecs.
 
 These are ownership decisions; a new dialect namespace requires an actual
-operation set and checked consumers. Decide the Residue/Codec split with the
-represented-execution migration, rather than keeping duplicate meaning merely
-to match a planned dialect list. Ordinary collection shape converges on Data;
-nominal polynomial domains and bases remain Poly responsibilities.
+operation set and checked consumers. The represented-execution decision keeps
+Residue projection/lifts separate from strict codecs, whose current owners
+remain the installed runtime and exact encoding contracts. A later Codec IR
+requires a shared consumer of those relations, not wrappers around existing
+bindings. Data owns logical collections; Poly retains nominal polynomial
+domains and bases.
 
 Delivery order does not impose representation order. Constraints consume exact
 logical assignments and relation assets before information-erasing physical
-lowering even though their migration follows represented execution. Review this
-ingress with the STARK unit now so later encodings do not reconstruct their
-statement or witness map from emitted machine programs.
+lowering even though their migration follows represented execution. The STARK
+construction retains logical terms and public/witness maps at that ingress;
+later encodings consume them directly instead of reconstructing them from
+emitted machine programs.
 
 Construction-specific encoding contracts are fixed when their first consumer
 lands, including statement/root binding, witness framing and request/state
@@ -300,6 +296,13 @@ layouts for EVM and later targets. Standard bufferization can inform private
 storage lowering, but its [alias and ownership analysis](https://mlir.llvm.org/docs/Bufferization/)
 does not establish zkc scope custody or observable resource refusal.
 
+The [EVM target](../spec/targets/evm.md) reads the same Data collection types
+through its native layout owner. Its word lanes, coefficient buffers and exact
+wire permissions are target-specific interpretations of those logical values.
+They do not consume CPU numerical plans or inherit the CPU tile limits. Keep
+installed field facts and complete logical layouts common; keep storage,
+instruction selection and reached resource accounting with each target.
+
 A selected installation restricts independently known contracts throughout
 compiler selection and final validation, including defaults, explicit choices,
 fallback, conversions, table relayout, nested layouts and codecs. Candidate
@@ -312,7 +315,8 @@ explicit-vector mode does not restore a withheld provider. See the
 [CPU installation contract](../../crates/zkc-cpu/README.md#provider-composition).
 
 External dialects remain useful at bounded adapters where their semantics match.
-HEIR reuse should be evaluated against represented polynomial/modular workloads;
+The [represented-arithmetic decision](../rationale/represented-arithmetic.md)
+selects an owned Residue boundary after a bounded HEIR comparison;
 Clean and LLZK are acceptance clients of the constraint/relation redesign;
 CirC remains a comparison point. Clean's ensemble obligations must survive
 extraction, and LLZK's mutable object identity cannot be treated as an immutable

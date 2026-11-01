@@ -1,7 +1,9 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraDialect.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Dialect/TypeFormation.h"
@@ -131,7 +133,7 @@ IndexLogicalShiftRightOp::getOperandDependencies(unsigned result) {
   return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
 }
 std::optional<MathematicalIdentity> DimOp::getMathematicalIdentity() {
-  if (getAxis() == 0 && isa<algebra::FieldVectorType>(getInput().getType()))
+  if (getAxis() == 0 && isa<data::FieldVectorType>(getInput().getType()))
     return MathematicalIdentity::VectorLength;
   return std::nullopt;
 }

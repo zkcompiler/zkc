@@ -36,7 +36,8 @@ const ComputationContract *admitMathematicalMeaning(
   if (inputs != llvm::ArrayRef<BoundType>(signature->inputs) ||
       outputs != llvm::ArrayRef<BoundType>(signature->outputs))
     return nullptr;
-  if (auto error = checkParameters(application, parameters)) {
+  if (auto error = checkParameters(application, parameters,
+                                   zkc::protocol::ParameterStage::Logical)) {
     llvm::consumeError(std::move(error));
     return nullptr;
   }

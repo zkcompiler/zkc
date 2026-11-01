@@ -41,11 +41,12 @@ void runChecked(ModuleOp module, std::unique_ptr<Pass> pass,
   DialectRegistry dependencies;
   pass->getDependentDialects(dependencies);
   auto *context = module.getContext();
-  // Fail the case before executing a pass with an uncovered dependency. In
-  // particular, the preparation regression must never reach unregistered ops.
+  // Check the declared transitive closure in a fresh context. Input dialects
+  // already loaded in the source context must not mask a missing declaration.
+  MLIRContext dependencyContext(dependencies);
+  dependencyContext.loadAllAvailableDialects();
   for (auto name : createdDialects)
-    require(context->getLoadedDialect(name) ||
-                dependencies.getDialectAllocator(name),
+    require(bool(dependencyContext.getLoadedDialect(name)),
             pass->getArgument() + " does not declare " + name);
   PassManager manager(context);
   manager.addPass(std::move(pass));
@@ -175,7 +176,7 @@ module { "protocol.module"() ({
 
 constexpr StringLiteral finiteCollection = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 module { "protocol.module"() ({
   "data.domain"() ({ ^entry(%lo: ui64, %hi: ui64):
     %d = "data.domain_range"(%lo, %hi) : (ui64, ui64) -> !data.domain<ui64>
@@ -188,7 +189,7 @@ module { "protocol.module"() ({
   "protocol.func"() ({ ^entry(%value: !F):
     %zero = "data.index"() {value=0 : ui64} : () -> ui64
     %two = "data.index"() {value=2 : ui64} : () -> ui64
-    %r = "algebra.finite_collect"(%zero, %two, %value)
+    %r = "data.finite_collect"(%zero, %two, %value)
         {domain=@items, body=@body} : (ui64, ui64, !F) -> !A
     "protocol.return"(%r) : (!A) -> ()
   }) {sym_name="main", function_type=(!F) -> !A, roles=["P"],
@@ -198,7 +199,7 @@ module { "protocol.module"() ({
 
 constexpr StringLiteral polynomial = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 !P = !poly.polynomial<"bls12-381.fr", 1>
 !C = !poly.polynomial<"bls12-381.fr", 0>
 module { "protocol.module"() ({
@@ -255,6 +256,17 @@ void checkRealizedRecipe(ModuleOp module, MLIRContext &context) {
 
 int main() {
   Cases cases;
+  cases.run(
+      "physical selection declares represented temporary dependencies", [&] {
+        DialectRegistry dependencies;
+        protocol::createSelectPhysicalPass()->getDependentDialects(
+            dependencies);
+        for (StringRef name : {"residue", "arith", "func", "linalg", "tensor",
+                               "vector", "memref", "bufferization", "ub"})
+          require(bool(dependencies.getDialectAllocator(name)),
+                  "physical selection omitted " + name);
+      });
+
   cases.run("verify polynomial-only arithmetic in a lazy context", [&] {
     withSource<poly::PolynomialDialect, func::FuncDialect>(
         R"mlir(module {
@@ -316,14 +328,15 @@ int main() {
     });
   for (bool projection : {false, true})
     cases.run(
-        projection ? "project a range fold without input algebra"
-                   : "prepare a range fold without input algebra",
+        projection
+            ? "project a range fold with declared transitive dependencies"
+            : "prepare a range fold with declared transitive dependencies",
         [&] {
           withSource<data::DataDialect, runtime::RuntimeDialect,
                      exec::ExecDialect, func::FuncDialect>(
               rangeFold, [&](ModuleOp module, MLIRContext &context) {
-                require(!context.getLoadedDialect<algebra::AlgebraDialect>(),
-                        "range fixture unexpectedly loaded algebra");
+                require(context.getLoadedDialect<algebra::AlgebraDialect>(),
+                        "Data did not initialize its scalar dependency");
                 auto pass = projection
                                 ? protocol::createProjectProtocolPass(false)
                                 : protocol::createPrepareProtocolPass(false);
@@ -432,7 +445,7 @@ int main() {
           runChecked(module, protocol::createLowerMathPass(),
                      {"exec", "runtime", "func", "cf", "arith", "data"});
           require(count(module, "exec.compute") &&
-                      count(module, "algebra.finite_collect") &&
+                      count(module, "data.finite_collect") &&
                       count(module, "data.domain") &&
                       !count(module, "exec.range"),
                   "finite raw closure was not retained");
@@ -440,7 +453,7 @@ int main() {
                      {"exec", "runtime", "func", "cf", "arith", "data"});
           require(count(module, "exec.range") && count(module, "cf.cond_br") &&
                       boundCount(module, "field_array.from_vector") &&
-                      !count(module, "algebra.finite_collect") &&
+                      !count(module, "data.finite_collect") &&
                       !computationCount(module) &&
                       !count(module, "data.domain"),
                   "finite recipe did not lower and consume its source helper");
@@ -452,27 +465,29 @@ int main() {
                   : "fix polynomial factors in their input dialects",
         [&] {
           auto participant =
-              project<algebra::AlgebraDialect, poly::PolynomialDialect>(
-                  polynomial);
-          withSource<algebra::AlgebraDialect, poly::PolynomialDialect>(
-              participant, [&](ModuleOp module, MLIRContext &context) {
-                require(count(module, "poly.fix"),
-                        "missing polynomial observation");
-                auto pass = eliminate
-                                ? protocol::createEliminatePolynomialsPass()
-                                : protocol::createFixPolynomialFactorsPass();
-                runChecked(module, std::move(pass), {"algebra", "poly"});
-                require(
-                    !count(module, "poly.fix") &&
+              project<algebra::AlgebraDialect, poly::PolynomialDialect,
+                      data::DataDialect>(polynomial);
+          withSource<algebra::AlgebraDialect, poly::PolynomialDialect,
+                     data::DataDialect>(participant, [&](ModuleOp module,
+                                                         MLIRContext &context) {
+            require(count(module, "poly.fix"),
+                    "missing polynomial observation");
+            auto pass = eliminate ? protocol::createEliminatePolynomialsPass()
+                                  : protocol::createFixPolynomialFactorsPass();
+            if (eliminate)
+              runChecked(module, std::move(pass), {"algebra", "data"});
+            else
+              runChecked(module, std::move(pass), {"poly"});
+            require(!count(module, "poly.fix") &&
                         context.getLoadedDialect<data::DataDialect>() &&
                         !context.getLoadedDialect<func::FuncDialect>(),
                     "polynomial rewrite lost its verification dependency or "
                     "loaded execution dialects");
-                require(eliminate ? !count(module, "poly.evaluate") &&
-                                        count(module, "algebra.array_at")
-                                  : count(module, "poly.fix_table"),
-                        "polynomial recipe did not execute");
-              });
+            require(eliminate ? !count(module, "poly.evaluate") &&
+                                    count(module, "data.array_at")
+                              : count(module, "poly.fix_table"),
+                    "polynomial recipe did not execute");
+          });
         });
   return cases.result();
 }

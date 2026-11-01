@@ -1,6 +1,6 @@
 #K = #protocol.oracle_kind<"table", [ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  "protocol.func"() ({
  ^entry(%data:!D,%rows:ui64,%position:ui64):

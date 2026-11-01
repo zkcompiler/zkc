@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  func.func private @value(%xs:!V,%dimension:ui64,%width:ui64)->!V {
    func.return %xs : !V

@@ -2,8 +2,9 @@
 #include "../HelperNormalization.h"
 #include "../MathematicalValues.h"
 #include "zkc/Analysis/Finite.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -245,17 +246,17 @@ struct NormalizationProvenanceChecker::Implementation {
     Value at(Value array, uint64_t index) {
       if (!array || !check.terms.charge())
         return {};
-      auto type = dyn_cast<algebra::FieldArrayType>(array.getType());
+      auto type = dyn_cast<data::FieldArrayType>(array.getType());
       if (!type || index >= uint64_t(type.getLength()))
         return {};
       // Definitional pack observation within a polynomial law. The concrete
       // pack itself was already consumed and is never deleted or conflated.
-      if (auto pack = array.getDefiningOp<algebra::ArrayFromElementsOp>())
+      if (auto pack = array.getDefiningOp<data::ArrayFromElementsOp>())
         return pack.getElements()[index];
       auto key = std::make_pair(array, index);
       if (auto found = elements.find(key); found != elements.end())
         return found->second;
-      auto result = make("algebra.array_at", type.getElementType(), {array},
+      auto result = make("data.array_at", type.getElementType(), {array},
                          {attributes.getNamedAttr(
                              "index", attributes.getI64IntegerAttr(index))});
       if (result)
@@ -265,7 +266,7 @@ struct NormalizationProvenanceChecker::Implementation {
     SmallVector<Value> unpack(Value array) {
       if (!array)
         return {};
-      auto type = dyn_cast<algebra::FieldArrayType>(array.getType());
+      auto type = dyn_cast<data::FieldArrayType>(array.getType());
       if (!type || !check.terms.charge(type.getLength()))
         return {};
       SmallVector<Value> result;
@@ -278,7 +279,7 @@ struct NormalizationProvenanceChecker::Implementation {
       return result;
     }
     Value pack(Type type, ArrayRef<Value> inputs) {
-      return make("algebra.array_from_elements", type, inputs);
+      return make("data.array_from_elements", type, inputs);
     }
     SmallVector<Value> fixTable(Value table, ValueRange prefix) {
       auto result = unpack(table);
@@ -319,11 +320,11 @@ struct NormalizationProvenanceChecker::Implementation {
       SmallVector<Term> samples;
       for (unsigned i = 0; i < n; ++i)
         samples.push_back(terms.anchor(field));
-      auto array = algebra::FieldArrayType::get(source.getContext(),
-                                                field.getDomain(), n);
+      auto array =
+          data::FieldArrayType::get(source.getContext(), field.getDomain(), n);
       auto empty = attributes.getDictionaryAttr({});
-      Term table = terms.expression("algebra.array_from_elements", array, empty,
-                                    samples);
+      Term table =
+          terms.expression("data.array_from_elements", array, empty, samples);
       Term polynomial = terms.expression(
           "poly.interpolate",
           poly::PolynomialType::get(source.getContext(), field.getDomain(), 1),
@@ -341,7 +342,7 @@ struct NormalizationProvenanceChecker::Implementation {
         return failure();
       auto packed = terms.expression(normal);
       if (!packed.name ||
-          packed.name.getValue() != "algebra.array_from_elements" ||
+          packed.name.getValue() != "data.array_from_elements" ||
           packed.operands.size() != n)
         return failure();
       SmallVector<SmallVector<algebra::FieldLiteralAttr>> result(n);
@@ -552,8 +553,7 @@ struct NormalizationProvenanceChecker::Implementation {
         bound.assign(type.getArity(), 1);
       else if (isa<poly::CoefficientPolynomialOp, poly::InterpolateDomainOp>(
                    op)) {
-        auto array =
-            dyn_cast<algebra::FieldArrayType>(op.getOperand(0).getType());
+        auto array = dyn_cast<data::FieldArrayType>(op.getOperand(0).getType());
         if (!array || array.getLength() <= 0)
           return false;
         bound.push_back(array.getLength() - 1);
@@ -654,7 +654,7 @@ struct NormalizationProvenanceChecker::Implementation {
         } else if (auto observation =
                        dyn_cast<poly::PolynomialCoefficientsOp>(op)) {
           auto entries = coefficientValues(observation.getPolynomial());
-          auto width = cast<algebra::FieldArrayType>(
+          auto width = cast<data::FieldArrayType>(
                            observation.getCoefficients().getType())
                            .getLength();
           if (entries.empty() || entries.size() > uint64_t(width) ||
@@ -734,9 +734,9 @@ struct NormalizationProvenanceChecker::Implementation {
     for (auto &op : source.front().without_terminator()) {
       if (!charge(op) || !flatTotal(op))
         return refuse(source, "unsupported simplification subject");
-      if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
+      if (auto projection = dyn_cast<data::ArrayAtOp>(op)) {
         auto pack = canonical(projection->getOperand(0))
-                        .getDefiningOp<algebra::ArrayFromElementsOp>();
+                        .getDefiningOp<data::ArrayFromElementsOp>();
         auto index = projection.getIndexAttr().getInt();
         if (pack && index >= 0 && uint64_t(index) < pack->getNumOperands())
           aliases[projection.getResult()] = canonical(pack->getOperand(index));

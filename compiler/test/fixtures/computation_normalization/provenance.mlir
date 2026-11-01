@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 !P = !poly.polynomial<"bls12-381.fr", 1>
 module { "protocol.module"() ({
  func.func private @leaf(%a:!F,%b:!F)->(!F,!F,!F) {
@@ -29,7 +29,7 @@ module { "protocol.module"() ({
    %dead = algebra.field_multiply %a,%b : (!F,!F)->!F
    %first = algebra.field_multiply %a,%b : (!F,!F)->!F
    %second = algebra.field_multiply %a,%b : (!F,!F)->!F
-   %table = "algebra.array_from_elements"(%first,%second) : (!F,!F)->!A
+   %table = "data.array_from_elements"(%first,%second) : (!F,!F)->!A
    %p = "poly.from_coefficients"(%table) : (!A)->!P
    func.return %first,%p,%second : !F,!P,!F
  }
@@ -42,14 +42,14 @@ module { "protocol.module"() ({
    %dead = algebra.field_multiply %b,%a : (!F,!F)->!F
    %first = algebra.field_multiply %b,%a : (!F,!F)->!F
    %second = algebra.field_multiply %b,%a : (!F,!F)->!F
-   %table = "algebra.array_from_elements"(%first,%second) : (!F,!F)->!A
+   %table = "data.array_from_elements"(%first,%second) : (!F,!F)->!A
    %p = "poly.from_coefficients"(%table) : (!A)->!P
    %value = "poly.evaluate"(%p,%x) : (!P,!F)->!F
    func.return %first,%value,%second : !F,!F,!F
  }
  func.func private @polynomial(%a:!F,%b:!F,%x:!F)->(!F,!F) {
    %dead = algebra.field_multiply %a,%b : (!F,!F)->!F
-   %table = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
+   %table = "data.array_from_elements"(%a,%b) : (!F,!F)->!A
    %p = "poly.from_coefficients"(%table) : (!A)->!P
    %square = "poly.multiply"(%p,%p) : (!P,!P)->!P
    %value = "poly.evaluate"(%square,%x) : (!P,!F)->!F
@@ -58,7 +58,7 @@ module { "protocol.module"() ({
  }
  func.func private @normalized(%a:!F,%b:!F,%x:!F)->(!F,!F) {
    %dead = algebra.field_multiply %a,%b : (!F,!F)->!F
-   %table = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
+   %table = "data.array_from_elements"(%a,%b) : (!F,!F)->!A
    %bx = algebra.field_multiply %b,%x : (!F,!F)->!F
    %p = algebra.field_add %bx,%a : (!F,!F)->!F
    %value = algebra.field_multiply %p,%p : (!F,!F)->!F
@@ -76,8 +76,8 @@ module { "protocol.module"() ({
    func.return %product : !F
  }
  func.func private @projection(%a:!F,%b:!F)->!F {
-   %table = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
-   %value = "algebra.array_at"(%table) {index=0:i64} : (!A)->!F
+   %table = "data.array_from_elements"(%a,%b) : (!F,!F)->!A
+   %value = "data.array_at"(%table) {index=0:i64} : (!A)->!F
    func.return %value : !F
  }
  func.func private @cache(%table:!A,%a:!F,%b:!F,%x:!F)->(!F,!F,!A) {
@@ -95,27 +95,27 @@ module { "protocol.module"() ({
    %m = "poly.mle"(%table) : (!A)->!P
    %fix = "poly.fix"(%m,%x) : (!P,!F)->!poly.polynomial<"bls12-381.fr",0>
    %value = "poly.evaluate"(%fix) : (!poly.polynomial<"bls12-381.fr",0>)->!F
-   %fixed = "poly.fix_table"(%table,%x) : (!A,!F)->!algebra.field_array<"bls12-381.fr",1>
+   %fixed = "poly.fix_table"(%table,%x) : (!A,!F)->!data.field_array<"bls12-381.fr",1>
    %dead = "poly.evaluate"(%p,%x) : (!P,!F)->!F
-   %padded = "algebra.array_from_elements"(%value,%value) : (!F,!F)->!A
+   %padded = "data.array_from_elements"(%value,%value) : (!F,!F)->!A
    func.return %coeffs,%domain,%value,%padded : !A,!A,!F,!A
  }
- func.func private @coefficients(%table:!algebra.field_array<"bls12-381.fr",4>,%x:!F)->(!A,!A,!F) {
-   %m = "poly.mle"(%table) : (!algebra.field_array<"bls12-381.fr",4>)->!poly.polynomial<"bls12-381.fr",2>
+ func.func private @coefficients(%table:!data.field_array<"bls12-381.fr",4>,%x:!F)->(!A,!A,!F) {
+   %m = "poly.mle"(%table) : (!data.field_array<"bls12-381.fr",4>)->!poly.polynomial<"bls12-381.fr",2>
    %sum = "poly.sum_suffix"(%m) {count=1:i64} : (!poly.polynomial<"bls12-381.fr",2>)->!P
    %coeffs = "poly.coefficients"(%sum) : (!P)->!A
-   %fixed = "poly.fix_table"(%table,%x) : (!algebra.field_array<"bls12-381.fr",4>,!F)->!A
+   %fixed = "poly.fix_table"(%table,%x) : (!data.field_array<"bls12-381.fr",4>,!F)->!A
    %value = "poly.evaluate"(%sum,%x) : (!P,!F)->!F
    func.return %coeffs,%fixed,%value : !A,!A,!F
  }
- func.func private @convolution(%a:!F,%b:!F,%x:!F)->!algebra.field_array<"bls12-381.fr",4> {
-   %table = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
+ func.func private @convolution(%a:!F,%b:!F,%x:!F)->!data.field_array<"bls12-381.fr",4> {
+   %table = "data.array_from_elements"(%a,%b) : (!F,!F)->!A
    %p = "poly.from_coefficients"(%table) : (!A)->!P
    %c = "poly.constant"(%x) : (!F)->!P
    %sum = "poly.add"(%p,%c) : (!P,!P)->!P
    %product = "poly.multiply"(%sum,%p) : (!P,!P)->!P
-   %coeffs = "poly.coefficients"(%product) : (!P)->!algebra.field_array<"bls12-381.fr",4>
-   func.return %coeffs : !algebra.field_array<"bls12-381.fr",4>
+   %coeffs = "poly.coefficients"(%product) : (!P)->!data.field_array<"bls12-381.fr",4>
+   func.return %coeffs : !data.field_array<"bls12-381.fr",4>
  }
  "protocol.func"() ({ "protocol.return"() : ()->() })
  {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()

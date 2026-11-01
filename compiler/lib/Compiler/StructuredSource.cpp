@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -236,15 +237,15 @@ Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
     return Error::success();
   };
   if (type.isSignlessInteger(1) || type.isUnsignedInteger(64) ||
-      isa<algebra::IndicesType>(type))
+      isa<data::IndicesType>(type))
     return Error::success();
   if (auto field = dyn_cast<algebra::FieldType>(type))
     return nominal("field", "Field", field.getDomain());
-  if (auto vector = dyn_cast<algebra::FieldVectorType>(type))
+  if (auto vector = dyn_cast<data::FieldVectorType>(type))
     return nominal("vector", "Field", vector.getDomain());
   if (auto group = dyn_cast<algebra::GroupType>(type))
     return nominal("group", "Group", group.getDomain());
-  if (auto groups = dyn_cast<algebra::GroupVectorType>(type))
+  if (auto groups = dyn_cast<data::GroupVectorType>(type))
     return nominal("groups", "Group", groups.getDomain());
   protocol_ir::OracleKindAttr kind;
   if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type))
@@ -924,12 +925,12 @@ class Exporter {
     if (auto dim = dyn_cast<data::DimOp>(op)) {
       if ((owner != "protocol" && owner != "math" && owner != "oracle") ||
           dim.getAxis() != 0 ||
-          !isa<algebra::FieldVectorType>(dim.getInput().getType()))
+          !isa<data::FieldVectorType>(dim.getInput().getType()))
         return error("structured-source-operation");
       if (auto e = attributes(op, {"axis"}))
         return std::move(e);
       auto domain =
-          cast<algebra::FieldVectorType>(dim.getInput().getType()).getDomain();
+          cast<data::FieldVectorType>(dim.getInput().getType()).getDomain();
       used.domains.insert(domain);
       return json::Array{"vector.length", domain};
     }
@@ -1192,8 +1193,7 @@ class Exporter {
     if (isa<data::BoundedAtOp>(op)) {
       if (auto e = attributes(op, {}))
         return std::move(e);
-      auto vector =
-          dyn_cast<algebra::FieldVectorType>(op.getOperand(0).getType());
+      auto vector = dyn_cast<data::FieldVectorType>(op.getOperand(0).getType());
       if (!vector)
         return error("structured-source-type");
       return json::Array{"bounded_at", vector.getDomain()};
@@ -1226,7 +1226,7 @@ class Exporter {
       }
       return json::Array{"call", *callee};
     }
-    if (isa<algebra::FiniteFoldOp>(op)) {
+    if (isa<data::FiniteFoldOp>(op)) {
       if (auto e = attributes(op, {"domain", "step", "predicate"}))
         return std::move(e);
       auto refs = fold(op);
@@ -1405,7 +1405,7 @@ class Exporter {
         auto arg = input(constructor.getOperand(0));
         if (!arg)
           return arg.takeError();
-        if (!isa<algebra::FieldVectorType, data::SequenceType>(
+        if (!isa<data::FieldVectorType, data::SequenceType>(
                 constructor.getOperand(0).getType()))
           return error("structured-source-domain");
         desc = json::Array{indices ? "indices" : "elements", *arg};
@@ -1483,7 +1483,7 @@ class Exporter {
             return e;
           continue;
         }
-        if (isa<algebra::FiniteFoldOp>(instruction)) {
+        if (isa<data::FiniteFoldOp>(instruction)) {
           // Ordinary formation discharges callback bounds at each call edge.
           // Both callbacks belong to admission even for an empty domain.
           for (StringRef attribute : {"step", "predicate"}) {
@@ -1652,7 +1652,7 @@ class Exporter {
             bound.getContainerArg() - offset >= type.getNumInputs() ||
             !type.getInput(bound.getIndexArg() - offset)
                  .isUnsignedInteger(64) ||
-            !isa<algebra::FieldVectorType>(
+            !isa<data::FieldVectorType>(
                 type.getInput(bound.getContainerArg() - offset)))
           return error("structured-source-precondition");
         preconditions.push_back(
@@ -1956,7 +1956,7 @@ public:
           [&](Operation *op) { operations.push_back(op); });
       for (Operation *operation : operations) {
         Operation &op = *operation;
-        if (isa<algebra::FiniteFoldOp, data::BoundedAtOp>(op))
+        if (isa<data::FiniteFoldOp, data::BoundedAtOp>(op))
           return error("structured-source-multirole-math");
         if (auto call = dyn_cast<func::CallOp>(op))
           if (auto e = scalarMath(symbols.lookup(call.getCallee())))

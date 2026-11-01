@@ -197,7 +197,7 @@ fn normal_vm_executes_nonbase_multiply_cosets_and_prepared_numerical_plans() {
     );
     let mut bind = binding(field, "numerical.map");
     bind.arguments.push("1".into());
-    let body = json!([
+    let body = zkc_test_support::numerical_plan(json!([
         "zkc.ring/0",
         [field.name()],
         [
@@ -206,8 +206,7 @@ fn normal_vm_executes_nonbase_multiply_cosets_and_prepared_numerical_plans() {
             ["add", 0, 1]
         ],
         [2]
-    ])
-    .to_string();
+    ]));
     let result = one(
         backend(Policy::default()),
         bind,

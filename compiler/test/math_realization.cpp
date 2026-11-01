@@ -11,6 +11,8 @@
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -292,7 +294,7 @@ int main(int argc, char **argv) {
   cases.run(
       "prefix restriction has an independently checked ordered recipe", [&] {
         auto numerical = parseSourceString<ModuleOp>(R"(
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module @restriction attributes {exec.computation} {
   func.func @realized(%values:!V,%point:!V)->!V {
     %r = "algebra.multilinear_restrict_prefix"(%values,%point):(!V,!V)->!V
@@ -329,7 +331,7 @@ module @restriction attributes {exec.computation} {
   cases.run("static dimension discards unused field-array construction", [&] {
     auto module = withHelper(R"(
  func.func private @dimension(%a:!F,%b:!F)->ui64 {
-   %v = "algebra.array_from_elements"(%a,%b):(!F,!F)->!A
+   %v = "data.array_from_elements"(%a,%b):(!F,!F)->!A
    %n = "data.dim"(%v){axis=0:i64}:(!A)->ui64
    func.return %n:ui64
  })",
@@ -363,15 +365,15 @@ module @restriction attributes {exec.computation} {
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
-    auto array = algebra::ArrayFromElementsOp::create(
+    auto array = data::ArrayFromElementsOp::create(
         builder, entry.getLoc(),
-        algebra::FieldArrayType::get(
+        data::FieldArrayType::get(
             &context,
             cast<algebra::FieldType>(block.getArgument(0).getType())
                 .getDomain(),
             2),
         ValueRange{block.getArgument(0), block.getArgument(1)});
-    auto at = algebra::ArrayAtOp::create(
+    auto at = data::ArrayAtOp::create(
         builder, entry.getLoc(), block.getArgument(0).getType(),
         array.getResult(), builder.getI64IntegerAttr(1));
     func::ReturnOp::create(builder, entry.getLoc(), at.getResult());

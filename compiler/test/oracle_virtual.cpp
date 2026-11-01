@@ -13,7 +13,7 @@ std::string source() {
   return R"mlir(
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear">, 16 : ui64]>
 !F = !algebra.field<"koala-bear">
-!D = !algebra.field_vector<"koala-bear">
+!D = !data.field_vector<"koala-bear">
 !H = !protocol.oracle<#K>
 module {
  "protocol.module"() ({
@@ -55,8 +55,7 @@ std::string indices() {
     while ((position = text.find(from.str())) != std::string::npos)
       text.replace(position, from.size(), "ui64");
   }
-  return replace(text, "!algebra.field_vector<\"koala-bear\">",
-                 "!algebra.indices");
+  return replace(text, "!data.field_vector<\"koala-bear\">", "!data.indices");
 }
 OwningOpRef<ModuleOp> parse(llvm::StringRef text, MLIRContext &context) {
   std::string message;
@@ -276,7 +275,7 @@ int main() {
   cases.run(
       "virtual helper observations check actual degree bounds before DCE", [&] {
         auto text = replace(source(), "module {", R"mlir(
-!A = !algebra.field_array<"koala-bear", 2>
+!A = !data.field_array<"koala-bear", 2>
 !Polynomial = !poly.polynomial<"koala-bear", 1>
 module {)mlir");
         size_t position;

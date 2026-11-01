@@ -198,7 +198,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
   std::string stride = std::to_string(f.coefficientBytes());
   std::string code = op.opcode().str();
   std::string identity = p + "_" + d + "_" + beta;
-  if (auto array = dyn_cast<algebra::FieldArrayType>(attr.getValue()))
+  if (auto array = dyn_cast<data::FieldArrayType>(attr.getValue()))
     identity += "_array_" + std::to_string(array.getLength());
   auto literal = op->getAttrOfType<algebra::FieldLiteralAttr>("value");
   auto literals = op->getAttrOfType<ArrayAttr>("values");
@@ -237,7 +237,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
   auto collectionCheck = [&](StringRef pointer, StringRef count) {
     out << "if gt(" << count << ", " << storage->limits.publicElements
         << ") { evm_resource(2) }\n";
-    if (auto array = dyn_cast<algebra::FieldArrayType>(attr.getValue()))
+    if (auto array = dyn_cast<data::FieldArrayType>(attr.getValue()))
       out << "if iszero(eq(" << count << ", " << array.getLength()
           << ")) { evm_fault(9) }\n";
     out << "evm_memory(" << pointer << ", mul(" << count << ", " << stride

@@ -35,8 +35,8 @@ for group in (False, True):
                                   '\n'.join(operations), ['%first', '%second'])
     source = f'''!f = !algebra.field<"{scalar}">
 !r = {value}
-!v = !algebra.field_vector<"{scalar}">
-!a = !algebra.{"group_vector" if group else "field_vector"}<"{domain}">
+!v = !data.field_vector<"{scalar}">
+!a = !data.{"group_vector" if group else "field_vector"}<"{domain}">
 module {{ "protocol.module"() ({{
  "runtime.binding"() {{sym_name="map",contract="{mapping}",arguments=["{domain}"],implementation="",function_type=(!runtime.scope,!v,!a)->!exec.outcome<(!a)>}} : ()->()
  "runtime.binding"() {{sym_name="reduce",contract="{reduction}",arguments=["{domain}"],implementation="",function_type=(!runtime.scope,!v,!a)->!exec.outcome<(!r)>}} : ()->()

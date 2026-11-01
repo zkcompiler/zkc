@@ -1,5 +1,5 @@
-!V = !algebra.field_vector<"bls12-381.fr">
-!I = !algebra.indices
+!V = !data.field_vector<"bls12-381.fr">
+!I = !data.indices
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "runtime.binding"() <{arguments = [], contract = "index.mul", implementation = "", sym_name = "mul",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>}> : () -> ()

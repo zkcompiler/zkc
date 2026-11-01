@@ -386,6 +386,8 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
   auto admitted = readNativeBinding([&] { return op->emitOpError(); }, binding);
   if (failed(admitted))
     return refuse(op, "invalid checked runtime binding");
+  if (!admitted->declaration.getImplementation().empty())
+    return refuse(op, "EVM cannot honor a pinned runtime implementation");
   auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
   auto signature = executableBindingSignature(admitted->valueType);
   if (op->getOperandTypes() != signature.getInputs() ||
@@ -393,11 +395,10 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
       failed(verifyInvocationParameters(
           [&] { return op->emitOpError(); },
           admitted->declaration.getContract(),
-          admitted->declaration.getArgumentsAttr(), parameters)))
+          admitted->declaration.getArgumentsAttr(), parameters,
+          protocol::ParameterStage::Logical)))
     return refuse(
         op, "invocation differs from exact binding signature or parameters");
-  if (!admitted->declaration.getImplementation().empty())
-    return refuse(op, "EVM cannot honor a pinned runtime implementation");
   auto contract =
       binding ? binding->getAttrOfType<StringAttr>("contract") : StringAttr();
   if (!contract)
@@ -461,8 +462,8 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
       name.starts_with("indices.") || name.starts_with("bytes.")) {
     Type collection;
     for (Type type : admitted->valueType.getInputs())
-      if (isa<algebra::FieldVectorType, algebra::IndicesType,
-              data::SequenceType, data::BytesType>(type)) {
+      if (isa<data::FieldVectorType, data::IndicesType, data::SequenceType,
+              data::BytesType>(type)) {
         collection = type;
         break;
       }
@@ -727,11 +728,11 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
     if (!outputLayout->collection || outputLayout->collection->storage ==
                                          CollectionLayout::Storage::PackedBytes)
       return refuse(op, "unsupported collected element family");
-    if (auto array = dyn_cast<algebra::FieldArrayType>(collection))
+    if (auto array = dyn_cast<data::FieldArrayType>(collection))
       checked(op, "range.check", {},
               {count, integer(op->getLoc(), array.getLength())});
     capacity = count;
-    if (!isa<algebra::FieldArrayType, algebra::FixedVectorType>(collection)) {
+    if (!isa<data::FieldArrayType, data::FixedVectorType>(collection)) {
       // Traversal cardinality is independent of selected output cardinality.
       // Reserve once; callbacks still run before each capacity-checked write.
       Value ceiling = integer(op->getLoc(), options.limits.publicElements);
@@ -847,7 +848,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
   if (name == "exec.apply")
     return lowerBinding(op, map);
   if (name == "exec.fold" || name == "exec.collect" ||
-      name == "algebra.finite_fold" || name == "algebra.finite_collect")
+      name == "data.finite_fold" || name == "data.finite_collect")
     return lowerFinite(op, map);
   if (name == "protocol.loop")
     return lowerLoop(op, map);
@@ -1172,7 +1173,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
                     {builder.getNamedAttr("value_type", TypeAttr::get(type))}),
                 map);
   }
-  if (name == "data.bounded_at" || name == "algebra.array_at") {
+  if (name == "data.bounded_at" || name == "data.array_at") {
     Type type = op->getOperand(0).getType();
     auto layout = layouts.get(type);
     if (!layout) {
@@ -1181,7 +1182,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     }
     if (!(*layout)->collection)
       return refuse(op, "requires complete collection layout");
-    if (name == "algebra.array_at") {
+    if (name == "data.array_at") {
       auto index = op->getAttrOfType<IntegerAttr>("index");
       if (!index)
         return refuse(op, "missing array index");
@@ -1198,8 +1199,8 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
                     {builder.getNamedAttr("value_type", TypeAttr::get(type))}),
                 map);
   }
-  if (name == "algebra.array_from_elements") {
-    auto array = dyn_cast<algebra::FieldArrayType>(op->getResult(0).getType());
+  if (name == "data.array_from_elements") {
+    auto array = dyn_cast<data::FieldArrayType>(op->getResult(0).getType());
     if (!array || op->getNumOperands() != array.getLength())
       return refuse(op, "invalid fixed field array construction");
     auto type = builder.getNamedAttr("value_type", TypeAttr::get(array));

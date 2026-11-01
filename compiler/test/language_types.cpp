@@ -1199,7 +1199,7 @@ void nativeData() {
     entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(selected));
-  require(selected.bytes().contains("!algebra.field_vector<"),
+  require(selected.bytes().contains("!data.field_vector<"),
           "dynamic vector did not retain native representation");
   mutation(selected, [](mlir::ModuleOp module) {
     mlir::Builder builder(module.getContext());

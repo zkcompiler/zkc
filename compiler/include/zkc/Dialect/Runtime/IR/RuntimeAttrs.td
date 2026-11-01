@@ -57,4 +57,12 @@ def RuntimeNativeOrigin : AttrDef<RuntimeDialect, "NativeOrigin"> {
   let assemblyFormat = "`<` $entry (`path` `[` $path^ `]`)? `,` $event `>`";
   let genVerifyDecl = 1;
 }
+def RuntimeNumericalPlan : AttrDef<RuntimeDialect, "NumericalPlan"> {
+  let mnemonic = "numerical_plan";
+  let summary = "actual pointwise expression, tile extent and scratch locations";
+  let parameters = (ins "::zkc::algebra::RingExpressionAttr":$expression,
+    "unsigned":$lanes, "unsigned":$slots, "::mlir::DenseI32ArrayAttr":$locations);
+  let assemblyFormat = "`<` $expression `,` $lanes `,` $slots `,` $locations `>`";
+  let genVerifyDecl = 1;
+}
 #endif

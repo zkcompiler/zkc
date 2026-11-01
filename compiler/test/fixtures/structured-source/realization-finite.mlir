@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({
  ^entry(%xs:!V):
@@ -12,7 +12,7 @@ module { "protocol.module"() ({
  }
  func.func private @sum(%xs:!V)->!F {
    %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
-   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
+   %sum = "data.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %sum : !F
  }
  func.func @realized(%scope:!runtime.scope,%a0:!V)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["realized",[]]} {

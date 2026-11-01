@@ -47,6 +47,10 @@ struct RealizationWork {
   // Mandatory occurrence/catalog bookkeeping is independent of optional
   // equation recognition, including when matching.structural is zero.
   uint64_t selectionBookkeeping = 1000000;
+  // Weighted represented-expression construction, including actual word/tile
+  // lowering and its private reader. One balance spans physical retries;
+  // immutable producer reuse does not refund work or confer admission.
+  uint64_t representedConstruction = 64 * 1024 * 1024;
   // Synchronous producer hook, never evidence or a persistent source pointer.
   // Finite emitters apply select() after recognition and before emission.
   NumericalSelection *numericalSelection = nullptr;

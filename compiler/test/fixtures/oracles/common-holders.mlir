@@ -2,7 +2,7 @@
 #K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
 !H = !protocol.oracle<#K>
 !S = !protocol.oracle_sequence<#K,2>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  "protocol.func"() ({
  ^entry(%left:!D,%right:!D,%which:ui64,%position:ui64):

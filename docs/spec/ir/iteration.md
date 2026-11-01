@@ -12,13 +12,13 @@ Logical collections have dedicated nominal MLIR types:
 | MLIR type | Logical executable identity |
 |---|---|
 | `ui64` | `index` |
-| `!algebra.indices` | `indices` |
+| `!data.indices` | `indices` |
 | `!data.bytes` | `bytes` |
-| `!algebra.field_vector<"F">` | `vector:F` |
-| `!algebra.field_matrix<"F">` | `matrix:F` |
-| `!algebra.group_vector<"G">` | `groups:G` |
-| `!algebra.field_array<"F", N>` | `field_array<F,N>`, including `N = 0` |
-| `!algebra.fixed_vector<T, N>` | `fixed_vector<T,N>`, with `T` encoded recursively |
+| `!data.field_vector<"F">` | `vector:F` |
+| `!data.field_matrix<"F">` | `matrix:F` |
+| `!data.group_vector<"G">` | `groups:G` |
+| `!data.field_array<"F", N>` | `field_array<F,N>`, including `N = 0` |
+| `!data.fixed_vector<T, N>` | `fixed_vector<T,N>`, with `T` encoded recursively |
 | `!data.sequence<T>` | `sequence<T>`, with `T` encoded recursively |
 
 Storage layouts are physical choices. Matrices have row then column axes,

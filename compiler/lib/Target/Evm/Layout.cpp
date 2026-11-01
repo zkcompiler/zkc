@@ -111,20 +111,20 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
     result->kind = Kind::Field;
     result->lanes.push_back(
         IntegerType::get(&storage->context, (*facts)->degree == 1 ? 256 : 64));
-  } else if (isa<algebra::FieldVectorType, algebra::FieldArrayType>(type)) {
-    StringRef domain = isa<algebra::FieldVectorType>(type)
-                           ? cast<algebra::FieldVectorType>(type).getDomain()
-                           : cast<algebra::FieldArrayType>(type).getDomain();
+  } else if (isa<data::FieldVectorType, data::FieldArrayType>(type)) {
+    StringRef domain = isa<data::FieldVectorType>(type)
+                           ? cast<data::FieldVectorType>(type).getDomain()
+                           : cast<data::FieldArrayType>(type).getDomain();
     auto element = algebra::FieldType::get(&storage->context, domain);
     auto facts = field(element);
     if (!facts)
       return facts.takeError();
-    result->kind = isa<algebra::FieldVectorType>(type) ? Kind::FieldVector
-                                                       : Kind::FieldArray;
+    result->kind =
+        isa<data::FieldVectorType>(type) ? Kind::FieldVector : Kind::FieldArray;
     result->lanes.append({i64, i64});
     result->collection = CollectionLayout{element, Cells::FieldCoefficients,
                                           (*facts)->coefficientBytes()};
-  } else if (isa<algebra::IndicesType>(type)) {
+  } else if (isa<data::IndicesType>(type)) {
     result->kind = Kind::Indices;
     result->lanes.append({i64, i64});
     result->collection = CollectionLayout{
@@ -134,10 +134,10 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
     result->kind = Kind::Bytes;
     result->lanes.append({i64, i64});
     result->collection = CollectionLayout{{}, Cells::PackedBytes, 1};
-  } else if (isa<data::SequenceType, algebra::FixedVectorType>(type)) {
+  } else if (isa<data::SequenceType, data::FixedVectorType>(type)) {
     Type element = isa<data::SequenceType>(type)
                        ? cast<data::SequenceType>(type).getElementType()
-                       : cast<algebra::FixedVectorType>(type).getElementType();
+                       : cast<data::FixedVectorType>(type).getElementType();
     auto child = get(element);
     if (!child)
       return child.takeError();

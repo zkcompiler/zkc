@@ -194,8 +194,8 @@ int main() {
   cases.run("explicit packed projection folding is independently checked", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
  func.func private @projection(%a:!F,%b:!F)->!F {
-   %pack = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
-   %value = "algebra.array_at"(%pack) {index=1:i64} : (!A)->!F
+   %pack = "data.array_from_elements"(%a,%b) : (!F,!F)->!A
+   %value = "data.array_at"(%pack) {index=1:i64} : (!A)->!F
    func.return %value : !F
  }
  )"),
@@ -226,11 +226,11 @@ int main() {
   });
   cases.run("static dimension meaning is checked before recipe lowering", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
- func.func private @dimension(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {
-   %n = "data.dim"(%v) {axis=0:i64} : (!algebra.field_array<"bls12-381.fr", 4>)->ui64
+ func.func private @dimension(%v:!data.field_array<"bls12-381.fr", 4>)->ui64 {
+   %n = "data.dim"(%v) {axis=0:i64} : (!data.field_array<"bls12-381.fr", 4>)->ui64
    func.return %n : ui64
  }
- func.func private @constant(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {
+ func.func private @constant(%v:!data.field_array<"bls12-381.fr", 4>)->ui64 {
    %n = "data.index"() {value=4 : ui64} : ()->ui64
    func.return %n : ui64
  }
@@ -301,14 +301,14 @@ int main() {
   });
   cases.run("bounded indices retain their argument assignment", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
- func.func private @access(%xs:!algebra.field_vector<"bls12-381.fr">,%i:ui64,%j:ui64)->!F
+ func.func private @access(%xs:!data.field_vector<"bls12-381.fr">,%i:ui64,%j:ui64)->!F
  attributes {data.preconditions=[#data.index_bound<1,0,0>,#data.index_bound<2,0,0>]} {
-   %v = "data.bounded_at"(%xs,%i) : (!algebra.field_vector<"bls12-381.fr">,ui64)->!F
+   %v = "data.bounded_at"(%xs,%i) : (!data.field_vector<"bls12-381.fr">,ui64)->!F
    func.return %v : !F
  }
- func.func private @other(%xs:!algebra.field_vector<"bls12-381.fr">,%i:ui64,%j:ui64)->!F
+ func.func private @other(%xs:!data.field_vector<"bls12-381.fr">,%i:ui64,%j:ui64)->!F
  attributes {data.preconditions=[#data.index_bound<1,0,0>,#data.index_bound<2,0,0>]} {
-   %v = "data.bounded_at"(%xs,%j) : (!algebra.field_vector<"bls12-381.fr">,ui64)->!F
+   %v = "data.bounded_at"(%xs,%j) : (!data.field_vector<"bls12-381.fr">,ui64)->!F
    func.return %v : !F
  }
  )"),
@@ -388,7 +388,7 @@ int main() {
    func.return %c : !A
  }
  func.func private @tables(%a:!F,%b:!F,%x:!F)->(!A,!A,!F) {
-   %v = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !A
+   %v = "data.array_from_elements"(%a,%b) : (!F,!F)-> !A
    %p = "poly.interpolate"(%v) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>]} : (!A)->!P
    %c = func.call @observe(%p) : (!P)->!A
    %d = "poly.evaluate_domain"(%p) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 2 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 3 : ui255>]} : (!P)->!A
@@ -399,12 +399,12 @@ int main() {
    func.return %c,%d,%r : !A,!A,!F
  }
  func.func private @sum(%a:!F,%b:!F,%x:!F)->(!A,!A,ui64) {
-   %v = "algebra.array_from_elements"(%a,%b,%b,%a) : (!F,!F,!F,!F)-> !algebra.field_array<"bls12-381.fr", 4>
-   %m = "poly.mle"(%v) : (!algebra.field_array<"bls12-381.fr", 4>)->!poly.polynomial<"bls12-381.fr",2>
+   %v = "data.array_from_elements"(%a,%b,%b,%a) : (!F,!F,!F,!F)-> !data.field_array<"bls12-381.fr", 4>
+   %m = "poly.mle"(%v) : (!data.field_array<"bls12-381.fr", 4>)->!poly.polynomial<"bls12-381.fr",2>
    %s = "poly.sum_suffix"(%m) {count=1:i64} : (!poly.polynomial<"bls12-381.fr",2>)->!P
    %c = "poly.coefficients"(%s) : (!P)->!A
-   %t = "poly.fix_table"(%v,%x) : (!algebra.field_array<"bls12-381.fr", 4>,!F)->!A
-   %n = "data.dim"(%v) {axis=0:i64} : (!algebra.field_array<"bls12-381.fr", 4>)->ui64
+   %t = "poly.fix_table"(%v,%x) : (!data.field_array<"bls12-381.fr", 4>,!F)->!A
+   %n = "data.dim"(%v) {axis=0:i64} : (!data.field_array<"bls12-381.fr", 4>)->ui64
    func.return %c,%t,%n : !A,!A,ui64
  }
  )";
@@ -458,8 +458,8 @@ int main() {
     require(returned != std::string::npos,
             "finite polynomial insertion unavailable");
     text.replace(returned, std::string("   func.return %b,%v").size(), R"(
-   %coeffs = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !algebra.field_array<"bls12-381.fr", 2>
-   %p = "poly.from_coefficients"(%coeffs) : (!algebra.field_array<"bls12-381.fr", 2>)->!poly.polynomial<"bls12-381.fr",1>
+   %coeffs = "data.array_from_elements"(%a,%b) : (!F,!F)-> !data.field_array<"bls12-381.fr", 2>
+   %p = "poly.from_coefficients"(%coeffs) : (!data.field_array<"bls12-381.fr", 2>)->!poly.polynomial<"bls12-381.fr",1>
    %y = "poly.evaluate"(%p,%v) : (!poly.polynomial<"bls12-381.fr",1>,!F)->!F
    func.return %b,%y)");
     auto source = parseSourceString<ModuleOp>(text, &context);

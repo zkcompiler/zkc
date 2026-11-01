@@ -59,6 +59,12 @@ std::string boundary(size_t bytes) {
 program::Participants makeProgram(StringRef contract, StringRef field,
                                   StringRef mask, StringRef expression) {
   BindingApplication binding{contract.str(), {field.str(), mask.str()}, ""};
+  auto logical = take(readNumericalExpression(expression, field, mask.size()));
+  NumericalPlan plan{
+      logical, NumericalLimits::lanes, unsigned(logical.nodes().size()), {}};
+  for (unsigned i = 0; i < logical.nodes().size(); ++i)
+    plan.locations.push_back(i);
+  auto physical = printJson(plan.encode());
   binding.implementation = take(defaultImplementation(binding));
   auto signature = take(resolveBinding(binding, true));
   program::Participants result;
@@ -79,8 +85,7 @@ program::Participants makeProgram(StringRef contract, StringRef field,
   function.arguments = participant.arguments;
   function.results.push_back(signature.outputs.front().spelling());
   function.body.push_back(
-      {"call",
-       program::Operation{"numerical", {expression.str()}, inputs, {"r"}}});
+      {"call", program::Operation{"numerical", {physical}, inputs, {"r"}}});
   function.body.push_back({"", program::Return{{"r"}}});
   participant.results = function.results;
   participant.body.push_back(
@@ -118,7 +123,8 @@ int main() {
                     signature.outputs[0].kind ==
                         (contract == "numerical.map" ? "vector" : "field"),
                 "leading zero mask changed its positional signature");
-        accept(checkParameters(binding, {body(field)}));
+        accept(checkParameters(binding, {body(field)},
+                               zkc::protocol::ParameterStage::Logical));
         const auto implementation = take(defaultImplementation(binding));
         StringRef provider = field == "ristretto255.scalar" ? "dalek"
                              : field == "bn254.fr" || field == "bls12-381.fr"
@@ -134,8 +140,8 @@ int main() {
         model.functions.front()
             .body.front()
             .get<program::Operation>()
-            ->attributes = {body(field) + " "};
-        refuse(protocol::admit(model), "numerical-body-canonical");
+            ->attributes[0] += " ";
+        refuse(protocol::admit(model), "numerical-plan-canonical");
         binding.implementation =
             (provider == "arkworks" ? "dalek/" : "arkworks/") + contract.str();
         refuses(resolveBinding(binding, true), "binding-implementation");
@@ -173,15 +179,21 @@ int main() {
   cases.run("closed body admission", [&] {
     BindingApplication binding{"numerical.map", {"koala-bear", "001"}, ""};
     auto original = body("koala-bear");
-    refuse(checkParameters(binding, {}), "interactive-kernel-parameters");
-    refuse(checkParameters(binding, {original, original}),
+    refuse(checkParameters(binding, {}, zkc::protocol::ParameterStage::Logical),
            "interactive-kernel-parameters");
-    refuse(checkParameters(binding, {original + " "}),
+    refuse(checkParameters(binding, {original, original},
+                           zkc::protocol::ParameterStage::Logical),
+           "interactive-kernel-parameters");
+    refuse(checkParameters(binding, {original + " "},
+                           zkc::protocol::ParameterStage::Logical),
            "numerical-body-canonical");
-    refuse(checkParameters(binding, {body("bn254.fr")}),
+    refuse(checkParameters(binding, {body("bn254.fr")},
+                           zkc::protocol::ParameterStage::Logical),
            "numerical-body-field");
     binding.arguments[1] = "01";
-    refuse(checkParameters(binding, {original}), "numerical-body-signature");
+    refuse(checkParameters(binding, {original},
+                           zkc::protocol::ParameterStage::Logical),
+           "numerical-body-signature");
     auto two = take(ring::Expression::create({{"koala-bear"}},
                                              {ring::Node::slot(0)}, {0, 0}));
     refuses(readNumericalExpression(printJson(two.encode()), "koala-bear", 1),
@@ -207,7 +219,8 @@ int main() {
     for (StringRef contract :
          {"numerical.map", "numerical.sum", "numerical.product"})
       accept(checkParameters({contract.str(), {"bn254.fr", ""}, ""},
-                             {printJson(constant.encode())}));
+                             {printJson(constant.encode())},
+                             zkc::protocol::ParameterStage::Logical));
     auto unused = take(ring::Expression::create({{"koala-bear"}, {"bn254.fr"}},
                                                 {ring::Node::slot(0)}, {0}));
     refuses(

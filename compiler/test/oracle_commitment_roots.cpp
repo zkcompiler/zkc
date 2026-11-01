@@ -26,7 +26,7 @@ std::string source(bool input, bool fixed, bool query = false) {
   std::string result = R"mlir(
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">EXTENT]>
 !H = !protocol.oracle<#K>
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 module { "protocol.module"() ({
  "protocol.func"() ({
  ^entry(%data:!D,%anchor:ANCHOR):
@@ -83,7 +83,7 @@ std::string virtualSource(bool zero) {
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">,8:ui64]>
 !F = !algebra.field<"koala-bear.ext4-binomial3">
 !H = !protocol.oracle<#K>
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 module { "protocol.module"() ({
  relation.declare @empty_ok {kind="external",key="test/empty",revision="0",
   signature=(!D,!F)->i1,purposes=["witness","parameter"]}

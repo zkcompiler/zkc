@@ -32,7 +32,7 @@ std::string fixtureText(unsigned width = 0, bool callFree = false,
   llvm::raw_string_ostream out(text);
   out << R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -72,11 +72,11 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%seed:!F)->!F {
-   %r = "algebra.finite_fold"(%xs,%seed) {domain=@items,step=@step} : (!V,!F)->!F
+   %r = "data.finite_fold"(%xs,%seed) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %r : !F
  }
  func.func private @small_total(%xs:!V,%seed:!F)->!F {
-   %r = "algebra.finite_fold"(%xs,%seed) {domain=@items,step=@small_step} : (!V,!F)->!F
+   %r = "data.finite_fold"(%xs,%seed) {domain=@items,step=@small_step} : (!V,!F)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
@@ -226,8 +226,8 @@ int main() {
   cases.run("projection preparation follows nested helper bodies", [&] {
     auto text = fixtureText();
     text.insert(text.find("%r = algebra.field_multiply"), R"mlir(
- %pack = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!algebra.field_array<"koala-bear",2>
- %selected = "algebra.array_at"(%pack) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
+ %pack = "data.array_from_elements"(%a,%b) : (!F,!F)->!data.field_array<"koala-bear",2>
+ %selected = "data.array_at"(%pack) {index=1:i64} : (!data.field_array<"koala-bear",2>)->!F
 )mlir");
     auto source = parseSourceString<ModuleOp>(text, &context);
     require(bool(source) && succeeded(zkc::admitStage(*source)),

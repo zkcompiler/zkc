@@ -1,3 +1,4 @@
+#include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
@@ -20,9 +21,9 @@ int main() {
   auto field = algebra::FieldType::get(&context, "bls12-381.fr");
   auto group = algebra::GroupType::get(&context, "bls12-381.g1");
   auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
-  auto vector = algebra::FieldVectorType::get(&context, field.getDomain());
-  auto array = algebra::FieldArrayType::get(&context, field.getDomain(), 4);
-  auto fixed = algebra::FixedVectorType::get(&context, field, 4);
+  auto vector = data::FieldVectorType::get(&context, field.getDomain());
+  auto array = data::FieldArrayType::get(&context, field.getDomain(), 4);
+  auto fixed = data::FixedVectorType::get(&context, field, 4);
   auto sequence = data::SequenceType::get(&context, vector);
   auto bytes = data::BytesType::get(&context);
   struct Expected {
@@ -34,17 +35,17 @@ int main() {
   };
   for (const auto &expected :
        {Expected{vector, CollectionKind::FieldVector, field, 1, {}},
-        Expected{algebra::GroupVectorType::get(&context, group.getDomain()),
+        Expected{data::GroupVectorType::get(&context, group.getDomain()),
                  CollectionKind::GroupVector,
                  group,
                  1,
                  {}},
-        Expected{algebra::IndicesType::get(&context),
+        Expected{data::IndicesType::get(&context),
                  CollectionKind::Indices,
                  index,
                  1,
                  {}},
-        Expected{algebra::FieldMatrixType::get(&context, field.getDomain()),
+        Expected{data::FieldMatrixType::get(&context, field.getDomain()),
                  CollectionKind::FieldMatrix,
                  field,
                  2,
@@ -57,9 +58,9 @@ int main() {
                  IntegerType::get(&context, 8, IntegerType::Unsigned),
                  1,
                  {}},
-        Expected{algebra::FieldArrayType::get(&context, field.getDomain(), 0),
+        Expected{data::FieldArrayType::get(&context, field.getDomain(), 0),
                  CollectionKind::FieldArray, field, 1, 0},
-        Expected{algebra::FixedVectorType::get(&context, field, 0),
+        Expected{data::FixedVectorType::get(&context, field, 0),
                  CollectionKind::FixedVector, field, 1, 0}}) {
     cases.run("collection observation: " +
                   take(encodeBoundType(expected.type, false)).spelling(),
@@ -67,6 +68,8 @@ int main() {
                 auto collection =
                     dyn_cast<CollectionTypeInterface>(expected.type);
                 require(bool(collection), "collection interface missing");
+                require(expected.type.getDialect().getNamespace() == "data",
+                        "logical collections have more than one owner");
                 require(collection.getCollectionKind() == expected.kind &&
                             collection.getElementType() == expected.element &&
                             collection.getRank() == expected.rank,
@@ -78,6 +81,28 @@ int main() {
                         "out-of-range axis acquired an extent");
               });
   }
+  for (StringRef spelling :
+       {"field_vector<\"bls12-381.fr\">", "group_vector<\"bls12-381.g1\">",
+        "indices", "field_matrix<\"bls12-381.fr\">",
+        "field_array<\"bls12-381.fr\", 4>",
+        "fixed_vector<!algebra.field<\"bls12-381.fr\">, 4>"})
+    cases.run("removed collection owner refuses: " + spelling.str(), [&] {
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      require(!parseType(("!algebra." + spelling).str(), &context),
+              "a removed Algebra collection spelling remains accepted");
+      require(bool(parseType(("!data." + spelling).str(), &context)),
+              "the Data collection spelling is unavailable");
+    });
+  for (StringRef name :
+       {"array_from_elements", "array_at", "finite_fold", "finite_collect"})
+    cases.run("structural operation has one owner: " + name.str(), [&] {
+      require(
+          !OperationName(("algebra." + name).str(), &context).isRegistered(),
+          "a removed Algebra operation remains registered");
+      require(OperationName(("data." + name).str(), &context).isRegistered(),
+              "the structural Data operation is unavailable");
+    });
   cases.run("structural observation preserves admission boundaries", [&] {
     require(finite::elementType(vector) == field &&
                 finite::elementType(array) == field &&
@@ -108,8 +133,8 @@ int main() {
   });
   cases.run("extent evidence preserves vector type and representation", [&] {
     auto module = parseSourceString<ModuleOp>(R"mlir(
-!V = !algebra.field_vector<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 4>
+!V = !data.field_vector<"bls12-381.fr">
+!A = !data.field_array<"bls12-381.fr", 4>
 module { "protocol.module"() ({
  func.func private @identity(%xs: !V, %fixed: !A) -> !V { func.return %xs : !V }
  "protocol.func"() ({ ^entry(%xs: !V):

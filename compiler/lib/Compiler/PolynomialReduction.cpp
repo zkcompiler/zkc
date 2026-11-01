@@ -6,8 +6,10 @@
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/Collections.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -279,9 +281,9 @@ bool evaluates(Value value, Value polynomial, Value point) {
 bool recipeOperation(Operation *op) {
   return isa<poly::MultilinearPolynomialOp, poly::AddPolynomialOp,
              poly::MultiplyPolynomialOp, poly::ConstantPolynomialOp,
-             algebra::ConstantFieldOp, algebra::ArrayAtOp, algebra::FieldAddOp,
+             algebra::ConstantFieldOp, data::ArrayAtOp, algebra::FieldAddOp,
              algebra::FieldMultiplyOp, algebra::SubtractFieldOp,
-             algebra::ArrayFromElementsOp>(op);
+             data::ArrayFromElementsOp>(op);
 }
 // Match pure DAGs without algebraic equality or location-based provenance.
 // Multiple equal source nodes may share one candidate node.
@@ -388,8 +390,8 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
     if (!input || !ti || input != output || input.getType() != ti.getType() ||
         input.getType() != recipe.getArgument(i).getType())
       return refuse("residual subject");
-    auto array = dyn_cast<algebra::FieldArrayType>(input.getType());
-    if (input.getType() != field && (!array || !algebra::isFieldArray(array) ||
+    auto array = dyn_cast<data::FieldArrayType>(input.getType());
+    if (input.getType() != field && (!array || !data::isFieldArray(array) ||
                                      array.getElementType() != field))
       return refuse("subject domain");
   }
@@ -460,7 +462,7 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
     auto guard = dyn_cast<protocol_ir::GuardOp>(actions[4 * k + 1]);
     auto query = dyn_cast<pir::ParticipantQueryOp>(actions[4 * k + 2]);
     auto send = dyn_cast<pir::EmitOp>(actions[4 * k + 3]);
-    auto payload = algebra::FieldArrayType::get(
+    auto payload = data::FieldArrayType::get(
         field.getContext(), cast<algebra::FieldType>(field).getDomain(),
         bounds->second[k] + 1);
     if (!receive || !guard || !query || !send || receive.getPeer() != prover ||

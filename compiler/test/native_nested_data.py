@@ -40,7 +40,7 @@ for family, public in [("batched-openings", ["2", "3", "4"]),
                      refuses="native-proof-policy")
 
 standalone = OUT / "matrix.mlir"
-standalone.write_text('''!m = !algebra.field_matrix<"bls12-381.fr">
+standalone.write_text('''!m = !data.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%matrix:!m,%rows:ui64,%columns:ui64):
    %received = protocol.exchange %matrix {sender="P",receiver="V",site="matrix"} : !m
@@ -74,7 +74,7 @@ with case("standalone matrix refuses unknown policy tag"):
 # independent upstream transcript oracle in the runtime client.
 observed = OUT / "observed.mlir"
 observed.write_text('''!f = !algebra.field<"bls12-381.fr">
-!s = !data.sequence<!algebra.field_matrix<"bls12-381.fr">>
+!s = !data.sequence<!data.field_matrix<"bls12-381.fr">>
 !coins = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%data:!s,%coins:!coins):

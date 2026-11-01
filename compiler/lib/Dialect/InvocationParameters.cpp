@@ -14,7 +14,14 @@ using namespace llvm;
 using namespace mlir;
 namespace zkc {
 namespace {
+using protocol::ParameterStage;
 using protocol::ParameterValidator;
+std::string maskText(DenseBoolArrayAttr mask) {
+  std::string result;
+  for (bool row : mask.asArrayRef())
+    result.push_back(row ? '1' : '0');
+  return result;
+}
 struct Profile {
   protocol::ParameterContract schema{ParameterValidator::None, 0, 0};
   algebra::FieldType field;
@@ -76,7 +83,8 @@ bool arity(const Profile &profile, size_t count) {
 }
 LogicalResult verifyParameters(llvm::function_ref<InFlightDiagnostic()> emit,
                                StringRef contract, const Profile &profile,
-                               ArrayAttr parameters, MLIRContext *context) {
+                               ArrayAttr parameters, MLIRContext *context,
+                               ParameterStage stage) {
   auto refuse = [&](StringRef code = "interactive-kernel-parameters") {
     return diagnostics::emit(emit(), code);
   };
@@ -161,6 +169,18 @@ LogicalResult verifyParameters(llvm::function_ref<InFlightDiagnostic()> emit,
     }
     case ParameterValidator::NumericalExpression: {
       auto expression = dyn_cast<algebra::RingExpressionAttr>(parameter);
+      if (stage == ParameterStage::Physical) {
+        auto physical = dyn_cast<runtime::NumericalPlanAttr>(parameter);
+        if (!physical)
+          return refuse("numerical-plan");
+        auto plan = runtime::exportNumericalPlan(physical);
+        if (!plan)
+          return diagnostics::emit(emit(), plan.takeError());
+        if (auto e = protocol::checkNumericalPlan(
+                *plan, profile.field.getDomain(), maskText(profile.mask)))
+          return diagnostics::emit(emit(), std::move(e));
+        expression = physical.getExpression();
+      }
       if (!expression || !expression.getOutputs() ||
           expression.getInputs().size() != size_t(profile.mask.size()) ||
           expression.getOutputs().size() != 1)
@@ -212,22 +232,22 @@ LogicalResult verifyParameters(llvm::function_ref<InFlightDiagnostic()> emit,
 LogicalResult
 verifyInvocationParameters(llvm::function_ref<InFlightDiagnostic()> emit,
                            StringRef contract, ArrayAttr arguments,
-                           ArrayAttr parameters) {
+                           ArrayAttr parameters, ParameterStage stage) {
   auto selected = profile(emit, contract, arguments);
   return failed(selected)
              ? failure()
              : verifyParameters(emit, contract, *selected, parameters,
-                                arguments.getContext());
+                                arguments.getContext(), stage);
 }
 namespace protocol {
-Expected<ArrayAttr>
-decodeInvocationParameters(MLIRContext *context,
-                           const BindingApplication &binding,
-                           ArrayRef<std::string> parameters) {
+Expected<ArrayAttr> decodeInvocationParameters(
+    MLIRContext *context, const BindingApplication &binding,
+    ArrayRef<std::string> parameters, ParameterStage stage) {
   auto arguments = decodeBindingArguments(context, binding);
   if (!arguments)
     return arguments.takeError();
-  return decodeInvocationParameters(binding.contract, *arguments, parameters);
+  return decodeInvocationParameters(binding.contract, *arguments, parameters,
+                                    stage);
 }
 Expected<std::vector<std::string>>
 encodeInvocationParameters(exec::ApplyOp call) {
@@ -237,13 +257,19 @@ encodeInvocationParameters(exec::ApplyOp call) {
                      : runtime::BindingOp{};
   if (!binding)
     return zkc::error("binding-reference");
-  return encodeInvocationParameters(binding.getContract(),
-                                    binding.getArgumentsAttr(),
-                                    call.getParametersAttr());
+  auto admitted =
+      readNativeBinding([&] { return call.emitOpError(); }, binding);
+  if (failed(admitted))
+    return zkc::error("binding-signature");
+  return encodeInvocationParameters(
+      binding.getContract(), binding.getArgumentsAttr(),
+      call.getParametersAttr(),
+      admitted->physical ? ParameterStage::Physical : ParameterStage::Logical);
 }
-Expected<ArrayAttr>
-decodeInvocationParameters(StringRef contract, ArrayAttr arguments,
-                           ArrayRef<std::string> parameters) {
+Expected<ArrayAttr> decodeInvocationParameters(StringRef contract,
+                                               ArrayAttr arguments,
+                                               ArrayRef<std::string> parameters,
+                                               ParameterStage stage) {
   if (!arguments)
     return zkc::error("binding-signature");
   auto *context = arguments.getContext();
@@ -297,6 +323,17 @@ decodeInvocationParameters(StringRef contract, ArrayAttr arguments,
       break;
     }
     case ParameterValidator::NumericalExpression: {
+      if (stage == ParameterStage::Physical) {
+        auto plan = readNumericalPlan(parameter, selected->field.getDomain(),
+                                      maskText(selected->mask));
+        if (!plan)
+          return plan.takeError();
+        auto attribute = runtime::importNumericalPlan(context, *plan);
+        if (!attribute)
+          return attribute.takeError();
+        attributes.push_back(*attribute);
+        break;
+      }
       if (parameter.size() > NumericalLimits::bodyBytes)
         return zkc::error("numerical-body-limit");
       auto expression = ring::readExpressionText(parameter);
@@ -329,17 +366,17 @@ decodeInvocationParameters(StringRef contract, ArrayAttr arguments,
   }
   auto result = ArrayAttr::get(context, attributes);
   if (failed(verifyParameters([&] { return silentDiagnostic(context); },
-                              contract, *selected, result, context)))
+                              contract, *selected, result, context, stage)))
     return zkc::error("interactive-kernel-parameters");
   return result;
 }
 Expected<std::vector<std::string>>
 encodeInvocationParameters(StringRef contract, ArrayAttr arguments,
-                           ArrayAttr parameters) {
+                           ArrayAttr parameters, ParameterStage stage) {
   if (!arguments ||
       failed(verifyInvocationParameters(
           [&] { return silentDiagnostic(arguments.getContext()); }, contract,
-          arguments, parameters)))
+          arguments, parameters, stage)))
     return zkc::error("interactive-kernel-parameters");
   std::vector<std::string> result;
   for (Attribute parameter : parameters) {
@@ -355,6 +392,12 @@ encodeInvocationParameters(StringRef contract, ArrayAttr arguments,
       if (!encoded)
         return encoded.takeError();
       result.push_back(std::move(*encoded));
+    } else if (auto physical =
+                   dyn_cast<runtime::NumericalPlanAttr>(parameter)) {
+      auto plan = runtime::exportNumericalPlan(physical);
+      if (!plan)
+        return plan.takeError();
+      result.push_back(printJson(plan->encode()));
     } else if (auto expression =
                    dyn_cast<algebra::RingExpressionAttr>(parameter)) {
       auto encoded = algebra::encodeRingExpression(expression);
@@ -376,8 +419,10 @@ encodeInvocationParameters(StringRef contract, ArrayAttr arguments,
 }
 bool invocationParametersMatch(StringRef contract, ArrayAttr arguments,
                                ArrayAttr parameters,
-                               ArrayRef<std::string> expected) {
-  auto decoded = decodeInvocationParameters(contract, arguments, expected);
+                               ArrayRef<std::string> expected,
+                               ParameterStage stage) {
+  auto decoded =
+      decodeInvocationParameters(contract, arguments, expected, stage);
   if (!decoded) {
     consumeError(decoded.takeError());
     return false;

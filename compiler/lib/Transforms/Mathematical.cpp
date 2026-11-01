@@ -1,4 +1,4 @@
-#include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Mathematical.h"
 #include "MathematicalPassOptions.h"
 #include "MathematicalPreservation.h"
 #include "MathematicalSupport.h"
@@ -25,7 +25,6 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"

@@ -52,9 +52,9 @@ commands.verified(module(chain), "protocol-application")
 # Count expanded operand storage before cloning wide, otherwise cheap bodies.
 wide = empty_function(
     "wide",
-    f'%zero = "algebra.constant"() {{value=#algebra.literal<{F}, 0 : ui255>}} : () -> {F}\n%a = "algebra.array_from_elements"('
+    f'%zero = "algebra.constant"() {{value=#algebra.literal<{F}, 0 : ui255>}} : () -> {F}\n%a = "data.array_from_elements"('
     + ",".join(["%zero"] * 4096)
-    + ") : (" + ",".join([F] * 4096) + ') -> !algebra.field_array<"bls12-381.fr", 4096>',
+    + ") : (" + ",".join([F] * 4096) + ') -> !data.field_array<"bls12-381.fr", 4096>',
 )
 commands.verified(
     module(

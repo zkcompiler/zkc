@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeFormation.h"
@@ -93,7 +94,7 @@ int main() {
                 cast<StringAttr>(scalar.arguments[0]).getValue() ==
                     "koala-bear",
             "nominal domain identity changed");
-    auto fixed = algebra::FixedVectorType::get(&context, field, 4);
+    auto fixed = data::FixedVectorType::get(&context, field, 4);
     auto view = application(fixed);
     require(view.constructor == "fixed_vector" && view.arguments.size() == 2 &&
                 cast<TypeAttr>(view.arguments[0]).getValue() == field &&
@@ -107,7 +108,7 @@ int main() {
         auto app = CatalogTypeApplication{"fixed_vector",
                                           {TypeAttr::get(field), nat(4)}};
         require(constructLogicalType(emit, &context, app) ==
-                    algebra::FixedVectorType::get(&context, field, 4),
+                    data::FixedVectorType::get(&context, field, 4),
                 "native construction changed the typed application");
         codes.clear();
         require(!constructLogicalType(emit, &context, {"fixed_vector", {}}) &&

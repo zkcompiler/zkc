@@ -1,6 +1,6 @@
 #K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  relation.declare @claim {kind="external",key="test/oracle-claim",revision="0",signature=(!D)->i1,purposes=["statement"]}
  "protocol.func"() ({

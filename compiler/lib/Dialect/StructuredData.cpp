@@ -623,9 +623,10 @@ Error checkBindingData(runtime::BindingOp binding, const json::Value &value) {
 Expected<json::Array> exportInvocationParametersData(StringRef contract,
                                                      ArrayAttr arguments,
                                                      ArrayAttr parameters) {
-  if (!arguments || failed(verifyInvocationParameters(
-                        [&] { return silent(arguments.getContext()); },
-                        contract, arguments, parameters)))
+  if (!arguments ||
+      failed(verifyInvocationParameters(
+          [&] { return silent(arguments.getContext()); }, contract, arguments,
+          parameters, zkc::protocol::ParameterStage::Logical)))
     return refuse();
   json::Array result;
   for (auto parameter : parameters) {

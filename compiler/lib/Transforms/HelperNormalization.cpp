@@ -2,6 +2,7 @@
 #include "Computation/Support.h"
 #include "MathematicalSupport.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Interfaces/Collection.h"
@@ -14,7 +15,7 @@ LogicalResult foldArrayProjections(Block &body, uint64_t &work,
     if (!finite::consumeComputationWork(work, 1, WorkOwner::Structural,
                                         outcome))
       return failure();
-    if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
+    if (auto projection = dyn_cast<data::ArrayAtOp>(op)) {
       SmallVector<Attribute> attributes(projection->getNumOperands());
       auto folded = projection.fold({attributes, projection});
       if (auto value = dyn_cast_if_present<Value>(folded)) {
@@ -28,7 +29,7 @@ LogicalResult foldArrayProjections(Block &body, uint64_t &work,
     if (!finite::consumeComputationWork(work, 1, WorkOwner::Structural,
                                         outcome))
       return failure();
-    if (isa<algebra::ArrayFromElementsOp>(op) && op.use_empty())
+    if (isa<data::ArrayFromElementsOp>(op) && op.use_empty())
       op.erase();
   }
   return success();

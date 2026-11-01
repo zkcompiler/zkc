@@ -18,6 +18,8 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -834,7 +836,7 @@ public:
             ready = false;
             break;
           }
-          if (isa<func::CallOp, algebra::ArrayAtOp>(op)) {
+          if (isa<func::CallOp, data::ArrayAtOp>(op)) {
             needsNormalization = true;
             break;
           }
@@ -881,7 +883,7 @@ public:
                 break;
               if (access.value == operand &&
                   access.kind == AccessKind::Element &&
-                  isa<algebra::FieldVectorType>(
+                  isa<data::FieldVectorType>(
                       computation.signature.getInput(access.input)))
                 input = access.input;
             }
@@ -961,7 +963,7 @@ public:
       const auto &nested = *selection.nested;
       const auto &recipe = *selection.matrix;
       auto output = computation.signature.getResult(0);
-      auto field = cast<algebra::FieldVectorType>(output).getElementType();
+      auto field = cast<data::FieldVectorType>(output).getElementType();
       SmallVector<Attribute> arguments{
           builder.getStringAttr(cast<algebra::FieldType>(field).getDomain())};
       auto root = computation.domain.getBody().front().back().getOperand(0);
@@ -1045,7 +1047,7 @@ public:
       for (unsigned input : reduction.inputs)
         operands.push_back(entry[input]);
       auto vector =
-          cast<algebra::FieldVectorType>(computation.signature.getResult(0));
+          cast<data::FieldVectorType>(computation.signature.getResult(0));
       loc = sumConsumer->getLoc();
       auto result = emit(
           NativeBindingApplication{reduction.recipe->target.str(),
@@ -1095,7 +1097,7 @@ public:
       const auto *reduction = selection.pointwiseReduction;
       Type resultType = computation.signature.getResult(0);
       Type vector = reduction
-                        ? Type(algebra::FieldVectorType::get(
+                        ? Type(data::FieldVectorType::get(
                               resultType.getContext(),
                               cast<algebra::FieldType>(resultType).getDomain()))
                         : resultType;

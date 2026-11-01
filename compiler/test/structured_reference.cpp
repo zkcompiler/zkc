@@ -1,3 +1,4 @@
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 // Bounded, independent test evaluation of original native structured SSA.
 // No structured exporter, serialized SSA coordinates, preparation, or runtime
 // kernels participate. Native verification remains authoritative for admission;
@@ -82,7 +83,7 @@ bool valueType(Type type) {
     return true;
   if (auto field = dyn_cast<algebra::FieldType>(type))
     return field.getDomain() == fieldDomain;
-  if (auto vector = dyn_cast<algebra::FieldVectorType>(type))
+  if (auto vector = dyn_cast<data::FieldVectorType>(type))
     return vector.getDomain() == fieldDomain;
   if (auto group = dyn_cast<algebra::GroupType>(type))
     return group.getDomain() == groupDomain;
@@ -213,7 +214,7 @@ bool primitivePorts(TypeRange types, StringRef ports) {
   for (auto [type, port] : llvm::zip(types, ports)) {
     bool valid = port == 'i'   ? type.isUnsignedInteger(64)
                  : port == 'b' ? type.isSignlessInteger(1)
-                 : port == 'v' ? isa<algebra::FieldVectorType>(type)
+                 : port == 'v' ? isa<data::FieldVectorType>(type)
                                : isa<algebra::FieldType>(type);
     if (!valid || !valueType(type))
       return false;
@@ -258,7 +259,7 @@ Kind kind(Operation &op) {
       .Case("protocol.apply", Kind::ProtocolApply)
       .Case("protocol.repeat", Kind::ProtocolRepeat)
       .Case("protocol.local_call", Kind::LocalCall)
-      .Case("algebra.finite_fold", Kind::Fold)
+      .Case("data.finite_fold", Kind::Fold)
       .Case("protocol.guard", Kind::Guard)
       .Cases({"func.return", "protocol.return"}, Kind::Return)
       .Case("protocol.yield", Kind::Yield)
@@ -1055,7 +1056,7 @@ public:
                 bound.getIndexArg() >= type.getNumInputs() ||
                 bound.getContainerArg() >= type.getNumInputs() ||
                 !type.getInput(bound.getIndexArg()).isUnsignedInteger(64) ||
-                !isa<algebra::FieldVectorType>(
+                !isa<data::FieldVectorType>(
                     type.getInput(bound.getContainerArg())))
               return error("structured-reference-unsupported", "precondition");
           }
@@ -1157,7 +1158,7 @@ Expected<Datum> decode(Type type, const json::Value &input) {
       return error("structured-reference-input", "expected Boolean");
     return Datum(*value);
   }
-  if (isa<algebra::FieldVectorType>(type)) {
+  if (isa<data::FieldVectorType>(type)) {
     auto array = input.getAsArray();
     if (!array)
       return error("structured-reference-input", "expected vector");
@@ -1251,7 +1252,7 @@ bool matches(Type type, const Datum &value) {
   }
   if (isa<algebra::FieldType, algebra::GroupType>(type))
     return std::holds_alternative<APInt>(value);
-  if (isa<algebra::FieldVectorType>(type))
+  if (isa<data::FieldVectorType>(type))
     return std::holds_alternative<Vector>(value);
   return isa<data::DomainType>(type) && std::holds_alternative<Domain>(value);
 }
@@ -1688,8 +1689,7 @@ class Reference {
       return json::Array{"field", field.getDomain()};
     if (auto group = dyn_cast<algebra::GroupType>(type))
       return json::Array{"group", group.getDomain()};
-    return json::Array{"vector",
-                       cast<algebra::FieldVectorType>(type).getDomain()};
+    return json::Array{"vector", cast<data::FieldVectorType>(type).getDomain()};
   }
 
   Expected<Outcome> replay(Operation &op, json::Array action, Type replyType,

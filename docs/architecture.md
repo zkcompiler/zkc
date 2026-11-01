@@ -171,8 +171,15 @@ adapter consumes that packet; final numerical readback remains independent.
 The native expression handlers borrow typed columns and scalar captures,
 evaluate bounded row chunks, and construct private results through the existing
 numerical scope. They share provider-packed slice arithmetic with dense vector
-kernels, without a new VM instruction or executable format. Compiler-generated
-writable-buffer layouts and target vector IR remain future work.
+kernels. CPU selection now lowers admitted prime-field pointwise expressions
+through canonical Residue values, widened Arith, upstream Linalg vectorization
+and One-Shot Bufferization. Independent readers recover actual scalar meaning
+and check private bounds, aliasing, initialization and release. Standard MLIR
+liveness proposes scratch reuse; independent C++ and Rust readers validate the
+actual [numerical plan](spec/runtime/numerical-plans.md). Its expression, lane
+bound and slots reach resident CPU execution through the existing Call scope.
+Complete extension/binary domains retain their explicit opaque providers.
+This adds no generic word interpreter or AOT object boundary.
 Participant scheduling, transport and resource authority stay with their existing owners.
 The [IR ownership design](compiler/ir-design.md) explains current abstractions,
 standard MLIR use and the semantic boundaries reserved for future work.

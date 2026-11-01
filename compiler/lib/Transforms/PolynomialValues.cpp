@@ -1,8 +1,8 @@
 #include "MathematicalValues.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallString.h"
@@ -70,19 +70,19 @@ class PolynomialValues {
     if (!array)
       return 0;
     auto node = terms.expression(array);
-    auto type = dyn_cast<algebra::FieldArrayType>(node.type);
+    auto type = dyn_cast<data::FieldArrayType>(node.type);
     if (!type || index >= type.getLength())
       return 0;
-    if (node.name && node.name.getValue() == "algebra.array_from_elements")
+    if (node.name && node.name.getValue() == "data.array_from_elements")
       return node.operands[index];
-    return make("algebra.array_at", type.getElementType(), {array},
+    return make("data.array_at", type.getElementType(), {array},
                 builder.getDictionaryAttr({builder.getNamedAttr(
                     "index", builder.getI64IntegerAttr(index))}));
   }
   SmallVector<Term> unpack(Term array) {
     if (!array)
       return {};
-    auto type = dyn_cast<algebra::FieldArrayType>(terms.expression(array).type);
+    auto type = dyn_cast<data::FieldArrayType>(terms.expression(array).type);
     if (!type || !terms.charge(type.getLength()))
       return {};
     SmallVector<Term> values;
@@ -130,7 +130,7 @@ class PolynomialValues {
       return SmallVector<unsigned>(type.getArity(), 1);
     if (name == "poly.from_coefficients")
       return {unsigned(
-          cast<algebra::FieldArrayType>(terms.expression(node.operands[0]).type)
+          cast<data::FieldArrayType>(terms.expression(node.operands[0]).type)
               .getLength() -
           1)};
     if (name == "poly.interpolate")
@@ -384,9 +384,9 @@ class PolynomialValues {
     if (name == "poly.mle") {
       if (type.getArity() >= 63)
         return 0;
-      auto table = algebra::FieldArrayType::get(type.getContext(),
-                                                field(polynomial).getDomain(),
-                                                uint64_t(1) << type.getArity());
+      auto table = data::FieldArrayType::get(type.getContext(),
+                                             field(polynomial).getDomain(),
+                                             uint64_t(1) << type.getArity());
       SmallVector<Term> inputs{node.operands[0]};
       append_range(inputs, prefix);
       return make("poly.mle", type, {make("poly.fix_table", table, inputs)});
@@ -413,26 +413,26 @@ class PolynomialValues {
       return evaluate(inputs[0], inputs.drop_front());
     if (name == "poly.coefficients") {
       auto values = coefficients(inputs[0]);
-      unsigned size = cast<algebra::FieldArrayType>(node.type).getLength();
+      unsigned size = cast<data::FieldArrayType>(node.type).getLength();
       if (values.empty() || values.size() > size || !terms.charge(size))
         return 0;
       values.resize(size, literal(field(inputs[0]), uint64_t(0)));
-      return make("algebra.array_from_elements", node.type, values);
+      return make("data.array_from_elements", node.type, values);
     }
     if (name == "poly.evaluate_domain") {
       SmallVector<Term> values;
       for (auto point : node.attributes.getAs<ArrayAttr>("points"))
         values.push_back(evaluate(
             inputs[0], {literal(cast<algebra::FieldLiteralAttr>(point))}));
-      return make("algebra.array_from_elements", node.type, values);
+      return make("data.array_from_elements", node.type, values);
     }
     if (name == "poly.fix_table") {
       auto values = tablePrefix(inputs[0], inputs.drop_front());
       if (values.empty())
         return 0;
-      return make("algebra.array_from_elements", node.type, values);
+      return make("data.array_from_elements", node.type, values);
     }
-    if (name == "algebra.array_at")
+    if (name == "data.array_at")
       return at(inputs[0],
                 node.attributes.getAs<IntegerAttr>("index").getInt());
     return terms.expression(name, node.type, node.attributes, inputs,

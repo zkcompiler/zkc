@@ -15,20 +15,23 @@ class ApplyOp;
 mlir::LogicalResult
 verifyInvocationParameters(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
                            llvm::StringRef contract, mlir::ArrayAttr arguments,
-                           mlir::ArrayAttr parameters);
+                           mlir::ArrayAttr parameters,
+                           protocol::ParameterStage stage);
 namespace protocol {
 /// Explicit interchange with the program/0 parameter spellings. Native
 /// consumers use the attributes directly. Neither direction is a fallback
 /// native parser or evidence of source correspondence.
 llvm::Expected<mlir::ArrayAttr>
 decodeInvocationParameters(llvm::StringRef contract, mlir::ArrayAttr arguments,
-                           llvm::ArrayRef<std::string> parameters);
+                           llvm::ArrayRef<std::string> parameters,
+                           ParameterStage stage);
 llvm::Expected<mlir::ArrayAttr>
 decodeInvocationParameters(mlir::MLIRContext *, const BindingApplication &,
-                           llvm::ArrayRef<std::string> parameters);
+                           llvm::ArrayRef<std::string> parameters,
+                           ParameterStage stage);
 llvm::Expected<std::vector<std::string>>
 encodeInvocationParameters(llvm::StringRef contract, mlir::ArrayAttr arguments,
-                           mlir::ArrayAttr parameters);
+                           mlir::ArrayAttr parameters, ParameterStage stage);
 llvm::Expected<std::vector<std::string>>
     encodeInvocationParameters(exec::ApplyOp);
 /// Compare actual attributes to independently decoded boundary data; never
@@ -36,7 +39,8 @@ llvm::Expected<std::vector<std::string>>
 bool invocationParametersMatch(llvm::StringRef contract,
                                mlir::ArrayAttr arguments,
                                mlir::ArrayAttr parameters,
-                               llvm::ArrayRef<std::string> expected);
+                               llvm::ArrayRef<std::string> expected,
+                               ParameterStage stage);
 } // namespace protocol
 } // namespace zkc
 #endif

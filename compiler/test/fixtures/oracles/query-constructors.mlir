@@ -1,11 +1,11 @@
 !F = !algebra.field<"koala-bear.ext4-binomial3">
 #K = #protocol.oracle_kind<"table", [!F, 4 : ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 !BF = !algebra.field<"koala-bear">
 #B = #protocol.oracle_kind<"table", [!BF, 4 : ui64]>
 !B = !protocol.oracle<#B>
-!BD = !algebra.field_vector<"koala-bear">
+!BD = !data.field_vector<"koala-bear">
 module { "protocol.module"() ({
  relation.declare @admissible {kind="external",key="test/controller",revision="0",
   signature=(!D,!BD,ui64)->i1,purposes=["witness","witness","parameter"]}

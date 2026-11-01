@@ -9,6 +9,8 @@
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -538,9 +540,9 @@ primitive(Operation &op, SymbolTable *symbols,
                               binding.getArguments().getValue());
   if (!signature || !equal(signature.getInputs(), inputs.getTypes()) ||
       !equal(signature.getResults(), outputs.getTypes()) ||
-      failed(verifyInvocationParameters(silent, binding.getContract(),
-                                        binding.getArgumentsAttr(),
-                                        parameters)))
+      failed(verifyInvocationParameters(
+          silent, binding.getContract(), binding.getArgumentsAttr(), parameters,
+          zkc::protocol::ParameterStage::Logical)))
     return std::nullopt;
   return Primitive{binding.getContract(),
                    SmallVector<Attribute>(parameters.getValue()), binding};
@@ -563,12 +565,12 @@ bool candidateContract(StringRef contract) {
          contract == "matrix.bilinear";
 }
 algebra::FieldType scalarField(Type type) {
-  if (isa<algebra::FieldVectorType, algebra::FieldMatrixType,
-          algebra::FieldArrayType>(type))
+  if (isa<data::FieldVectorType, data::FieldMatrixType, data::FieldArrayType>(
+          type))
     type = cast<CollectionTypeInterface>(type).getElementType();
   return dyn_cast<algebra::FieldType>(type);
 }
-bool vectorType(Type type) { return isa<algebra::FieldVectorType>(type); }
+bool vectorType(Type type) { return isa<data::FieldVectorType>(type); }
 
 // Index terms distinguish each product coordinate from a captured selector.
 // SSA identities are invocation-local; source captures are assigned to actual
@@ -761,7 +763,7 @@ class Comparison {
         for (auto [value, meaning] : zip(outputs, *returned))
           values[value] = meaning;
         continue;
-      } else if (auto pack = dyn_cast<algebra::ArrayFromElementsOp>(op)) {
+      } else if (auto pack = dyn_cast<data::ArrayFromElementsOp>(op)) {
         if (!op.getAttrs().empty() || arrays.size() >= invalidTerm ||
             !terms.charge(pack.getNumOperands() + 1))
           return {};
@@ -777,7 +779,7 @@ class Comparison {
         // elements. This reader does not invoke the producer's MLIR fold.
         arrays.push_back(std::move(elements));
         result = {Meaning::Array, static_cast<Term>(arrays.size() - 1)};
-      } else if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
+      } else if (auto projection = dyn_cast<data::ArrayAtOp>(op)) {
         auto array = values.lookup(projection.getArray());
         auto index = projection.getIndexAttr().getInt();
         if (array.kind != Meaning::Array || index < 0 ||
@@ -1258,7 +1260,7 @@ public:
     }
     return consume(
         expected,
-        algebra::FieldVectorType::get(field.getContext(), field.getDomain()),
+        data::FieldVectorType::get(field.getContext(), field.getDomain()),
         cursor, bindings, end, output);
   }
   FailureOr<Value> finite(const finite::Computation &source, ValueRange inputs,
@@ -1531,9 +1533,9 @@ class ModuleComparison {
     Value container = mapping.lookup(op->getOperand(0));
     if (!container)
       return false;
-    Kind kind = isa<algebra::GroupVectorType>(container.getType())   ? Point
-                : isa<algebra::FieldVectorType>(container.getType()) ? Scalar
-                                                                     : Unknown;
+    Kind kind = isa<data::GroupVectorType>(container.getType())   ? Point
+                : isa<data::FieldVectorType>(container.getType()) ? Scalar
+                                                                  : Unknown;
     if (kind == Unknown)
       return false;
     containers.insert(container);

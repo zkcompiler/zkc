@@ -16,6 +16,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
@@ -485,7 +486,7 @@ std::string selectedVariantSource(MLIRContext &context, StringRef descriptor) {
           exec::ScopedExecutionBuilder &control) {
         auto field = work.getArgument(1).getType();
         auto sequence = data::SequenceType::get(&context, field);
-        auto fixed = algebra::FixedVectorType::get(&context, field, 2);
+        auto fixed = data::FixedVectorType::get(&context, field, 2);
         auto empty =
             sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
         auto values = sc::apply(control, builder, "append", "append",
@@ -1023,10 +1024,10 @@ int main(int argc, char **argv) {
   });
   cases.run(
       "inapplicable family candidate advances before physical admission", [&] {
-        auto source = R"(!V = !algebra.field_vector<"koala-bear">
-!X = !algebra.fixed_vector<!algebra.field<"koala-bear">,2>
+        auto source = R"(!V = !data.field_vector<"koala-bear">
+!X = !data.fixed_vector<!algebra.field<"koala-bear">,2>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["koala-bear", 2 : ui64],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"koala-bear">, 2>)>} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["koala-bear", 2 : ui64],implementation="",function_type=(!runtime.scope, !data.field_vector<"koala-bear">) -> !exec.outcome<(!data.fixed_vector<!algebra.field<"koala-bear">, 2>)>} : ()->()
 )",
                    "%v:!V", "%v", "!V", "!X",
                    scopedApply("fixed", "fixed", "%v", "!V", "%out", "!X") +
@@ -1058,10 +1059,10 @@ int main(int argc, char **argv) {
       });
   cases.run(
       "aggregate layout conflict advances its automatic family owner", [&] {
-        auto source = R"(!V = !algebra.field_vector<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr",2>
+        auto source = R"(!V = !data.field_vector<"bls12-381.fr">
+!A = !data.field_array<"bls12-381.fr",2>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr", 2 : ui64],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_array<"bls12-381.fr", 2>)>} : ()->()
+"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr", 2 : ui64],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_array<"bls12-381.fr", 2>)>} : ()->()
 )",
                    "%v:!V", "%v", "!V", "!A",
                    scopedApply("array", "array", "%v", "!V", "%out", "!A") +
@@ -1534,14 +1535,14 @@ int main(int argc, char **argv) {
       "nested access propagates selected layouts without installed defaults",
       [&] {
         auto source = R"(!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>
-!S = !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>>
+!V = !data.field_vector<"bls12-381.fr">
+!X = !data.fixed_vector<!algebra.field<"bls12-381.fr">,2>
+!S = !data.sequence<!data.fixed_vector<!algebra.field<"bls12-381.fr">,2>>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr", 2 : ui64],implementation="blst/resident/fixed_vector.from_vector",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>)>} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>)>} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>, !algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>) -> !exec.outcome<(!data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>)>} : ()->()
-"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.at",function_type=(!runtime.scope, !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>, ui64) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>)>} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr", 2 : ui64],implementation="blst/resident/fixed_vector.from_vector",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>, !data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>) -> !exec.outcome<(!data.sequence<!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>)>} : ()->()
+"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.at",function_type=(!runtime.scope, !data.sequence<!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>, ui64) -> !exec.outcome<(!data.fixed_vector<!algebra.field<"bls12-381.fr">, 2>)>} : ()->()
 )",
                    "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!X",
                    scopedApply("empty", "empty", "", "", "%s", "!S") +
@@ -1603,15 +1604,15 @@ int main(int argc, char **argv) {
   cases.run("compiled resident dense arrays and fixed vectors", [&] {
     auto source =
         R"(!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr",4>
-!X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,4>
+!V = !data.field_vector<"bls12-381.fr">
+!A = !data.field_array<"bls12-381.fr",4>
+!X = !data.fixed_vector<!algebra.field<"bls12-381.fr">,4>
 )" + scopedFixture(
             R"(
-"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/field_array.from_vector",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_array<"bls12-381.fr", 4>)>} : ()->()
-"runtime.binding"() {sym_name="get",contract="field_array.get",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/field_array.get",function_type=(!runtime.scope, !algebra.field_array<"bls12-381.fr", 4>, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
-"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/fixed_vector.from_vector",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 4>)>} : ()->()
-"runtime.binding"() {sym_name="dot",contract="fixed_vector.dot",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/fixed_vector.dot",function_type=(!runtime.scope, !algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 4>, !algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 4>) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/field_array.from_vector",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_array<"bls12-381.fr", 4>)>} : ()->()
+"runtime.binding"() {sym_name="get",contract="field_array.get",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/field_array.get",function_type=(!runtime.scope, !data.field_array<"bls12-381.fr", 4>, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/fixed_vector.from_vector",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.fixed_vector<!algebra.field<"bls12-381.fr">, 4>)>} : ()->()
+"runtime.binding"() {sym_name="dot",contract="fixed_vector.dot",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/fixed_vector.dot",function_type=(!runtime.scope, !data.fixed_vector<!algebra.field<"bls12-381.fr">, 4>, !data.fixed_vector<!algebra.field<"bls12-381.fr">, 4>) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )",
             "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!F",
             scopedApply("array", "array", "%v", "!V", "%a", "!A") +
@@ -1743,10 +1744,10 @@ int main(int argc, char **argv) {
     auto source =
         R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
-!I = !algebra.indices
+!I = !data.indices
 )" + scopedFixture(
             R"(
-"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !data.sequence<!algebra.field<"bls12-381.fr">>],implementation="arkworks/transcript.native.indexed.observe.data",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->()
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !data.sequence<!algebra.field<"bls12-381.fr">>],implementation="arkworks/transcript.native.indexed.observe.data",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !data.sequence<!algebra.field<"bls12-381.fr">>, !data.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->()
 )",
             "%t:!T,%s:!S,%i:!I", "%t,%s,%i", "!T,!S,!I", "!T",
             scopedApply("observe", "observe", "%t,%s,%i", "!T,!S,!I", "%out",

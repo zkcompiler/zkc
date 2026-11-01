@@ -52,6 +52,42 @@ fn arithmetic<S: Coefficient>(element: impl Fn(usize) -> S) {
         );
         assert_eq!(automatic.output_bytes(), n * size_of::<S>());
         assert_eq!(automatic.workspace_bytes(), 0);
+        for destination in 0..3 {
+            let stride = n.max(1) + 2;
+            for operation in [
+                vector::SlotOperation::Add(0, 1),
+                vector::SlotOperation::Multiply(0, 1),
+                vector::SlotOperation::Negate(0),
+            ] {
+                let mut storage = vec![element(97); 3 * stride];
+                storage[..n].copy_from_slice(&a);
+                storage[stride..stride + n].copy_from_slice(&b);
+                let before = storage.clone();
+                automatic
+                    .apply_slots(operation, destination, stride, &mut storage)
+                    .unwrap();
+                for lane in 0..n {
+                    let expected = match operation {
+                        vector::SlotOperation::Add(..) => a[lane] + b[lane],
+                        vector::SlotOperation::Multiply(..) => a[lane] * b[lane],
+                        vector::SlotOperation::Negate(..) => -a[lane],
+                    };
+                    assert!(storage[destination * stride + lane] == expected);
+                }
+                for i in 0..storage.len() {
+                    if !(destination * stride..destination * stride + n).contains(&i) {
+                        assert!(storage[i] == before[i]);
+                    }
+                }
+                let before = storage.clone();
+                assert_eq!(
+                    automatic.apply_slots(operation, 3, stride, &mut storage),
+                    Err(Error::LengthMismatch)
+                );
+                assert!(storage == before);
+            }
+        }
+
         for algorithm in [Algorithm::Scalar, Algorithm::Packed] {
             if algorithm == Algorithm::Packed && width <= 1 {
                 assert!(matches!(

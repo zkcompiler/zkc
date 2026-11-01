@@ -22,9 +22,9 @@ std::string source(StringRef declarations) {
   return R"mlir(
 !S = !data.sequence<i1>
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 4>
-!M = !algebra.field_matrix<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+!A = !data.field_array<"bls12-381.fr", 4>
+!M = !data.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
 )mlir" + declarations.str() +
          R"mlir(
@@ -440,11 +440,11 @@ int main() {
    %one = "data.sequence_append"(%empty,%flag) : (!S,i1)->!S
    %two = "data.sequence_append"(%one,%flag) : (!S,i1)->!S
    %zero = "data.index"() {value=0 : ui64} : ()->ui64
-   %all = "algebra.finite_collect"(%two) {domain=@items,body=@body} : (!S)->!S
-   %some = "algebra.finite_collect"(%two) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
-   %none = "algebra.finite_collect"(%empty) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
-   %mapped = "algebra.finite_collect"(%dynamic) {domain=@items,body=@body} : (!S)->!S
-   %filtered = "algebra.finite_collect"(%dynamic) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
+   %all = "data.finite_collect"(%two) {domain=@items,body=@body} : (!S)->!S
+   %some = "data.finite_collect"(%two) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
+   %none = "data.finite_collect"(%empty) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
+   %mapped = "data.finite_collect"(%dynamic) {domain=@items,body=@body} : (!S)->!S
+   %filtered = "data.finite_collect"(%dynamic) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
    func.return %all,%some,%none,%mapped,%filtered : !S,!S,!S,!S,!S
  }
 )mlir");
@@ -494,7 +494,7 @@ int main() {
    data.preconditions=[#data.equal_extent<0,0,1,0>]
  } {
    %next = func.call @append(%xs,%flag) : (!S,i1)->!S
-   %some = "algebra.finite_collect"(%xs) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
+   %some = "data.finite_collect"(%xs) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
    func.return %next,%some : !S,!S
  }
 )mlir");

@@ -34,8 +34,10 @@ class Structure {
     if (++nodes > artifactNodeLimit)
       fail("source-limit", "program exceeds artifact node limit");
   }
-  size_t text(StringRef value) {
+  size_t text(StringRef value, size_t limit = stringByteLimit) {
     node();
+    if (value.size() > limit)
+      fail("source-limit", "program string exceeds its field byte limit");
     if (!json::isUTF8(value))
       fail("source-string");
     size_t bytes = 2;
@@ -72,8 +74,8 @@ class Structure {
     }
     return bytes;
   }
-  size_t names(const Names &values) {
-    return list(values, [&](const auto &s) { return text(s); });
+  size_t names(const Names &values, size_t limit = stringByteLimit) {
+    return list(values, [&](const auto &s) { return text(s, limit); });
   }
   size_t pairs(const protocol::Assignments &values) {
     return list(values, [&](const auto &p) {
@@ -113,8 +115,8 @@ class Structure {
                              names(op.values), names(op.continuations)});
             } else if constexpr (std::is_same_v<T, Operation>) {
               return fields({tag, text(i.site), text(op.callee),
-                             names(op.attributes), names(op.inputs),
-                             names(op.outputs)});
+                             names(op.attributes, parameterByteLimit),
+                             names(op.inputs), names(op.outputs)});
             } else if constexpr (std::is_same_v<T, BooleanConstant>) {
               node();
               return fields(

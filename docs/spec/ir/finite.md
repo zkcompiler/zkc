@@ -95,8 +95,8 @@ when they have no result dependencies.
 
 | Computation | Inputs and outputs | Helper attribute |
 |---|---|---|
-| `algebra.finite_fold` | `(A..., S..., C...) -> S...` | `step` |
-| `algebra.finite_collect` | `(A..., C...) -> R` | `body` |
+| `data.finite_fold` | `(A..., S..., C...) -> S...` | `step` |
+| `data.finite_collect` | `(A..., C...) -> R` | `body` |
 | `exec.fold` occurrence | `(scope, A..., S..., C...) -> outcome(S...)` | `step` |
 | `exec.collect` occurrence | `(scope, A..., C...) -> outcome(R)` | `body` |
 

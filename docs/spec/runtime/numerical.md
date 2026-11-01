@@ -249,7 +249,7 @@ They use ordinary installed bindings and operation parameters:
 |---|---|
 | Binding arguments | `[F, M]`: an exact installed field and an ASCII `0`/`1` operand mask |
 | Inputs | Row count (`index`), followed by one `field<F>` for each `0` and one `vector<F>` for each `1` |
-| Parameters | One canonical `zkc.ring/0` expression, at most 4096 decoded UTF-8 bytes |
+| Parameters | Logical: one canonical Ring expression. Physical: one [numerical plan](numerical-plans.md), at most 16384 bytes, with a nested Ring expression of at most 4096 bytes |
 | Expression | Exactly `M.length` inputs, one output, every node in `F`; constants, input, addition, multiplication and negation |
 | Result | `vector<F>` for map; `field<F>` for sum or product |
 | Installation | `arkworks/numerical.*`, `dalek/numerical.*` or `plonky3/numerical.*`, according to the owning field provider |
@@ -261,7 +261,7 @@ expression. Scalars are broadcast mathematically without allocating vectors.
 Empty maps return an empty vector; empty sums and products return zero and one.
 An authored reduction seed is combined outside the operation.
 
-All eight installed field families have native consumers. Cross-field embedding
+All installed field families have native consumers. Cross-field embedding
 is outside this expression contract. Natural constants denote prime-subfield
 elements; general extension elements arrive through typed operands. Binary-field
 constants retain the Ring carrier's restrictions: only the prime-subfield
@@ -278,17 +278,18 @@ slot before a work refusal, including with zero work allowance. The numerical
 work policy does not provide a pre-execution admission guarantee for this
 preceding preparation.
 
-Preparation has separate bounds: a 4096-byte decoded UTF-8 body, 1023 operand
+Preparation has separate bounds: a 16384-byte decoded UTF-8 plan, a 4096-byte
+inner expression, 1023 operand
 slots and 1 MiB of conservatively charged immutable metadata per prepared call.
 The metadata charge includes copied keys, Ring inputs/nodes/facts/roots, typed
-constants, the positional mask and invariant/varying node schedules. Parsing
+constants, the positional mask, scratch-slot map and invariant/varying node schedules. Parsing
 scratch is bounded by the carrier size. These bounds are separate from managed
 row scratch and result construction;
 they do not bound allocator overhead or process RSS. No Host relation asset or
 process-wide expression cache is used.
 
 For each evaluation, the work admission score is
-`W = 8B + 2I + 2N + 1 + R(3N + 3)`, where `B` is the body byte length, `I` is the
+`W = 8B + 2I + 2N + 1 + R(3N + 3)`, where `B` is the complete physical plan byte length, `I` is the
 operand slot count, `N` is the Ring node count and `R` is the row count. The fixed
 setup surcharge `8B + 2I + 2N + 1` is identical for cold and cached calls, including
 empty domains. This is a conservative evaluation-admission score, not a meter of
@@ -302,14 +303,14 @@ the first row is reached; an empty domain evaluates no arithmetic. Only varying
 nodes run for each later row. Captured values never enter immutable preparation.
 The conservative work score remains unchanged by this optimization.
 
-Evaluation may process contiguous row chunks in a node-major scratch slab.
-Chunk width is an invocation detail, bounded by the remaining managed-memory
-allowance. The minimum admission requirement remains one element per Ring node,
-typed operand views, map staging when present, and the conservative result charge.
-A tighter allowance reduces chunk width down to one row. All scratch remains
-charged; this preserves policy admission, not allocator success or process RSS.
-Only the remaining rows are evaluated in the final chunk. Sum and product consume
-roots in row order, and results are published only after the complete call.
+Evaluation processes contiguous row chunks using the actual validated scratch-slot
+map. The chunk width is at most the plan's lane bound and can shrink under the
+remaining managed-memory allowance. The minimum requirement is one resident
+element per scratch slot, typed operand views, map staging when present, and the
+conservative result charge. Invariant dependencies needed by later chunks remain
+in persistent slots. Arithmetic loads both operand lanes before an overlapping
+result write; provider packing and scalar tails preserve the same values. All
+scratch remains charged. This is not allocator success or a process RSS bound.
 
 Expression nodes and ordinary dense vector operations share destination-slice
 arithmetic. Each field uses its provider-declared packing for native element

@@ -57,6 +57,9 @@ struct OperationDecision {
   // Data-only signature; materialization supplies scope and outcome types.
   mlir::FunctionType functionType;
   llvm::SmallVector<UseConversion> conversions;
+  // Immutable actual physical invocation data. Numerical occurrences carry a
+  // checked plan; other contracts retain their exact logical parameters.
+  mlir::ArrayAttr physicalParameters;
 };
 struct ContractionDecision {
   OperationIndex producer;

@@ -39,10 +39,14 @@ class Decoder {
     }
     return r;
   }
-  std::string string(const V &v) {
+  std::string string(const V &v, size_t limit = stringByteLimit) {
     auto s = v.getAsString();
     if (!s) {
       fail("interactive-shape");
+      return {};
+    }
+    if (s->size() > limit) {
+      fail("source-limit");
       return {};
     }
     return s->str();
@@ -57,8 +61,8 @@ class Decoder {
     }
     return out;
   }
-  Names names(const V &v) {
-    return list(v, [&](const V &x) { return string(x); });
+  Names names(const V &v, size_t limit = stringByteLimit) {
+    return list(v, [&](const V &x) { return string(x, limit); });
   }
   protocol::Assignments pairs(const V &v) {
     return list(v, [&](const V &x) -> std::pair<std::string, std::string> {
@@ -124,8 +128,9 @@ class Decoder {
     out.site = string((*r)[1]);
     if (tag == "op") {
       if (fields(6, "interactive-operation"))
-        out.value = Operation{string((*r)[2]), names((*r)[3]), names((*r)[4]),
-                              names((*r)[5])};
+        out.value =
+            Operation{string((*r)[2]), names((*r)[3], parameterByteLimit),
+                      names((*r)[4]), names((*r)[5])};
     } else if (tag == "return_if") {
       if (fields(5, "interactive-return-type"))
         out.value = ReturnIf{string((*r)[2]), names((*r)[3]), names((*r)[4])};

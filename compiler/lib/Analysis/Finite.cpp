@@ -6,6 +6,8 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -258,10 +260,11 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
 } // namespace
 Type elementType(Type container, bool matrix) {
   if (!container ||
-      (matrix ? !isa<algebra::FieldMatrixType>(container)
-              : !isa<algebra::FieldVectorType, algebra::GroupVectorType,
-                     algebra::IndicesType, algebra::FieldArrayType,
-                     data::SequenceType>(container)))
+      (matrix
+           ? !isa<data::FieldMatrixType>(container)
+           : !isa<data::FieldVectorType, data::GroupVectorType,
+                  data::IndicesType, data::FieldArrayType, data::SequenceType>(
+                 container)))
     return {};
   auto silent = [&] {
     auto diagnostic = emitError(UnknownLoc::get(container.getContext()));
@@ -274,7 +277,7 @@ Type elementType(Type container, bool matrix) {
   return collection ? collection.getElementType() : Type();
 }
 bool isComputation(Operation *op) {
-  return isa_and_nonnull<algebra::FiniteFoldOp, algebra::FiniteCollectOp,
+  return isa_and_nonnull<data::FiniteFoldOp, data::FiniteCollectOp,
                          exec::FoldOp, exec::CollectOp>(op);
 }
 bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba) {
@@ -388,7 +391,7 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
     return refuse(op, "expected finite computation");
   c.scoped = isScoped(op);
   c.total = !c.scoped;
-  c.collect = isa<algebra::FiniteCollectOp, exec::CollectOp>(op);
+  c.collect = isa<data::FiniteCollectOp, exec::CollectOp>(op);
   c.signature = computationSignature(op);
   auto reference = [&](StringRef name) {
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>(name);
@@ -548,7 +551,7 @@ LogicalResult verifyLocal(Operation *op) {
   if (!isComputation(op))
     return refuse(op, "expected finite computation");
   bool scoped = isScoped(op);
-  bool collect = isa<algebra::FiniteCollectOp, exec::CollectOp>(op);
+  bool collect = isa<data::FiniteCollectOp, exec::CollectOp>(op);
   for (auto attr : op->getAttrs()) {
     StringRef name = attr.getName().getValue();
     if (name == "domain" || name == "predicate" ||
@@ -646,8 +649,7 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
     }
   }
   if (c.collect)
-    if (auto array =
-            dyn_cast<algebra::FieldArrayType>(c.signature.getResult(0))) {
+    if (auto array = dyn_cast<data::FieldArrayType>(c.signature.getResult(0))) {
       auto card = domainEvidence(c, work, [&](facts::DomainCardinality &view) {
         return view.exact(detail::domainRef(domainResult(c.domain)));
       });
@@ -777,7 +779,7 @@ LogicalResult CollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
   return finite::verifyReferences(*this, symbols);
 }
 } // namespace zkc::exec
-namespace zkc::algebra {
+namespace zkc::data {
 LogicalResult FiniteFoldOp::verify() { return finite::verifyLocal(*this); }
 LogicalResult FiniteCollectOp::verify() { return finite::verifyLocal(*this); }
 LogicalResult FiniteFoldOp::verifySymbolUses(SymbolTableCollection &symbols) {
@@ -787,7 +789,7 @@ LogicalResult
 FiniteCollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
   return finite::verifyReferences(*this, symbols);
 }
-} // namespace zkc::algebra
+} // namespace zkc::data
 
 namespace zkc::finite {
 namespace {

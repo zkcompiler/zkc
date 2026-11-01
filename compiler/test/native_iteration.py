@@ -74,7 +74,7 @@ module { "protocol.module"() ({
     commands.source('protocol-bundle', affine.replace('"protocol.yield"(%left,%right)', '"protocol.yield"(%right,%left)'), refuses='mathematical-formation')
 with case('nested unused polynomial observation is checked before DCE'):
     source = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
-    extra = '''     %too_small = "poly.coefficients"(%q) : (!q)->!algebra.field_array<"bls12-381.fr", 1>
+    extra = '''     %too_small = "poly.coefficients"(%q) : (!q)->!data.field_array<"bls12-381.fr", 1>
 '''
     commands.source('protocol-bundle', source.replace('     %zero =', extra + '     %zero ='), refuses='polynomial-formation')
 with case('statement bindings stay at entry'):
@@ -113,13 +113,13 @@ module { "protocol.module"() ({
  "protocol.func"() ({
    %a = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
    %b = "algebra.constant"() {value=#algebra.literal<!f, 2 : ui255>} : ()->!f
-   %xs = "algebra.array_from_elements"(%a, %b) : (!f, !f)-> !algebra.field_array<"bls12-381.fr", 2>
-   "protocol.return"(%xs) : (!algebra.field_array<"bls12-381.fr", 2>)->()
- }) {sym_name="main",function_type=()->!algebra.field_array<"bls12-381.fr", 2>,roles=["P"],input_roles=[],output_roles=[["P"]]} : ()->()
+   %xs = "data.array_from_elements"(%a, %b) : (!f, !f)-> !data.field_array<"bls12-381.fr", 2>
+   "protocol.return"(%xs) : (!data.field_array<"bls12-381.fr", 2>)->()
+ }) {sym_name="main",function_type=()->!data.field_array<"bls12-381.fr", 2>,roles=["P"],input_roles=[],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
     prepared = commands.verified(source, None, '--zkc-prepare-protocol')
-    assert 'algebra.array_from_elements' in prepared
+    assert 'data.array_from_elements' in prepared
     assert 'arith.constant dense' not in prepared
     commands.source('protocol-bundle', prepared)
 counted()

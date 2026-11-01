@@ -111,7 +111,11 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
         site for site in work_instructions(entry) if site[0][1] == "numerical.map"
     )
     assert binding[2] == ["koala-bear", "10"]  # Column x and scalar a.
-    _, _, nodes, outputs = json.loads(instruction[3][0])
+    tag, expression, lanes, slots, locations = json.loads(instruction[3][0])
+    assert tag == "zkc.numerical-plan/0"
+    assert 1 <= lanes <= 256 and slots == len(set(locations))
+    _, _, nodes, outputs = expression
+    assert len(locations) == len(nodes)
     # Both authored copies of a*a and x+a*a have one shared DAG node.
     assert sum(node[0] == "mul" for node in nodes) == 2
     assert sum(node[0] == "add" for node in nodes) == 1

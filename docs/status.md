@@ -156,8 +156,9 @@ SSA against admitted native local definitions without reader or emitter replay.
 Both checks inspect the complete immediate execution inventory, including
 dormant definitions; surrounding protocol associations remain the enclosing
 profile's responsibility. Native program records and runtime kernels retain
-their own contracts. Transparent word arithmetic and compiler-selected
-writable-buffer execution remain incomplete.
+their own contracts. The [represented arithmetic profile](#represented-arithmetic-development)
+adds independently checked word and private-buffer candidates consumed through
+physical numerical plans. General writable-buffer programs remain outside it.
 
 Source preparation has one service with polynomial recipe, protocol application
 and participant mathematics stages. Numerical recipes emit scoped operations
@@ -363,7 +364,9 @@ reader and source comparison are in IR Analysis; proposal and optimization are
 in Transforms. Numerical pass options preserve representation choices through
 copied and textual pipelines. Products use the pointwise tensor stage; their
 aggregate remains native. Row-free fills and explicit vector selection remain
-outside the tensor profile. General tensor transforms and writable-buffer ownership are outside this profile.
+outside the tensor profile. The later represented pointwise stage checks private
+buffer ownership separately; general tensor and buffer transforms remain outside
+these profiles.
 Owned [quotient-ring kernels](spec/domains/quotient-rings.md) support canonical
 negacyclic arithmetic, exact centered norms and natural-order transforms through
 ordered native contracts. Coefficient and evaluation values have distinct kernel
@@ -389,8 +392,9 @@ Weighted sums of selected off-domain column quotients use the same scope
 on BN254 Fr and those residue fields.
 Compiler-generated pointwise expressions pass
 borrowed columns and scalar captures through ordinary installed bindings.
-Compiler buffer lowering, target-specific vectorization and JIT/AOT engines remain
-unimplemented. These execution boundaries do not establish formal native
+The represented pointwise stage uses upstream vectorization and bufferization,
+then checked resident storage plans. It does not emit object code or provide
+JIT/AOT engines. These execution boundaries do not establish formal native
 correspondence.
 
 ## Source and application boundary
@@ -884,7 +888,7 @@ entries, integration and protocol-specific theorems.
 | Capability | Support and boundary |
 |---|---|
 | Numerical scheduling | [Numerical computation](spec/ir/computation.md) retains the mathematical subject and checks a private standard SCF loop schedule before scoped execution. Explicit collect–fold fusion supports total field-vector/field-sequence producers and element or same-position indexed consumers; unsupported observations retain materialization. Nominal values, domain admission and ordered state are checked independently. No vectorized schedule, writable-buffer ABI or new VM instruction is implied. |
-| Scalar, collection and polynomial mathematics | Nominal Algebra field/group vectors, indices, field matrices and field arrays, with ordered `algebra.array_from_elements` packing. A shared collection interface reports structure without granting finite, mathematical, Copy/Drop or wire admission; shape evidence retains the logical family. Source syntax, logical binding spellings and native codecs retain their meanings; builtin tensors have no compatibility alias. Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
+| Scalar, collection and polynomial mathematics | Nominal Algebra field/group vectors, indices, field matrices and field arrays, with ordered `data.array_from_elements` packing. A shared collection interface reports structure without granting finite, mathematical, Copy/Drop or wire admission; shape evidence retains the logical family. Source syntax, logical binding spellings and native codecs retain their meanings; builtin tensors have no compatibility alias. Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
 | Group identity | Total `intrinsic<G>("curve.identity")`, Algebra identity and independently checked native recipe. Dalek Ristretto255 and prime-order Edwards25519; arkworks BLS12-381 G1/G2/GT and BN254 G1/G2/GT, including multiplicative-one GT. Empty MSM identity is checked for the six installed dense group families; [contract](spec/domains/values.md#group-identity). No native proof claim. |
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/protocols/polynomial/sumcheck/README.md) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |
 | Source clients of imported AIR | The [imported AIR client](../common/tests/fixtures/projects/imported-air/README.md) checks actual trace, configuration and public inputs. The [AIR STARK client](../common/tests/fixtures/projects/air-stark/README.md) adds base-field trace commitments, scoped extension-field quotient chunks, OOD/DEEP equations and FRI through ordinary source libraries and separate proof Hosts. The single-table profile covers one present table's assertions; the three-table profile adds whole-Bundle Boolean multisets and signed field balance through LogUp. Security reductions for both remain separate work. |
@@ -1260,3 +1264,29 @@ assignment, formula, readback and mathematical-law obligations remain for the
 consumer; this adds no independent acceptance of authored mathematics or
 protocol security result. Root generator and protocol-library migration is
 separate integration work.
+
+## Represented arithmetic development
+
+The represented-execution unit consolidates collection ownership in Data. Its
+canonical [Residue contract](spec/ir/residues.md) specifies exact modular values,
+projection and lifts independently of nominal field and byte-codec meaning. The
+scalar word producer and independent actual-body reader cover closed arithmetic,
+canonical ranges, unsigned projection, exact centered lifts and standard CSE.
+The reader reconstructs a canonical expression from actual word operations;
+mutations of the modulus, ranges, outputs and poison-producing flags refuse.
+Static pointwise tiles now use upstream Linalg vectorization and One-Shot
+Bufferization. An independent reader checks actual accesses, initialization,
+aliases, release, poison isolation and the fresh returned owner, then recovers
+the scalar meaning. The default CPU target now retains that actual expression,
+lane bound and liveness-proposed scratch assignment in a typed Runtime plan.
+Independent C++/Rust readers validate actual symbolic slot contents; the reached
+CPU Call consumes the plan using packed resident kernels with exact-slot aliases
+and scalar tails. Extension/binary domains keep complete identities and select
+opaque providers. Old executable bare Ring parameters are refused.
+
+Maintained checks exercise default selection, actual-candidate mutation,
+resource refusal and compiled field/quotient-ring/group clients. Lazy-context
+checks cover collection and pass dependencies; the installed IR client consumes
+a word candidate without the lowering or target libraries. The admitted storage
+profile is static, rank-one and pointwise. These native readers do not add Lean
+correspondence or object-code/AOT coverage.

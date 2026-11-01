@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "data.domain"() <{function_type = (!V, !V, !V) -> !data.domain<!F>, sym_name = "outer", sym_visibility = "private"}> ({

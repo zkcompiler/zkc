@@ -1,6 +1,6 @@
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">,8:ui64]>
 !F = !algebra.field<"koala-bear.ext4-binomial3">
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({
  "protocol.func"() ({

@@ -11,9 +11,18 @@
 using namespace llvm;
 namespace zkc::protocol {
 Error checkParameters(const BindingApplication &binding,
-                      ArrayRef<std::string> parameters) {
-  if (numericalContract(binding.contract))
-    return checkNumericalParameters(binding, parameters);
+                      ArrayRef<std::string> parameters, ParameterStage stage) {
+  if (numericalContract(binding.contract)) {
+    if (stage == ParameterStage::Logical)
+      return checkNumericalParameters(binding, parameters);
+    if (auto e = checkNumericalArguments(binding))
+      return e;
+    if (parameters.size() != 1)
+      return error("interactive-kernel-parameters");
+    auto plan = readNumericalPlan(parameters[0], binding.arguments[0],
+                                  binding.arguments[1]);
+    return plan ? Error::success() : plan.takeError();
+  }
   std::string field;
   const auto *schema = parameterContract(binding.contract);
   if (schema && schema->fieldTerm) {

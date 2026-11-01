@@ -402,7 +402,7 @@ for label, path, entry, maximum in [
 
 
 with case('prefix-restriction-in-repeat-keeps-raw-shape-and-coordinate-order'):
-    vector_type = '!algebra.field_vector<"bls12-381.fr">'
+    vector_type = '!data.field_vector<"bls12-381.fr">'
     body = f'''%r = "protocol.repeat"(%n,%values,%fixed) ({{
       ^body(%i:ui64,%state:{vector_type},%capture:{vector_type}):
       %next = "algebra.multilinear_restrict_prefix"(%state,%capture) : ({vector_type},{vector_type})->{vector_type}
@@ -583,12 +583,12 @@ with case('native-multirole-finite-math-profile-reaches-repeat-body'):
     definitions = original[:start]
     tail = original[original.rindex('}) {profile='):]
     body = '''%r:2 = "protocol.repeat"(%n,%a,%b,%xs) ({
-      ^body(%i:ui64,%x:!algebra.field<"bls12-381.fr">,%y:!algebra.field<"bls12-381.fr">,%captured:!algebra.field_vector<"bls12-381.fr">):
-      %v:2 = "algebra.finite_fold"(%captured,%x,%y) {domain=@items,step=@step} : (!algebra.field_vector<"bls12-381.fr">,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)->(!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)
+      ^body(%i:ui64,%x:!algebra.field<"bls12-381.fr">,%y:!algebra.field<"bls12-381.fr">,%captured:!data.field_vector<"bls12-381.fr">):
+      %v:2 = "data.finite_fold"(%captured,%x,%y) {domain=@items,step=@step} : (!data.field_vector<"bls12-381.fr">,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)->(!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)
       "protocol.yield"(%v#0,%v#1) : (!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)->()
-    }) {site="loop",carried=2:i64,maximum=0:i64,roles=["P"],carried_roles=[["P"],["P"]]} : (ui64,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">,!algebra.field_vector<"bls12-381.fr">)->(!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)'''
+    }) {site="loop",carried=2:i64,maximum=0:i64,roles=["P"],carried_roles=[["P"],["P"]]} : (ui64,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">,!data.field_vector<"bls12-381.fr">)->(!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)'''
     ports = (('n', 'ui64', ('P',)), ('a', '!algebra.field<"bls12-381.fr">', ('P',)),
-             ('b', '!algebra.field<"bls12-381.fr">', ('P',)), ('xs', '!algebra.field_vector<"bls12-381.fr">', ('P',)))
+             ('b', '!algebra.field<"bls12-381.fr">', ('P',)), ('xs', '!data.field_vector<"bls12-381.fr">', ('P',)))
     source = definitions + protocol('main', body, inputs=ports, outputs=(), returns=()) + tail
     commands.verified(source)
     refuse(source, 'structured-source-multirole-math', 'structured-reference-unsupported')

@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!I = !algebra.indices
-!M = !algebra.field_matrix<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+!I = !data.indices
+!M = !data.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%matrix:!M):
    %d = "data.domain_matrix_coordinates"(%matrix) {order="row_major"} : (!M)->!data.domain<ui64,ui64>
@@ -12,7 +12,7 @@ module { "protocol.module"() ({
    func.return %v : !F
  }
  "protocol.func"() ({ ^entry(%matrix:!M):
-   %r = "algebra.finite_collect"(%matrix) {domain=@items,body=@body} : (!M)->!V
+   %r = "data.finite_collect"(%matrix) {domain=@items,body=@body} : (!M)->!V
    "protocol.return"(%r) : (!V)->()
  }) {sym_name="main",function_type=(!M)->!V,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

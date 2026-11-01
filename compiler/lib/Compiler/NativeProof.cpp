@@ -18,6 +18,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -532,7 +533,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
             query.getNumResults() != 1 ||
             (!construction &&
              query.getResult(0).getType() !=
-                 (block   ? Type(algebra::IndicesType::get(source.getContext()))
+                 (block   ? Type(data::IndicesType::get(source.getContext()))
                   : index ? Type(IntegerType::get(source.getContext(), 64,
                                                   IntegerType::Unsigned))
                           : Type(algebra::FieldType::get(source.getContext(),
@@ -1059,7 +1060,7 @@ class Emitter {
       SmallVector<Attribute> arguments{builder.getStringAttr(policy.suite)};
       if (!event.query)
         arguments.push_back(TypeAttr::get(event.payload));
-      auto indices = algebra::IndicesType::get(builder.getContext());
+      auto indices = data::IndicesType::get(builder.getContext());
       Value coordinates = kernel(control, binding("indices.empty", {}), {},
                                  {indices}, "coordinates")[0];
       for (auto [i, argument] : enumerate(data.drop_front(dataInputs)))

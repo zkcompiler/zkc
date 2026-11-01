@@ -2,6 +2,7 @@
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Analysis/ComputationMeaning.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -284,11 +285,11 @@ std::optional<unsigned> argument(Value value, Block &block) {
              : std::nullopt;
 }
 bool nativeVector(Type type, Type field) {
-  auto vector = dyn_cast<algebra::FieldVectorType>(type);
+  auto vector = dyn_cast<data::FieldVectorType>(type);
   return vector && vector.getElementType() == field;
 }
 bool nativeMatrix(Type type, Type field) {
-  auto matrix = dyn_cast<algebra::FieldMatrixType>(type);
+  auto matrix = dyn_cast<data::FieldMatrixType>(type);
   return matrix && matrix.getElementType() == field;
 }
 } // namespace

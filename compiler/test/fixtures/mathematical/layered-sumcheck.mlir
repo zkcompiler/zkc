@@ -1,7 +1,7 @@
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
-!a = !algebra.field_array<"bls12-381.fr", 3>
+!a = !data.field_array<"bls12-381.fr", 3>
 !q = !poly.polynomial<"bls12-381.fr", 1>
 !rng = !protocol.service_ref<"random.bls12-381.fr/0">
 !state = !data.variant<#data.identity<["atom", "poly.residual.product"]>, [#data.alternative<"state", [!poly.point<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">]>]>
@@ -47,10 +47,10 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(!p)>
     }
     func.func @equality_table(%arg0: !runtime.scope, %arg1: !p) -> !exec.outcome<(!t)> attributes {no_inline, runtime.origin = ["equality_table", []]} {
-      %0 = "exec.apply"(%arg0, %arg1) <{binding = @weights, parameters = [], site = "weights"}> : (!runtime.scope, !p) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>
-      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>) -> ()
-    ^bb1(%1: !algebra.field_vector<"bls12-381.fr">):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0, %1) <{binding = @table, parameters = [], site = "table"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!t)>
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @weights, parameters = [], site = "weights"}> : (!runtime.scope, !p) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!data.field_vector<"bls12-381.fr">)>) -> ()
+    ^bb1(%1: !data.field_vector<"bls12-381.fr">):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1) <{binding = @table, parameters = [], site = "table"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!t)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!t)>) -> ()
     ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!t)>
@@ -96,8 +96,8 @@ module { "protocol.module"() ({
    "protocol.return"(%accepted,%finished#0,%finished#1) : (i1,!p,!f)->()
  }) {sym_name="sumcheck",function_type=(ui64,!t,!t,!t,!t,!f,!rng)->(i1,!p,!f),roles=["P","V"],input_roles=[["P"],["P"],["P"],["V"],["V"],["V"],["V"]],output_roles=[["V"],["P"],["P"]]} : ()->()
 
- "runtime.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
- "runtime.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 
  "protocol.func"() ({ ^entry(%layers:ui64,%coins:!rng):
    %pP = "protocol.local_call"() {callee=@empty_point,role="P",site="emptyP"} : ()->!p

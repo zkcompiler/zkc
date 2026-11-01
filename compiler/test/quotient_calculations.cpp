@@ -81,7 +81,7 @@ int main() {
     });
   auto source = parseSourceString<ModuleOp>(R"mlir(
     !R = !poly.quotient<17,4>
-    !I = !algebra.indices
+    !I = !data.indices
     module {
       func.func private @calculate(%a:!I,%b:!I)->!I {
         %x = poly.quotient_project %a : (!I)->!R
@@ -163,7 +163,7 @@ int main() {
       "upstream select does not widen the admitted mathematical profile", [&] {
         auto choices = parseSourceString<ModuleOp>(R"mlir(
       !R = !poly.quotient<17,4>
-      !I = !algebra.indices
+      !I = !data.indices
       module {
         func.func private @choose(%flag:i1,%a:!I,%b:!I)->!I {
           %x = poly.quotient_project %a : (!I)->!R

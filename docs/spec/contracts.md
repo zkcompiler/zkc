@@ -67,6 +67,52 @@ coverage from observations absorbed into a final history state. Primitive/codec
 meaning, host initialization where applicable and cryptographic laws remain
 explicit premises; the report grants no execution authority or security theorem.
 
+### Logical collection ownership
+
+Data is the single native MLIR owner of `field_vector`, `group_vector`,
+`indices`, `field_matrix`, `field_array`, `fixed_vector`, `sequence` and `bytes`,
+their structural operations and catalog type adapters. Exact-array construction
+and observation, and logical finite fold/collect, use `data.*` operations. The
+replaced `algebra.*` collection types and structural operations are not
+registered and have no parser aliases. Algebra retains scalar fields, groups
+and operations expressing algebraic meaning.
+
+This native IR cutover preserves logical family identities, layout, custody,
+admission and serialized catalog/type spellings. Equal element type and extent
+do not identify different families. Native source producers, mathematical and
+finite readers, computation/physical selection, EVM lowering and fixtures move
+together. Structured-source, application-map and program-byte vocabulary retain
+their existing family names; these formats do not serialize the MLIR namespace.
+See [representation ownership](../compiler/representation.md). Independent
+formal code and its native-MLIR fixtures remain owned by the Lean component.
+
+### Represented arithmetic boundary
+
+[Canonical Residue arithmetic](ir/residues.md) owns modular values, width and
+lift laws; [Codec](realization/codecs.md) owns the exact logical/coordinate/limb/
+byte relations. Nominal fields and polynomial domains keep their original
+owners. The word-lowering producer retains its source and yields a private
+standard-Arith candidate. The independent scalar reader checks actual ranges,
+modular expressions and centered lifts, including candidates changed by CSE.
+A private-tile reader additionally checks static Vector/MemRef bounds and
+ownership, with peak canonical-word storage. The checked expression and storage
+plan reach the CPU consumer under its resident value relation and fallible
+resource scope. The dialect itself introduces no serialized representation
+certificate or executable wire type; independent formal interpretation remains
+separate.
+
+### Physical numerical plans
+
+[Physical numerical plans](runtime/numerical-plans.md) define the target-stage
+`zkc.numerical-plan/0` parameter: actual Ring expression, lane bound and scratch
+slot assignment. Logical parameters remain Ring expressions. The replacement
+changes executable parameters, scratch admission and the setup byte term in the
+numerical work score. Compiler materialization, independent C++ and Rust
+readers, reached CPU consumers and fixtures use this carrier. Bare executable
+Ring parameters are rejected. The compiler checks source correspondence and
+the native consumer independently admits the actual schedule; native admission
+does not establish a Lean interpretation or source-to-execution theorem.
+
 ### Participant-loop capture bindings
 
 Participant `loop` captures in `zkc.program/0` are ordered

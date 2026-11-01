@@ -27,7 +27,7 @@ using namespace zkc::test;
 namespace {
 const char *source = R"mlir(
 !F = !algebra.field<"koala-bear.ext4-binomial3">
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 #K = #protocol.oracle_kind<"table", [!F,16:ui64]>
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({
@@ -541,10 +541,10 @@ module { "protocol.module"() ({
   cases.run("allocation and lookup share the actual ordinary store", [&] {
     auto candidate = parseSourceString<ModuleOp>(R"mlir(
 module { "protocol.module"() ({
- "protocol.func"() ({ ^entry(%data:!algebra.indices,%rows:ui64):
-  %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="table",shape_names=["rows"],shape_bounds={rows=16:ui64}} : (!algebra.indices,ui64)->!protocol.oracle<#protocol.oracle_kind<"table", [ui64]>>
+ "protocol.func"() ({ ^entry(%data:!data.indices,%rows:ui64):
+  %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="table",shape_names=["rows"],shape_bounds={rows=16:ui64}} : (!data.indices,ui64)->!protocol.oracle<#protocol.oracle_kind<"table", [ui64]>>
   "protocol.return"() : ()->()
- }) {sym_name="main",function_type=(!algebra.indices,ui64)->(),roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[]} : ()->()
+ }) {sym_name="main",function_type=(!data.indices,ui64)->(),roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir",
                                                  &context);

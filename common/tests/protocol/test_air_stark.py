@@ -186,6 +186,22 @@ def packet_rejected(report):
     assert stop['local']['function'].startswith('_oracle_packet_authenticate_')
 
 
+def terminal_rejected(report, package):
+    # Terminal coefficients affect the subsequent query draw. A changed draw
+    # can still select an authenticated row, reaching the terminal equation.
+    if report['code'] == 'rejected:require':
+        packet_rejected(report)
+        return
+    from test_fri import CHECK_GUARDS, emitted_guard_sites, stop_guard
+    stop = report['execution']['stop']
+    assert report['status'] == 'refused'
+    assert report['code'] == 'artifact-stopped:Explicit("reject")', report
+    assert stop['role'] == 'role00000001' and stop['kind'] == 'Explicit("reject")'
+    sites = emitted_guard_sites(json.loads(package.read_text())['original'],
+                                {'check.': CHECK_GUARDS})
+    assert stop_guard(stop, sites) == ('check.terminal', ['0'])
+
+
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk'], ['--release-storage']])
 @pytest.mark.parametrize('profile', [(4, 8), (5, 8), (6, 12)])
 def test_external_air_stark_produces_and_verifies(toolchain, journal, directory, flags, profile):
@@ -279,10 +295,13 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
     for name, position, payload in mutations:
         candidate = directory / f'message-{name}.bin'
         candidate.write_bytes(replace_frame(original, position, payload))
-        generated = 4 <= position < 8 + 6 * public['query_count']
+        generated = 4 <= position < 8 + 6 * public['query_count'] and position != 7
         report = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
-                              refuses='rejected:require' if generated else 'artifact-stopped')
-        if generated:
+                              refuses=True if position == 7 else
+                              'rejected:require' if generated else 'artifact-stopped')
+        if position == 7:
+            terminal_rejected(report, package)
+        elif generated:
             packet_rejected(report)
     for name, value, code in [('truncated', original[:-1], 'proof-truncated'),
                               ('trailing', original + b'\x00', 'proof-trailing')]:

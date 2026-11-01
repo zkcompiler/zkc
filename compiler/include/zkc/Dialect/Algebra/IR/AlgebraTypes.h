@@ -3,7 +3,6 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OpImplementation.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraDialect.h"
-#include "zkc/Interfaces/Collection.h"
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Algebra/IR/algebraTypes.h.inc"
 

@@ -14,6 +14,7 @@ impl Limits {
     pub const PARAMETER: u64 = 1_048_576;
     pub const JSON_NODES: usize = 400_000;
     pub const STRING_BYTES: usize = 4096;
+    pub const PARAMETER_BYTES: usize = 16384;
     pub const DEFINITIONS: usize = 4096;
     pub const PORTS: usize = 1024;
     /// Ordered operation parameters (for example gather indices), not SSA ports.

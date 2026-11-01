@@ -1,9 +1,9 @@
 #K = #protocol.oracle_kind<"table", [ui64, 4 : ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 #B = #protocol.oracle_kind<"table", [ui64, 4 : ui64]>
 !B = !protocol.oracle<#B>
-!BD = !algebra.indices
+!BD = !data.indices
 module { "protocol.module"() ({
  relation.declare @admissible {kind="external",key="test/controller",revision="0",
   signature=(!D,!BD,ui64)->i1,purposes=["witness","witness","parameter"]}

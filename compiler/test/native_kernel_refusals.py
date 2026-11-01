@@ -33,7 +33,7 @@ def reject(text, code):
     commands.source('protocol-export', text, refuses=code)
 
 field = '!algebra.field<"bls12-381.fr">'
-vector = '!algebra.field_vector<"bls12-381.fr">'
+vector = '!data.field_vector<"bls12-381.fr">'
 gather = fixture('vector.gather', 'bls12-381.fr', [vector], vector, ['0', '3'])
 commands.verified(gather)
 physical = commands.verified(gather, None, '--zkc-participant-pipeline')
@@ -41,8 +41,8 @@ assert json.loads(commands.source('protocol-export', physical))[0] == 'zkc.progr
 reject(gather.replace('[0 : ui64, 3 : ui64]', '["0", "01"]'), 'interactive-kernel-parameters')
 reject(gather.replace('[0 : ui64, 3 : ui64]', '["-1"]'), 'interactive-kernel-parameters')
 reject(gather.replace('[0 : ui64, 3 : ui64]', '["18446744073709551616"]'), 'interactive-kernel-parameters')
-for wrong in ('!algebra.field_array<"bls12-381.fr", 4>', '!algebra.field_matrix<"bls12-381.fr">',
-              '!algebra.field_vector<"ristretto255.scalar">'):
+for wrong in ('!data.field_array<"bls12-381.fr", 4>', '!data.field_matrix<"bls12-381.fr">',
+              '!data.field_vector<"ristretto255.scalar">'):
     reject(gather.replace(vector, wrong), 'binding-signature')
 for tensor in ('tensor<?xi64>', f'tensor<?x{field}>', f'tensor<4x{field}>', f'tensor<?x?x{field}>'):
     # Keep the external declaration valid to exercise invocation formation.

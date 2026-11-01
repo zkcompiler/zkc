@@ -7,6 +7,7 @@ set(zkc_builtin_dialects
   "data|Data|types"
   "crypto|Crypto|types"
   "algebra|Algebra|types"
+  "residue|Residue|types"
   "poly|Polynomial|types"
   "commitment|Commitment|types"
   "relation|Relation|none"
@@ -15,6 +16,7 @@ set(zkc_builtin_dialects
 # Type-binding owner record | generated output stem. Owners need not be dialects.
 set(zkc_builtin_type_adapters
   "CoreTypeAdapters|Core"
+  "DataTypeAdapters|Data"
   "RuntimeTypeAdapters|Runtime"
   "AlgebraTypeAdapters|Algebra"
   "PolynomialTypeAdapters|Polynomial"

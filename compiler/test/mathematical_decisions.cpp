@@ -12,6 +12,7 @@
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -284,7 +285,7 @@ int main() {
     auto candidate = prepareProtocol(*source, false, {}, {}, &trace);
     unsigned collections = 0;
     if (candidate)
-      candidate->walk([&](algebra::FiniteCollectOp) { ++collections; });
+      candidate->walk([&](data::FiniteCollectOp) { ++collections; });
     require(candidate && same(*source, *original) && collections == 1 &&
                 trace.remainingWork.helperOperations ==
                     trace.initialWork.helperOperations,
@@ -339,7 +340,7 @@ int main() {
         auto unit =
             cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
         auto total = SymbolTable(unit).lookup<func::FuncOp>("total");
-        total.walk([&](algebra::FiniteFoldOp op) {
+        total.walk([&](data::FiniteFoldOp op) {
           op->setAttr("step", FlatSymbolRefAttr::get(&context, "inside"));
         });
       }

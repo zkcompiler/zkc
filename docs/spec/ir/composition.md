@@ -10,12 +10,12 @@ call stack, bundle connector, or separately mutable relation graph.
 ```mlir
 %result:4 = protocol.apply @reduction(%assignment, %weight, %zero, %random)
   {roles = ["Prover", "Checker"], site = "reduce"}
-  : (!algebra.field_array<"bls12-381.fr", 4>,
-     !algebra.field_array<"bls12-381.fr", 1>,
+  : (!data.field_array<"bls12-381.fr", 4>,
+     !data.field_array<"bls12-381.fr", 1>,
      !algebra.field<"bls12-381.fr">,
      !protocol.service_ref<"random.bls12-381.fr/0">)
-  -> (!algebra.field_array<"bls12-381.fr", 4>,
-      !algebra.field_array<"bls12-381.fr", 1>,
+  -> (!data.field_array<"bls12-381.fr", 4>,
+      !data.field_array<"bls12-381.fr", 1>,
       !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">)
 ```
 

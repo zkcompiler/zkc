@@ -10,4 +10,5 @@ include "zkc/Dialect/Crypto/IR/CryptoTypes.td"
 include "zkc/Dialect/Commitment/IR/CommitmentTypes.td"
 
 include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
+include "zkc/Dialect/Residue/IR/ResidueTypes.td"
 #endif

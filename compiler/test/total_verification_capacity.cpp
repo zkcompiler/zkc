@@ -6,6 +6,7 @@
 #include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -250,7 +251,7 @@ int main() {
           if (!nested) {
             auto helper =
                 SymbolTable(unit(*source)).lookup<func::FuncOp>("total");
-            auto fold = cast<algebra::FiniteFoldOp>(helper.front().front());
+            auto fold = cast<data::FiniteFoldOp>(helper.front().front());
             fold.setStepAttr(FlatSymbolRefAttr::get(&context, "inside"));
           }
           require(succeeded(zkc::admitStage(*source)), "total source refused");

@@ -47,7 +47,7 @@ std::string functionText(StringRef name, StringRef arguments, StringRef result,
 }
 constexpr StringLiteral aliases = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 )mlir";
 constexpr StringLiteral domain = R"mlir(
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
@@ -60,7 +60,7 @@ constexpr StringLiteral domain = R"mlir(
 )mlir";
 std::string reductionFixture(bool repeated = false) {
   std::string definitions = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !data.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 func.func private @formula(%a:!F,%b:!F,%unused:!F)->!F {
   %r = algebra.field_multiply %a,%b : (!F,!F)->!F
   func.return %r : !F

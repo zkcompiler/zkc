@@ -389,8 +389,8 @@ protocol.apply @deliver(%q) {roles=["P","V"],site="deliver"} : (!F)->()
 %count="data.index"() {value=4:ui64} : ()->ui64
 %i="protocol.query"(%s,%n) {owner="V",method="index",site="scalar"} : (!protocol.service_ref<"random.koala-bear.ext4-binomial3/0">,ui64)->ui64
 %sent_i=protocol.exchange %i {sender="V",receiver="P",site="scalar_delivery"} : ui64
-%block="protocol.query"(%s,%n,%count) {owner="V",method="indices",site="product"} : (!protocol.service_ref<"random.koala-bear.ext4-binomial3/0">,ui64,ui64)->!algebra.indices
-%sent_block=protocol.exchange %block {sender="V",receiver="P",site="product_delivery"} : !algebra.indices
+%block="protocol.query"(%s,%n,%count) {owner="V",method="indices",site="product"} : (!protocol.service_ref<"random.koala-bear.ext4-binomial3/0">,ui64,ui64)->!data.indices
+%sent_block=protocol.exchange %block {sender="V",receiver="P",site="product_delivery"} : !data.indices
 %yes=arith.constant true
 "protocol.return"(%yes) : (i1)->()
 }) {sym_name="main",function_type=(!protocol.service_ref<"random.koala-bear.ext4-binomial3/0">)->i1,roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()

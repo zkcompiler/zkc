@@ -43,6 +43,15 @@ impl<S: Coefficient> Packing<S> for Scalar {
 
 type Packed<S> = <<S as Coefficient>::Packing as Packing<S>>::Value;
 
+/// Operands are whole slots in one caller-owned scratch allocation. A result
+/// may overwrite either operand: both values are loaded before each write.
+#[derive(Clone, Copy, Debug)]
+pub enum SlotOperation {
+    Add(usize, usize),
+    Multiply(usize, usize),
+    Negate(usize),
+}
+
 /// Existing destination algorithms over one native scalar representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Algorithm {
@@ -64,6 +73,52 @@ pub struct Plan<S> {
 }
 
 impl<S: Coefficient> Plan<S> {
+    /// Execute independent lanes in an admitted scratch schedule. Exact slot
+    /// overlap is safe; partial overlap is not expressible. This checks storage
+    /// extents, not the caller's liveness or ownership obligation.
+    pub fn apply_slots(
+        &self,
+        operation: SlotOperation,
+        output: usize,
+        stride: usize,
+        storage: &mut [S],
+    ) -> Result<()> {
+        if stride < self.len || stride == 0 || !storage.len().is_multiple_of(stride) {
+            return Err(Error::LengthMismatch);
+        }
+        let slots = storage.len() / stride;
+        let (a, b) = match operation {
+            SlotOperation::Add(a, b) | SlotOperation::Multiply(a, b) => (a, b),
+            SlotOperation::Negate(a) => (a, a),
+        };
+        if [a, b, output].iter().any(|i| *i >= slots) {
+            return Err(Error::LengthMismatch);
+        }
+        // Bounded by the validated allocation length; no products can wrap.
+        let (a, b, output) = (a * stride, b * stride, output * stride);
+        let width = S::Packing::WIDTH;
+        let end = self.packed_end();
+        for lane in (0..end).step_by(width) {
+            let left = S::Packing::load(&storage[a + lane..a + lane + width]);
+            let right = S::Packing::load(&storage[b + lane..b + lane + width]);
+            let value = match operation {
+                SlotOperation::Add(..) => left + right,
+                SlotOperation::Multiply(..) => left * right,
+                SlotOperation::Negate(..) => -left,
+            };
+            S::Packing::store(value, &mut storage[output + lane..output + lane + width]);
+        }
+        for lane in end..self.len {
+            let left = storage[a + lane];
+            let right = storage[b + lane];
+            storage[output + lane] = match operation {
+                SlotOperation::Add(..) => left + right,
+                SlotOperation::Multiply(..) => left * right,
+                SlotOperation::Negate(..) => -left,
+            };
+        }
+        Ok(())
+    }
     /// Make a fixed choice. Unavailable native packing is a refusal, never an
     /// implicit scalar fallback or a conversion to base-coordinate storage.
     pub fn new(len: usize, algorithm: Algorithm) -> Result<Self> {

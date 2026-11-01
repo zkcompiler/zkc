@@ -12,7 +12,7 @@ using namespace zkc::test;
 namespace {
 constexpr llvm::StringLiteral aliases = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 !P = !poly.polynomial<"bls12-381.fr", 1>
 )mlir";
 std::string standalone(StringRef declarations) {
@@ -225,7 +225,7 @@ int main() {
           func.return %v : !F
         }
         func.func @entry(%xs:!A,%initial:!F) -> !F {
-          %v = "algebra.finite_fold"(%xs,%initial) {domain=@items,step=@step} : (!A,!F)->!F
+          %v = "data.finite_fold"(%xs,%initial) {domain=@items,step=@step} : (!A,!F)->!F
           func.return %v : !F
         }
       }

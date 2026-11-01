@@ -53,7 +53,7 @@ def stopped(reason='refused', site='map'):
 
 def wrap_unit(body):
     return '''!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
 ''' + body + '\n}) {profile=#protocol.profile<protocol>} : ()->() }\n'
 
@@ -170,7 +170,7 @@ with case('realization-total-profile-keeps-pure-index-and-group-values'):
         '   func.return %xs')
     export(source)
     assert run(source, [['2'], maximum, '1']) == returned([['2']])
-    source = realized.replace('!algebra.field_vector<"bls12-381.fr">', '!algebra.group<"bls12-381.g1">')
+    source = realized.replace('!data.field_vector<"bls12-381.fr">', '!algebra.group<"bls12-381.g1">')
     export(source)
     assert run(source, ['7', maximum, '1']) == returned(['7'])
 

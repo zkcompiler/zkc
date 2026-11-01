@@ -106,8 +106,11 @@ int main() {
         consumeError(physical.takeError());
     } else
       consumeError(implementation.takeError());
-    success(checkParameters(binding, {}), "product takes no parameters");
-    auto unexpected = checkParameters(binding, {"0"});
+    success(
+        checkParameters(binding, {}, zkc::protocol::ParameterStage::Logical),
+        "product takes no parameters");
+    auto unexpected =
+        checkParameters(binding, {"0"}, zkc::protocol::ParameterStage::Logical);
     check(bool(unexpected), "product refuses parameters");
     consumeError(std::move(unexpected));
   }
@@ -139,15 +142,15 @@ int main() {
         "captured asset families are declaration-owned");
   success(
       checkParameters(BindingApplication{"field.constant", {"koala-bear"}, ""},
-                      {"2130706432"}),
+                      {"2130706432"}, zkc::protocol::ParameterStage::Logical),
       "literal below KoalaBear modulus");
   refusal(
       checkParameters(BindingApplication{"field.constant", {"koala-bear"}, ""},
-                      {"2130706433"}),
+                      {"2130706433"}, zkc::protocol::ParameterStage::Logical),
       "interactive-constant");
   success(checkParameters(
               BindingApplication{"field.constant", {"bls12-381.fr"}, ""},
-              {"2130706433"}),
+              {"2130706433"}, zkc::protocol::ParameterStage::Logical),
           "same literal has a different domain bound");
   refusal(checkParameters("field.constant", {"1"}), "interactive-constant");
   const auto &univariate = signature("poly.univariate_evaluate");

@@ -1,6 +1,7 @@
 #include "CollectionRealization.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Interfaces/Collection.h"
 
 using namespace mlir;
@@ -68,7 +69,7 @@ std::optional<CollectionRealization> collectionRealization(Type type) {
     auto extent = IntegerAttr::get(
         IntegerType::get(type.getContext(), 64, IntegerType::Unsigned),
         *result.staticExtent);
-    result.storage = algebra::FieldVectorType::get(type.getContext(), domain);
+    result.storage = data::FieldVectorType::get(type.getContext(), domain);
     result.get = application("field_array.get", {argument, extent});
     result.empty = application("vector.empty", {argument});
     result.append = application("vector.append", {argument});

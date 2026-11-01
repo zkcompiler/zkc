@@ -351,7 +351,7 @@ int main() {
         builder.create(state);
       } else if (reason == "nested check") {
         builder.setInsertionPoint(&body.front().back());
-        OperationState state(body.getLoc(), "algebra.finite_fold");
+        OperationState state(body.getLoc(), "data.finite_fold");
         state.addOperands({body.getArgument(1), body.getArgument(0),
                            body.getArgument(2), body.getArgument(2)});
         state.addTypes(

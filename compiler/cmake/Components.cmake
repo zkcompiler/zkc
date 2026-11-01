@@ -52,6 +52,7 @@ add_zkc_component(Contracts
   lib/Contracts/RingExpression.cpp
   lib/Contracts/RingSharing.cpp
   lib/Contracts/Numerical.cpp
+  lib/Contracts/NumericalPlan.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
@@ -219,8 +220,11 @@ add_zkc_component(IR
   lib/Dialect/Runtime/IR/RuntimeDialect.cpp
   lib/Dialect/Runtime/IR/Attributes.cpp
   lib/Dialect/Runtime/Parameters.cpp
+  lib/Dialect/Runtime/Numerical.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
+  lib/Dialect/Residue/IR/ResidueDialect.cpp
+  lib/Dialect/Data/IR/Collections.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
   lib/Dialect/Data/IR/Layout.cpp
@@ -229,6 +233,8 @@ add_zkc_component(IR
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
   lib/Analysis/StructuredComputation.cpp
+  lib/Analysis/ResidueArithmetic.cpp
+  lib/Analysis/ResidueTile.cpp
   lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
@@ -287,6 +293,7 @@ add_zkc_component(IR
   lib/Dialect/Relation/IR/RelationDialect.cpp
   lib/Dialect/Relation/IR/Declarations.cpp
   lib/Dialect/Relation/IR/Formula.cpp
+  lib/Dialect/TypeAdapters/Data.cpp
   lib/Dialect/TypeAdapters/Algebra.cpp
   lib/Dialect/TypeAdapters/Commitment.cpp
   lib/Dialect/TypeAdapters/Core.cpp
@@ -390,6 +397,8 @@ add_zkc_component(Transforms
   lib/Transforms/LaneRealization.cpp
   lib/Transforms/MathematicalComparison.cpp
   lib/Transforms/ScopedNestedContraction.cpp
+  lib/Transforms/Residue.cpp
+  lib/Transforms/ResidueTile.cpp
   lib/Transforms/StructuredComputation.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
@@ -452,6 +461,7 @@ add_zkc_component(CpuTarget
   lib/Target/ExecutionPorts.cpp
   lib/Target/NativePlanTypes.cpp
   lib/Target/PhysicalPlan.cpp
+  lib/Target/NumericalPlan.cpp
   lib/Target/StorageSchedule.cpp
   lib/Target/Cpu/Stages.cpp
   lib/Target/Cpu/Passes.cpp
@@ -514,7 +524,7 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRPass MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
   MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect
-  MLIRLinalgDialect MLIRTensorDialect)
+  MLIRLinalgDialect MLIRTensorDialect MLIRVectorDialect MLIRMemRefDialect MLIRUBDialect)
 # Pass::Statistic is constructed out of line by MLIR, but its base layout
 # depends on NDEBUG. Isolate that ABI while retaining project assertions in
 # every other translation unit, including the passes and their observers.
@@ -527,7 +537,9 @@ else()
 endif()
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms MLIRFuncTransforms
+  MLIRBufferizationTransforms MLIRArithTransforms MLIRTensorTransforms
+  MLIRVectorTransforms MLIRMemRefDialect MLIRUBDialect)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCpuTarget ZkcEvmTarget)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)

@@ -22,7 +22,8 @@ inline ArrayAttr fixtureParameters(func::FuncOp function, StringRef name,
   for (auto parameter : parameters)
     expected.push_back(parameter.str());
   return take(protocol::decodeInvocationParameters(
-      binding.getContract(), binding.getArgumentsAttr(), expected));
+      binding.getContract(), binding.getArgumentsAttr(), expected,
+      zkc::protocol::ParameterStage::Logical));
 }
 inline func::FuncOp region(OpBuilder &builder, func::FuncOp parent,
                            StringRef name, TypeRange inputs,

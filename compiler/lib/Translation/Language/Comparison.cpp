@@ -767,7 +767,7 @@ class Comparator {
         !protocol::invocationParametersMatch(
             declaration.getContract(), declaration.getArgumentsAttr(),
             actual->getAttrOfType<mlir::ArrayAttr>("parameters"),
-            expected.parameters)) {
+            expected.parameters, zkc::protocol::ParameterStage::Logical)) {
       fail("ordered operation parameters differ");
       return {};
     }
@@ -799,7 +799,8 @@ class Comparator {
     if (!selected)
       return {};
     if (auto err =
-            protocol::checkParameters(application, expected.parameters)) {
+            protocol::checkParameters(application, expected.parameters,
+                                      zkc::protocol::ParameterStage::Logical)) {
       failure = std::move(err);
       return {};
     }
@@ -1252,7 +1253,7 @@ class Comparator {
               actual->getContext(),
               mlir::isa<poly::PolynomialType>(type)
                   ? mlir::cast<poly::PolynomialType>(type).getDomain()
-                  : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+                  : mlir::cast<data::FieldArrayType>(type).getDomain());
           auto points = actual->getAttrOfType<mlir::ArrayAttr>("points");
           if (!attributes(*actual, {"points"}) || !points ||
               points.size() != math->parameters.size())

@@ -19,7 +19,7 @@ It is distinct from the existing normalized concrete `!poly.univariate` object.
 and `1 <= n <= 2^64-1`. It is a total mathematical value with exact ring identity;
 composite moduli and zero divisors are allowed. It has no executable port,
 message or wire encoding. Transparent mathematical helpers may carry it.
-`poly.quotient_project` reduces an arbitrary finite `!algebra.indices` polynomial
+`poly.quotient_project` reduces an arbitrary finite `!data.indices` polynomial
 into the ring; `poly.quotient_coefficients` observes exactly `n` canonical
 ascending coefficients. `poly.quotient_add`, `poly.quotient_subtract` and
 `poly.quotient_multiply` require identical modulus and degree on all ports.
@@ -27,13 +27,13 @@ Multiplication is negacyclic convolution, not coordinate-wise multiplication.
 No field inversion, cancellation or FFT capability follows from this type.
 The [quotient contract](../domains/quotient-rings.md) defines these meanings.
 
-Concrete field arrays use `!algebra.field_array<"F", N>`, with exact nominal
+Concrete field arrays use `!data.field_array<"F", N>`, with exact nominal
 field identity and `0 ≤ N ≤ 1048576`. Logical encoding remains
 `field_array<F,N>`; field and length survive physical selection. The type has
 rank one and an intrinsic extent of `N`. A field vector with proven length `N`
-retains `!algebra.field_vector<"F">` and cannot substitute for a field array.
+retains `!data.field_vector<"F">` and cannot substitute for a field array.
 Builtin tensors have no compatibility alias. Source `[T; N]` and
-`!algebra.fixed_vector<T, N>` remain distinct. A field array does not denote a
+`!data.fixed_vector<T, N>` remain distinct. A field array does not denote a
 polynomial until an operation supplies that interpretation.
 
 The following flat operations are total on their verified types:
@@ -46,8 +46,8 @@ The following flat operations are total on their verified types:
 | `data.dim` on a field vector, axis zero | Field vector to its length as an index |
 | `algebra.constant` | Typed `#algebra.literal<F, value>` to a scalar in exactly `F` |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
-| `algebra.array_from_elements` | Exactly `N` ordered operands of field `F` to `!algebra.field_array<"F", N>`; empty construction is allowed |
-| `algebra.array_at` | Static array and constant `index` attribute; `0 ≤ index < N` |
+| `data.array_from_elements` | Exactly `N` ordered operands of field `F` to `!data.field_array<"F", N>`; empty construction is allowed |
+| `data.array_at` | Static array and constant `index` attribute; `0 ≤ index < N` |
 | `poly.constant` | Scalar to a polynomial of the declared arity |
 | `poly.from_coefficients` | Positive array to univariate, ascending powers; trailing zeros allowed |
 | `poly.mle` | Length `2^n` array to arity `n`, high-bit Boolean order |
@@ -108,7 +108,7 @@ realizations; they do not change the static polynomial type.
 `algebra.constant` requires a native field-literal attribute and the exact same
 nominal field on its result. A mismatched result uses `mathematical-formation`;
 malformed literal presentations or values use `field-literal`. Static
-`algebra.array_at` extraction uses `mathematical-formation`. Polynomial operation
+`data.array_at` extraction uses `mathematical-formation`. Polynomial operation
 and domain formation use `polynomial-formation`. Evaluation and interpolation
 points are ordered native field literals with distinct values and the same field
 as their polynomial. These native operations do not parse decimal strings.
@@ -334,7 +334,7 @@ echoed and hashed in its report. The raw input digest records the supplied bytes
 The retained original module defines one private, flat recipe from subject
 field scalars or positive static field arrays using MLE, polynomial constants,
 addition and multiplication. The closed recipe vocabulary also includes field
-constants/add/multiply/subtract, static array extraction and `algebra.array_from_elements`.
+constants/add/multiply/subtract, static array extraction and `data.array_from_elements`.
 Subject lengths need not equal the Boolean domain size; each actual recipe
 argument and terminal subject must still have exactly the original subject type. The
 recipe has positive arity and per-axis degree below 64.

@@ -22,7 +22,7 @@ consumers, identity domains and cross-subsystem integration gates.
 | Formal import | [structured source](formats/structured-source.md): original protocol-stage units with helpers, participants, contracts, applications and repeats; [constructed validator](formats/constructed-participant.md): a checked proof candidate's validator participant |
 | Host execution | [Entries](runtime/entries.md), [joint bundles](runtime/joint.md), [proofs](runtime/proofs.md), [attempts](runtime/attempts.md), [services](runtime/services.md) |
 | EVM target | [Checked verifier lowering, canonical ABI, effects, ceilings and artifact identity](targets/evm.md) |
-| Operational boundaries | [VM execution](runtime/vm.md), [numerical calls](runtime/numerical.md), [capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
+| Operational boundaries | [VM execution](runtime/vm.md), [numerical calls](runtime/numerical.md), [physical numerical plans](runtime/numerical-plans.md), [capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
 
 The four MLIR profiles constrain one program at successive compilation
 boundaries; they are not four dialects. An artifact's structural admission does
@@ -46,7 +46,7 @@ premises. A law alone does not prove that a C++ checker or Rust kernel realizes 
 | Polynomial meaning | [Tables and polynomials](domains/polynomials.md), [negacyclic quotient rings](domains/quotient-rings.md), [prepared quotient matrices](domains/quotient-matrices.md), [shared ring expressions](domains/ring-expressions.md): formal substitution, polynomial SSA and recipe lowering |
 | Ordered execution | [Exec outcomes](ir/execution.md): return/stop propagation, Data values and independently checked Func/CF structure |
 | Relations and authentication | [Constraints](domains/constraints.md), [relation bundles](domains/relation-bundles.md), [oracles](domains/oracles.md), [STARK reduction](domains/stark.md), [relation terminals](relations.md): imported assets, multi-table relations, binding and explicit terminal checks |
-| Representation | [Complete results](realization/representations.md), [codecs](realization/codecs.md), [artifacts](realization/artifacts.md): source comparison, wire admission and retained authority |
+| Representation | [Canonical residues](ir/residues.md), [Complete results](realization/representations.md), [codecs](realization/codecs.md), [artifacts](realization/artifacts.md): source comparison, wire admission and retained authority |
 | External constructions | [Hash-chain and duplex transitions](realization/external-constructions.md): explicit native primitive calls |
 | Validation | [Refinement](verification/refinement.md), [analysis](verification/analysis.md), [judgments](verification/judgments.md): the obligations of source-relative checking |
 

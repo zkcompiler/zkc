@@ -587,9 +587,8 @@ void dynamicWindows(Cases &cases, MLIRContext &context) {
           if (sameKind) {
             replace(text, "!BF = !algebra.field<\"koala-bear\">",
                     "!BF = !algebra.field<\"koala-bear.ext4-binomial3\">");
-            replace(
-                text, "!BD = !algebra.field_vector<\"koala-bear\">",
-                "!BD = !algebra.field_vector<\"koala-bear.ext4-binomial3\">");
+            replace(text, "!BD = !data.field_vector<\"koala-bear\">",
+                    "!BD = !data.field_vector<\"koala-bear.ext4-binomial3\">");
           }
           replace(text, "   \"protocol.return\"(%answer)",
                   "   %unusedRoot = \"protocol.oracle_query\"(%b,%mapped) "
@@ -708,7 +707,7 @@ void dynamicWindows(Cases &cases, MLIRContext &context) {
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">,8:ui64]>
 !F = !algebra.field<"koala-bear.ext4-binomial3">
 !H = !protocol.oracle<#K>
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 module { "protocol.module"() ({
  relation.declare @empty_ok {kind="external",key="test/empty",revision="0",
   signature=(!D,!F)->i1,purposes=["witness","parameter"]}

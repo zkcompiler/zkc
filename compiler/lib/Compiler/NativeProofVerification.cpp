@@ -124,7 +124,8 @@ class TranscriptCorrespondence {
         !llvm::equal(binding.getArguments(), arguments) ||
         !protocol::invocationParametersMatch(
             contract, binding.getArgumentsAttr(),
-            op->getAttrOfType<ArrayAttr>("parameters"), parameters))
+            op->getAttrOfType<ArrayAttr>("parameters"), parameters,
+            zkc::protocol::ParameterStage::Logical))
       return false;
     bindings.insert(binding.getSymName());
     return true;

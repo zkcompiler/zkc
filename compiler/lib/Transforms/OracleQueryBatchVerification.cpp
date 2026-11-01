@@ -187,9 +187,9 @@ struct Reader {
           op, op.getBindingAttr());
       if (reader.expect(matchesNativeBinding(
               binding, {contract.str(), SmallVector<Attribute>(statics), {}})))
-        reader.expect(
-            invocationParametersMatch(contract, binding.getArgumentsAttr(),
-                                      op.getParametersAttr(), parameters));
+        reader.expect(invocationParametersMatch(
+            contract, binding.getArgumentsAttr(), op.getParametersAttr(),
+            parameters, zkc::protocol::ParameterStage::Logical));
       return values;
     }
     Value number(uint64_t value, StringRef site) {

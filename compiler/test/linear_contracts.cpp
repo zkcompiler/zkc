@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -65,7 +66,7 @@ void catalogAndCarriers(MLIRContext &ctx) {
                   physical,
               "physical carrier roundtrip");
       if (kind == "vector") {
-        auto vector = dyn_cast<zkc::algebra::FieldVectorType>(logical);
+        auto vector = dyn_cast<zkc::data::FieldVectorType>(logical);
         require(vector && vector.getDomain() == identity &&
                     vector.getElementType() ==
                         zkc::algebra::FieldType::get(&ctx, identity),
@@ -76,8 +77,7 @@ void catalogAndCarriers(MLIRContext &ctx) {
     }
   for (StringRef identity : {"bls12-381.g1", "ristretto255.group"}) {
     BoundType t{"groups", identity.str(), ""};
-    auto logical =
-        cast<zkc::algebra::GroupVectorType>(decodeBoundType(&ctx, t));
+    auto logical = cast<zkc::data::GroupVectorType>(decodeBoundType(&ctx, t));
     require(logical.getElementType() ==
                 zkc::algebra::GroupType::get(&ctx, identity),
             "group vector exact elements");
@@ -182,7 +182,7 @@ void scopedRoles(MLIRContext &ctx) {
   for (StringRef contract : {"vector.mul", "vector.dot"})
     runtime::BindingOp::create(builder, loc, contract, contract,
                                builder.getStrArrayAttr({"koala-bear"}), "");
-  auto vector = algebra::FieldVectorType::get(&ctx, "koala-bear");
+  auto vector = data::FieldVectorType::get(&ctx, "koala-bear");
   auto field = algebra::FieldType::get(&ctx, "koala-bear");
   auto scope = runtime::ScopeType::get(&ctx);
   auto function = func::FuncOp::create(
@@ -226,7 +226,7 @@ void scopedRoles(MLIRContext &ctx) {
           "wrong outcome payload cannot expose producer roles");
   multiply.getOutcome().setType(original);
   function.getArgument(1).setType(
-      algebra::FieldVectorType::get(&ctx, "bls12-381.fr"));
+      data::FieldVectorType::get(&ctx, "bls12-381.fr"));
   require(!producer.getDiagonalProducerRoles() &&
               !consumer.getDiagonalContractionRoles(),
           "nominal operand mismatch cannot expose semantic roles");

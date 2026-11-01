@@ -17,7 +17,7 @@ std::string source(llvm::StringRef body) {
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear">, 16 : ui64]>
 #U = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear">]>
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 !H = !protocol.oracle<#K>
 !U = !protocol.oracle<#U>
 !S = !protocol.oracle_sequence<#K, 4>

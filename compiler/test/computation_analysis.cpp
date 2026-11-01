@@ -8,6 +8,8 @@
 #include "support/ScopedComputation.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -394,14 +396,14 @@ int main() {
     OpBuilder builder(sum);
     auto unused = algebra::FieldMultiplyOp::create(builder, raw.getLoc(), field,
                                                    raw.getArguments());
-    auto pack = algebra::ArrayFromElementsOp::create(
+    auto pack = data::ArrayFromElementsOp::create(
         builder, raw.getLoc(),
-        algebra::FieldArrayType::get(&context, field.getDomain(), 2),
+        data::FieldArrayType::get(&context, field.getDomain(), 2),
         ValueRange{raw.getArgument(1), raw.getArgument(0)});
-    auto left = algebra::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
-                                           builder.getI64IntegerAttr(1));
-    auto right = algebra::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
-                                            builder.getI64IntegerAttr(0));
+    auto left = data::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
+                                        builder.getI64IntegerAttr(1));
+    auto right = data::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
+                                         builder.getI64IntegerAttr(0));
     sum->setOperands({left, right});
     require(succeeded(zkc::admitStage(*module)),
             "scoped packed source refused");
@@ -660,7 +662,7 @@ int main() {
             "predicate fixture edit missing");
     text.replace(begin, end - begin, R"mlir(
  func.func private @predicate(%x:!F,%xs:!V) -> i1 {
-   %r = "algebra.finite_fold"(%xs,%x) {domain=@items,step=@inside} : (!V,!F)->!F
+   %r = "data.finite_fold"(%xs,%x) {domain=@items,step=@inside} : (!V,!F)->!F
    %ok = algebra.field_equal %r,%x : (!F,!F)->i1
    func.return %ok : i1
  }
@@ -725,8 +727,8 @@ int main() {
   cases.run("nested selected-index proofs share optional evidence work", [&] {
     const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!M = !algebra.field_matrix<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+!M = !data.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%m:!M):
    %d = "data.domain_indices"(%m) {axis=0:i64} : (!M)->!data.domain<ui64>
@@ -743,11 +745,11 @@ module { "protocol.module"() ({
  }
  func.func private @row(%i:ui64,%m:!M)->!F attributes {data.preconditions=[#data.index_bound<0,1,0>]} {
    %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
-   %out = "algebra.finite_fold"(%m,%zero,%i) {domain=@columns,step=@step} : (!M,!F,ui64)->!F
+   %out = "data.finite_fold"(%m,%zero,%i) {domain=@columns,step=@step} : (!M,!F,ui64)->!F
    func.return %out : !F
  }
  "protocol.func"() ({ ^entry(%m:!M):
-   %out = "algebra.finite_collect"(%m) {domain=@rows,body=@row} : (!M)->!V
+   %out = "data.finite_collect"(%m) {domain=@rows,body=@row} : (!M)->!V
    "protocol.return"(%out) : (!V)->()
  }) {sym_name="main",function_type=(!M)->!V,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

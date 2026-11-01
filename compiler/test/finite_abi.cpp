@@ -31,12 +31,12 @@ module { "protocol.module"() ({
    func.return %j : ui64
  }
  func.func private @fold(%lo:ui64,%hi:ui64,%a:ui64,%b:ui64,%x:ui64,%y:ui64)->(ui64,ui64) {
-   %r:2 = "algebra.finite_fold"(%lo,%hi,%a,%b,%x,%y) {domain=@items,step=@step,predicate=@predicate} : (ui64,ui64,ui64,ui64,ui64,ui64)->(ui64,ui64)
+   %r:2 = "data.finite_fold"(%lo,%hi,%a,%b,%x,%y) {domain=@items,step=@step,predicate=@predicate} : (ui64,ui64,ui64,ui64,ui64,ui64)->(ui64,ui64)
    func.return %r#0,%r#1 : ui64,ui64
  }
- func.func private @collect(%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!algebra.indices {
-   %r = "algebra.finite_collect"(%lo,%hi,%x,%y) {domain=@items,body=@body,predicate=@predicate} : (ui64,ui64,ui64,ui64)->!algebra.indices
-   func.return %r : !algebra.indices
+ func.func private @collect(%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!data.indices {
+   %r = "data.finite_collect"(%lo,%hi,%x,%y) {domain=@items,body=@body,predicate=@predicate} : (ui64,ui64,ui64,ui64)->!data.indices
+   func.return %r : !data.indices
  }
  func.func private @stop(%scope:!runtime.scope,%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!exec.outcome<> attributes {no_inline,runtime.origin=["stop",[]]} {
    %reason = "exec.reject"(%scope) {site="stop",reason="abort"} : (!runtime.scope)->!exec.stop

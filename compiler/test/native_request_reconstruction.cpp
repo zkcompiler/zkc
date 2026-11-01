@@ -765,9 +765,9 @@ module { "protocol.module"() ({
   %sent = protocol.exchange %secret {sender="P",receiver="V",site="commitment"} : ui64
   %n = "data.index"() {value=16:ui64} : ()->ui64
   %q = "data.index"() {value=4:ui64} : ()->ui64
-  %sample = "protocol.query"(%coins,%n,%q) {method="indices",owner="V",site="pick"} : (!protocol.service_ref<"random.FIELD/0">,ui64,ui64)->!algebra.indices
-  %actual = protocol.exchange %sample {sender="V",receiver="P",site="delivery"} : !algebra.indices
-  %echo = protocol.exchange %actual {sender="P",receiver="V",site="response"} : !algebra.indices
+  %sample = "protocol.query"(%coins,%n,%q) {method="indices",owner="V",site="pick"} : (!protocol.service_ref<"random.FIELD/0">,ui64,ui64)->!data.indices
+  %actual = protocol.exchange %sample {sender="V",receiver="P",site="delivery"} : !data.indices
+  %echo = protocol.exchange %actual {sender="P",receiver="V",site="response"} : !data.indices
   %ok = arith.constant true
   "protocol.return"(%ok) : (i1)->()
  }) {sym_name="main",function_type=(ui64,!protocol.service_ref<"random.FIELD/0">)->i1,

@@ -23,7 +23,7 @@ std::string source(uint64_t maximum, StringRef operands = "%previous,%other",
 )mlir";
   return R"mlir(
 #K = #protocol.oracle_kind<"table", [ui64, 2 : ui64]>
-!D = !algebra.indices
+!D = !data.indices
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({
  relation.declare @admissible {kind="external",key="test/capacity",revision="0",

@@ -1,12 +1,12 @@
 !F = !algebra.field<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
-!V = !algebra.field_vector<"bls12-381.fr">
-!GS = !algebra.group_vector<"bls12-381.g1">
+!V = !data.field_vector<"bls12-381.fr">
+!GS = !data.group_vector<"bls12-381.g1">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.generator", implementation = "", sym_name = "generator",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.empty", implementation = "", sym_name = "empty",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.append", implementation = "", sym_name = "append",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.empty", implementation = "", sym_name = "empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.group_vector<"bls12-381.g1">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.append", implementation = "", sym_name = "append",function_type=(!runtime.scope, !data.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(!data.group_vector<"bls12-381.g1">)>}> : () -> ()
     "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.scale", implementation = "", sym_name = "scale",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>}> : () -> ()
     "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>}> : () -> ()
     "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.equal", implementation = "", sym_name = "equal",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(i1)>}> : () -> ()

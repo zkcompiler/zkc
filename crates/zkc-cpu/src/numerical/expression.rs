@@ -10,6 +10,7 @@ use crate::operations::field::StructuredFamily;
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::mem::size_of;
 use zkc_kernels::vector;
+use zkc_runtime::numerical::Plan as NumericalPlan;
 use zkc_runtime::ring::{Expression, Node};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
@@ -28,19 +29,17 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("plonky3/numerical.product", "numerical.product"),
 ];
 
-const BODY_BYTES: usize = 4096;
 const INPUTS: usize = 1023;
 const ROWS: u64 = 1_048_576;
 /// Requested immutable metadata per installed call, including its copied key,
 /// Ring inputs/nodes/facts/roots, typed constants, positional mask and node
 /// schedules. Temporary classification flags are also conservatively included.
-/// Parsing scratch is separately bounded by the 4096-byte carrier. This is not RSS.
+/// Parsing scratch is separately bounded by the 16384-byte plan carrier. This is not RSS.
 const PREPARED_BYTES: usize = 1024 * 1024;
 
 /// Bound the entire node workspace, rather than allocating whole intermediate
 /// columns. This target is independent of protocols, fields and expression shape.
 const WORKSPACE_BYTES: usize = 16 * 1024;
-const CHUNK_ROWS: usize = 256;
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -128,9 +127,9 @@ macro_rules! residue_plans {
     ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
         pub(crate) enum ResiduePlan { $($id(Plan<$s>),)* }
         impl ResiduePlan {
-            fn new(field: Identity, expression: Expression, mask: &[u8], mode: Mode, bytes: usize, binding: &OperationBinding) -> Result<Self> {
+            fn new(field: Identity, plan: NumericalPlan, mask: &[u8], mode: Mode, bytes: usize, binding: &OperationBinding) -> Result<Self> {
                 match field {
-                    $(Identity::$id => Ok(Self::$id(Plan::<$s>::new(expression, mask, mode, bytes, binding)?)),)*
+                    $(Identity::$id => Ok(Self::$id(Plan::<$s>::new(plan, mask, mode, bytes, binding)?)),)*
                     _ => Err(refused("numerical-binding")),
                 }
             }
@@ -147,6 +146,9 @@ crate::fields::inventory!([residue_plans], ());
 
 pub(crate) struct Plan<S> {
     expression: Expression,
+    lanes: usize,
+    slots: usize,
+    locations: Box<[usize]>,
     constants: Box<[S]>,
     mask: Box<[u8]>,
     invariant_nodes: Box<[usize]>,
@@ -167,34 +169,13 @@ pub(crate) fn prepare(
     let [body] = attributes else {
         return Err(refused("numerical-expression"));
     };
-    if body.len() > BODY_BYTES {
-        return Err(refused("numerical-expression-bytes"));
-    }
-    let expression = Expression::parse(body).map_err(|_| refused("numerical-expression"))?;
     let field = Identity::parse(&binding.arguments[0]).map_err(|_| refused("numerical-binding"))?;
     let mask = binding.arguments[1].as_bytes();
-    if expression.canonical() != *body
-        || expression.inputs().len() != mask.len()
-        || expression.outputs().len() != 1
-        || expression.inputs().iter().any(|f| *f != field)
-        || expression.facts().iter().any(|f| f.field != field)
-        || expression
-            .nodes()
-            .iter()
-            .any(|node| matches!(node, Node::Embed(..)))
-    {
-        return Err(refused("numerical-expression"));
-    }
+    let plan = NumericalPlan::parse(body, field, mask).map_err(|e| refused(e.0))?;
     let mode = Mode::for_contract(&binding.contract).ok_or_else(|| refused("numerical-binding"))?;
     macro_rules! plan {
         ($scalar:ty, $variant:ident) => {
-            Prepared::$variant(Plan::<$scalar>::new(
-                expression,
-                mask,
-                mode,
-                body.len(),
-                binding,
-            )?)
+            Prepared::$variant(Plan::<$scalar>::new(plan, mask, mode, body.len(), binding)?)
         };
     }
     Ok(match field {
@@ -203,7 +184,7 @@ pub(crate) fn prepare(
         Identity::Ristretto255Scalar => plan!(crate::RistrettoScalar, Ristretto),
         field if crate::fields::contains(field) => Prepared::Residue(ResiduePlan::new(
             field,
-            expression,
+            plan,
             mask,
             mode,
             body.len(),
@@ -216,7 +197,7 @@ pub(crate) fn prepare(
 }
 
 /// Conservative evaluation-admission score W = 8B + 2I + 2N + 1 + R(3N + 3),
-/// where B is the carrier byte length, I the slot count, N the node count and R
+/// where B is the carrier byte length, I the operand count, N the node count and R
 /// the row count. The fixed setup surcharge applies even on an empty domain and
 /// is identical for cold and cached calls. Bounded parsing, canonicalization and
 /// immutable preparation precede per-evaluation scope admission; this score does
@@ -239,12 +220,13 @@ fn work_counts(bytes: usize, inputs: usize, nodes: usize) -> Result<(u64, u64)> 
 
 impl<S: StructuredFamily> Plan<S> {
     fn new(
-        expression: Expression,
+        plan: NumericalPlan,
         mask: &[u8],
         mode: Mode,
         bytes: usize,
         binding: &OperationBinding,
     ) -> Result<Self> {
+        let (expression, lanes, slots, locations) = plan.into_parts();
         let nodes = expression.nodes().len();
         // The key has only nominal, nonstructural types. Include their complete
         // owned descriptors, strings and carrier copies in this metadata bound.
@@ -254,7 +236,7 @@ impl<S: StructuredFamily> Plan<S> {
                 size_of::<Node>()
                     + size_of::<zkc_runtime::ring::Fact>()
                     + size_of::<S>()
-                    + size_of::<usize>()
+                    + 2 * size_of::<usize>()
                     + size_of::<bool>(),
             )
             .and_then(|n| n.checked_add(mask.len().checked_mul(size_of::<Identity>() + 1)?))
@@ -307,6 +289,9 @@ impl<S: StructuredFamily> Plan<S> {
         }
         Ok(Self {
             expression,
+            lanes,
+            slots,
+            locations: locations.into_boxed_slice(),
             constants: constants.into_boxed_slice(),
             mask: mask.into(),
             invariant_nodes: invariant_nodes.into_boxed_slice(),
@@ -350,7 +335,7 @@ impl<S: StructuredFamily> Plan<S> {
         policy.output(retained, max_output_bytes)?;
         let call = Call::new(policy, max_output_bytes);
         call.work_items(rows, self.per_row, self.setup)?;
-        let row_bytes = payload_bytes::<S>(self.expression.nodes().len())?;
+        let row_bytes = payload_bytes::<S>(self.slots)?;
         let input_bytes = payload_bytes::<Operand<'_, S>>(operands.len())?;
         let scratch_bytes = row_bytes
             .checked_add(input_bytes)
@@ -367,7 +352,7 @@ impl<S: StructuredFamily> Plan<S> {
         let stride = if self.varying_nodes.is_empty() {
             1
         } else {
-            rows.clamp(1, CHUNK_ROWS)
+            rows.clamp(1, self.lanes)
                 .min((WORKSPACE_BYTES / row_bytes).max(1))
                 .min(1 + (policy.max_numerical_bytes - minimum) / row_bytes)
         };
@@ -386,7 +371,7 @@ impl<S: StructuredFamily> Plan<S> {
                 Operand::Column(S::vector(operand)?)
             };
         }
-        let mut scratch = call.scratch(self.expression.nodes().len() * stride, S::zero())?;
+        let mut scratch = call.scratch(self.slots * stride, S::zero())?;
         let value = if map {
             let mut output = call.output(rows, S::zero(), retained)?;
             for (chunk, destination) in output.as_mut_slice().chunks_mut(stride).enumerate() {
@@ -447,37 +432,47 @@ impl<S: StructuredFamily> Plan<S> {
                         Operand::Scalar(value) => value,
                         Operand::Column(_) => return Err(refused("numerical-expression")),
                     },
-                    Node::Add(a, b) => scratch[a * stride] + scratch[b * stride],
-                    Node::Mul(a, b) => scratch[a * stride] * scratch[b * stride],
-                    Node::Neg(a) => -scratch[a * stride],
+                    Node::Add(a, b) => {
+                        scratch[self.locations[a] * stride] + scratch[self.locations[b] * stride]
+                    }
+                    Node::Mul(a, b) => {
+                        scratch[self.locations[a] * stride] * scratch[self.locations[b] * stride]
+                    }
+                    Node::Neg(a) => -scratch[self.locations[a] * stride],
                     Node::Embed(..) => return Err(refused("numerical-expression")),
                 };
-                scratch[index * stride..(index + 1) * stride].fill(value);
+                let slot = self.locations[index];
+                scratch[slot * stride..(slot + 1) * stride].fill(value);
             }
         }
+        let kernel = vector::Plan::<S>::select(len).map_err(crate::field_error)?;
         for &index in &self.varying_nodes {
-            // Ring admission proves dependencies precede this node, so the
-            // initialized destination cannot alias either immutable input slice.
-            let (prefix, destination) = scratch.split_at_mut(index * stride);
-            let destination = &mut destination[..len];
-            let source = |node| &prefix[node * stride..node * stride + len];
-            match self.expression.nodes()[index] {
-                Node::Input(input) => match inputs[input] {
-                    Operand::Scalar(value) => destination.fill(value),
-                    Operand::Column(values) => destination.copy_from_slice(&values[row..row + len]),
-                },
-                Node::Add(a, b) => vector::add::<S>(source(a), source(b), destination)
-                    .map_err(crate::field_error)?,
-                Node::Mul(a, b) => vector::mul::<S>(source(a), source(b), destination)
-                    .map_err(crate::field_error)?,
-                Node::Neg(a) => {
-                    vector::neg::<S>(source(a), destination).map_err(crate::field_error)?
+            let slot = self.locations[index];
+            let operation = match self.expression.nodes()[index] {
+                Node::Input(input) => {
+                    let destination = &mut scratch[slot * stride..slot * stride + len];
+                    match inputs[input] {
+                        Operand::Scalar(value) => destination.fill(value),
+                        Operand::Column(values) => {
+                            destination.copy_from_slice(&values[row..row + len])
+                        }
+                    }
+                    continue;
                 }
-                Node::Constant(..) => destination.fill(self.constants[index]),
-                Node::Embed(..) => return Err(refused("numerical-expression")),
-            }
+                Node::Add(a, b) => vector::SlotOperation::Add(self.locations[a], self.locations[b]),
+                Node::Mul(a, b) => {
+                    vector::SlotOperation::Multiply(self.locations[a], self.locations[b])
+                }
+                Node::Neg(a) => vector::SlotOperation::Negate(self.locations[a]),
+                Node::Constant(..) | Node::Embed(..) => {
+                    return Err(refused("numerical-plan-schedule"));
+                }
+            };
+            kernel
+                .apply_slots(operation, slot, stride, scratch)
+                .map_err(crate::field_error)?;
         }
-        let root = self.expression.outputs()[0] * stride;
+        let root = self.locations[self.expression.outputs()[0]] * stride;
         Ok(&scratch[root..root + len])
     }
 }
@@ -537,8 +532,16 @@ mod tests {
             [3]
         ])
         .to_string();
+        let body = json!([
+            "zkc.numerical-plan/0",
+            serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+            256,
+            2,
+            [1, 0, 0, 1]
+        ])
+        .to_string();
         Plan::<S>::new(
-            Expression::parse(&body).unwrap(),
+            NumericalPlan::parse(&body, field, b"10").unwrap(),
             b"10",
             mode,
             body.len(),
@@ -559,7 +562,7 @@ mod tests {
                 };
                 // Independent scalar-floor formula, including typed views and
                 // staging/final overlap. Do not discover this value by probing.
-                let minimum = 4 * size_of::<S>()
+                let minimum = 2 * size_of::<S>()
                     + 2 * size_of::<Operand<'_, S>>()
                     + if map { rows * size_of::<S>() } else { 0 }
                     + retained;
@@ -598,7 +601,7 @@ mod tests {
                 } else {
                     crate::VALUE_SLOT_BYTES
                 };
-                let row_bytes = 4 * size_of::<S>();
+                let row_bytes = 2 * size_of::<S>();
                 let minimum = row_bytes
                     + 2 * size_of::<Operand<'_, S>>()
                     + if map { rows * size_of::<S>() } else { 0 }

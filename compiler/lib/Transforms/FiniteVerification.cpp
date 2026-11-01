@@ -11,6 +11,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
@@ -199,7 +200,7 @@ class Reader {
     auto col = mathematical::interpretCollection(container.getType());
     if (col.staticExtent.has_value())
       return natural(
-          cast<algebra::FieldArrayType>(container.getType()).getLength());
+          cast<data::FieldArrayType>(container.getType()).getLength());
     return kernel(col.length, container, index, col.arguments,
                   col.matrix
                       ? ArrayRef<Attribute>{IntegerAttr::get(index, selected)}
@@ -302,7 +303,7 @@ class Reader {
   bool nestedContraction(const nested::ScopedSource &source, ValueRange entry,
                          Value size) {
     auto output = c.signature.getResult(0);
-    auto field = cast<algebra::FieldVectorType>(output).getElementType();
+    auto field = cast<data::FieldVectorType>(output).getElementType();
     SmallVector<Attribute> parameters{StringAttr::get(
         field.getContext(), cast<algebra::FieldType>(field).getDomain())};
     Value zero = natural(0);
@@ -679,7 +680,7 @@ public:
         (mathematical::hasFinitePayloadContract(cursor, symbols) ||
          // An identity collect may return an existing vector without payload.
          (c.collect && cursor &&
-          isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
+          isa<data::FieldVectorType>(c.signature.getResult(0)) &&
           !startsEmpty))) {
       // Semantic comparison is optional. Its bounded interpretation and
       // normalization cannot spend the ordered reader's admission budget.
@@ -752,7 +753,7 @@ public:
       auto result = c.signature.getResult(0);
       auto col = mathematical::interpretCollection(result);
       if (col.staticExtent.has_value()) {
-        result = algebra::FieldVectorType::get(
+        result = data::FieldVectorType::get(
             col.element.getContext(),
             cast<algebra::FieldType>(col.element).getDomain());
         col = mathematical::interpretCollection(result);

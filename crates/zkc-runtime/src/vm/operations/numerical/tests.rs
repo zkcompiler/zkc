@@ -1,6 +1,8 @@
 use super::*;
+use crate::ring::Expression;
 use crate::vm::Program;
 use serde_json::{Value as Json, json};
+use zkc_test_support::numerical_plan;
 
 fn binding(field: &str, provider: &str, mode: &str, mask: &str) -> OperationBinding {
     OperationBinding {
@@ -168,7 +170,7 @@ fn program(binding: &OperationBinding, parameters: &[String], dormant: bool) -> 
 #[test]
 fn admission_checks_the_actual_body_and_dormant_branches() {
     let binding = binding("koala-bear", "plonky3", "map", "1");
-    let valid = json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string();
+    let valid = numerical_plan(json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]));
     for dormant in [false, true] {
         assert!(
             Program::decode(
@@ -183,18 +185,30 @@ fn admission_checks_the_actual_body_and_dormant_branches() {
             vec![format!(" {valid}")],
             vec![valid.replace("\"input\",0", "\"input\",1")],
             vec![valid.replace("koala-bear", "bls12-381.fr")],
-            vec![json!(["zkc.ring/0", [], [["constant", "koala-bear", "1"]], [0]]).to_string()],
-            vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0, 0]]).to_string()],
-            vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], []]).to_string()],
-            vec![
-                json!([
-                    "zkc.ring/0",
-                    ["koala-bear"],
-                    [["constant", "bls12-381.fr", "1"]],
-                    [0]
-                ])
-                .to_string(),
-            ],
+            vec![numerical_plan(json!([
+                "zkc.ring/0",
+                [],
+                [["constant", "koala-bear", "1"]],
+                [0]
+            ]))],
+            vec![numerical_plan(json!([
+                "zkc.ring/0",
+                ["koala-bear"],
+                [["input", 0]],
+                [0, 0]
+            ]))],
+            vec![numerical_plan(json!([
+                "zkc.ring/0",
+                ["koala-bear"],
+                [["input", 0]],
+                []
+            ]))],
+            vec![numerical_plan(json!([
+                "zkc.ring/0",
+                ["koala-bear"],
+                [["constant", "bls12-381.fr", "1"]],
+                [0]
+            ]))],
             vec!["not a Ring body".into()],
         ] {
             assert_eq!(
@@ -209,13 +223,12 @@ fn admission_checks_the_actual_body_and_dormant_branches() {
         }
     }
     let extension = binding_for_extension();
-    let embedded = json!([
+    let embedded = numerical_plan(json!([
         "zkc.ring/0",
         ["koala-bear"],
         [["input", 0], ["embed", "koala-bear.ext4-binomial3", 0]],
         [1]
-    ])
-    .to_string();
+    ]));
     assert_eq!(
         parameters(&extension, &[embedded]).unwrap_err().code,
         ErrorCode::Attributes
@@ -247,7 +260,11 @@ fn canonical_body_byte_boundary_is_exact() {
     assert_eq!(exact.len(), 4096);
     assert!(
         Program::decode(
-            &program(&binding, &[exact], false),
+            &program(
+                &binding,
+                &[numerical_plan(serde_json::from_str(&exact).unwrap())],
+                false
+            ),
             &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
         )
         .is_ok()
@@ -255,7 +272,12 @@ fn canonical_body_byte_boundary_is_exact() {
     let over = body_with_bytes(4097);
     assert!(Expression::parse(&over).is_ok());
     assert_eq!(
-        parameters(&binding, &[over]).unwrap_err().code,
+        parameters(
+            &binding,
+            &[numerical_plan(serde_json::from_str(&over).unwrap())]
+        )
+        .unwrap_err()
+        .code,
         ErrorCode::Limit
     );
 }

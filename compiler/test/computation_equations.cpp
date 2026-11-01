@@ -69,7 +69,7 @@ Operation *neutralResult(func::FuncOp helper, bool multiply,
 }
 const char *capturedReduction = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -81,14 +81,14 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
-   %r = "algebra.finite_fold"(%xs,%seed,%xs) {domain=@items,step=@step} : (!V,!F,!V)->!F
+   %r = "data.finite_fold"(%xs,%seed,%xs) {domain=@items,step=@step} : (!V,!F,!V)->!F
    "protocol.return"(%r) : (!F)->()
  }) {sym_name="main",function_type=(!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
 const char *indexedCollect = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -100,7 +100,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%factor:!F):
-   %r = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   %r = "data.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
    "protocol.return"(%r) : (!V)->()
  }) {sym_name="main",function_type=(!V,!F)->!V,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

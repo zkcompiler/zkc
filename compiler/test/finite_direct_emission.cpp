@@ -25,7 +25,7 @@ using namespace zkc::test;
 namespace {
 const char *aliasSource = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -66,7 +66,7 @@ module { "protocol.module"() ({
    func.return %capture : !F
  }
  "protocol.func"() ({ ^entry(%bound:ui64,%seed:!F):
-   %r = "algebra.finite_fold"(%bound,%bound,%seed,%seed) {domain=@items,step=@step} : (ui64,ui64,!F,!F)->!F
+   %r = "data.finite_fold"(%bound,%bound,%seed,%seed) {domain=@items,step=@step} : (ui64,ui64,!F,!F)->!F
    "protocol.return"(%r) : (!F)->()
  }) {sym_name="main",origin=["main",[]],function_type=(ui64,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

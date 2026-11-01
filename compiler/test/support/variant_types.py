@@ -16,7 +16,7 @@ def logical_type(value):
     head, domain = value.split(':', 1)
     constructors = {
         'field': 'algebra.field', 'group': 'algebra.group',
-        'vector': 'algebra.field_vector', 'matrix': 'algebra.field_matrix',
+        'vector': 'data.field_vector', 'matrix': 'data.field_matrix',
         'point': 'poly.point', 'table': 'poly.multilinear',
     }
     if head == 'proof':

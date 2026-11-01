@@ -36,7 +36,7 @@ Type fixture(MLIRContext &context, StringRef name) {
   if (name.consume_front("field:"))
     return algebra::FieldType::get(&context, name);
   if (name.consume_front("vector:"))
-    return algebra::FieldVectorType::get(&context, name);
+    return data::FieldVectorType::get(&context, name);
   if (name.consume_front("root:"))
     return commitment::VectorObjectType::get(&context, name, "commitment");
   if (name.consume_front("path:"))
@@ -44,7 +44,7 @@ Type fixture(MLIRContext &context, StringRef name) {
   if (name.consume_front("array:")) {
     uint64_t length = 0;
     require(!name.getAsInteger(10, length), "bad fixed-array fixture length");
-    return algebra::FieldArrayType::get(&context, "bls12-381.fr", length);
+    return data::FieldArrayType::get(&context, "bls12-381.fr", length);
   }
   if (name == "index")
     return IntegerType::get(&context, 64, IntegerType::Unsigned);
@@ -53,7 +53,7 @@ Type fixture(MLIRContext &context, StringRef name) {
   if (name == "bytes")
     return data::BytesType::get(&context);
   if (name == "indices")
-    return algebra::IndicesType::get(&context);
+    return data::IndicesType::get(&context);
   if (name == "empty")
     return variant(context, "Empty", {{}});
   if (name == "nested") {
@@ -347,7 +347,7 @@ int main(int argc, char **argv) {
   });
   cases.run("inactive unsupported local payload refuses wire", [&] {
     auto local =
-        algebra::FixedVectorType::get(&context, fixture(context, "index"), 0);
+        data::FixedVectorType::get(&context, fixture(context, "index"), 0);
     take(layouts.get(local));
     auto type = variant(context, "InactiveLocal", {{}, {local}});
     auto error = evm::verifyWireType(layouts, type);
@@ -356,7 +356,7 @@ int main(int argc, char **argv) {
   });
   cases.run("empty sequence cannot hide unsupported element", [&] {
     auto element =
-        algebra::FixedVectorType::get(&context, fixture(context, "index"), 0);
+        data::FixedVectorType::get(&context, fixture(context, "index"), 0);
     auto type = data::SequenceType::get(&context, element);
     take(layouts.get(type));
     auto error = evm::verifyWireType(layouts, type);

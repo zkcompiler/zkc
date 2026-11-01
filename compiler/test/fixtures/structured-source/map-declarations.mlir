@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  func.func private @square(%x:!F)->!F {
    %r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F

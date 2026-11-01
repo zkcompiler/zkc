@@ -118,7 +118,8 @@ public:
     return declaration && call.getBinding() == record.callee &&
            invocationParametersMatch(
                declaration.getContract(), declaration.getArgumentsAttr(),
-               call.getParametersAttr(), record.attributes);
+               call.getParametersAttr(), record.attributes,
+               physical ? ParameterStage::Physical : ParameterStage::Logical);
   }
   bool body(func::FuncOp function, const program::Body &expected,
             ArrayRef<std::string> arguments, bool outlined) {

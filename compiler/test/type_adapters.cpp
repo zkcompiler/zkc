@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Layout.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -164,7 +165,7 @@ int main() {
         auto logical =
             take(parseBoundType("fixed_vector<field:koala-bear,4>", false));
         require(decodeBoundType(&context, logical) ==
-                    zkc::algebra::FixedVectorType::get(
+                    zkc::data::FixedVectorType::get(
                         &context,
                         zkc::algebra::FieldType::get(&context, "koala-bear"),
                         4),
@@ -193,16 +194,16 @@ int main() {
       {"bytes", zkc::data::BytesType::get(&context)},
       {"shake128_state", zkc::crypto::Shake128StateType::get(&context)},
       {"quotient_matrix", zkc::runtime::QuotientMatrixType::get(&context)},
-      {"indices", zkc::algebra::IndicesType::get(&context)},
+      {"indices", zkc::data::IndicesType::get(&context)},
       {"field:" + field, zkc::algebra::FieldType::get(&context, field)},
-      {"matrix:" + field, zkc::algebra::FieldMatrixType::get(&context, field)},
-      {"vector:" + field, zkc::algebra::FieldVectorType::get(&context, field)},
+      {"matrix:" + field, zkc::data::FieldMatrixType::get(&context, field)},
+      {"vector:" + field, zkc::data::FieldVectorType::get(&context, field)},
       {"group:" + group, zkc::algebra::GroupType::get(&context, group)},
-      {"groups:" + group, zkc::algebra::GroupVectorType::get(&context, group)},
+      {"groups:" + group, zkc::data::GroupVectorType::get(&context, group)},
       {"field_array<" + field + ",0>",
-       zkc::algebra::FieldArrayType::get(&context, field, 0)},
+       zkc::data::FieldArrayType::get(&context, field, 0)},
       {"field_array<" + field + ",4>",
-       zkc::algebra::FieldArrayType::get(&context, field, 4)},
+       zkc::data::FieldArrayType::get(&context, field, 4)},
       {"polynomial:" + field, zkc::poly::UnivariateType::get(&context, field)},
       {"table:" + field, zkc::poly::MultilinearType::get(&context, field)},
       {"point:" + field, zkc::poly::PointType::get(&context, field)},
@@ -262,9 +263,9 @@ int main() {
       llvm::raw_string_ostream(printed) << native;
       require(parseType(printed, &context) == native,
               "native parser/printer changed identity");
-      if (isa<zkc::algebra::FieldVectorType, zkc::algebra::GroupVectorType,
-              zkc::algebra::IndicesType, zkc::algebra::FieldMatrixType,
-              zkc::algebra::FieldArrayType, zkc::data::BytesType,
+      if (isa<zkc::data::FieldVectorType, zkc::data::GroupVectorType,
+              zkc::data::IndicesType, zkc::data::FieldMatrixType,
+              zkc::data::FieldArrayType, zkc::data::BytesType,
               zkc::crypto::Shake128StateType, zkc::runtime::QuotientMatrixType>(
               native))
         roundTrip(context, take(defaultRepresentation(bound)), true);
@@ -451,25 +452,24 @@ int main() {
   auto physical = zkc::runtime::RepresentedType::get(&context, logical,
                                                      "arkworks.fr/0", {});
   cases.run("field-array domain and length identity", [&] {
-    auto empty = zkc::algebra::FieldArrayType::get(&context, field, 0);
-    auto array = zkc::algebra::FieldArrayType::get(&context, field, 4);
+    auto empty = zkc::data::FieldArrayType::get(&context, field, 0);
+    auto array = zkc::data::FieldArrayType::get(&context, field, 4);
     require(empty.getLength() == 0 && array.getLength() == 4 &&
                 array.getDomain() == field && array.getElementType() == logical,
             "field-array domain, element or length changed");
-    require(Type(array) !=
-                    zkc::algebra::FieldVectorType::get(&context, field) &&
+    require(Type(array) != zkc::data::FieldVectorType::get(&context, field) &&
                 Type(array) !=
-                    zkc::algebra::FixedVectorType::get(&context, logical, 4) &&
+                    zkc::data::FixedVectorType::get(&context, logical, 4) &&
                 Type(array) != zkc::data::SequenceType::get(&context, logical),
             "distinct collection families acquired the same native type");
     ScopedDiagnosticHandler diagnostics(&context,
                                         [](Diagnostic &) { return success(); });
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
-    require(succeeded(zkc::algebra::FieldArrayType::verify(emit, field, 0)) &&
-                succeeded(
-                    zkc::algebra::FieldArrayType::verify(emit, field, 1048576)),
-            "admitted field-array length boundary refused");
-    require(failed(zkc::algebra::FieldArrayType::verify(emit, field, 1048577)),
+    require(
+        succeeded(zkc::data::FieldArrayType::verify(emit, field, 0)) &&
+            succeeded(zkc::data::FieldArrayType::verify(emit, field, 1048576)),
+        "admitted field-array length boundary refused");
+    require(failed(zkc::data::FieldArrayType::verify(emit, field, 1048577)),
             "field-array length limit ignored");
   });
   cases.run("fixed-vector native type verifier", [&] {
@@ -477,16 +477,15 @@ int main() {
                                         [](Diagnostic &) { return success(); });
     auto location = UnknownLoc::get(&context);
     auto emit = [&] { return emitError(location); };
-    require(succeeded(zkc::algebra::FixedVectorType::verify(emit, logical, 4)),
+    require(succeeded(zkc::data::FixedVectorType::verify(emit, logical, 4)),
             "valid logical fixed-vector native type rejected");
-    require(failed(zkc::algebra::FixedVectorType::verify(emit, physical, 4)),
+    require(failed(zkc::data::FixedVectorType::verify(emit, physical, 4)),
             "fixed-vector element acquired a physical representation");
-    require(failed(zkc::algebra::FixedVectorType::verify(
+    require(failed(zkc::data::FixedVectorType::verify(
                 emit, Float32Type::get(&context), 4)),
             "unadmitted floating-point element accepted");
-    require(
-        failed(zkc::algebra::FixedVectorType::verify(emit, logical, 1048577)),
-        "unbounded natural index accepted");
+    require(failed(zkc::data::FixedVectorType::verify(emit, logical, 1048577)),
+            "unbounded natural index accepted");
   });
   cases.run("physical carrier at logical stage", [&] {
     refuses(encodeBoundType(physical, false),
@@ -536,20 +535,19 @@ int main() {
     require(parseType("!algebra.field<\"f7\">", &context) == field,
             "native field parser changed f7 formation");
     auto element = zkc::algebra::FieldType::get(&context, "koala-bear");
-    auto vector = zkc::algebra::FixedVectorType::getChecked(
+    auto vector = zkc::data::FixedVectorType::getChecked(
         emit, &context, Type(element), uint64_t(4));
     require(bool(vector), "checked fixed-vector construction failed");
-    require(
-        parseType("!algebra.fixed_vector<!algebra.field<\"koala-bear\">, 4>",
-                  &context) == vector,
-        "fixed-vector parser changed native identity");
-    require(!zkc::algebra::FixedVectorType::getChecked(
-                emit, &context, Type(field), uint64_t(4)),
+    require(parseType("!data.fixed_vector<!algebra.field<\"koala-bear\">, 4>",
+                      &context) == vector,
+            "fixed-vector parser changed native identity");
+    require(!zkc::data::FixedVectorType::getChecked(emit, &context, Type(field),
+                                                    uint64_t(4)),
             "fixed-vector admitted an unadmitted nested field");
-    require(!parseType("!algebra.fixed_vector<!algebra.field<\"f7\">, 4>",
-                       &context),
-            "fixed-vector parser bypassed nested admission");
-    require(!zkc::algebra::FixedVectorType::getChecked(
+    require(
+        !parseType("!data.fixed_vector<!algebra.field<\"f7\">, 4>", &context),
+        "fixed-vector parser bypassed nested admission");
+    require(!zkc::data::FixedVectorType::getChecked(
                 emit, &context, Type(element), uint64_t(1048577)),
             "checked fixed-vector accepted an excessive natural");
   });
@@ -880,15 +878,14 @@ int main() {
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
     require(!data::SequenceType::getChecked(emit, &context, Type{}) &&
-                !algebra::FixedVectorType::getChecked(emit, &context, Type{},
-                                                      uint64_t(4)),
+                !data::FixedVectorType::getChecked(emit, &context, Type{},
+                                                   uint64_t(4)),
             "checked aggregate builder accepted a null child");
 #ifdef NDEBUG
     // Assert-enabled MLIR builders stop before malformed storage exists.
     // Public export must still refuse it in the supported release build.
-    for (Type bad :
-         {Type(data::SequenceType::get(&context, Type{})),
-          Type(algebra::FixedVectorType::get(&context, Type{}, 4))}) {
+    for (Type bad : {Type(data::SequenceType::get(&context, Type{})),
+                     Type(data::FixedVectorType::get(&context, Type{}, 4))}) {
       refuses(encodeBoundType(bad, false), "binding-type");
       auto nested = data::SequenceType::get(&context, bad);
       refuses(encodeBoundType(nested, false), "binding-type-identity");
