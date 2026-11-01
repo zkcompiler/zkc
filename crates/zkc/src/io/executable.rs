@@ -194,6 +194,22 @@ mod tests {
     const ORIGINAL: &[u8] = b"#!/bin/sh\nprintf original\n";
     const REPLACEMENT: &[u8] = b"#!/bin/sh\nprintf replaced\n";
 
+    fn elf_tool(name: &str) -> std::path::PathBuf {
+        // Nix provides its real tools through PATH. Its special /bin/sh may be
+        // a multicall image that dispatches on argv0, and /bin/false need not
+        // exist at all. Resolve the toolchain fixture before copying its bytes.
+        let path = std::env::split_paths(&std::env::var_os("PATH").expect("test toolchain PATH"))
+            .map(|directory| directory.join(name))
+            .find(|path| path.is_file())
+            .unwrap_or_else(|| panic!("missing ELF test tool: {name}"))
+            .canonicalize()
+            .unwrap();
+        let mut magic = [0; 4];
+        File::open(&path).unwrap().read_exact(&mut magic).unwrap();
+        assert_eq!(&magic, b"\x7fELF", "ELF test tool: {}", path.display());
+        path
+    }
+
     fn script(path: &Path, bytes: &[u8]) {
         std::fs::write(path, bytes).unwrap();
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -391,32 +407,31 @@ mod tests {
 
     #[test]
     fn elf_snapshot_preserves_the_requested_argv0() {
-        assert_eq!(&std::fs::read("/bin/sh").unwrap()[..4], b"\x7fELF");
-        let executable = Executable::capture(Path::new("/bin/sh"), 16 * 1024 * 1024).unwrap();
+        let executable = Executable::capture(&elf_tool("sh"), 16 * 1024 * 1024).unwrap();
         let output = execute(
             &executable,
             Path::new("/original/installed/tool"),
             &["-c", "printf '%s' \"$0\""],
         );
-        assert!(output.status.success());
+        assert!(output.status.success(), "{output:?}");
         assert_eq!(output.stdout, b"/original/installed/tool");
     }
 
     #[test]
     fn elf_exec_does_not_inherit_the_image_descriptor() {
-        let executable = Executable::capture(Path::new("/bin/sh"), 16 * 1024 * 1024).unwrap();
+        let executable = Executable::capture(&elf_tool("sh"), 16 * 1024 * 1024).unwrap();
         let fd = executable.file.as_raw_fd().to_string();
         let output = execute(
             &executable,
             Path::new("/original/installed/tool"),
             &[
                 "-c",
-                "readlink /proc/$$/fd/\"$1\"; printf done",
+                "if [ -e /proc/$$/fd/\"$1\" ]; then exit 1; fi; printf done",
                 "tool",
                 &fd,
             ],
         );
-        assert!(output.status.success());
+        assert!(output.status.success(), "{output:?}");
         assert_eq!(output.stdout, b"done", "{output:?}");
         assert!(
             rustix::io::fcntl_getfd(&*executable.file)
@@ -429,8 +444,8 @@ mod tests {
     fn elf_bytes_survive_path_replacement_and_in_place_edit() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("tool");
-        let original = std::fs::read("/bin/sh").unwrap();
-        let replacement = std::fs::read("/bin/false").unwrap();
+        let original = std::fs::read(elf_tool("sh")).unwrap();
+        let replacement = std::fs::read(elf_tool("false")).unwrap();
         assert_eq!(&original[..4], b"\x7fELF");
         assert_eq!(&replacement[..4], b"\x7fELF");
         for replace_inode in [true, false] {
