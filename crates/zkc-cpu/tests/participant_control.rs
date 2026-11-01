@@ -24,7 +24,7 @@ fn selected_participant_draw_preserves_actual_roots_and_dormant_budget() {
             "if",
             "choice",
             "c",
-            ["c", "x", "r", "s"],
+            [["c", "c"], ["x", "x"], ["r", "r"], ["s", "s"]],
             [
                 [
                     "local",
@@ -182,7 +182,7 @@ fn native_variant_selects_its_actual_payload_without_touching_other_arms() {
                     "match",
                     "choice",
                     "c",
-                    ["fallback"],
+                    [["fallback", "fallback"]],
                     [
                         ["some", ["payload"], [["yield", ["payload"]]]],
                         ["none", [], [["yield", ["fallback"]]]]

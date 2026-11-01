@@ -80,7 +80,7 @@ fn selected_branch_queries_use_the_bound_service_and_dormant_arms_do_not_draw() 
                     "if",
                     "inner",
                     "selected",
-                    ["fallback"],
+                    [["fallback", "fallback"]],
                     query,
                     [["yield", ["fallback"]]],
                     ["inner_result"]
@@ -101,7 +101,7 @@ fn selected_branch_queries_use_the_bound_service_and_dormant_arms_do_not_draw() 
                 "if",
                 "outer",
                 "selected",
-                ["selected", "fallback"],
+                [["selected", "selected"], ["fallback", "fallback"]],
                 selected_body,
                 [["yield", ["fallback"]]],
                 ["result"]

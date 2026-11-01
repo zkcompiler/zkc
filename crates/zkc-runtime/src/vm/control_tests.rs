@@ -738,6 +738,19 @@ fn participant_branch_transfers_exact_resources_and_cleanup_outcomes() {
         &Contracts::standard(ExecutionPolicy::general_purpose()),
     )
     .unwrap();
+    // Capture rows transfer an affine parent at most once; only Copy parents
+    // may bind several formals.
+    let mut repeated = artifact.clone();
+    repeated[3][0][6][0][3] = json!([["c", "c"], ["r", "r"], ["s", "r"]]);
+    let refused = Program::decode(
+        repeated.to_string().as_bytes(),
+        &Contracts::standard(ExecutionPolicy::general_purpose()),
+    )
+    .unwrap_err();
+    assert!(
+        refused.detail.contains("interactive-resource-reuse"),
+        "{refused:?}"
+    );
     for selected in [false, true] {
         for cleanup_failure in [false, true] {
             let store = Store {
