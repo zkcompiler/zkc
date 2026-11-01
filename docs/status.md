@@ -1064,12 +1064,16 @@ query identities, construction classes, realized laws, observation classes with
 certified openings, blocks, gates, cryptographic effects, binding, provider and
 explicit-input obligations, equivalence notions and the model of claims. The
 native construction implements the profile that absorbs every message, over the
-installed Merlin, spongefish and hash-chain suites, and its request operands are `index`
-bounds defined by `data.index` constants, which meets operand provenance
-statically. Programmable handlers may ignore values, and nothing checks the
-omission classes for them. No gate, block request, declared role of hash calls,
-challenge-input coverage, configuration provenance check or interaction-pattern
-digest is implemented, and the salt kind is not admitted natively. Lean states
+installed Merlin, spongefish and hash-chain suites. Scalar `index` requests use
+bounds defined by `data.index` constants. Explicit `indices` blocks and gated
+blocks are also implemented for their installed native profiles, with static
+bound/count parameters, authenticated gate policy, witness framing and independent
+actual-body checks; see [native index blocks](spec/ir/construction.md#native-index-blocks).
+Source proof declarations still select ungated blocks; source gate policy remains
+planned. Programmable handlers may ignore values, and nothing checks the
+omission classes for them. General declared hash-role, challenge-input coverage,
+configuration provenance and interaction-pattern judgments remain unimplemented,
+and the salt kind is not admitted natively. Lean states
 formal readings of the obligations, refutes each with a model counterexample
 ([support](../lean/docs/support.md#construction-obligation-counterexamples)),
 fixes the type of provider simulations and proves one for the hash-chain

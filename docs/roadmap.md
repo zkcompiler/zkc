@@ -56,7 +56,7 @@ what actually landed. The completion criteria below belong inside those units.
 | Virtual batching and FRI | Landed supported native profile: shared interaction analyses, checked dynamic virtual query blocks and one logical FRI component used by maintained STARK callers. Formal realization closure remains separate |
 | STARK reduction and checked construction | Next PR: settle the caller's DEEP degree claim, expose source proof policy through the existing construction path, complete the selected native binding checks and exercise the quartic Keccak STARK client |
 | Represented execution | Next substantial PR: canonical logical collection ownership across Data/Algebra, represented modular arithmetic and codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering |
-| Constraints and semantic consumers | Following substantial PR: one assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
+| Constraints and semantic consumers | Following substantial PR: complete assignment-level redesign and consumer migration, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
 
 The remaining units each contain their research, contract changes, implementation,
 review and final validation. Do not reopen the completed foundation or shared FRI
@@ -92,20 +92,31 @@ Proceed through these phases inside one PR:
 
 1. **Reduction and statement.** Fix the exact column, quotient and DEEP degree
    bounds, public/witness layouts and challenge order before changing code.
-   Compare a caller-owned degree adjustment with a tighter FRI degree API;
-   prefer a caller-local solution if it establishes the intended bound without
-   weakening FRI or adding a second FRI implementation. Record coefficient,
-   cancellation and sampling assumptions. Execution controls do not prove the
-   resulting soundness bound.
+   Use a fresh caller-owned linear adjustment `(1 + delta * X)` on the DEEP
+   word and on its verifier-side query equation. Keep generic FRI's absolute
+   strict-degree contract. Check the full ordered term inventory, including
+   the treatment of committed but unread columns. Record coefficient,
+   cancellation and sampling assumptions. Separate exact polynomial membership,
+   proximity and the complete reduction's security statement; execution controls
+   do not prove the latter. Multiplication by `X` alone can wrap a high-degree
+   interpolant modulo the evaluation domain, and changing only a terminal bound
+   loses the strict boundary during binary folding.
 2. **Source policy and actual construction.** Carry the selected transcript,
    block/gate parameters and witness framing from the frontend checked program
    through construction and independent record consumption. Reuse the installed
    block/grinding wire and kernels. An explicit native policy already supports
    gates; source proof declarations and the STARK client still need that path.
+   Select gates by authored query labels and labelled application paths, with
+   independent source-to-selected-occurrence comparison. Separate FRI's common
+   folding/opening implementation from query acquisition: the flagship selects
+   one explicit product request after the terminal coefficients. Existing scalar
+   suites retain an explicit scalar sampling policy, not an implicit fallback;
+   blocks require their own installed capability and change transcript bytes.
    Inspect actual binding, omission and authentication-before-use conditions for
    supported ordinary, programmable and explicit-input profiles. Unsupported
    interpretations must refuse the requested judgment, not inherit a native
-   hash-chain security claim.
+   hash-chain security claim. Publish the closed supported handler/encoding
+   forms; data dependence by itself does not establish cryptographic binding.
 3. **Selected complete client.** Use KoalaBear with its quartic extension,
    quartic Keccak rows and the selected direct quartic transcript. Preserve
    field/basis, setup, row order, request length and actual final acceptance.
@@ -127,6 +138,50 @@ Proceed through these phases inside one PR:
    the affected complete native matrix on the final base; report formal
    interpretation and security closure independently. Remove superseded forms
    and revise represented execution from the measured result.
+
+### Constraint redesign and complete migration
+
+The third remaining PR redesigns the whole assignment/constraint boundary. It
+is not an adapter-only addition to the present AIR representation. Clean and
+LLZK exercise complementary requirements; neither becomes the protocol owner.
+
+- **One meaning.** Relation retains declaration, asset and public-interface
+  identity. Constraint owns predicates over arbitrary assignments, including
+  row scopes, rotations, exact multiplicity and chronological memory. Keep
+  witness generation as a separate fallible computation: success is neither the
+  definition nor a proof of the adversarial relation.
+- **Complete Clean profile.** Specify and support an executable ensemble profile
+  with its tables, public inputs, fixed cells, hints, witness blocks, dynamic
+  sizing/padding rules, interactions and public verifier contributions. Preserve
+  balance bounds and the distinction between assignment validity and the source
+  theorem's assumptions/specification. Do not silently flatten an ensemble into
+  independent tables or treat arbitrary Lean propositions as executable IR.
+- **Complete LLZK profile.** Reevaluate the current upstream dialect and backend
+  at implementation time, including the augmented computation and complete wire
+  map. Preserve mutable object identity, reads, assignments and public outputs.
+  Decide external-dialect versus boundary-adapter ownership using exact semantic
+  correspondence and the current toolchain; the old LLVM pin is not the decision.
+- **Adequacy and connections.** Record public, fixed, witness and auxiliary
+  projections explicitly. Check the reduced predicate on arbitrary auxiliary
+  assignments and connect it to the actual commitments and final acceptance.
+  Compare lookup reductions, including characteristic, denominator, multiplicity
+  and transcript conditions; memory additionally retains address, time,
+  initialization and final state.
+- **Single cutover.** Migrate every existing relation consumer, emitter, codec,
+  fixture and native adapter to the selected owner. Remove replaced assignment
+  implementations and compatibility readers in this PR. Native completion and
+  independently maintained formal adequacy remain distinct outcomes.
+
+Freeze supported/refused profiles before implementation and test both external
+clients end to end within them. This is complete support of explicit executable
+profiles, not a promise to compile every upstream language or proposition.
+CirC remains a comparison point, not an extra mandatory integration.
+
+The first PR publishes logical term and statement/witness maps; represented
+execution preserves them; Constraint reads them before physical lowering.
+Consequently this delivery order does not require rebuilding relations from
+buffers or bytes. If representation work needs assignment meaning, it must
+preserve the existing logical subject instead of inventing a temporary owner.
 
 ### Shared interfaces before implementation
 
