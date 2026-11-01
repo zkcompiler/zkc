@@ -12,4 +12,5 @@ include "zkc/Dialect/Relation/IR/RelationDialect.td"
 include "zkc/Dialect/Data/IR/DataDialect.td"
 
 include "zkc/Dialect/Runtime/IR/RuntimeDialect.td"
+include "zkc/Dialect/Residue/IR/ResidueDialect.td"
 #endif

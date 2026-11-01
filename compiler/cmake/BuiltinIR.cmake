@@ -7,6 +7,7 @@ set(zkc_builtin_dialects
   "data|Data|types"
   "crypto|Crypto|types"
   "algebra|Algebra|types"
+  "residue|Residue|types"
   "poly|Polynomial|types"
   "commitment|Commitment|types"
   "relation|Relation|none"

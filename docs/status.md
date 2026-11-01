@@ -1257,3 +1257,15 @@ assignment, formula, readback and mathematical-law obligations remain for the
 consumer; this adds no independent acceptance of authored mathematics or
 protocol security result. Root generator and protocol-library migration is
 separate integration work.
+
+## Represented arithmetic development
+
+The represented-execution unit consolidates collection ownership in Data. Its
+canonical [Residue contract](spec/ir/residues.md) specifies exact modular values,
+projection and lifts independently of nominal field and byte-codec meaning. The
+scalar word producer and independent actual-body reader cover closed arithmetic,
+canonical ranges, unsigned projection, exact centered lifts and standard CSE.
+The reader reconstructs a canonical expression from actual word operations;
+mutations of the modulus, ranges, outputs and poison-producing flags refuse.
+Shaped integration and the actual execution-plan consumer remain in progress.
+Registration and scalar correspondence are not default-path execution support.

@@ -10,5 +10,6 @@
 
 #include "zkc/Dialect/Data/IR/DataOps.h"
 
+#include "zkc/Dialect/Residue/IR/ResidueOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #endif

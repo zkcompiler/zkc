@@ -86,6 +86,17 @@ their existing family names; these formats do not serialize the MLIR namespace.
 See [representation ownership](../compiler/representation.md). Independent
 formal code and its native-MLIR fixtures remain owned by the Lean component.
 
+### Represented arithmetic boundary
+
+[Canonical Residue arithmetic](ir/residues.md) owns modular values, width and
+lift laws; [Codec](realization/codecs.md) owns the exact logical/coordinate/limb/
+byte relations. Nominal fields and polynomial domains keep their original
+owners. The word-lowering producer retains its source and yields a private
+standard-Arith candidate. The independent scalar reader checks actual ranges,
+modular expressions and centered lifts, including candidates changed by CSE.
+Shaped execution and resource-plan integration remain in progress; no serialized
+representation certificate or executable wire type is introduced by the dialect.
+
 ### Participant-loop capture bindings
 
 Participant `loop` captures in `zkc.program/0` are ordered

@@ -221,6 +221,7 @@ add_zkc_component(IR
   lib/Dialect/Runtime/Parameters.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
+  lib/Dialect/Residue/IR/ResidueDialect.cpp
   lib/Dialect/Data/IR/Collections.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
@@ -230,6 +231,7 @@ add_zkc_component(IR
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
   lib/Analysis/StructuredComputation.cpp
+  lib/Analysis/ResidueArithmetic.cpp
   lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
@@ -392,6 +394,7 @@ add_zkc_component(Transforms
   lib/Transforms/LaneRealization.cpp
   lib/Transforms/MathematicalComparison.cpp
   lib/Transforms/ScopedNestedContraction.cpp
+  lib/Transforms/Residue.cpp
   lib/Transforms/StructuredComputation.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
@@ -526,7 +529,7 @@ else()
 endif()
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms MLIRFuncTransforms)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCpuTarget ZkcEvmTarget)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)

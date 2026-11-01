@@ -86,6 +86,14 @@ mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraEnums.h.inc -gen-enum-decls
 mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraEnums.cpp.inc -gen-enum-defs
   EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Residue/IR)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Residue/IR/ResidueAttrs.td)
+list(APPEND zkc_generated_headers include/zkc/Dialect/Residue/IR/residueAttrs.h.inc)
+mlir_tablegen(include/zkc/Dialect/Residue/IR/residueAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=residue EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Residue/IR/residueAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=residue EXTRA_INCLUDES ${zkc_tablegen_includes})
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
 set(zkc_builtin_headers "// Generated private registration includes.\n")
 set(zkc_builtin_classes "// Generated private registration classes.\n")
 foreach(record IN LISTS zkc_builtin_dialects)
