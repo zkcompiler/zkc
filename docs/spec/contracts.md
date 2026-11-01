@@ -95,9 +95,11 @@ owners. The word-lowering producer retains its source and yields a private
 standard-Arith candidate. The independent scalar reader checks actual ranges,
 modular expressions and centered lifts, including candidates changed by CSE.
 A private-tile reader additionally checks static Vector/MemRef bounds and
-ownership, with peak canonical-word storage. Reached execution and resident
-resource-plan integration remain in progress; no serialized
-representation certificate or executable wire type is introduced by the dialect.
+ownership, with peak canonical-word storage. The checked expression and storage
+plan reach the CPU consumer under its resident value relation and fallible
+resource scope. The dialect itself introduces no serialized representation
+certificate or executable wire type; independent formal interpretation remains
+separate.
 
 ### Physical numerical plans
 
@@ -105,10 +107,11 @@ representation certificate or executable wire type is introduced by the dialect.
 `zkc.numerical-plan/0` parameter: actual Ring expression, lane bound and scratch
 slot assignment. Logical parameters remain Ring expressions. The replacement
 changes executable parameters, scratch admission and the setup byte term in the
-numerical work score. Compiler materialization, native readers, reached CPU
-consumers and fixtures must migrate together; bare executable Ring parameters
-will not remain an alternative. The specification is published before that
-migration; implementation is in progress and not yet enabled.
+numerical work score. Compiler materialization, independent C++ and Rust
+readers, reached CPU consumers and fixtures use this carrier. Bare executable
+Ring parameters are rejected. The compiler checks source correspondence and
+the native consumer independently admits the actual schedule; native admission
+does not establish a Lean interpretation or source-to-execution theorem.
 
 ### Participant-loop capture bindings
 
