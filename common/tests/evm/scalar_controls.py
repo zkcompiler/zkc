@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "common/tests/evm"))
 sys.path.insert(0, str(ROOT / "common/tests/support"))
 from abi import encode_verify  # noqa: E402
