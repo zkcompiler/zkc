@@ -241,6 +241,137 @@ class Admission {
     });
     return result;
   }
+  // Local control captures keep their names: scoped local regions canonicalize
+  // aliased captures before emission. Participant control binds each distinct
+  // arm formal to its parent value, so a repeated parent keeps one formal and
+  // one storage binding per row. Ordinary operand consumption admits a repeated
+  // parent only for duplicable values.
+  bool captures(const program::Names &names, const Env &env,
+                std::set<std::string> &consumed, Env &captured) {
+    std::vector<Port> ports;
+    if (!operands(names, env, ports, consumed))
+      return false;
+    for (auto [capture, port] : zip(names, ports))
+      if (!captured.emplace(capture, port).second)
+        return fail("local-control-capture");
+    return true;
+  }
+  bool captures(const protocol::Assignments &bindings, const Env &env,
+                std::set<std::string> &consumed, Env &captured) {
+    program::Names parents;
+    for (const auto &binding : bindings)
+      parents.push_back(binding.second);
+    std::vector<Port> ports;
+    if (!operands(parents, env, ports, consumed))
+      return false;
+    for (auto [binding, port] : zip(bindings, ports))
+      if (!name(binding.first) || !captured.emplace(binding.first, port).second)
+        return fail("interactive-branch-capture");
+    return true;
+  }
+  template <typename Captures>
+  static constexpr bool participantControl =
+      std::is_same_v<Captures, protocol::Assignments>;
+
+  template <typename Captures>
+  bool selectedMatch(const program::SelectedMatch<Captures> &match, Env &env,
+                     std::set<std::string> &consumed, const Definition &def,
+                     StringRef owner, bool local, std::set<std::string> &sites,
+                     unsigned depth) {
+    constexpr bool participant = participantControl<Captures>;
+    if (local == participant)
+      return fail("interactive-instruction");
+    std::vector<Port> input;
+    Env captured;
+    if (!operands({match.input}, env, input, consumed) ||
+        !captures(match.captures, env, consumed, captured))
+      return false;
+    auto descriptor =
+        decodeVariant(StringRef(input[0].type).split('@').first.str());
+    if (!descriptor)
+      return fail("variant-type");
+    if (match.arms.size() != descriptor->alternatives.size())
+      return fail("local-match-arms");
+    auto complete = parseBoundType(input[0].type, physical);
+    if (!complete) {
+      consumeError(complete.takeError());
+      return fail("variant-type");
+    }
+    size_t payloadOffset = 0;
+    std::optional<std::vector<Port>> outputs;
+    for (size_t i = 0; i < match.arms.size(); ++i) {
+      const auto &arm = match.arms[i];
+      const auto &alternative = descriptor->alternatives[i];
+      if (arm.alternative != alternative.label ||
+          arm.payload.size() != alternative.payload.size())
+        return fail("local-match-arm");
+      Env inner;
+      for (size_t j = 0; j < arm.payload.size(); ++j) {
+        std::string leaf = alternative.payload[j];
+        if (physical) {
+          if (!complete->physicalChildren ||
+              payloadOffset + j >= complete->physicalChildren->size())
+            return fail("binding-representation");
+          leaf = (*complete->physicalChildren)[payloadOffset + j].spelling();
+        }
+        if (!name(arm.payload[j]) ||
+            !inner.emplace(arm.payload[j], Port{leaf}).second)
+          return fail("local-match-payload");
+      }
+      payloadOffset += alternative.payload.size();
+      for (const auto &[capture, port] : captured)
+        if (!inner.emplace(capture, port).second)
+          return fail(participant ? "interactive-branch-capture"
+                                  : "local-control-capture");
+      std::vector<Port> yielded;
+      if (!body(arm.body, std::move(inner), {}, def, owner, local, sites,
+                depth + 1, true, &yielded, local))
+        return false;
+      if (arm.body.back().template get<program::Yield>()) {
+        if (outputs && *outputs != yielded)
+          return fail("local-match-yield");
+        outputs = std::move(yielded);
+      }
+    }
+
+    if (!outputs && !match.outputs.empty())
+      return fail("local-terminal-outputs");
+    return bind(match.outputs, outputs.value_or(std::vector<Port>{}), env);
+  }
+
+  template <typename Captures>
+  bool selectedConditional(const program::SelectedConditional<Captures> &branch,
+                           Env &env, std::set<std::string> &consumed,
+                           const Definition &def, StringRef owner, bool local,
+                           std::set<std::string> &sites, unsigned depth,
+                           bool inMatch) {
+    if (local == participantControl<Captures>)
+      return fail("interactive-instruction");
+    std::vector<Port> condition;
+    if (!operands({branch.condition}, env, condition, consumed) ||
+        StringRef(condition[0].type).split('@').first != "bool")
+      return fail("local-if-condition");
+    Env inner;
+    if (!captures(branch.captures, env, consumed, inner))
+      return false;
+    std::vector<Port> left, right;
+    if (!body(branch.thenBody, inner, {}, def, owner, local, sites, depth + 1,
+              true, &left, inMatch) ||
+        !body(branch.elseBody, inner, {}, def, owner, local, sites, depth + 1,
+              true, &right, inMatch))
+      return false;
+
+    bool leftYields = branch.thenBody.back().template get<program::Yield>();
+    bool rightYields = branch.elseBody.back().template get<program::Yield>();
+    if (!leftYields && !rightYields && !branch.outputs.empty())
+      return fail("local-terminal-outputs");
+    if (leftYields && rightYields && left != right)
+      return fail("local-if-yield");
+    if (!leftYields)
+      left = right;
+    return bind(branch.outputs, left, env);
+  }
+
   bool body(const program::Body &instructionsBody, Env env,
             const std::vector<Port> &returns, const Definition &def,
             StringRef owner, bool local, std::set<std::string> &sites,
@@ -490,89 +621,22 @@ class Admission {
         if (!bind({pack->output}, {{pack->type}}, env))
           return false;
       } else if (const auto *match = instruction.get<program::Match>()) {
-        std::vector<Port> input, captures;
-        if (!operands({match->input}, env, input, consumed) ||
-            !operands(match->captures, env, captures, consumed))
+        if (!selectedMatch(*match, env, consumed, def, owner, local, sites,
+                           depth))
           return false;
-        auto descriptor =
-            decodeVariant(StringRef(input[0].type).split('@').first.str());
-        if (!descriptor)
-          return fail("variant-type");
-        if (match->arms.size() != descriptor->alternatives.size())
-          return fail("local-match-arms");
-        auto complete = parseBoundType(input[0].type, physical);
-        if (!complete) {
-          consumeError(complete.takeError());
-          return fail("variant-type");
-        }
-        size_t payloadOffset = 0;
-        std::optional<std::vector<Port>> outputs;
-        for (size_t i = 0; i < match->arms.size(); ++i) {
-          const auto &arm = match->arms[i];
-          const auto &alternative = descriptor->alternatives[i];
-          if (arm.alternative != alternative.label ||
-              arm.payload.size() != alternative.payload.size())
-            return fail("local-match-arm");
-          Env inner;
-          for (size_t j = 0; j < arm.payload.size(); ++j) {
-            std::string leaf = alternative.payload[j];
-            if (physical) {
-              if (!complete->physicalChildren ||
-                  payloadOffset + j >= complete->physicalChildren->size())
-                return fail("binding-representation");
-              leaf =
-                  (*complete->physicalChildren)[payloadOffset + j].spelling();
-            }
-            if (!name(arm.payload[j]) ||
-                !inner.emplace(arm.payload[j], Port{leaf}).second)
-              return fail("local-match-payload");
-          }
-          payloadOffset += alternative.payload.size();
-          for (auto [capture, port] : zip(match->captures, captures))
-            if (!inner.emplace(capture, port).second)
-              return fail("local-control-capture");
-          std::vector<Port> yielded;
-          if (!body(arm.body, std::move(inner), {}, def, owner, local, sites,
-                    depth + 1, true, &yielded, local))
-            return false;
-          if (arm.body.back().get<program::Yield>()) {
-            if (outputs && *outputs != yielded)
-              return fail("local-match-yield");
-            outputs = std::move(yielded);
-          }
-        }
-
-        if (!outputs && !match->outputs.empty())
-          return fail("local-terminal-outputs");
-        if (!bind(match->outputs, outputs.value_or(std::vector<Port>{}), env))
+      } else if (const auto *match =
+                     instruction.get<program::ParticipantMatch>()) {
+        if (!selectedMatch(*match, env, consumed, def, owner, local, sites,
+                           depth))
           return false;
       } else if (const auto *branch = instruction.get<program::Conditional>()) {
-        std::vector<Port> condition, captured;
-        if (!operands({branch->condition}, env, condition, consumed) ||
-            StringRef(condition[0].type).split('@').first != "bool")
-          return fail("local-if-condition");
-        Env inner;
-        if (!operands(branch->captures, env, captured, consumed))
+        if (!selectedConditional(*branch, env, consumed, def, owner, local,
+                                 sites, depth, inMatch))
           return false;
-        for (auto [capture, port] : zip(branch->captures, captured))
-          if (!inner.emplace(capture, port).second)
-            return fail("local-control-capture");
-        std::vector<Port> left, right;
-        if (!body(branch->thenBody, inner, {}, def, owner, local, sites,
-                  depth + 1, true, &left, inMatch) ||
-            !body(branch->elseBody, inner, {}, def, owner, local, sites,
-                  depth + 1, true, &right, inMatch))
-          return false;
-
-        bool leftYields = branch->thenBody.back().get<program::Yield>();
-        bool rightYields = branch->elseBody.back().get<program::Yield>();
-        if (!leftYields && !rightYields && !branch->outputs.empty())
-          return fail("local-terminal-outputs");
-        if (leftYields && rightYields && left != right)
-          return fail("local-if-yield");
-        if (!leftYields)
-          left = right;
-        if (!bind(branch->outputs, left, env))
+      } else if (const auto *branch =
+                     instruction.get<program::ParticipantConditional>()) {
+        if (!selectedConditional(*branch, env, consumed, def, owner, local,
+                                 sites, depth, inMatch))
           return false;
       } else if (const auto *nested = instruction.get<program::For>()) {
         if (!local)

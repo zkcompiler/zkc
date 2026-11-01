@@ -50,7 +50,7 @@ fn fixture(messages: bool) -> Json {
                         "if",
                         "choice",
                         "c",
-                        ["x"],
+                        [["x", "x"]],
                         yes,
                         [["yield", ["x"]]],
                         ["result"]
@@ -135,6 +135,50 @@ fn only_selected_boolean_arm_sends_and_creates_frames() {
             report.reached.iter().filter(|r| r.branch_started).count(),
             2
         );
+    }
+}
+
+/// Rebind the branch captures and route the arms through the given formals.
+fn captured(rows: Json, sent: &str, kept: &str) -> Json {
+    let mut raw = fixture(true);
+    let mut candidate: Json = serde_json::from_str(raw["candidate"].as_str().unwrap()).unwrap();
+    for role in 0..2 {
+        let branch = &mut candidate[3][role][6][0];
+        branch[3] = rows.clone();
+        if role == 0 {
+            branch[4][0][4] = json!(sent);
+            branch[4][1][1] = json!([kept]);
+        }
+        branch[5][0][1] = json!([kept]);
+    }
+    raw["candidate"] = json!(candidate.to_string());
+    raw
+}
+
+#[test]
+fn copy_aliases_keep_distinct_branch_formals_and_capture_rows_are_exact() {
+    // Two formals bind one Copy parent; each arm uses them independently.
+    let rows = json!([["first", "x"], ["second", "x"]]);
+    let bundle = admit(&captured(rows, "first", "second")).unwrap();
+    for selected in [false, true] {
+        let report = execute(
+            &bundle,
+            [TestValue::Bool(selected), TestValue::Bool(selected)],
+            [true, false],
+            RunLimits::default(),
+        );
+        assert!(matches!(report.outcome, Outcome::Completed));
+        assert_eq!(report.wire.sends, usize::from(selected));
+        assert_eq!(report.roles[0].outputs, vec![TestValue::Bool(true)]);
+        assert_eq!(report.roles[1].outputs, vec![TestValue::Bool(selected)]);
+    }
+    for rows in [
+        json!(["x"]),
+        json!([["first", "x"], ["first", "x"]]),
+        json!([["first", "x", "extra"]]),
+        json!([["first", "missing"]]),
+    ] {
+        assert!(admit(&captured(rows, "first", "first")).is_err());
     }
 }
 
@@ -265,7 +309,7 @@ fn enum_fixture() -> Json {
             "match",
             "choice",
             "c",
-            ["x"],
+            [["x", "x"]],
             [["some", ["value"], body], ["none", [], old[5]]],
             ["result"]
         ]);
@@ -463,7 +507,7 @@ fn one_participant_stopping_or_returning_does_not_complete_an_independent_peer()
         }
         for role in 0..2 {
             let branch = &mut raw[3][role][6][0];
-            branch[3] = json!(["x", "c"]);
+            branch[3] = json!([["x", "x"], ["c", "c"]]);
             branch[4].as_array_mut().unwrap().insert(
                 0,
                 if early_return {

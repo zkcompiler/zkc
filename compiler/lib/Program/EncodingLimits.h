@@ -22,22 +22,36 @@ inline bool excessiveDepth(const program::Body &body, unsigned depth = 3) {
                  instruction.get<program::Conditional>() ||
                  instruction.get<program::For>() ||
                  instruction.get<program::VariantConstruct>() ||
-                 instruction.get<program::Match>();
+                 instruction.get<program::Match>() ||
+                 instruction.get<program::ParticipantConditional>() ||
+                 instruction.get<program::ParticipantMatch>();
     if (recordDepth >= 64 || (lists && recordDepth + 1 >= 64))
       return true;
-    if (auto *match = instruction.get<program::Match>()) {
+    auto arms = [&](const auto *match) {
+      if (!match)
+        return false;
       if (recordDepth + 3 >= 64)
         return true;
       for (const auto &arm : match->arms)
         if (excessiveDepth(arm.body, recordDepth + 3))
           return true;
-    }
-    if (auto *branch = instruction.get<program::Conditional>()) {
-      if (excessiveDepth(branch->thenBody, recordDepth + 1))
-        return true;
-      if (excessiveDepth(branch->elseBody, recordDepth + 1))
-        return true;
-    }
+      return false;
+    };
+    auto branches = [&](const auto *branch) {
+      return branch && (excessiveDepth(branch->thenBody, recordDepth + 1) ||
+                        excessiveDepth(branch->elseBody, recordDepth + 1));
+    };
+    // Participant capture rows are nested arrays, as participant loop rows are.
+    auto rows = [&](const auto *branch) {
+      return branch && !branch->captures.empty() && recordDepth + 2 >= 64;
+    };
+    if (arms(instruction.get<program::Match>()) ||
+        arms(instruction.get<program::ParticipantMatch>()) ||
+        rows(instruction.get<program::ParticipantMatch>()) ||
+        branches(instruction.get<program::Conditional>()) ||
+        branches(instruction.get<program::ParticipantConditional>()) ||
+        rows(instruction.get<program::ParticipantConditional>()))
+      return true;
     if (auto *loop = instruction.get<program::For>()) {
       if (!loop->carried.empty() && recordDepth + 2 >= 64)
         return true;

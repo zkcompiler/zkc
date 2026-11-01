@@ -386,7 +386,7 @@ impl Decoder<'_> {
                     Instruction::Conditional {
                         site: name(&a[1])?,
                         condition: name(&a[2])?,
-                        captures: names(&a[3])?,
+                        captures: pairs(&a[3])?,
                         then_body: self.body(&a[4], depth + 1)?,
                         else_body: self.body(&a[5], depth + 1)?,
                         outputs: names(&a[6])?,
@@ -409,7 +409,7 @@ impl Decoder<'_> {
                     Instruction::Match {
                         site: name(&a[1])?,
                         input: name(&a[2])?,
-                        captures: names(&a[3])?,
+                        captures: pairs(&a[3])?,
                         arms,
                         outputs: names(&a[5])?,
                     }

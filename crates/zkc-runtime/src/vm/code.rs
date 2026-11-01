@@ -449,12 +449,15 @@ pub(crate) struct ParticipantArm {
     pub payload: Vec<String>,
     pub body: Body,
 }
+/// Participant control binds each distinct region formal to its parent value
+/// as `(local, parent)`. A Copy parent may repeat; every formal keeps its own
+/// storage binding.
 #[derive(Clone, Debug)]
 pub(crate) enum Instruction {
     Conditional {
         site: String,
         condition: String,
-        captures: Vec<String>,
+        captures: Vec<(String, String)>,
         then_body: Body,
         else_body: Body,
         outputs: Vec<String>,
@@ -462,7 +465,7 @@ pub(crate) enum Instruction {
     Match {
         site: String,
         input: String,
-        captures: Vec<String>,
+        captures: Vec<(String, String)>,
         arms: Vec<ParticipantArm>,
         outputs: Vec<String>,
     },

@@ -255,7 +255,11 @@ class ExecutionModelReader {
           fail("interactive-branch-alternatives");
           return {};
         }
-        auto captured = names(op->getOperands().drop_front(), env);
+        // Each arm formal has its own storage binding even when several Copy
+        // captures reference the same parent value, as in participant loops.
+        protocol::Assignments captured;
+        for (auto &parent : names(op->getOperands().drop_front(), env))
+          captured.emplace_back(fresh(), std::move(parent));
         std::vector<program::MatchArm> arms;
         for (auto [index, region] : enumerate(op->getRegions())) {
           auto label = dyn_cast<StringAttr>(alternatives[index]);
@@ -290,9 +294,9 @@ class ExecutionModelReader {
             nested[argument] = name;
             bindings.push_back(std::move(name));
           }
-          for (auto [argument, name] :
+          for (auto [argument, binding] :
                zip(inner.getArguments().drop_front(payload.size()), captured))
-            nested[argument] = name;
+            nested[argument] = binding.first;
           arms.push_back(
               {label.getValue().str(), std::move(bindings),
                body(inner, std::move(nested), op->getResultTypes())});
@@ -300,15 +304,15 @@ class ExecutionModelReader {
         auto selector = name(op->getOperand(0), env);
         auto joined = results(op, env);
         if (boolean)
-          out.push_back({site, program::Conditional{std::move(selector),
-                                                    std::move(captured),
-                                                    std::move(arms[0].body),
-                                                    std::move(arms[1].body),
-                                                    std::move(joined)}});
-        else
           out.push_back(
-              {site, program::Match{std::move(selector), std::move(captured),
-                                    std::move(arms), std::move(joined)}});
+              {site, program::ParticipantConditional{
+                         std::move(selector), std::move(captured),
+                         std::move(arms[0].body), std::move(arms[1].body),
+                         std::move(joined)}});
+        else
+          out.push_back({site, program::ParticipantMatch{
+                                   std::move(selector), std::move(captured),
+                                   std::move(arms), std::move(joined)}});
       } else if (auto loop = dyn_cast<zkc::protocol_ir::ProtocolLoopOp>(op)) {
         if (!attributes(op,
                         {"site", "carried", "count", "parameter", "maximum"}) ||

@@ -156,16 +156,18 @@ Ring parameters are rejected. The compiler checks source correspondence and
 the native consumer independently admits the actual schedule; native admission
 does not establish a Lean interpretation or source-to-execution theorem.
 
-### Participant-loop capture bindings
+### Participant control capture bindings
 
-Participant `loop` captures in `zkc.program/0` are ordered
-`[local_name, parent_name]` pairs. This preserves distinct Copy formals that
-refer to one parent value, including their storage accounting. The compiler,
+Participant `loop`, `if` and `match` captures in `zkc.program/0` are ordered
+`[local_name, parent_name]` pairs. Expanding protocol applications into
+participant bodies can bind two formals to one parent value; the pairs preserve
+those distinct Copy formals and their storage accounting. The compiler,
 independent artifact checker, native decoder, interpreter and proof admission
-readers use this form together. The old string list is rejected; local numeric
-control keeps its existing grammar. See the
-[byte-language change](formats/program-bytes.md#participant-bodies). This is a
-version-0 schema replacement, not a compatibility profile. Independent formal
+readers use this form together, decoding `if` and `match` by body kind. A
+participant string list is rejected; local numeric control keeps its name lists,
+because scoped local regions canonicalize aliased captures before emission. See
+the [byte-language change](formats/program-bytes.md#participant-bodies). This is
+a version-0 schema replacement, not a compatibility profile. Independent formal
 reader adaptation remains separate.
 
 ### Foundation interfaces

@@ -700,7 +700,11 @@ impl<B: Backend> Runner<B> {
                 }
                 _ => return Err(RuntimeError::WrongAction),
             };
-            values.extend(self.values(captures));
+            let parents = captures
+                .iter()
+                .map(|(_, parent)| parent.clone())
+                .collect::<Vec<_>>();
+            values.extend(self.values(&parents));
             let mut child = origin.clone();
             child.path.push(PathElement::Branch {
                 site: site.into(),

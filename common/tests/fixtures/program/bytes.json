@@ -279,7 +279,7 @@
     {
       "name": "participant_selected_if",
       "admitted": true,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "dormant_unbound",
@@ -314,7 +314,27 @@
     {
       "name": "participant_selected_match",
       "admitted": true,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_selected_if_copy_aliases",
+      "admitted": true,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"first\",\"x\"],[\"second\",\"x\"]],[[\"yield\",[\"first\"]]],[[\"yield\",[\"second\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_selected_if_name_captures",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_selected_if_repeated_formal",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"first\",\"x\"],[\"first\",\"x\"]],[[\"yield\",[\"first\"]]],[[\"yield\",[\"first\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "participant_selected_if_malformed_capture",
+      "admitted": false,
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"first\",\"x\",\"extra\"]],[[\"yield\",[\"first\"]]],[[\"yield\",[\"first\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_dormant_payload_leak",

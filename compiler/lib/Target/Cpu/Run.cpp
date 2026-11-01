@@ -149,9 +149,11 @@ class Schedule {
             return e;
           auto instruction = next(*index);
           auto conditional =
-              instruction ? instruction->get<program::Conditional>() : nullptr;
-          auto match =
-              instruction ? instruction->get<program::Match>() : nullptr;
+              instruction ? instruction->get<program::ParticipantConditional>()
+                          : nullptr;
+          auto match = instruction
+                           ? instruction->get<program::ParticipantMatch>()
+                           : nullptr;
           if ((!conditional && !match) ||
               instruction->site != a.getAs<StringAttr>("site").getValue() ||
               armMaps.size() != (conditional ? 2 : match->arms.size()))

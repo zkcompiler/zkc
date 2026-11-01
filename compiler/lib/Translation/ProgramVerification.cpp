@@ -21,8 +21,8 @@ class ArtifactCorrespondence {
   struct Environment {
     llvm::DenseMap<Value, std::string> values;
     llvm::StringSet<> names;
-    bool bind(Value value, StringRef name, bool capture = false) {
-      if (name.empty() || (!names.insert(name).second && !capture))
+    bool bind(Value value, StringRef name) {
+      if (name.empty() || !names.insert(name).second)
         return false;
       values[value] = name.str();
       return true;
@@ -107,12 +107,14 @@ class ArtifactCorrespondence {
         return false;
     return true;
   }
-  bool captures(ValueRange arguments, ArrayRef<std::string> names,
+  // Every capture row names a distinct arm formal, even when several rows
+  // share one parent value.
+  bool captures(ValueRange arguments, ArrayRef<std::string> formals,
                 Environment &environment) {
-    if (arguments.size() != names.size())
+    if (arguments.size() != formals.size())
       return false;
-    for (auto [argument, name] : zip(arguments, names))
-      if (!charge() || !environment.bind(argument, name, true))
+    for (auto [argument, formal] : zip(arguments, formals))
+      if (!charge() || !environment.bind(argument, formal))
         return false;
     return true;
   }
@@ -164,15 +166,16 @@ class ArtifactCorrespondence {
             !environment.inputs(op.getOperands().drop_front(), r->values) ||
             !outputs(r->continuations))
           return false;
-      } else if (record.get<program::Conditional>() ||
-                 record.get<program::Match>()) {
+      } else if (record.get<program::ParticipantConditional>() ||
+                 record.get<program::ParticipantMatch>()) {
         if (op.getName().getStringRef() != "protocol.participant_branch")
           return false;
-        program::Names alternatives, captured, joined;
+        program::Names alternatives, joined;
+        protocol::Assignments captured;
         std::string selector;
         SmallVector<const program::Body *> bodies;
         SmallVector<program::Names> payloads;
-        if (auto branch = record.get<program::Conditional>()) {
+        if (auto branch = record.get<program::ParticipantConditional>()) {
           selector = branch->condition;
           captured = branch->captures;
           joined = branch->outputs;
@@ -180,7 +183,7 @@ class ArtifactCorrespondence {
           bodies = {&branch->thenBody, &branch->elseBody};
           payloads.resize(2);
         } else {
-          const auto &match = *record.get<program::Match>();
+          const auto &match = *record.get<program::ParticipantMatch>();
           selector = match.input;
           captured = match.captures;
           joined = match.outputs;
@@ -190,12 +193,17 @@ class ArtifactCorrespondence {
             payloads.push_back(arm.payload);
           }
         }
+        program::Names parents, formals;
+        for (const auto &[formal, parent] : captured) {
+          formals.push_back(formal);
+          parents.push_back(parent);
+        }
         if (!strings(op.getAttrOfType<ArrayAttr>("alternatives"),
                      alternatives) ||
             op.getNumRegions() != bodies.size() ||
             op.getNumOperands() != 1 + captured.size() ||
             !environment.inputs(op.getOperands().take_front(), {selector}) ||
-            !environment.inputs(op.getOperands().drop_front(), captured))
+            !environment.inputs(op.getOperands().drop_front(), parents))
           return false;
         for (auto [index, region] : enumerate(op.getRegions())) {
           if (!llvm::hasSingleElement(region))
@@ -209,7 +217,7 @@ class ArtifactCorrespondence {
                zip(arm.getArguments().take_front(payload.size()), payload))
             if (!charge() || !inner.bind(argument, name))
               return false;
-          if (!captures(arm.getArguments().drop_front(payload.size()), captured,
+          if (!captures(arm.getArguments().drop_front(payload.size()), formals,
                         inner) ||
               !body(arm, *bodies[index], std::move(inner), depth + 1))
             return false;

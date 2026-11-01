@@ -12,7 +12,11 @@ to EVM word/slice operations, Yul and pinned solc bytecode.
 
 Registered `protocol.branch`, `protocol.participant_branch` and `data.branch`
 retain closed typed arms, captures and selected yields. Native admission checks
-all arms, exact role containment and affine usage. Bounded interaction edges,
+all arms, exact role containment and affine usage. Participant `if` and `match`
+records bind every capture as an explicit `[local, parent]` row, as participant
+loops do, so Copy captures aliased by expanded applications keep distinct
+formals and storage; the C++ and Rust byte readers share the
+[program byte controls](../common/tests/fixtures/program/bytes.json). Bounded interaction edges,
 resource-origin joins, common-input requirement derivation, participant
 projection and actual-candidate comparison consume the registered forms.
 Participant mathematics outlining and its independent reader recurse through

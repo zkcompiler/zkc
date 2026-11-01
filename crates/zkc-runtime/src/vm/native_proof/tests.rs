@@ -1845,7 +1845,7 @@ fn selected_participant_requests_refuse_before_codec_or_message_flattening() {
             "if",
             "choice",
             "public",
-            ["candidate"],
+            [["candidate", "candidate"]],
             [send, ["yield", []]],
             [["yield", []]],
             []

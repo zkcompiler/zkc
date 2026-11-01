@@ -16,6 +16,9 @@ class Structure {
   size_t nodes = 0;
   bool projected = false;
   bool nativeIR = false;
+  // Selected-control tags share names across body kinds but differ in their
+  // capture field. A record is serializable only within its own body kind.
+  bool participantBody = false;
 
   void fail(StringRef code, StringRef reason = {}) {
     if (problem.empty()) {
@@ -82,6 +85,8 @@ class Structure {
       return fields({text(p.first), text(p.second)});
     });
   }
+  size_t captures(const Names &values) { return names(values); }
+  size_t captures(const protocol::Assignments &values) { return pairs(values); }
   size_t parameters(const std::vector<Parameter> &values) {
     return list(values, [&](const auto &p) {
       return fields({text(p.name), text(p.type)});
@@ -144,9 +149,12 @@ class Structure {
               return fields({tag, text(i.site), text(op.type),
                              text(op.alternative), names(op.payload),
                              text(op.output)});
-            else if constexpr (std::is_same_v<T, Match>)
+            else if constexpr (std::is_same_v<T, Match> ||
+                               std::is_same_v<T, ParticipantMatch>) {
+              if (participantBody != std::is_same_v<T, ParticipantMatch>)
+                fail("source-model-shape");
               return fields({tag, text(i.site), text(op.input),
-                             names(op.captures),
+                             captures(op.captures),
                              list(op.arms,
                                   [&](const MatchArm &arm) {
                                     return fields({text(arm.alternative),
@@ -154,16 +162,21 @@ class Structure {
                                                    body(arm.body, depth + 1)});
                                   }),
                              names(op.outputs)});
-            else if constexpr (std::is_same_v<T, Conditional>)
+            } else if constexpr (std::is_same_v<T, Conditional> ||
+                                 std::is_same_v<T, ParticipantConditional>) {
+              if (participantBody != std::is_same_v<T, ParticipantConditional>)
+                fail("source-model-shape");
               return fields({tag, text(i.site), text(op.condition),
-                             names(op.captures), body(op.thenBody, depth + 1),
+                             captures(op.captures),
+                             body(op.thenBody, depth + 1),
                              body(op.elseBody, depth + 1), names(op.outputs)});
-            else if constexpr (std::is_same_v<T, For>) {
+            } else if constexpr (std::is_same_v<T, For>) {
               return fields({tag, text(i.site), text(op.induction),
                              text(op.lower), text(op.upper), pairs(op.carried),
                              names(op.captures), body(op.body, depth + 1),
                              names(op.outputs)});
             } else {
+              static_assert(std::is_same_v<T, Loop>);
               if (!projected || op.count.maximum > 1048576)
                 fail("interactive-loop-count");
               size_t count = fields({text("value"), text(op.count.value),
@@ -213,10 +226,12 @@ class Structure {
          list(m.functions, [&](const auto &f) { return function(f); }),
          list(m.participants,
               [&](const Participant &p) {
+                participantBody = true;
                 auto bytes =
                     fields({text("participant"), text(p.name), text(p.instance),
                             text(p.role), parameters(p.arguments),
                             names(p.results), body(p.body)});
+                participantBody = false;
                 bytes = add(bytes,
                             1 + list(p.services, [&](const ServicePort &port) {
                               return fields(

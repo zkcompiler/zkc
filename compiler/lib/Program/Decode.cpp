@@ -77,21 +77,25 @@ class Decoder {
       return p ? Parameter{string((*p)[0]), string((*p)[1])} : Parameter{};
     });
   }
-  Body body(const V &v, unsigned depth = 0) {
+  // Local and participant bodies are distinct closed grammars. Their shared
+  // selected-control tags differ in the capture field, so a reader decodes
+  // them by body kind and never by guessing the field's shape.
+  enum class BodyKind { Local, Participant };
+  Body body(const V &v, BodyKind kind, unsigned depth = 0) {
     if (depth > 64) {
       fail("interactive-body");
       return {};
     }
-    return list(v, [&](const V &x) { return instruction(x, depth); });
+    return list(v, [&](const V &x) { return instruction(x, kind, depth); });
   }
   Body functionBody(const V &v) {
     if (!v.getAsArray()) {
       fail("interactive-external-body");
       return {};
     }
-    return body(v);
+    return body(v, BodyKind::Local);
   }
-  Instruction instruction(const V &v, unsigned depth) {
+  Instruction instruction(const V &v, BodyKind kind, unsigned depth) {
     Instruction out;
 
     const auto *r = array(v);
@@ -164,33 +168,47 @@ class Decoder {
         out.value = VariantConstruct{string((*r)[2]), string((*r)[3]),
                                      names((*r)[4]), string((*r)[5])};
     } else if (tag == "match") {
-      if (fields(6, "local-match-shape")) {
-        Match match;
-        match.input = string((*r)[2]);
-        match.captures = names((*r)[3]);
-        match.arms = list((*r)[4], [&](const V &v) {
-          MatchArm arm;
-          if (const auto *a = array(v, 3, "local-match-arm")) {
-            arm.alternative = string((*a)[0]);
-            arm.payload = names((*a)[1]);
-            arm.body = body((*a)[2], depth + 1);
-          }
-          return arm;
-        });
-        match.outputs = names((*r)[5]);
-        out.value = std::move(match);
+      bool participant = kind == BodyKind::Participant;
+      if (fields(6, participant ? "interactive-match-shape"
+                                : "local-match-shape")) {
+        auto arms = [&] {
+          return list((*r)[4], [&](const V &v) {
+            MatchArm arm;
+            if (const auto *a = array(v, 3, "local-match-arm")) {
+              arm.alternative = string((*a)[0]);
+              arm.payload = names((*a)[1]);
+              arm.body = body((*a)[2], kind, depth + 1);
+            }
+            return arm;
+          });
+        };
+        // Braced initialization keeps field order, so the first reported
+        // problem is the first malformed field.
+        if (participant)
+          out.value = ParticipantMatch{string((*r)[2]), pairs((*r)[3]), arms(),
+                                       names((*r)[5])};
+        else
+          out.value =
+              Match{string((*r)[2]), names((*r)[3]), arms(), names((*r)[5])};
       }
     } else if (tag == "if") {
-      if (fields(7, "local-if-shape"))
-        out.value = Conditional{string((*r)[2]), names((*r)[3]),
-                                body((*r)[4], depth + 1),
-                                body((*r)[5], depth + 1), names((*r)[6])};
+      bool participant = kind == BodyKind::Participant;
+      if (fields(7, participant ? "interactive-if-shape" : "local-if-shape")) {
+        if (participant)
+          out.value = ParticipantConditional{
+              string((*r)[2]), pairs((*r)[3]), body((*r)[4], kind, depth + 1),
+              body((*r)[5], kind, depth + 1), names((*r)[6])};
+        else
+          out.value = Conditional{
+              string((*r)[2]), names((*r)[3]), body((*r)[4], kind, depth + 1),
+              body((*r)[5], kind, depth + 1), names((*r)[6])};
+      }
     } else if (tag == "for" || (tag == "for_while")) {
       if (fields(9, "local-for-shape"))
-        out.value =
-            For{string((*r)[2]), string((*r)[3]),   string((*r)[4]),
-                pairs((*r)[5]),  names((*r)[6]),    body((*r)[7], depth + 1),
-                names((*r)[8]),  tag == "for_while"};
+        out.value = For{string((*r)[2]), string((*r)[3]),
+                        string((*r)[4]), pairs((*r)[5]),
+                        names((*r)[6]),  body((*r)[7], kind, depth + 1),
+                        names((*r)[8]),  tag == "for_while"};
     } else if (tag == "loop") {
       if (fields(7, "interactive-loop")) {
         Loop loop;
@@ -211,7 +229,7 @@ class Decoder {
         }
         loop.carried = pairs((*r)[3]);
         loop.captures = pairs((*r)[4]);
-        loop.body = body((*r)[5], depth + 1);
+        loop.body = body((*r)[5], kind, depth + 1);
         loop.outputs = names((*r)[6]);
         out.value = std::move(loop);
       }
@@ -266,7 +284,7 @@ class Decoder {
         p.role = string((*r)[3]);
         p.arguments = this->parameters((*r)[4]);
         p.results = names((*r)[5]);
-        p.body = body((*r)[6]);
+        p.body = body((*r)[6], BodyKind::Participant);
         p.services = list((*r)[7], [&](const V &v) {
           ServicePort port;
           if (const auto *row = array(v, 3)) {

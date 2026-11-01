@@ -1106,13 +1106,17 @@ fn rename(op: &mut Instruction, names: &Names) {
             ..
         } => {
             *condition = mapped(names, condition);
-            map(captures);
+            for (_, parent) in captures {
+                *parent = mapped(names, parent);
+            }
         }
         Instruction::Match {
             input, captures, ..
         } => {
             *input = mapped(names, input);
-            map(captures);
+            for (_, parent) in captures {
+                *parent = mapped(names, parent);
+            }
         }
         Instruction::Local { inputs, .. } | Instruction::Query { inputs, .. } => map(inputs),
         Instruction::Send { input, .. } => *input = mapped(names, input),

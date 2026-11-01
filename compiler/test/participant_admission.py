@@ -83,6 +83,50 @@ with case("copy aliases remain distinct native loop formals"):
     assert captures[0][1] == captures[1][1]
     commands.verified(loop.replace('site="right"', 'site="left"'), "interactive-site")
 
+def branch(captures, types, then_body, else_body="", alternatives='["then", "else"]'):
+    formals = ", ".join(f"%{name}: {ty}" for name, ty in types)
+    return f'''"protocol.participant_branch"(%c, {captures}) ({{
+      ^then({formals}):
+        {then_body}
+        "protocol.yield"() : () -> ()
+      }}, {{
+      ^else({formals}):
+        {else_body}
+        "protocol.yield"() : () -> ()
+      }}) {{site="choice", alternatives={alternatives}}}
+        : (i1, {", ".join(ty for _, ty in types)}) -> ()'''
+
+
+with case("copy aliases remain distinct native branch formals"):
+    aliased = module(participant(branch("%x, %x", [("left", FIELD), ("right", FIELD)], f'''
+        "protocol.send"(%left) {{site="left", schema="message", peer="Q"}} : ({FIELD}) -> ()
+        "protocol.send"(%right) {{site="right", schema="message", peer="Q"}} : ({FIELD}) -> ()''') + f'''
+      "protocol.finish"(%x) : ({FIELD}) -> ()''', [("c", "i1"), ("x", FIELD)], [FIELD]))
+    commands.verified(aliased)
+    model = export(aliased)
+    record = model[3][0][6][0]
+    assert record[0] == "if"
+    captures = record[3]
+    assert len(captures) == 2 and captures[0][0] != captures[1][0]
+    assert captures[0][1] == captures[1][1] == model[3][0][4][1][0]
+    commands.verified(aliased.replace('site="right"', 'site="left"'), "interactive-site")
+
+    # Capture rows are exact: a legacy name list, a repeated formal and a
+    # malformed row are refused by the independent byte reader.
+    for title, rows, reason in [
+        ("legacy name list", [captures[0][1], captures[1][1]], "interactive-shape"),
+        ("repeated formal", [captures[0], captures[0]], "interactive-branch-capture"),
+        ("malformed row", [captures[0] + ["extra"], captures[1]], "interactive-shape"),
+    ]:
+        changed = json.loads(json.dumps(model))
+        changed[3][0][6][0][3] = rows
+        canonical_program(commands, json.dumps(changed), refuses=reason)
+
+with case("branch cannot capture an affine capability twice"):
+    twice = module(participant(branch("%rng, %rng", [("left", RNG), ("right", RNG)], "") + '''
+      "protocol.finish"() : () -> ()''', [("c", "i1"), ("rng", RNG)]))
+    commands.verified(twice, "interactive-resource-reuse")
+
 with case("loop invariant cannot borrow an affine capability"):
     bad = module(participant(f'''
       "protocol.loop"(%n, %rng) ({{

@@ -1098,18 +1098,29 @@ impl Check<'_> {
             .chain(self.services.iter().map(|p| p.name.clone()))
             .collect()
     }
-    fn branch_captures(&self, env: &mut Env, captures: &[String]) -> Result<(Env, FrameInputs)> {
-        let types = captures
+    /// Bind each distinct arm formal to its parent. Ordinary operand use admits
+    /// a repeated parent only for duplicable values; every formal keeps its own
+    /// port and storage binding.
+    fn branch_captures(
+        &self,
+        env: &mut Env,
+        captures: &[(String, String)],
+    ) -> Result<(Env, FrameInputs)> {
+        let parents = captures
+            .iter()
+            .map(|(_, parent)| parent.clone())
+            .collect::<Vec<_>>();
+        let types = parents
             .iter()
             .map(|n| lookup(env, n))
             .collect::<Result<Vec<_>>>()?;
-        operands(env, captures, &types)?;
+        operands(env, &parents, &types)?;
         let mut child = Env::new();
         let mut ports = Vec::new();
-        for (name, ty) in captures.iter().zip(types) {
+        for ((local, _), ty) in captures.iter().zip(types) {
             if child
                 .insert(
-                    name.clone(),
+                    local.clone(),
                     Binding {
                         ty: ty.clone(),
                         available: true,
@@ -1119,7 +1130,7 @@ impl Check<'_> {
             {
                 return Err(err(ErrorCode::Capture, "duplicate/overlapping capture"));
             }
-            ports.push((name.clone(), ty));
+            ports.push((local.clone(), ty));
         }
         Ok((child, ports.into()))
     }

@@ -287,7 +287,7 @@ impl Program {
                 } => {
                     let child = captures
                         .iter()
-                        .map(|n| (n.clone(), env[n].clone()))
+                        .map(|(local, parent)| (local.clone(), env[parent].clone()))
                         .collect::<BTreeMap<_, _>>();
                     let start = actions.len();
                     actions.push(ProgramAction::Branch {
@@ -331,7 +331,7 @@ impl Program {
                     for (i, arm) in arms.iter().enumerate() {
                         let mut child = captures
                             .iter()
-                            .map(|n| (n.clone(), env[n].clone()))
+                            .map(|(local, parent)| (local.clone(), env[parent].clone()))
                             .collect::<BTreeMap<_, _>>();
                         child.extend(
                             arm.payload.iter().cloned().zip(

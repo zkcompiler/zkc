@@ -710,7 +710,7 @@ fn participant_branch_transfers_exact_resources_and_cleanup_outcomes() {
             "if",
             "selected",
             "c",
-            ["c", "r", "s"],
+            [["c", "c"], ["r", "r"], ["s", "s"]],
             [["yield", ["c", "s", "r"]]],
             [["yield", ["c", "r", "s"]]],
             ["b", "first", "second"]

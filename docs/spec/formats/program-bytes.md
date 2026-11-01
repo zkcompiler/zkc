@@ -129,8 +129,8 @@ under its admitted contract; that does not introduce another instruction tag.
 ["loop", site, Count, list(Carried), list(Capture),
  ParticipantBody, list(output)]
 ["return_if", site, condition, list(value), list(continuation)]
-["if", site, condition, list(capture), ParticipantBody, ParticipantBody, list(output)]
-["match", site, input, list(capture), list(ParticipantArm), list(output)]
+["if", site, condition, list(Capture), ParticipantBody, ParticipantBody, list(output)]
+["match", site, input, list(Capture), list(ParticipantArm), list(output)]
 ["yield", list(value)]
 ["return", list(value)]
 
@@ -152,9 +152,9 @@ Boolean literals, `for`, `release` or direct `stop`. Local bodies
 cannot contain `send`, `receive`, `query`, `loop` or `return_if`. Composition,
 parameter and family-selector records are absent from both closed grammars.
 
-Participant `if` and `match` use the same closed capture, exhaustive alternative,
-active payload and typed join rules as Local control. Every arm must admit under
-participant permissions. Only the selected arm creates a frame, executes actions,
+Participant `if` and `match` use the exhaustive alternative, active payload and
+typed join rules of Local control, with the explicit capture bindings below.
+Every arm must admit under participant permissions. Only the selected arm creates a frame, executes actions,
 charges execution work or yields. Immutable service roots remain participant
 interface metadata and cannot be manufactured, returned or selected as data.
 An explicit participant branch occurrence uses `["branch", site, alternative]`
@@ -162,22 +162,29 @@ in the runtime origin, distinct from Local control and loop iteration frames.
 Generic Program admission establishes no source common-input provenance. The
 [joint Host](../runtime/joint.md) compares reached selectors before arm work;
 independent execution establishes no agreement with peers.
-Participant-loop captures use explicit bindings:
+Every participant control record (`loop`, `if` and `match`) binds its captures
+explicitly:
 
 ```text
 Capture := [local_name, parent_name]
 ```
 
-Each local name is a distinct body formal, disjoint from the induction and
-carried formals. Parent names resolve in the enclosing environment and may
-repeat only for Copy types. Every row retains one formal and its owned-storage
-charge; two aliases are not deduplicated. A body uses the local name. Capture
-order remains significant. This change is confined to participant `loop`;
-local structured instructions retain their specified capture lists.
+Each local name is a distinct formal of the loop body or of every arm, disjoint
+from the induction, carried formals and arm payload bindings. Parent names
+resolve in the enclosing environment and may repeat only for Copy types. Every
+row retains one formal and its owned-storage charge; two aliases are not
+deduplicated. A body uses the local name. Capture order remains significant.
+Expanding protocol applications into participant bodies can make two formals
+share one parent, so the binding cannot be recovered from parent names.
+
+Local structured instructions keep their name lists. Scoped local regions
+canonicalize aliased captures before emission, so a local capture list is
+exact. `if` and `match` therefore have different capture fields in the two
+body grammars; a reader decodes them by body kind and never guesses the shape.
 
 The version remains `zkc.program/0`. Producers, independent readers and fixtures
-change together. The previous participant-loop string capture list is refused;
-there is no compatibility decoder. Empty capture lists remain empty.
+change together. A participant string capture list is refused; there is no
+compatibility decoder. Empty capture lists remain empty.
 
 ## Bounds and admission
 
