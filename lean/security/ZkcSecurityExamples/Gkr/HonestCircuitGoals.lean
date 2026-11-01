@@ -26,14 +26,10 @@ helper_presentation Layer inputs [addWeights, mulWeights, below, width]
 helper_presentation Traversal inputs [addWeights, mulWeights, inputValues, layers, selector, width, layerIndex]
   outputs [values] := GkrSourceBodies.helper34Body
 
-named_values StepArguments [position, values, addWeights, mulWeights, width, left, right] :=
-  layerCallback_selection.callback.inputs
 named_values LayerState [values] := layerCallback_selection.callback.state
 named_values LayerCaptures [addWeights, mulWeights, width, left, right] :=
   layerCallback_selection.callback.captures
-named_values LayerArguments [addWeights, mulWeights, below, width] := GkrSourceBodies.helper33Helper.inputs
-named_values ValuesArguments [addWeights, mulWeights, inputValues, layers, selector, width, layerIndex] :=
-  GkrSourceBodies.helper34Helper.inputs
+
 named_values BlockArguments [source, position, width] := GkrSourceBodies.selectBlockHelper.inputs
 named_values BlockResult [values] := GkrSourceBodies.selectBlockHelper.outputs
 named_values PowerResult [count] := GkrSourceBodies.helper18Helper.outputs

@@ -141,14 +141,14 @@ theorem values_below {width : Nat} (add mul inputValues : List F) (layers select
     (small : width + width + width + selector < 64)
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
     invoke (helpers (G := G)) GkrSourceBodies.helper34Helper
-      (Goals.ValuesArguments.pack (Value := assignment F G)
+      (Goals.Traversal.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, inputValues, layers, selector, width, layerIndex }) =
       .done (Goals.Traversal.encode (ringModel F G)
         ⟨GkrRoundsLayout.encode (circuit.wires (layers - layerIndex - 1) (layerIndex + 1))⟩) := by
   have indexBound : layerIndex < indexLimit := by omega
   have remainingBound : layers - layerIndex < indexLimit := by omega
   have countBound : layers - layerIndex - 1 < indexLimit := by omega
-  dsimp only [Goals.ValuesArguments.pack]
+  dsimp only [Goals.Traversal.Inputs.pack]
   rw [circuit_bodies.values.invoke unit.linked]
   simp only [meaning]
   rw [Evaluation.denote_meaning_eq_meaningOn, Goals.valuesProcess_equation]

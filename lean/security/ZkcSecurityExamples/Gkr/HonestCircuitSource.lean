@@ -26,7 +26,7 @@ theorem layer_plain {width : Nat} (add mul below : List F)
     (dv : ofList? width below = some v) (small : width + width + width < 64) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper33Helper
-      (Goals.LayerArguments.pack (Value := assignment F G)
+      (Goals.Layer.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, below, width }) =
       .done (Goals.Layer.encode (ringModel F G)
         ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩) := by
@@ -45,7 +45,7 @@ theorem values_below_plain {width : Nat} (add mul inputValues : List F) (layers 
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper34Helper
-      (Goals.ValuesArguments.pack (Value := assignment F G)
+      (Goals.Traversal.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, inputValues := inputValues,
           layers, selector, width, layerIndex }) =
       .done (Goals.Traversal.encode (ringModel F G)
@@ -66,7 +66,7 @@ theorem values_below_run {width : Nat} {H E : Type} (add mul inputValues : List 
     (handler : PIR.Handler (participantInterface F G) H E) (initial : H) :
     (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper34Helper
-      (Goals.ValuesArguments.pack (Value := assignment F G)
+      (Goals.Traversal.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, inputValues := inputValues,
           layers, selector, width, layerIndex })).run handler initial =
       ⟨.returned (Goals.Traversal.encode (ringModel F G)
@@ -82,7 +82,7 @@ theorem layer_component {width : Nat} (add mul below : List F)
     (dv : ofList? width below = some v) (small : width + width + width < 64) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
       GkrSourceBodies.helper33Helper
-      (Goals.LayerArguments.pack (Value := Component (assignment F G))
+      (Goals.Layer.Inputs.pack (Value := Component (assignment F G))
         { addWeights := some add, mulWeights := some mul, below := some below, width := some width }) =
       .done (Goals.Layer.encode (ringModel F G)
         ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩).present := by
@@ -99,7 +99,7 @@ theorem values_below_component {width : Nat} (add mul inputValues : List F) (lay
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
       GkrSourceBodies.helper34Helper
-      (Goals.ValuesArguments.pack (Value := Component (assignment F G))
+      (Goals.Traversal.Inputs.pack (Value := Component (assignment F G))
         { addWeights := some add, mulWeights := some mul, inputValues := some inputValues,
           layers := some layers, selector := some selector, width := some width,
           layerIndex := some layerIndex }) =

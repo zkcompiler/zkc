@@ -42,7 +42,7 @@ theorem circuit_bodies : Goals.Bodies unit.definitions := by
 /-- The source gate callback is the independent gate formula. -/
 theorem gate_equation (add mul left right : F) :
     invoke (helpers (G := G)) GkrSourceBodies.helper31Helper
-      ((GkrGateGoals.ValueArguments.pack (Value := assignment F G))
+      ((GkrGateGoals.Value.Inputs.pack (Value := assignment F G))
         { addWeight := add, mulWeight := mul, left, right }) =
         .done (GkrGateGoals.Value.encode (ringModel F G)
           ⟨Zkc.Protocols.AlgebraicRounds.Gate.value add mul left right⟩) := by
@@ -59,7 +59,7 @@ theorem gate_value_dependency :
     (F := F) (G := G) (helper := GkrSourceBodies.helper31Helper)
     unit.definitions unit.linked gate_bodies.value
   intro arguments
-  rw [← GkrGateGoals.ValueArguments.pack_unpack arguments]
+  rw [← GkrGateGoals.Value.Inputs.pack_unpack arguments]
   trivial
 
 theorem gate_realization_dependency :
@@ -69,7 +69,7 @@ theorem gate_realization_dependency :
     (F := F) (G := G) (helper := GkrSourceBodies.scopedHelper42Helper)
     unit.definitions unit.linked gate_bodies.realization
   intro arguments
-  rw [← GkrGateGoals.ValueArguments.pack_unpack arguments]
+  rw [← GkrGateGoals.Value.Inputs.pack_unpack arguments]
   exact gate_value_dependency
 
 abbrev gateCollection : CollectSpec := GkrGateGoals.collection
@@ -77,7 +77,7 @@ abbrev gateCollection : CollectSpec := GkrGateGoals.collection
 /-- The ordered callback retains every input vector in its actual ABI. -/
 theorem gate_callback (a m l r : F) (add mul left right : List F) :
     invoke (helpers (G := G)) gateCollection.bodyHelper
-      (GkrGateGoals.CallbackArguments.pack (Value := assignment F G)
+      (GkrGateGoals.Callback.Inputs.pack (Value := assignment F G)
         { addWeight := a, mulWeight := m, left := l, right := r,
           addWeights := add, mulWeights := mul, lefts := left, rights := right }) =
       .done (GkrGateGoals.Callback.encode (ringModel F G)
@@ -94,7 +94,7 @@ theorem gate_callback_dependency :
     (F := F) (G := G) (helper := GkrSourceBodies.scopedHelper43Helper)
     unit.definitions unit.linked gate_bodies.callback
   intro arguments
-  rw [← GkrGateGoals.CallbackArguments.pack_unpack arguments]
+  rw [← GkrGateGoals.Callback.Inputs.pack_unpack arguments]
   exact gate_realization_dependency
 
 /-- Actual ordered domain admission and the installed complete callback law. -/
@@ -110,7 +110,7 @@ theorem gate_map_dependencies (add mul left right : List F) :
 theorem gate_map_encodes {n : Nat} (add mul left right : Table F n)
     (small : 2 ^ n < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.scopedHelper44Helper
-      (GkrGateGoals.MapArguments.pack (Value := assignment F G)
+      (GkrGateGoals.Map.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode add, mulWeights := GkrRoundsLayout.encode mul,
           lefts := GkrRoundsLayout.encode left, rights := GkrRoundsLayout.encode right }) =
       .done (GkrGateGoals.Map.encode (ringModel F G)
@@ -143,7 +143,7 @@ theorem layer_step_encodes {width : Nat} (a m : Zkc.Protocols.Gkr.Wiring F width
     (v : Table F width) (xs : List F) (position : Fin (2 ^ width))
     (small : width + width + width < 64) :
     Goals.Step.body.denote (meaning F G (helpers (G := G)))
-      (Goals.StepArguments.pack (Value := assignment F G)
+      (Goals.Step.Inputs.pack (Value := assignment F G)
         { position := position.val, values := xs, addWeights := GkrRoundsLayout.encode a,
           mulWeights := GkrRoundsLayout.encode m, width,
           left := GkrRoundsLayout.encode (GkrRoundsLayout.replicate width width v),
@@ -161,7 +161,7 @@ theorem layer_step_encodes {width : Nat} (a m : Zkc.Protocols.Gkr.Wiring F width
 theorem layer_encoded {width : Nat} (a m : Zkc.Protocols.Gkr.Wiring F width)
     (v : Table F width) (small : width + width + width < 64) :
     invoke (helpers (G := G)) GkrSourceBodies.helper33Helper
-      (Goals.LayerArguments.pack (Value := assignment F G)
+      (Goals.Layer.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode a, mulWeights := GkrRoundsLayout.encode m,
           below := GkrRoundsLayout.encode v, width }) =
       .done (Goals.Layer.encode (ringModel F G) ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩) := by
@@ -176,9 +176,9 @@ theorem layer_encodes {width : Nat} (add mul below : List F)
     (dm : ofList? (width + width + width) mul = some m)
     (dv : ofList? width below = some v) (small : width + width + width < 64) :
     invoke (helpers (G := G)) GkrSourceBodies.helper33Helper
-      (Goals.LayerArguments.pack (Value := assignment F G) { addWeights := add, mulWeights := mul, below, width }) =
+      (Goals.Layer.Inputs.pack (Value := assignment F G) { addWeights := add, mulWeights := mul, below, width }) =
         .done (Goals.Layer.encode (ringModel F G) ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩) := by
-  dsimp only [Goals.LayerArguments.pack]
+  dsimp only [Goals.Layer.Inputs.pack]
   rw [← HonestHelpers.encode_of_decodes add a da, ← HonestHelpers.encode_of_decodes mul m dm,
     ← HonestHelpers.encode_of_decodes below v dv]
   exact layer_encoded a m v small

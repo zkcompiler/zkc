@@ -22,7 +22,7 @@ private abbrev model := ringModel ℚ ℚ
 all captures, including coordinates beyond the current position. -/
 theorem complete_callback :
     Goals.Step.body.denote (Evaluation.meaningOn model SiteObservations.closed (helpers (F := ℚ) (G := ℚ)))
-      (Goals.StepArguments.pack
+      (Goals.Step.Inputs.pack
         { iteration := 0, values := [1, 0, 3, 0], position := 0,
           start := [0, 7], finish := [1, 11], count := 2 }).get =
       .done (Goals.Step.encode model
@@ -33,7 +33,7 @@ theorem complete_callback :
   norm_num [step, linePoints, shiftAux] at actual ⊢
   exact actual
 
-private def changedCallback : Region dialect Goals.StepArguments.types
+private def changedCallback : Region dialect Goals.Step.Inputs.types
     (Goals.LineState.types ++ Goals.LineCaptures.types) := .stop .abort
 
 theorem changed_callback_rejected : changedCallback ≠ Goals.Step.body := by
@@ -63,7 +63,7 @@ example : HelperCallbacks.Selected GkrSourceBodies.helper69Body none Goals.lineC
 /-- Every returned coordinate matters, even when the coefficient list is right. -/
 theorem wrong_cursor_rejected :
     Goals.Step.body.denote (Evaluation.meaningOn model SiteObservations.closed (helpers (F := ℚ) (G := ℚ)))
-      (Goals.StepArguments.pack
+      (Goals.Step.Inputs.pack
         { iteration := 0, values := [1, 0, 3, 0], position := 0,
           start := [0, 7], finish := [1, 11], count := 2 }).get ≠
       .done (Goals.Step.encode model
@@ -87,9 +87,9 @@ example : invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper86H
 /-- Strict zip refusal occurs before the scalar callback, for any table. -/
 example (table : Evaluation.MeaningsOn model.toCarriers closedInterface) :
     Goals.Slopes.body.denote (Evaluation.meaningOn model SiteObservations.closed table)
-      (Goals.SlopesArguments.pack { left := [1, 2], right := [3], delta := 4 }).get =
+      (Goals.Slopes.Inputs.pack { left := [1, 2], right := [3], delta := 4 }).get =
       .halt .refused := by
-  simp only [Goals.SlopesArguments.pack]
+  simp only [Goals.Slopes.Inputs.pack]
   rw [Goals.Slopes.equation model]
   rfl
 

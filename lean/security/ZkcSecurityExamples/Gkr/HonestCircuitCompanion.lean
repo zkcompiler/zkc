@@ -48,7 +48,7 @@ structure Dependencies (table : Meanings F G) : Prop where
       .done (Goals.RepeatResult.pack (Value := assignment F G) ⟨(List.replicate count source).flatten⟩)
   gates : ∀ {n : Nat} (add mul left right : Table F n), 2 ^ n < indexLimit →
     invoke table GkrSourceBodies.scopedHelper44Helper
-      (GkrGateGoals.MapArguments.pack (Value := assignment F G)
+      (GkrGateGoals.Map.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode add, mulWeights := GkrRoundsLayout.encode mul,
           lefts := GkrRoundsLayout.encode left, rights := GkrRoundsLayout.encode right }) =
       .done (GkrGateGoals.Map.encode (ringModel F G)
@@ -61,7 +61,7 @@ theorem step_encoded (table : Meanings F G) (dependencies : Dependencies table) 
     (v : Table F width) (xs : List F) (position : Fin (2 ^ width))
     (small : width + width + width < 64) :
     Goals.Step.body.denote (meaning F G table)
-      (Goals.StepArguments.pack (Value := assignment F G)
+      (Goals.Step.Inputs.pack (Value := assignment F G)
         { position := position.val, values := xs, addWeights := GkrRoundsLayout.encode a,
           mulWeights := GkrRoundsLayout.encode m, width,
           left := GkrRoundsLayout.encode (GkrRoundsLayout.replicate width width v),
@@ -81,7 +81,7 @@ theorem step_encoded (table : Meanings F G) (dependencies : Dependencies table) 
     simp [GkrRoundsLayout.encode, Nat.pow_add, Nat.mul_comm]
   have selectBlock_equation := dependencies.block
   dsimp only [Goals.BlockArguments.pack, Goals.BlockResult.pack] at selectBlock_equation
-  dsimp only [Goals.StepArguments.pack]
+  dsimp only [Goals.Step.Inputs.pack]
   simp only [meaning]
   rw [Evaluation.denote_meaning_eq_meaningOn, Goals.stepProcess_equation]
   dsimp only [Goals.stepProcess, Goals.stepProcess_certificate, Op.arguments, Op.results, Op.regions]
@@ -104,7 +104,7 @@ theorem step_encoded (table : Meanings F G) (dependencies : Dependencies table) 
     (fun bits => a (Quadratic.point width (vertex width position) bits))
     (fun bits => m (Quadratic.point width (vertex width position) bits))
     (GkrRoundsLayout.replicate width width v) (GkrRoundsLayout.tile width width v) pairBound
-  dsimp only [GkrGateGoals.MapArguments.pack] at mapped
+  dsimp only [GkrGateGoals.Map.Inputs.pack] at mapped
   rw [mapped]
   simp only [GkrGateGoals.Map.encode, PIR.Process.bind, Op.arguments, Op.results, Op.regions,
     SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
@@ -130,13 +130,13 @@ theorem layer_encoded_body (table : Meanings F G) (dependencies : Dependencies t
     (a m : Zkc.Protocols.Gkr.Wiring F width)
     (v : Table F width) (small : width + width + width < 64) :
     Goals.Layer.body.denote (meaning F G table)
-      (Goals.LayerArguments.pack (Value := assignment F G)
+      (Goals.Layer.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode a, mulWeights := GkrRoundsLayout.encode m,
           below := GkrRoundsLayout.encode v, width }).get =
       .done (Goals.Layer.encode (ringModel F G) ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩) := by
   have widthSmall : width < 64 := by omega
   have countBound : 2 ^ width < indexLimit := Nat.pow_lt_pow_right (by decide) widthSmall
-  dsimp only [Goals.LayerArguments.pack]
+  dsimp only [Goals.Layer.Inputs.pack]
   simp only [meaning]
   rw [Evaluation.denote_meaning_eq_meaningOn, Goals.layerProcess_equation]
   dsimp only [Goals.layerProcess, Goals.layerProcess_certificate, Op.arguments, Op.results, Op.regions]
@@ -184,7 +184,7 @@ theorem layer_encoded_body (table : Meanings F G) (dependencies : Dependencies t
   · intro i bound
     have iteration := step_encoded table dependencies a m v
       ((GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)).take i) ⟨i, bound⟩ small
-    simp only [Goals.StepArguments.pack, meaning] at iteration
+    simp only [Goals.Step.Inputs.pack, meaning] at iteration
     rw [Evaluation.denote_meaning_eq_meaningOn, Goals.stepProcess_equation] at iteration
     dsimp only [Goals.stepProcess, Goals.stepProcess_certificate] at iteration
     simp only [Evaluation.invokeCallback, Goals.LayerState.pack, Goals.LayerCaptures.pack,

@@ -31,7 +31,7 @@ theorem loop_step (index : Nat) (xs start finish : List F) (position count m : N
     (finishBound : finish.length < indexLimit) (positionBound : position + 1 < indexLimit)
     (countBound : count < indexLimit) (positive : 0 < count) :
     Goals.lineCallback.denote (Evaluation.meaningOn (ringModel F G) SiteObservations.closed (helpers (F := F) (G := G)))
-      (Goals.StepArguments.pack { iteration := index, values := xs, position, start, finish, count }).get =
+      (Goals.Step.Inputs.pack { iteration := index, values := xs, position, start, finish, count }).get =
       .done (Goals.Step.encode (ringModel F G)
         { values := step count xs (start[position]?.getD 0) (finish[position]?.getD 0),
           position := position + 1, start, finish, count }) := by
@@ -46,7 +46,7 @@ theorem loop_step (index : Nat) (xs start finish : List F) (position count m : N
           [.vector "bls12-381.fr", .vector "bls12-381.fr"])) := by
     simp only [Primitive.evaluateOn, primitiveOutcome,
       show 0 < xs.length ∧ xs.length % 2 = 0 by omega, and_self, ite_true]
-  simp only [Goals.StepArguments.pack]
+  simp only [Goals.Step.Inputs.pack]
   named_process Goals.stepProcess over F G
   rw [HonestHelpers.element_equation start position startBound positionSmall]
   named_reduce
@@ -108,7 +108,7 @@ theorem loop_invariant (values start finish : List F) (width : Nat)
   rw [step_pack (width + 1) _ _ _ (2 ^ (width - (i + 1))) (by omega) rowShape,
     ← coordinate, ← stage_succ] at reached
   simpa only [Evaluation.invokeCallback, Goals.LineState.pack, Goals.LineCaptures.pack,
-    Goals.StepArguments.pack, Goals.Step.encode, Values.append] using reached
+    Goals.Step.Inputs.pack, Goals.Step.encode, Values.append] using reached
 
 /-- Actual helper69, for all admitted cube tables and all bounded coordinate
 vectors. No premise assumes a helper or whole producer is correct. -/
@@ -138,9 +138,9 @@ theorem line_coefficients (values start finish : List F) (width : Nat)
       (Evaluation.meaningOn (ringModel F G) SiteObservations.closed (helpers (F := F) (G := G))) args.get)
     (by
       intro arguments
-      obtain ⟨view, rfl⟩ := Goals.StepArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := Goals.Step.Inputs.pack_surjective arguments
       symm
-      simp only [Goals.StepArguments.pack]
+      simp only [Goals.Step.Inputs.pack]
       named_process Goals.stepProcess over F G
       simp only [Primitive.evaluateOn, primitiveOutcome, checkedIndices,
         show 0 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,

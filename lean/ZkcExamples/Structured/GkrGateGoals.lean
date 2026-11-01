@@ -35,12 +35,6 @@ abbrev collection : CollectSpec :=
 
 named_values Item [addWeight, mulWeight, left, right] := collection.domain.items
 
-named_values ValueArguments [addWeight, mulWeight, left, right] := GkrSourceBodies.helper31Helper.inputs
-named_values CallbackArguments
-  [addWeight, mulWeight, left, right, addWeights, mulWeights, lefts, rights] :=
-  GkrSourceBodies.scopedHelper43Helper.inputs
-named_values MapArguments [addWeights, mulWeights, lefts, rights] := GkrSourceBodies.scopedHelper44Helper.inputs
-
 /-- Source selection is checked once and shared by every installed gate law. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
   value : BodyIn definitions GkrSourceBodies.helper31Helper Value.body

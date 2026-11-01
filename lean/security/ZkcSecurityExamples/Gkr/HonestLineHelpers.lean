@@ -118,10 +118,10 @@ theorem difference (high low : F) :
       .done (Goals.DifferenceWrapper.encode (ringModel F G) ⟨high - low⟩) := by
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   simpa [Companion.differenceWrapperLaw, Goals.DifferenceWrapper.law,
-    Companion.differenceWrapperReference, Goals.DifferenceWrapperArguments.pack,
+    Companion.differenceWrapperReference, Goals.DifferenceWrapper.Inputs.pack,
     Goals.DifferenceWrapper.encodeOutcome, Goals.DifferenceWrapper.encode, primitiveOutcome] using
     (scalar_laws (F := F) (G := G)).differenceWrapper
-      (Goals.DifferenceWrapperArguments.pack { high, low })
+      (Goals.DifferenceWrapper.Inputs.pack { high, low })
 
 noncomputable abbrev slopeCollection : CollectSpec := Goals.slopesSpec
 noncomputable abbrev totalCollection : CollectSpec := Goals.totalsSpec
@@ -153,10 +153,10 @@ theorem slope_map (left right : List F) (delta : F)
       change invoke (helpers (F := F) (G := G)) GkrSourceBodies.scopedHelper69Helper _ = _
       simpa [Goals.SlopesItem.pack, Goals.SlopesDomain.pack, Goals.SlopesCaptures.pack,
         Values.append, closedMeanings_eq_closedMeaningsOn, Companion.slopeCallbackLaw,
-        Goals.SlopeCallback.law, Companion.slopeCallbackReference, Goals.SlopeCallbackArguments.pack,
+        Goals.SlopeCallback.law, Companion.slopeCallbackReference, Goals.SlopeCallback.Inputs.pack,
         Goals.SlopeCallback.encodeOutcome, Goals.SlopeCallback.encode, primitiveOutcome] using
         (scalar_laws (F := F) (G := G)).slopeCallback
-          (Goals.SlopeCallbackArguments.pack { low := pair.1, high := pair.2, left, right, delta }))
+          (Goals.SlopeCallback.Inputs.pack { low := pair.1, high := pair.2, left, right, delta }))
   simp only [Goals.SlopesDomain.pack, Goals.SlopesCaptures.pack, Goals.SlopesItem.pack, Values.append] at collected
   rw [collected]
   simp only [PIR.Process.bind, Values.get, Collection.pack, List.map_zip_eq_zipWith]
@@ -177,10 +177,10 @@ theorem total_map (left right : List F)
       change invoke (helpers (F := F) (G := G)) GkrSourceBodies.scopedHelper72Helper _ = _
       simpa [Goals.TotalsItem.pack, Goals.TotalsDomain.pack,
         Values.append, closedMeanings_eq_closedMeaningsOn, Companion.totalCallbackLaw,
-        Goals.TotalCallback.law, Companion.totalCallbackReference, Goals.TotalCallbackArguments.pack,
+        Goals.TotalCallback.law, Companion.totalCallbackReference, Goals.TotalCallback.Inputs.pack,
         Goals.TotalCallback.encodeOutcome, Goals.TotalCallback.encode, primitiveOutcome] using
         (scalar_laws (F := F) (G := G)).totalCallback
-          (Goals.TotalCallbackArguments.pack { low := pair.1, high := pair.2, left, right }))
+          (Goals.TotalCallback.Inputs.pack { low := pair.1, high := pair.2, left, right }))
   simp only [Goals.TotalsDomain.pack, Goals.TotalsItem.pack, Values.append] at collected
   rw [collected]
   simp only [PIR.Process.bind, Values.get, Collection.pack, List.map_zip_eq_zipWith]

@@ -21,7 +21,7 @@ private def below : Table ℚ 0 := fun _ => 3
 /-- A scalar layer exercises both independent addition and multiplication. -/
 theorem actual_layer :
     invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper33Helper
-      (Goals.LayerArguments.pack { addWeights := [2], mulWeights := [1], below := [3], width := 0 }) =
+      (Goals.Layer.Inputs.pack { addWeights := [2], mulWeights := [1], below := [3], width := 0 }) =
       .done (Goals.Layer.encode model ⟨[21]⟩) := by
   have actual := layer_encoded (G := ℚ) add mul below (by decide +kernel)
   norm_num [add, mul, below, GkrRoundsLayout.encode, Zkc.Protocols.Gkr.layer,
@@ -32,7 +32,7 @@ theorem actual_layer :
 /-- The actual callback keeps its initial prefix and all five captures. -/
 theorem complete_callback :
     Goals.Step.body.denote (meaning ℚ ℚ (helpers (F := ℚ) (G := ℚ)))
-      (Goals.StepArguments.pack
+      (Goals.Step.Inputs.pack
         { position := 0, values := [7, 11], addWeights := [2], mulWeights := [1],
           width := 0, left := [3], right := [3] }).get =
       .done (Goals.Step.encode model
@@ -46,13 +46,13 @@ theorem complete_callback :
   exact actual
 
 /-- Equal carrier types do not make source coordinates interchangeable. -/
-example : Goals.LayerArguments.pack (Value := assignment ℚ ℚ)
+example : Goals.Layer.Inputs.pack (Value := assignment ℚ ℚ)
     { addWeights := [2], mulWeights := [1], below := [3], width := 0 } ≠
-    Goals.LayerArguments.pack
+    Goals.Layer.Inputs.pack
       { addWeights := [1], mulWeights := [2], below := [3], width := 0 } := by
   intro same
-  have weights := congrArg (fun row => (Goals.LayerArguments.unpack row).addWeights) same
-  norm_num [Goals.LayerArguments.unpack_pack] at weights
+  have weights := congrArg (fun row => (Goals.Layer.Inputs.unpack row).addWeights) same
+  norm_num [Goals.Layer.Inputs.unpack_pack] at weights
 
 private def changedLayer : CheckedDefinition :=
   .ofBody GkrSourceBodies.helper33Helper (.stop .abort)
@@ -69,7 +69,7 @@ theorem changed_body_refused :
 /-- The complete source-generated equation retains the original early guard. -/
 theorem boundary_refused :
     invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper34Helper
-      (Goals.ValuesArguments.pack
+      (Goals.Traversal.Inputs.pack
         { addWeights := [], mulWeights := [], inputValues := [], layers := 2,
           selector := 1, width := 1, layerIndex := 2 }) = .halt .refused := by
   rw [circuit_bodies.values.invoke GkrSourceViews.unit.linked]

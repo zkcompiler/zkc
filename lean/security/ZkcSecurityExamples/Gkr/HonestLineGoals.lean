@@ -65,13 +65,12 @@ named_values ShiftDomain [source] := shiftSpec.domain.inputs
 named_values ShiftCaptures [count] := shiftSpec.captures
 named_values LineState [values, position] := lineCallback_selection.callback.state
 named_values LineCaptures [start, finish, count] := lineCallback_selection.callback.captures
-named_values StepArguments [iteration, values, position, start, finish, count] := lineCallback_selection.callback.inputs
+
 named_values SlopesItem [low, high] := slopesSpec.domain.items
 named_values TotalsItem [low, high] := totalsSpec.domain.items
 named_values SlopesDomain [left, right] := slopesSpec.domain.inputs
 named_values SlopesCaptures [delta] := slopesSpec.captures
 named_values TotalsDomain [left, right] := totalsSpec.domain.inputs
-named_values SlopesArguments [left, right, delta] := GkrSourceBodies.scopedHelper70Helper.inputs
 
 source_reference slopesProcess from_equation Slopes.equation
   using [Slopes.run, Slopes.encode, Slopes.decode, PIR.Process.bind_assoc, PIR.Process.bind,
@@ -82,15 +81,6 @@ source_reference stepProcess from_equation Step.equation
 source_reference lineProcess from_equation Line.equation
   using [Line.run, Line.encode, Line.decode, PIR.Process.bind_assoc, PIR.Process.bind,
     Zkc.Source.Environment.prepend, Zkc.Source.Environment.push, Values.get]
-
-named_values DifferenceArguments [high, low] := GkrSourceBodies.helper58Helper.inputs
-named_values SlopeArguments [low, high, delta] := GkrSourceBodies.helper60Helper.inputs
-named_values TotalArguments [left, right] := GkrSourceBodies.helper67Helper.inputs
-named_values DifferenceWrapperArguments [high, low] := GkrSourceBodies.scopedHelper67Helper.inputs
-named_values SlopeWrapperArguments [low, high, delta] := GkrSourceBodies.scopedHelper68Helper.inputs
-named_values SlopeCallbackArguments [low, high, left, right, delta] := GkrSourceBodies.scopedHelper69Helper.inputs
-named_values TotalWrapperArguments [left, right] := GkrSourceBodies.scopedHelper71Helper.inputs
-named_values TotalCallbackArguments [low, high, left, right] := GkrSourceBodies.scopedHelper72Helper.inputs
 
 structure ScalarBodies (definitions : List CheckedDefinition) : Prop where
   difference : BodyIn definitions GkrSourceBodies.helper58Helper Difference.body

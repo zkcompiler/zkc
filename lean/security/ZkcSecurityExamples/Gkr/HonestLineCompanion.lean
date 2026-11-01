@@ -156,42 +156,42 @@ theorem installScalars (model : DomainModel) (definitions : List CheckedDefiniti
   have difference := (differenceLaw model).realizes (helper := GkrSourceBodies.helper58Helper)
     definitions linked bodies.difference (by
       intro arguments
-      obtain ⟨view, rfl⟩ := DifferenceArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := Difference.Inputs.pack_surjective arguments
       trivial)
   have slope := (slopeLaw model).realizes (helper := GkrSourceBodies.helper60Helper)
     definitions linked bodies.slope (by
       intro arguments
-      obtain ⟨view, rfl⟩ := SlopeArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := Slope.Inputs.pack_surjective arguments
       trivial)
   have total := (totalLaw model).realizes (helper := GkrSourceBodies.helper67Helper)
     definitions linked bodies.total (by
       intro arguments
-      obtain ⟨view, rfl⟩ := TotalArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := Total.Inputs.pack_surjective arguments
       trivial)
   have differenceWrapper := (differenceWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper67Helper)
     definitions linked bodies.differenceWrapper (by
       intro arguments
-      obtain ⟨view, rfl⟩ := DifferenceWrapperArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := DifferenceWrapper.Inputs.pack_surjective arguments
       exact difference)
   have slopeWrapper := (slopeWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper68Helper)
     definitions linked bodies.slopeWrapper (by
       intro arguments
-      obtain ⟨view, rfl⟩ := SlopeWrapperArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := SlopeWrapper.Inputs.pack_surjective arguments
       exact slope)
   have slopeCallback := (slopeCallbackLaw model).realizes (helper := GkrSourceBodies.scopedHelper69Helper)
     definitions linked bodies.slopeCallback (by
       intro arguments
-      obtain ⟨view, rfl⟩ := SlopeCallbackArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := SlopeCallback.Inputs.pack_surjective arguments
       exact slopeWrapper)
   have totalWrapper := (totalWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper71Helper)
     definitions linked bodies.totalWrapper (by
       intro arguments
-      obtain ⟨view, rfl⟩ := TotalWrapperArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := TotalWrapper.Inputs.pack_surjective arguments
       exact total)
   have totalCallback := (totalCallbackLaw model).realizes (helper := GkrSourceBodies.scopedHelper72Helper)
     definitions linked bodies.totalCallback (by
       intro arguments
-      obtain ⟨view, rfl⟩ := TotalCallbackArguments.pack_surjective arguments
+      obtain ⟨view, rfl⟩ := TotalCallback.Inputs.pack_surjective arguments
       exact totalWrapper)
   exact ⟨difference, slope, total, differenceWrapper, slopeWrapper, slopeCallback, totalWrapper, totalCallback⟩
 
