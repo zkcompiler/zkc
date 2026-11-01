@@ -30,10 +30,10 @@ These hashes cover the exact retained bytes from the generator above.
 |---|---|
 | `boolean.zkc` | `77d5eb5f80a516bc6466a6ec40223d28c72b75ed86cb1af9fbf44f47f16867ac` |
 | `boolean.mlir` | `a6370d7c8fbca788da8a9e6f3ebf3744c88c431102ca7d490de064d7ada34e42` |
-| `boolean.json` | `bbff273876802e1ee634f0f4c2736371beaac4b4ac1b7733286d76b2a86e8b0a` |
+| `boolean.json` | `7d400afc468d36aa98d21cea7c03ebe20b4d5d99145eb0628098fd7c05f49277` |
 | `custody-fields.zkc` | `7f860eafedb25f0ce4970c0381bac5dde69f306d439b6b5fe54f27609df13483` |
 | `custody-fields.mlir` | `45846f6cbab49ca5591bf6ffa97270098e8350adf9aebae5d8e9302e4b6f9489` |
-| `custody-fields.json` | `813876a467fff967b0642e72e60d1a9938cb4ca29eacf96ae8725af0a55acd8a` |
+| `custody-fields.json` | `a938f3a9269dca2139727a5325f883d338a2cbdf146e1b00c46e45817279ca91` |
 
 The SDK interface suite consumes the emitted custody fixture directly and checks
 that the ordinary field maps to native input 2, after the two custody components.

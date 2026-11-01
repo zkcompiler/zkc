@@ -24,7 +24,7 @@ Path('crates/zkc/src/entry/interface/tests/fixtures/fri-interface.json').write_b
 PYTHON
 ```
 
-Current SHA-256: `41063ffc2b19712871ee41b94b0b12e893dd90494e01f157b9fb6871f1eca757`.
+Current SHA-256: `3aa34332ee4907be2661b1a0733dc53aa08821158c7d11a7a07353b11a77637e`.
 This digest covers the exact retained fixture; its embedded original and
 compiler identities bind different inputs and are not source proofs.
 
