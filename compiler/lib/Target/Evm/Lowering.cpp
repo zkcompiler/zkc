@@ -8,6 +8,7 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
@@ -83,13 +84,14 @@ private:
 
 class Lowering {
 public:
-  Lowering(ModuleOp source, ModuleOp target, const EvmOptions &options)
-      : source(source), target(target), options(options),
+  Lowering(ModuleOp source, ModuleOp complete, ModuleOp target,
+           const EvmOptions &options)
+      : source(source), complete(complete), target(target), options(options),
         types(source.getContext()), builder(source.getContext()) {}
   LogicalResult run();
 
 private:
-  ModuleOp source, target;
+  ModuleOp source, complete, target;
   const EvmOptions &options;
   EvmTypes types;
   OpBuilder builder;
@@ -164,6 +166,8 @@ private:
                                const llvm::DenseMap<Block *, Block *> &);
   LogicalResult lowerFinite(Operation *, ValueMap &);
   LogicalResult lowerBinding(Operation *, ValueMap &);
+  std::optional<LogicalResult> lowerScalar(Operation *, StringRef, ValueRange,
+                                           ArrayAttr, ValueMap &);
   LogicalResult lowerLoop(Operation *, ValueMap &);
   FailureOr<Values> call(Operation *op, Operation *callee, ValueRange args) {
     auto function = functions.lookup(callee);
@@ -201,8 +205,26 @@ LogicalResult Lowering::run() {
         entry ? "verify_endpoint" : "helper_" + std::to_string(serial++),
         builder.getFunctionType(*inputs, *outputs));
     function.setPrivate();
-    if (entry)
+    if (entry) {
       function->setAttr("evm.entry", builder.getUnitAttr());
+      function->setAttr("evm.logical_type", attribute);
+      // The complete source retains the checked original-to-endpoint ports;
+      // executable closure selection deliberately prunes that record.
+      complete.walk([&](Operation *record) {
+        if (record->getName().getStringRef() != "protocol.projection")
+          return;
+        for (Attribute item : record->getAttrOfType<ArrayAttr>("interfaces")) {
+          auto interface = cast<DictionaryAttr>(item);
+          if (interface.get("source") != owner->getAttr("instance"))
+            continue;
+          for (Attribute port : interface.getAs<ArrayAttr>("participants")) {
+            auto participant = cast<DictionaryAttr>(port);
+            if (participant.get("role") == owner->getAttr("role"))
+              function->setAttr("evm.output_ports", participant.get("outputs"));
+          }
+        }
+      });
+    }
     functions[owner] = function;
   }
   if (entries != 1)
@@ -269,8 +291,75 @@ LogicalResult Lowering::lowerBody(Operation *owner, func::FuncOp function) {
   return success();
 }
 
+std::optional<LogicalResult>
+Lowering::lowerScalar(Operation *op, StringRef code, ValueRange operands,
+                      ArrayAttr parameters, ValueMap &map) {
+  Location loc = op->getLoc();
+  if (code == "field.constant") {
+    auto literal = parameters && parameters.size() == 1
+                       ? dyn_cast<algebra::FieldLiteralAttr>(parameters[0])
+                       : algebra::FieldLiteralAttr();
+    if (!literal || literal.getField().getDomain() != field)
+      return refuse(op, "field.constant requires an admitted Fr literal");
+    return bind(op,
+                {constant(loc, builder.getIntegerType(256),
+                          literal.getValue().getValue().zextOrTrunc(256))},
+                map);
+  }
+  if (code == "field.equal")
+    return bind(op,
+                {arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::eq,
+                                       operands[0], operands[1])},
+                map);
+  if (code == "field.add" || code == "field.sub" || code == "field.mul" ||
+      code == "field.neg") {
+    Value a = operands[0], b, p = prime(loc);
+    if (code == "field.neg") {
+      b = arith::SubIOp::create(builder, loc, p, a);
+      a = integer(loc, 0, 256);
+    } else {
+      b = operands[1];
+      if (code == "field.sub")
+        b = arith::SubIOp::create(builder, loc, p, b);
+    }
+    return bind(
+        op,
+        {WordOp::create(builder, loc, code == "field.mul" ? "mulmod" : "addmod",
+                        a, b, p)
+             ->getResult(0)},
+        map);
+  }
+  if (code == "field.inverse" || code == "field.pow" || code == "field.div")
+    return bind(op, checkedResult(op, code, operands), map);
+  if (code == "bool.and")
+    return bind(op,
+                {arith::AndIOp::create(builder, loc, operands[0], operands[1])},
+                map);
+  if (code == "bool.or")
+    return bind(op,
+                {arith::OrIOp::create(builder, loc, operands[0], operands[1])},
+                map);
+  if (code == "bool.xor")
+    return bind(op,
+                {arith::XOrIOp::create(builder, loc, operands[0], operands[1])},
+                map);
+  if (code == "bool.not")
+    return bind(
+        op,
+        {arith::XOrIOp::create(builder, loc, operands[0], integer(loc, 1, 1))},
+        map);
+  return std::nullopt;
+}
+
 LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
   Operation *binding = resolve(op, "binding");
+  if (!binding)
+    return refuse(op, "missing checked runtime binding");
+  auto admitted = readNativeBinding([&] { return op->emitOpError(); }, binding);
+  if (failed(admitted))
+    return refuse(op, "invalid checked runtime binding");
+  if (!admitted->declaration.getImplementation().empty())
+    return refuse(op, "EVM cannot honor a pinned runtime implementation");
   auto contract =
       binding ? binding->getAttrOfType<StringAttr>("contract") : StringAttr();
   if (!contract)
@@ -282,6 +371,8 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
   auto resultTypes = converted(op->getResultTypes(), op);
   if (failed(resultTypes))
     return failure();
+  if (auto scalar = lowerScalar(op, name, operands, parameters, map))
+    return *scalar;
   if (name == "index.constant") {
     if (!parameters || parameters.size() != 1 ||
         !isa<IntegerAttr>(parameters[0]))
@@ -290,7 +381,7 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
         op, {integer(op->getLoc(), cast<IntegerAttr>(parameters[0]).getUInt())},
         map);
   }
-  if (name == "index.equal" || name == "index.less" || name == "field.equal") {
+  if (name == "index.equal" || name == "index.less") {
     auto predicate = name == "index.less" ? arith::CmpIPredicate::ult
                                           : arith::CmpIPredicate::eq;
     return bind(op,
@@ -651,28 +742,39 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
             {builder.getNamedAttr("site", op->getAttr("site"))});
     return success();
   }
-  if (name == "data.index" || name == "algebra.constant") {
-    IntegerAttr literal;
-    if (name == "data.index")
-      literal = op->getAttrOfType<IntegerAttr>("value");
-    else if (auto attr = op->getAttrOfType<algebra::FieldLiteralAttr>("value"))
-      literal = attr.getValue();
-    auto result = converted(op->getResultTypes(), op);
-    if (!literal || failed(result) || result->size() != 1)
-      return refuse(op, "unsupported numeric literal");
-    return bind(op,
-                {constant(loc, (*result)[0],
-                          literal.getValue().zextOrTrunc(
-                              (*result)[0].getIntOrFloatBitWidth()))},
-                map);
+  StringRef scalar = llvm::StringSwitch<StringRef>(name)
+                         .Case("algebra.constant", "field.constant")
+                         .Case("algebra.field_add", "field.add")
+                         .Case("algebra.field_subtract", "field.sub")
+                         .Case("algebra.field_multiply", "field.mul")
+                         .Case("algebra.field_negate", "field.neg")
+                         .Case("algebra.field_equal", "field.equal")
+                         .Case("algebra.field_inverse", "field.inverse")
+                         .Case("algebra.field_power", "field.pow")
+                         .Case("algebra.field_divide", "field.div")
+                         .Default("");
+  if (name == "arith.andi" && op->getResult(0).getType().isInteger(1))
+    scalar = "bool.and";
+  if (name == "arith.ori" && op->getResult(0).getType().isInteger(1))
+    scalar = "bool.or";
+  if (name == "arith.xori" && op->getResult(0).getType().isInteger(1))
+    scalar = "bool.xor";
+  if (!scalar.empty())
+    return *lowerScalar(op, scalar, operands,
+                        name == "algebra.constant"
+                            ? builder.getArrayAttr({op->getAttr("value")})
+                            : builder.getArrayAttr({}),
+                        map);
+  if (name == "data.index") {
+    auto literal = op->getAttrOfType<IntegerAttr>("value");
+    return bind(op, {integer(loc, literal.getUInt())}, map);
   }
   if (name == "data.dim")
     return bind(op, {operands[1]}, map);
   if (name == "data.index_power_of_two") {
     return bind(op, checkedResult(op, "index.power_of_two", operands), map);
   }
-  if (name == "data.index_equal" || name == "data.index_less" ||
-      name == "algebra.field_equal")
+  if (name == "data.index_equal" || name == "data.index_less")
     return bind(op,
                 {arith::CmpIOp::create(builder, loc,
                                        name.ends_with("less")
@@ -680,33 +782,6 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
                                            : arith::CmpIPredicate::eq,
                                        operands[0], operands[1])},
                 map);
-  if (name == "algebra.field_add" || name == "algebra.field_multiply" ||
-      name == "algebra.field_subtract" || name == "algebra.field_negate") {
-    Value a = operands[0], b;
-    Value p = prime(loc);
-    if (name == "algebra.field_negate") {
-      b = arith::SubIOp::create(builder, loc, p, a);
-      a = integer(loc, 0, 256);
-    } else {
-      b = operands[1];
-      if (name == "algebra.field_subtract")
-        b = arith::SubIOp::create(builder, loc, p, b);
-    }
-    return bind(
-        op,
-        {WordOp::create(builder, loc,
-                        name == "algebra.field_multiply" ? "mulmod" : "addmod",
-                        a, b, p)
-             ->getResult(0)},
-        map);
-  }
-  if (name == "algebra.field_inverse" || name == "algebra.field_power" ||
-      name == "algebra.field_divide") {
-    StringRef opcode = name.ends_with("inverse") ? "field.inverse"
-                       : name.ends_with("power") ? "field.pow"
-                                                 : "field.div";
-    return bind(op, checkedResult(op, opcode, operands), map);
-  }
   if (name.starts_with("data.index_")) {
     auto opcode =
         llvm::StringSwitch<StringRef>(name)
@@ -847,7 +922,7 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   context->getOrLoadDialect<cf::ControlFlowDialect>();
   context->getOrLoadDialect<func::FuncDialect>();
   OwningOpRef<ModuleOp> target(ModuleOp::create(candidate->getLoc()));
-  Lowering lowering(*candidate, *target, options);
+  Lowering lowering(*candidate, *source, *target, options);
   if (failed(lowering.run()) || failed(verify(*target)))
     return zkc::error("evm.lowering", "EVM operation realization failed");
   InactiveIntegerLanes policy;

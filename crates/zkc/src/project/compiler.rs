@@ -687,7 +687,7 @@ mod tests {
     #[cfg(all(feature = "evm", target_os = "linux"))]
     mod evm {
         use super::super::*;
-        use serde_json::json;
+        use serde_json::Value;
         use std::{collections::BTreeMap, os::unix::fs::PermissionsExt};
 
         fn script(path: &Path, text: &str) {
@@ -696,21 +696,7 @@ mod tests {
         }
 
         fn response(entry: &str) -> String {
-            let identity = "00".repeat(32);
-            let yul = "object \"Verifier\" { code {} }";
-            json!({
-                "format":"zkc.evm-source/0", "target":"evm", "fork":"cancun",
-                "entry":entry, "capture":identity, "installation":identity,
-                "original":identity, "source_sha256":identity, "yul":yul,
-                "abi":[{"type":"function", "name":"verify", "stateMutability":"view",
-                    "inputs":[{"name":"publicInputs","type":"bytes[]"},
-                        {"name":"context","type":"bytes"},{"name":"proof","type":"bytes"}],
-                    "outputs":[{"name":"accepted","type":"bool"}]}],
-                "manifest":{"entry":entry, "capture":identity, "installation":identity,
-                    "original":identity, "source_sha256":identity,
-                    "yul_sha256":crate::io::bytes::hex(&Sha256::digest(yul.as_bytes()))}
-            })
-            .to_string()
+            crate::evm::tests::source_record(entry, "object \"Verifier\" { code {} }").to_string()
         }
 
         fn fixture(directory: &Path, entry: &str) -> (Compiler, Project) {
@@ -812,6 +798,10 @@ mod tests {
             for path in [&bin, &lib, &ambient] {
                 std::fs::create_dir_all(path).unwrap();
             }
+            // Wrappers may add every -L directory to RUNPATH. Link against a
+            // disposable directory, then move only the fixture libraries into
+            // the installation. Keep all toolchain/system search paths intact.
+            let link_libraries = tempfile::tempdir_in(&root).unwrap();
             let (mut compiler, project) = fixture(&bin, "example::Proof");
             let source = root.join("response.c");
             std::fs::write(
@@ -829,7 +819,7 @@ mod tests {
                     .args(["-shared", "-fPIC", "-Wl,-soname,libZkcLoaderFixture.so"])
                     .arg(&source)
                     .arg("-o")
-                    .arg(lib.join(library_name)),
+                    .arg(link_libraries.path().join(library_name)),
             );
             let fallback_source = root.join("fallback.c");
             std::fs::write(
@@ -844,7 +834,7 @@ mod tests {
                     .args(["-shared", "-fPIC", "-Wl,-soname,libZkcLoaderFallback.so"])
                     .arg(&fallback_source)
                     .arg("-o")
-                    .arg(lib.join(fallback_name)),
+                    .arg(link_libraries.path().join(fallback_name)),
             );
             let main = root.join("main.c");
             std::fs::write(
@@ -857,7 +847,7 @@ mod tests {
                 Command::new(&cc)
                     .arg(&main)
                     .arg("-L")
-                    .arg(&lib)
+                    .arg(link_libraries.path())
                     .args([
                         "-lZkcLoaderFixture",
                         "-lZkcLoaderFallback",
@@ -866,6 +856,12 @@ mod tests {
                     ])
                     .arg(compiler.path()),
             );
+            for name in [library_name, fallback_name] {
+                std::fs::rename(link_libraries.path().join(name), lib.join(name)).unwrap();
+            }
+            let link_path = link_libraries.path().to_owned();
+            link_libraries.close().unwrap();
+            assert!(!link_path.exists());
             let original = std::fs::read(compiler.path()).unwrap();
             assert_eq!(&original[..4], b"\x7fELF");
             let image = compiler_snapshot(compiler.path()).unwrap();
@@ -1102,6 +1098,43 @@ mod tests {
             let direct = compiler.evm_source_from(&project, selection).unwrap();
             let sealed = compiler.evm_source(&project, selection).unwrap();
             assert_eq!(direct.bytes(), sealed.bytes());
+            // Replay the transport defects against a complete real compiler
+            // response, before any solc or artifact operation can consume it.
+            for key in ["descriptor", "policy", "limits"] {
+                let mut malformed = sealed.metadata().clone();
+                malformed.as_object_mut().unwrap().remove(key);
+                assert_eq!(
+                    crate::evm::Source::capture(&serde_json::to_vec(&malformed).unwrap())
+                        .unwrap_err()
+                        .0,
+                    "evm-source-format",
+                    "missing {key}"
+                );
+            }
+            for (path, replacement) in [
+                ("/unknown", Value::Bool(true)),
+                ("/manifest/format", Value::String("wrong-format".into())),
+                ("/manifest/limits", Value::Null),
+            ] {
+                let mut malformed = sealed.metadata().clone();
+                if path == "/unknown" {
+                    malformed["unknown"] = replacement;
+                } else {
+                    *malformed.pointer_mut(path).unwrap() = replacement;
+                }
+                assert!(
+                    crate::evm::Source::capture(&serde_json::to_vec(&malformed).unwrap()).is_err(),
+                    "{path}"
+                );
+            }
+            let response = serde_json::to_string(sealed.metadata()).unwrap();
+            let duplicate = format!("{{\"target\":\"cpu\",{}", &response[1..]);
+            assert_eq!(
+                crate::evm::Source::capture(duplicate.as_bytes())
+                    .unwrap_err()
+                    .0,
+                "evm-json"
+            );
             let solc = crate::evm::Solc::new(
                 std::env::var("ZKC_SOLC").unwrap(),
                 &std::env::var("ZKC_SOLC_SHA256").unwrap(),

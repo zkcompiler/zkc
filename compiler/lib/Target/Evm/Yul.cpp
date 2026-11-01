@@ -3,7 +3,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
@@ -472,6 +474,87 @@ LogicalResult Exporter::outer(func::FuncOp function) {
                          : nullptr;
   if (!rows)
     return refuse(function, "invalid logical public schema");
+  auto logicalAttr = function->getAttrOfType<TypeAttr>("evm.logical_type");
+  auto logical = logicalAttr ? dyn_cast<FunctionType>(logicalAttr.getValue())
+                             : FunctionType();
+  auto ports = function->getAttrOfType<ArrayAttr>("evm.output_ports");
+  if (!logical || !ports)
+    return refuse(function, "missing checked endpoint interface");
+  auto transcriptType = [&](Type type) {
+    auto capability = dyn_cast<runtime::CapabilityType>(type);
+    return capability &&
+           capability.getKind() == runtime::CapabilityKind::Transcript &&
+           capability.getIdentity() == policy.suite;
+  };
+  // Admit copyable data explicitly. Scope, transfer and other affine values
+  // must never disappear into unused return lanes at this boundary.
+  auto lanes = [&](Type type, SmallVectorImpl<Type> &expanded) -> StringRef {
+    auto i64 = IntegerType::get(module.getContext(), 64);
+    if (type.isSignlessInteger(1)) {
+      expanded.push_back(type);
+      return "bool";
+    }
+    if (type.isUnsignedInteger(64)) {
+      expanded.push_back(i64);
+      return "index";
+    }
+    if (auto field = dyn_cast<algebra::FieldType>(type)) {
+      if (field.getDomain() == "bls12-381.fr") {
+        expanded.push_back(IntegerType::get(module.getContext(), 256));
+        return "field:bls12-381.fr";
+      }
+    }
+    if (auto vector = dyn_cast<algebra::FieldVectorType>(type)) {
+      if (vector.getDomain() == "bls12-381.fr") {
+        expanded.append({i64, i64});
+        return "vector:bls12-381.fr";
+      }
+    }
+    if (isa<algebra::IndicesType>(type)) {
+      expanded.append({i64, i64});
+      return "indices";
+    }
+    return {};
+  };
+  bool hasTranscript = logical.getNumInputs() == rows->size() + 1 &&
+                       transcriptType(logical.getInputs().back());
+  if (logical.getNumInputs() != rows->size() + unsigned(hasTranscript) ||
+      logical.getNumResults() != ports.size() + unsigned(hasTranscript))
+    return refuse(function, "unconsumed endpoint inputs or affine results");
+  SmallVector<Type> inputs, outputs;
+  for (auto [i, row] : enumerate(*rows)) {
+    auto *port = row.getAsArray();
+    auto type = lanes(logical.getInput(i), inputs);
+    if (!port || port->size() != 4 || type.empty() ||
+        (*port)[2].getAsString() != type)
+      return refuse(function, "public schema differs from endpoint signature");
+  }
+  std::optional<unsigned> acceptance;
+  for (auto [i, port] : enumerate(ports)) {
+    auto source = dyn_cast<IntegerAttr>(port);
+    if (!source || source.getInt() < 0)
+      return refuse(function, "invalid checked output projection");
+    if (source.getUInt() == policy.acceptance) {
+      if (acceptance || !logical.getResult(i).isSignlessInteger(1))
+        return refuse(function, "selected acceptance is not one Boolean");
+      acceptance = outputs.size();
+    }
+    if (lanes(logical.getResult(i), outputs).empty())
+      return refuse(function, "unsupported or affine data result");
+  }
+  if (!acceptance)
+    return refuse(function, "selected acceptance is absent from endpoint");
+  unsigned generation = outputs.size();
+  if (hasTranscript) {
+    if (!transcriptType(logical.getResults().back()))
+      return refuse(function, "unconsumed managed transcript result");
+    inputs.push_back(IntegerType::get(module.getContext(), 64));
+    outputs.push_back(IntegerType::get(module.getContext(), 64));
+  }
+  if (function.getArgumentTypes() != ArrayRef<Type>(inputs) ||
+      function.getResultTypes() != ArrayRef<Type>(outputs))
+    return refuse(function,
+                  "expanded endpoint signature differs from logical lanes");
   json::Array root{"zkc.native-proof-binding/0",
                    "sha256",
                    (*descriptorRows)[2],
@@ -604,25 +687,31 @@ LogicalResult Exporter::outer(func::FuncOp function) {
       << "let boundState := keccak256(input, add(" << bindPrefix.size() + 8
       << ", sub(rootEnd, root)))\nverbatim_1i_0o(hex\"50\", boundState)\n"
       << "mstore(0x120, boundState)\nmstore(0x40, input)\n}\n";
-  arguments.push_back(
-      "0"); // The single internally issued transcript generation.
-  if (function.getNumArguments() != arguments.size() ||
-      function.getNumResults() != 2 ||
-      !function.getResultTypes()[0].isInteger(1) ||
-      !function.getResultTypes()[1].isInteger(64))
-    return refuse(function, "endpoint requires public inputs and one "
-                            "transcript, returning one Boolean and transcript");
-  out << "let accepted, finalGeneration := " << function.getName() << "(";
+  if (hasTranscript)
+    arguments.push_back("0"); // The actual internally issued generation.
+  if (function.getNumArguments() != arguments.size())
+    return refuse(function, "decoded public inputs differ from endpoint lanes");
+  SmallVector<std::string> results;
+  out << "let ";
+  for (unsigned i = 0; i < function.getNumResults(); ++i) {
+    if (i)
+      out << ", ";
+    results.push_back(fresh());
+    out << results.back();
+  }
+  out << " := " << function.getName() << "(";
   for (auto [i, argument] : enumerate(arguments)) {
     if (i)
       out << ", ";
     out << argument;
   }
   out << ")\n"
-      << "if iszero(eq(mload(0x140), mload(0x160))) { evm_decode(13) }\n"
-      << "if or(iszero(eq(finalGeneration, mload(0xc0))), "
-         "iszero(eq(mload(0xa0), rootScope))) { evm_fault(5) }\n"
-      << "mstore(0, accepted) return(0, 32)\n";
+      << "if iszero(eq(mload(0x140), mload(0x160))) { evm_decode(13) }\n";
+  if (hasTranscript)
+    out << "if iszero(eq(" << results[generation]
+        << ", mload(0xc0))) { evm_fault(5) }\n";
+  out << "if iszero(eq(mload(0xa0), rootScope)) { evm_fault(5) }\n"
+      << "mstore(0, " << results[*acceptance] << ") return(0, 32)\n";
   return success();
 }
 

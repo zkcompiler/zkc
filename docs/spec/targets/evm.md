@@ -28,6 +28,12 @@ failure behavior. Runtime scope and transcript tickets preserve the selected
 closure's ownership checks. Yul emission follows these operations; it does not
 recognize protocol names.
 
+Pure expressions and ordered helper calls use the same supported arithmetic.
+An explicit implementation constraint must be honored; a CPU provider selector
+does not silently select an EVM realization. The invocation adapter selects the
+Entry's checked Boolean acceptance output, including when other data results
+precede it, and validates all returned managed transcript state.
+
 ## Invocation
 
 The sole function is:
@@ -111,6 +117,8 @@ A `zkc.evm-artifact/0` directory contains:
 
 The manifest binds authored capture, installation and original identities
 through the exact compiler response, as well as target settings and bytecode.
+Source capture validates the complete current response, repeated metadata and
+deployment ceilings, and rejects duplicate or unknown JSON object fields.
 Import requires an independently retained hash of the exact manifest bytes.
 Internal checksums alone do not authenticate a substituted directory. Reuse
 requires an authenticated immutable artifact and the exact build key; compiler

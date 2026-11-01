@@ -8,6 +8,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Compiler/Evm.h"
+#include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Target/Evm/Target.h"
@@ -33,6 +34,28 @@ module {
   }) {sym_name="independent_numeric", function_type=(!algebra.group<"bls12-381.g1">,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">,!algebra.field<"bls12-381.fr">)->(!algebra.group<"bls12-381.g1">,i1), roles=["P","V"], input_roles=[["P"],["P"],["V"],["V"],["V"]], output_roles=[["P"],["V"]]} : () -> ()
  }) {profile=#protocol.profile<protocol>} : () -> ()
 })mlir";
+
+constexpr StringLiteral orderedScalarSource = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+module { "protocol.module"() ({
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope,!F,!F)->!exec.outcome<(!F)>} : ()->()
+ func.func private @work(%scope:!runtime.scope,%a:!F,%b:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %r = "exec.apply"(%scope,%a,%b) {binding=@mul,parameters=[],site="mul"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%r)[^ok,^stop] : (!exec.outcome<(!F)>)->()
+ ^ok(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^stop(%reason:!exec.stop):
+   %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
+ }
+ "protocol.func"() ({ ^entry(%a:!F,%b:!F):
+   %product = "protocol.local_call"(%a,%b) {callee=@work,role="V",site="work"} : (!F,!F)->!F
+   %ok = algebra.field_equal %product,%a : (!F,!F)->i1
+   "protocol.return"(%ok) : (i1)->()
+ }) {sym_name="main",function_type=(!F,!F)->i1,roles=["V"],input_roles=[["V"],["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
 
 // An index accumulator over field elements deliberately uses different state,
 // item and capture types. The final vector is a two-lane invariant capture.
@@ -169,10 +192,122 @@ int main() {
     buildProjectionPipeline(pm, false);
     buildClosedExecutionPipeline(pm);
     require(succeeded(pm.run(*source)),
-            "numeric source failed closed formation");
+            "numeric source failed closed formation: " + diagnostics);
     return source;
   };
   auto closed = [&] { return close(sourceText); };
+  auto proofSource = [](StringRef helper, StringRef outputs, StringRef body) {
+    return ("module scalar; domain Fr=field(\"bls12-381.fr\"); " + helper +
+            " protocol Work roles(P,V)(a:Fr@V,b:Fr@V,c:Fr@V,"
+            "challenges:Random<Fr>@V)->(" +
+            outputs +
+            "){let challenge=challenges.draw();"
+            "let delivered=send V->P(challenge);" +
+            body +
+            "} proof Proof=Work{prover P;verifier V;public{a,b,c};"
+            "accept accepted;construction fiat_shamir("
+            "\"hash-chain.keccak256.bls12-381.fr64be/0\",challenges);}")
+        .str();
+  };
+  auto originalSource = [&](StringRef text) {
+    auto project = take(
+        language::analyze(
+            take(language::capture({{"scalar", text.str(), "scalar.zkc"}})))
+            .checkedProject());
+    return take(language::prepareOriginal(
+        take(language::closeEntry(project, "scalar::Proof"))));
+  };
+  auto compileSource = [&](StringRef text) {
+    return take(compileEvmEntry(originalSource(text)));
+  };
+  cases.run("no-draw source retains common construction refusal", [&] {
+    auto text = proofSource("", "accepted:bool@V", "return(accepted=a*b==c);");
+    text = replaceFixture(
+        std::move(text),
+        "let challenge=challenges.draw();let delivered=send V->P(challenge);",
+        "");
+    refuses(compileEvmEntry(originalSource(text)), "native-proof-policy");
+  });
+  for (StringRef expression : {"a*b==c", "a+b==c", "a-b==c", "!(a==b)",
+                               "a==b && b==c", "a==b || b==c", "a+1==c"}) {
+    cases.run(
+        ("pure and ordered scalar legalization: " + expression).str(), [&] {
+          auto pure = compileSource(
+              proofSource("", "accepted:bool@V",
+                          ("return(accepted=" + expression + ");").str()));
+          auto ordered = compileSource(proofSource(
+              ("fn work(a:Fr,b:Fr,c:Fr)->bool{return " + expression + ";}")
+                  .str(),
+              "accepted:bool@V",
+              "let result@V=work(a,b,c);return(accepted=result);"));
+          require(succeeded(evm::checkTarget(*pure.targetSnapshot())) &&
+                      succeeded(evm::checkTarget(*ordered.targetSnapshot())),
+                  "scalar legalization did not produce legal targets");
+        });
+  }
+  for (StringRef contract : {"field.neg", "field.inverse"})
+    cases.run(("ordered unary scalar legalization: " + contract).str(), [&] {
+      compileSource(
+          proofSource(("fn work(a:Fr,b:Fr,c:Fr)->bool{return kernel<Fr>(\"" +
+                       contract + "\",a)==c;}")
+                          .str(),
+                      "accepted:bool@V",
+                      "let result@V=work(a,b,c);return(accepted=result);"));
+    });
+  cases.run(
+      "selected acceptance follows projected and expanded output lanes", [&] {
+        auto result = compileSource(proofSource(
+            "", "hidden:Fr@P,extra:Fr@V,other:bool@V,accepted:bool@V",
+            "return(hidden=delivered,extra=a+b,other=true,accepted=a*b==c);"));
+        auto target = result.targetSnapshot();
+        for (auto function : target->getOps<func::FuncOp>()) {
+          if (!function->hasAttr("evm.entry"))
+            continue;
+          auto ports = function->getAttrOfType<ArrayAttr>("evm.output_ports");
+          require(ports && ports.size() == 3 &&
+                      cast<IntegerAttr>(ports[2]).getUInt() == 3 &&
+                      function.getNumResults() == 4 &&
+                      function.getResultTypes()[0].isInteger(256),
+                  "acceptance mapping lost source output ownership or Fr lane");
+        }
+        require(result.policy().acceptance == 3,
+                "test did not select the non-first original Boolean");
+      });
+  cases.run("ordered scalar binding retains its admitted callable", [&] {
+    auto source = close(orderedScalarSource);
+    take(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}));
+  });
+  for (auto replacement :
+       {std::pair<StringRef, StringRef>{"arguments=[\"bls12-381.fr\"]",
+                                        "arguments=[]"},
+        {"arguments=[\"bls12-381.fr\"]", "arguments=[\"koala-bear\"]"},
+        {"parameters=[]", "parameters=[1:ui64]"},
+        {"function_type=(!runtime.scope,!F,!F)",
+         "function_type=(!runtime.scope,!F,i1)"}}) {
+    cases.run("malformed scalar binding: " + replacement.second, [&] {
+      diagnostics.clear();
+      auto text = replaceFixture(orderedScalarSource.str(), replacement.first,
+                                 replacement.second);
+      auto malformed = parseSourceString<ModuleOp>(text, &context);
+      require(!malformed || failed(verify(*malformed)),
+              "malformed scalar contract escaped common admission");
+      StringRef code = replacement.first == "parameters=[]"
+                           ? "interactive-kernel-parameters"
+                           : "binding-signature";
+      require(StringRef(diagnostics).contains(code),
+              "scalar contract refusal lost its diagnostic: " + diagnostics);
+    });
+  }
+  cases.run("EVM refuses a valid pinned provider instead of replacing it", [&] {
+    auto text = replaceFixture(orderedScalarSource.str(), "implementation=\"\"",
+                               "implementation=\"arkworks/field.mul\"");
+    auto source = close(text);
+    diagnostics.clear();
+    refuses(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}),
+            "evm.lowering");
+    require(StringRef(diagnostics).contains("pinned runtime implementation"),
+            "provider constraint was silently discarded");
+  });
   cases.run("deployment ceilings reject zero and unsupported increases", [&] {
     EvmOptions options;
     options.limits.transcriptTransitions = 0;
@@ -413,17 +548,20 @@ int main() {
                 "nested helper local call escaped common owner admission: " +
                     diagnostics);
       });
-  auto boundaryYul = [&] {
-    auto module = parseSourceString<ModuleOp>(R"mlir(
+  constexpr StringLiteral boundaryText = R"mlir(
       module {
-        func.func private @verify_endpoint(%generation:i64) -> (i1,i64) attributes {evm.entry} {
+        func.func private @verify_endpoint(%generation:i64) -> (i1,i64) attributes {evm.entry,
+          evm.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
+          evm.output_ports=[0:i64]} {
           %accepted = arith.constant true
           func.return %accepted,%generation : i1,i64
         }
-      })mlir",
-                                              &context);
+      })mlir";
+  auto boundary = [&](StringRef text, unsigned selected = 0) {
+    auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "invalid boundary test target");
     NativeProofPolicy policy;
+    policy.acceptance = selected;
     policy.entry = "independent";
     policy.producer = "P";
     policy.validator = "V";
@@ -432,12 +570,57 @@ int main() {
         json::Array{"zkc.native-proof/0", "independent", "binding-test",
                     json::Array{},        json::Array{}, json::Array{},
                     json::Array{},        json::Array{}, json::Array{}};
-    return take(evm::exportYul(*module, "exact original bytes\n", descriptor,
-                               policy, {}));
+    return evm::exportYul(*module, "exact original bytes\n", descriptor, policy,
+                          {});
   };
+  cases.run("expanded copyable results precede selected acceptance", [&] {
+    auto text = replaceFixture(boundaryText.str(), "-> (i1,i64)",
+                               "-> (i64,i64,i1,i64)");
+    text = replaceFixture(
+        std::move(text), "->(i1,!runtime.capability",
+        "->(!algebra.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
+    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
+                          "evm.output_ports=[0:i64,2:i64]");
+    text = replaceFixture(
+        std::move(text), "func.return %accepted,%generation : i1,i64",
+        "func.return %generation,%generation,%accepted,%generation : "
+        "i64,i64,i1,i64");
+    take(boundary(text, 2));
+  });
+  cases.run("invocation checks logical lane expansion independently", [&] {
+    auto text = replaceFixture(
+        boundaryText.str(), "->(i1,!runtime.capability",
+        "->(!algebra.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
+    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
+                          "evm.output_ports=[0:i64,1:i64]");
+    refuses(boundary(text, 1), "evm.yul");
+  });
+  cases.run("invocation refuses unconsumed affine results", [&] {
+    auto text =
+        replaceFixture(boundaryText.str(), "-> (i1,i64)", "-> (i64,i1,i64)");
+    text = replaceFixture(std::move(text), "->(i1,!runtime.capability",
+                          "->(!runtime.scope,i1,!runtime.capability");
+    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
+                          "evm.output_ports=[0:i64,1:i64]");
+    text = replaceFixture(
+        std::move(text), "func.return %accepted,%generation : i1,i64",
+        "func.return %generation,%accepted,%generation : i64,i1,i64");
+    refuses(boundary(text, 1), "evm.yul");
+  });
+  cases.run("invocation refuses absent selected acceptance",
+            [&] { refuses(boundary(boundaryText, 1), "evm.yul"); });
+  cases.run("zero transcript signature needs no invented generation lane", [&] {
+    take(boundary(R"mlir(module {
+      func.func private @verify_endpoint() -> i1 attributes {
+        evm.entry,evm.logical_type=()->i1,evm.output_ports=[0:i64]} {
+        %ok = arith.constant true
+        func.return %ok : i1
+      }
+    })mlir"));
+  });
   cases.run("minimum calldata is a decode refusal below the resource ceiling",
             [&] {
-              auto yul = boundaryYul();
+              auto yul = take(boundary(boundaryText));
               require(StringRef(yul).contains(
                           "if lt(calldatasize(), 100) { evm_decode(7) }"),
                       "short ABI inputs retain the resource failure class");
@@ -446,7 +629,7 @@ int main() {
                       "oversized calldata lost its resource refusal");
             });
   cases.run("static binding uses raw bytes and the exact original digest", [&] {
-    auto yul = boundaryYul();
+    auto yul = take(boundary(boundaryText));
     StringRef text(yul);
     require(
         text.contains(

@@ -109,7 +109,7 @@ mod tests {
 }
 
 pub(crate) mod bytes;
-#[cfg(any(feature = "cpu", test))]
+#[cfg(any(feature = "cpu", feature = "evm", test))]
 pub(crate) mod document;
 #[cfg(feature = "evm")]
 pub(crate) mod executable;
