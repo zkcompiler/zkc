@@ -94,7 +94,9 @@ byte relations. Nominal fields and polynomial domains keep their original
 owners. The word-lowering producer retains its source and yields a private
 standard-Arith candidate. The independent scalar reader checks actual ranges,
 modular expressions and centered lifts, including candidates changed by CSE.
-Shaped execution and resource-plan integration remain in progress; no serialized
+A private-tile reader additionally checks static Vector/MemRef bounds and
+ownership, with peak canonical-word storage. Reached execution and resident
+resource-plan integration remain in progress; no serialized
 representation certificate or executable wire type is introduced by the dialect.
 
 ### Participant-loop capture bindings

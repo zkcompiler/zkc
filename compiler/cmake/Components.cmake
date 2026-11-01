@@ -232,6 +232,7 @@ add_zkc_component(IR
   lib/Analysis/TotalClosure.cpp
   lib/Analysis/StructuredComputation.cpp
   lib/Analysis/ResidueArithmetic.cpp
+  lib/Analysis/ResidueTile.cpp
   lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
@@ -395,6 +396,7 @@ add_zkc_component(Transforms
   lib/Transforms/MathematicalComparison.cpp
   lib/Transforms/ScopedNestedContraction.cpp
   lib/Transforms/Residue.cpp
+  lib/Transforms/ResidueTile.cpp
   lib/Transforms/StructuredComputation.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
@@ -516,7 +518,7 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRPass MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
   MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect
-  MLIRLinalgDialect MLIRTensorDialect)
+  MLIRLinalgDialect MLIRTensorDialect MLIRVectorDialect MLIRMemRefDialect MLIRUBDialect)
 # Pass::Statistic is constructed out of line by MLIR, but its base layout
 # depends on NDEBUG. Isolate that ABI while retaining project assertions in
 # every other translation unit, including the passes and their observers.
@@ -529,7 +531,9 @@ else()
 endif()
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms MLIRFuncTransforms)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms MLIRFuncTransforms
+  MLIRBufferizationTransforms MLIRArithTransforms MLIRTensorTransforms
+  MLIRVectorTransforms MLIRMemRefDialect MLIRUBDialect)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCpuTarget ZkcEvmTarget)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)

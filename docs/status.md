@@ -1267,5 +1267,8 @@ scalar word producer and independent actual-body reader cover closed arithmetic,
 canonical ranges, unsigned projection, exact centered lifts and standard CSE.
 The reader reconstructs a canonical expression from actual word operations;
 mutations of the modulus, ranges, outputs and poison-producing flags refuse.
-Shaped integration and the actual execution-plan consumer remain in progress.
-Registration and scalar correspondence are not default-path execution support.
+Static pointwise tiles now use upstream Linalg vectorization and One-Shot
+Bufferization. An independent reader checks actual accesses, initialization,
+aliases, release, poison isolation and the fresh returned owner, then recovers
+the scalar meaning. The actual execution-plan consumer remains in progress.
+These checked private candidates are not yet default CPU execution support.
