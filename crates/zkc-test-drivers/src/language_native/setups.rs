@@ -19,8 +19,9 @@ fn package(directory: &Path, entry: &str) -> Package {
 fn point() -> Value {
     Native::Vector(vec![Scalar::from(7)].into()).into()
 }
-fn role(material: &[ProverMaterial], claim: Value, producing: bool) -> RoleInputs {
-    let mut inputs = NamedValues::from([("point".into(), point()), ("claim".into(), claim)]);
+fn role(material: &[ProverMaterial], claim: NamedValues, producing: bool) -> RoleInputs {
+    let mut inputs = NamedValues::from([("point".into(), point())]);
+    inputs.extend(claim);
     if producing {
         for (i, key) in material.iter().enumerate() {
             inputs.insert(format!("pk{i}"), InputValue::ProverKey(key.clone()).into());
@@ -63,17 +64,17 @@ pub(super) fn run(directory: &Path) {
         .iter()
         .map(|key| key.prover_key().commit(&table).unwrap())
         .collect();
-    let claim = |index: usize| {
-        Value::Record(
-            [
-                (
-                    "c".into(),
-                    Native::Commitment(Arc::new(commitments[index].commitment().clone())).into(),
-                ),
-                ("tag".into(), Native::Bool(true).into()),
-            ]
-            .into(),
-        )
+    // Setup `first` binds claim.c, so the claim port reaches Hosts as one
+    // input per field, named by the boundary alias of its path.
+    let claim = |index: usize| -> NamedValues {
+        [
+            (
+                "claim_c".into(),
+                Native::Commitment(Arc::new(commitments[index].commitment().clone())).into(),
+            ),
+            ("claim_tag".into(), Native::Bool(true).into()),
+        ]
+        .into()
     };
     let pins = || SetupAuthority {
         keys: ["first", "second"]
@@ -161,7 +162,7 @@ pub(super) fn run(directory: &Path) {
     );
     let mut wrong_claim = run_request();
     for role in wrong_claim.roles.values_mut() {
-        role.inputs.insert("claim".into(), claim(1));
+        role.inputs.extend(claim(1));
     }
     assert_eq!(
         host.prepare(wrong_claim).err().unwrap().to_string(),
@@ -185,11 +186,16 @@ pub(super) fn run(directory: &Path) {
     let prover = ProofEntry::admit(publication.clone(), options.clone(), pins()).unwrap();
     let verifier = ProofEntry::admit(publication, options.clone(), pins()).unwrap();
     let request = |producing| ProofRequest {
-        public: [("point".into(), point()), ("claim".into(), claim(0))].into(),
+        public: {
+            let mut public = NamedValues::from([("point".into(), point())]);
+            public.extend(claim(0));
+            public
+        },
         private: {
             let mut role = role(&material, claim(0), producing);
-            role.inputs.remove("point");
-            role.inputs.remove("claim");
+            for name in ["point", "claim_c", "claim_tag"] {
+                role.inputs.remove(name);
+            }
             role
         },
         context: vec![1, 2, 3],
@@ -259,7 +265,7 @@ pub(super) fn run(directory: &Path) {
     }
     for producing in [true, false] {
         let mut wrong = request(producing);
-        wrong.public.insert("claim".into(), claim(1));
+        wrong.public.extend(claim(1));
         let result = if producing {
             prover.prove(wrong)
         } else {
