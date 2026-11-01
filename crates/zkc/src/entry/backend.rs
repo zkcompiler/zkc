@@ -159,8 +159,14 @@ impl InputBoundBackendRun {
             .bindings
             .check_role(&input.role, &input.backend, &input.values)
         {
+            // Capacity exhaustion keeps its own class; a refused binding keeps
+            // its exact code.
+            let error = match error {
+                BindingError::Limit => RuntimeError::Limit,
+                error => RuntimeError::Backend(BackendError::new(error.to_string())),
+            };
             return Err(LoadError {
-                error: RuntimeError::Backend(BackendError::new(error.to_string())),
+                error,
                 backend: input.backend,
                 usage: Usage::default(),
             });

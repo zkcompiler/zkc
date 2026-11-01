@@ -1010,6 +1010,9 @@ impl Check<'_> {
                         define(&mut child, &mut self.seen, arg, ty.clone())?;
                     }
                     for (local, parent) in captures {
+                        if self.services.iter().any(|port| &port.name == local) {
+                            return Err(err(ErrorCode::Type, "service-port-interface"));
+                        }
                         let ty = lookup(&env, parent)?;
                         if !ty.is_duplicable() {
                             return Err(err(
@@ -1118,6 +1121,10 @@ impl Check<'_> {
         let mut child = Env::new();
         let mut ports = Vec::new();
         for ((local, _), ty) in captures.iter().zip(types) {
+            // Service names share the participant value namespace.
+            if self.services.iter().any(|port| &port.name == local) {
+                return Err(err(ErrorCode::Type, "service-port-interface"));
+            }
             if child
                 .insert(
                     local.clone(),

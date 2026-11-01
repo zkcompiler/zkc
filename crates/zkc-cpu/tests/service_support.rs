@@ -114,6 +114,40 @@ fn selected_branch_queries_use_the_bound_service_and_dormant_arms_do_not_draw() 
             zkc_cpu::cpu_contracts(),
         )
         .unwrap();
+        // Service names share the participant value namespace, so neither a
+        // branch nor a loop capture formal can take the service's name.
+        let mut shadowed = candidate.clone();
+        shadowed[3][0][6][0][3] = json!([["rng", "selected"], ["fallback", "fallback"]]);
+        let mut looped = candidate.clone();
+        looped[3][0][4] = json!([
+            ["selected", "bool@native.bool/0"],
+            ["fallback", SERVICES[0].2],
+            ["n", "index@native.index/0"]
+        ]);
+        looped[3][0][6] = json!([
+            [
+                "loop",
+                "rounds",
+                ["value", "n", "1", "i"],
+                [],
+                [["rng", "selected"]],
+                [["yield", []]],
+                []
+            ],
+            ["return", ["fallback"]]
+        ]);
+        looped[3][0][7][0][2] = json!("3");
+        for refused in [shadowed, looped] {
+            let error = zkc_runtime::vm::Program::decode(
+                refused.to_string().as_bytes(),
+                zkc_cpu::cpu_contracts(),
+            )
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("service-port-interface"),
+                "{error}"
+            );
+        }
         for selected in [false, true] {
             for budget in [0, 1] {
                 let registry = ServiceRegistry::new(Policy::default());

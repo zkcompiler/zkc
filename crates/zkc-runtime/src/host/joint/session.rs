@@ -563,9 +563,13 @@ impl<B: WireBackend> Execution<B> {
             return Some(Outcome::DriverFailed(limit()));
         }
         let mut iterations = Vec::new();
-        if iterations.try_reserve_exact(path.len()).is_err() {
+        let mut retained = Vec::new();
+        if iterations.try_reserve_exact(path.len()).is_err()
+            || retained.try_reserve_exact(path.len()).is_err()
+        {
             return Some(Outcome::DriverFailed(limit()));
         }
+        retained.extend_from_slice(path);
         for element in path {
             if let PathElement::Loop { iteration, .. } = element {
                 iterations.push(*iteration);
@@ -578,7 +582,7 @@ impl<B: WireBackend> Execution<B> {
             loop_started: false,
             branch_alternative: None,
             branch_started: false,
-            path: path.to_vec(),
+            path: retained,
             progress: Progress::Exposed,
             sent_bytes: None,
             replacement_bytes: None,
