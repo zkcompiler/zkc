@@ -3,6 +3,7 @@
 #include "support/VariantFixture.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Support/Json.h"

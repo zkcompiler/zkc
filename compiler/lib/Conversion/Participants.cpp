@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/PassStatistics.h"

@@ -111,6 +111,8 @@ mod tests {
 pub(crate) mod bytes;
 #[cfg(any(feature = "cpu", test))]
 pub(crate) mod document;
+#[cfg(feature = "evm")]
+pub(crate) mod executable;
 #[cfg(any(feature = "cpu", test))]
 pub(crate) mod json;
 #[cfg(feature = "project")]

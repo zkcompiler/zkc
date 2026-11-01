@@ -14,6 +14,8 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Target/Cpu/Passes.h"
+#include "zkc/Target/Cpu/Stages.h"
 #include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <mutex>
@@ -54,6 +56,8 @@ void dormantCast(ModuleOp module) {
 int main() {
   registerCompilerPasses();
   registerCompilerPipelines();
+  registerCpuPasses();
+  registerCpuPipelines();
   registerTransformsPasses();
   DialectRegistry registry;
   registerDialects(registry);

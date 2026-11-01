@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
             take(compileRun(text, "oracle-roots.mlir", options, registry));
         auto edge = run.compilation.oracleRealizationSnapshot();
         require(bool(edge), "joint compilation lost realization edge");
-        checked(checkOracleRealization(*edge->original, *edge->candidate,
+        checked(checkOracleRealization(*edge->prepared, *edge->candidate,
                                        edge->record, policy));
         if (argc >= 2) {
           std::filesystem::create_directories(argv[1]);
@@ -550,7 +550,7 @@ int main(int argc, char **argv) {
         take(compileRun(text, "oracle-final-draw.mlir", options, registry));
     auto edge = run.compilation.oracleRealizationSnapshot();
     require(bool(edge), "service-bearing compilation lost realization edge");
-    checked(checkOracleRealization(*edge->original, *edge->candidate,
+    checked(checkOracleRealization(*edge->prepared, *edge->candidate,
                                    edge->record, policy));
   });
   for (StringRef mode : {"paired", "individual", "reversed", "invalid-first",
@@ -677,7 +677,7 @@ int main(int argc, char **argv) {
           take(compileRun(text, "oracle-blocks.mlir", options, registry));
       auto edge = run.compilation.oracleRealizationSnapshot();
       require(bool(edge), "batch compilation lost checked edge");
-      checked(checkOracleRealization(*edge->original, *edge->candidate,
+      checked(checkOracleRealization(*edge->prepared, *edge->candidate,
                                      edge->record, policy));
       if (argc >= 2) {
         std::ofstream out(std::filesystem::path(argv[1]) /

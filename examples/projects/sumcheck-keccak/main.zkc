@@ -1,0 +1,11 @@
+module example;
+use sumcheck::{Sumcheck};
+domain Fr = field("bls12-381.fr");
+
+proof Proof = Sumcheck<Fr, 10> {
+  prover P;
+  verifier V;
+  public { values, claim, rounds };
+  accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.bls12-381.fr64be/0", challenges);
+}

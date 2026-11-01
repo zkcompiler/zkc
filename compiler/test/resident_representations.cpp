@@ -15,6 +15,7 @@
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 
 using namespace llvm;

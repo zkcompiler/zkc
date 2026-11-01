@@ -1,10 +1,12 @@
 # What the implementation supports
 
-The supported implementation is `.zkc` frontend → Protocol IR (PIR)
+The native implementation is `.zkc` frontend → Protocol IR (PIR)
 (`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → the Rust VM and
 interpreter with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
 [Specification](spec/README.md) defines contracts; this page records support.
 Links identify maintained checks, not a claim that they ran for this revision.
+The [EVM verifier target](spec/targets/evm.md) branches from checked closed Exec
+to EVM word/slice operations, Yul and pinned solc bytecode.
 
 ## Current public interfaces
 
@@ -44,6 +46,15 @@ egress use the same admission. Pass-managed symbol and mathematical facts are
 scoped to the stable symbol-table owner with explicit invalidation dependencies;
 budgeted semantic queries still account for each request.
 
+Common `ZkcCompiler` and `ZkcTransforms` expose logical proof construction,
+checked original/interface admission, closed Exec formation and selected endpoint
+closure independently of `ZkcCpuTarget`. CPU compilation/publication and
+physical selection live in that target component. Operation-specific native
+compilation consumes the checked endpoint candidate while retaining complete
+source correspondence records separately. The [endpoint controls](../compiler/test/endpoint_closure.cpp)
+cover nested dependencies, producer pruning, metadata and source/candidate
+mutation refusal; they do not establish another target's lowering semantics.
+
 The module-owned [interaction view](spec/ir/interactions.md) retains actual
 Protocol functions, virtual definitions, applications and symbolic repeats.
 Oracle observations, query capacity, batch scheduling and native source-origin
@@ -81,18 +92,29 @@ unit, and native checks do not establish a formal connection for the new schemas
 | Source Entry | [`zkc.entry/0` and `zkc.language-interface/0`](spec/formats/entry.md#published-entry-package), authenticated source, input/result schemas and selected artifact |
 | Joint execution | [`zkc.run/0`](spec/runtime/joint.md), participants, schedule and invocation policy |
 | Native proof | [Policy, descriptor, deployment, construction map and invocation binding](spec/formats/proof.md), with `zkc.native-origin/0` occurrences |
+| EVM verifier | [`zkc.evm-source/0` and `zkc.evm-artifact/0`](spec/targets/evm.md), canonical `verify(bytes[],bytes,bytes)` ABI and authenticated artifact directory |
 | Installed declarations | [`zkc.contract-declarations/0`](compiler/operation-contracts.md), declaration inventory; the language catalog contributes an opaque compiler fingerprint |
 
 Use `zkc run`, `prove` and `verify` for named Entries, and `bundle run`,
 `bundle prove` and `bundle verify` for lower-level artifacts. In the C++ SDK,
-`Zkc::Compiler` owns compilation and packaging;
-`Zkc::Driver` separately owns CLI parsing. Request `Tools` for installed commands.
+`Zkc::Compiler` owns common checked construction; `Zkc::CpuTarget` owns native
+compilation and packaging, and `Zkc::EvmTarget` owns EVM source lowering.
+`Zkc::Driver` composes these APIs and owns CLI parsing. Request `Tools` for installed commands.
 See the [SDK reference](../compiler/README.md#components-and-ownership).
 Rust package, run and deployment admission take trusted 32-byte SHA-256 pins;
 CLI adapters own hexadecimal spelling. Backend service installation uses
 `service_support` returning a named `ServiceSupport` signature and reply bound.
 
 ## Execution foundation
+
+The first EVM profile supports BLS12-381 Fr arithmetic, checked indices, vectors
+and the managed Keccak construction. The maintained
+[Sumcheck project](../examples/projects/sumcheck-keccak/README.md) uses the native
+prover and EVM verifier over identical framed proof bytes. The
+[deployed tests](../common/tests/evm/README.md) compare complete primitive traces
+and failure frontiers. Other fields, curve operations, custom constructions and
+STARK verifier deployment need additional target support. These checks are
+bounded execution evidence, not a formal lowering or cryptographic theorem.
 
 `zkc-cpu` composes the five compiled providers through an immutable
 `CpuInstallation`. Reduced installations restrict operation, layout, codec,

@@ -128,6 +128,9 @@ def test_native_lean_checks_subjects_then_source_views_then_records(monkeypatch,
 def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp_path, native_config):
     developer = load("test_runner", "common/tests/run.py")
     prefixes, builds, completed, discovery = [], [], [], []
+    consumer_prefixes = []
+    cpu_headers = ("Compiler/NativeCompilation.h", "Compiler/NativeLanguage.h",
+                   "Compiler/Run.h", "Transforms/Protocol.h", "Transforms/PipelineOptions.h")
 
     def run(arguments, **kwargs):
         args = list(map(str, arguments))
@@ -138,21 +141,61 @@ def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp
             package = prefix / "lib/cmake/ZkcCompiler"
             package.mkdir(parents=True)
             (package / "ZkcCompilerConfig.cmake").write_text("# installed config")
+            for relative in ("bin", "include/zkc/Target/Cpu", "include/zkc/Target/Evm",
+                             "include/zkc/Dialect/Evm"):
+                (prefix / relative).mkdir(parents=True)
+            for relative in (*cpu_headers, "Compiler/Evm.h", "Compiler/Compilation.h"):
+                header = prefix / "include/zkc" / relative
+                header.parent.mkdir(parents=True, exist_ok=True)
+                header.write_text("// installed header")
+            for component in ("Compiler", "CpuTarget", "EvmTarget", "Driver", "Tools"):
+                (prefix / "lib" / f"libZkc{component}.a").write_bytes(b"archive")
+                (package / f"Zkc{component}Targets.cmake").write_text("# installed export")
             prefixes.append(prefix)
         elif "-S" in args:
             build = Path(args[args.index("-B") + 1])
             assert not build.exists(), "a stale consumer cache can mask a broken install"
             build.mkdir()
-            (build / "CMakeCache.txt").write_text(str(prefixes[-1]))
-            assert f"-DZkcCompiler_DIR={prefixes[-1]}/lib/cmake/ZkcCompiler" in args
+            hint, = [arg.removeprefix("-DZkcCompiler_DIR=") for arg in args
+                     if arg.startswith("-DZkcCompiler_DIR=")]
+            selected = Path(hint).parents[2]
+            source = Path(args[args.index("-S") + 1]).name
+            if source in {"common-only", "evm-only"}:
+                assert selected != prefixes[-1]
+                assert not (selected / "bin").exists()
+                assert not (selected / "include/zkc/Target/Cpu").exists()
+                for relative in cpu_headers:
+                    assert not (selected / "include/zkc" / relative).exists()
+                removed = ("CpuTarget", "Driver", "Tools")
+                if source == "common-only":
+                    removed += ("EvmTarget",)
+                    assert not (selected / "include/zkc/Target").exists()
+                    assert not (selected / "include/zkc/Dialect/Evm").exists()
+                    assert not (selected / "include/zkc/Compiler/Evm.h").exists()
+                else:
+                    assert (selected / "include/zkc/Target/Evm").is_dir()
+                    assert (selected / "lib/libZkcEvmTarget.a").is_file()
+                for component in removed:
+                    assert not (selected / "lib" / f"libZkc{component}.a").exists()
+                    assert not (Path(hint) / f"Zkc{component}Targets.cmake").exists()
+            else:
+                assert source == "consumer" and selected == prefixes[-1]
+                assert (selected / "lib/libZkcCpuTarget.a").is_file()
+            assert (selected / "include/zkc/Compiler/Compilation.h").is_file()
+            assert (selected / "lib/libZkcCompiler.a").is_file()
+            (build / "CMakeCache.txt").write_text(str(selected))
+            consumer_prefixes.append(selected)
             builds.append(build)
         elif "--build" in args:
-            assert Path(args[-1]) == builds[-1]
+            assert args == ["cmake", "--build", str(builds[-1]), "--parallel", "2"]
         elif args[-1] in {"--help", "--version"}:
             assert Path(args[0]).parent == prefixes[-1] / "bin"
             discovery.append(args)
         else:
-            assert args == ["ctest", "--test-dir", str(builds[-1]), "--output-on-failure"]
+            expected = ["ctest", "--test-dir", str(builds[-1]), "--output-on-failure"]
+            if builds[-1].name != "consumer":
+                expected.append("--no-tests=error")
+            assert args == expected
             completed.append(builds[-1])
 
     monkeypatch.setattr(developer, "run", run)
@@ -163,13 +206,14 @@ def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp
             args += ["--output", str(tmp_path / f"selected-{number}")]
         monkeypatch.setattr(sys, "argv", args)
         developer.main()
-    assert len(set(prefixes)) == len(set(builds)) == len(completed) == 2
+    assert len(set(prefixes)) == 2
+    assert len(set(builds)) == len(completed) == 6
     assert len(discovery) == 8
     assert [path.joinpath("installed-header").read_text() for path in prefixes] == ["0", "1"]
-    assert [path.joinpath("CMakeCache.txt").read_text() for path in builds] == list(map(str, prefixes))
+    assert [path.joinpath("CMakeCache.txt").read_text() for path in builds] == list(map(str, consumer_prefixes))
     assert all(path.is_relative_to(tmp_path / "reports/runs") for path in builds)
     if not explicit:
-        assert all(prefix.parent == build.parent for prefix, build in zip(prefixes, builds))
+        assert all(prefix.parent == build.parent for prefix, build in zip(prefixes, builds[2::3]))
 
 
 @pytest.mark.parametrize("kind", ["directory", "file", "symlink", "dangling-symlink"])

@@ -33,6 +33,7 @@ production correctness theorem.
 | Broad native integration | `just test` | Harness, SDK, compiler, Rust, integration, installation, docs and lint |
 | Plonky3 AIR adapter | `just test-plonky3` | Pinned upstream adapter and native differential controls |
 | OpenVM relation adapter | [Standalone workspace commands](../../compiler/adapters/openvm/README.md#run-the-checks) | Pinned branch-subsystem export, upstream comparisons and both native Bundle evaluators |
+| Deployed EVM target | [Pinned runner and real native-proof commands](evm/README.md) | Optional isolated revm workspace; exact deployed bytecode, canonical ABI, outcome and full primitive-trace controls |
 | Independent Lean research | `just test-lean` | Optional formal build, controls and consumers |
 
 `just setup` prepares locked Python and Cargo dependencies. `just build` builds

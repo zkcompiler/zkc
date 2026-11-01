@@ -95,7 +95,7 @@ elseif(NOT result EQUAL 0)
   message(FATAL_ERROR "${MODE} discovery refused: ${output} ${error}")
 endif()
 if(MODE IN_LIST llvm_components)
-  execute_process(COMMAND "${CMAKE_COMMAND}" --build "${TEST_ROOT}/build" --parallel 4
+  execute_process(COMMAND "${CMAKE_COMMAND}" --build "${TEST_ROOT}/build" --parallel 2
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
   if(NOT result EQUAL 0)
     message(FATAL_ERROR "${MODE} failed to compile/link: ${output} ${error}")

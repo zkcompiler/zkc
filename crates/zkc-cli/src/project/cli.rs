@@ -183,7 +183,22 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
     let checking = command == "check";
     let mut report = json!({"format":if checking {"zkc.source-check/0"} else {"zkc.entry-build/0"},"status":"refused","phase":"arguments"});
     let result = (|| -> Result<()> {
+        let target = args.value("--target").unwrap_or("cpu");
+        if !matches!(target, "cpu" | "evm") {
+            return Err("cli-target".into());
+        }
+        if target == "cpu"
+            && ["--solc", "--solc-sha256", "--reuse", "--reuse-sha256"]
+                .iter()
+                .any(|flag| args.has(flag))
+        {
+            return Err("cli-usage".into());
+        }
         let source = Source::load(args)?;
+        source.describe(&mut report);
+        if !checking && target == "evm" {
+            return super::evm::compile(args, &source, &mut report);
+        }
         let entry = args.positional.first().copied();
         let output = args.value("--output");
         if !checking && output.is_none() && source.project.manifest().is_none() {

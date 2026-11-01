@@ -50,15 +50,15 @@ pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) ->
 }
 
 pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
-    let target = Target::load(args, report)?;
+    let target = Input::load(args, report)?;
     let output = args.value("--output").map(std::path::Path::new);
     report["phase"] = json!("preparation");
     let plan = match &target {
-        Target::Project(source) => source
+        Input::Project(source) => source
             .compiler
             .prepare(&source.project, args.positional.first().copied(), output)
             .map_err(|e| crate::project::cli::compiler_error(report, e))?,
-        Target::Package { .. } => {
+        Input::Package { .. } => {
             let directory = output.ok_or("source-output-required")?;
             let interface = target.inspect(None, report)?;
             Preparation {
@@ -76,15 +76,15 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
         let directory = match output {
             Some(directory) => directory.to_path_buf(),
             None => match &target {
-                Target::Project(source) => {
+                Input::Project(source) => {
                     source.project.layout().unwrap().inputs(interface.entry())?
                 }
-                Target::Package { .. } => unreachable!(),
+                Input::Package { .. } => unreachable!(),
             },
         };
         let commands = commands(&target, interface, &directory)?;
         if interface.kind() == EntryKind::Function {
-            if let Target::Package { package, .. } = &target {
+            if let Input::Package { package, .. } = &target {
                 let deployments = crate::entry::FunctionInterface::deployment_interfaces(package)?;
                 entry["requirements"] = deployment_requirements(&deployments);
             }
@@ -140,15 +140,15 @@ fn deployment_requirements(deployments: &[crate::entry::DeploymentInterface]) ->
     })
 }
 fn commands(
-    target: &Target,
+    target: &Input,
     interface: &CheckedInterface,
     directory: &std::path::Path,
 ) -> Result<Json> {
     let project_defaults =
-        matches!(target, Target::Project(source) if source.project.layout().is_some());
+        matches!(target, Input::Project(source) if source.project.layout().is_some());
     let groups = interface.input_groups();
     let selection: Vec<String> = match target {
-        Target::Project(source) => {
+        Input::Project(source) => {
             let mut v = vec![
                 interface.entry().into(),
                 format!("--compiler={}", source.compiler.path().display()),
@@ -160,7 +160,7 @@ fn commands(
             }
             v
         }
-        Target::Package { path, pin, .. } => {
+        Input::Package { path, pin, .. } => {
             vec![format!("--package={path}"), format!("--sha256={pin}")]
         }
     };

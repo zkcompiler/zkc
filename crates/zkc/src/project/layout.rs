@@ -13,6 +13,7 @@ pub struct Layout {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Artifact {
     Package,
+    Evm,
     Proof,
     Results,
 }
@@ -33,6 +34,7 @@ impl Layout {
             entry,
             match kind {
                 Artifact::Package => ".zkpkg",
+                Artifact::Evm => ".evm",
                 Artifact::Proof => ".zkproof",
                 Artifact::Results => ".results.json",
             },

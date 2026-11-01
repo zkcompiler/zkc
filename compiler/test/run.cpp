@@ -66,17 +66,17 @@ int main() {
       {
         auto edge = result.compilation.oracleRealizationSnapshot();
         require(bool(edge), "compilation lost its retained realization edge");
-        require(succeeded(mlir::verify(*edge->original)) &&
+        require(succeeded(mlir::verify(*edge->prepared)) &&
                     succeeded(mlir::verify(*edge->candidate)),
                 "retained realization lost its context");
         auto record = json::parse(edge->record);
         require(bool(record) &&
                     record->getAsObject()->getArray("entries")->empty(),
                 "ordinary invocation invented an oracle entry");
-        edge->original->getBody()->front().setAttr(
-            "test.changed", mlir::UnitAttr::get(edge->original->getContext()));
+        edge->prepared->getBody()->front().setAttr(
+            "test.changed", mlir::UnitAttr::get(edge->prepared->getContext()));
         auto fresh = result.compilation.oracleRealizationSnapshot();
-        require(!fresh->original->getBody()->front().hasAttr("test.changed"),
+        require(!fresh->prepared->getBody()->front().hasAttr("test.changed"),
                 "mutable inspection changed retained source");
       }
       auto second = compile(simplify, release);

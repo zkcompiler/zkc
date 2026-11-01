@@ -8,6 +8,7 @@
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 

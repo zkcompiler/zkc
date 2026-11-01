@@ -5,7 +5,7 @@ use crate::project::{
     cli::{Source, compiler_error},
 };
 
-pub(super) enum Target {
+pub(super) enum Input {
     Project(Box<Source>),
     Package {
         package: Box<Package>,
@@ -13,7 +13,7 @@ pub(super) enum Target {
         pin: String,
     },
 }
-impl Target {
+impl Input {
     pub fn validate(args: &Arguments<'_>) -> Result<()> {
         let package = args.has("--package");
         if package != args.has("--sha256") {

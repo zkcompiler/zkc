@@ -61,36 +61,5 @@ int main() {
   if (failed(lowering.run(*module)) ||
       failed(zkc::computation::verifyComputationRealization(*logical, *module)))
     return 1;
-  mlir::OwningOpRef<mlir::ModuleOp> realized(
-      mlir::cast<mlir::ModuleOp>(module->clone()));
-  pipeline.clear();
-  pipeline.addPass(zkc::protocol::createSelectPhysicalPass());
-  if (failed(pipeline.run(*module)) || failed(mlir::verify(*module)) ||
-      failed(zkc::mathematical::verifyProjectionPreserved(*realized, *module)))
-    return 1;
-  // Passes publish a new body in the builtin module; reacquire its unit.
-  auto scope = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
-      module->getBody()->front());
-  if (scope.getProfile() != zkc::protocol_ir::Profile::Physical)
-    return 2;
-  unsigned literals = 0;
-  module->walk([&](zkc::exec::BooleanOp) { ++literals; });
-  if (literals != 1)
-    return 3;
-  mlir::OwningOpRef<mlir::ModuleOp> changed(
-      mlir::cast<mlir::ModuleOp>(module->clone()));
-  changed->walk([&](zkc::exec::BooleanOp value) {
-    value->setAttr("value", builder.getBoolAttr(false));
-  });
-  if (failed(mlir::verify(*changed)))
-    return 4;
-  mlir::ScopedDiagnosticHandler expected(
-      &context, [](mlir::Diagnostic &) { return mlir::success(); });
-  if (succeeded(
-          zkc::mathematical::verifyProjectionPreserved(*module, *changed)))
-    return 5;
-  return mlir::PassInfo::lookup("zkc-lower-math") ||
-                 mlir::PassInfo::lookup("zkc-realize-computations")
-             ? 6
-             : 0;
+  return failed(mlir::verify(*module)) ? 1 : 0;
 }

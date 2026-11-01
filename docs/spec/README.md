@@ -21,6 +21,7 @@ consumers, identity domains and cross-subsystem integration gates.
 | Serialized artifacts | [Program](formats/program.md), [oracle realization](formats/oracle-realization.md), [Entry package and interface](formats/entry.md), [proof deployment and transport](formats/proof.md), [message frames and setups](formats/messages.md) |
 | Formal import | [structured source](formats/structured-source.md): original protocol-stage units with helpers, participants, contracts, applications and repeats; [constructed validator](formats/constructed-participant.md): a checked proof candidate's validator participant |
 | Host execution | [Entries](runtime/entries.md), [joint bundles](runtime/joint.md), [proofs](runtime/proofs.md), [attempts](runtime/attempts.md), [services](runtime/services.md) |
+| EVM target | [Checked verifier lowering, canonical ABI, effects, ceilings and artifact identity](targets/evm.md) |
 | Operational boundaries | [VM execution](runtime/vm.md), [numerical calls](runtime/numerical.md), [capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
 
 The four MLIR profiles constrain one program at successive compilation

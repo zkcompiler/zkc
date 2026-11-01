@@ -8,6 +8,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInspection.h"
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Dialect/Registry.h"

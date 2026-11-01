@@ -310,13 +310,10 @@ add_zkc_component(Translation
   lib/Translation/R1CSSumcheck.cpp
 )
 add_zkc_component(Transforms
+  lib/Transforms/EndpointClosure.cpp
   lib/Transforms/Admission.cpp
   lib/Transforms/Stages.cpp
   lib/Transforms/PassStatistics.cpp
-  lib/Conversion/Bindings.cpp
-  lib/Conversion/PhysicalVerification.cpp
-  lib/Conversion/Storage.cpp
-  lib/Conversion/Participants.cpp
   lib/Transforms/AlgorithmSites.cpp
   lib/Transforms/ParticipantHelpers.cpp
   lib/Transforms/ScopedAlgorithms.cpp
@@ -399,16 +396,8 @@ add_zkc_component(Transforms
   lib/Transforms/MathematicalCorrespondence.cpp
   lib/Transforms/MathematicalPreservation.cpp
   lib/Transforms/MathLoweringVerification.cpp
-  lib/Transforms/Storage.cpp
   lib/Transforms/LinearContraction.cpp
   lib/Dialect/Relation/Transforms/Deduplicate.cpp
-  lib/Target/CpuTarget.cpp
-  lib/Target/Selection.cpp
-  lib/Target/Catalog.cpp
-  lib/Target/ExecutionPorts.cpp
-  lib/Target/NativePlanTypes.cpp
-  lib/Target/PhysicalPlan.cpp
-  lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
   lib/Compiler/OracleObligations.cpp
@@ -425,17 +414,15 @@ add_zkc_component(Compiler
   lib/Compiler/SourceClaims.cpp
   lib/Compiler/ComponentContracts.cpp
   lib/Compiler/SourceCorrespondence.cpp
+  lib/Compiler/NativeArtifact.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/ApplicationMap.cpp
   lib/Compiler/ApplicationMapData.cpp
   lib/Compiler/ApplicationMapVerification.cpp
   lib/Compiler/StructuredSource.cpp
   lib/Compiler/ArtifactJson.cpp
-  lib/Compiler/RunVerification.cpp
-  lib/Compiler/Run.cpp
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp
-  lib/Compiler/NativeDeployment.cpp
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
   lib/Compiler/NativeProof.cpp
@@ -446,8 +433,42 @@ add_zkc_component(Compiler
   lib/Compiler/NativeProofVerification.cpp
   lib/Compiler/Passes.cpp
   lib/Compiler/Pipelines.cpp
-  lib/Compiler/NativeCompilation.cpp
 )
+add_zkc_component(CpuTarget
+  lib/Conversion/Bindings.cpp
+  lib/Conversion/PhysicalVerification.cpp
+  lib/Conversion/Storage.cpp
+  lib/Conversion/Participants.cpp
+  lib/Transforms/Storage.cpp
+  lib/Target/CpuTarget.cpp
+  lib/Target/Selection.cpp
+  lib/Target/Catalog.cpp
+  lib/Target/ExecutionPorts.cpp
+  lib/Target/NativePlanTypes.cpp
+  lib/Target/PhysicalPlan.cpp
+  lib/Target/StorageSchedule.cpp
+  lib/Target/Cpu/Stages.cpp
+  lib/Target/Cpu/Passes.cpp
+  lib/Target/Cpu/Pipelines.cpp
+  lib/Target/Cpu/LanguagePackage.cpp
+  lib/Target/Cpu/Language.cpp
+  lib/Target/Cpu/Host.cpp
+  lib/Target/Cpu/NativeCompilation.cpp
+  lib/Target/Cpu/NativeDeployment.cpp
+  lib/Target/Cpu/Run.cpp
+  lib/Target/Cpu/RunVerification.cpp
+)
+target_link_libraries(ZkcCpuTarget PUBLIC ZkcCompiler)
+# This target consumes the common checked compiler without CPU selection.
+add_zkc_component(EvmTarget
+  lib/Dialect/Evm/Evm.cpp
+  lib/Target/Evm/Compilation.cpp
+  lib/Target/Evm/Lowering.cpp
+  lib/Target/Evm/Runtime.cpp
+  lib/Target/Evm/Yul.cpp
+)
+target_link_libraries(ZkcEvmTarget PUBLIC ZkcCompiler)
+mlir_target_link_libraries(ZkcEvmTarget PUBLIC MLIRControlFlowToSCF)
 add_zkc_component(Driver
   lib/Driver/Language.cpp
   lib/Driver/Assets.cpp
@@ -499,10 +520,10 @@ target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
-target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
+target_link_libraries(ZkcDriver PUBLIC ZkcCpuTarget ZkcEvmTarget)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
-set(zkc_components ZkcSupport ZkcSource ZkcSyntax ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcDriver)
+set(zkc_components ZkcSupport ZkcSource ZkcSyntax ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcCpuTarget ZkcEvmTarget ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

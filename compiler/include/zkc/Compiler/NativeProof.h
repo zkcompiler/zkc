@@ -1,15 +1,11 @@
 #ifndef ZKC_COMPILER_NATIVEPROOF_H
 #define ZKC_COMPILER_NATIVEPROOF_H
 #include "mlir/IR/BuiltinOps.h"
-#include "zkc/Compiler/Compilation.h"
 #include "zkc/Contracts/ProofFormat.h"
-#include "zkc/Target/CpuTarget.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/JSON.h"
 #include <memory>
-#include <optional>
-#include <variant>
 namespace zkc {
 class CompilationObservation;
 namespace mathematical {
@@ -98,29 +94,5 @@ llvm::Expected<llvm::json::Value> exportConstructedPair(
 struct NativeProofSelection {
   NativeProofPolicy policy;
 };
-enum class NativeProofOperation { Prove, Verify };
-struct NativeProofOptions {
-  std::variant<std::string, NativeProofSelection> policy;
-  bool simplify = true, releaseStorage = false;
-  MathematicalSelectionPolicy mathematicalSelection = {};
-  /// Absent preserves the existing complete declarative deployment API.
-  std::optional<NativeProofOperation> operation = std::nullopt;
-  CompilationObservation *observations = nullptr;
-  target::CpuTarget cpuTarget = {};
-  protocol::OracleRealizationPolicy oracleRealization = {};
-};
-struct CompiledNativeProof {
-  Compilation compilation;
-  std::string deployment;
-  /// Complete policy after occurrence selection and strict admission.
-  NativeProofPolicy policy;
-};
-/// Owned, source-checked compilation. A host must authenticate the resulting
-/// deployment independently; hashes inside a supplied artifact are not
-/// authority.
-llvm::Expected<CompiledNativeProof>
-compileNativeProof(llvm::StringRef source, llvm::StringRef filename,
-                   const NativeProofOptions &options,
-                   const mlir::DialectRegistry &registry);
 } // namespace zkc
 #endif

@@ -5,6 +5,7 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInspection.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Admission.h"

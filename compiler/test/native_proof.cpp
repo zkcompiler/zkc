@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Target/Cpu/Passes.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/Support/raw_ostream.h"

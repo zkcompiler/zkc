@@ -2,9 +2,9 @@
 
 mod function;
 mod initialize;
+mod input;
 mod inputs;
 mod invocation;
-mod target;
 use super::{
     AttemptOptions, BindingPolicy, BindingScope, Package, ProofEntry, ProofOperation, ProofOptions,
     SetupAuthority, files,
@@ -15,10 +15,10 @@ use crate::{
     files::{Outputs, digest, hex, read_regular as read},
     run::HostLimits,
 };
+use input::Input;
 use inputs::{Operation, Options};
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use target::Target;
 type Result<T> = std::result::Result<T, String>;
 
 pub(crate) fn run(command: &str, args: &Arguments<'_>, cpu: Option<&CpuExecution>) -> Json {
@@ -61,7 +61,7 @@ fn execute(
     if matches!(command, "init" | "new") {
         return initialize::project(command, args, report);
     }
-    Target::validate(args)?;
+    Input::validate(args)?;
     if command == "prepare" {
         return initialize::prepare(args, report);
     }
@@ -79,7 +79,7 @@ fn execute(
     if command == "bindings" && !args.has("--output") {
         return Err("cli-usage".into());
     }
-    let target = Target::load(args, report)?;
+    let target = Input::load(args, report)?;
     let name = args.positional.first().copied();
     if command == "inspect" {
         report["phase"] = json!("interface");
@@ -115,8 +115,8 @@ fn execute(
     report["entry"] = json!(view.entry());
     report["phase"] = json!("invocation");
     let layout = match &target {
-        Target::Project(source) => source.project.layout(),
-        Target::Package { .. } => None,
+        Input::Project(source) => source.project.layout(),
+        Input::Package { .. } => None,
     };
     let invocation =
         invocation::Invocation::resolve(&view, layout.as_ref(), args, operation, checking, report)?;

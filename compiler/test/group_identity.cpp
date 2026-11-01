@@ -6,6 +6,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Mathematical.h"

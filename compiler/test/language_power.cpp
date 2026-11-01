@@ -1,5 +1,6 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Language/Project.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>

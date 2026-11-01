@@ -1,6 +1,9 @@
 #ifndef ZKC_LIB_COMPILER_NATIVE_DEPLOYMENT_H
 #define ZKC_LIB_COMPILER_NATIVE_DEPLOYMENT_H
 #include "zkc/Compiler/NativeProof.h"
+namespace zkc {
+struct NativeProofOptions;
+}
 namespace zkc::detail {
 /// Decode the supplied outer bytes and compare retained policy/descriptor,
 /// source port coordinates and the checked physical executable view. JSON

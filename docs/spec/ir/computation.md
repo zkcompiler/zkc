@@ -271,3 +271,34 @@ Removing a collection can reduce storage and traversal work, but scalar streamin
 may be slower than native bulk kernels. This is an explicit compilation choice
 with the usual sufficient-capacity mathematical contract; it does not promise
 identical resource exhaustion or faster execution for every workload.
+
+## Selected endpoint closure
+
+After complete source construction and paired-role checks, including counts of
+communication-free loops, closed participant formation performs one scoped
+expansion and forms nominal mathematical Exec computations. Selecting an
+endpoint is a subsequent common compiler operation; it performs no CPU recipe,
+resident representation or physical implementation selection.
+
+The source must be a completely admitted closed Exec module. The selected role
+has exactly one participant. Retain that participant, entries restricted to its
+role, and the transitive executable symbol dependencies resolved from actual
+uses, including nested symbol references. A nested reference retains the exact
+symbol-table shells and demanded leaves; a reference to a symbol table itself
+conservatively retains its entire body. Bodies, attributes, contracts, order and
+SSA of retained definitions remain exact, ignoring locations. Unknown or
+unresolved references refuse. Closure traversal and comparison are bounded.
+
+The checked owner retains an immutable complete source snapshot separately from
+its executable candidate. Full projection correspondence records stay with that
+source; they are not executable target support obligations. The selected
+candidate retains its module/symbol contracts but excludes full paired-role
+projection records and unreachable definitions. Target support admission reads
+the actual selected candidate. The independent endpoint reader re-admits both
+subjects and compares the selected source definitions, entry targets, nested
+shells and exact dependency inventory against the supplied candidate. Generic
+symbol DCE, caller-provided hashes and edited snapshots grant no correspondence.
+
+This structural crossing assumes earlier source/construction checks. It does
+not prove target lowering, cryptographic soundness or equal resource behavior
+between execution targets.

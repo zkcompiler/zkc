@@ -1,7 +1,9 @@
 # Compilation pipeline
 
 Protocol source and direct Protocol IR share the mathematical compilation
-pipeline and native VM. Application `entry fn` control uses standard MLIR `func`/`cf`
+pipeline. CPU execution uses the native VM; the [EVM verifier target](../spec/targets/evm.md)
+branches from checked closed Exec to machine operations, Yul and pinned solc.
+Application `entry fn` control uses standard MLIR `func`/`cf`
 and typed Data/Exec boundaries, published as `zkc.host/0`. Its numerical helpers
 reuse numerical realization and physical export; its protocol and proof calls invoke
 the existing participant pipelines. The [architecture map](../architecture.md)

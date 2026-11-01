@@ -3,6 +3,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/SourceProject.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Registry.h"

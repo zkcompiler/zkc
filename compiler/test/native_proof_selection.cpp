@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Compiler/NativeCompilation.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Printing.h"
@@ -51,6 +52,40 @@ int main(int argc, char **argv) {
     return module;
   };
   auto schnorr = read("schnorr-services");
+  cases.run("native compilation consumes the checked endpoint closure", [&] {
+    for (auto operation :
+         {NativeProofOperation::Prove, NativeProofOperation::Verify}) {
+      NativeProofOptions options{NativeProofSelection{selection()}};
+      options.operation = operation;
+      auto compiled =
+          take(compileNativeProof(schnorr, "endpoint.mlir", options, registry));
+      auto root = *compiled.compilation.module()
+                       .getOps<protocol_ir::ProtocolModuleOp>()
+                       .begin();
+      auto participants =
+          root.getBody().front().getOps<protocol_ir::ParticipantOp>();
+      require(hasSingleElement(participants),
+              "native operation retained both roles");
+      require((*participants.begin()).getRole() ==
+                  (operation == NativeProofOperation::Verify ? "Bob" : "Alice"),
+              "native operation retained the wrong role");
+      require(
+          root.getBody().front().getOps<protocol_ir::ProjectionOp>().empty(),
+          "correspondence records entered executable publication");
+      auto malformed = schnorr;
+      auto position = malformed.find("%challenge = protocol.exchange %c");
+      require(position != std::string::npos, "missing delivery");
+      malformed.replace(
+          position, StringRef("%challenge = protocol.exchange %c").size(),
+          "%altered = algebra.field_add %c, %c : "
+          "(!algebra.field<\"bls12-381.fr\">, "
+          "!algebra.field<\"bls12-381.fr\">) "
+          "-> !algebra.field<\"bls12-381.fr\">\n%challenge = protocol.exchange "
+          "%altered");
+      refuses(compileNativeProof(malformed, "endpoint.mlir", options, registry),
+              "native-proof-reverse-message");
+    }
+  });
   for (StringRef suite : {"merlin3.bls12-381.fr64be/0",
                           "spongefish0.8.0.keccak.bls12-381.fr64be/0"})
     for (StringRef fixture :

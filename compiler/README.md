@@ -91,11 +91,30 @@ arguments or a closed numerical function root.
 | `Zkc::Relation` | `Relation/` | Pure R1CS/AIR data, normalization, evaluation and matrices |
 | `Zkc::Language` | `Language/` | Immutable `.zkc`/Asset capture, syntax, checking and Entry closure |
 | `Zkc::Program` | `Program/` | Shared participant records, native local-definition view, bounded codec and admission |
-| `Zkc::IR` | `Dialect/`, `Interfaces/` | Dialects, mandatory profile verification, type adapters and interfaces |
+| `Zkc::IR` | `Dialect/` (except Evm), `Interfaces/` | Dialects, mandatory profile verification, type adapters and interfaces |
 | `Zkc::Translation` | `Translation/` | Language-to-math emission/comparison, relation ingress and checked program export |
-| `Zkc::Transforms` | `Transforms/`, `Target/` | Mathematical preparation/projection, local expansion, polynomial lowering and physical selection |
-| `Zkc::Compiler` | `Compiler/` | Owned compilations, run/proof packaging, public-coin/polynomial checks and pass registration |
+| `Zkc::Transforms` | `Transforms/` (except physical APIs) | Common mathematical preparation/projection, closed Exec formation and checked endpoint closure |
+| `Zkc::Compiler` | Common `Compiler/` headers | Checked original/interface admission, logical proof construction/check/export, public-coin/polynomial checks and common pass registration |
+| `Zkc::CpuTarget` | `Target/` (except Evm), `Compiler/NativeCompilation.h`, `Compiler/NativeLanguage.h`, `Compiler/Run.h`, `Transforms/Protocol.h`, `Transforms/PipelineOptions.h` | CPU physical selection/layout, native compilation and publication, CPU pass/pipeline registration |
+| `Zkc::EvmTarget` | `Compiler/Evm.h`, `Target/Evm/`, `Dialect/Evm/` | EVM consumer of the common compiler, independent of CPU selection |
 | `Zkc::Driver` | `Driver/` | CLI parsing and input loading |
+
+`Compiler/NativeProof.h` owns logical construction and policy; CPU compilation
+options live in `Compiler/NativeCompilation.h`. `Compiler/Language.h` exposes
+checked original/source/interface bytes and derives logical proof selection with
+`language::proofPolicy`, independently of CPU compilation;
+`Compiler/NativeLanguage.h` adds native Entry compilation. Register common passes
+and pipelines with `registerCompilerPasses` and `registerCompilerPipelines`, and
+CPU registrations separately with `registerCpuPasses` and `registerCpuPipelines`.
+
+`buildClosedExecutionPipeline` performs one checked scoped expansion and forms
+nominal mathematical Exec computations. `closeEndpoint` then admits the entire
+closed source and checks selected-role executable symbol closure, including
+nested references. Its immutable `CheckedEndpoint` retains the complete source
+and correspondence records separately from the executable candidate. Target
+support checks inspect that candidate; snapshot edits require a fresh
+`checkEndpointClosure`. These structural checks assume the complete earlier
+construction/paired-role checks and do not prove target lowering semantics.
 
 Header paths are relative to `zkc/`. C++ namespaces express semantic subjects;
 `zkc::protocol` spans several components and does not identify a link dependency.
@@ -107,7 +126,9 @@ Source require the pinned external utf8proc library for NFC validation of
 source origins and source text. Syntax depends on Source. Language depends on Syntax, Contracts
 and Relation and still has no MLIR dependency. Program depends on Contracts.
 IR adds MLIR and depends on Program and Relation. Transforms depends on IR; Translation depends on IR and Language; Compiler depends on Transforms
-and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.
+and Translation; CpuTarget and EvmTarget each depend on Compiler; Driver composes
+both targets. Common Compiler and Transforms do not link either machine target
+or CLI Driver.
 Tools imports Driver's dependency closure.
 
 ### Installed package discovery

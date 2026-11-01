@@ -120,7 +120,7 @@ void refusesConstruction(PreparedProtocol &owner, StringRef selection,
 }
 void checked(const RealizedProtocol &owner,
              const protocol::OracleRealizationPolicy &policy = {}) {
-  auto original = owner.originalSnapshot();
+  auto original = owner.preparedSnapshot();
   auto candidate = owner.candidateSnapshot();
   require(bool(original) && bool(candidate), "checked edge lost a side");
   if (auto failure = protocol::checkOracleRealization(
@@ -290,7 +290,7 @@ int main() {
   cases.run(
       "checked owner retains both sides and serialized interpretation", [&] {
         checked(owner);
-        auto original = owner.originalSnapshot();
+        auto original = owner.preparedSnapshot();
         require(OperationEquivalence::isEquivalentTo(
                     *original, *frozen, OperationEquivalence::IgnoreLocations),
                 "realization altered the retained prepared original");
@@ -395,7 +395,7 @@ int main() {
   });
   cases.run("candidate snapshot mutation cannot change checked ownership", [&] {
     auto selection = owner.normalizedSelection().str();
-    auto original = owner.originalSnapshot();
+    auto original = owner.preparedSnapshot();
     auto candidate = owner.candidateSnapshot();
     changeRelation(*candidate);
     auto failure = protocol::checkOracleRealization(*original, *candidate,
@@ -409,7 +409,7 @@ int main() {
   cases.run(
       "original and caller mutations cannot rebind the checked edge", [&] {
         auto selection = owner.normalizedSelection().str();
-        auto original = owner.originalSnapshot();
+        auto original = owner.preparedSnapshot();
         auto candidate = owner.candidateSnapshot();
         changeRelation(*original);
         changeRelation(*source);
@@ -426,7 +426,7 @@ int main() {
     require(bool(ordinary), "invalid ordinary fixture");
     auto identity = take(RealizedProtocol::realize(prepare(*ordinary)));
     checked(identity);
-    auto left = identity.originalSnapshot(),
+    auto left = identity.preparedSnapshot(),
          right = identity.candidateSnapshot();
     require(OperationEquivalence::isEquivalentTo(
                 *left, *right, OperationEquivalence::IgnoreLocations),
@@ -484,7 +484,7 @@ int main() {
   };
   cases.run("logical clauses stay on the original signature", [&] {
     checked(clauses);
-    auto original = clauses.originalSnapshot(),
+    auto original = clauses.preparedSnapshot(),
          candidate = clauses.candidateSnapshot();
     require(main(*original).getContracts()->size() == 5,
             "original lost a clause");
@@ -515,7 +515,7 @@ int main() {
         "returned anchor lost its actual representation associations");
   });
   cases.run("equal predicates do not merge named target selections", [&] {
-    auto original = clauses.originalSnapshot(),
+    auto original = clauses.preparedSnapshot(),
          candidate = clauses.candidateSnapshot();
     auto record = take(json::parse(clauses.realizationRecord()));
     auto entry =
@@ -527,7 +527,7 @@ int main() {
     rejects(*original, *candidate, changed, "oracle-realization-record");
   });
   cases.run("identical native code cannot substitute a logical target", [&] {
-    auto original = clauses.originalSnapshot(),
+    auto original = clauses.preparedSnapshot(),
          candidate = clauses.candidateSnapshot();
     auto statements =
         main(*original).getBody().front().getOps<protocol_ir::StatementOp>();
@@ -547,7 +547,7 @@ int main() {
             "oracle-realization-record");
   });
   cases.run("candidate cannot insert its own ordinary clause", [&] {
-    auto original = owner.originalSnapshot(),
+    auto original = owner.preparedSnapshot(),
          candidate = owner.candidateSnapshot();
     main(*candidate)
         ->setAttr("contracts", main(*original)->getAttr("contracts"));

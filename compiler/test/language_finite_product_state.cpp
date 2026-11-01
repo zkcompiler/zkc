@@ -4,6 +4,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/SourceProject.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Translation/Language.h"
 using namespace llvm;

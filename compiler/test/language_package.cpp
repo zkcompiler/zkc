@@ -1,5 +1,6 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"

@@ -3,6 +3,7 @@ use crate::entry::{CompileOptions, Package};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    ffi::OsString,
     path::{Path, PathBuf},
     process::Command,
     time::Duration,
@@ -110,6 +111,8 @@ type Result<T> = std::result::Result<T, Error>;
 /// The selected executable is resolved once from an explicit path or trusted PATH.
 pub struct Compiler {
     path: PathBuf,
+    #[cfg(feature = "evm")]
+    immutable_image: Option<crate::io::executable::Executable>,
 }
 impl Compiler {
     pub fn new(name: &str) -> Result<Self> {
@@ -142,12 +145,75 @@ impl Compiler {
             }
             return Ok(Self {
                 path: path.canonicalize().map_err(|_| "source-compiler-io")?,
+                #[cfg(feature = "evm")]
+                immutable_image: None,
             });
         }
         Err("source-compiler-missing".into())
     }
     pub fn path(&self) -> &Path {
         &self.path
+    }
+    /// Compile a selected proof Entry through the common checked compiler
+    /// boundary. This produces EVM source, never a native Entry package.
+    #[cfg(feature = "evm")]
+    pub fn evm_source(
+        &self,
+        project: &Project,
+        selection: Selection<'_>,
+    ) -> Result<crate::evm::Source> {
+        let executable = compiler_snapshot(&self.path)?;
+        let compiler = Self {
+            path: self.path.clone(),
+            immutable_image: Some(executable),
+        };
+        let source = compiler.evm_source_from(project, selection)?;
+        check_compiler_path(compiler.immutable_image.as_ref().unwrap(), &self.path)?;
+        Ok(source)
+    }
+    #[cfg(feature = "evm")]
+    fn evm_source_from(
+        &self,
+        project: &Project,
+        selection: Selection<'_>,
+    ) -> Result<crate::evm::Source> {
+        if selection.kind == Some(EntryKind::Function) {
+            return Err("source-entry-selection".into());
+        }
+        let bytes = self.invoke(project, "language-evm", selection, &[])?;
+        let source = crate::evm::Source::capture(&bytes).map_err(|e| Error::from(e.to_string()))?;
+        if !selection::matches(selection.name, source.entry()) {
+            return Err("source-entry-selection".into());
+        }
+        Ok(source)
+    }
+    /// Reuse requires an immutable authenticated artifact with an exact build
+    /// key. Both compiler and solc identities are rechecked on this path.
+    #[cfg(feature = "evm")]
+    pub fn build_evm(
+        &self,
+        project: &Project,
+        selection: Selection<'_>,
+        solc: &crate::evm::Solc,
+        reuse: Option<&crate::evm::Artifact>,
+    ) -> Result<crate::evm::Artifact> {
+        let executable = compiler_snapshot(&self.path)?;
+        let compiler = Self {
+            path: self.path.clone(),
+            immutable_image: Some(executable),
+        };
+        let executable = compiler.immutable_image.as_ref().unwrap();
+        let source = compiler.evm_source_from(project, selection)?;
+        check_compiler_path(executable, &self.path)?;
+        let artifact = solc
+            .compile(crate::evm::Build {
+                source: &source,
+                compiler_sha256: executable.sha256(),
+                reuse,
+            })
+            .map_err(|e| Error::from(e.to_string()))?;
+        check_compiler_path(executable, &self.path)?;
+        Ok(artifact)
     }
     fn invoke(
         &self,
@@ -171,48 +237,51 @@ impl Compiler {
         for source in project.paths() {
             crate::io::open_regular(source).map_err(|_| "artifact-io")?;
         }
-        let mut process = Command::new(&self.path);
-        process.args([command, "--source-format=zkc"]);
+        let mut arguments = vec![OsString::from(command), "--source-format=zkc".into()];
         if let Some(name) = selection.name {
             if name.is_empty() {
                 return Err("source-entry-selection".into());
             }
-            process.arg(format!("--entry={name}"));
+            arguments.push(format!("--entry={name}").into());
         }
         if let Some(kind) = selection.kind {
-            process.arg(format!("--entry-kind={}", kind.name()));
+            arguments.push(format!("--entry-kind={}", kind.name()).into());
         }
         let directory = tempfile::tempdir().map_err(|_| "source-compiler-io")?;
         let observation_path = directory.path().join("observations.json");
-        process.arg(format!(
-            "--{}={}",
-            if observations.is_some() {
-                "observations"
-            } else {
-                "diagnostics"
-            },
-            observation_path.display()
-        ));
+        arguments.push(
+            format!(
+                "--{}={}",
+                if observations.is_some() {
+                    "observations"
+                } else {
+                    "diagnostics"
+                },
+                observation_path.display()
+            )
+            .into(),
+        );
         let trace_path = directory.path().join("time-trace.json");
         if let Some(request) = observations {
-            process.arg(format!("--time-trace={}", trace_path.display()));
+            arguments.push(format!("--time-trace={}", trace_path.display()).into());
             if !request.dumps.is_empty() {
-                process.arg(format!("--dump={}", request.dumps.join(",")));
+                arguments.push(format!("--dump={}", request.dumps.join(",")).into());
             }
         }
-        process.args(&project.flags).args(extra);
-        let captured = crate::io::process::capture(
-            &mut process,
-            directory.path(),
-            |elapsed| elapsed >= Duration::from_secs(300),
-            Package::MAX_BYTES,
-            true,
-        )
-        .map_err(|e| match e {
-            crate::io::process::Error::Timeout => "source-compiler-timeout",
-            crate::io::process::Error::OutputLimit => "source-compiler-limit",
-            _ => "source-compiler-io",
-        })?;
+        arguments.extend(project.flags.iter().map(OsString::from));
+        arguments.extend(extra.iter().map(OsString::from));
+        let captured = self
+            .capture(
+                &arguments,
+                directory.path(),
+                Duration::from_secs(300),
+                Package::MAX_BYTES,
+            )
+            .map_err(|e| match e {
+                crate::io::process::Error::Timeout => "source-compiler-timeout",
+                crate::io::process::Error::OutputLimit => "source-compiler-limit",
+                _ => "source-compiler-io",
+            })?;
         use std::io::Read;
         let mut diagnostics = Vec::new();
         captured
@@ -401,14 +470,14 @@ impl Compiler {
     /// Query the actual selected executable, even outside a project.
     pub fn capabilities(&self) -> Result<serde_json::Value> {
         let directory = tempfile::tempdir().map_err(|_| "source-compiler-io")?;
-        let captured = crate::io::process::capture(
-            Command::new(&self.path).arg("--capabilities"),
-            directory.path(),
-            |elapsed| elapsed >= Duration::from_secs(30),
-            65536,
-            true,
-        )
-        .map_err(|_| "source-compiler-io")?;
+        let captured = self
+            .capture(
+                &["--capabilities".into()],
+                directory.path(),
+                Duration::from_secs(30),
+                65536,
+            )
+            .map_err(|_| "source-compiler-io")?;
         if !captured.status.success() {
             return Err("source-compiler-capabilities".into());
         }
@@ -438,6 +507,37 @@ impl Compiler {
         result["execution_counts"] = serde_json::json!(execution_counts);
         Ok(result)
     }
+
+    fn capture(
+        &self,
+        arguments: &[OsString],
+        directory: &Path,
+        timeout: Duration,
+        limit: usize,
+    ) -> std::result::Result<crate::io::process::Captured, crate::io::process::Error> {
+        #[cfg(feature = "evm")]
+        if let Some(image) = &self.immutable_image {
+            let mut command = image
+                .command(&self.path)
+                .map_err(crate::io::process::Error::Process)?;
+            if let Some(libraries) =
+                compiler_library_path(&self.path, std::env::var_os("LD_LIBRARY_PATH").as_deref())
+                    .map_err(crate::io::process::Error::Process)?
+            {
+                command.env("LD_LIBRARY_PATH", libraries);
+            }
+            return command
+                .args(arguments)
+                .capture(directory, timeout, limit, None);
+        }
+        crate::io::process::capture(
+            Command::new(&self.path).args(arguments),
+            directory,
+            |elapsed| elapsed >= timeout,
+            limit,
+            true,
+        )
+    }
 }
 
 /// Sidecars are opt-in and never become part of executable identity.
@@ -464,6 +564,70 @@ struct Invocation {
     diagnostics: Option<String>,
     diagnostics_truncated: bool,
     observation: Option<serde_json::Value>,
+}
+
+/// The compiler installer owns the bin/../lib layout. A memfd has no installed
+/// ELF $ORIGIN, so supply that directory explicitly for snapshot execution.
+/// Installed libraries precede trusted ambient fallback; both remain mutable
+/// host toolchain inputs, outside the executable image's authentication.
+#[cfg(feature = "evm")]
+fn compiler_library_path(
+    executable: &Path,
+    ambient: Option<&std::ffi::OsStr>,
+) -> std::io::Result<Option<OsString>> {
+    let Some(bin) = executable.parent().filter(|bin| bin.ends_with("bin")) else {
+        return Ok(None);
+    };
+    let library = bin.parent().unwrap().join("lib");
+    // ld.so accepts both separators, expands $ tokens and has no escaping.
+    // Refuse an ambiguous installation rather than search unintended paths.
+    if !library.is_absolute()
+        || library
+            .as_os_str()
+            .as_encoded_bytes()
+            .iter()
+            .any(|byte| matches!(byte, b':' | b';' | b'$'))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "compiler installation cannot be represented in LD_LIBRARY_PATH",
+        ));
+    }
+    let mut libraries = library.into_os_string();
+    if let Some(ambient) = ambient.filter(|value| !value.is_empty()) {
+        libraries.push(":");
+        libraries.push(ambient);
+    }
+    Ok(Some(libraries))
+}
+
+#[cfg(feature = "evm")]
+fn compiler_snapshot(path: &Path) -> Result<crate::io::executable::Executable> {
+    crate::io::executable::Executable::capture(path, 512 * 1024 * 1024)
+        .map_err(compiler_snapshot_error)
+}
+
+#[cfg(feature = "evm")]
+fn check_compiler_path(executable: &crate::io::executable::Executable, path: &Path) -> Result<()> {
+    if !executable
+        .matches_path(path)
+        .map_err(compiler_snapshot_error)?
+    {
+        return Err("source-compiler-changed".into());
+    }
+    Ok(())
+}
+
+#[cfg(feature = "evm")]
+fn compiler_snapshot_error(error: crate::io::ReadError) -> Error {
+    match error {
+        crate::io::ReadError::Limit => "source-compiler-limit",
+        crate::io::ReadError::Io(error) if error.kind() == std::io::ErrorKind::Unsupported => {
+            "source-compiler-snapshot-unsupported"
+        }
+        crate::io::ReadError::Io(_) => "source-compiler-io",
+    }
+    .into()
 }
 
 #[cfg(test)]
@@ -518,5 +682,449 @@ mod tests {
         let mut unknown = baseline;
         unknown["unrecognized"] = json!([]);
         assert!(serde_json::from_value::<Checked>(unknown).is_err());
+    }
+
+    #[cfg(all(feature = "evm", target_os = "linux"))]
+    mod evm {
+        use super::super::*;
+        use serde_json::json;
+        use std::{collections::BTreeMap, os::unix::fs::PermissionsExt};
+
+        fn script(path: &Path, text: &str) {
+            std::fs::write(path, text).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+
+        fn response(entry: &str) -> String {
+            let identity = "00".repeat(32);
+            let yul = "object \"Verifier\" { code {} }";
+            json!({
+                "format":"zkc.evm-source/0", "target":"evm", "fork":"cancun",
+                "entry":entry, "capture":identity, "installation":identity,
+                "original":identity, "source_sha256":identity, "yul":yul,
+                "abi":[{"type":"function", "name":"verify", "stateMutability":"view",
+                    "inputs":[{"name":"publicInputs","type":"bytes[]"},
+                        {"name":"context","type":"bytes"},{"name":"proof","type":"bytes"}],
+                    "outputs":[{"name":"accepted","type":"bool"}]}],
+                "manifest":{"entry":entry, "capture":identity, "installation":identity,
+                    "original":identity, "source_sha256":identity,
+                    "yul_sha256":crate::io::bytes::hex(&Sha256::digest(yul.as_bytes()))}
+            })
+            .to_string()
+        }
+
+        fn fixture(directory: &Path, entry: &str) -> (Compiler, Project) {
+            let path = directory.join("compiler");
+            script(
+                &path,
+                &format!("#!/bin/sh\nprintf '%s' '{}'\n", response(entry)),
+            );
+            let module = directory.join("main.zkc");
+            std::fs::write(&module, "module example;\n").unwrap();
+            let project = Project::explicit(
+                BTreeMap::from([("example".into(), module.to_str().unwrap().into())]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            (Compiler::new(path.to_str().unwrap()).unwrap(), project)
+        }
+
+        #[test]
+        fn installed_compiler_library_path_preserves_trusted_fallback_without_adding_cwd() {
+            use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+            let path = Path::new("/trusted compiler/安装/bin/zkc-compile");
+            let library = OsStr::new("/trusted compiler/安装/lib");
+            for ambient in [None, Some(OsStr::new(""))] {
+                assert_eq!(
+                    compiler_library_path(path, ambient).unwrap().unwrap(),
+                    library
+                );
+            }
+            // Preserve caller-supplied empty entries, tokens, separators and
+            // non-UTF-8 bytes as trusted ambient policy, without parsing them.
+            let ambient = OsStr::from_bytes(b":/ambient\xff;$ORIGIN/plugins:");
+            let mut expected = library.to_os_string();
+            expected.push(":");
+            expected.push(ambient);
+            assert_eq!(
+                compiler_library_path(path, Some(ambient)).unwrap().unwrap(),
+                expected
+            );
+            assert!(
+                compiler_library_path(Path::new("/build/compiler/zkc-compile"), Some(ambient))
+                    .unwrap()
+                    .is_none()
+            );
+            let path = Path::new(OsStr::from_bytes(b"/trusted\xff/bin/zkc-compile"));
+            assert_eq!(
+                compiler_library_path(path, None).unwrap().unwrap(),
+                OsStr::from_bytes(b"/trusted\xff/lib")
+            );
+            for prefix in ["colon:prefix", "semicolon;prefix", "token$ORIGIN"] {
+                let directory = tempfile::tempdir().unwrap();
+                let bin = directory.path().join(prefix).join("bin");
+                std::fs::create_dir_all(&bin).unwrap();
+                let (compiler, project) = fixture(&bin, "example::Proof");
+                assert_eq!(
+                    compiler
+                        .evm_source(&project, Selection::default())
+                        .unwrap_err()
+                        .code,
+                    "source-compiler-io"
+                );
+            }
+        }
+
+        #[test]
+        fn shared_installed_compiler_runs_sealed_bytes_with_installation_libraries() {
+            fn output(captured: crate::io::process::Captured) -> Vec<u8> {
+                let stderr =
+                    crate::io::read_regular(captured.stderr.as_ref().unwrap().path(), 65536)
+                        .unwrap();
+                assert!(
+                    captured.status.success(),
+                    "{}: {}",
+                    captured.status,
+                    String::from_utf8_lossy(&stderr)
+                );
+                crate::io::read_regular(captured.stdout.path(), 65536).unwrap()
+            }
+            fn build(directory: &Path, command: &mut Command) {
+                output(
+                    crate::io::process::capture(
+                        command,
+                        directory,
+                        |elapsed| elapsed >= Duration::from_secs(30),
+                        65536,
+                        true,
+                    )
+                    .unwrap(),
+                );
+            }
+
+            let directory = tempfile::tempdir().unwrap();
+            let root = directory.path().join("shared compiler 安装");
+            let cc = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+            let bin = root.join("bin");
+            let lib = root.join("lib");
+            let ambient = root.join("ambient");
+            for path in [&bin, &lib, &ambient] {
+                std::fs::create_dir_all(path).unwrap();
+            }
+            let (mut compiler, project) = fixture(&bin, "example::Proof");
+            let source = root.join("response.c");
+            std::fs::write(
+                &source,
+                format!(
+                    "const char *compiler_response(void) {{ return {}; }}\n",
+                    serde_json::to_string(&response("example::Proof")).unwrap()
+                ),
+            )
+            .unwrap();
+            let library_name = "libZkcLoaderFixture.so";
+            build(
+                &root,
+                Command::new(&cc)
+                    .args(["-shared", "-fPIC", "-Wl,-soname,libZkcLoaderFixture.so"])
+                    .arg(&source)
+                    .arg("-o")
+                    .arg(lib.join(library_name)),
+            );
+            let fallback_source = root.join("fallback.c");
+            std::fs::write(
+                &fallback_source,
+                "int compiler_fallback(void) { return 0; }\n",
+            )
+            .unwrap();
+            let fallback_name = "libZkcLoaderFallback.so";
+            build(
+                &root,
+                Command::new(&cc)
+                    .args(["-shared", "-fPIC", "-Wl,-soname,libZkcLoaderFallback.so"])
+                    .arg(&fallback_source)
+                    .arg("-o")
+                    .arg(lib.join(fallback_name)),
+            );
+            let main = root.join("main.c");
+            std::fs::write(
+                &main,
+                "#include <stdio.h>\nextern const char *compiler_response(void);\nextern int compiler_fallback(void);\nint main(void) { puts(compiler_response()); return compiler_fallback(); }\n",
+            )
+            .unwrap();
+            build(
+                &root,
+                Command::new(&cc)
+                    .arg(&main)
+                    .arg("-L")
+                    .arg(&lib)
+                    .args([
+                        "-lZkcLoaderFixture",
+                        "-lZkcLoaderFallback",
+                        "-Wl,--enable-new-dtags,-rpath,$ORIGIN/../lib",
+                        "-o",
+                    ])
+                    .arg(compiler.path()),
+            );
+            let original = std::fs::read(compiler.path()).unwrap();
+            assert_eq!(&original[..4], b"\x7fELF");
+            let image = compiler_snapshot(compiler.path()).unwrap();
+            assert_eq!(
+                image.sha256(),
+                crate::io::bytes::hex(&Sha256::digest(&original))
+            );
+            let direct = compiler
+                .evm_source_from(&project, Selection::default())
+                .unwrap();
+            // Control: argv0 alone cannot restore the original ELF $ORIGIN.
+            let broken = image
+                .command(compiler.path())
+                .unwrap()
+                .args(["language-evm"])
+                .capture(&root, Duration::from_secs(5), 65536, None)
+                .unwrap();
+            assert_eq!(broken.status.code(), Some(127));
+            let stderr =
+                crate::io::read_regular(broken.stderr.as_ref().unwrap().path(), 65536).unwrap();
+            assert!(String::from_utf8_lossy(&stderr).contains(library_name));
+            let sealed = compiler.evm_source(&project, Selection::default()).unwrap();
+            assert_eq!(sealed.bytes(), direct.bytes());
+
+            compiler.immutable_image = Some(image);
+            for replace_inode in [true, false] {
+                if replace_inode {
+                    let replacement = root.join("replacement");
+                    script(&replacement, "#!/bin/sh\nexit 9\n");
+                    std::fs::rename(replacement, compiler.path()).unwrap();
+                } else {
+                    script(compiler.path(), "#!/bin/sh\nexit 9\n");
+                }
+                let sealed = compiler
+                    .evm_source_from(&project, Selection::default())
+                    .unwrap();
+                assert_eq!(sealed.bytes(), direct.bytes());
+                assert_eq!(
+                    check_compiler_path(
+                        compiler.immutable_image.as_ref().unwrap(),
+                        compiler.path()
+                    )
+                    .unwrap_err()
+                    .code,
+                    "source-compiler-changed"
+                );
+                std::fs::write(compiler.path(), &original).unwrap();
+                check_compiler_path(compiler.immutable_image.as_ref().unwrap(), compiler.path())
+                    .unwrap();
+            }
+
+            // A colliding ambient library must lose to the installation, while
+            // a dependency absent from the installation still uses fallback.
+            std::fs::rename(lib.join(fallback_name), ambient.join(fallback_name)).unwrap();
+            std::fs::write(
+                &source,
+                "const char *compiler_response(void) { return \"ambient replacement\"; }\n",
+            )
+            .unwrap();
+            build(
+                &root,
+                Command::new(&cc)
+                    .args(["-shared", "-fPIC", "-Wl,-soname,libZkcLoaderFixture.so"])
+                    .arg(&source)
+                    .arg("-o")
+                    .arg(ambient.join(library_name)),
+            );
+            let libraries = compiler_library_path(compiler.path(), Some(ambient.as_os_str()))
+                .unwrap()
+                .unwrap();
+            let captured = compiler
+                .immutable_image
+                .as_ref()
+                .unwrap()
+                .command(compiler.path())
+                .unwrap()
+                .env("LD_LIBRARY_PATH", libraries)
+                .capture(&root, Duration::from_secs(5), 65536, None)
+                .unwrap();
+            assert_eq!(output(captured), direct.bytes());
+        }
+
+        #[test]
+        fn evm_response_must_match_the_requested_entry_and_proof_kind() {
+            let directory = tempfile::tempdir().unwrap();
+            let (compiler, project) = fixture(directory.path(), "example::Proof<example::Fr>");
+            for name in [
+                None,
+                Some("Proof<example::Fr>"),
+                Some(" ::example::Proof < example::Fr > "),
+            ] {
+                assert_eq!(
+                    compiler
+                        .evm_source(
+                            &project,
+                            Selection {
+                                name,
+                                kind: Some(EntryKind::Proof)
+                            }
+                        )
+                        .unwrap()
+                        .entry(),
+                    "example::Proof<example::Fr>"
+                );
+            }
+            for name in [
+                "Other<example::Fr>",
+                "Proof",
+                "Proof<other::Fr>",
+                "other::Proof<example::Fr>",
+                "",
+            ] {
+                assert_eq!(
+                    compiler
+                        .evm_source(
+                            &project,
+                            Selection {
+                                name: Some(name),
+                                kind: None
+                            }
+                        )
+                        .unwrap_err()
+                        .code,
+                    "source-entry-selection"
+                );
+            }
+            assert_eq!(
+                compiler
+                    .evm_source(
+                        &project,
+                        Selection {
+                            name: None,
+                            kind: Some(EntryKind::Function)
+                        }
+                    )
+                    .unwrap_err()
+                    .code,
+                "source-entry-selection"
+            );
+        }
+
+        #[test]
+        fn compiler_image_survives_path_changes_and_live_recheck_refuses_them() {
+            let directory = tempfile::tempdir().unwrap();
+            let (mut compiler, project) = fixture(directory.path(), "example::Proof");
+            compiler.immutable_image = Some(compiler_snapshot(compiler.path()).unwrap());
+            let original = std::fs::read(compiler.path()).unwrap();
+            for replace_inode in [true, false] {
+                let replacement = "#!/bin/sh\nexit 9\n";
+                if replace_inode {
+                    let other = directory.path().join("replacement");
+                    script(&other, replacement);
+                    std::fs::rename(other, compiler.path()).unwrap();
+                } else {
+                    script(compiler.path(), replacement);
+                }
+                let source = compiler
+                    .evm_source_from(&project, Selection::default())
+                    .unwrap();
+                assert_eq!(source.entry(), "example::Proof");
+                assert_eq!(
+                    check_compiler_path(
+                        compiler.immutable_image.as_ref().unwrap(),
+                        compiler.path()
+                    )
+                    .unwrap_err()
+                    .code,
+                    "source-compiler-changed"
+                );
+                std::fs::write(compiler.path(), &original).unwrap();
+                check_compiler_path(compiler.immutable_image.as_ref().unwrap(), compiler.path())
+                    .unwrap();
+            }
+        }
+
+        #[test]
+        fn evm_route_refuses_a_compiler_path_changed_during_execution() {
+            let directory = tempfile::tempdir().unwrap();
+            let (compiler, project) = fixture(directory.path(), "example::Proof");
+            // $0 is the parent fd for scripts; pass the installed path as data.
+            // The command executes admitted bytes even after mutating that path.
+            script(
+                compiler.path(),
+                &format!(
+                    "#!/bin/sh\nfor arg do\n case \"$arg\" in --replace=*) printf changed > \"${{arg#--replace=}}\";; esac\ndone\nprintf '%s' '{}'\n",
+                    response("example::Proof")
+                ),
+            );
+            let mut project = project;
+            project
+                .flags
+                .push(format!("--replace={}", compiler.path().display()));
+            assert_eq!(
+                compiler
+                    .evm_source(&project, Selection::default())
+                    .unwrap_err()
+                    .code,
+                "source-compiler-changed"
+            );
+        }
+
+        #[test]
+        fn compiler_snapshot_refuses_oversized_installed_images() {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("compiler");
+            script(&path, "#!/bin/sh\nexit 0\n");
+            let file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+            file.set_len(512 * 1024 * 1024 + 1).unwrap();
+            assert_eq!(
+                compiler_snapshot(&path).unwrap_err().code,
+                "source-compiler-limit"
+            );
+        }
+
+        #[test]
+        #[ignore = "requires explicitly pinned installed compiler and solc"]
+        fn pinned_installed_compiler_builds_and_reuses_a_sealed_evm_artifact() {
+            let path = std::env::var("ZKC_COMPILER_BIN").unwrap();
+            let expected = std::env::var("ZKC_COMPILER_SHA256").unwrap();
+            let compiler = Compiler::new(&path).unwrap();
+            let image = compiler_snapshot(compiler.path()).unwrap();
+            assert_eq!(image.sha256(), expected);
+            let project = Project::load(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../examples/projects/sumcheck-keccak/zkc.toml"),
+            )
+            .unwrap();
+            let selection = Selection {
+                name: Some("example::Proof"),
+                kind: Some(EntryKind::Proof),
+            };
+            // Compare installed catalog resolution and identities with ordinary
+            // pathname execution, then use the public snapshot route end to end.
+            let direct = compiler.evm_source_from(&project, selection).unwrap();
+            let sealed = compiler.evm_source(&project, selection).unwrap();
+            assert_eq!(direct.bytes(), sealed.bytes());
+            let solc = crate::evm::Solc::new(
+                std::env::var("ZKC_SOLC").unwrap(),
+                &std::env::var("ZKC_SOLC_SHA256").unwrap(),
+            )
+            .unwrap();
+            let artifact = compiler
+                .build_evm(&project, selection, &solc, None)
+                .unwrap();
+            assert_eq!(artifact.manifest().compiler_sha256, expected);
+            assert!(!artifact.runtime_bytecode().is_empty());
+            let reused = compiler
+                .build_evm(&project, selection, &solc, Some(&artifact))
+                .unwrap();
+            assert_eq!(artifact.identity(), reused.identity());
+            let directory = tempfile::tempdir().unwrap();
+            artifact.publish(directory.path().join("artifact")).unwrap();
+            let captured = crate::evm::Artifact::capture(
+                directory.path().join("artifact"),
+                &artifact.identity(),
+            )
+            .unwrap();
+            assert_eq!(captured.runtime_bytecode(), artifact.runtime_bytecode());
+            check_compiler_path(&image, compiler.path()).unwrap();
+        }
     }
 }

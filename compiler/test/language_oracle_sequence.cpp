@@ -80,7 +80,7 @@ int main() {
         auto edge = compiled.compilation.oracleRealizationSnapshot();
         require(bool(edge), "production discarded its checked realization");
         auto unit =
-            *edge->original->getOps<protocol_ir::ProtocolModuleOp>().begin();
+            *edge->prepared->getOps<protocol_ir::ProtocolModuleOp>().begin();
         require(
             llvm::hasSingleElement(
                 unit.getBody().front().getOps<protocol_ir::MathematicalOp>()),
