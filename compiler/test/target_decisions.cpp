@@ -100,9 +100,9 @@ func.return %done : !exec.outcome<(!R)>)"),
     text = replaceText(text, "vector.dot", "curve.msm");
   }
   std::string scalar = group ? "ristretto255.scalar" : "bls12-381.fr";
-  return "!V = !algebra.field_vector<\"" + scalar + "\">\n!A = " +
-         (group ? "!algebra.group_vector<\"ristretto255.group\">"
-                : "!algebra.field_vector<\"bls12-381.fr\">") +
+  return "!V = !data.field_vector<\"" + scalar + "\">\n!A = " +
+         (group ? "!data.group_vector<\"ristretto255.group\">"
+                : "!data.field_vector<\"bls12-381.fr\">") +
          "\n!R = " +
          (group ? "!algebra.group<\"ristretto255.group\">"
                 : "!algebra.field<\"bls12-381.fr\">") +

@@ -49,34 +49,10 @@ def ConstantFieldOp : Op<AlgebraDialect, "constant",
   let hasVerifier = 1;
   let hasFolder = 1;
 }
-def ArrayFromElementsOp : Op<AlgebraDialect, "array_from_elements",
-    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let summary = "Pack ordered field elements into an exact nominal field array";
-  let arguments = (ins Variadic<Field>:$elements);
-  let results = (outs FieldArray:$result);
-  let hasVerifier = 1;
-}
-def ArrayAtOp : Op<AlgebraDialect, "array_at",
-                  [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins FieldArray:$array, I64Attr:$index);
-  let results = (outs Field:$result);
-  let hasVerifier = 1;
-  let hasFolder = 1;
-}
 def SubtractFieldOp : TotalMathOp<AlgebraDialect, "field_subtract", Field,
     Field, Field, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
 def PairingOp : TotalMathOp<AlgebraDialect, "pairing", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
-class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
-    [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
-  let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$domain,
-    OptionalAttr<FlatSymbolRefAttr>:$step, OptionalAttr<FlatSymbolRefAttr>:$body,
-    OptionalAttr<FlatSymbolRefAttr>:$predicate);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-}
-def FiniteFoldOp : AlgebraFiniteOp<"finite_fold">;
-def FiniteCollectOp : AlgebraFiniteOp<"finite_collect">;
 
 #endif

@@ -17,7 +17,7 @@ std::string source() {
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear">, 16 : ui64]>
 #U = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear">]>
 !F = !algebra.field<"koala-bear">
-!D = !algebra.field_vector<"koala-bear">
+!D = !data.field_vector<"koala-bear">
 !H = !protocol.oracle<#K>
 !U = !protocol.oracle<#U>
 !S = !protocol.oracle_sequence<#U, 4>
@@ -370,10 +370,9 @@ int main(int argc, char **argv) {
           size_t position;
           while ((position = typed.find(field)) != std::string::npos)
             typed.replace(position, field.size(), target);
-          typed =
-              replaceText(typed, "!algebra.field_vector<\"koala-bear\">",
-                          index ? "!algebra.indices"
-                                : "!algebra.group_vector<\"bls12-381.g1\">");
+          typed = replaceText(typed, "!data.field_vector<\"koala-bear\">",
+                              index ? "!data.indices"
+                                    : "!data.group_vector<\"bls12-381.g1\">");
           auto result = take(json::parse(take(capture(typed)).bytes));
           require(at(result, {7, 2, 4, 0}) ==
                       (index ? J(A{"apply", "indices", A{}})

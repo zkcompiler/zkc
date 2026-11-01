@@ -1,5 +1,4 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
@@ -129,8 +128,8 @@ FailureOr<FunctionType> realizationType(RealizeOp realization) {
     outputs = {state};
   } else if (kind == "round") {
     inputs = {state};
-    outputs = {algebra::FieldArrayType::get(
-        context, field.getDomain(), uint64_t(*recipeDegree(recipe)) + 1)};
+    outputs = {data::FieldArrayType::get(context, field.getDomain(),
+                                         uint64_t(*recipeDegree(recipe)) + 1)};
   } else if (kind == "finish") {
     inputs = {state};
     outputs = {point, field};

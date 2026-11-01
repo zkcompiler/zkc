@@ -267,7 +267,7 @@ with case('outside-roster-zero-result-child-and-native-projection'):
 
 
 finite_source = (root / 'compiler/test/fixtures/finite/total-state.mlir').read_text()
-finite_operation = '"algebra.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)'
+finite_operation = '"data.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)'
 finite_wrapper = protocol('main', apply(roles=('P',), args='%xs,%a,%b',
     inputs='!V,!F,!F', outputs='!F,!F', result='%r:2 = '),
     inputs=(('xs', '!V', ('P',)), ('a', '!F', ('P',)), ('b', '!F', ('P',)),

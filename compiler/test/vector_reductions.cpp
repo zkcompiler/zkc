@@ -18,8 +18,8 @@ namespace sf = zkc::test::scopedFinite;
 namespace sc = zkc::test::scopedComputation;
 namespace {
 const std::string declarations = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
-"runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !data.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
+"runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !data.field_vector<"koala-bear">) -> !exec.outcome<(ui64)>} : ()->()
 "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
 %as = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
@@ -83,7 +83,7 @@ std::string fixture() {
                        scopedReturn("%r", "!F"));
   auto result =
       "!F = !algebra.field<\"koala-bear\">\n!V = "
-      "!algebra.field_vector<\"koala-bear\">\n" +
+      "!data.field_vector<\"koala-bear\">\n" +
       scopedFixture(declarations + reducer, "%a:!V,%b:!V,%c:!V,%s:!F",
                     "%a,%b,%c,%s", "!V,!V,!V,!F", "!F",
                     replaceText(collection(), ",parameters=[]", "") +
@@ -697,7 +697,7 @@ int main() {
   });
   const auto emptyText = withDefinitions(fixture(), R"mlir(
 "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
-"runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, ui64) -> !exec.outcome<(!algebra.field_vector<"koala-bear">)>} : ()->()
+"runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, ui64) -> !exec.outcome<(!data.field_vector<"koala-bear">)>} : ()->()
 )mlir" + functionText("empty", "%s:!F", "!F",
                       scopedApply("index", "zero", "", "", "%zero", "ui64",
                                   "[0 : ui64]") +

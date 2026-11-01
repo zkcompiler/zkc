@@ -204,9 +204,9 @@ int main() {
       "polynomial observation bounds do not depend on finite operations", [&] {
         for (unsigned length : {2u, 3u}) {
           std::string text = R"mlir(
-        !A = !algebra.field_array<"bls12-381.fr", 2>
+        !A = !data.field_array<"bls12-381.fr", 2>
         !P = !poly.polynomial<"bls12-381.fr", 1>
-        !R = !algebra.field_array<"bls12-381.fr", LENGTH>
+        !R = !data.field_array<"bls12-381.fr", LENGTH>
         module {
           func.func @entry(%a:!A) -> !A {
             %p = "poly.from_coefficients"(%a) : (!A)->!P
@@ -237,7 +237,7 @@ int main() {
   cases.run("formal polynomial obligations are checked at actual callers", [&] {
     for (bool square : {false, true}) {
       std::string text = R"mlir(
-        !A = !algebra.field_array<"bls12-381.fr", 2>
+        !A = !data.field_array<"bls12-381.fr", 2>
         !P = !poly.polynomial<"bls12-381.fr", 1>
         module {
           func.func private @observe(%p:!P) -> !A {

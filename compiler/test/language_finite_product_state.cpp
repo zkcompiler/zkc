@@ -42,7 +42,7 @@ void pipeline(const CheckedOriginal &original, mlir::MLIRContext &context) {
   take(compareOriginal(original.entry(), *module));
   unsigned folds = 0;
   module->walk([&](mlir::Operation *op) {
-    if (op->getName().getStringRef() != "algebra.finite_fold")
+    if (op->getName().getStringRef() != "data.finite_fold")
       return;
     ++folds;
     require(op->getNumResults() == 3 &&

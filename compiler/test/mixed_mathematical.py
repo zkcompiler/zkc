@@ -60,15 +60,15 @@ for ty in ['!runtime.capability<rng, "bls12-381.fr">', '!commitment.polynomial<"
 # Non-scalar wire data passes through the common graph as whole components.
 vector = '''module { "protocol.module"() ({
 "protocol.func"() ({
-^entry(%x: !algebra.field_vector<"bls12-381.fr">):
-  %part = protocol.restrict_roles %x {roles=["P"]} : !algebra.field_vector<"bls12-381.fr">
-  %sent = protocol.exchange %part {sender="P", receiver="V", site="vector"} : !algebra.field_vector<"bls12-381.fr">
-  "protocol.return"(%sent) : (!algebra.field_vector<"bls12-381.fr">) -> ()
-}) {sym_name="vector", function_type=(!algebra.field_vector<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">, roles=["P","V"], input_roles=[["P","V"]], output_roles=[["P","V"]]} : () -> ()
+^entry(%x: !data.field_vector<"bls12-381.fr">):
+  %part = protocol.restrict_roles %x {roles=["P"]} : !data.field_vector<"bls12-381.fr">
+  %sent = protocol.exchange %part {sender="P", receiver="V", site="vector"} : !data.field_vector<"bls12-381.fr">
+  "protocol.return"(%sent) : (!data.field_vector<"bls12-381.fr">) -> ()
+}) {sym_name="vector", function_type=(!data.field_vector<"bls12-381.fr">) -> !data.field_vector<"bls12-381.fr">, roles=["P","V"], input_roles=[["P","V"]], output_roles=[["P","V"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> () }'''
 vector_physical = commands.verified(vector, None, '--zkc-project-protocol', '--zkc-lower-math', '--zkc-select-physical')
 assert 'vector:bls12-381.fr' in commands.source('protocol-export', vector_physical)
-commands.verified(vector.replace('!algebra.field_vector<"bls12-381.fr">', '!algebra.fixed_vector<i1, 2>'), 'exactly one owner')
+commands.verified(vector.replace('!data.field_vector<"bls12-381.fr">', '!data.fixed_vector<i1, 2>'), 'exactly one owner')
 # Generate resource-transition variants for execution by mixed_native.rs.
 draw = source.replace('    func.func @leaf', '  "runtime.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : () -> ()\n    func.func @leaf', 1)
 completion = '      %18 = "exec.returned"(%17, %arg2)'

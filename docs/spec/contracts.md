@@ -67,6 +67,25 @@ coverage from observations absorbed into a final history state. Primitive/codec
 meaning, host initialization where applicable and cryptographic laws remain
 explicit premises; the report grants no execution authority or security theorem.
 
+### Logical collection ownership
+
+Data is the single native MLIR owner of `field_vector`, `group_vector`,
+`indices`, `field_matrix`, `field_array`, `fixed_vector`, `sequence` and `bytes`,
+their structural operations and catalog type adapters. Exact-array construction
+and observation, and logical finite fold/collect, use `data.*` operations. The
+replaced `algebra.*` collection types and structural operations are not
+registered and have no parser aliases. Algebra retains scalar fields, groups
+and operations expressing algebraic meaning.
+
+This native IR cutover preserves logical family identities, layout, custody,
+admission and serialized catalog/type spellings. Equal element type and extent
+do not identify different families. Native source producers, mathematical and
+finite readers, computation/physical selection, EVM lowering and fixtures move
+together. Structured-source, application-map and program-byte vocabulary retain
+their existing family names; these formats do not serialize the MLIR namespace.
+See [representation ownership](../compiler/representation.md). Independent
+formal code and its native-MLIR fixtures remain owned by the Lean component.
+
 ### Participant-loop capture bindings
 
 Participant `loop` captures in `zkc.program/0` are ordered

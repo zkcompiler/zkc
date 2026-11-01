@@ -116,7 +116,7 @@ std::string oneRowFixture(StringRef mathematics, unsigned scalarCaptures = 0,
       declarations += functionText("work" + suffix, arguments, "!V", body);
   }
   auto text = "!F = !algebra.field<\"koala-bear\">\n!V = "
-              "!algebra.field_vector<\"koala-bear\">\n" +
+              "!data.field_vector<\"koala-bear\">\n" +
               scopedFixture(declarations, arguments, inputs, types, "!V",
                             rootBody, 1 + scalarCaptures);
   return replaceText(replaceText(text, "@Work", "@work"), "\"Work\"",
@@ -723,7 +723,7 @@ func.func private @twice(%x:!F)->!F {
           auto text = R"mlir(
 !S = !runtime.capability<rng, "bls12-381.fr">
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
 )mlir" + declarations +
                       R"mlir(

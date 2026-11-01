@@ -3,6 +3,8 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Relations.h"
@@ -50,14 +52,14 @@ class R1CSSumcheckBuilder {
                             cast<algebra::FieldType>(field), literal)))});
   }
   Value at(Value array, unsigned index) {
-    return value<algebra::ArrayAtOp>(
+    return value<data::ArrayAtOp>(
         field, array, {b.getNamedAttr("index", b.getI64IntegerAttr(index))});
   }
   Value array(ValueRange values) {
-    return value<algebra::ArrayFromElementsOp>(
-        algebra::FieldArrayType::get(
-            field.getContext(), cast<algebra::FieldType>(field).getDomain(),
-            values.size()),
+    return value<data::ArrayFromElementsOp>(
+        data::FieldArrayType::get(field.getContext(),
+                                  cast<algebra::FieldType>(field).getDomain(),
+                                  values.size()),
         values);
   }
   Value equal(Value a, Value c) {
@@ -148,12 +150,12 @@ public:
                                          mlir::ArrayAttr{});
     unit.getBody().push_back(new Block());
     b.setInsertionPointToEnd(&unit.getBody().front());
-    Type assignment = algebra::FieldArrayType::get(
+    Type assignment = data::FieldArrayType::get(
         field.getContext(), cast<algebra::FieldType>(field).getDomain(),
         relation.columns());
-    Type point = algebra::FieldArrayType::get(
+    Type point = data::FieldArrayType::get(
         field.getContext(), cast<algebra::FieldType>(field).getDomain(), arity);
-    Type table = algebra::FieldArrayType::get(
+    Type table = data::FieldArrayType::get(
         field.getContext(), cast<algebra::FieldType>(field).getDomain(), rows);
     Type service =
         pir::ServiceReferenceType::get(b.getContext(), "random.bls12-381.fr/0");
@@ -207,9 +209,9 @@ public:
           polynomial(1), current,
           {b.getNamedAttr("count", b.getI64IntegerAttr(arity - i - 1))});
       auto coefficients = value<poly::PolynomialCoefficientsOp>(
-          algebra::FieldArrayType::get(
-              field.getContext(), cast<algebra::FieldType>(field).getDomain(),
-              4),
+          data::FieldArrayType::get(field.getContext(),
+                                    cast<algebra::FieldType>(field).getDomain(),
+                                    4),
           round);
       auto received =
           exchange(coefficients, "P", "V", "round" + std::to_string(i));
@@ -327,6 +329,7 @@ Expected<OwningOpRef<ModuleOp>> authorR1CSSumcheck(const R1CS &relation,
   context.getOrLoadDialect<RelationDialect>();
   context.getOrLoadDialect<pir::ProtocolDialect>();
   context.getOrLoadDialect<algebra::AlgebraDialect>();
+  context.getOrLoadDialect<data::DataDialect>();
   context.getOrLoadDialect<poly::PolynomialDialect>();
   context.getOrLoadDialect<func::FuncDialect>();
   context.getOrLoadDialect<arith::ArithDialect>();

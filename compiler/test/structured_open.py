@@ -226,7 +226,7 @@ with case('replay-record-capacity-is-independent-of-request-byte-capacity'):
             assert result == returned([str(modulus - 1), str(modulus - 1), None], trace(script), 1800)
 
 with case('receive-vector-capacity-remains-a-reference-diagnostic'):
-    source = '''!V = !algebra.field_vector<"bls12-381.fr">
+    source = '''!V = !data.field_vector<"bls12-381.fr">
     module { "protocol.module"() ({
       "protocol.func"() ({ ^entry(%x:!V):
         %received = "protocol.exchange"(%x) {sender="P",receiver="V",site="vector"} : (!V)->!V
@@ -288,7 +288,7 @@ with case('closed-finite-regression-and-owned-local-finite-in-open-root'):
     run(unsupported, [[], '1', '2'], refusal='structured-reference-unsupported')
 
 with case('multi-role-math-finite-refusal-follows-retained-calls-and-dormant-roots'):
-    operation = '"algebra.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)'
+    operation = '"data.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)'
     source = total.replace(operation, 'func.call @fold_helper(%xs,%a,%b) : (!V,!F,!F)->(!F,!F)')
     helper = f'''func.func private @fold_helper(%xs:!V,%a:!F,%b:!F) -> (!F,!F) {{
       %r:2 = {operation}

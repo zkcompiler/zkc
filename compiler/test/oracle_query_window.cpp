@@ -122,8 +122,8 @@ Input emitted(MLIRContext &context, unsigned variant = 0,
   if (variant >= 2) {
     replace("!BF = !algebra.field<\"koala-bear\">",
             "!BF = !algebra.field<\"koala-bear.ext4-binomial3\">");
-    replace("!BD = !algebra.field_vector<\"koala-bear\">",
-            "!BD = !algebra.field_vector<\"koala-bear.ext4-binomial3\">");
+    replace("!BD = !data.field_vector<\"koala-bear\">",
+            "!BD = !data.field_vector<\"koala-bear.ext4-binomial3\">");
   }
   if (variant == 2)
     replace("oracle_query\"(%b,%mapped)", "oracle_query\"(%a,%position)");

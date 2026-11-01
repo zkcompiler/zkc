@@ -77,7 +77,7 @@ No intermediate located common program is required by this profile.
 
 `#protocol.oracle_kind<"table", [T]>` associates ordinary table data with a
 query and answer type. Field rows use the matching field vector, group rows
-use the matching group vector, unsigned 64-bit index rows use `algebra.indices`,
+use the matching group vector, unsigned 64-bit index rows use `data.indices`,
 and other admitted total data rows use `data.sequence<T>`. A table query has
 logical type `ui64` and its answer has type `T`. Rows must be canonical total,
 shared, non-affine logical data; capabilities, physical representations and

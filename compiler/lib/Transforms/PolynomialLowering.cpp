@@ -4,8 +4,9 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -111,21 +112,21 @@ class Elimination {
         cast<PolynomialType>(polynomial.getType()).getDomain());
   }
   Value at(Value array, uint64_t index) {
-    if (auto packed = array.getDefiningOp<algebra::ArrayFromElementsOp>())
+    if (auto packed = array.getDefiningOp<data::ArrayFromElementsOp>())
       return packed.getElements()[index];
     auto key = std::make_pair(array, index);
     if (auto found = elements.find(key); found != elements.end())
       return found->second;
-    auto type = cast<algebra::FieldArrayType>(array.getType()).getElementType();
+    auto type = cast<data::FieldArrayType>(array.getType()).getElementType();
     auto result =
-        make(algebra::ArrayAtOp::getOperationName(), type, ValueRange{array},
+        make(data::ArrayAtOp::getOperationName(), type, ValueRange{array},
              {builder.getNamedAttr("index", builder.getI64IntegerAttr(index))});
     if (result)
       elements[key] = result;
     return result;
   }
   SmallVector<Value> unpack(Value array) {
-    auto length = cast<algebra::FieldArrayType>(array.getType()).getLength();
+    auto length = cast<data::FieldArrayType>(array.getType()).getLength();
     if (!charge(length))
       return {};
     SmallVector<Value> result;
@@ -138,7 +139,7 @@ class Elimination {
     return result;
   }
   Value pack(Type type, ArrayRef<Value> values) {
-    return make(algebra::ArrayFromElementsOp::getOperationName(), type, values);
+    return make(data::ArrayFromElementsOp::getOperationName(), type, values);
   }
   // Tables use lexicographic Boolean order: the first axis is the high bit.
   SmallVector<Value> fixTable(Value table, ValueRange prefix) {
@@ -405,7 +406,7 @@ public:
                    dyn_cast<PolynomialCoefficientsOp>(observation)) {
         auto values = coefficientValues(observed.getPolynomial());
         auto length =
-            cast<algebra::FieldArrayType>(observed.getCoefficients().getType())
+            cast<data::FieldArrayType>(observed.getCoefficients().getType())
                 .getLength();
         if (!charge(length) || values.empty())
           return failure();
@@ -458,7 +459,7 @@ struct EliminatePolynomialsPass
            "nominal array operations";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<algebra::AlgebraDialect>();
+    registry.insert<algebra::AlgebraDialect, data::DataDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();

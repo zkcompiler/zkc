@@ -15,6 +15,7 @@
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -29,12 +30,12 @@ using namespace zkc::test;
 namespace {
 const char *laneFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 !O = !exec.outcome<(!V)>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
- "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
- "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>} : ()->()
  "runtime.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  func.func private @formula(%x:!F,%y:!F,%c:!F)->!F {
    %a = "algebra.field_add"(%x,%y) : (!F,!F)->!F
@@ -315,7 +316,7 @@ std::string largeOrderedFold(bool calls, bool total = false,
   require(!calls || !total, "the total control has no executable helper calls");
   std::string text = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
@@ -411,7 +412,7 @@ module { "protocol.module"() ({
   text += function("step", "%state:!F,%item:!F,%xs:!V") + body + " }\n";
   body.clear();
   if (total)
-    body = "   %value = \"algebra.finite_fold\"(%xs,%init) "
+    body = "   %value = \"data.finite_fold\"(%xs,%init) "
            "{domain=@items,step=@step} : (!V,!F)->!F\n";
   else
     scopedCall("\"exec.fold\"(%scope,%xs,%init) "
@@ -462,7 +463,7 @@ OwningOpRef<ModuleOp> totalOccurrenceSource(Operation *source) {
 }
 const char *operationExtents = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -476,7 +477,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @outer(%xs:!V,%ys:!V,%seed:!F)->!F attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} {
-   %r = "algebra.finite_fold"(%xs,%seed,%ys) {domain=@items,step=@step} : (!V,!F,!V)->!F
+   %r = "data.finite_fold"(%xs,%seed,%ys) {domain=@items,step=@step} : (!V,!F,!V)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
@@ -1027,8 +1028,8 @@ int main() {
         edit(fixture("total-collect"), "func.return %z", "func.return %x");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "identity collect source refused");
-    algebra::FiniteCollectOp source;
-    module->walk([&](algebra::FiniteCollectOp op) { source = op; });
+    data::FiniteCollectOp source;
+    module->walk([&](data::FiniteCollectOp op) { source = op; });
     require(bool(source), "missing total collect");
     auto numerical = totalOccurrenceSource(source);
     auto actual = realizeTotal(*numerical, "identity_collect");
@@ -1076,8 +1077,8 @@ int main() {
                      "#data.index_bound<1,3,0>,#data.equal_extent<2,0,3,0>]");
           auto module = parseSourceString<ModuleOp>(text, &context);
           require(bool(module), "operation-extent fixture refused");
-          algebra::FiniteFoldOp source;
-          module->walk([&](algebra::FiniteFoldOp op) { source = op; });
+          data::FiniteFoldOp source;
+          module->walk([&](data::FiniteFoldOp op) { source = op; });
           require(bool(source) &&
                       source->getOperand(0) != source->getOperand(2) &&
                       finite::provesEqualExtent(source->getOperand(0), 0,

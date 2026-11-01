@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
@@ -140,7 +141,7 @@ OwningOpRef<ModuleOp> parse(MLIRContext &context, StringRef text) {
 }
 constexpr StringLiteral foldText = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -153,7 +154,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%seed:!F,%a:!F)->!F {
-   %r = "algebra.finite_fold"(%xs,%seed,%a) {domain=@items,step=@step} : (!V,!F,!F)->!F
+   %r = "data.finite_fold"(%xs,%seed,%a) {domain=@items,step=@step} : (!V,!F,!F)->!F
    func.return %r : !F
  }
  "protocol.func"() ({
@@ -165,7 +166,7 @@ module { "protocol.module"() ({
 // The mathematical source above has no physical binding choices.
 constexpr StringLiteral scopedFoldText = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
  "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
@@ -741,7 +742,7 @@ int main(int argc, char **argv) {
   cases.run(
       "port capacity emits nothing and original domain policy survives", [&] {
         auto source = parse(context, foldText);
-        auto vector = algebra::FieldVectorType::get(&context, "koala-bear");
+        auto vector = data::FieldVectorType::get(&context, "koala-bear");
         auto total = SymbolTable(unit(*source)).lookup<func::FuncOp>("total");
         auto slots = std::vector<ring::Input>(1024, {"koala-bear"});
         auto body = take(ring::Expression::create(std::move(slots),
@@ -847,7 +848,7 @@ int main(int argc, char **argv) {
         [&] {
           std::string text = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 !E = EXTRA_CONTAINER
 !X = EXTRA_ELEMENT
 module { "protocol.module"() ({
@@ -864,7 +865,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%extra:!E,%seed:!F,%a:!F)->!F attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} {
-   %r = "algebra.finite_fold"(%xs,%extra,%seed,%a) {domain=@items,step=@step} : (!V,!E,!F,!F)->!F
+   %r = "data.finite_fold"(%xs,%extra,%seed,%a) {domain=@items,step=@step} : (!V,!E,!F,!F)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ "protocol.return"() : ()->() }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
@@ -872,8 +873,8 @@ module { "protocol.module"() ({
 )mlir";
           StringRef container = variant == 0 ? "!V"
                                 : variant == 1
-                                    ? "!algebra.group_vector<\"bls12-381.g1\">"
-                                    : "!algebra.field_array<\"koala-bear\",2>";
+                                    ? "!data.group_vector<\"bls12-381.g1\">"
+                                    : "!data.field_array<\"koala-bear\",2>";
           text = replaceText(text, "EXTRA_CONTAINER", container);
           text = replaceText(text, "EXTRA_ELEMENT",
                              variant == 1 ? "!algebra.group<\"bls12-381.g1\">"

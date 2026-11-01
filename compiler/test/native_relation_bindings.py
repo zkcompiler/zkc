@@ -207,7 +207,7 @@ with case('same-typed statement operands still require source correspondence'):
                  refuses='native-proof-correspondence')
 with case('logical relation data does not install a native wire codec'):
     # A logical static array is supported independently of native array codecs.
-    unsupported = '''!m = !algebra.field_array<"koala-bear", 4>
+    unsupported = '''!m = !data.field_array<"koala-bear", 4>
 module { "protocol.module"() ({
 relation.declare @relation {kind="external",key="example/foreign",revision="0",signature=(!m)->i1,purposes=["parameter"]}
 "protocol.func"() ({ ^entry(%data:!m,%ok:i1):

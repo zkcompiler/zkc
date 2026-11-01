@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -137,7 +138,7 @@ class Realizer {
     Value values = one("vector.empty", {}, vector);
     for (Value value : coefficients)
       values = one("vector.append", {values, value}, vector);
-    Type result = algebra::FieldArrayType::get(
+    Type result = data::FieldArrayType::get(
         field.getContext(), field.getDomain(), coefficients.size());
     return emit("field_array.from_vector", values, result, {},
                 coefficients.size())
@@ -261,7 +262,7 @@ public:
     auto *context = builder.getContext();
     index = IntegerType::get(context, 64, IntegerType::Unsigned);
     boolean = builder.getI1Type();
-    vector = algebra::FieldVectorType::get(context, field.getDomain());
+    vector = data::FieldVectorType::get(context, field.getDomain());
     table = poly::MultilinearType::get(context, field.getDomain());
     point = poly::PointType::get(context, field.getDomain());
     auto name = realization.getSymName().str();

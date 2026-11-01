@@ -1,7 +1,8 @@
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Data/Collections.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "llvm/ADT/DenseSet.h"
@@ -18,7 +19,7 @@ LogicalResult refuse(Operation *op, StringRef detail) {
 algebra::FieldType field(Type type) {
   if (auto polynomial = dyn_cast<PolynomialType>(type))
     return algebra::FieldType::get(type.getContext(), polynomial.getDomain());
-  if (auto array = dyn_cast<algebra::FieldArrayType>(type))
+  if (auto array = dyn_cast<data::FieldArrayType>(type))
     return dyn_cast<algebra::FieldType>(array.getElementType());
   return dyn_cast<algebra::FieldType>(type);
 }
@@ -31,15 +32,15 @@ LogicalResult sameField(Operation *op) {
     if (!actual || (expected && actual != expected))
       return refuse(op, "expected one field for every operand and result");
     expected = actual;
-    if (isa<algebra::FieldArrayType>(type) &&
-        (!algebra::isFieldArray(type) ||
-         cast<algebra::FieldArrayType>(type).getLength() == 0))
+    if (isa<data::FieldArrayType>(type) &&
+        (!data::isFieldArray(type) ||
+         cast<data::FieldArrayType>(type).getLength() == 0))
       return refuse(op, "expected a positive-length nominal field array");
   }
   return success();
 }
 uint64_t length(Type type) {
-  return cast<algebra::FieldArrayType>(type).getLength();
+  return cast<data::FieldArrayType>(type).getLength();
 }
 LogicalResult binary(Operation *op) {
   if (failed(sameField(op)))

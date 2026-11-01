@@ -562,7 +562,7 @@ inline void execution(Source &s, StringRef mode) {
                          {s.field, s.rng}, "random");
   auto coordinates =
       s.invoke(drawing, "coordinates", {},
-               parseType("!algebra.indices", &s.context), "coordinates");
+               parseType("!data.indices", &s.context), "coordinates");
   auto observed =
       s.invoke(drawing, "observe",
                {draw.getArgument(2), draw.getArgument(3), coordinates[0]},

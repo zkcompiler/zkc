@@ -15,7 +15,7 @@ std::string source(StringRef second = "%position", StringRef between = "",
   return R"mlir(
 #K = #protocol.oracle_kind<"table", [ui64,16:ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  "protocol.func"() ({
  ^entry(%data:!D,%position:ui64):

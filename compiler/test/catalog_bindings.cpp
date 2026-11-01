@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/InvocationParameters.h"
@@ -31,7 +32,7 @@ int main() {
     return success();
   });
   auto field = algebra::FieldType::get(&context, "bls12-381.fr");
-  auto vector = algebra::FieldVectorType::get(&context, "bls12-381.fr");
+  auto vector = data::FieldVectorType::get(&context, "bls12-381.fr");
   auto natural = [&](uint64_t value) {
     return builder.getIntegerAttr(
         IntegerType::get(&context, 64, IntegerType::Unsigned), value);
@@ -247,7 +248,7 @@ int main() {
     refuseInstallation(declaration, "binding-signature");
   });
   cases.run("dense family binds container scalar and vector layouts", [&] {
-    auto array = algebra::FieldArrayType::get(&context, "bls12-381.fr", 4);
+    auto array = data::FieldArrayType::get(&context, "bls12-381.fr", 4);
     auto resident = represented(field, "blst/fr");
     auto arrayPhysical = represented(array, "blst/field-array", {resident});
     auto vectorPhysical = represented(vector, "blst/fr");
@@ -263,7 +264,7 @@ int main() {
         builder.getFunctionType({defaultPhysicalType(emit, vector)},
                                 {defaultPhysicalType(emit, array)})));
     refuseInstallation(declaration, "binding-representation");
-    auto fixed = algebra::FixedVectorType::get(&context, field, 4);
+    auto fixed = data::FixedVectorType::get(&context, field, 4);
     auto fixedPhysical = represented(fixed, "blst/fixed-vector", {resident});
     auto dot = binding("fixed_vector.dot", {domain, natural(4)},
                        "blst/resident/fixed_vector.dot",
@@ -443,11 +444,11 @@ int main() {
             "scope or outcome leaked into mathematical ports");
   });
   cases.run("application terms construct complete nested ports", [&] {
-    auto fixed = algebra::FixedVectorType::get(&context, field, 4);
+    auto fixed = data::FixedVectorType::get(&context, field, 4);
     require(resolve("fixed_vector.dot", {domain, natural(4)}) ==
                 builder.getFunctionType({fixed, fixed}, {field}),
             "nested Type application or Nat argument erased");
-    auto array = algebra::FieldArrayType::get(&context, "bls12-381.fr", 4);
+    auto array = data::FieldArrayType::get(&context, "bls12-381.fr", 4);
     require(resolve("field_array.from_vector", {domain, natural(4)}) ==
                 builder.getFunctionType({vector}, {array}),
             "domain/Nat application changed");

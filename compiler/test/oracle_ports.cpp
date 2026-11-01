@@ -20,7 +20,7 @@ std::string source() {
   return R"mlir(
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear">, 16 : ui64]>
 !F = !algebra.field<"koala-bear">
-!D = !algebra.field_vector<"koala-bear">
+!D = !data.field_vector<"koala-bear">
 !H = !protocol.oracle<#K>
 module {
  "protocol.module"() ({
@@ -66,7 +66,7 @@ std::string contractSource() {
   return R"mlir(
 #K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  relation.declare @claimed {kind="external",key="test/anchor-contract",revision="0",signature=(!D)->i1,purposes=["statement"]}
  "protocol.func"() ({
@@ -99,7 +99,7 @@ std::string sequenceSource(bool dynamic = false) {
 #K = #protocol.oracle_kind<"table", [ui64, 16 : ui64]>
 !H = !protocol.oracle<#K>
 !S = !protocol.oracle_sequence<#K, 3>
-!D = !algebra.indices
+!D = !data.indices
 !DS = !data.sequence<!D>
 module { "protocol.module"() ({
  "protocol.func"() ({
@@ -286,7 +286,7 @@ int main() {
         auto module = parse(R"mlir(
 #K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  relation.declare @claimed {kind="external",key="test/port-statement",revision="0",signature=(!D)->i1,purposes=["statement"]}
  "protocol.func"() ({
@@ -794,8 +794,8 @@ module { "protocol.module"() ({
         const std::string field = "!algebra.field<\"koala-bear\">";
         while ((at = text.find(field)) != std::string::npos)
           text.replace(at, field.size(), "ui64");
-        text = replace(text, "!algebra.field_vector<\"koala-bear\">",
-                       "!algebra.indices");
+        text = replace(text, "!data.field_vector<\"koala-bear\">",
+                       "!data.indices");
         text = replace(text, "    %result:3 =", R"mlir(
     %selector = "protocol.oracle_query"(%word,%position) {owner="V",site="selector"} : (!H,ui64)->!F
     %empty = "protocol.oracle_sequence_empty"() : ()->!S
@@ -839,8 +839,8 @@ module { "protocol.module"() ({
         size_t at;
         while ((at = text.find(field)) != std::string::npos)
           text.replace(at, field.size(), "ui64");
-        text = replace(text, "!algebra.field_vector<\"koala-bear\">",
-                       "!algebra.indices");
+        text = replace(text, "!data.field_vector<\"koala-bear\">",
+                       "!data.indices");
         text = replace(text, "  \"protocol.func\"()", R"mlir(
     func.func private @choose(%a:ui64,%b:ui64)->ui64 { return %a : ui64 }
     "protocol.func"())mlir");

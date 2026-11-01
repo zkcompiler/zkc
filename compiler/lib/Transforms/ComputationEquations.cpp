@@ -1,6 +1,7 @@
 #include "ComputationEquations.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <limits>
@@ -308,7 +309,7 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
     for (const auto &item : facts.view.items) {
       auto *factor = facts.view.iteration[item.iteration].operation;
       if (isa<data::DomainElementsOp>(factor) &&
-          !isa<algebra::FieldVectorType>(factor->getOperand(0).getType())) {
+          !isa<data::FieldVectorType>(factor->getOperand(0).getType())) {
         facts.payload.formula(factor);
         return std::nullopt;
       }
@@ -323,7 +324,7 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
     for (const auto &item : facts.view.items) {
       auto *factor = facts.view.iteration[item.iteration].operation;
       if (!isa<data::DomainElementsOp>(factor) ||
-          !isa<algebra::FieldVectorType, algebra::GroupVectorType>(
+          !isa<data::FieldVectorType, data::GroupVectorType>(
               factor->getOperand(0).getType())) {
         facts.payload.formula(factor);
         return std::nullopt;
@@ -364,14 +365,14 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
         at.kind == AccessKind::MatrixRow || at.kind == AccessKind::MatrixColumn;
     Type container = c.signature.getInput(at.input);
     if (!matrix) {
-      if (!isa<algebra::FieldVectorType, algebra::GroupVectorType>(container))
+      if (!isa<data::FieldVectorType, data::GroupVectorType>(container))
         return std::nullopt;
       continue;
     }
     if (result.combine != MathematicalIdentity::FieldAdd ||
         result.termIdentity != MathematicalIdentity::FieldMultiply ||
         result.accesses.size() != 2 ||
-        !isa<algebra::FieldVectorType>(
+        !isa<data::FieldVectorType>(
             c.signature.getInput(result.accesses[1 - i].input)))
       return std::nullopt;
     result.matrixAccess = at.kind;
@@ -476,7 +477,7 @@ analyzeAlignedLanes(const ComputationFacts &facts, Type field,
   for (auto [i, item] : enumerate(view.items)) {
     auto *factor = facts.factor(i);
     if (!isa<data::DomainElementsOp, data::DomainIndicesOp>(factor) ||
-        !isa<algebra::FieldVectorType>(factor->getOperand(0).getType()))
+        !isa<data::FieldVectorType>(factor->getOperand(0).getType()))
       return std::nullopt;
     if (isa<data::DomainElementsOp>(factor))
       lanes.push_back(item.formal);
@@ -492,7 +493,7 @@ analyzeAlignedLanes(const ComputationFacts &facts, Type field,
 }
 std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
   auto c = facts.view.computation;
-  if (!c.collect || !isa<algebra::FieldVectorType>(c.signature.getResult(0)))
+  if (!c.collect || !isa<data::FieldVectorType>(c.signature.getResult(0)))
     return std::nullopt;
   return analyzeAlignedLanes(facts, elementType(c.signature.getResult(0)));
 }
@@ -540,8 +541,8 @@ std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
     auto elements = dyn_cast<data::DomainElementsOp>(
         view.iteration[zip.children[1]].operation);
     if (!indices || !elements || indices.getAxis() != axis ||
-        !isa<algebra::FieldMatrixType>(indices.getInput().getType()) ||
-        !isa<algebra::FieldVectorType>(elements.getInput().getType()))
+        !isa<data::FieldMatrixType>(indices.getInput().getType()) ||
+        !isa<data::FieldVectorType>(elements.getInput().getType()))
       return std::nullopt;
     if (matrix && matrix != indices.getInput())
       return std::nullopt;
@@ -604,7 +605,7 @@ matchLaneFormula(Block &body, Type field, ValueRange laneArguments,
     if (facet && facet->access == protocol::AccessRule::Element &&
         op->getNumOperands() == 2 &&
         indices.lookup(op->getOperand(1)) == op->getOperand(0) &&
-        isa<algebra::FieldVectorType>(op->getOperand(0).getType()))
+        isa<data::FieldVectorType>(op->getOperand(0).getType()))
       lookups[op->getResult(0)] = op->getOperand(0);
   }
   auto result = analyzeLanes(body, field, laneArguments, lookups, payload);
@@ -678,11 +679,11 @@ ComputationEquations matchComputation(const ComputationView &view,
 }
 namespace {
 bool nativeVector(Type type, Type field) {
-  auto vector = dyn_cast<algebra::FieldVectorType>(type);
+  auto vector = dyn_cast<data::FieldVectorType>(type);
   return vector && vector.getElementType() == field;
 }
 bool nativeMatrix(Type type, Type field) {
-  auto matrix = dyn_cast<algebra::FieldMatrixType>(type);
+  auto matrix = dyn_cast<data::FieldMatrixType>(type);
   return matrix && matrix.getElementType() == field;
 }
 } // namespace

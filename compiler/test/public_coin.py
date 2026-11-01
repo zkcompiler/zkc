@@ -908,7 +908,7 @@ for mutation in (
 realized_source = '''
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">]>
 !F = !algebra.field<"koala-bear.ext4-binomial3">
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 !H = !protocol.oracle<#K>
 !S = !protocol.service_ref<"random.koala-bear.ext4-binomial3/0">
 module { "protocol.module"() ({

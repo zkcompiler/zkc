@@ -20,9 +20,9 @@ SOURCE = '''module { "protocol.module"() ({
     %first = protocol.exchange %secret {site="commitment", sender="P", receiver="V"} : ui64
     %n = "data.index"() {value=16 : ui64} : () -> ui64
     %q = "data.index"() {value=4 : ui64} : () -> ui64
-    %sample = "protocol.query"(%coins, %n, %q) {method="indices", owner="V", site="pick"} : (!protocol.service_ref<"random.koala-bear.extDEGREE-binomial3/0">, ui64, ui64) -> !algebra.indices
-    %actual = protocol.exchange %sample {site="delivery", sender="V", receiver="P"} : !algebra.indices
-    %echo = protocol.exchange %actual {site="response", sender="P", receiver="V"} : !algebra.indices
+    %sample = "protocol.query"(%coins, %n, %q) {method="indices", owner="V", site="pick"} : (!protocol.service_ref<"random.koala-bear.extDEGREE-binomial3/0">, ui64, ui64) -> !data.indices
+    %actual = protocol.exchange %sample {site="delivery", sender="V", receiver="P"} : !data.indices
+    %echo = protocol.exchange %actual {site="response", sender="P", receiver="V"} : !data.indices
     %ok = arith.constant true
     "protocol.return"(%ok) : (i1) -> ()
   }) {sym_name="main", function_type=(ui64, !protocol.service_ref<"random.koala-bear.extDEGREE-binomial3/0">) -> i1,

@@ -37,12 +37,12 @@ int main() {
     for (const auto &[row, data] :
          std::vector<std::pair<std::string, std::string>>{
              {"!algebra.field<\"koala-bear\">",
-              "!algebra.field_vector<\"koala-bear\">"},
+              "!data.field_vector<\"koala-bear\">"},
              {"!algebra.field<\"koala-bear.ext8-binomial3\">",
-              "!algebra.field_vector<\"koala-bear.ext8-binomial3\">"},
+              "!data.field_vector<\"koala-bear.ext8-binomial3\">"},
              {"!algebra.group<\"bls12-381.g1\">",
-              "!algebra.group_vector<\"bls12-381.g1\">"},
-             {"ui64", "!algebra.indices"},
+              "!data.group_vector<\"bls12-381.g1\">"},
+             {"ui64", "!data.indices"},
              {"i1", "!data.sequence<i1>"},
              {"!data.sequence<i1>", "!data.sequence<!data.sequence<i1>>"}}) {
       auto instance = kind("[" + row + "]", context);

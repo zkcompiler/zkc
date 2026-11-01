@@ -188,7 +188,7 @@ with case('domain-extra-formals-and-selected-container-retained'):
         'function_type=(!V)->!data.domain<ui64>', 'function_type=(!V,!V)->!data.domain<ui64>')
     changed = changed.replace('%i:ui64,%xs:!V)', '%i:ui64,%other:!V,%xs:!V)').replace(
         '#data.index_bound<2,3,0>', '#data.index_bound<2,4,0>')
-    changed = changed.replace('"algebra.finite_fold"(%xs,%a,%b)', '"algebra.finite_fold"(%xs,%xs,%a,%b)').replace(
+    changed = changed.replace('"data.finite_fold"(%xs,%a,%b)', '"data.finite_fold"(%xs,%xs,%a,%b)').replace(
         ': (!V,!F,!F)->(!F,!F)', ': (!V,!V,!F,!F)->(!F,!F)')
     data = export(changed)
     assert data[4][0][2:] == [[vector, vector], [['indices', 1, 0]], 0]
@@ -290,7 +290,7 @@ with case('condition-native-type-check-precedes-export-profile'):
     export(source, 'structured-source-original', 'entry')
 
 with case('unused-unsupported-provider-declaration'):
-    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()'
+    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()'
     export(simple(binding), 'structured-source-binding')
 
 with case('unsupported-collect'):
@@ -387,7 +387,7 @@ with case('communication-and-statement-retained'):
     assert instructions(table(data)['main'])[0][0] == ['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0, None]
 
 with case('unsupported-static-relation-annotation'):
-    helper = 'func.func private @equal(%a:!algebra.field_vector<"bls12-381.fr">,%b:!algebra.field_vector<"bls12-381.fr">) -> i1 attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} { %yes = arith.constant true\n return %yes : i1 }'
+    helper = 'func.func private @equal(%a:!data.field_vector<"bls12-381.fr">,%b:!data.field_vector<"bls12-381.fr">) -> i1 attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} { %yes = arith.constant true\n return %yes : i1 }'
     export(simple(helper), 'structured-source-precondition')
 
 with case('invalid-utf8-must-not-crash-or-repair-json'):

@@ -197,7 +197,7 @@ for helper in (
 
 with case("unused invalid polynomial observation precedes folding and requirements"):
     marker = ' %coefficients0 = "poly.coefficients"'
-    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !algebra.field_array<"bls12-381.fr", 2>\n'
+    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !data.field_array<"bls12-381.fr", 2>\n'
     invalid = source.replace(marker, extra + marker)
     checked("{", program=invalid, refuses="polynomial-formation")
 
@@ -241,7 +241,7 @@ with case("collect-fold preparation choice is explicit even without an eligible 
 
 
 field = '!algebra.field<"bls12-381.fr">'
-vector = '!algebra.field_vector<"bls12-381.fr">'
+vector = '!data.field_vector<"bls12-381.fr">'
 with case("finite policy matches independent reconstruction with and without simplify"):
     finite = (fixtures.parent / 'finite/sum.mlir').read_text()
     declarations = finite[finite.index('    "runtime.binding"'):finite.rindex('  }) : () -> ()')]

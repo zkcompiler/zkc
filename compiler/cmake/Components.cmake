@@ -221,6 +221,7 @@ add_zkc_component(IR
   lib/Dialect/Runtime/Parameters.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
+  lib/Dialect/Data/IR/Collections.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
   lib/Dialect/Data/IR/Layout.cpp
@@ -287,6 +288,7 @@ add_zkc_component(IR
   lib/Dialect/Relation/IR/RelationDialect.cpp
   lib/Dialect/Relation/IR/Declarations.cpp
   lib/Dialect/Relation/IR/Formula.cpp
+  lib/Dialect/TypeAdapters/Data.cpp
   lib/Dialect/TypeAdapters/Algebra.cpp
   lib/Dialect/TypeAdapters/Commitment.cpp
   lib/Dialect/TypeAdapters/Core.cpp

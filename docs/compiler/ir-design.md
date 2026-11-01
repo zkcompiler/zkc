@@ -17,9 +17,9 @@ conditions, not registered dialects or supported protocol claims.
 | Owner | Abstraction and information retained |
 |---|---|
 | Protocol | Roles, source-relative action occurrences, communication, draws, statements, completion and repeated interaction |
-| Algebra | Nominal field/group values, specialized bulk collections, exact arithmetic and finite mathematical computations; machine integers do not substitute for field semantics |
+| Algebra | Nominal field/group values, exact arithmetic and finite mathematical computations; machine integers do not substitute for field semantics |
 | Poly | Formal polynomial and quotient-ring values, domains, bases and evaluation structure before concrete realization |
-| Data | Logical aggregates, sequences, variants, domains and explicit ordering; no authentication or oracle claim follows from a container |
+| Data | All logical collection types (bulk vectors, matrices, arrays, sequences and bytes), aggregates, variants, domains and explicit ordering; no authentication or oracle claim follows from a container |
 | Relation | Relation declarations/assets, public/witness layout and deterministic interpretation; imported syntax remains an adapter concern |
 | Commitment | Scheme-specific types and attributes with exact setup/domain parameters; installed commitment/opening actions use Exec bindings |
 | Crypto | Cryptographic types and attributes, with installed primitive actions through Exec; a hash invocation is not itself a random-oracle security judgment |

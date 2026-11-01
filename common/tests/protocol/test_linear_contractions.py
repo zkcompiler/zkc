@@ -13,7 +13,7 @@ def mathematical_source(family, control="direct"):
         for old, new in [
             ("ristretto255.scalar", "bls12-381.fr"),
             ("ristretto255.group", "bls12-381.fr"),
-            ("!algebra.group_vector", "!algebra.field_vector"),
+            ("!data.group_vector", "!data.field_vector"),
             ("!algebra.group", "!algebra.field"),
             ("curve.scale_each", "vector.mul"),
             ("curve.msm", "vector.dot"),

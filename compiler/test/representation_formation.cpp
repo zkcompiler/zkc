@@ -5,6 +5,7 @@
 #include "zkc/Contracts/TypeRepresentations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -98,7 +99,7 @@ int main() {
   auto blst = represented(bls, "blst/fr");
   auto bear = represented(koala, "plonky3.koala-bear/0");
   cases.run("dense identity includes the exact child representation", [&] {
-    auto array = algebra::FieldArrayType::get(&context, "bls12-381.fr", 4);
+    auto array = data::FieldArrayType::get(&context, "bls12-381.fr", 4);
     represented(array, "arkworks.field-array/0", {ark});
     represented(array, "blst/field-array", {blst});
     refuse(array, "arkworks.field-array/0", {blst});

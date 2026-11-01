@@ -10,7 +10,7 @@
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Admission.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
@@ -365,7 +365,7 @@ struct LowerMathPass
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
-                    exec::ExecDialect, func::FuncDialect,
+                    data::DataDialect, exec::ExecDialect, func::FuncDialect,
                     cf::ControlFlowDialect, arith::ArithDialect>();
   }
   StringRef getArgument() const final {

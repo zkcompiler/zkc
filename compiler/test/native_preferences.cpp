@@ -42,10 +42,10 @@ std::string source(StringRef contract, StringRef domain,
   std::string group = pairing ? "bls12-381.g1" : domain.str();
   const std::string aliases =
       "!F = " +
-      std::string(pairing ? "!algebra.group_vector<\"bls12-381.g2\">"
+      std::string(pairing ? "!data.group_vector<\"bls12-381.g2\">"
                           : "!algebra.field<\"bls12-381.fr\">") +
-      "\n!V = !algebra.field_vector<\"bls12-381.fr\">\n!G = " +
-      (scalar ? "!algebra.group<\"" : "!algebra.group_vector<\"") + group +
+      "\n!V = !data.field_vector<\"bls12-381.fr\">\n!G = " +
+      (scalar ? "!algebra.group<\"" : "!data.group_vector<\"") + group +
       "\">\n";
   std::string body;
   std::string point = "%p", result;
@@ -73,12 +73,12 @@ std::string observationSource(MLIRContext &context, bool fixed, bool joined) {
       R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !G = !algebra.group<"bls12-381.g2">
 !F = !algebra.field<"bls12-381.fr">
-!I = !algebra.indices
+!I = !data.indices
 )" + scopedFixture(
           R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
               std::string(fixed ? "blst/resident/curve.scale" : "") +
               R"(",function_type=(!runtime.scope,!G,!F)->!exec.outcome<(!G)>} : ()->()
-"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !algebra.group<"bls12-381.g2">],implementation="",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !algebra.group<"bls12-381.g2">, !algebra.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->())",
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !algebra.group<"bls12-381.g2">],implementation="",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !algebra.group<"bls12-381.g2">, !data.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->())",
           joined ? "%c:i1,%g:!G,%s:!F,%t:!T,%i:!I" : "%g:!G,%s:!F,%t:!T,%i:!I",
           joined ? "%c,%g,%s,%t,%i" : "%g,%s,%t,%i",
           joined ? "i1,!G,!F,!T,!I" : "!G,!F,!T,!I", "!T",

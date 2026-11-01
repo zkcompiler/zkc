@@ -13,6 +13,7 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -33,7 +34,7 @@ namespace sc = zkc::test::scopedComputation;
 namespace {
 const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
  "data.domain"() ({
@@ -560,9 +561,9 @@ int main(int argc, char **argv) {
               "   func.return %z : !F",
               "   func.return %x : !F");
           text = replace(
-              text, "   %r = \"algebra.finite_collect\"(%xs,%factor)",
+              text, "   %r = \"data.finite_collect\"(%xs,%factor)",
               "   %capture = algebra.field_add %factor,%factor : (!F,!F)->!F\n"
-              "   %r = \"algebra.finite_collect\"(%xs,%capture)");
+              "   %r = \"data.finite_collect\"(%xs,%capture)");
           auto module = parseSourceString<ModuleOp>(text, &context);
           require(bool(module), "ignored capture fixture refused");
           PassManager lower(&context);
@@ -583,7 +584,7 @@ int main(int argc, char **argv) {
     auto module = parseSourceString<ModuleOp>(fixture("total-state"), &context);
     require(bool(module), "total fixture refused");
     Operation *fold = nullptr;
-    module->walk([&](algebra::FiniteFoldOp op) { fold = op; });
+    module->walk([&](data::FiniteFoldOp op) { fold = op; });
     finite::Summary summary;
     require(succeeded(finite::summarize(fold, summary)), "summary failed");
     require(summary.results.size() == 2 && summary.results[0].test(0) &&
@@ -602,15 +603,15 @@ int main(int argc, char **argv) {
     text = replace(text, "func.return %b,%v : !F,!F", "func.return");
     text = replace(
         text,
-        "%r:2 = \"algebra.finite_fold\"(%xs,%a,%b) {domain=@items,step=@step} "
+        "%r:2 = \"data.finite_fold\"(%xs,%a,%b) {domain=@items,step=@step} "
         ": (!V,!F,!F)->(!F,!F)",
-        "\"algebra.finite_fold\"(%xs) {domain=@items,step=@step} : (!V)->()");
+        "\"data.finite_fold\"(%xs) {domain=@items,step=@step} : (!V)->()");
     text = replace(text, "\"protocol.return\"(%r#0,%r#1)",
                    "\"protocol.return\"(%a,%b)");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "Unit state total fold refused");
     Operation *fold = nullptr;
-    module->walk([&](algebra::FiniteFoldOp op) { fold = op; });
+    module->walk([&](data::FiniteFoldOp op) { fold = op; });
     finite::Summary summary;
     require(succeeded(finite::summarize(fold, summary)) &&
                 summary.results.empty() &&
@@ -678,9 +679,9 @@ int main(int argc, char **argv) {
   cases.run("dead helper polynomial observation refused", [&] {
     auto wrong = replace(
         fixture("total-state"), "   func.return",
-        R"mlir(   %array = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !algebra.field_array<"bls12-381.fr", 2>
-   %poly = "poly.from_coefficients"(%array) : (!algebra.field_array<"bls12-381.fr", 2>)->!poly.polynomial<"bls12-381.fr",1>
-   %bad = "poly.coefficients"(%poly) : (!poly.polynomial<"bls12-381.fr",1>)->!algebra.field_array<"bls12-381.fr", 1>
+        R"mlir(   %array = "data.array_from_elements"(%a,%b) : (!F,!F)-> !data.field_array<"bls12-381.fr", 2>
+   %poly = "poly.from_coefficients"(%array) : (!data.field_array<"bls12-381.fr", 2>)->!poly.polynomial<"bls12-381.fr",1>
+   %bad = "poly.coefficients"(%poly) : (!poly.polynomial<"bls12-381.fr",1>)->!data.field_array<"bls12-381.fr", 1>
    func.return)mlir");
     refusesIR(wrong, context, "polynomial-formation");
   });
@@ -693,26 +694,26 @@ int main(int argc, char **argv) {
                     replace(fixture("total-state"), " func.func private @step",
                             " func.func private "
                             "@observe(%p:!poly.polynomial<\"bls12-381.fr\",1>)-"
-                            ">!algebra.field_array<\"bls12-381.fr\", " +
+                            ">!data.field_array<\"bls12-381.fr\", " +
                                 width +
                                 "> {\n"
                                 "   %v = \"poly.coefficients\"(%p) : "
                                 "(!poly.polynomial<\"bls12-381.fr\",1>)->!"
-                                "algebra.field_array<\"bls12-381.fr\", " +
+                                "data.field_array<\"bls12-381.fr\", " +
                                 width +
                                 ">\n"
                                 "   func.return %v : "
-                                "!algebra.field_array<\"bls12-381.fr\", " +
+                                "!data.field_array<\"bls12-381.fr\", " +
                                 width + ">\n }\n func.func private @step");
                 text = replace(
                     text, "   func.return %b,%v",
-                    "   %array = \"algebra.array_from_elements\"(%a,%b) : "
-                    "(!F,!F)-> !algebra.field_array<\"bls12-381.fr\", 2>\n"
+                    "   %array = \"data.array_from_elements\"(%a,%b) : "
+                    "(!F,!F)-> !data.field_array<\"bls12-381.fr\", 2>\n"
                     "   %poly = \"poly.from_coefficients\"(%array) : "
-                    "(!algebra.field_array<\"bls12-381.fr\", "
+                    "(!data.field_array<\"bls12-381.fr\", "
                     "2>)->!poly.polynomial<\"bls12-381.fr\",1>\n"
                     "   %dead = func.call @observe(%poly) : "
-                    "(!poly.polynomial<\"bls12-381.fr\",1>)->!algebra.field_"
+                    "(!poly.polynomial<\"bls12-381.fr\",1>)->!data.field_"
                     "array<\"bls12-381.fr\", " +
                         width +
                         ">\n"

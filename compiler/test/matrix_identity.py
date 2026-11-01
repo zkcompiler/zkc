@@ -38,7 +38,7 @@ def source(field, parameters):
     call = invocation('exec.apply', ['!M'], ['i1'],
                       f'binding=@check,parameters=[{", ".join(parameters)}],site="check"')
     check = scoped_function('Check', ['!M'], ['i1'], call, ['%r'])
-    return f'''!M = !algebra.field_matrix<"{field}">
+    return f'''!M = !data.field_matrix<"{field}">
 module {{ "protocol.module"() ({{
  "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation="",function_type=(!runtime.scope,!M)->!exec.outcome<(i1)>}} : ()->()
  {check}

@@ -156,7 +156,7 @@ with case('same body under another terminal recipe name'):
     checked(before + '%f = func.call @copy' + terminal, refuses='polynomial-correspondence')
 
 with case('round coefficient arrays must fit the derived degree'):
-    invalid = source.replace('!algebra.field_array<"bls12-381.fr", 3>', '!algebra.field_array<"bls12-381.fr", 2>')
+    invalid = source.replace('!data.field_array<"bls12-381.fr", 3>', '!data.field_array<"bls12-381.fr", 2>')
     commands.source('protocol-bundle', invalid, '--entry=reduction', refuses='polynomial-formation')
 
 with case('factorwise fixing retains two shared table leaves'):
@@ -175,7 +175,7 @@ with case('factorwise fixing retains two shared table leaves'):
     plain = commands.verified(plain, None, '--symbol-dce')
     realized = commands.verified(realized, None, '--symbol-dce')
     assert '!poly.polynomial' not in plain and '!poly.polynomial' not in realized
-    counts = {name: {op: text.count(op) for op in ['algebra.field_add', 'algebra.field_multiply', 'algebra.field_subtract', 'algebra.array_at']}
+    counts = {name: {op: text.count(op) for op in ['algebra.field_add', 'algebra.field_multiply', 'algebra.field_subtract', 'data.array_at']}
               for name, text in [('plain', plain), ('factorwise', realized)]}
     (OUT / 'operation-counts.json').write_text(json.dumps(counts, indent=2))
 
@@ -190,7 +190,7 @@ with case('shared table competitor uses the same mathematical realization'):
         (OUT / f'{name}.bundle').write_text(commands.source('protocol-bundle', text, *flags))
         ir = commands.verified(text, None, '--zkc-project-protocol=simplify=false', *passes,
                                '--zkc-eliminate-polynomials', '--zkc-simplify-participant')
-        comparison[name] = {op: ir.count(op) for op in ['algebra.field_add', 'algebra.field_multiply', 'algebra.field_subtract', 'algebra.array_at']}
+        comparison[name] = {op: ir.count(op) for op in ['algebra.field_add', 'algebra.field_multiply', 'algebra.field_subtract', 'data.array_at']}
     assert comparison['fixing'] == comparison['fixing_competitor'], comparison
     # CSE can already recover sharing. This fixture trades one multiply for
     # five additions; equal backend cost is not assumed and no speedup is asserted.
@@ -220,7 +220,7 @@ with case('a coherently projected query before its guard fails correspondence'):
 
 with case('an oversized round payload does not establish the required degree'):
     # Source construction fits; the receive domain now also admits degree 3.
-    checked(source.replace('!algebra.field_array<"bls12-381.fr", 3>', '!algebra.field_array<"bls12-381.fr", 4>'),
+    checked(source.replace('!data.field_array<"bls12-381.fr", 3>', '!data.field_array<"bls12-381.fr", 4>'),
             refuses='polynomial-correspondence')
 
 with case('canonical distinct interpolation points are checked before simplification'):
@@ -235,7 +235,7 @@ with case('canonical distinct interpolation points are checked before simplifica
 
 def single_math(length, arity, body):
     field = '!algebra.field<"bls12-381.fr">'
-    array = f'!algebra.field_array<"bls12-381.fr", {length}>'
+    array = f'!data.field_array<"bls12-381.fr", {length}>'
     polynomial = f'!poly.polynomial<"bls12-381.fr", {arity}>'
     return f"""module {{ "protocol.module"() ({{
       "protocol.func"() ({{
@@ -278,7 +278,7 @@ with case('all verifier outputs must belong to the residual connector'):
 
 with case('unused invalid coefficients refuse before default simplification'):
     marker = ' %coefficients0 = "poly.coefficients"'
-    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !algebra.field_array<"bls12-381.fr", 2>\n'
+    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !data.field_array<"bls12-381.fr", 2>\n'
     commands.source('protocol-bundle', changed(source, marker, extra + marker),
                     '--entry=reduction', refuses='polynomial-formation')
 
@@ -292,7 +292,7 @@ with case('participant passes remove dead polynomial observations before expansi
     # chain and neither polynomial pass ever sees it.
     args = ', '.join(['%arg1'] * 15)
     types = ', '.join([field] * 15)
-    chain = f'''%dead_p = "poly.mle"(%arg0) : (!algebra.field_array<"bls12-381.fr", 65536>) -> !poly.polynomial<"bls12-381.fr", 16>
+    chain = f'''%dead_p = "poly.mle"(%arg0) : (!data.field_array<"bls12-381.fr", 65536>) -> !poly.polynomial<"bls12-381.fr", 16>
       %dead_fixed = "poly.fix"(%dead_p, %arg1) : (!poly.polynomial<"bls12-381.fr", 16>, {field}) -> !poly.polynomial<"bls12-381.fr", 15>
       %dead_value = "poly.evaluate"(%dead_fixed, {args}) : (!poly.polynomial<"bls12-381.fr", 15>, {types}) -> {field}
       '''
@@ -300,14 +300,14 @@ with case('participant passes remove dead polynomial observations before expansi
     commands.verified(participant)
     for option in ['--zkc-fix-polynomial-factors', '--zkc-eliminate-polynomials']:
         result = commands.verified(participant, None, option)
-        assert '"poly.' not in result and 'algebra.array_at' not in result
+        assert '"poly.' not in result and 'data.array_at' not in result
 
 with case('domain formation does not promise interpolation within the expansion budget'):
     field = '!algebra.field<"bls12-381.fr">'
     polynomial = '!poly.polynomial<"bls12-381.fr", 1>'
     for count in [32, 64]:
         points = "[" + ",".join(f"#algebra.literal<{field}, {i} : ui255>" for i in range(count)) + "]"
-        body = f'''%interpolant = "poly.interpolate"(%T) {{points={points}}} : (!algebra.field_array<"bls12-381.fr", {count}>) -> {polynomial}
+        body = f'''%interpolant = "poly.interpolate"(%T) {{points={points}}} : (!data.field_array<"bls12-381.fr", {count}>) -> {polynomial}
           %value = "poly.evaluate"(%interpolant, %x) : ({polynomial}, {field}) -> {field}'''
         text = single_math(count, 5 if count == 32 else 6, body)
         participant = commands.verified(text, None, '--zkc-project-protocol=simplify=false')
@@ -324,8 +324,8 @@ with case('constant field-array packing compiles under selected simplification')
     polynomial = '!poly.polynomial<"bls12-381.fr", 1>'
     body = f'''%one = "algebra.constant"() {{value=#algebra.literal<{field}, 1 : ui255>}} : () -> {field}
       %two = "algebra.constant"() {{value=#algebra.literal<{field}, 2 : ui255>}} : () -> {field}
-      %table = "algebra.array_from_elements"(%one, %two) : ({field}, {field}) -> !algebra.field_array<"bls12-381.fr", 2>
-      %constant_table = "poly.mle"(%table) : (!algebra.field_array<"bls12-381.fr", 2>) -> {polynomial}
+      %table = "data.array_from_elements"(%one, %two) : ({field}, {field}) -> !data.field_array<"bls12-381.fr", 2>
+      %constant_table = "poly.mle"(%table) : (!data.field_array<"bls12-381.fr", 2>) -> {polynomial}
       %value = "poly.evaluate"(%constant_table, %x) : ({polynomial}, {field}) -> {field}'''
     for flags in [(), ('--no-simplify',)]:
         commands.source('protocol-bundle', single_math(2, 1, body), *flags)
@@ -333,7 +333,7 @@ with case('constant field-array packing compiles under selected simplification')
 
 with case('nonidentity ports preserve original requirements and actual handoff'):
     field = '!algebra.field<"bls12-381.fr">'
-    array = '!algebra.field_array<"bls12-381.fr", 4>'
+    array = '!data.field_array<"bls12-381.fr", 4>'
     types = {name: field for name in ['claim', 'extra', 'r0', 'r1', 'next1',
                                      'delivered0', 'delivered1']}
     types.update(T=array, U=array, random='!protocol.service_ref<"random.bls12-381.fr/0">', accept='i1')

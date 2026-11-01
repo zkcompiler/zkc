@@ -1252,7 +1252,7 @@ class Comparator {
               actual->getContext(),
               mlir::isa<poly::PolynomialType>(type)
                   ? mlir::cast<poly::PolynomialType>(type).getDomain()
-                  : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+                  : mlir::cast<data::FieldArrayType>(type).getDomain());
           auto points = actual->getAttrOfType<mlir::ArrayAttr>("points");
           if (!attributes(*actual, {"points"}) || !points ||
               points.size() != math->parameters.size())

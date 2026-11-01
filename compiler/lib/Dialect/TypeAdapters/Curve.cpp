@@ -4,7 +4,6 @@
 namespace zkc::protocol::type_adapters {
 namespace {
 using GroupAdapter = DomainAdapter<zkc::algebra::GroupType>;
-using GroupVectorAdapter = DomainAdapter<zkc::algebra::GroupVectorType>;
 } // namespace
 } // namespace zkc::protocol::type_adapters
 

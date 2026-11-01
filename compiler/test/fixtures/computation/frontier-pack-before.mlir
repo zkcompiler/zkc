@@ -1,17 +1,17 @@
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 module { "protocol.module"() ({
   module @first_unit attributes {exec.computation} {
     func.func @evaluate(%a: !F, %b: !F) -> !A {
       %x = algebra.field_subtract %a, %b : (!F, !F) -> !F
       %y = algebra.field_subtract %a, %b : (!F, !F) -> !F
-      %p = "algebra.array_from_elements"(%x, %y) : (!F, !F)->!A
+      %p = "data.array_from_elements"(%x, %y) : (!F, !F)->!A
       func.return %p : !A
     }
   }
   module @second_unit attributes {exec.computation} {
     func.func @evaluate(%a: !A) -> !F {
-      %v = "algebra.array_at"(%a) {index=1:i64} : (!A)->!F
+      %v = "data.array_at"(%a) {index=1:i64} : (!A)->!F
       func.return %v : !F
     }
   }

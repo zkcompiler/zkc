@@ -2,6 +2,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -124,7 +125,7 @@ public:
         size.arrayProjections |= child->arrayProjections;
       } else {
         size.expandedOperations = addSize(size.expandedOperations, 1);
-        size.arrayProjections |= isa<algebra::ArrayAtOp>(op);
+        size.arrayProjections |= isa<data::ArrayAtOp>(op);
       }
       // This is a proved fixed-threshold result, not temporary exhaustion.
       // Its partial operation/overhead counts are never used as exact costs.

@@ -4,6 +4,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/LogicalTree.h"
@@ -504,13 +505,13 @@ LogicalResult Exporter::outer(func::FuncOp function) {
         return "field:bls12-381.fr";
       }
     }
-    if (auto vector = dyn_cast<algebra::FieldVectorType>(type)) {
+    if (auto vector = dyn_cast<data::FieldVectorType>(type)) {
       if (vector.getDomain() == "bls12-381.fr") {
         expanded.append({i64, i64});
         return "vector:bls12-381.fr";
       }
     }
-    if (isa<algebra::IndicesType>(type)) {
+    if (isa<data::IndicesType>(type)) {
       expanded.append({i64, i64});
       return "indices";
     }

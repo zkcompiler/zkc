@@ -1,7 +1,7 @@
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 
 using namespace mlir;
@@ -43,7 +43,7 @@ LogicalResult verifyGroup(Operation *op, bool equality, bool scalarAction) {
 } // namespace
 
 LogicalResult zkc::algebra::MultilinearRestrictPrefixOp::verify() {
-  auto vector = cast<zkc::algebra::FieldVectorType>(getLhs().getType());
+  auto vector = cast<zkc::data::FieldVectorType>(getLhs().getType());
   if (protocol::installedDomains().identitySort(vector.getDomain()) !=
           "Field" ||
       getRhs().getType() != vector || getResult().getType() != vector)
@@ -155,13 +155,6 @@ GroupEqualOp::getOperandDependencies(unsigned result) {
 } // namespace zkc::algebra
 
 namespace zkc::algebra {
-bool isFieldArray(Type type) {
-  auto array = dyn_cast_if_present<FieldArrayType>(type);
-  if (!array || array.getLength() > MaximumArrayLength)
-    return false;
-  return protocol::installedDomains().identitySort(array.getDomain()) ==
-         "Field";
-}
 LogicalResult ConstantFieldOp::verify() {
   if (getValue().getType() != getResult().getType())
     return diagnostics::emit(emitOpError(), "mathematical-formation",
@@ -170,54 +163,12 @@ LogicalResult ConstantFieldOp::verify() {
                                   getValue().getField(), getValue().getValue());
 }
 OpFoldResult ConstantFieldOp::fold(FoldAdaptor) { return getValue(); }
-LogicalResult ArrayFromElementsOp::verify() {
-  auto type = getResult().getType();
-  if (!isFieldArray(type) || getElements().size() != type.getLength() ||
-      !llvm::all_of(getOperandTypes(), [&](Type element) {
-        return element == type.getElementType();
-      }))
-    return refuse(*this, "expected exact field-array length and element field");
-  return success();
-}
-LogicalResult ArrayAtOp::verify() {
-  auto type = getArray().getType();
-  auto index = getIndexAttr().getInt();
-  if (!isFieldArray(type) || index < 0 || uint64_t(index) >= type.getLength() ||
-      type.getElementType() != getResult().getType())
-    return diagnostics::emit(
-        emitOpError(), "mathematical-formation",
-        "expected static in-bounds field-array extraction");
-  return success();
-}
-OpFoldResult ArrayAtOp::fold(FoldAdaptor) {
-  if (auto packed = getArray().getDefiningOp<ArrayFromElementsOp>())
-    return packed.getElements()[getIndexAttr().getInt()];
-  return {};
-}
 LogicalResult SubtractFieldOp::verify() { return verifyField(*this, false); }
 std::optional<MathematicalIdentity> ConstantFieldOp::getMathematicalIdentity() {
   return MathematicalIdentity::FieldConstant;
 }
 SmallVector<unsigned> ConstantFieldOp::getOperandDependencies(unsigned) {
   return {};
-}
-std::optional<MathematicalIdentity> ArrayAtOp::getMathematicalIdentity() {
-  return MathematicalIdentity::ArrayAt;
-}
-std::optional<MathematicalIdentity>
-ArrayFromElementsOp::getMathematicalIdentity() {
-  return MathematicalIdentity::ArrayFromElements;
-}
-SmallVector<unsigned>
-ArrayFromElementsOp::getOperandDependencies(unsigned result) {
-  SmallVector<unsigned> dependencies;
-  if (result == 0)
-    for (unsigned i = 0; i < getNumOperands(); ++i)
-      dependencies.push_back(i);
-  return dependencies;
-}
-SmallVector<unsigned> ArrayAtOp::getOperandDependencies(unsigned result) {
-  return result == 0 ? SmallVector<unsigned>{0} : SmallVector<unsigned>{};
 }
 std::optional<MathematicalIdentity> SubtractFieldOp::getMathematicalIdentity() {
   return MathematicalIdentity::FieldSubtract;

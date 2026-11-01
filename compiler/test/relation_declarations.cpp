@@ -122,11 +122,11 @@ relation.declare @predicate {
   const std::string optional = variant(
       "Optional", {{"None", {}}, {"Some", {"sequence<vector:bls12-381.fr>"}}});
   for (const auto &type : std::vector<std::string>{
-           "ui64", "!algebra.field_array<\"bls12-381.fr\", 0>",
-           "!algebra.field_array<\"bls12-381.fr\", 3>",
-           "!algebra.field_vector<\"bls12-381.fr\">",
-           "!algebra.field_matrix<\"bls12-381.fr\">", "!algebra.indices",
-           "!algebra.group_vector<\"bls12-381.g1\">",
+           "ui64", "!data.field_array<\"bls12-381.fr\", 0>",
+           "!data.field_array<\"bls12-381.fr\", 3>",
+           "!data.field_vector<\"bls12-381.fr\">",
+           "!data.field_matrix<\"bls12-381.fr\">", "!data.indices",
+           "!data.group_vector<\"bls12-381.g1\">",
            "!data.sequence<!data.sequence<" + record + ">>", record,
            optional}) {
     auto left = parse(schema(type), context);
@@ -139,15 +139,15 @@ relation.declare @predicate {
   }
   for (auto [leftType, rightType] :
        std::vector<std::pair<std::string, std::string>>{
-           {"!algebra.field_array<\"bls12-381.fr\", 2>",
-            "!algebra.field_array<\"bls12-381.fr\", 3>"},
-           {"!algebra.field_array<\"bls12-381.fr\", 2>",
-            "!algebra.field_vector<\"bls12-381.fr\">"},
-           {"!algebra.field_vector<\"bls12-381.fr\">",
-            "!algebra.field_matrix<\"bls12-381.fr\">"},
+           {"!data.field_array<\"bls12-381.fr\", 2>",
+            "!data.field_array<\"bls12-381.fr\", 3>"},
+           {"!data.field_array<\"bls12-381.fr\", 2>",
+            "!data.field_vector<\"bls12-381.fr\">"},
+           {"!data.field_vector<\"bls12-381.fr\">",
+            "!data.field_matrix<\"bls12-381.fr\">"},
            {"!data.sequence<" + fieldType + ">", "!data.sequence<i1>"},
-           {"!algebra.field_vector<\"bls12-381.fr\">",
-            "!algebra.field_vector<\"bn254.fr\">"},
+           {"!data.field_vector<\"bls12-381.fr\">",
+            "!data.field_vector<\"bn254.fr\">"},
            {record, variant("OtherData", {{"Record",
                                            {"matrix:bls12-381.fr",
                                             "vector:bls12-381.fr"}}})},
@@ -252,7 +252,7 @@ relation.declare @predicate {
           "directly constructed malformed native input was admitted");
   for (const auto &type : std::vector<std::string>{
            "i64", "tensor<2x2x" + fieldType + ">", "memref<2xi1>",
-           "!algebra.fixed_vector<" + fieldType + ", 3>",
+           "!data.fixed_vector<" + fieldType + ", 3>",
            "!runtime.capability<rng, \"bls12-381.fr\">",
            variant("HiddenResource",
                    {{"None", {}}, {"Some", {"rng:bls12-381.fr"}}}),

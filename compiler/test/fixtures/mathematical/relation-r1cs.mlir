@@ -1,24 +1,24 @@
 // Direct constraint checking deliberately discloses the witness in the proof.
 !f = !algebra.field<"bls12-381.fr">
-!v = !algebra.field_vector<"bls12-381.fr">
-!m = !algebra.field_matrix<"bls12-381.fr">
+!v = !data.field_vector<"bls12-381.fr">
+!m = !data.field_matrix<"bls12-381.fr">
 !ms = !data.sequence<!m>
 module { "protocol.module"() ({
 "runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
-"runtime.binding"() {sym_name="sequence_length",contract="sequence.length",arguments=[!algebra.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="sequence_length",contract="sequence.length",arguments=[!data.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!data.field_matrix<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
 "runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
-"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
 "runtime.binding"() {sym_name="index_less",contract="index.less",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
-"runtime.binding"() {sym_name="sequence_at",contract="sequence.at",arguments=[!algebra.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field_matrix<"bls12-381.fr">)>} : ()->()
-"runtime.binding"() {sym_name="matrix_dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
-"runtime.binding"() {sym_name="matrix_mul_vector",contract="matrix.mul_vector",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="sequence_at",contract="sequence.at",arguments=[!data.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!data.field_matrix<"bls12-381.fr">>, ui64) -> !exec.outcome<(!data.field_matrix<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="matrix_dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_matrix<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="matrix_mul_vector",contract="matrix.mul_vector",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_matrix<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>} : ()->()
 "runtime.binding"() {sym_name="field_constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
-"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 "runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
 "runtime.binding"() {sym_name="index_add",contract="index.add",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>} : ()->()
 "runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
-"runtime.binding"() {sym_name="vector_mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
-"runtime.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="vector_mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
 relation.declare @relation {kind="external",key="example/r1cs-data",revision="0",signature=(!ms,!v,!v)->i1,purposes=["parameter","statement","witness"]}
     func.func @validate(%arg0: !runtime.scope, %arg1: !ms, %arg2: !v, %arg3: !v) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["validate", []]} {
       %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>

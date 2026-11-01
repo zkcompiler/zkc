@@ -4,8 +4,8 @@
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Collections.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -69,7 +69,7 @@ LogicalResult verifyNativeExecution(Operation *unit,
                                                  : op->getResult(0).getType();
         auto policy = types.get(logical(type));
         bool representation = true;
-        if (physical && algebra::isFieldArray(logical(type))) {
+        if (physical && data::isFieldArray(logical(type))) {
           auto selected = cast<runtime::RepresentedType>(type);
           representation =
               selected.getRepresentation() == "arkworks.field-array/0";

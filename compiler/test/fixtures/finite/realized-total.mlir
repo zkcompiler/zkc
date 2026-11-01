@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "data.domain"() <{function_type = (!V) -> !data.domain<!F>, sym_name = "items", sym_visibility = "private"}> ({
@@ -12,11 +12,11 @@ module {
       return %0 : !F
     }
     func.func private @outside(%arg0: !F, %arg1: !F, %arg2: !V) -> !F {
-      %0 = "algebra.finite_fold"(%arg2, %arg0) <{domain = @items, step = @inside}> : (!V, !F) -> !F
+      %0 = "data.finite_fold"(%arg2, %arg0) <{domain = @items, step = @inside}> : (!V, !F) -> !F
       return %0 : !F
     }
     func.func private @total(%arg0: !V, %arg1: !F) -> !F {
-      %0 = "algebra.finite_fold"(%arg0, %arg1) <{domain = @items, step = @outside}> : (!V, !F) -> !F
+      %0 = "data.finite_fold"(%arg0, %arg1) <{domain = @items, step = @outside}> : (!V, !F) -> !F
       return %0 : !F
     }
     "protocol.func"() <{function_type = (!V, !F) -> !F, input_roles = [["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({

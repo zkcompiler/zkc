@@ -3,6 +3,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -242,7 +243,7 @@ public:
         // Resolve only these polynomial-created projections by the existing
         // exact pack-coordinate law, so coefficient/evaluation memoization is
         // not lost merely because the concrete pack crossed a native port.
-        if (auto projection = dyn_cast<algebra::ArrayAtOp>(op);
+        if (auto projection = dyn_cast<data::ArrayAtOp>(op);
             projection && shareable.contains(&op)) {
           auto packed = packedArrays.find(inputs.front());
           if (packed != packedArrays.end()) {
@@ -321,7 +322,7 @@ public:
           available.try_emplace(id, Available{unsigned(position), result});
           outputs.push_back(id);
         }
-        if (isa<algebra::ArrayFromElementsOp>(op))
+        if (isa<data::ArrayFromElementsOp>(op))
           packedArrays[outputs.front()] = inputs;
         if (shareable.contains(&op)) {
           buckets[hash].push_back(instructions.size());

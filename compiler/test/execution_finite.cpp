@@ -18,7 +18,7 @@ namespace {
 constexpr llvm::StringLiteral fold = R"mlir(
 !S = !runtime.scope
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 !O = !exec.outcome<(!F)>
 module {
  "data.domain"() ({ ^entry(%v:!V):
@@ -56,7 +56,7 @@ module {
 constexpr llvm::StringLiteral collect = R"mlir(
 !S = !runtime.scope
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 !O = !exec.outcome<(!V)>
 module {
  "data.domain"() ({ ^entry(%v:!V):
@@ -220,8 +220,8 @@ int main() {
                 "rng, \"bls12-381.fr\"");
     text = changed(text, "!algebra.field<\"koala-bear\">",
                    "!algebra.field<\"bls12-381.fr\">");
-    text = changed(text, "!algebra.field_vector<\"koala-bear\">",
-                   "!algebra.field_vector<\"bls12-381.fr\">");
+    text = changed(text, "!data.field_vector<\"koala-bear\">",
+                   "!data.field_vector<\"bls12-381.fr\">");
     text = changed(text, "module {", R"mlir(module {
  "runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : ()->()
 )mlir");
@@ -378,13 +378,13 @@ int main() {
       "fixed collection cardinality comes from the actual domain input", [&] {
         auto text = changed(collect, "!F = !algebra.field<\"koala-bear\">",
                             "!F = !algebra.field<\"bls12-381.fr\">");
-        text = changed(text, "!V = !algebra.field_vector<\"koala-bear\">",
-                       "!V = !algebra.field_array<\"bls12-381.fr\", 2>");
+        text = changed(text, "!V = !data.field_vector<\"koala-bear\">",
+                       "!V = !data.field_array<\"bls12-381.fr\", 2>");
         auto module = accept(text);
         auto *op = occurrence(*module);
         auto wrong = parseSourceString<ModuleOp>(
             "module { func.func private @types() -> !exec.outcome<"
-            "(!algebra.field_array<\"bls12-381.fr\", 3>)> }",
+            "(!data.field_array<\"bls12-381.fr\", 3>)> }",
             &context);
         require(bool(wrong), "wrong-cardinality type fixture");
         op->getResult(0).setType(

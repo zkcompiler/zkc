@@ -175,7 +175,7 @@ module { "protocol.module"() ({
 
 constexpr StringLiteral finiteCollection = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 module { "protocol.module"() ({
   "data.domain"() ({ ^entry(%lo: ui64, %hi: ui64):
     %d = "data.domain_range"(%lo, %hi) : (ui64, ui64) -> !data.domain<ui64>
@@ -188,7 +188,7 @@ module { "protocol.module"() ({
   "protocol.func"() ({ ^entry(%value: !F):
     %zero = "data.index"() {value=0 : ui64} : () -> ui64
     %two = "data.index"() {value=2 : ui64} : () -> ui64
-    %r = "algebra.finite_collect"(%zero, %two, %value)
+    %r = "data.finite_collect"(%zero, %two, %value)
         {domain=@items, body=@body} : (ui64, ui64, !F) -> !A
     "protocol.return"(%r) : (!A) -> ()
   }) {sym_name="main", function_type=(!F) -> !A, roles=["P"],
@@ -198,7 +198,7 @@ module { "protocol.module"() ({
 
 constexpr StringLiteral polynomial = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 2>
+!A = !data.field_array<"bls12-381.fr", 2>
 !P = !poly.polynomial<"bls12-381.fr", 1>
 !C = !poly.polynomial<"bls12-381.fr", 0>
 module { "protocol.module"() ({
@@ -432,7 +432,7 @@ int main() {
           runChecked(module, protocol::createLowerMathPass(),
                      {"exec", "runtime", "func", "cf", "arith", "data"});
           require(count(module, "exec.compute") &&
-                      count(module, "algebra.finite_collect") &&
+                      count(module, "data.finite_collect") &&
                       count(module, "data.domain") &&
                       !count(module, "exec.range"),
                   "finite raw closure was not retained");
@@ -440,7 +440,7 @@ int main() {
                      {"exec", "runtime", "func", "cf", "arith", "data"});
           require(count(module, "exec.range") && count(module, "cf.cond_br") &&
                       boundCount(module, "field_array.from_vector") &&
-                      !count(module, "algebra.finite_collect") &&
+                      !count(module, "data.finite_collect") &&
                       !computationCount(module) &&
                       !count(module, "data.domain"),
                   "finite recipe did not lower and consume its source helper");
@@ -469,7 +469,7 @@ int main() {
                     "polynomial rewrite lost its verification dependency or "
                     "loaded execution dialects");
                 require(eliminate ? !count(module, "poly.evaluate") &&
-                                        count(module, "algebra.array_at")
+                                        count(module, "data.array_at")
                                   : count(module, "poly.fix_table"),
                         "polynomial recipe did not execute");
               });

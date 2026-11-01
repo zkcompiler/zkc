@@ -30,9 +30,9 @@ with case("unknown policy tag refuses structured message"):
     commands.run([compiler, "protocol-proof", source, policy], refuses="native-proof-policy")
 # Standalone numeric collections use the same frame family and carrier.
 # Wrapping them in a record is not required to select the correct boundary.
-for name, ty in [("vector", "!algebra.field_vector<\"bls12-381.fr\">"),
-                 ("groups", "!algebra.group_vector<\"bls12-381.g1\">"),
-                 ("indices", "!algebra.indices")]:
+for name, ty in [("vector", "!data.field_vector<\"bls12-381.fr\">"),
+                 ("groups", "!data.group_vector<\"bls12-381.g1\">"),
+                 ("indices", "!data.indices")]:
     with case(f"standalone {name}"):
         text = f'''module {{ "protocol.module"() ({{
           "protocol.func"() ({{ ^entry(%data:{ty}, %ok:i1):

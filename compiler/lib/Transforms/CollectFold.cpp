@@ -1,6 +1,7 @@
 #include "CollectFold.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
@@ -31,7 +32,7 @@ FailureOr<CollectFold> readCollectFold(Operation *producer, Operation *consumer,
   auto collection =
       dyn_cast<CollectionTypeInterface>(producer->getResult(0).getType());
   if (!collection || !isa<algebra::FieldType>(collection.getElementType()) ||
-      !isa<algebra::FieldVectorType, data::SequenceType>(
+      !isa<data::FieldVectorType, data::SequenceType>(
           producer->getResult(0).getType()))
     return failure();
   pair.collected = producer->getResult(0);

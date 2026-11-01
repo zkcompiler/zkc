@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
@@ -52,11 +53,11 @@ private:
       if (scalar.getDomain() != field)
         return failure();
       out.push_back(IntegerType::get(context, 256));
-    } else if (auto vector = dyn_cast<algebra::FieldVectorType>(type)) {
+    } else if (auto vector = dyn_cast<data::FieldVectorType>(type)) {
       if (vector.getDomain() != field)
         return failure();
       out.append({i64, i64});
-    } else if (isa<algebra::IndicesType>(type)) {
+    } else if (isa<data::IndicesType>(type)) {
       out.append({i64, i64});
     } else if (auto capability = dyn_cast<runtime::CapabilityType>(type)) {
       if (capability.getKind() != runtime::CapabilityKind::Transcript ||
@@ -573,7 +574,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
   if (name == "exec.apply")
     return lowerBinding(op, map);
   if (name == "exec.fold" || name == "exec.collect" ||
-      name == "algebra.finite_fold" || name == "algebra.finite_collect")
+      name == "data.finite_fold" || name == "data.finite_collect")
     return lowerFinite(op, map);
   if (name == "protocol.loop")
     return lowerLoop(op, map);

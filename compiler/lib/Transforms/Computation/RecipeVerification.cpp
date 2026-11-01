@@ -15,6 +15,8 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
@@ -50,7 +52,7 @@ class RecipeReader {
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
                                            "numerical recipes differ"};
   static bool representation(Type source, Type actual) {
-    return isa<poly::QuotientType>(source) ? isa<algebra::IndicesType>(actual)
+    return isa<poly::QuotientType>(source) ? isa<data::IndicesType>(actual)
                                            : source == actual;
   }
   bool charge(uint64_t amount = 1) {
@@ -481,7 +483,7 @@ class RecipeReader {
                   {StringAttr::get(source->getContext(),
                                    constant.getResult().getType().getDomain())},
                   {constant.getValue()});
-    if (auto at = dyn_cast<algebra::ArrayAtOp>(source)) {
+    if (auto at = dyn_cast<data::ArrayAtOp>(source)) {
       auto array = at.getArray().getType();
       auto field = StringAttr::get(
           source->getContext(),
@@ -490,9 +492,8 @@ class RecipeReader {
       auto index = natural(at.getIndexAttr().getInt());
       return take("field_array.at", inputs, {field, length}, {index});
     }
-    if (isa<algebra::ArrayFromElementsOp>(source)) {
-      auto array =
-          cast<algebra::FieldArrayType>(source->getResult(0).getType());
+    if (isa<data::ArrayFromElementsOp>(source)) {
+      auto array = cast<data::FieldArrayType>(source->getResult(0).getType());
       auto field = StringAttr::get(
           source->getContext(),
           cast<algebra::FieldType>(array.getElementType()).getDomain());

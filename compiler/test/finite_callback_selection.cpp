@@ -10,6 +10,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -23,7 +24,7 @@ using namespace zkc::mathematical;
 namespace {
 constexpr llvm::StringLiteral sourceText = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -42,7 +43,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%seed:!F)->!F {
-   %r = "algebra.finite_fold"(%xs,%seed) {domain=@items,step=@step} : (!V,!F)->!F
+   %r = "data.finite_fold"(%xs,%seed) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
@@ -53,7 +54,7 @@ module { "protocol.module"() ({
 )mlir";
 constexpr llvm::StringLiteral indexedSourceText = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -71,7 +72,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%seed:!F,%ys:!V)->!F attributes {data.preconditions=[#data.equal_extent<0,0,2,0>]} {
-   %r = "algebra.finite_fold"(%xs,%seed,%ys) {domain=@items,step=@step} : (!V,!F,!V)->!F
+   %r = "data.finite_fold"(%xs,%seed,%ys) {domain=@items,step=@step} : (!V,!F,!V)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
@@ -85,9 +86,9 @@ module { "protocol.module"() ({
 std::string groupSource(unsigned variant) {
   std::string text = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
-!GS = !algebra.group_vector<"bls12-381.g1">
+!GS = !data.group_vector<"bls12-381.g1">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%points:!GS,%scalars:!V):
    %p = "data.domain_elements"(%points) : (!GS)->!data.domain<!G>
@@ -105,7 +106,7 @@ module { "protocol.module"() ({
    func.return %r : !G
  }
  func.func private @total(%points:!GS,%scalars:!V,%seed:!G)->!G attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} {
-   %r = "algebra.finite_fold"(%points,%scalars,%seed) {domain=@items,step=@step} : (!GS,!V,!G)->!G
+   %r = "data.finite_fold"(%points,%scalars,%seed) {domain=@items,step=@step} : (!GS,!V,!G)->!G
    func.return %r : !G
  }
  "protocol.func"() ({ "protocol.return"() : ()->() }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
@@ -151,7 +152,7 @@ module { "protocol.module"() ({
     replace("algebra.group_scale %point,%scalar : (!G,!F)->(!G,!F)",
             "algebra.group_scale %point,%scalar : (!G,!F)->!G");
   } else if (variant == 4) {
-    text.insert(0, "!A = !algebra.field_array<\"bls12-381.fr\", 2>\n");
+    text.insert(0, "!A = !data.field_array<\"bls12-381.fr\", 2>\n");
     replace("^entry(%points:!GS,%scalars:!V)",
             "^entry(%points:!GS,%scalars:!V,%extra:!A)");
     replace("   %d =", "   %a = \"data.domain_elements\"(%extra) : "
@@ -469,9 +470,9 @@ int main() {
     std::string text(indexedSourceText);
     auto product = text.find("   %p = algebra.field_multiply %x,%y");
     text.insert(product, R"mlir(
-   %a = "algebra.array_from_elements"(%x,%y) : (!F,!F)->!algebra.field_array<"koala-bear",2>
-   %left = "algebra.array_at"(%a) {index=0:i64} : (!algebra.field_array<"koala-bear",2>)->!F
-   %right = "algebra.array_at"(%a) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
+   %a = "data.array_from_elements"(%x,%y) : (!F,!F)->!data.field_array<"koala-bear",2>
+   %left = "data.array_at"(%a) {index=0:i64} : (!data.field_array<"koala-bear",2>)->!F
+   %right = "data.array_at"(%a) {index=1:i64} : (!data.field_array<"koala-bear",2>)->!F
 )mlir");
     auto operands = text.find("algebra.field_multiply %x,%y");
     text.replace(operands, StringRef("algebra.field_multiply %x,%y").size(),
@@ -491,7 +492,7 @@ int main() {
         !hasLoop(selected(*candidate)) && compare(*source, *candidate),
         "packed scalar projection did not select an independently checked dot");
     auto update = SymbolTable(unit(*source)).lookup<func::FuncOp>("update");
-    auto projection = *update.front().getOps<algebra::ArrayAtOp>().begin();
+    auto projection = *update.front().getOps<data::ArrayAtOp>().begin();
     projection.setIndexAttr(
         IntegerAttr::get(IntegerType::get(&context, 64), 1));
     require(succeeded(verify(*source)), "changed projection is malformed");
@@ -502,7 +503,7 @@ int main() {
     cases.run("field reduction domain coverage " + llvm::Twine(variant), [&] {
       std::string text = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 !E = EXTRA_CONTAINER
 !X = EXTRA_ELEMENT
 module { "protocol.module"() ({
@@ -517,7 +518,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%extra:!E,%seed:!F)->!F attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} {
-   %r = "algebra.finite_fold"(%xs,%extra,%seed) {domain=@items,step=@step} : (!V,!E,!F)->!F
+   %r = "data.finite_fold"(%xs,%extra,%seed) {domain=@items,step=@step} : (!V,!E,!F)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ "protocol.return"() : ()->() }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
@@ -525,8 +526,8 @@ module { "protocol.module"() ({
 )mlir";
       StringRef container = variant == 0 ? "!V"
                             : variant == 1
-                                ? "!algebra.group_vector<\"bls12-381.g1\">"
-                                : "!algebra.field_array<\"bls12-381.fr\", 2>";
+                                ? "!data.group_vector<\"bls12-381.g1\">"
+                                : "!data.field_array<\"bls12-381.fr\", 2>";
       StringRef element =
           variant == 1 ? "!algebra.group<\"bls12-381.g1\">" : "!F";
       text.replace(text.find("EXTRA_CONTAINER"),
@@ -763,8 +764,8 @@ module { "protocol.module"() ({
         [&] {
           std::string text = R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
-!M = !algebra.field_matrix<"koala-bear">
+!V = !data.field_vector<"koala-bear">
+!M = !data.field_matrix<"koala-bear">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -782,7 +783,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @total(%xs:!V,%seed:!F,%m:!M,%selected:ui64)->!F attributes {data.preconditions=[#data.equal_extent<0,0,2,VARYING>,#data.index_bound<3,2,FIXED>]} {
-   %r = "algebra.finite_fold"(%xs,%seed,%m,%selected) {domain=@items,step=@step} : (!V,!F,!M,ui64)->!F
+   %r = "data.finite_fold"(%xs,%seed,%m,%selected) {domain=@items,step=@step} : (!V,!F,!M,ui64)->!F
    func.return %r : !F
  }
  "protocol.func"() ({ "protocol.return"() : ()->() }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
@@ -831,8 +832,8 @@ module { "protocol.module"() ({
         at += to.size();
       }
     };
-    replace("!V = !algebra.field_vector<\"koala-bear\">",
-            "!V = !algebra.field_vector<\"koala-bear\">\n!G = "
+    replace("!V = !data.field_vector<\"koala-bear\">",
+            "!V = !data.field_vector<\"koala-bear\">\n!G = "
             "!algebra.group<\"bn254.g1\">");
     replace("%ys:!V)->!F", "%ys:!V,%g:!G)->!F");
     replace("#data.index_bound<1,3,0>]",

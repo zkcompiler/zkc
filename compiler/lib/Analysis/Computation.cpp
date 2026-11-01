@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
@@ -138,9 +139,8 @@ class NumericalBodyReader {
         return failure();
       // Exact pack projection is descriptor substitution, not arithmetic
       // simplification. Keep every scalar producer and its occurrence order.
-      if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
-        auto pack =
-            inputs.front().getDefiningOp<algebra::ArrayFromElementsOp>();
+      if (auto projection = dyn_cast<data::ArrayAtOp>(op)) {
+        auto pack = inputs.front().getDefiningOp<data::ArrayFromElementsOp>();
         auto coordinate = projection.getIndexAttr().getInt();
         if (pack && coordinate >= 0 &&
             uint64_t(coordinate) < pack.getNumOperands()) {
@@ -318,7 +318,7 @@ class NumericalBodyReader {
     for (auto &op : llvm::make_early_inc_range(body.without_terminator())) {
       if (!charge(&op))
         return failure();
-      if (!isa<algebra::ArrayFromElementsOp>(op) || !op.use_empty())
+      if (!isa<data::ArrayFromElementsOp>(op) || !op.use_empty())
         continue;
       for (auto iterator = result.callbackValues.begin();
            iterator != result.callbackValues.end();) {

@@ -6,7 +6,6 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"

@@ -21,7 +21,7 @@ using Status = SuccessfulContinuationAnalysis::Status;
 std::string source(StringRef body, StringRef declarations = "") {
   return R"mlir(
 !F = !algebra.field<"goldilocks.ext2-binomial7">
-!D = !algebra.field_vector<"goldilocks.ext2-binomial7">
+!D = !data.field_vector<"goldilocks.ext2-binomial7">
 #K = #protocol.oracle_kind<"table", [!F,16:ui64]>
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({

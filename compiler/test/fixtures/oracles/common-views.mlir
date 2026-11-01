@@ -1,6 +1,6 @@
 #K = #protocol.oracle_kind<"table", [ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 module { "protocol.module"() ({
  relation.declare @admissible {kind="external",key="test/holder-contents",revision="0",
   signature=(!D,!D,ui64,ui64)->i1,purposes=["witness","witness","parameter","parameter"]}

@@ -15,7 +15,7 @@ namespace sf = zkc::test::scopedFinite;
 namespace sc = zkc::test::scopedComputation;
 namespace {
 const std::string declarations = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !data.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
 %as = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
 %bs = "data.domain_elements"(%b) : (!V)->!data.domain<!F>
@@ -41,7 +41,7 @@ func.return %failure : !exec.outcome<(!F)>
 )mlir";
 std::string fixture() {
   return "!F = !algebra.field<\"koala-bear\">\n!V = "
-         "!algebra.field_vector<\"koala-bear\">\n" +
+         "!data.field_vector<\"koala-bear\">\n" +
          scopedFixture(declarations, "%a:!V,%b:!V,%c:!V,%s:!F", "%a,%b,%c,%s",
                        "!V,!V,!V,!F", "!F",
                        R"mlir(

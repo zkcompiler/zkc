@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -30,20 +30,20 @@ module { "protocol.module"() ({
    func.return %b,%next : !F,!F
  }
  func.func private @elements(%xs:!V,%factor:!F,%bias:!F,%first:!F,%second:!F)->(!F,!F) {
-   %ys = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
-   %r:2 = "algebra.finite_fold"(%ys,%first,%second,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
+   %ys = "data.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   %r:2 = "data.finite_fold"(%ys,%first,%second,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
    func.return %r#0,%r#1 : !F,!F
  }
  func.func private @indices(%xs:!V,%factor:!F,%bias:!F,%first:!F,%second:!F)->(!F,!F) {
-   %ys = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
-   %r:2 = "algebra.finite_fold"(%ys,%first,%second,%bias,%ys) {domain=@positions,step=@indexed_step} : (!V,!F,!F,!F,!V)->(!F,!F)
+   %ys = "data.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   %r:2 = "data.finite_fold"(%ys,%first,%second,%bias,%ys) {domain=@positions,step=@indexed_step} : (!V,!F,!F,!F,!V)->(!F,!F)
    func.return %r#0,%r#1 : !F,!F
  }
  func.func private @nonzero_seeds(%xs:!V,%factor:!F,%bias:!F)->(!F,!F) {
    %first = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F
    %second = "algebra.constant"() {value=#algebra.literal<!F, 11 : ui255>} : ()->!F
-   %ys = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
-   %r:2 = "algebra.finite_fold"(%ys,%first,%second,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
+   %ys = "data.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   %r:2 = "data.finite_fold"(%ys,%first,%second,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
    func.return %r#0,%r#1 : !F,!F
  }
  func.func private @unit_step(%x:!F,%ys:!V,%bias:!F) {
@@ -51,8 +51,8 @@ module { "protocol.module"() ({
    func.return
  }
  func.func private @unit_state(%xs:!V,%factor:!F,%bias:!F) {
-   %ys = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
-   "algebra.finite_fold"(%ys,%bias) {domain=@items,step=@unit_step} : (!V,!F)->()
+   %ys = "data.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   "data.finite_fold"(%ys,%bias) {domain=@items,step=@unit_step} : (!V,!F)->()
    func.return
  }
  func.func private @mixed_step(%ok:i1,%state:!F,%x:!F,%ys:!V,%bias:!F)->(i1,!F) {
@@ -63,8 +63,8 @@ module { "protocol.module"() ({
    func.return %next,%sum : i1,!F
  }
  func.func private @mixed_states(%xs:!V,%factor:!F,%bias:!F,%ok:i1,%seed:!F)->(i1,!F) {
-   %ys = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
-   %r:2 = "algebra.finite_fold"(%ys,%ok,%seed,%bias) {domain=@items,step=@mixed_step} : (!V,i1,!F,!F)->(i1,!F)
+   %ys = "data.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   %r:2 = "data.finite_fold"(%ys,%ok,%seed,%bias) {domain=@items,step=@mixed_step} : (!V,i1,!F,!F)->(i1,!F)
    func.return %r#0,%r#1 : i1,!F
  }
  "data.domain"() ({ ^entry(%xs:!V,%other:!V):
@@ -80,13 +80,13 @@ module { "protocol.module"() ({
  func.func private @checked_body(%x:!F,%xs:!V,%factor:!F,%other:!V)->!F {
    // Identical factors discharge total zip's equal-extent obligation while
    // retaining the nested admission check, even though its result is unused.
-   %dead = "algebra.finite_fold"(%xs,%xs,%x) {domain=@paired,step=@nested_step} : (!V,!V,!F)->!F
+   %dead = "data.finite_fold"(%xs,%xs,%x) {domain=@paired,step=@nested_step} : (!V,!V,!F)->!F
    %r = algebra.field_multiply %x,%factor : (!F,!F)->!F
    func.return %r : !F
  }
  func.func private @nested_checks(%xs:!V,%other:!V,%factor:!F,%bias:!F,%a:!F,%b:!F)->(!F,!F) {
-   %ys = "algebra.finite_collect"(%xs,%factor,%other) {domain=@items,body=@checked_body} : (!V,!F,!V)->!V
-   %r:2 = "algebra.finite_fold"(%ys,%a,%b,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
+   %ys = "data.finite_collect"(%xs,%factor,%other) {domain=@items,body=@checked_body} : (!V,!F,!V)->!V
+   %r:2 = "data.finite_fold"(%ys,%a,%b,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
    func.return %r#0,%r#1 : !F,!F
  }
  "protocol.func"() ({ "protocol.return"() : ()->() })

@@ -89,7 +89,7 @@ std::string mappedSource(unsigned count = 1) {
   }
   body += scopedReturn(result, "!F");
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 )mlir" + scopedFixture(R"mlir(
 module @mapped attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
@@ -104,7 +104,7 @@ module @mapped attributes {exec.computation} {
  }
  func.func @evaluate(%xs:!V,%a:!F,%b:!F)->!F {
    %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
-   %sum = "algebra.finite_fold"(%xs,%zero,%a,%b) {domain=@items,step=@step} : (!V,!F,!F,!F)->!F
+   %sum = "data.finite_fold"(%xs,%zero,%a,%b) {domain=@items,step=@step} : (!V,!F,!F,!F)->!F
    func.return %sum : !F
  }
 }
@@ -138,7 +138,7 @@ std::string mixedMapSource(MLIRContext &context) {
    func.return %r : !F
  }
  func.func private @late_map(%xs:!V,%a:!F,%b:!F)->!V {
-   %v = "algebra.finite_collect"(%xs,%a,%b) {domain=@late_items,body=@late_formula} : (!V,!F,!F)->!V
+   %v = "data.finite_collect"(%xs,%a,%b) {domain=@late_items,body=@late_formula} : (!V,!F,!F)->!V
    func.return %v : !V
  }
 )mlir");
@@ -264,7 +264,7 @@ func.func private @difference(%a:!F,%b:!F)->!F {
 
 std::string finiteSource(bool bulk = true) {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 )mlir" + scopedFixture(
              R"mlir(
  "data.domain"() ({ ^entry(%xs:!V):
@@ -277,7 +277,7 @@ std::string finiteSource(bool bulk = true) {
  }
  func.func private @sum(%xs:!V)->!F {
    %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
-   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
+   %sum = "data.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %sum : !F
  }
 )mlir",
@@ -594,9 +594,9 @@ int main() {
         [&] {
           auto source = std::string(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
-!GS = !algebra.group_vector<"bls12-381.g1">
+!GS = !data.group_vector<"bls12-381.g1">
 )mlir") + scopedFixture(R"mlir(
 module @difference attributes {exec.computation} {
  func.func @evaluate(%a:!F,%b:!F)->!F {
@@ -604,7 +604,7 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 "runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )mlir",
                         "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
@@ -958,7 +958,7 @@ module @difference attributes {exec.computation} {
         require(at != std::string::npos, "missing sum fixture result");
         text.replace(at, std::string("   func.return %sum : !F").size(), R"(
    %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
-   %product = "algebra.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
+   %product = "data.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
    %both = "algebra.field_add"(%sum,%product) : (!F,!F)->!F
    func.return %both : !F
 )");
@@ -968,7 +968,7 @@ module @difference attributes {exec.computation} {
         auto entry = first<exec::ComputeOp>(*module).resolveCallee(symbols);
         require(bool(entry), "missing actual numerical entry");
         entry.walk([&](Operation *op) {
-          computations += op->getName().getStringRef() == "algebra.finite_fold";
+          computations += op->getName().getStringRef() == "data.finite_fold";
         });
         require(computations == 2,
                 "fixture lost its two computation occurrences");

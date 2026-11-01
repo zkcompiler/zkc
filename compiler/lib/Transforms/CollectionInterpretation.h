@@ -22,7 +22,7 @@ struct CollectionInterpretation {
 };
 inline CollectionInterpretation interpretCollection(mlir::Type type) {
   CollectionInterpretation result;
-  if (auto vector = mlir::dyn_cast<algebra::FieldVectorType>(type)) {
+  if (auto vector = mlir::dyn_cast<data::FieldVectorType>(type)) {
     result.element = vector.getElementType();
     result.arguments = {
         mlir::StringAttr::get(type.getContext(), vector.getDomain())};
@@ -30,7 +30,7 @@ inline CollectionInterpretation interpretCollection(mlir::Type type) {
     result.access = "vector.get";
     result.empty = "vector.empty";
     result.append = "vector.append";
-  } else if (auto groups = mlir::dyn_cast<algebra::GroupVectorType>(type)) {
+  } else if (auto groups = mlir::dyn_cast<data::GroupVectorType>(type)) {
     result.element = groups.getElementType();
     result.arguments = {
         mlir::StringAttr::get(type.getContext(), groups.getDomain())};
@@ -38,21 +38,21 @@ inline CollectionInterpretation interpretCollection(mlir::Type type) {
     result.access = "curve.get";
     result.empty = "curve.empty";
     result.append = "curve.append";
-  } else if (mlir::isa<algebra::IndicesType>(type)) {
+  } else if (mlir::isa<data::IndicesType>(type)) {
     result.element = mlir::IntegerType::get(type.getContext(), 64,
                                             mlir::IntegerType::Unsigned);
     result.length = "indices.length";
     result.access = "indices.at";
     result.empty = "indices.empty";
     result.append = "indices.append";
-  } else if (auto matrix = mlir::dyn_cast<algebra::FieldMatrixType>(type)) {
+  } else if (auto matrix = mlir::dyn_cast<data::FieldMatrixType>(type)) {
     result.element = matrix.getElementType();
     result.arguments = {
         mlir::StringAttr::get(type.getContext(), matrix.getDomain())};
     result.length = "matrix.dimension";
     result.access = "matrix.get";
     result.matrix = true;
-  } else if (auto array = mlir::dyn_cast<algebra::FieldArrayType>(type)) {
+  } else if (auto array = mlir::dyn_cast<data::FieldArrayType>(type)) {
     result.element = array.getElementType();
     result.arguments = {
         mlir::StringAttr::get(type.getContext(), array.getDomain()),

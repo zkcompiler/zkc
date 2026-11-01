@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -360,10 +361,9 @@ int main(int argc, char **argv) {
           };
           if (!valid) {
             auto value = first(*module, "poly.coefficients")->getResult(0);
-            auto array =
-                mlir::cast<zkc::algebra::FieldArrayType>(value.getType());
-            value.setType(zkc::algebra::FieldArrayType::get(
-                &context, array.getDomain(), 1));
+            auto array = mlir::cast<zkc::data::FieldArrayType>(value.getType());
+            value.setType(
+                zkc::data::FieldArrayType::get(&context, array.getDomain(), 1));
           }
           auto before = print();
           mlir::ScopedDiagnosticHandler quiet(
@@ -420,10 +420,10 @@ int main(int argc, char **argv) {
   });
   mutate("array index changed", [&](auto module) {
     mlir::Builder b(&context);
-    first(module, "algebra.array_at")->setAttr("index", b.getI64IntegerAttr(1));
+    first(module, "data.array_at")->setAttr("index", b.getI64IntegerAttr(1));
   });
   mutate("flattened array elements swapped", [&](auto module) {
-    auto *op = first(module, "algebra.array_from_elements");
+    auto *op = first(module, "data.array_from_elements");
     auto a = op->getOperand(0);
     op->setOperand(0, op->getOperand(1));
     op->setOperand(1, a);

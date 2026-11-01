@@ -110,7 +110,7 @@ Input emitted(MLIRContext &context, bool sameKind = false) {
   std::string text((std::istreambuf_iterator<char>(fixture)), {});
   if (sameKind) {
     for (StringRef fragment : {"!BF = !algebra.field<\"koala-bear\">",
-                               "!BD = !algebra.field_vector<\"koala-bear\">"}) {
+                               "!BD = !data.field_vector<\"koala-bear\">"}) {
       auto offset = text.find(fragment.str());
       require(offset != std::string::npos, "same-kind fixture fragment");
       auto replacement = fragment.str();

@@ -98,7 +98,7 @@ for wrappers, appends, refused in ((0, 70, False), (60, 50, False),
             for k in range(appends))
         commands.verified(f'''!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!F>
-!A = !algebra.field_array<"bls12-381.fr", {appends}>
+!A = !data.field_array<"bls12-381.fr", {appends}>
 module {{
 {domain}
 func.func private @body(%x:!F,%xs:!S)->!F {{ func.return %x : !F }}
@@ -109,7 +109,7 @@ func.func private @append(%xs:!S,%x:!F)->!S {{
 func.func @subject(%x:!F)->!A {{
  %s0 = "data.sequence_empty"() : ()->!S
  {calls}
- %r = "algebra.finite_collect"(%s{appends}) {{domain=@items,body=@body}} : (!S)->!A
+ %r = "data.finite_collect"(%s{appends}) {{domain=@items,body=@body}} : (!S)->!A
  func.return %r : !A
 }}
 }}
@@ -126,7 +126,7 @@ for wrappers, forwards, refused in ((0, 220, False), (60, 180, False),
             f'%n{k+1} = func.call @identity(%n{k}) : (ui64)->ui64'
             for k in range(forwards))
         commands.verified(f'''!F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr", 3>
+!A = !data.field_array<"bls12-381.fr", 3>
 module {{
 {domain}
 func.func private @body(%i:ui64,%lo:ui64,%hi:ui64,%x:!F)->!F {{
@@ -137,7 +137,7 @@ func.func @subject(%x:!F)->!A {{
  %lo = "data.index"() {{value=0 : ui64}} : ()->ui64
  %n0 = "data.index"() {{value=3 : ui64}} : ()->ui64
  {calls}
- %r = "algebra.finite_collect"(%lo,%n{forwards},%x) {{domain=@items,body=@body}}
+ %r = "data.finite_collect"(%lo,%n{forwards},%x) {{domain=@items,body=@body}}
    : (ui64,ui64,!F)->!A
  func.return %r : !A
 }}

@@ -2,7 +2,6 @@
 #include "MathematicalValues.h"
 #include "ProtocolApplications.h"
 #include "mlir/IR/OperationSupport.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"

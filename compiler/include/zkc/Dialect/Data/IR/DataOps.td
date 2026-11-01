@@ -177,4 +177,31 @@ def Data_MatchOp : Op<DataDialect, "match", [Terminator,
   let successors = (successor VariadicSuccessor<AnySuccessor>:$arms);
   let hasVerifier = 1;
 }
+def ArrayFromElementsOp : Op<DataDialect, "array_from_elements",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let summary = "Pack ordered field elements into an exact nominal field array";
+  let arguments = (ins Variadic<Field>:$elements);
+  let results = (outs FieldArray:$result);
+  let hasVerifier = 1;
+}
+
+def ArrayAtOp : Op<DataDialect, "array_at",
+                  [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins FieldArray:$array, I64Attr:$index);
+  let results = (outs Field:$result);
+  let hasVerifier = 1;
+  let hasFolder = 1;
+}
+
+class DataFiniteOp<string name> : Op<DataDialect, name,
+    [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$domain,
+    OptionalAttr<FlatSymbolRefAttr>:$step, OptionalAttr<FlatSymbolRefAttr>:$body,
+    OptionalAttr<FlatSymbolRefAttr>:$predicate);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+}
+def FiniteFoldOp : DataFiniteOp<"finite_fold">;
+def FiniteCollectOp : DataFiniteOp<"finite_collect">;
+
 #endif

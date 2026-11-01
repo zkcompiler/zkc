@@ -5,6 +5,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
@@ -318,7 +319,7 @@ struct MathematicalFactAnalysis::Impl {
                              depth + 1, known);
         }
       }
-      if (isa_and_nonnull<algebra::FiniteCollectOp>(op)) {
+      if (isa_and_nonnull<data::FiniteCollectOp>(op)) {
         auto domainOp = dyn_cast_or_null<data::DomainOp>(resolve(op, "domain"));
         if (domainOp && domainOp.getBody().hasOneBlock()) {
           auto &body = domainOp.getBody().front();
@@ -369,7 +370,7 @@ struct MathematicalFactAnalysis::Impl {
             return resultSource;
         }
       }
-      if (isa_and_nonnull<algebra::FiniteCollectOp>(op) &&
+      if (isa_and_nonnull<data::FiniteCollectOp>(op) &&
           !op->hasAttr("predicate")) {
         auto domainOp = dyn_cast_or_null<data::DomainOp>(resolve(op, "domain"));
         if (domainOp && domainOp.getBody().hasOneBlock()) {

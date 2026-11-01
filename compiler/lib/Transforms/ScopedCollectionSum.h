@@ -1,5 +1,6 @@
 #ifndef ZKC_TRANSFORMS_SCOPEDCOLLECTIONSUM_H
 #define ZKC_TRANSFORMS_SCOPEDCOLLECTIONSUM_H
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -24,7 +25,7 @@ collectionSumConsumer(const protocol::SourceExecutionStep &producer,
       producer.outputs[0].use_begin()->getOwner() != consumer->operation)
     return nullptr;
   auto vector =
-      mlir::dyn_cast<algebra::FieldVectorType>(producer.outputs[0].getType());
+      mlir::dyn_cast<data::FieldVectorType>(producer.outputs[0].getType());
   auto call = mlir::cast<exec::ApplyOp>(consumer->operation);
   auto binding = mlir::SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
       call, call.getBindingAttr());

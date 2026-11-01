@@ -8,6 +8,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -251,7 +252,7 @@ int main() {
         [&] { return emitError(UnknownLoc::get(&context)); }, &context,
         StringRef("unknown"));
     require(!type, "unknown field acquired a formed native type");
-    auto vector = algebra::FixedVectorType::getChecked(
+    auto vector = data::FixedVectorType::getChecked(
         [&] { return emitError(UnknownLoc::get(&context)); }, &context,
         Type(IntegerType::get(&context, 32)), uint64_t(2));
     require(!vector, "invalid element acquired a formed native vector");

@@ -21,7 +21,7 @@ int main() {
   if (!outcome.getPayload().empty())
     return 5;
   context.getOrLoadDialect<zkc::algebra::AlgebraDialect>();
-  auto vector = zkc::algebra::FieldVectorType::get(&context, "bls12-381.fr");
+  auto vector = zkc::data::FieldVectorType::get(&context, "bls12-381.fr");
   auto collection = mlir::cast<zkc::CollectionTypeInterface>(vector);
   if (collection.getCollectionKind() != zkc::CollectionKind::FieldVector ||
       collection.getRank() != 1 || collection.getStaticExtent(0))

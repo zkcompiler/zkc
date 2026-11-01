@@ -1,7 +1,7 @@
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
-!a = !algebra.field_array<"bls12-381.fr", 3>
+!a = !data.field_array<"bls12-381.fr", 3>
 !q = !poly.polynomial<"bls12-381.fr", 1>
 !rng = !protocol.service_ref<"random.bls12-381.fr/0">
 !state = !data.variant<#data.identity<["atom", "poly.residual.product"]>, [#data.alternative<"state", [!poly.point<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">]>]>

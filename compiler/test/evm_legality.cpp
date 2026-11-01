@@ -61,7 +61,7 @@ module { "protocol.module"() ({
 // item and capture types. The final vector is a two-lane invariant capture.
 constexpr StringLiteral finiteSource = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "runtime.binding"() {sym_name="add",contract="index.add",arguments=[],implementation="",function_type=(!runtime.scope,ui64,ui64)->!exec.outcome<(ui64)>} : ()->()
  "data.domain"() ({ ^entry(%xs:!V,%ys:!V):
@@ -100,7 +100,7 @@ module { "protocol.module"() ({
 
 constexpr StringLiteral totalFiniteSource = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %x = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -112,7 +112,7 @@ module { "protocol.module"() ({
    func.return %next : !F
  }
  "protocol.func"() ({ ^entry(%xs:!V,%init:!F,%factor:!F):
-   %r = "algebra.finite_fold"(%xs,%init,%factor) {domain=@items,step=@step} : (!V,!F,!F)->!F
+   %r = "data.finite_fold"(%xs,%init,%factor) {domain=@items,step=@step} : (!V,!F,!F)->!F
    "protocol.return"(%r) : (!F)->()
  }) {sym_name="main",function_type=(!V,!F,!F)->!F,roles=["V"],input_roles=[["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
@@ -122,21 +122,21 @@ module { "protocol.module"() ({
 // the fold's scope, which owns the generation throughout the traversal.
 constexpr StringLiteral capabilityFiniteSource = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 !T = !runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">
 !O = !exec.outcome<(!T)>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="coordinates",contract="indices.empty",arguments=[],implementation="",function_type=(!runtime.scope)->!exec.outcome<(!algebra.indices)>} : ()->()
- "runtime.binding"() {sym_name="draw",contract="transcript.native.indexed.challenge",arguments=["hash-chain.keccak256.bls12-381.fr64be/0"],implementation="",function_type=(!runtime.scope,!T,!algebra.indices)->!exec.outcome<(!F,!T)>} : ()->()
+ "runtime.binding"() {sym_name="coordinates",contract="indices.empty",arguments=[],implementation="",function_type=(!runtime.scope)->!exec.outcome<(!data.indices)>} : ()->()
+ "runtime.binding"() {sym_name="draw",contract="transcript.native.indexed.challenge",arguments=["hash-chain.keccak256.bls12-381.fr64be/0"],implementation="",function_type=(!runtime.scope,!T,!data.indices)->!exec.outcome<(!F,!T)>} : ()->()
  "data.domain"() ({ ^entry(%xs:!V):
    %x = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%x) : (!data.domain<!F>)->()
  }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
  func.func private @step(%scope:!runtime.scope,%state:!T,%item:!F,%xs:!V)->!O attributes {no_inline,runtime.origin=["step",[]]} {
-   %coordinates = "exec.apply"(%scope) {binding=@coordinates,parameters=[],site="coordinates"} : (!runtime.scope)->!exec.outcome<(!algebra.indices)>
-   "exec.dispatch"(%coordinates)[^invoke,^stop] : (!exec.outcome<(!algebra.indices)>)->()
- ^invoke(%indices:!algebra.indices):
-   %draw = "exec.apply"(%scope,%state,%indices) {binding=@draw,parameters=[#runtime.origin<"main", #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","draw","V">>],site="draw"} : (!runtime.scope,!T,!algebra.indices)->!exec.outcome<(!F,!T)>
+   %coordinates = "exec.apply"(%scope) {binding=@coordinates,parameters=[],site="coordinates"} : (!runtime.scope)->!exec.outcome<(!data.indices)>
+   "exec.dispatch"(%coordinates)[^invoke,^stop] : (!exec.outcome<(!data.indices)>)->()
+ ^invoke(%indices:!data.indices):
+   %draw = "exec.apply"(%scope,%state,%indices) {binding=@draw,parameters=[#runtime.origin<"main", #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","draw","V">>],site="draw"} : (!runtime.scope,!T,!data.indices)->!exec.outcome<(!F,!T)>
    "exec.dispatch"(%draw)[^done,^stop] : (!exec.outcome<(!F,!T)>)->()
  ^done(%unused:!F,%next:!T):
    %ok = "exec.returned"(%next) : (!T)->!O
@@ -484,9 +484,9 @@ int main() {
             "%next = algebra.field_add %state,%product : (!F,!F)->!F",
             "%next = algebra.field_add %product,%factor : (!F,!F)->!F");
         text = replaceFixture(std::move(text),
-                              "\"algebra.finite_fold\"(%xs,%init,%factor) "
+                              "\"data.finite_fold\"(%xs,%init,%factor) "
                               "{domain=@items,step=@step} : (!V,!F,!F)->!F",
-                              "\"algebra.finite_collect\"(%xs,%factor) "
+                              "\"data.finite_collect\"(%xs,%factor) "
                               "{domain=@items,body=@step} : (!V,!F)->!V");
         text = replaceFixture(std::move(text),
                               "\"protocol.return\"(%r) : (!F)->()",
@@ -578,7 +578,7 @@ int main() {
                                "-> (i64,i64,i1,i64)");
     text = replaceFixture(
         std::move(text), "->(i1,!runtime.capability",
-        "->(!algebra.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
+        "->(!data.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
     text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
                           "evm.output_ports=[0:i64,2:i64]");
     text = replaceFixture(
@@ -590,7 +590,7 @@ int main() {
   cases.run("invocation checks logical lane expansion independently", [&] {
     auto text = replaceFixture(
         boundaryText.str(), "->(i1,!runtime.capability",
-        "->(!algebra.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
+        "->(!data.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
     text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
                           "evm.output_ports=[0:i64,1:i64]");
     refuses(boundary(text, 1), "evm.yul");

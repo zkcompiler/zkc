@@ -89,10 +89,10 @@ void project(ModuleOp module) {
 std::string forwardingFixture(bool matrix, bool finite) {
   std::string source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 )mlir";
   source +=
-      matrix ? "!C = !algebra.field_matrix<\"bls12-381.fr\">\n" : "!C = !V\n";
+      matrix ? "!C = !data.field_matrix<\"bls12-381.fr\">\n" : "!C = !V\n";
   source += "module { \"protocol.module\"() ({\n";
   if (finite) {
     source += "\"data.domain\"() ({ ^entry(%xs:!C):\n";
@@ -138,7 +138,7 @@ std::string forwardingFixture(bool matrix, bool finite) {
  }
  "protocol.func"() ({ ^entry(%xs:!C,%other:ui64):
 )mlir";
-  source += finite ? "%result = \"algebra.finite_collect\"(%xs,%other) "
+  source += finite ? "%result = \"data.finite_collect\"(%xs,%other) "
                      "{domain=@items,body=@read} : (!C,ui64)->!V\n"
                      "\"protocol.return\"(%result) : (!V)->()\n"
                      "}) {sym_name=\"main\",function_type=(!C,ui64)->!V,"
@@ -152,7 +152,7 @@ std::string forwardingFixture(bool matrix, bool finite) {
 
 constexpr StringLiteral directFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr",4>
+!A = !data.field_array<"bls12-381.fr",4>
 module { "protocol.module"() ({
  func.func private @identity(%xs:!A)->!A { func.return %xs : !A }
  func.func private @index()->ui64 {
@@ -279,7 +279,7 @@ int main() {
   cases.run("generic module verification is structural without an owner", [&] {
     auto module = parse(context, R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!A = !algebra.field_array<"bls12-381.fr",4>
+!A = !data.field_array<"bls12-381.fr",4>
 module {
  func.func private @read(%xs:!A)->!F {
    %index = "data.index"() {value=0 : ui64} : ()->ui64

@@ -60,8 +60,8 @@ with case('exact-math-formation-and-export-refusals'):
     # Installed Field vectors still require nominal agreement at every port.
     for inputs, output in [(('bls12-381.fr', 'bn254.fr'), 'bls12-381.fr'),
                            (('bls12-381.fr', 'bls12-381.fr'), 'bn254.fr')]:
-        left, right = (f'!algebra.field_vector<"{d}">' for d in inputs)
-        result = f'!algebra.field_vector<"{output}">'
+        left, right = (f'!data.field_vector<"{d}">' for d in inputs)
+        result = f'!data.field_vector<"{output}">'
         bad = f'''module {{
           func.func @bad(%xs:{left},%point:{right})->{result} {{
             %r = "algebra.multilinear_restrict_prefix"(%xs,%point) : ({left},{right})->{result}

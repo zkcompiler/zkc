@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
 !R = !runtime.capability<rng, "bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({

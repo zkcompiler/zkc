@@ -1,11 +1,11 @@
 // Authored scoped contractions: arithmetic, guard order and cleanup.
-!V = !algebra.field_vector<"ristretto255.scalar">
-!A = !algebra.group_vector<"ristretto255.group">
+!V = !data.field_vector<"ristretto255.scalar">
+!A = !data.group_vector<"ristretto255.group">
 !R = !algebra.group<"ristretto255.group">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.scale_each", implementation = "", sym_name = "map",function_type=(!runtime.scope, !algebra.field_vector<"ristretto255.scalar">, !algebra.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group_vector<"ristretto255.group">)>}> : () -> ()
-    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.msm", implementation = "", sym_name = "reduce",function_type=(!runtime.scope, !algebra.field_vector<"ristretto255.scalar">, !algebra.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group<"ristretto255.group">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.scale_each", implementation = "", sym_name = "map",function_type=(!runtime.scope, !data.field_vector<"ristretto255.scalar">, !data.group_vector<"ristretto255.group">) -> !exec.outcome<(!data.group_vector<"ristretto255.group">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.msm", implementation = "", sym_name = "reduce",function_type=(!runtime.scope, !data.field_vector<"ristretto255.scalar">, !data.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group<"ristretto255.group">)>}> : () -> ()
     "runtime.binding"() <{arguments = [], contract = "control.require", implementation = "", sym_name = "guard",function_type=(!runtime.scope, i1) -> !exec.outcome<>}> : () -> ()
     func.func @Work(%arg0: !runtime.scope, %arg1: !V, %arg2: !V, %arg3: !V, %arg4: !A, %arg5: i1) -> !exec.outcome<(!R, !R)> attributes {no_inline, runtime.origin = ["Work", []]} {
       %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>

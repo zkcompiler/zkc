@@ -1,6 +1,7 @@
 #include "FrontierVerification.h"
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -304,7 +305,7 @@ class FrontierReader {
       // A checked polynomial projection may use the exact coordinate of an
       // already retained pack. This forwards an existing scalar; it never
       // deletes or coalesces its concrete producer or the pack itself.
-      if (auto projection = dyn_cast<algebra::ArrayAtOp>(op);
+      if (auto projection = dyn_cast<data::ArrayAtOp>(op);
           projection && source.generated.contains(&op)) {
         auto found = frontier.packs.find(inputs->front());
         auto index = projection.getIndexAttr().getInt();
@@ -331,7 +332,7 @@ class FrontierReader {
           actual[b] = id;
           outputs.push_back(id);
         }
-        if (isa<algebra::ArrayFromElementsOp>(op))
+        if (isa<data::ArrayFromElementsOp>(op))
           frontier.packs[outputs.front()] = *inputs;
         if (source.generated.contains(&op)) {
           frontier.producerIndex[fingerprint(target, *inputs)].push_back(

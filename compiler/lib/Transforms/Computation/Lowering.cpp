@@ -14,6 +14,7 @@
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
@@ -31,8 +32,8 @@ namespace zkc::computation {
 namespace {
 void registerRealizationDialects(DialectRegistry &registry) {
   registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
-                  exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
-                  arith::ArithDialect, cf::ControlFlowDialect,
+                  data::DataDialect, exec::ExecDialect, func::FuncDialect,
+                  scf::SCFDialect, arith::ArithDialect, cf::ControlFlowDialect,
                   tensor::TensorDialect, linalg::LinalgDialect>();
 }
 void loadRealizationDialects(MLIRContext &context) {

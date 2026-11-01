@@ -55,7 +55,7 @@ The [sequence rationale](../rationale/nested-sequences.md) explains this
 choice alongside numerical collections. The shared `CollectionTypeInterface`
 reports structure only; finite, mathematical, Copy/Drop, wire and physical
 admission still use their owning contracts. Builtin tensors are not alternate
-logical carriers. `algebra.array_from_elements` packs ordered field operands
+logical carriers. `data.array_from_elements` packs ordered field operands
 into a nominal field array, including an empty array. Source arrays and nominal
 fixed vectors retain their separate meanings and representations.
 

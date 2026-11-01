@@ -8,7 +8,7 @@
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
 !batch = !data.sequence<!message>
-!fs = !algebra.field_vector<"bls12-381.fr">
+!fs = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>)>} : ()->()
  "runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>],implementation="",function_type=(!runtime.scope, !data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>, !data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>) -> !exec.outcome<(!data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>)>} : ()->()
@@ -17,8 +17,8 @@ module { "protocol.module"() ({
  "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
  "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
  "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
- "runtime.binding"() {sym_name="vlength",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
- "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="vlength",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  "runtime.binding"() {sym_name="point",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
  "runtime.binding"() {sym_name="coordinate",contract="poly.append_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
  "runtime.binding"() {sym_name="commit",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation="",function_type=(!runtime.scope, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "opening_state">)>} : ()->()

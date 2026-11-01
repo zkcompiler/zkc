@@ -976,10 +976,10 @@ class Emitter {
             name = "algebra.group_equal";
             break;
           case MathematicalIdentity::ArrayFromElements:
-            name = "algebra.array_from_elements";
+            name = "data.array_from_elements";
             break;
           case MathematicalIdentity::ArrayAt:
-            name = "algebra.array_at";
+            name = "data.array_at";
             break;
           case MathematicalIdentity::PolynomialConstant:
             name = "poly.constant";
@@ -1061,7 +1061,7 @@ class Emitter {
                 &context,
                 mlir::isa<poly::PolynomialType>(type)
                     ? mlir::cast<poly::PolynomialType>(type).getDomain()
-                    : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+                    : mlir::cast<data::FieldArrayType>(type).getDomain());
             SmallVector<mlir::Attribute> points;
             for (const auto &parameter : math->parameters) {
               auto point = take(algebra::decodeFieldLiteral(field, parameter));

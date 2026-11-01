@@ -290,10 +290,10 @@ int main() {
         auto other = parse(R"mlir(
                  module @other {
                    func.func private @unchecked(
-                       %xs: !algebra.field_vector<"koala-bear">, %i: ui64)
+                       %xs: !data.field_vector<"koala-bear">, %i: ui64)
                        -> !algebra.field<"koala-bear"> {
                      %v = "data.bounded_at"(%xs, %i) :
-                       (!algebra.field_vector<"koala-bear">, ui64)
+                       (!data.field_vector<"koala-bear">, ui64)
                        -> !algebra.field<"koala-bear">
                      func.return %v : !algebra.field<"koala-bear">
                    }

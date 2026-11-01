@@ -91,7 +91,7 @@ module { "protocol.module"() <{profile = #protocol.profile<participant>}> ({
 constexpr llvm::StringLiteral bounded = R"mlir(
 !S = !runtime.scope
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
+!V = !data.field_vector<"koala-bear">
 !O = !exec.outcome<(!F)>
 module {
   func.func private @load(%left: !V, %right: !V, %i: ui64) -> !F

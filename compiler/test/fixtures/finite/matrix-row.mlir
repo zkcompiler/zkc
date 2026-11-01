@@ -1,6 +1,6 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!M = !algebra.field_matrix<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+!M = !data.field_matrix<"bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()

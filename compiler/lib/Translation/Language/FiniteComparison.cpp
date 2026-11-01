@@ -684,7 +684,7 @@ public:
     }
     if (!count() ||
         actual.getName().getStringRef() !=
-            (fold ? "algebra.finite_fold" : "algebra.finite_collect") ||
+            (fold ? "data.finite_fold" : "data.finite_collect") ||
         !attributes(actual, attrs) || actual.getNumRegions() ||
         !llvm::equal(actual.getOperands(), operands) ||
         actual.getResultTypes() != mlir::TypeRange(*outputs)) {

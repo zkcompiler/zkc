@@ -1,5 +1,6 @@
 #include "HelperNormalization.h"
 #include "MathematicalValues.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -42,7 +43,7 @@ struct HelperNormalizationChecker::Implementation {
     if (isa<poly::PolynomialCoefficientsOp>(op)) {
       auto bound = degrees.find(inputs[0]);
       auto width =
-          cast<algebra::FieldArrayType>(op.getResult(0).getType()).getLength();
+          cast<data::FieldArrayType>(op.getResult(0).getType()).getLength();
       if (bound == degrees.end() || bound->second.size() != 1 ||
           bound->second[0] >= uint64_t(width))
         return false;
@@ -60,9 +61,9 @@ struct HelperNormalizationChecker::Implementation {
     else if (isa<poly::MultilinearPolynomialOp>(op))
       bound.assign(type.getArity(), 1);
     else if (isa<poly::CoefficientPolynomialOp, poly::InterpolateDomainOp>(op))
-      bound.push_back(cast<algebra::FieldArrayType>(op.getOperand(0).getType())
-                          .getLength() -
-                      1);
+      bound.push_back(
+          cast<data::FieldArrayType>(op.getOperand(0).getType()).getLength() -
+          1);
     else {
       auto first = degrees.find(inputs[0]);
       if (first == degrees.end())

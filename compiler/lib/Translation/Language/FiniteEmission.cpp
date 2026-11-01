@@ -558,7 +558,7 @@ public:
         return std::move(failure);
       return result;
     }
-    auto *result = make(fold ? "algebra.finite_fold" : "algebra.finite_collect",
+    auto *result = make(fold ? "data.finite_fold" : "data.finite_collect",
                         *outputs, operands, attrs);
     if (!result)
       return std::move(failure);

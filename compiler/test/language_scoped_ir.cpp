@@ -115,7 +115,7 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(
           auto original = take(prepareOriginal(entry));
           require(original.bytes().contains("data.domain_elements") &&
                       original.bytes().contains(
-                          mathematical ? "algebra.finite_fold" : "exec.fold"),
+                          mathematical ? "data.finite_fold" : "exec.fold"),
                   "finite structure missing from source original");
           take(compileEntry(original));
           take(compileEntry(original, {false, false}));

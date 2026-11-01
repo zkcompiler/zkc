@@ -20,8 +20,8 @@ namespace {
 // other constructors are unused, but their admission still belongs to the body.
 const char *constructors = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-!M = !algebra.field_matrix<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+!M = !data.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
   "data.domain"() ({
   ^entry(%xs: !V, %matrix: !M, %lower: ui64, %upper: ui64, %selector: ui64):
@@ -110,8 +110,8 @@ int main() {
   cases.run("bounded reads do not promise context-free speculation", [&] {
     auto module = parseSourceString<ModuleOp>(R"mlir(
 !F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
-!M = !algebra.field_matrix<"koala-bear">
+!V = !data.field_vector<"koala-bear">
+!M = !data.field_matrix<"koala-bear">
 module {
   func.func @read(%xs: !V, %matrix: !M, %i: ui64, %j: ui64) -> (!F, !F) {
     %x = "data.bounded_at"(%xs, %i) : (!V, ui64) -> !F

@@ -26,10 +26,10 @@ std::string source(bool noQueries = false, bool heterogeneous = false,
   std::string text = R"mlir(
 #K = #protocol.oracle_kind<"table", [ui64, 4 : ui64]>
 !H = !protocol.oracle<#K>
-!D = !algebra.indices
+!D = !data.indices
 #B = #protocol.oracle_kind<"table", [ui64, 4 : ui64]>
 !B = !protocol.oracle<#B>
-!BD = !algebra.indices
+!BD = !data.indices
 module { "protocol.module"() ({
  relation.declare @admissible {kind="external",key="test/controller",revision="0",
   signature=(!D,!BD,ui64)->i1,purposes=["witness","witness","parameter"]}
@@ -80,7 +80,7 @@ module { "protocol.module"() ({
     };
     replace("#B = #protocol.oracle_kind<\"table\", [ui64,",
             "#B = #protocol.oracle_kind<\"table\", [i1,");
-    replace("!BD = !algebra.indices", "!BD = !data.sequence<i1>");
+    replace("!BD = !data.indices", "!BD = !data.sequence<i1>");
     if (!noQueries)
       replace("(!B,ui64)->ui64", "(!B,ui64)->i1");
   }
@@ -376,7 +376,7 @@ int main(int argc, char **argv) {
   cases.run("a Merkle receiver suspends without a local table evaluator", [&] {
     auto original = parse(context, R"mlir(
 !F = !algebra.field<"koala-bear.ext4-binomial3">
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 #K = #protocol.oracle_kind<"table", [!F, 4 : ui64]>
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({
@@ -423,7 +423,7 @@ module { "protocol.module"() ({
       "holder contents remain available beside unrelated Merkle receipts", [&] {
         auto original = parse(context, R"mlir(
 !F = !algebra.field<"koala-bear.ext4-binomial3">
-!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!D = !data.field_vector<"koala-bear.ext4-binomial3">
 #K = #protocol.oracle_kind<"table", [!F, 4 : ui64]>
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({

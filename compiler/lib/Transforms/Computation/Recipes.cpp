@@ -15,9 +15,10 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
@@ -272,7 +273,7 @@ class Recipes {
         operands.push_back(
             emit("index.constant", {}, index,
                  {rewriter.getIntegerAttr(index, type.getDegree())}, false));
-      auto output = algebra::IndicesType::get(op->getContext());
+      auto output = data::IndicesType::get(op->getContext());
       replace(emit(contract, operands, output, {}, true));
       return success();
     }
@@ -603,8 +604,8 @@ class Recipes {
       replace(result);
       return success();
     }
-    if (isa<algebra::ConstantFieldOp, algebra::ArrayAtOp,
-            algebra::ArrayFromElementsOp>(op)) {
+    if (isa<algebra::ConstantFieldOp, data::ArrayAtOp,
+            data::ArrayFromElementsOp>(op)) {
       // Formation has established exact finite shapes and canonical literals.
       // Check the complete recipe vocabulary before making any mutation.
       for (StringRef contract :
@@ -636,7 +637,7 @@ class Recipes {
         result =
             emit("field.constant", {field}, {}, constant.getResult().getType(),
                  {constant.getValue()}, true);
-      } else if (auto at = dyn_cast<algebra::ArrayAtOp>(op)) {
+      } else if (auto at = dyn_cast<data::ArrayAtOp>(op)) {
         auto array = at.getArray().getType();
         auto field = rewriter.getStringAttr(
             cast<algebra::FieldType>(array.getElementType()).getDomain());
@@ -651,11 +652,11 @@ class Recipes {
                                      at.getIndexAttr().getInt())},
             true);
       } else {
-        auto array = cast<algebra::FieldArrayType>(op->getResult(0).getType());
+        auto array = cast<data::FieldArrayType>(op->getResult(0).getType());
         auto field = rewriter.getStringAttr(
             cast<algebra::FieldType>(array.getElementType()).getDomain());
-        auto vector = algebra::FieldVectorType::get(array.getContext(),
-                                                    array.getDomain());
+        auto vector =
+            data::FieldVectorType::get(array.getContext(), array.getDomain());
         result = emit("vector.empty", {field}, {}, vector, {}, false);
         for (auto value : inputs)
           result = emit("vector.append", {field}, ValueRange{result, value},

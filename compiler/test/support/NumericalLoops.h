@@ -51,7 +51,7 @@ fixture(mlir::MLIRContext &context, llvm::StringRef field = "bls12-381.fr",
     position += carrier.size();
   }
   if (sequence) {
-    auto position = text.find("!V = !algebra.field_vector<");
+    auto position = text.find("!V = !data.field_vector<");
     auto end = text.find('\n', position);
     require(position != std::string::npos && end != std::string::npos,
             "missing nominal collection alias");

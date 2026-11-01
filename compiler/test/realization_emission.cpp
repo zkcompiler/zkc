@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -100,7 +101,7 @@ int main() {
   context.loadAllAvailableDialects();
   Cases cases;
   auto field = algebra::FieldType::get(&context, "bls12-381.fr");
-  auto vector = algebra::FieldVectorType::get(&context, field.getDomain());
+  auto vector = data::FieldVectorType::get(&context, field.getDomain());
   auto group = algebra::GroupType::get(&context, "bls12-381.g1");
   auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
   cases.run("byte collection observations do not grant finite recipes", [&] {
@@ -122,7 +123,7 @@ int main() {
                "vector.append",
                1,
                {}},
-        Family{algebra::GroupVectorType::get(&context, group.getDomain()),
+        Family{data::GroupVectorType::get(&context, group.getDomain()),
                group,
                "curve.length",
                "curve.get",
@@ -130,7 +131,7 @@ int main() {
                "curve.append",
                1,
                {}},
-        Family{algebra::IndicesType::get(&context),
+        Family{data::IndicesType::get(&context),
                index,
                "indices.length",
                "indices.at",
@@ -146,7 +147,7 @@ int main() {
                "sequence.append",
                1,
                {}},
-        Family{algebra::FieldMatrixType::get(&context, field.getDomain()),
+        Family{data::FieldMatrixType::get(&context, field.getDomain()),
                field,
                "matrix.dimension",
                "matrix.get",
@@ -154,12 +155,12 @@ int main() {
                nullptr,
                2,
                {}},
-        Family{algebra::FieldArrayType::get(&context, field.getDomain(), 4),
-               field, nullptr, "field_array.get", "vector.empty",
-               "vector.append", 1, 4},
-        Family{algebra::FieldArrayType::get(&context, field.getDomain(), 0),
-               field, nullptr, "field_array.get", "vector.empty",
-               "vector.append", 1, 0}}) {
+        Family{data::FieldArrayType::get(&context, field.getDomain(), 4), field,
+               nullptr, "field_array.get", "vector.empty", "vector.append", 1,
+               4},
+        Family{data::FieldArrayType::get(&context, field.getDomain(), 0), field,
+               nullptr, "field_array.get", "vector.empty", "vector.append", 1,
+               0}}) {
     cases.run(
         std::string("collection realization: ") + family.get +
             (family.extent ? " length " + std::to_string(*family.extent) : ""),
@@ -252,7 +253,7 @@ int main() {
   cases.run("observation alone does not grant a realization", [&] {
     require(!collectionRealization(field) &&
                 !collectionRealization(
-                    algebra::FixedVectorType::get(&context, field, 4)),
+                    data::FixedVectorType::get(&context, field, 4)),
             "unadmitted collection gained a realization");
   });
   for (StringRef prefix : {"_finite_binding_", "_map_binding_"}) {
@@ -382,7 +383,7 @@ int main() {
           return reference;
         };
         auto sequence = data::SequenceType::get(&context, vector);
-        auto otherVector = algebra::FieldVectorType::get(&context, "bn254.fr");
+        auto otherVector = data::FieldVectorType::get(&context, "bn254.fr");
         auto otherSequence = data::SequenceType::get(&context, otherVector);
         auto firstType = declare("sequence.at", {TypeAttr::get(vector)},
                                  {sequence, index}, vector);
@@ -393,13 +394,11 @@ int main() {
         auto domain = builder.getStringAttr(field.getDomain());
         auto firstLength = declare(
             "field_array.get", {domain, builder.getIntegerAttr(index, 0)},
-            {algebra::FieldArrayType::get(&context, field.getDomain(), 0),
-             index},
+            {data::FieldArrayType::get(&context, field.getDomain(), 0), index},
             field);
         auto secondLength = declare(
             "field_array.get", {domain, builder.getIntegerAttr(index, 4)},
-            {algebra::FieldArrayType::get(&context, field.getDomain(), 4),
-             index},
+            {data::FieldArrayType::get(&context, field.getDomain(), 4), index},
             field);
         require(firstLength != secondLength,
                 "distinct unsigned lengths shared a binding");

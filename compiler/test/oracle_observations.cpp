@@ -17,7 +17,7 @@ std::string source(StringRef body, StringRef declarations = "") {
   return R"mlir(
 #K = #protocol.oracle_kind<"table", [!algebra.field<"bls12-381.fr">, 16 : ui64]>
 !F = !algebra.field<"bls12-381.fr">
-!D = !algebra.field_vector<"bls12-381.fr">
+!D = !data.field_vector<"bls12-381.fr">
 !H = !protocol.oracle<#K>
 !R = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
