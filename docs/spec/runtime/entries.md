@@ -29,11 +29,12 @@ nesting at 256 and lexical nodes
 at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
 string tokens have at most six times 256 KiB. Decoded strings retain their owning
 name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
-leaves, and validation has a cumulative work allowance of 1,000,000. A protocol
-roster has 1 to 1,024 distinct roles, the joint runtime ceiling; a role-bearing
-record has at most 16 role parameters. Native leaf
-parsing retains its own structural bounds. Portable schema summaries and the CPU's
-reconstructed native descriptor cache each have a 16 MiB total retained charge.
+leaves, and validation has a cumulative work allowance of 1,000,000. Entry
+admission accepts protocol rosters of 1 to 1,024 distinct roles, the joint
+runtime ceiling, and role-bearing records with at most 16 role parameters.
+Native leaf parsing retains its own structural bounds. Portable schema summaries
+and the CPU's reconstructed native descriptor cache each have a 16 MiB total
+retained charge.
 Supply reconstruction and public selection indexing share a cumulative
 1,000,000-work allowance, independent of native storage width. Each reconstructed
 input/output supply plan also charges its retained descriptors and residual
