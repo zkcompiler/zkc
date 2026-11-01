@@ -124,7 +124,10 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
           if (!work)
             return failure();
           --work;
-          if (isTotal(&op) && !finite::isComputation(&op) && op.use_empty())
+          // Finite work and selected regions are retained even when unused:
+          // their reached work and arm premises are part of their meaning.
+          if (isTotal(&op) && !finite::isComputation(&op) &&
+              !isa<data::BranchOp>(op) && op.use_empty())
             op.erase();
         }
         return success();

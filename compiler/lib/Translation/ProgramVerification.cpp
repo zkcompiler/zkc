@@ -168,7 +168,7 @@ class ArtifactCorrespondence {
           return false;
       } else if (record.get<program::ParticipantConditional>() ||
                  record.get<program::ParticipantMatch>()) {
-        if (op.getName().getStringRef() != "protocol.participant_branch")
+        if (!isa<protocol_ir::ParticipantBranchOp>(op))
           return false;
         program::Names alternatives, joined;
         protocol::Assignments captured;

@@ -637,8 +637,14 @@ public:
         associated.push_back(arguments[payload->size() + capture]);
       auto *at = ports.first(actual);
       auto prefix = (site + "_recipe_arm_" + Twine(index) + "_").str();
+      // Arm finite work owns root subjects, as in the producer. The enclosing
+      // finite occurrence and its child ordinal resume after the arm.
+      auto inherited = activeSubject;
+      auto inheritedChild = nextChild;
       auto outputs = block(region.front(), prefix, associated, at, bytes,
                            policy, true, depth + 1);
+      activeSubject = inherited;
+      nextChild = inheritedChild;
       if (failed(outputs) || !isa_and_nonnull<exec::CompleteOp>(at) ||
           ports.next(at) || ports.inputs(at) != ValueRange(*outputs))
         return failure();

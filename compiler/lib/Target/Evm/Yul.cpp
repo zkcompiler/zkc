@@ -147,6 +147,10 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   json::Array steps;
   unsigned depth = 0;
   for (const auto &step : origin->path) {
+    // A branch step carries its alternative; the EVM transcript has no
+    // selected-control occurrence encoding, so it must not become an apply.
+    if (step.kind == protocol::NativeOriginStep::Kind::Branch)
+      return refuse(op, "unsupported selected-control transcript origin");
     bool repeat = step.kind == protocol::NativeOriginStep::Kind::Repeat;
     depth += repeat;
     steps.push_back(

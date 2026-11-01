@@ -230,8 +230,7 @@ class ExecutionModelReader {
                                       attr(op, "peer").str(), n,
                                       type(op->getResult(0).getType())}});
         }
-      } else if (op->getName().getStringRef() ==
-                 "protocol.participant_branch") {
+      } else if (isa<zkc::protocol_ir::ParticipantBranchOp>(op)) {
         auto alternatives = op->getAttrOfType<ArrayAttr>("alternatives");
         if (!attributes(op, {"site", "alternatives"}) ||
             op->getNumOperands() == 0 || !alternatives ||

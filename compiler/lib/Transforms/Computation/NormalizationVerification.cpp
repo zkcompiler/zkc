@@ -802,7 +802,7 @@ struct NormalizationProvenanceChecker::Implementation {
                       "simplification liveness work bound");
       if (op.getNumResults() == 1 && aliases.contains(op.getResult(0)))
         continue;
-      bool live = finite::isComputation(&op) ||
+      bool live = finite::isComputation(&op) || isa<data::BranchOp>(op) ||
                   llvm::any_of(op.getResults(),
                                [&](Value v) { return needed.contains(v); });
       if (!live)

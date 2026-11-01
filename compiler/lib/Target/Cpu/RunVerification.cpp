@@ -119,7 +119,7 @@ class RunCorrespondence {
     for (auto &op : block) {
       if (!charge())
         return false;
-      if (op.getName().getStringRef() == "protocol.branch") {
+      if (isa<protocol_ir::BranchOp>(op)) {
         size_t source = anchor++;
         auto *group = cursor.next();
         auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
