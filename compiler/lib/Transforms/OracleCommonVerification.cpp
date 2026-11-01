@@ -182,7 +182,8 @@ Error checkOracleRealizationModel(
     const OracleVerificationContext &targetContext,
     ArrayRef<OracleCommonEntryRealization> actualEntries,
     ArrayRef<OracleRootSelection> selections,
-    OracleAuthentication authentication) {
+    OracleAuthentication authentication, OracleRealizationFacts *facts) {
+  OracleRealizationFacts derived;
   ModuleOp prepared = sourceContext.getModule(),
            actualModule = targetContext.getModule();
   auto entries = oracleEntries(prepared);
@@ -370,9 +371,47 @@ Error checkOracleRealizationModel(
         return refuse();
       root(helper);
     }
+    if (facts) {
+      llvm::StringSet<> requests;
+      for (const auto &occurrence : plan->occurrences)
+        if (occurrence.purpose == "opening_request" &&
+            !requests.insert(occurrence.site).second)
+          return refuse();
+      program.walk([&](pir::ExchangeOp exchange) {
+        if (requests.erase(exchange.getSite()))
+          derived.openingRequests.push_back(exchange);
+      });
+      if (!requests.empty())
+        return refuse();
+      derived.entries.push_back(
+          {entry, std::move(plan->occurrences), std::move(plan->queryBlocks)});
+    }
   }
   if (!inventory(source, candidate, *entries, roots))
     return refuse();
+  if (facts)
+    *facts = std::move(derived);
   return Error::success();
+}
+Expected<OracleRealizationFacts>
+checkOracleRealization(ModuleOp prepared, const OracleCommonRealization &actual,
+                       const OracleRealizationPolicy &policy) {
+  auto selections = resolveOracleRealizationSelection(prepared, policy);
+  if (!selections)
+    return selections.takeError();
+  auto source = OracleVerificationContext::read(prepared);
+  if (!source)
+    return source.takeError();
+  auto target = OracleVerificationContext::read(actual.module.get());
+  if (!target) {
+    consumeError(target.takeError());
+    return refuse();
+  }
+  OracleRealizationFacts facts;
+  if (auto e = checkOracleRealizationModel(*source, *target, actual.entries,
+                                           *selections, policy.authentication,
+                                           &facts))
+    return std::move(e);
+  return facts;
 }
 } // namespace zkc::protocol

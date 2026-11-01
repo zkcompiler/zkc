@@ -8,7 +8,6 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/SHA256.h"
-#include <limits>
 #include <map>
 
 using namespace llvm;
@@ -18,19 +17,6 @@ namespace {
 namespace pir = protocol_ir;
 using Path = std::vector<unsigned>;
 using Steps = std::vector<std::array<std::string, 3>>;
-Expected<Path> readPath(const json::Value &value) {
-  const auto *array = value.getAsArray();
-  if (!array || array->empty() || array->size() > 64)
-    return error("native-proof-realization-origin");
-  Path path;
-  for (const auto &step : *array) {
-    auto ordinal = step.getAsUINT64();
-    if (!ordinal || *ordinal > std::numeric_limits<unsigned>::max())
-      return error("native-proof-realization-origin");
-    path.push_back(*ordinal);
-  }
-  return path;
-}
 json::Array sourceOrigin(const NativeSourceOrigin &origin) {
   json::Array steps, event;
   for (const auto &step : origin.steps)
@@ -58,50 +44,20 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
   auto after = program(candidate.get(), entry);
   if (!before || !after)
     return error("native-proof-realization-origin");
-  // The owner already validated this bounded record against the complete
-  // actual body. Parsing here does not accept caller-supplied evidence.
-  auto record = json::parse(realization.realizationRecord());
-  if (!record)
-    return record.takeError();
-  const auto *root = record->getAsObject();
-  const auto *entries = root ? root->getArray("entries") : nullptr;
-  if (!entries)
-    return error("native-proof-realization-origin");
-  const json::Object *selected = nullptr;
-  for (const auto &item : *entries) {
-    auto *object = item.getAsObject();
-    if (!object)
-      return error("native-proof-realization-origin");
-    if (object->getString("entry") == entry) {
-      if (selected)
+  // Retained associations come from the independent actual-body reader. They
+  // are native facts, not instructions recovered from a serialized report.
+  StringMap<const protocol::OracleCommonOccurrence *> occurrences;
+  std::map<Path, const protocol::OracleCommonQueryBlock *> queryBlocks;
+  for (const auto &selected : realization.realizationFacts()) {
+    if (selected.entry != entry)
+      continue;
+    for (const auto &item : selected.occurrences)
+      if (!occurrences.try_emplace(item.site, &item).second)
         return error("native-proof-realization-origin");
-      selected = object;
-    }
-  }
-  StringMap<const json::Object *> occurrences;
-  std::map<Path, const json::Object *> queryBlocks;
-  if (selected) {
-    auto *items = selected->getArray("occurrences");
-    auto *blocks = selected->getArray("query_blocks");
-    if (!items || !blocks)
-      return error("native-proof-realization-origin");
-    for (const auto &item : *items) {
-      auto *object = item.getAsObject();
-      auto site = object ? object->getString("site") : std::nullopt;
-      if (!site || !occurrences.try_emplace(*site, object).second)
+    for (const auto &block : selected.queryBlocks)
+      if (block.queries.empty() ||
+          !queryBlocks.emplace(block.queries.front(), &block).second)
         return error("native-proof-realization-origin");
-    }
-    for (const auto &item : *blocks) {
-      auto *object = item.getAsObject();
-      auto *queries = object ? object->getArray("queries") : nullptr;
-      if (!queries || queries->empty())
-        return error("native-proof-realization-origin");
-      auto first = readPath(queries->front());
-      if (!first)
-        return first.takeError();
-      if (!queryBlocks.emplace(*first, object).second)
-        return error("native-proof-realization-origin");
-    }
   }
   uint64_t remaining = 100000;
   facts::Work work(remaining);
@@ -168,52 +124,46 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
           return error("native-proof-realization-origin");
       } else {
         const auto *metadata = occurrences.lookup(site.getValue());
-        auto purpose = metadata ? metadata->getString("purpose") : std::nullopt;
-        auto role = metadata ? metadata->getString("role") : std::nullopt;
-        auto *coordinate = metadata ? metadata->get("path") : nullptr;
-        if (!purpose || !role || !coordinate)
+        if (!metadata)
           return error("native-proof-realization-origin");
-        auto path = readPath(*coordinate);
-        if (!path)
-          return path.takeError();
-        auto sourceOp = sourceOperation(*path);
+        StringRef purpose = metadata->purpose, role = metadata->role;
+        const auto &path = metadata->sourcePath;
+        auto sourceOp = sourceOperation(path);
         if (!sourceOp)
           return sourceOp.takeError();
-        auto source = association(*path, *sourceOp);
+        auto source = association(path, *sourceOp);
         if (!source)
           return source.takeError();
         json::Array queries;
         json::Value capacity(nullptr);
-        if (auto block = queryBlocks.find(*path); block != queryBlocks.end()) {
-          for (const auto &item : *block->second->getArray("queries")) {
-            auto position = readPath(item);
-            if (!position)
-              return position.takeError();
-            auto queryOp = sourceOperation(*position);
+        if (auto block = queryBlocks.find(path); block != queryBlocks.end()) {
+          for (const auto &position : block->second->queries) {
+            auto queryOp = sourceOperation(position);
             if (!queryOp)
               return queryOp.takeError();
-            auto query = association(*position, *queryOp);
+            auto query = association(position, *queryOp);
             if (!query)
               return query.takeError();
             queries.push_back(std::move(*query));
           }
-          capacity = *block->second->get("packet_capacity");
+          if (block->second->packetCapacity)
+            capacity = *block->second->packetCapacity;
         }
         if (auto message = dyn_cast<pir::ExchangeOp>(op)) {
           bool delivery =
-              *purpose == "deliver" && isa<pir::OracleSendOp>(*sourceOp);
-          bool opening = (*purpose == "opening_request" ||
-                          *purpose == "opening_response") &&
-                         isa<pir::OracleQueryOp>(*sourceOp) && !queries.empty();
-          if ((!delivery && !opening) || *role != message.getReceiver())
+              purpose == "deliver" && isa<pir::OracleSendOp>(*sourceOp);
+          bool opening =
+              (purpose == "opening_request" || purpose == "opening_response") &&
+              isa<pir::OracleQueryOp>(*sourceOp) && !queries.empty();
+          if ((!delivery && !opening) || role != message.getReceiver())
             return error("native-proof-realization-origin");
         } else if (!isa<pir::RepeatOp>(op)) {
           return error("native-proof-realization-origin");
         }
-        auto provenance = printJson(json::Array{
-            "zkc.oracle-native-occurrence/0", entry, *purpose, *role,
-            realization.normalizedSelection(), std::move(*source),
-            std::move(queries), std::move(capacity)});
+        auto provenance = printJson(
+            json::Array{"zkc.oracle-native-occurrence/0", entry, purpose, role,
+                        realization.normalizedSelection(), std::move(*source),
+                        std::move(queries), std::move(capacity)});
         origin.protocol =
             "zkc.oracle." +
             toHex(SHA256::hash(arrayRefFromStringRef(provenance)), true);

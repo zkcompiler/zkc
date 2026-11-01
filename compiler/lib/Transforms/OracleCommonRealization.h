@@ -4,7 +4,9 @@
 #include "OracleQueryBatch.h"
 #include "OracleQueryController.h"
 #include "OracleQueryPacket.h"
+#include "OracleRealizationFacts.h"
 #include "OracleRealizationSelection.h"
+#include "llvm/Support/JSON.h"
 namespace zkc::protocol {
 struct OracleCommonController {
   std::string role;
@@ -82,9 +84,23 @@ struct OracleCommonRealization {
 llvm::Expected<OracleCommonRealization>
 emitOracleRealization(mlir::ModuleOp prepared,
                       const OracleRealizationPolicy &policy = {});
+llvm::Expected<OracleRealizationFacts>
+checkOracleRealization(mlir::ModuleOp prepared,
+                       const OracleCommonRealization &actual,
+                       const OracleRealizationPolicy &policy = {});
 // Re-derive layouts, capacities and the common recipe from the frozen original,
 // then read the actual common SSA and every generated helper body. The reader
 // never invokes emission. This is native correspondence, not a Lean simulation.
+// A boundary publication retains its data and exact bytes together. Native
+// analyses consume OracleRealizationFacts, never these field names.
+struct OracleRealizationPublication {
+  llvm::json::Value data;
+  std::string bytes;
+};
+llvm::Expected<OracleRealizationPublication>
+exportOracleRealization(mlir::ModuleOp prepared,
+                        const OracleCommonRealization &actual,
+                        const OracleRealizationPolicy &policy = {});
 llvm::Expected<std::string>
 serializeOracleRealization(mlir::ModuleOp prepared,
                            const OracleCommonRealization &actual,

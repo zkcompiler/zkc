@@ -249,6 +249,42 @@ static void print(raw_ostream &out, const json::Value &value) {
   } else
     out << value;
 }
+void ownJsonStrings(json::Value &value) {
+  if (auto text = value.getAsString()) {
+    value = text->str();
+  } else if (auto *array = value.getAsArray()) {
+    for (auto &child : *array)
+      ownJsonStrings(child);
+  } else if (auto *object = value.getAsObject()) {
+    json::Object owned;
+    for (auto &field : *object) {
+      ownJsonStrings(field.second);
+      owned.try_emplace(field.first.str(), std::move(field.second));
+    }
+    value = std::move(owned);
+  }
+}
+bool jsonWithinByteLimit(const json::Value &value, uint64_t limit) {
+  class Counter final : public raw_ostream {
+    uint64_t remaining;
+    bool exceeded = false;
+    void write_impl(const char *, size_t size) override {
+      if (size > remaining) {
+        exceeded = true;
+        remaining = 0;
+      } else {
+        remaining -= size;
+      }
+    }
+    uint64_t current_pos() const override { return 0; }
+
+  public:
+    explicit Counter(uint64_t limit) : remaining(limit) { SetUnbuffered(); }
+    bool withinLimit() const { return !exceeded; }
+  } out(limit);
+  print(out, value);
+  return out.withinLimit();
+}
 std::string printJson(const json::Value &value) {
   std::string text;
   raw_string_ostream out(text);

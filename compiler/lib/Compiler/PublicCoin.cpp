@@ -272,13 +272,8 @@ detail::analyzePublicCoin(const mathematical::RealizedProtocol &owner,
       protocol::encodeOracleRealizationPolicy(owner.oraclePolicy());
   if (!oraclePolicy)
     return oraclePolicy.takeError();
-  auto record = parseNaturalJson(owner.realizationRecord(), 8 * 1024 * 1024, 64,
-                                 "public-coin-report", "public-coin-limit");
-  if (!record)
-    return record.takeError();
-  auto selection = json::parse(owner.normalizedSelection());
-  if (!selection)
-    return selection.takeError();
+  if (!jsonWithinByteLimit(owner.realizationData(), 8 * 1024 * 1024))
+    return error("public-coin-limit");
   json::Array entries;
   for (const auto &entry : roots)
     entries.push_back(entry);
@@ -303,22 +298,12 @@ detail::analyzePublicCoin(const mathematical::RealizedProtocol &owner,
                       {"fuse_collect_fold", policy.collectFoldFusion},
                       {"calculation_batching", policy.calculationBatching},
                       {"oracle_policy", std::move(*oraclePolicy)},
-                      {"oracle_selection", std::move(*selection)},
-                      {"realization", std::move(*record)}};
-  // Count without retaining another serialized copy, including the checked
-  // realization record and interface outside the graph's own byte allowance.
-  class Counter : public raw_ostream {
-    uint64_t count = 0;
-    void write_impl(const char *, size_t size) override { count += size; }
-    uint64_t current_pos() const override { return count; }
-
-  public:
-    Counter() { SetUnbuffered(); }
-  } stream;
-  stream << json::Value(json::Object(result));
-  if (stream.tell() > 8 * 1024 * 1024)
+                      {"oracle_selection", owner.normalizedSelectionData()},
+                      {"realization", owner.realizationData()}};
+  json::Value publication(std::move(result));
+  if (!jsonWithinByteLimit(publication, 8 * 1024 * 1024))
     return error("public-coin-limit");
-  return json::Value(std::move(result));
+  return publication;
 }
 Expected<json::Value>
 analyzePublicCoin(ModuleOp original, StringRef text,

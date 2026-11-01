@@ -3,6 +3,31 @@
 
 using namespace llvm;
 int main() {
+  {
+    std::string key = "borrowed-key", content = "borrowed-value";
+    json::Value data = json::Object{
+        {StringRef(key),
+         json::Array{StringRef(content),
+                     json::Object{{StringRef(content), uint64_t(-1)}}}}};
+    auto expected = zkc::printJson(data);
+    zkc::ownJsonStrings(data);
+    key.assign(key.size(), 'x');
+    content.assign(content.size(), 'y');
+    if (zkc::printJson(data) != expected)
+      return 1;
+  }
+  for (const json::Value &value :
+       {json::Value(nullptr), json::Value("quote\" slash\\ unicode 한글"),
+        json::Value(json::Array{0, "value", json::Array{true, false}}),
+        json::Value(json::Object{{"field", "value"}}),
+        zkc::naturalValue("18446744073709551616")}) {
+    auto size = zkc::printJson(value).size();
+    if (!zkc::jsonWithinByteLimit(value, size) ||
+        !zkc::jsonWithinByteLimit(value, size + 1) ||
+        zkc::jsonWithinByteLimit(value, size - 1) ||
+        zkc::jsonWithinByteLimit(value, 0))
+      return 1;
+  }
   for (StringRef text : {"0", "123456789012345678901234567890"}) {
     auto parsed = zkc::parseJson(text);
     if (!parsed) {

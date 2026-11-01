@@ -39,18 +39,6 @@ inline const OracleHelperSignature &
 localSignature(const OracleCommonLocal &local) {
   return local;
 }
-// Generated identifiers use the program grammar. Full source coordinates stay
-// separate from their short spelling, for the eventual realization record.
-struct OracleCommonOccurrence {
-  std::string site, purpose, role;
-  std::vector<unsigned> sourcePath;
-};
-struct OracleCommonQueryBlock {
-  std::vector<std::vector<unsigned>> queries;
-  // Dynamic packet bound; null for ideal local evaluation. Actual physical
-  // groups are first-use runtime data checked by the packet reader.
-  std::optional<uint64_t> packetCapacity;
-};
 struct OracleCommonPlan {
   mlir::DictionaryAttr attributes;
   OracleCommonBlock body;
@@ -85,13 +73,15 @@ llvm::Expected<OracleCommonPlan> planOracleCommon(
     llvm::ArrayRef<OracleMerkleFunctions> merkle,
     OracleAuthentication authentication, llvm::ArrayRef<OracleCommonRemote>,
     llvm::ArrayRef<OracleCommonBatch>);
-// Internal parsed-model reader. Only the record reader publishes its result.
+// Independent native reader, shared by the typed edge and external record
+// boundary. Facts are written only after the complete candidate has passed.
 class OracleVerificationContext;
 llvm::Error checkOracleRealizationModel(
     const OracleVerificationContext &source,
     const OracleVerificationContext &target,
     llvm::ArrayRef<OracleCommonEntryRealization> entries,
     llvm::ArrayRef<OracleRootSelection> selections,
-    OracleAuthentication authentication);
+    OracleAuthentication authentication,
+    OracleRealizationFacts *facts = nullptr);
 } // namespace zkc::protocol
 #endif

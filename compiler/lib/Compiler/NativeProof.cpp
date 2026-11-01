@@ -2017,22 +2017,17 @@ Expected<json::Value> analyzeNativeProofBinding(
   auto &object = *view.getAsObject();
   object["source_sha256"] = *originalHash;
   object["candidate_sha256"] = *candidateHash;
-  auto record = parseNaturalJson(
-      expected->realization->realizationRecord(), 8 * 1024 * 1024, 64,
-      "construction-binding-report", "construction-binding-capacity");
-  if (!record)
-    return record.takeError();
   auto oracle = protocol::encodeOracleRealizationPolicy(oracleSelection);
   if (!oracle)
     return oracle.takeError();
-  object["realization"] = std::move(*record);
+  object["realization"] = expected->realization->realizationData();
   object["oracle_policy"] = std::move(*oracle);
   object["mathematical_policy"] = json::Object{
       {"finite_bulk", mathematicalSelection.finiteBulk},
       {"calculation_batching", mathematicalSelection.calculationBatching},
       {"fuse_vector_reductions", mathematicalSelection.vectorReductionFusion},
       {"fuse_collect_fold", mathematicalSelection.collectFoldFusion}};
-  if (printJson(view).size() > 8 * 1024 * 1024)
+  if (!jsonWithinByteLimit(view, 8 * 1024 * 1024))
     return error("construction-binding-capacity");
   return view;
 }
