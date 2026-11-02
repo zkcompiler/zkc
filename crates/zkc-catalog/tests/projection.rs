@@ -866,10 +866,20 @@ fn refuse(original: &Value, cases: &[Mutation], check: fn(&Value) -> Result<Stri
 #[test]
 fn staged_catalog_documents_validate_together() {
     let generated = check(&source()).unwrap();
-    // The native installation document is validated, not projected.
+    // A physical-only change leaves the logical projection unchanged: the
+    // installation tables are the separate INSTALLATION static.
     let mut changed = installation();
     rows(&mut changed, "representations").retain(|row| row["identity"] != "arkworks.mle-msb/0");
-    assert_eq!(check_installation(&changed).unwrap(), generated);
+    let physical = check_installation(&changed).unwrap();
+    let logical = |code: &str| {
+        code.split("pub static INSTALLATION")
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(logical(&physical), logical(&generated));
+    assert_ne!(physical, generated);
+    assert!(!logical(&generated).contains("arkworks.mle-msb/0"));
     for table in [
         "domains",
         "logicalTypes",

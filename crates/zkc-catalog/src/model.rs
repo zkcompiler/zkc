@@ -400,4 +400,380 @@ pub struct Catalog {
     pub mathematical_identities: &'static [MathematicalIdentity],
     pub mathematical_intrinsics: &'static [Intrinsic],
     pub consumer_profiles: &'static [ConsumerProfile],
+    pub domains: &'static [InstalledDomain],
+    pub logical_types: &'static [LogicalTypeInstance],
+    pub frame_tags: &'static [FrameTag],
+    pub codecs: &'static [Codec],
+    pub aggregate_frames: &'static [AggregateFrame],
+    pub random_services: &'static [RandomService],
+    pub limits: &'static [Limit],
+    pub finite_definitions: &'static [FiniteDefinition],
+    pub domain_constructors: &'static [DomainConstructor],
+}
+
+// Installed instances of `zkc.contract-declarations/0`: which nominal domains,
+// logical type instances, codecs and frames exist. A row grants no execution,
+// transport or implementation authority; a target admits its own handlers.
+
+/// One installed nominal domain. Members are ordered `(member, identity)` pairs
+/// and capabilities keep their declared order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InstalledDomain {
+    pub identity: crate::DomainIdentity,
+    pub sort: &'static str,
+    pub members: &'static [(&'static str, crate::DomainIdentity)],
+    pub capabilities: &'static [&'static str],
+    pub facts: DomainFacts,
+}
+/// The sort-specific facts: Field, Transcript and Commitment rows have them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DomainFacts {
+    None,
+    Field(FieldFacts),
+    Transcript(TranscriptFacts),
+    Commitment(CommitmentFacts),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FieldFacts {
+    /// The characteristic as a canonical decimal.
+    pub characteristic: &'static str,
+    pub structure: FieldStructure,
+    pub two_adic: Option<TwoAdicConvention>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExtensionBase {
+    BaseField,
+    PrimeSubfield,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldStructure {
+    Prime,
+    /// `B[X]/(X^degree - sum(c * X^e))` over the named base, with the
+    /// `(e, c)` terms in strictly decreasing exponent order.
+    Extension {
+        over: ExtensionBase,
+        degree: usize,
+        reduction: &'static [(usize, &'static str)],
+    },
+}
+/// A prime field's coset convention; cosets list `shift * root^i` in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TwoAdicConvention {
+    pub convention: &'static str,
+    pub maximal_root: &'static str,
+    pub two_adicity: usize,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TranscriptFamily {
+    Merlin3,
+    Spongefish080,
+    HashChain,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ByteHash {
+    Keccak256,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChallengeDecoder {
+    Fr64Be,
+    Rejection31Le,
+    Rejection64Le,
+    Scalar64Le,
+}
+/// Typed facts about the transcript algorithm that `family` names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TranscriptFacts {
+    pub family: TranscriptFamily,
+    pub hash: Option<ByteHash>,
+    pub decoder: ChallengeDecoder,
+    pub binds_suite: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommitmentScheme {
+    Keccak256Rows,
+    Poseidon2Rows,
+    MultilinearKzg,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommitmentFacts {
+    Keccak256Rows {
+        digest_bytes: usize,
+    },
+    Poseidon2Rows {
+        permutation: &'static str,
+        digest_bytes: usize,
+        digest_word_bytes: usize,
+    },
+    MultilinearKzg,
+}
+impl CommitmentFacts {
+    pub fn scheme(self) -> CommitmentScheme {
+        match self {
+            Self::Keccak256Rows { .. } => CommitmentScheme::Keccak256Rows,
+            Self::Poseidon2Rows { .. } => CommitmentScheme::Poseidon2Rows,
+            Self::MultilinearKzg => CommitmentScheme::MultilinearKzg,
+        }
+    }
+}
+/// An admitted instance of a nullary or unary constructor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LogicalTypeInstance {
+    pub kind: &'static str,
+    pub domain: Option<crate::DomainIdentity>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameLayout {
+    Scalar,
+    Vector,
+    SparseMatrix,
+    MerkleRoot,
+    MerklePath,
+    DigestRoot,
+    DigestProof,
+    PcsCommitment,
+    PcsProof,
+    Table,
+    Sequence,
+    Variant,
+    FieldArray,
+}
+/// The codecs of `kind` over commitments of `scheme` share the tag.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SharedFrame {
+    pub kind: &'static str,
+    pub scheme: CommitmentScheme,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameTag {
+    pub tag: u8,
+    pub layout: FrameLayout,
+    pub shared: Option<SharedFrame>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodecFrame {
+    pub tag: u8,
+    pub element_bytes: Option<usize>,
+    pub bytes: Option<usize>,
+    pub bytes_per_arity: Option<usize>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Codec {
+    pub identity: &'static str,
+    pub kind: &'static str,
+    pub domain: Option<crate::DomainIdentity>,
+    pub frame: Option<CodecFrame>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AggregateFrame {
+    pub constructor: &'static str,
+    pub domain: Option<crate::DomainIdentity>,
+    pub tag: u8,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RandomService {
+    pub contract: &'static str,
+    pub field: crate::DomainIdentity,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LimitUnit {
+    Roles,
+    Bytes,
+    Elements,
+    Entries,
+    Steps,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LimitPhase {
+    Formation,
+    Admission,
+    Publication,
+    Execution,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limit {
+    pub name: &'static str,
+    pub value: u64,
+    pub unit: LimitUnit,
+    pub owner: &'static str,
+    pub scope: &'static str,
+    pub phase: LimitPhase,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FiniteMode {
+    Math,
+    Local,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FiniteOperation {
+    Fold,
+    Collect,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FiniteDefinition {
+    pub identity: &'static str,
+    pub mode: FiniteMode,
+    pub operation: FiniteOperation,
+    pub collection: Option<&'static str>,
+    pub filtered: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DomainConstructorKind {
+    Elements,
+    Indices,
+    Range,
+    Zip,
+    Product,
+    MatrixRow,
+    MatrixColumn,
+    MatrixCoordinates,
+    SourceArray,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DomainConstructor {
+    pub identity: &'static str,
+    pub kind: DomainConstructorKind,
+    pub axis: usize,
+}
+
+// Available physical choices of `zkc.native-installation/0`. A preference is
+// not an installation grant: a target still admits each exact handler,
+// signature and storage owner.
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueFrame {
+    Canonical,
+    Local,
+}
+/// The implementation family that a binding selects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Provider {
+    Arkworks,
+    Blst,
+    Dalek,
+    Halo2curvesAxiom,
+    Plonky3,
+    Spongefish,
+}
+impl Provider {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Arkworks => "arkworks",
+            Self::Blst => "blst",
+            Self::Dalek => "dalek",
+            Self::Halo2curvesAxiom => "halo2curves-axiom",
+            Self::Plonky3 => "plonky3",
+            Self::Spongefish => "spongefish",
+        }
+    }
+}
+/// The native library contribution that owns storage and handlers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstallationUnit {
+    Arkworks,
+    Blst,
+    Dalek,
+    Halo2curves,
+    Plonky3,
+    Independent,
+}
+impl InstallationUnit {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Arkworks => "arkworks",
+            Self::Blst => "blst",
+            Self::Dalek => "dalek",
+            Self::Halo2curves => "halo2curves",
+            Self::Plonky3 => "plonky3",
+            Self::Independent => "independent",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Representation {
+    pub identity: &'static str,
+    pub kind: &'static str,
+    pub domain: Option<crate::DomainIdentity>,
+    pub default: bool,
+    pub layout: Option<&'static str>,
+    pub frame: ValueFrame,
+    pub unit: InstallationUnit,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArgumentPattern {
+    Any,
+    Domain(crate::DomainIdentity),
+    /// An exact admitted logical type instance.
+    Type(LogicalTypeInstance),
+    Naturals {
+        minimum: u64,
+        maximum: u64,
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RepresentationChild {
+    pub kind: &'static str,
+    pub domain: Option<crate::DomainIdentity>,
+    pub representation: &'static str,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AppliedRepresentation {
+    pub constructor: &'static str,
+    pub arguments: &'static [ArgumentPattern],
+    pub identity: &'static str,
+    pub default: bool,
+    pub child: Option<RepresentationChild>,
+    pub frame: ValueFrame,
+    pub unit: InstallationUnit,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProviderPreference {
+    pub domain: crate::DomainIdentity,
+    pub default: Provider,
+    pub alternatives: &'static [Provider],
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProviderUnit {
+    pub provider: Provider,
+    pub unit: InstallationUnit,
+}
+/// Canonical residue arithmetic in the field's default representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResidueArithmetic {
+    pub representation: &'static str,
+}
+/// Coordinates stored as `x * 2^radix_bits mod characteristic`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MontgomeryForm {
+    pub word_bytes: usize,
+    pub radix_bits: usize,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ByteOrder {
+    LittleEndian,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ByteEncoding {
+    pub codec: &'static str,
+    pub order: ByteOrder,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FieldForm {
+    pub field: crate::DomainIdentity,
+    pub arithmetic: Option<ResidueArithmetic>,
+    pub montgomery: Option<MontgomeryForm>,
+    pub byte_encoding: Option<ByteEncoding>,
+}
+/// A backend calling convention, not part of the logical declaration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhysicalArguments {
+    pub operation: &'static str,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Installation {
+    pub representations: &'static [Representation],
+    pub applied_representations: &'static [AppliedRepresentation],
+    pub providers: &'static [ProviderPreference],
+    pub provider_units: &'static [ProviderUnit],
+    pub field_forms: &'static [FieldForm],
+    pub physical_arguments: &'static [PhysicalArguments],
 }

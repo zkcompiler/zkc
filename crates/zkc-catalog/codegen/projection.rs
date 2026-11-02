@@ -1,6 +1,8 @@
 //! Build-time projection. No JSON parser or allocation enters the generated
 //! runtime table. Formation is checked before any Rust output is published.
 
+#[path = "installed.rs"]
+mod installed;
 #[path = "validation.rs"]
 mod validation;
 
@@ -713,7 +715,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
         &[],
     )?;
     choice(&v["format"], &["zkc.contract-declarations/0"])?;
-    let fields = [
+    let mut fields = vec![
         (
             "frontend_associations",
             array(&v["frontendAssociations"], |r| {
@@ -942,8 +944,14 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
         ),
     ];
     validation::validate(&v, &installation)?;
+    // The logical installed-instance tables join CATALOG; the physical tables
+    // are the separate INSTALLATION static, so neither surface carries the other.
+    let identities = installed::Identities::new(&v)?;
+    fields.extend(identities.logical(&v)?);
     Ok(format!(
-        "// Generated from the shared declaration source.\npub static CATALOG: Catalog = {};\n",
-        record("Catalog", &fields)
+        "// Generated from the shared declaration source.\n{}pub static CATALOG: Catalog = {};\n{}",
+        identities.enumeration(&v)?,
+        record("Catalog", &fields),
+        identities.installation(&installation)?
     ))
 }

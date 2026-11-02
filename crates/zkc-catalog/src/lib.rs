@@ -36,3 +36,17 @@ pub fn consumer_profile_operation(
         .iter()
         .find(|row| row.operation == operation)
 }
+
+/// The installed row of a domain identity.
+pub fn installed_domain(identity: DomainIdentity) -> &'static InstalledDomain {
+    CATALOG
+        .domains
+        .iter()
+        .find(|row| row.identity == identity)
+        .expect("every domain identity has its installed row")
+}
+
+/// Look up an installed codec by its exact identity.
+pub fn installed_codec(identity: &str) -> Option<&'static Codec> {
+    CATALOG.codecs.iter().find(|row| row.identity == identity)
+}

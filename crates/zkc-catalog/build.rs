@@ -11,7 +11,13 @@ fn main() {
     for source in [&declarations, &installation] {
         println!("cargo::rerun-if-changed={}", source.display());
     }
-    for generator in ["projection", "validation", "instances", "installation"] {
+    for generator in [
+        "projection",
+        "validation",
+        "instances",
+        "installation",
+        "installed",
+    ] {
         println!("cargo::rerun-if-changed=codegen/{generator}.rs");
     }
     let read = |source: &PathBuf| {

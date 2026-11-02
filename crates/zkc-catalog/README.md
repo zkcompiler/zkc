@@ -9,11 +9,25 @@ The build reads two inputs of one catalog package: `declarations.json`
 ([`zkc.contract-declarations/0`](../../docs/spec/formats/contract-declarations.md))
 and `installation.json`
 ([`zkc.native-installation/0`](../../docs/spec/formats/native-installation.md)),
-which references the first one way. Both are validated together. The
-installed-instance tables (domains, logical type instances, frame tags,
+which references the first one way. Both are validated together.
+
+The installed-instance tables (domains, logical type instances, frame tags,
 codecs, aggregate frames, random services, limits and the source vocabulary)
-and the whole native installation document are validated but not yet
-projected into `CATALOG`.
+join `CATALOG` in declared order. The native installation document is the
+separate `INSTALLATION` static, so a physical-only change leaves the logical
+projection unchanged. `DomainIdentity` enumerates exactly the declared domains:
+`name()` returns the canonical identity and `parse` accepts only that spelling.
+Variant names are presentation only, and identities whose presentations
+coincide are refused at build time. These rows declare which instances, codecs
+and physical choices exist; they grant no execution, transport or handler, and
+a target still admits each implementation it runs.
+
+`tests/installed.rs` checks that every authored row and fact reaches the
+projection in order. `tests/validation_cases.rs` runs the
+[shared validation cases](../../common/catalog/README.md). The
+`installed_parity` tests of `zkc-runtime` and `zkc-cpu` compare these tables
+with the hand-written runtime and backend tables and list each known
+difference until its consumer reads the catalog.
 
 Runtime admission interprets the table's kinded scopes, signatures, requirements,
 parameter rules, history facets and type permissions. Consumers still check actual arguments, profile
