@@ -189,7 +189,8 @@ format. The maintained
 prover and EVM verifier over identical framed proof bytes. The
 [deployed tests](../common/tests/evm/README.md) compare complete primitive traces
 and failure frontiers. Root/path envelopes can be transported without
-authentication; cryptographic Merkle operations, curve operations, transcript
+authentication, and every path envelope is bounded by the declared path ceiling,
+whose maximum admits every path native admits; cryptographic Merkle operations, curve operations, transcript
 families and decoders other than the realized ones and full STARK verifier
 deployment need additional target support. Conditional participant completion
 in the verifier refuses with `evm.completion`. These checks are

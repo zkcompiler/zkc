@@ -56,12 +56,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let project = Project::load(required("--project")?)?;
     let entry = required("--entry")?;
     let rounds: u32 = required("--rounds")?.parse()?;
-    // Include the first control over the declared round maximum without
-    // permitting huge fixtures.
+    // The fixture's rounds are its participant loop count. Include the first
+    // control over the declared participant loop maximum without permitting
+    // huge fixtures.
     let declared = zkc::evm_target::LIMITS
         .iter()
-        .find(|limit| limit.name == "rounds")
-        .ok_or("the target declaration has no round ceiling")?
+        .find(|limit| limit.name == "participant_loop_maximum")
+        .ok_or("the target declaration has no participant loop maximum")?
         .maximum;
     let bound = u32::try_from(declared + 1)?;
     if rounds > bound {

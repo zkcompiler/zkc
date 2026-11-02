@@ -42,8 +42,8 @@ with case("the generator's Keccak-256 matches the standard vectors"):
 cases = validation_cases.load()
 with case("the shared cases cover every rule"):
     assert {item["rule"] for item in cases} == {
-        "keys", "format", "fork", "default-fork", "rules", "selector", "abi", "solc", "limit",
-        "revert"}
+        "keys", "format", "fork", "default-fork", "validation-gas", "rules", "selector", "abi",
+        "solc", "limit", "revert"}
 
 for item in cases:
     with case(f"refused: {item['name']}"):

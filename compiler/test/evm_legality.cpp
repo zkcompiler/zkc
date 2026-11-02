@@ -624,6 +624,40 @@ proof Proof=Work {
     refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),
             "evm.limits");
   });
+  cases.run("participant loops admit only the deployment's loop maximum", [&] {
+    auto loops = [](uint64_t maximum) {
+      return R"zkc(
+module scalar;
+domain F=field("bls12-381.fr");
+protocol Copies roles(A,B)(a:F@(A,B),rounds:index@(A,B))->(accepted:bool@B) {
+  let mut accepted @B = true;
+  for _ in 0..rounds roles(A,B) max )zkc" +
+             std::to_string(maximum) + R"zkc( {
+    let copy=send A->B(a);
+    accepted=accepted&&copy==a;
+  }
+  return accepted;
+}
+proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construction authored;}
+)zkc";
+    };
+    const uint64_t declared = EvmLimits().participantLoopMaximum;
+    EvmOptions options;
+    take(compileEvmEntry(originalSource(loops(declared)), options));
+    for (auto [maximum, ceiling] :
+         {std::pair<uint64_t, uint64_t>{declared + 1, declared}, {3, 2}}) {
+      options.limits.participantLoopMaximum = ceiling;
+      auto refused = compileEvmEntry(originalSource(loops(maximum)), options);
+      require(!refused, "a loop above the deployment's maximum compiled");
+      auto message = toString(refused.takeError());
+      require(namesIdentifier(message, "evm.participant-loop-maximum") &&
+                  StringRef(message).contains(
+                      "loop maximum " + std::to_string(maximum) +
+                      " exceeds the deployment's participant loop maximum " +
+                      std::to_string(ceiling)),
+              "loop refusal does not name both maxima: " + message);
+    }
+  });
   cases.run("runtime revert helpers follow the declared classes", [&] {
     std::string helpers = evm::detail::runtimeHelpers(EvmLimits(), nullptr);
     // The emitted helper comment names each tag beside the helper's word.

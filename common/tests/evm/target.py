@@ -39,6 +39,7 @@ DEFAULT_FORK = DECLARATION["default_fork"]
 LIMITS = {row["name"]: row["maximum"] for row in DECLARATION["limits"]}
 MINIMA = {row["name"]: row["minimum"] for row in DECLARATION["limits"]}
 REVERT_CLASSES = {row["class"]: row["tag"].encode() for row in DECLARATION["reverts"]}
+VALIDATION_GAS = DECLARATION["validation_gas"]
 
 
 def optimizer():
@@ -65,8 +66,9 @@ def transaction_gas(name):
     """Gas each validation transaction, deployment included, requests on a fork.
 
     A fork's declared consensus transaction cap when it has one; otherwise the
-    declared practical validation budget. Deployment uses the same budget, so a
-    runtime at the fork's code size ceiling always deploys.
+    declared validation gas, which is never a deployment ceiling. Deployment
+    uses the same budget, so a runtime at the fork's code size ceiling always
+    deploys.
     """
     cap = fork(name)["transaction_gas_cap"]
-    return cap if cap is not None else LIMITS["practical_gas"]
+    return cap if cap is not None else VALIDATION_GAS

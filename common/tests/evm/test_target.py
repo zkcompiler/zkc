@@ -19,7 +19,7 @@ class TargetDeclarationTests(unittest.TestCase):
         for name, row in target.FORKS.items():
             with self.subTest(fork=name):
                 cap = row["transaction_gas_cap"]
-                expected = cap if cap is not None else target.LIMITS["practical_gas"]
+                expected = cap if cap is not None else target.DECLARATION["validation_gas"]
                 self.assertEqual(target.transaction_gas(name), expected)
 
     def test_forks_are_exact(self):

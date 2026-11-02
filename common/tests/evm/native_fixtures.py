@@ -74,7 +74,7 @@ def generate(driver, compiler, project, output, *, evm_artifact=None, evm_sha256
 
     # The declared round ceiling is the largest honest fixture; one over it is
     # the round-bound stop.
-    rounds = target.LIMITS["rounds"]
+    rounds = target.LIMITS["participant_loop_maximum"]
     honest, _ = run("honest-16", 4, decision=True)
     run(f"honest-{1 << rounds}", rounds, decision=True)
     run("honest-context-max", rounds, context=bytes(target.LIMITS["context_bytes"]).hex(),

@@ -526,9 +526,11 @@ LogicalResult Lowering::lowerLoop(Operation *op, ValueMap &map) {
   auto carried = op->getAttrOfType<IntegerAttr>("carried");
   auto maximum = op->getAttrOfType<IntegerAttr>("maximum");
   auto parameter = op->getAttrOfType<BoolAttr>("parameter");
+  // lowerEndpoint has refused a maximum above the deployment's ceiling.
   if (!carried || !maximum || maximum.getInt() < 0 || !parameter ||
       parameter.getValue() || op->getNumOperands() < 1 ||
-      static_cast<uint64_t>(maximum.getInt()) > options.limits.rounds)
+      static_cast<uint64_t>(maximum.getInt()) >
+          options.limits.participantLoopMaximum)
     return refuse(op, "loop requires an admitted deployment maximum");
   Value count = map.lookup(op->getOperand(0))[0];
   checked(op, "loop.bound", {},
@@ -1440,6 +1442,31 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
     return zkc::error("evm.completion", "conditional participant completion "
                                         "has no EVM realization");
   }
+  // Each participant loop's checked maximum lies within the deployment's
+  // participant loop maximum; the transcript transitions stay the only global
+  // bound.
+  std::optional<uint64_t> overLimit;
+  candidate->walk([&](Operation *op) {
+    if (op->getName().getStringRef() != "protocol.loop")
+      return WalkResult::advance();
+    auto maximum = op->getAttrOfType<IntegerAttr>("maximum");
+    if (!maximum || maximum.getInt() < 0 ||
+        maximum.getUInt() <= options.limits.participantLoopMaximum)
+      return WalkResult::advance();
+    overLimit = maximum.getUInt();
+    op->emitError("[evm.participant-loop-maximum] protocol.loop: loop "
+                  "maximum ")
+        << *overLimit << " exceeds the deployment's participant loop maximum "
+        << options.limits.participantLoopMaximum;
+    return WalkResult::interrupt();
+  });
+  if (overLimit)
+    return zkc::error(
+        "evm.participant-loop-maximum",
+        "loop maximum " + std::to_string(*overLimit) +
+            " exceeds the deployment's participant loop "
+            "maximum " +
+            std::to_string(options.limits.participantLoopMaximum));
   auto *context = candidate->getContext();
   context->getOrLoadDialect<EvmDialect>();
   context->getOrLoadDialect<scf::SCFDialect>();

@@ -28,16 +28,13 @@ struct Frame {
   unsigned elementBytes = 0;
   std::string name;
   const FieldLayout *digestField = nullptr;
-  unsigned digestBytes = 0, digestWordWidth = 0, pathLimit = 0;
+  unsigned digestBytes = 0, digestWordWidth = 0;
 };
 
 // Every byte fact of a frame is the catalog's: the codec row's tag and element
 // width, the aggregate frame's tag and the commitment row's digest widths.
 // Degree, modulus, local strides and lanes come from the shared layout owner.
 namespace instances = protocol::instances;
-
-// The deployment ceiling on the siblings of one binary Merkle path frame.
-constexpr unsigned merklePathSiblings = 24;
 
 const instances::Codec *codecRow(StringRef kind, StringRef domain) {
   const auto *codec = protocol::installedDomains().defaultCodec(kind, domain);
@@ -167,12 +164,9 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
     result.digestBytes = *scheme->commitment->digestBytes;
     using Layout = instances::FrameLayout;
     bool root = result.layout->kind == Kind::Root;
-    if (tag->layout == (root ? Layout::MerkleRoot : Layout::MerklePath)) {
-      if (!root)
-        result.pathLimit = merklePathSiblings;
-    } else if (tag->layout ==
-               (root ? Layout::DigestRoot : Layout::DigestProof)) {
-      // Digest words are canonical elements of the value field's prime base.
+    // Byte digests need no further facts; digest words are canonical elements
+    // of the value field's prime base.
+    if (tag->layout == (root ? Layout::DigestRoot : Layout::DigestProof)) {
       const auto &words = scheme->commitment->digestWordBytes;
       if (!words || !*words || result.digestBytes % *words)
         return zkc::error("evm.wire-type", "unsupported exact root/path codec");
@@ -184,7 +178,8 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
       if (!facts)
         return facts.takeError();
       result.digestField = *facts;
-    } else {
+    } else if (tag->layout !=
+               (root ? Layout::MerkleRoot : Layout::MerklePath)) {
       return zkc::error("evm.wire-type", "unsupported exact root/path codec");
     }
     return result;
@@ -342,8 +337,10 @@ void WireGenerator::Storage::scan(const Frame &f) {
     else {
       out << "let count := evm_le(add(p, 6), 4) evm_wire_elements(budget, "
              "count)\n";
-      if (f.pathLimit)
-        out << "if gt(count, " << f.pathLimit << ") { evm_resource(2) }\n";
+      // Every path envelope, digest-word or byte digest, is bounded by the
+      // deployment's path ceiling, after the element charge native shares.
+      out << "if gt(count, " << limits.pathSiblings
+          << ") { evm_resource(14) }\n";
       out << "if iszero(eq(n, add(10, evm_wire_mul(count, " << f.digestBytes
           << ")))) { evm_decode(2) }\n";
     }

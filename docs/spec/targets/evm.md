@@ -96,6 +96,7 @@ identity.
 | `solc` | The pinned compiler `version`, with its commit, and the standard-JSON `optimizer` settings |
 | `forks` | Per fork: `name`, solc `evmVersion` (`solc`), engine `hardfork`, consensus `transaction_gas_cap` or null, `runtime_code_bytes`, `initcode_bytes` and the named consensus `rules` |
 | `default_fork` | The fork selected when a caller names none |
+| `validation_gas` | The per-transaction gas budget of validation runs on a fork without a `transaction_gas_cap` |
 | `limits` | Per deployment ceiling: `name`, `minimum` and `maximum` |
 | `reverts` | Per revert class: `class` and its four-byte ASCII `tag` |
 
@@ -195,19 +196,42 @@ verification decision. Reverts have a four-byte declared class followed by one
 EVM out-of-gas is a machine halt, separate from these structured outcomes. EVM
 gas does not implement native VM instruction fuel.
 
-The compiler fixes ceilings in each deployment, each within its declared
-minimum and maximum. The declared maxima are 10 rounds, 1,024 collection elements per reached wire value, 65,536 bytes per frame
-and proof, 131,072 public wire bytes, 4,096 context bytes, 262,144 calldata and binding-root bytes,
-2,097,152 memory bytes and 64 transcript transitions. Compiler callers may
-lower supported ceilings, never raise them. Finite local ranges retain the
-native bound of 1,048,576; local collects apply the collection ceiling to
-selected output elements after their callbacks. Coordinate sequences have at
-most 64 elements and origin templates fit a 4,096-byte workspace. Callers cannot supply per-call
-budgets through the verifier ABI. Validation runs request one transaction budget
-per fork for deployment and calls alike: the fork's consensus
-`transaction_gas_cap`, or the `practical_gas` maximum for a fork without one. The
-budget never overrides the selected fork's gas rules, and a runtime at the
-fork's code size ceiling deploys within it.
+Each deployment fixes one effective value per declared ceiling, within the
+ceiling's declared minimum and maximum. The declaration alone states these
+ranges; the defaults are the maxima, and compiler callers may lower a ceiling,
+never raise it. The `zkc.evm-source/0` response carries the effective values,
+which every reader checks against the declared ranges.
+
+| Ceiling | What it bounds |
+|---|---|
+| `participant_loop_maximum` | The checked maximum of each participant loop. A larger one refuses compilation with `evm.participant-loop-maximum`, naming both maxima; transcript transitions remain the only bound across loops |
+| `public_elements` | Collection elements per reached wire value, and the selected output elements of a local collect |
+| `frame_bytes` | Bytes of one public or proof frame |
+| `public_bytes` | Public wire bytes of one call |
+| `context_bytes` | Context bytes of one call |
+| `proof_bytes` | Proof bytes of one call |
+| `calldata_bytes` | Calldata bytes of one call |
+| `root_bytes` | Bytes of the invocation binding root |
+| `memory_bytes` | Retained memory; its declared minimum holds the fixed target state |
+| `transcript_transitions` | Transcript transitions of one call |
+| `path_siblings` | Digests of one Merkle path envelope, for byte and digest-word paths alike. One more refuses with its own resource code, after the element charge |
+
+The `path_siblings` maximum equals the element ceiling that bounds a native
+path's digests, so a deployment at its maxima accepts every path that native
+accepts. Equal path ceilings do not make the admissible workloads equal: the
+calldata, frame, root, memory and gas limits of an EVM call can still refuse a
+proof that native accepts.
+
+Finite local ranges retain the native bound of 1,048,576. Coordinate sequences
+have at most 64 elements and origin templates fit a 4,096-byte workspace.
+Callers cannot supply per-call budgets through the verifier ABI.
+
+Validation runs request one transaction budget per fork, for deployment and
+calls alike: the fork's consensus `transaction_gas_cap`, or the declaration's
+`validation_gas` for a fork without one. Only the deployed-validation runner and
+harness read `validation_gas`. It is never a deployment ceiling, never reaches
+compilation, and never overrides the selected fork's gas rules. A runtime at the
+fork's code size ceiling deploys within the budget.
 
 ## Artifact and tool ownership
 

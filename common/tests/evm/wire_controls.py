@@ -24,6 +24,7 @@ import target
 ELEMENTS = target.LIMITS["public_elements"]
 FRAME_BYTES = target.LIMITS["frame_bytes"]
 MEMORY_BYTES = target.LIMITS["memory_bytes"]
+PATH_SIBLINGS = target.LIMITS["path_siblings"]
 
 FIELDS = [
     ("bls12-381.fr", 1, 66, 32, 1,
@@ -89,11 +90,13 @@ def main():
     artifacts = {}
     receipts = []
 
-    def run(fixture, mode, frame, expected, *, error=None, memory=MEMORY_BYTES):
-        key = (fixture, mode, memory)
+    def run(fixture, mode, frame, expected, *, error=None, memory=MEMORY_BYTES,
+            path_siblings=PATH_SIBLINGS):
+        key = (fixture, mode, memory, path_siblings)
         if key not in artifacts:
             yul = subprocess.check_output(
-                [str(args.consumer), "--emit", fixture, mode, str(memory)], text=True)
+                [str(args.consumer), "--emit", fixture, mode, str(memory), str(path_siblings)],
+                text=True)
             artifact = compile_request(args.solc, {
                 "language": "Yul", "sources": {"wire.yul": {"content": yul}},
                 "settings": settings()})
@@ -115,6 +118,7 @@ def main():
                          "memory_high_water": result["memory_high_water"]})
 
     decode_length, decode_tag, decode_value = ("decode", 2), ("decode", 3), ("decode", 4)
+    path_ceiling = ("resource", 14)
     element_limit, wire_capacity = ("resource", 2), ("resource", 13)
     for domain, scalar_tag, vector_tag, width, degree, prime in FIELDS:
         values = [prime-1] + list(range(1, degree))
@@ -228,8 +232,11 @@ def main():
         if width:
             broken = head(root_tag)+prime.to_bytes(width, "little")+digest[width:]
             run(f"root:{scheme}", "roundtrip", broken, b"", error=decode_value)
-        else:
-            run(f"path:{scheme}", "roundtrip", head(path_tag)+u32(25)+digest*25, b"", error=element_limit)
+        # Every path envelope accepts what native accepts at the default path
+        # ceiling and refuses one sibling over a lowered ceiling.
+        longer = head(path_tag)+u32(25)+digest*25
+        run(f"path:{scheme}", "roundtrip", longer, longer)
+        run(f"path:{scheme}", "roundtrip", longer, b"", error=path_ceiling, path_siblings=24)
     if args.compiler:
         def compiled_source(text):
             process = subprocess.run([str(args.compiler.resolve()), "language-evm",

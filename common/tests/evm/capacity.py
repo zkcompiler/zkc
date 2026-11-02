@@ -26,7 +26,7 @@ def capacities(runner, artifact, fixture, maximum_context=None, *,
         raise ValueError("expected an honest completed native fixture")
     context_cap, proof_cap = target.LIMITS["context_bytes"], target.LIMITS["proof_bytes"]
     frame_cap, elements = target.LIMITS["frame_bytes"], target.LIMITS["public_elements"]
-    rounds_cap = target.LIMITS["rounds"]
+    rounds_cap = target.LIMITS["participant_loop_maximum"]
     if len(context) > context_cap or len(proof) > proof_cap:
         raise ValueError("fixture already exceeds first-profile capacity")
     cases = {}

@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 FORMAT = "zkc.evm-target/0"
-KEYS = ("format", "abi", "solc", "default_fork", "forks", "limits", "reverts")
+KEYS = ("format", "abi", "solc", "default_fork", "forks", "validation_gas", "limits", "reverts")
 FORK_KEYS = ("name", "solc", "hardfork", "transaction_gas_cap", "runtime_code_bytes",
              "initcode_bytes", "rules")
 # The emitted verifier copies memory with MCOPY.
@@ -207,6 +207,7 @@ def validate(document):
         _unique([fork[key] for fork in forks], "fork", f"fork {key}")
     if document["default_fork"] not in [fork["name"] for fork in forks]:
         raise Refusal("default-fork", "default_fork must name a declared fork")
+    _natural(document["validation_gas"], "validation-gas", "validation_gas")
 
     limits = _list(document["limits"], "limit", "limits")
     for limit in limits:

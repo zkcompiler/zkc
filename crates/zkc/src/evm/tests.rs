@@ -543,7 +543,7 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
             }
             "limits" => {
                 let mut limits = valid["limits"].clone();
-                limits["rounds"] = json!(9);
+                limits["participant_loop_maximum"] = json!(9);
                 limits
             }
             _ => json!("ab".repeat(32)),
@@ -590,6 +590,45 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
         Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
         "evm-source-identity"
     );
+}
+
+#[test]
+fn source_limits_follow_declared_rows() {
+    let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
+    Source::capture(&encode(&valid).unwrap()).unwrap();
+    // The inert gas ceiling and the former round ceiling are not declared
+    // deployment ceilings; every declared one, the path ceiling included, is
+    // required.
+    let declared = |name: &str| {
+        crate::evm_target::LIMITS
+            .iter()
+            .any(|limit| limit.name == name)
+    };
+    assert!(!declared("practical_gas") && !declared("rounds"));
+    assert!(declared("participant_loop_maximum") && declared("path_siblings"));
+    for path in ["/limits", "/manifest/limits"] {
+        for (added, value) in [("practical_gas", 20_000_000), ("rounds", 10)] {
+            let mut changed = valid.clone();
+            changed.pointer_mut(path).unwrap()[added] = json!(value);
+            assert_eq!(
+                Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
+                "evm-source-limits",
+                "{path}/{added}"
+            );
+        }
+        let mut missing = valid.clone();
+        missing
+            .pointer_mut(path)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove("path_siblings");
+        assert_eq!(
+            Source::capture(&encode(&missing).unwrap()).unwrap_err().0,
+            "evm-source-limits",
+            "{path}"
+        );
+    }
 }
 
 #[test]

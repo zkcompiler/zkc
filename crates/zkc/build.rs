@@ -517,6 +517,7 @@ fn validate_evm_target(declaration: &Json) -> Result<(), String> {
             "solc",
             "default_fork",
             "forks",
+            "validation_gas",
             "limits",
             "reverts",
         ],
@@ -686,6 +687,11 @@ fn validate_evm_target(declaration: &Json) -> Result<(), String> {
             "default_fork must name a declared fork",
         ));
     }
+    natural(
+        &declaration["validation_gas"],
+        "validation-gas",
+        "validation_gas",
+    )?;
 
     let limits = nonempty_list(&declaration["limits"], "limit", "limits")?;
     for limit in limits {

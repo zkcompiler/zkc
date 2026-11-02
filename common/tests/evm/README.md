@@ -61,11 +61,12 @@ to one and must be between one and eight. Installed code is checked after every
 call. `test_engine.py` uses a storage counter to prove state persists and traces
 do not accumulate.
 `fork` is exactly a declared fork name; results repeat that selection. Gas includes
-transaction intrinsic gas and the selected fork's normal charges. The Python
-helpers request each fork's transaction budget for calls and deployment alike:
-the fork's declared consensus transaction gas cap, or the declared validation
-budget for a fork without one. A runtime at the fork's code size ceiling
-therefore always deploys. Deployment
+transaction intrinsic gas and the selected fork's normal charges. `gas_limit`
+and `deployment_gas_limit` are optional: each defaults to the fork's transaction
+budget, its declared consensus transaction gas cap or, for a fork without one,
+the declaration's `validation_gas`. The Python helpers request the same budget
+for calls and deployment alike, so a runtime at the fork's code size ceiling
+always deploys. Deployment
 failure sets `phase=deployment` and `runtime_gas=null`. Transaction admission,
 JSON, runtime pin and trace-capacity errors use `error` and nonzero process exit;
 they are not EVM false/revert/halt. Limits are 4 MiB JSON, 100 million gas per
@@ -284,6 +285,7 @@ the exact 32-byte ABI Boolean; refusals require the exact class, code and hash
 frontier. The wire consumer emits the production expected-type helpers; separate
 raw-value views check coefficient order independently of their encoder. Its
 controls cover whole-value node/element/memory budgets, inactive/empty type
-refusals, fixed arrays, and opaque root/path envelopes. Envelope transport does
+refusals, fixed arrays, and opaque root/path envelopes, including the path
+ceiling at the declared default and lowered below a path's length. Envelope transport does
 not establish cryptographic authentication. These are bounded differential
 controls, not a general EVM refinement proof.

@@ -192,6 +192,21 @@ class EngineTests(unittest.TestCase):
                 self.assertEqual(code, 0, oversized)
                 self.assertEqual(oversized["phase"], "deployment", oversized)
 
+    def test_omitted_gas_requests_the_fork_budget(self):
+        # An invalid opcode consumes all of the call's gas, which shows the
+        # limit the runner chose for each declared fork.
+        runtime = bytes.fromhex("fe")
+        for fork in target.FORK_NAMES:
+            with self.subTest(fork=fork):
+                request = {"creation_bytecode": creation_for(runtime).hex(), "calldata": "",
+                           "expected_runtime_bytecode": runtime.hex(), "fork": fork}
+                process = subprocess.run([os.environ["ZKC_EVM_RUNNER"]], input=json.dumps(request),
+                                         text=True, capture_output=True, timeout=30)
+                self.assertEqual(process.returncode, 0, process.stdout)
+                result = json.loads(process.stdout)
+                self.assertEqual(result["status"], "halt", result)
+                self.assertEqual(result["runtime_gas"], target.transaction_gas(fork))
+
     def test_runtime_pin(self):
         code, result = invoke(bytes.fromhex("00"), expected_runtime_bytecode="01")
         self.assertNotEqual(code, 0)

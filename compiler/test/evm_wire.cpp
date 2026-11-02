@@ -194,11 +194,12 @@ void emitAppend(MLIRContext &context) {
          << evm::detail::runtimeHelpers(limits, nullptr) << wire.definitions()
          << "} } }\n";
 }
-void emit(MLIRContext &context, StringRef kind, StringRef mode,
-          uint64_t memory) {
+void emit(MLIRContext &context, StringRef kind, StringRef mode, uint64_t memory,
+          uint64_t pathSiblings) {
   evm::NativeLayouts layouts(context);
   EvmLimits limits;
   limits.memoryBytes = memory;
+  limits.pathSiblings = pathSiblings;
   evm::WireGenerator wire(layouts, limits);
   Type type = fixture(context, kind);
   require(bool(type), "unknown test fixture");
@@ -305,10 +306,13 @@ int main(int argc, char **argv) {
   }
   if (argc >= 3 && StringRef(argv[1]) == "--emit") {
     uint64_t memory = EvmLimits().memoryBytes;
-    if (argc >= 5 && StringRef(argv[4]).getAsInteger(10, memory))
+    uint64_t pathSiblings = EvmLimits().pathSiblings;
+    if ((argc >= 5 && StringRef(argv[4]).getAsInteger(10, memory)) ||
+        (argc >= 6 && StringRef(argv[5]).getAsInteger(10, pathSiblings)))
       return 2;
     try {
-      emit(context, argv[2], argc >= 4 ? argv[3] : "roundtrip", memory);
+      emit(context, argv[2], argc >= 4 ? argv[3] : "roundtrip", memory,
+           pathSiblings);
     } catch (const std::exception &failure) {
       errs() << failure.what() << '\n';
       return 1;
@@ -344,6 +348,27 @@ int main(int argc, char **argv) {
       if (failure)
         throw std::runtime_error(toString(std::move(failure)));
     }
+  });
+  cases.run("every path envelope is bounded by the path ceiling", [&] {
+    for (StringRef name : {"path:rows.merkle-keccak256.koala-bear/0",
+                           "path:rows.merkle-poseidon2-16.koala-bear/0",
+                           "path:rows.merkle-poseidon2-8.goldilocks/0"}) {
+      for (uint64_t ceiling : {EvmLimits().pathSiblings, uint64_t(24)}) {
+        EvmLimits limits;
+        limits.pathSiblings = ceiling;
+        evm::WireGenerator wire(layouts, limits);
+        take(wire.decoder(fixture(context, name)));
+        std::string expected = "if gt(count, " + std::to_string(ceiling) +
+                               ") { evm_resource(14) }";
+        require(StringRef(wire.definitions()).count(expected) == 1,
+                Twine(name) + " is not bounded by path ceiling " +
+                    Twine(ceiling));
+      }
+    }
+    // The default accepts every path native accepts: it equals the element
+    // ceiling, which native applies to a path's siblings.
+    require(EvmLimits().pathSiblings == EvmLimits().publicElements,
+            "the default path ceiling differs from the element ceiling");
   });
   cases.run("inactive unsupported local payload refuses wire", [&] {
     auto local =
