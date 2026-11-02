@@ -932,6 +932,8 @@ std::string installedCatalogIdentity() {
     rows.push_back(std::move(value));
   };
   row({"source-name-profile", sourceNameProfileIdentity()});
+  for (const auto &constructor : protocol::frontendConstructors())
+    row({"frontend-constructor", constructor});
   for (const auto &home : protocol::frontendHomes()) {
     row({"frontend-home", home.constructor, home.module});
     for (const auto &member : home.members)

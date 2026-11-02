@@ -527,6 +527,20 @@ fn field_forms<'a>(
                     "{field}: arithmetic names the default representation of its field instance"
                 ),
             )?;
+            // Residue arithmetic is installed on a prime field or on a binomial
+            // extension of a prime base; its coordinates take the prime
+            // base's framed field codec.
+            let base = instances.residue_base(field).ok_or_else(|| {
+                format!(
+                    "{field}: residue arithmetic requires a prime field or a binomial extension of a prime base"
+                )
+            })?;
+            require(
+                instances.framed.contains_key(&("field", base)),
+                &format!(
+                    "{field}: residue arithmetic requires a framed field codec of its prime base"
+                ),
+            )?;
         }
         let montgomery = &row["montgomery"];
         if !montgomery.is_null() {

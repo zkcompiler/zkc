@@ -1059,12 +1059,23 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
         }
     }
     frontend(v, &catalog, &mut exports)?;
+    // A home names a catalog type constructor or a declared frontend
+    // constructor, a logical type head the source language owns.
+    let mut constructors = BTreeSet::new();
+    for r in list(&v["frontendConstructors"])? {
+        object(r, &["name"], &[])?;
+        let name = string(&r["name"])?;
+        require(
+            identifier(name) && !catalog.types.contains_key(name) && constructors.insert(name),
+            "invalid or duplicate frontend constructor",
+        )?;
+    }
     let mut homes = BTreeSet::new();
     for r in list(&v["frontendHomes"])? {
         let head = string(&r["constructor"])?;
         let module = string(&r["module"])?;
         require(
-            (catalog.types.contains_key(head) || ["oracle", "oracle_sequence"].contains(&head))
+            (catalog.types.contains_key(head) || constructors.contains(head))
                 && module.starts_with("zkc::")
                 && path(module, "::"),
             "invalid frontend home",

@@ -90,7 +90,7 @@ struct Model {
   Records sorts, types, operations, members, capabilities, rules, typeExports,
       families, familyCases, associatedTypes, capabilityExports,
       consumerProfiles, frontendRules, frontendDeclarations, frontendNotations,
-      frontendHomes, serviceSignatures, serviceMethods;
+      frontendConstructors, frontendHomes, serviceSignatures, serviceMethods;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
         types(order.sort("ZKC_Type")), operations(order.sort("ZKC_Operation")),
@@ -106,6 +106,7 @@ struct Model {
         frontendRules(order.sort("ZKC_FrontendRule")),
         frontendDeclarations(order.sort("ZKC_FrontendDeclaration")),
         frontendNotations(order.sort("ZKC_FrontendNotation")),
+        frontendConstructors(order.sort("ZKC_FrontendConstructor")),
         frontendHomes(order.sort("ZKC_FrontendHome")),
         serviceSignatures(order.sort("ZKC_ServiceSignature")),
         serviceMethods(order.sort("ZKC_ServiceMethod")) {
@@ -401,11 +402,18 @@ void Model::validate() {
     require(notations.emplace(module, symbol, target).second, r,
             "duplicate frontend notation");
   }
+  // A home names a catalog type constructor or a declared frontend
+  // constructor, a logical type head the source language owns.
+  std::set<StringRef> heads;
+  for (const auto *t : types)
+    heads.insert(name(t));
+  for (const auto *r : frontendConstructors)
+    require(identifier(name(r)) && heads.insert(name(r)).second, r,
+            "invalid or duplicate frontend constructor");
   for (const auto *r : frontendHomes) {
     auto head = name(r), module = r->getValueAsString("module");
-    require((head == "oracle" || head == "oracle_sequence" ||
-             any_of(types, [&](const auto *t) { return name(t) == head; })) &&
-                module.starts_with("zkc::") && path(module, "::"),
+    require(heads.count(head) && module.starts_with("zkc::") &&
+                path(module, "::"),
             r, "invalid frontend home");
     require(homes.insert(head).second, r, "duplicate frontend home");
     std::set<StringRef> exports;
@@ -1163,6 +1171,11 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
        << quote(r->getValueAsString("target")) << ", "
        << boolean(r->getValueAsBit("public")) << "},\n";
   os << "}; return rows; }\n";
+  os << "llvm::ArrayRef<std::string> frontendConstructors() {\n"
+        "static const std::vector<std::string> rows = {\n";
+  for (const auto *r : m.frontendConstructors)
+    os << quote(name(r)) << ",\n";
+  os << "}; return rows; }\n";
   os << "llvm::ArrayRef<FrontendHome> frontendHomes() {\n"
         "static const std::vector<FrontendHome> rows = {\n";
   for (const auto *r : m.frontendHomes)
@@ -1534,8 +1547,8 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                      {"naturals", intrinsic->getValueAsInt("naturals")},
                      {"domainPoints", intrinsic->getValueAsBit("domainPoints")},
                      {"scalar", intrinsic->getValueAsBit("scalar")}});
-  json::Array frontendRules, declarations, notations, homes, signatures,
-      services;
+  json::Array frontendRules, declarations, notations, constructors, homes,
+      signatures, services;
   auto sourceTerm = [](const Record *t) {
     auto index = t->getValueAsInt("index");
     if (index < 0)
@@ -1599,6 +1612,8 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
   for (const auto *r : m.serviceSignatures)
     signatures.push_back(json::Object{
         {"name", name(r)}, {"capability", r->getValueAsString("capability")}});
+  for (const auto *r : m.frontendConstructors)
+    constructors.push_back(json::Object{{"name", name(r)}});
   for (const auto *r : m.frontendHomes)
     homes.push_back(json::Object{{"constructor", name(r)},
                                  {"module", r->getValueAsString("module")},
@@ -1617,6 +1632,7 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
   result["frontendRules"] = std::move(frontendRules);
   result["frontendDeclarations"] = std::move(declarations);
   result["frontendNotations"] = std::move(notations);
+  result["frontendConstructors"] = std::move(constructors);
   result["frontendHomes"] = std::move(homes);
   result["serviceSignatures"] = std::move(signatures);
   result["serviceMethods"] = std::move(services);

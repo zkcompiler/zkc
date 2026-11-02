@@ -447,6 +447,7 @@ def validate(catalog):
                 "fixity": nullable(row({"associativity": one_of("left", "right", "none"), "precedence": count})),
                 "target": text, "public": flag,
             })),
+            "frontendConstructors": sequence(row({"name": text})),
             "frontendHomes": sequence(row({"constructor": text, "module": text, "members": sequence(text)})),
             "serviceSignatures": sequence(row({"name": text, "capability": text})),
             "serviceMethods": sequence(row({"name": text, "signature": text, "capability": text})),
@@ -577,8 +578,9 @@ def validate(catalog):
 def validate_frontend(catalog):
     """Installed source declarations, their rules and notations.
 
-    Rule shapes, service-signature capabilities and declaration references are
-    data; nothing here names a particular rule, method or declaration.
+    Rule shapes, service-signature capabilities, home constructors and
+    declaration references are data; nothing here names a particular rule,
+    method, constructor or declaration.
     """
     import re
 
@@ -660,7 +662,12 @@ def validate_frontend(catalog):
         key = (row["owner"], row["symbol"], row["target"])
         require(key not in notations, "duplicate frontend notation")
         notations.add(key)
-    heads = set(types) | {"oracle", "oracle_sequence"}
+    # A home names a catalog type constructor or a declared frontend
+    # constructor, a logical type head the source language owns.
+    heads = set(types)
+    for row in catalog["frontendConstructors"]:
+        require(identifier(row["name"]) and row["name"] not in heads, "invalid or duplicate frontend constructor")
+        heads.add(row["name"])
     seen = set()
     for row in catalog["frontendHomes"]:
         require(row["constructor"] in heads and path(row["module"]), "invalid frontend home")
@@ -1610,6 +1617,23 @@ def validate_installation(installation, catalog):
             require(
                 default is not None and default["identity"] == arithmetic["representation"],
                 "residue arithmetic names the field's default representation",
+            )
+            # Residue arithmetic is installed on a prime field or on a binomial
+            # extension B[X]/(X^degree - c) of a prime base; its coordinates
+            # take the prime base's framed field codec.
+            structure, base = facts["structure"], field
+            if structure["kind"] != "prime":
+                base = view.member(field, "BaseField") if structure["over"] == "BaseField" else None
+                require(
+                    base is not None
+                    and [term[0] for term in structure["reduction"]] == [0]
+                    and view.field(base)["structure"]["kind"] == "prime",
+                    "residue arithmetic requires a prime field or a binomial extension of a prime base",
+                )
+            require(
+                any(codec["kind"] == "field" and codec["domain"] == base and codec["frame"] is not None
+                    for codec in view.codecs.values()),
+                "residue arithmetic requires a framed field codec of its prime base",
             )
         if montgomery is not None:
             require(arithmetic is not None, "Montgomery words require residue arithmetic")

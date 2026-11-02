@@ -116,7 +116,11 @@ domain along two separate axes:
 - `arithmetic` is null or `{form, representation}`: `form` is `residue`
   (canonical residue arithmetic of the declared structure) and
   `representation` names the default representation row of the field's
-  `field` instance. `montgomery` is null or `{wordBytes, radixBits}`, with
+  `field` instance. Residue arithmetic is installed only on a prime field or
+  on a binomial extension `B[X]/(X^degree - c)` whose `BaseField` `B` is
+  prime, and the prime field or base has a framed `field` codec, whose width
+  its coordinates take. The generator, zkc-tblgen and the Rust build each
+  refuse another field family. `montgomery` is null or `{wordBytes, radixBits}`, with
   `wordBytes * 8 = radixBits`: a coordinate `x` is stored as the word
   `x * 2^radixBits mod characteristic`, which requires an `arithmetic` row and
   a characteristic below `2^radixBits`.

@@ -719,6 +719,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
             "frontendDeclarations",
             "frontendRules",
             "frontendNotations",
+            "frontendConstructors",
             "frontendHomes",
             "serviceSignatures",
             "serviceMethods",

@@ -244,6 +244,29 @@
           }
         }
       ]
+    },
+    {
+      "name": "a home over a further declared frontend constructor",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "oracle_family"
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "frontendHomes",
+          "op": "insert",
+          "value": {
+            "constructor": "oracle_family",
+            "module": "zkc::oracles",
+            "members": []
+          }
+        }
+      ]
     }
   ],
   "refused": [
@@ -3537,6 +3560,92 @@
       }
     },
     {
+      "name": "residue arithmetic on an extension whose reduction is not binomial",
+      "rule": "residue field family",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction"
+          ],
+          "value": [
+            [
+              1,
+              "1"
+            ],
+            [
+              0,
+              "3"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "native": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "rust": "residue arithmetic requires a prime field or a binomial extension of a prime base"
+      }
+    },
+    {
+      "name": "residue arithmetic on a binary field",
+      "rule": "residue field family",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "arithmetic"
+          ],
+          "value": {
+            "form": "residue",
+            "representation": "plonky3.gf2-64.pentanomial-4-3-1/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "native": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "rust": "residue arithmetic requires a prime field or a binomial extension of a prime base"
+      }
+    },
+    {
+      "name": "residue arithmetic on an extension of a binary field",
+      "rule": "residue field family",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "gf2-64.pentanomial-4-3-1.ext3-trinomial1"
+          },
+          "path": [
+            "arithmetic"
+          ],
+          "value": {
+            "form": "residue",
+            "representation": "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "native": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "rust": "residue arithmetic requires a prime field or a binomial extension of a prime base"
+      }
+    },
+    {
       "name": "calling convention of an undeclared operation",
       "rule": "physical arguments",
       "edits": [
@@ -3849,6 +3958,63 @@
         "generator": "frontend notation owner is not installed",
         "native": "frontend notation owner is not installed",
         "rust": "frontend notation owner is not installed"
+      }
+    },
+    {
+      "name": "a home whose logical constructor is no longer declared",
+      "rule": "home constructors are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "delete",
+          "where": {
+            "name": "oracle"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid frontend home",
+        "native": "invalid frontend home",
+        "rust": "invalid frontend home"
+      }
+    },
+    {
+      "name": "a frontend constructor that names a catalog type",
+      "rule": "home constructors are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "vector"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frontend constructor",
+        "native": "invalid or duplicate frontend constructor",
+        "rust": "invalid or duplicate frontend constructor"
+      }
+    },
+    {
+      "name": "a duplicate frontend constructor",
+      "rule": "home constructors are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "duplicate",
+          "where": {
+            "name": "oracle_sequence"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frontend constructor",
+        "native": "invalid or duplicate frontend constructor",
+        "rust": "invalid or duplicate frontend constructor"
       }
     },
     {

@@ -93,8 +93,8 @@ compiler's `catalog-source` test against the generator and `zkc-tblgen`, and
 outputs. The normal compiler configure step runs this projection; the
 `ZkcContractDeclarationsGen` target then regenerates native
 `Declarations.cpp.inc` and `Instances.inc` using `zkc-tblgen`. The compiler's
-`installedDomains()`, `plonky3Fields()` and applied representations are built
-from the installed-instance and installation tables through the validating
+`installedDomains()` and applied representations are built from the
+installed-instance and installation tables through the validating
 `DomainCatalog` constructor. The `installed-instances` test retains an ordered
 dump of these owners and of the facts their consumers derive, in
 `compiler/test/fixtures/contracts/installed-instances.json`, and compares the
@@ -103,11 +103,13 @@ regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source or belongs under `lean/`.
 
 `frontendDeclarations`, `frontendRules`, `frontendNotations`,
-`frontendHomes`, `serviceSignatures` and `serviceMethods` own the installed
-source declarations and notations, the rule and service-signature shapes, and
-semantic constructor homes. The generator, zkc-tblgen and the Rust build each
-check their structure: rule associations against the declared rule shapes,
-primitive associations against the declaration kind, static, member and
-notation references, unknown fields, duplicate owners and capability drift.
+`frontendConstructors`, `frontendHomes`, `serviceSignatures` and
+`serviceMethods` own the installed source declarations and notations, the rule
+and service-signature shapes, the source-owned logical type heads and semantic
+constructor homes. The generator, zkc-tblgen and the Rust build each check
+their structure: rule associations against the declared rule shapes, primitive
+associations against the declaration kind, static, member and notation
+references, home constructors against the type and frontend-constructor rows,
+unknown fields, duplicate owners and capability drift.
 Captured homonyms grant no authority.
 See [frontend associations](../../docs/spec/formats/contract-declarations.md#frontend-declaration-associations).

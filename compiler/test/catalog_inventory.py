@@ -23,7 +23,8 @@ def main():
                                   "capabilities", "exports", "families", "associatedTypes",
                                   "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles",
                                   "frontendDeclarations", "frontendRules", "frontendNotations",
-                                  "frontendHomes", "serviceSignatures", "serviceMethods",
+                                  "frontendConstructors", "frontendHomes", "serviceSignatures",
+                                  "serviceMethods",
                                   "domains", "logicalTypes", "frameTags", "codecs", "aggregateFrames",
                                   "randomServices", "limits", "finiteDefinitions", "domainConstructors"}
         assert catalog["format"] == "zkc.contract-declarations/0"

@@ -132,6 +132,9 @@ struct ServiceMethodDeclaration {
 };
 llvm::ArrayRef<FrontendDeclaration> frontendDeclarations();
 llvm::ArrayRef<FrontendNotation> frontendNotations();
+/// The logical type heads the source language owns that are not catalog type
+/// constructors. A frontend home names a catalog constructor or one of these.
+llvm::ArrayRef<std::string> frontendConstructors();
 llvm::ArrayRef<FrontendHome> frontendHomes();
 llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations();
 const FrontendDeclaration *frontendDeclaration(llvm::StringRef qualifiedName);

@@ -1,5 +1,8 @@
 #include "../lib/Language/Internal.h"
 #include "support/NativeCases.h"
+#include "zkc/Contracts/Declarations.h"
+#include "zkc/Language/Types.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -44,6 +47,23 @@ int main() {
                 read("zkc::records").members.size() == 3,
             "installed inventory differs");
   });
+  cases.run("declared frontend constructors are the frontend's logical heads",
+            [] {
+              // Catalog validators check homes against the declared rows; the
+              // frontend checks that those rows are the logical type heads it
+              // forms, so a home lookup by type category finds each one.
+              std::vector<std::string> formed{
+                  oracleConstructor(Type(Type::Kind::Oracle)).str(),
+                  oracleConstructor(Type(Type::Kind::OracleSequence)).str()};
+              auto declared = zkc::protocol::frontendConstructors();
+              require(std::vector<std::string>(declared.begin(),
+                                               declared.end()) == formed,
+                      "declared frontend constructors differ");
+              for (const auto &home : zkc::protocol::frontendHomes())
+                require(llvm::is_contained(formed, home.constructor) ||
+                            zkc::protocol::typeDeclaration(home.constructor),
+                        "home names no constructor: " + home.constructor);
+            });
   cases.run("installed modules are the declaration owners", [] {
     require(installedModules() ==
                 std::vector<std::string>{"zkc::prelude", "zkc::records"},

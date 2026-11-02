@@ -16368,6 +16368,14 @@
       "public": true
     }
   ],
+  "frontendConstructors": [
+    {
+      "name": "oracle"
+    },
+    {
+      "name": "oracle_sequence"
+    }
+  ],
   "frontendHomes": [
     {
       "constructor": "vector",

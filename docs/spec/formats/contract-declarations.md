@@ -29,8 +29,8 @@ does not install a runtime implementation by adding a declaration.
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
 `mathematicalIntrinsics`, `consumerProfiles`, `frontendDeclarations`,
-`frontendRules`, `frontendNotations`, `frontendHomes`, `serviceSignatures`,
-`serviceMethods`, and the [installed-instance](#installed-instances)
+`frontendRules`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
+`serviceSignatures`, `serviceMethods`, and the [installed-instance](#installed-instances)
 tables `domains`, `logicalTypes`, `frameTags`, `codecs`, `aggregateFrames`,
 `randomServices`, `limits`, `finiteDefinitions` and `domainConstructors`. The
 format tag is `zkc.contract-declarations/0`. Every list follows the contribution dependency
@@ -711,8 +711,8 @@ The [native block format](native-index-block.md) owns the exact bytes.
 ## Frontend declaration associations
 
 The exact version-0 envelope also contains `frontendDeclarations`,
-`frontendRules`, `frontendNotations`, `frontendHomes`, `serviceSignatures` and
-`serviceMethods`. These source-facing rows grant source resolution and typed
+`frontendRules`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
+`serviceSignatures` and `serviceMethods`. These source-facing rows grant source resolution and typed
 elaboration facts, never executable implementations, physical installation or
 formal interpretations; backend choices stay in the
 [native installation](native-installation.md). All objects reject unknown
@@ -787,9 +787,15 @@ constructor authority. Ordinary unrestricted unpack is pure; custody retirement,
 inspection and repacking require ordered execution and an outer `<-` in layout
 source. Custody-retiring restricted destructuring has the same ordered requirement.
 
+`frontendConstructors` lists the logical type heads the source language owns
+that are not catalog type constructors; the installed rows are `oracle` and
+`oracle_sequence`. A row has exactly `name`, an identifier that is unique and
+names no `types` row. The frontend checks that the rows are exactly the
+logical heads it forms, and the installation identity frames each row.
+
 A frontend home contains exactly `constructor`, `module` and `members`. The constructor
-is an admitted native constructor identity or the existing logical `oracle` /
-`oracle_sequence` constructor identity. Lookup uses checked type category and
+names a `types` row or a `frontendConstructors` row; validators check that
+membership as data, not against a fixed list of names. Lookup uses checked type category and
 catalog identity, never a printed alias or type name. Nominal wrappers retain
 their own home; aliases retain their target. A home association supplies no new
 methods, capabilities, role inference or implementation.

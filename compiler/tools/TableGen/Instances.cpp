@@ -1179,6 +1179,27 @@ void Physical::checkFieldForms() {
               text(found->second, "identity") ==
                   text(arithmetic, "representation"),
           row, "residue arithmetic names the field's default representation");
+      // Residue arithmetic is installed on a prime field or on a binomial
+      // extension B[X]/(X^degree - c) of a prime base; its coordinates take
+      // the prime base's framed field codec.
+      const auto *shape = logical.structure(domain);
+      const Record *base = domain;
+      if (text(shape, "kind") != "prime") {
+        auto member = logical.member(domain, "BaseField");
+        auto reduction = shape->getValueAsListOfDefs("reduction");
+        base = text(shape, "over") == "BaseField" && member
+                   ? logical.fieldRow(*member, row)
+                   : nullptr;
+        require(base && reduction.size() == 1 &&
+                    reduction.front()->getValueAsInt("exponent") == 0 &&
+                    text(logical.structure(base), "kind") == "prime",
+                row,
+                "residue arithmetic requires a prime field or a binomial "
+                "extension of a prime base");
+      }
+      require(framed("field", text(base, "identity")), row,
+              "residue arithmetic requires a framed field codec of its prime "
+              "base");
     }
     if (const auto *montgomery = nullableDef(row, "montgomery")) {
       exactFields(montgomery, {"wordBytes", "radixBits"});

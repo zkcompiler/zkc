@@ -149,6 +149,8 @@ enum Structure {
 struct Field<'a> {
     characteristic: Natural,
     structure: Structure,
+    /// The reduction is the single term `X^degree - c`.
+    binomial: bool,
     /// The row's own coset convention; only prime rows have one.
     convention: Option<&'a str>,
 }
@@ -252,6 +254,21 @@ impl<'a> Instances<'a> {
     fn field_or_refuse(&self, name: &str) -> Result<&Field<'a>> {
         self.field(name)
             .ok_or_else(|| format!("{name} is not a Field domain"))
+    }
+
+    /// The prime base that residue arithmetic on `name` computes over: the
+    /// field itself when it is prime, or the prime `BaseField` of a binomial
+    /// extension `B[X]/(X^degree - c)`.
+    pub(super) fn residue_base(&self, name: &'a str) -> Option<&'a str> {
+        let field = self.field(name)?;
+        match field.structure {
+            Structure::Prime => Some(name),
+            Structure::OverBase(_) if field.binomial => {
+                let base = self.member(name, "BaseField").ok()?;
+                matches!(self.field(base)?.structure, Structure::Prime).then_some(base)
+            }
+            _ => None,
+        }
     }
 
     /// Follow `BaseField` members to the prime row, if the tower has one.
@@ -810,6 +827,7 @@ fn field<'a>(
         "CharacteristicNotTwo must hold exactly when the characteristic is not 2",
     )?;
     let shape = &v["structure"];
+    let mut binomial = false;
     let structure = if choice(&shape["kind"], &["prime", "extension"])? == "prime" {
         object(shape, &["kind"], &[])?;
         Structure::Prime
@@ -820,6 +838,7 @@ fn field<'a>(
         require(degree >= 2, "extension degree must be at least 2")?;
         let reduction = list(&shape["reduction"])?;
         require(!reduction.is_empty(), "reduction is a nonempty list")?;
+        binomial = reduction.len() == 1 && reduction[0][0] == 0;
         let mut bound = degree;
         for term in reduction {
             let [exponent, coefficient] = list(term)? else {
@@ -881,6 +900,7 @@ fn field<'a>(
     Ok(Field {
         characteristic,
         structure,
+        binomial,
         convention,
     })
 }
