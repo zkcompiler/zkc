@@ -213,6 +213,7 @@ import Zkc.Executable.NativeLaws
 import Zkc.Executable.Numerical
 import Zkc.Executable.Observations
 import Zkc.Executable.Program
+import Zkc.Executable.ProgramAdmission
 import Zkc.Executable.Reading
 import Zkc.Executable.Refusal
 import Zkc.Executable.Relation
@@ -668,6 +669,7 @@ import Tests.DomainRuntimeProjection
 import Tests.ExecutableControls
 import Tests.ExecutableNormalization
 import Tests.ExecutableNumerical
+import Tests.ExecutableSelectedControl
 import Tests.ExecutableSumcheckControls
 import Tests.FieldEmbedding
 import Tests.Finite

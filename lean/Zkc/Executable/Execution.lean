@@ -12,9 +12,11 @@ public import Zkc.Construction.Scalar
 /-! The meaning of an executable validator under a native proof host.
 
 `execute` runs the validator's instructions as the native runner does. A local
-call enters a frame and runs the function's body, and every loop iteration runs
-the loop body in a frame of its own. Every receive, local call, loop, yield and
-return of the participant and every instruction of a local body is charged one
+call enters a frame and runs the function's body, every loop iteration runs the
+loop body in a frame of its own, and a participant conditional or match runs
+only its selected arm, in a frame of its own named by the branch site and the
+arm's alternative. Every receive, local call, loop, branch, yield and return of
+the participant and every instruction of a local body is charged one
 instruction against the host's budget; the budget is checked before each
 charge, so a budget of `b` executes exactly the first `b` charged steps. A
 receive reads the next length-framed message of the proof and decodes it at the
@@ -25,6 +27,16 @@ returned transcript to the host, which retires it. The runner's other resources
 (loop iterations, retained values and bytes, logical work, a numerical call's
 work and managed memory, and frame depth) are not modelled: their exhaustion
 only stops a run.
+
+A loop body or an arm sees only its own frame: its formals, bound from the
+enclosing frame by explicit capture rows (each row binds its own formal to its
+parent's value, so rows sharing a parent are distinct bindings; the runner's
+per-row storage charge is one of the unmodelled resources). Its bindings are
+discarded with its frame. The static admission of a program keeps loop captures
+copyable and never lets two rows share an affine parent; this meaning does not
+repeat those checks. An arm yields its outputs. The executable value model has
+no variant values, so a participant match, like an instruction kept as
+unsupported, stops with an explicit unsupported refusal (`Cause.unsupported`).
 
 Installed operations are interpreted through a `Vocabulary`: each row assigns
 a meaning to an exact contract, static arguments and implementation. Values
@@ -204,10 +216,16 @@ def magic : List UInt8 := [0x5a, 0x4b, 0x43, 0x50, 0x52, 0x46, 0x30, 0x30]
 
 /-! ## Machine state and results -/
 
+/-- A frame: the participant's, a local call's, a loop iteration's, or the
+selected arm of a participant branch, named by its site and alternative. The
+branch frame is the runner's runtime occurrence step `["branch", site,
+alternative]`; it is distinct from the four-field occurrence-template step
+`["branch", protocol, site, alternative]` (`Zkc.Construction.Step.branch`). -/
 inductive FrameId where
   | participant
   | call (site function : String)
   | loop (site : String) (iteration : Nat)
+  | branch (site alternative : String)
   deriving DecidableEq, Repr
 
 inductive Exit where
@@ -235,6 +253,11 @@ inductive Cause where
   | kernel (reason : PIR.Stop)
   /-- An explicit stop instruction with this reason. -/
   | explicit (reason : PIR.Stop)
+  /-- The run reached an instruction this meaning does not interpret: one kept
+  as unsupported by the reader, or a participant match, whose variant selector
+  the executable value model does not carry. This is an explicit refusal of the
+  profile, not a failure of the program. -/
+  | unsupported (instruction : String)
   deriving DecidableEq, Repr
 
 /-- The reason an explicit stop names. -/
@@ -540,7 +563,8 @@ def localStep (call : String × String) (top : Bool) (region : Option String) :
         | some results => exit results s.charge
         | none => pure (s.charge.stop .contract place (some call))
       else pure (s.stop .limit place (some call))
-  | .unsupported _, _, s, _, _ => pure (s.stop .contract (if top then some call.1 else region) (some call))
+  | .unsupported name, _, s, _, _ =>
+      pure (s.stop (.unsupported name) (if top then some call.1 else region) (some call))
 end
 
 /-! ## Local bodies without transcript operations
@@ -654,7 +678,7 @@ def evalStep : Step → Env F G → Stepped F G
       match lookupAll env values with
       | some results => .done (.values results 1)
       | none => .done (.stopped .contract 1)
-  | .unsupported _, _ => .done (.stopped .contract 0)
+  | .unsupported name, _ => .done (.stopped (.unsupported name) 0)
 end
 
 /-- What a call to a local function without transcript operations hands back
@@ -690,9 +714,23 @@ def loopK (run : State F G → (List (Value F G) → State F G → m (Run F G)) 
             else pure (s'.stop .contract (some site) none)
         | [] => pure (s'.stop .contract (some site) none)
 
+/-- Run the selected arm of a participant branch in a frame of its own that
+holds its bindings; what the arm yields leaves that frame and is handed to
+`done`. -/
+def armK (run : State F G → (List (Value F G) → State F G → m (Run F G)) → m (Run F G))
+    (site alternative : String) (bindings : Env F G) (s : State F G)
+    (done : List (Value F G) → State F G → m (Run F G)) : m (Run F G) :=
+  run { s with
+        frames := ⟨.branch site alternative, bindings⟩ :: s.frames
+        events := s.events ++ [.enter (.branch site alternative)] } fun yielded s' =>
+    match s'.frames with
+    | _ :: below =>
+        done yielded { s' with frames := below, events := s'.events ++ [.leave (.branch site alternative) .returned] }
+    | [] => pure (s'.stop .contract (some site) none)
+
 mutual
-/-- Run participant instructions. `exit` receives the values a loop body
-yields. -/
+/-- Run participant instructions. `exit` receives the values a loop body or an
+arm yields. -/
 def runK : List Action → State F G →
     (List (Value F G) → State F G → m (Run F G)) → m (Run F G)
   | [], s, _ => pure (s.stop .contract none none)
@@ -752,17 +790,39 @@ def runStep : Action → State F G → (State F G → m (Run F G)) →
       match s.frames with
       | frame :: _ =>
           match List.lookup count frame.env, lookupAll frame.env (carried.map (·.2)),
-              lookupAll frame.env captures with
+              lookupAll frame.env (captures.map (·.parent)) with
           | some (.index bound), some initial, some captured =>
               if bound ≤ maximum then
                 if s.used < budget then
                   loopK (fun s' exit => runK body s' exit) site induction (carried.map (·.1))
-                    (captures.zip captured) (List.range bound) initial s.charge
+                    ((captures.map (·.formal)).zip captured) (List.range bound) initial s.charge
                     fun final s' => next (s'.bind outputs final)
                 else pure (s.stop .limit (some site) none)
               else pure (s.stop .contract (some site) none)
           | _, _, _ => pure (s.stop .contract (some site) none)
       | [] => pure (s.stop .contract (some site) none)
+  | .cond site condition captures yes no outputs, s, next, _ =>
+      match s.frames with
+      | frame :: _ =>
+          match List.lookup condition frame.env, lookupAll frame.env (captures.map (·.parent)) with
+          | some (.data (.boolean true)), some captured =>
+              if s.used < budget then
+                armK (fun s' exit => runK yes s' exit) site "then" ((captures.map (·.formal)).zip captured)
+                  s.charge fun results s' =>
+                    if outputs.length = results.length then next (s'.bind outputs results)
+                    else pure (s'.stop .contract (some site) none)
+              else pure (s.stop .limit (some site) none)
+          | some (.data (.boolean false)), some captured =>
+              if s.used < budget then
+                armK (fun s' exit => runK no s' exit) site "else" ((captures.map (·.formal)).zip captured)
+                  s.charge fun results s' =>
+                    if outputs.length = results.length then next (s'.bind outputs results)
+                    else pure (s'.stop .contract (some site) none)
+              else pure (s.stop .limit (some site) none)
+          | _, _ => pure (s.stop .contract (some site) none)
+      | [] => pure (s.stop .contract (some site) none)
+  -- The value model carries no variant values: a match is outside the profile.
+  | .select site _ _ _ _, s, _, _ => pure (s.stop (.unsupported "participant-match") (some site) none)
   | .yield values, s, _, exit =>
       if s.used < budget then
         match s.frames with
@@ -783,7 +843,7 @@ def runStep : Action → State F G → (State F G → m (Run F G)) →
             | none => pure (s.charge.stop .contract none none)
         | _ => pure (s.charge.stop .contract none none)
       else pure (s.stop .limit none none)
-  | .unsupported _, s, _, _ => pure (s.stop .contract none none)
+  | .unsupported name, s, _, _ => pure (s.stop (.unsupported name) none none)
 end
 
 /-- Entry inputs: the data inputs, at their declared sorts, followed by the
@@ -843,5 +903,6 @@ run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.localK
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.localStep
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.loopK
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.armK
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.runK
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.runStep

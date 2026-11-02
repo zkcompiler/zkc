@@ -119,7 +119,7 @@ def policy : Policy := ⟨"main","P","V",0,"suite",[3],[0,1,2,4,5],
   [(qualified "first" "q",qualified "first" "d"),(qualified "second" "q",qualified "second" "d")],
   "zkc.framed/0",""⟩
 def template (site leaf : String) : Template :=
-  ⟨"main",[⟨"repeat","main","outer"⟩,⟨"repeat","main","inner"⟩,⟨"apply","main",site⟩],
+  ⟨"main",[.repeat "main" "outer",.repeat "main" "inner",.apply "main" site],
     if leaf = "q" then ["query","round","q","input_1",contract,"draw","V"]
     else ["message","round",leaf,leaf,if leaf = "m" then "P" else "V",if leaf = "m" then "V" else "P"]⟩
 def routing : Routing := ⟨snapshot,context,.validator,73,

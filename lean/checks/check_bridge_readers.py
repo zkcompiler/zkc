@@ -19,6 +19,8 @@ ROOT = LEAN.parent
 sys.path.insert(0, str(LEAN))
 sys.path.insert(0, str(LEAN / "bridges/common"))
 from bridges.common import interface as language_interface  # noqa: E402
+from bridges.common import lean_render  # noqa: E402
+from bridges.common.schema import origin_structure  # noqa: E402
 from bridges.common import policy as native_policy  # noqa: E402
 from bridges.common.lean_render import Refused  # noqa: E402
 from bridges.common.replacement import ReplacementError, replace_exactly_once  # noqa: E402
@@ -324,6 +326,134 @@ class ExecutableCeilings(unittest.TestCase):
         executable.render(deployment(site="s" * executable.STRING_BYTES), "Control")
         with self.assertRaisesRegex(Refused, "at most 4096 bytes"):
             executable.render(deployment(site="s" * (executable.STRING_BYTES + 1)), "Control")
+
+    def test_operation_attribute_count_ceiling(self):
+        """One operation carries up to the carrier's 16,384 attributes."""
+        def program(count):
+            value = json.loads(deployment()[4])
+            value[2][0][4][0][3] = ["0"] * count
+            value[2][0][5] = ["helper", []]
+            return value
+        executable.render_program(program(executable.OPERATION_ATTRIBUTES), "Control")
+        with self.assertRaisesRegex(Refused, "bounded array"):
+            executable.render_program(program(executable.OPERATION_ATTRIBUTES + 1), "Control")
+
+
+def control_deployment(body, functions=None):
+    """A deployment whose validator has the given participant body; every
+    function listed is declared, called or not."""
+    boolean = "bool@native.bool/0"
+    functions = functions or [
+        ["function", name, [["x", boolean]], [boolean], [["return", ["x"]]], [name, []]]
+        for name in ("in_then", "in_else", "in_arm", "in_loop", "unused")]
+    validator = ["participant", "validator", "main", NATIVE_ROLES[1],
+                 [["flag", boolean], ["value", boolean]], [boolean], body, []]
+    program = json.dumps(["zkc.program/0", [], functions, [validator],
+                          [["entry", "main", [[NATIVE_ROLES[1], "validator"]]]]])
+    return ["zkc.native-proof/0", "", ["", native(suite="", services=(), draws=())], "", program,
+            hashlib.sha256(program.encode()).hexdigest(), None, None, None]
+
+
+def conditional(rows, yes=(("yield", ["a"]),), no=(("yield", ["a"]),)):
+    return ["if", "choose", "flag", rows, [list(item) for item in yes], [list(item) for item in no], ["out"]]
+
+
+class ExecutableControl(unittest.TestCase):
+    """Participant capture rows and selected control, decoded by body kind."""
+
+    def render(self, body, functions=None):
+        return executable.render(control_deployment(body, functions), "Control")
+
+    def test_participant_rows_render_as_rows(self):
+        text = self.render([conditional([["a", "value"], ["b", "value"]]), ["return", ["out"]]])
+        self.assertIn('.cond "choose" "flag" [⟨"a", "value"⟩, ⟨"b", "value"⟩] [.yield ["a"]] [.yield ["a"]] ["out"]',
+                      text)
+        loop = ["loop", "rounds", ["value", "value", "4", "i"], [["acc", "flag"]], [["f", "value"]],
+                [["yield", ["acc"]]], ["out"]]
+        self.assertIn('[("acc", "flag")] [⟨"f", "value"⟩] [.yield ["acc"]] ["out"]',
+                      self.render([loop, ["return", ["out"]]]))
+
+    def test_participant_name_lists_and_malformed_rows_refuse(self):
+        for rows in (["value"], [["a"]], [["a", "value", "extra"]], [["a", 1]], [["", "value"]], "value"):
+            with self.subTest(rows=rows), self.assertRaisesRegex(Refused, "capture rows|array of size"):
+                self.render([conditional(rows), ["return", ["out"]]])
+            loop = ["loop", "rounds", ["value", "value", "4", "i"], [], rows, [["yield", []]], []]
+            with self.subTest(loop=rows), self.assertRaisesRegex(Refused, "capture rows|array of size"):
+                self.render([loop, ["return", ["out"]]])
+
+    def test_local_control_keeps_names(self):
+        boolean = "bool@native.bool/0"
+        local = ["function", "in_arm", [["x", boolean]], [boolean],
+                 [["if", "inner", "x", ["x"], [["yield", ["x"]]], [["yield", ["x"]]], ["y"]], ["return", ["y"]]],
+                 ["in_arm", []]]
+        body = [["local", "call", "in_arm", ["value"], ["out"]], ["return", ["out"]]]
+        self.assertIn('.cond "inner" "x" ["x"]', self.render(body, [local]))
+        local[4][0][3] = [["x", "x"]]
+        with self.assertRaisesRegex(Refused, "value names"):
+            self.render(body, [local])
+
+    def test_match_arms_render_in_order(self):
+        arms = [["some", ["payload"], [["yield", ["payload"]]]], ["none", [], [["yield", ["a"]]]]]
+        text = self.render([["match", "select", "value", [["a", "flag"]], arms, ["out"]], ["return", ["out"]]])
+        self.assertIn('.select "select" "value" [⟨"a", "flag"⟩] [("some", ["payload"], [.yield ["payload"]]), '
+                      '("none", [], [.yield ["a"]])] ["out"]', text)
+        for bad in ([["some", ["payload"]]], [["some", "payload", []]], "arms"):
+            with self.subTest(arms=bad), self.assertRaises(Refused):
+                self.render([["match", "select", "value", [], bad, ["out"]], ["return", ["out"]]])
+
+    def test_branch_records_have_exact_arity(self):
+        with self.assertRaisesRegex(Refused, "array of size 7"):
+            self.render([conditional([]) + ["extra"], ["return", ["out"]]])
+        with self.assertRaisesRegex(Refused, "array of size 6"):
+            self.render([["match", "select", "value", [], [], ["out"], "extra"], ["return", ["out"]]])
+
+    def test_functions_called_only_from_arms_are_rendered(self):
+        arms = [["some", [], [["local", "arm_call", "in_arm", ["a"], ["b"]], ["yield", ["b"]]]]]
+        body = [conditional([["a", "value"]], yes=(("local", "then_call", "in_then", ["a"], ["b"]), ("yield", ["b"])),
+                            no=(("local", "else_call", "in_else", ["a"], ["b"]), ("yield", ["b"]))),
+                ["loop", "rounds", ["value", "value", "4", "i"], [], [["a", "flag"]],
+                 [["match", "select", "a", [["a", "a"]], arms, ["c"]],
+                  ["local", "loop_call", "in_loop", ["c"], ["d"]], ["yield", []]], []],
+                ["return", ["out"]]]
+        text = self.render(body)
+        for name in ("in_then", "in_else", "in_arm", "in_loop"):
+            self.assertIn(f'/-- The local function `{name}`. -/', text)
+        self.assertNotIn("`unused`", text)
+        self.assertEqual(executable.called(body), {"in_then", "in_else", "in_arm", "in_loop"})
+
+
+class OriginSteps(unittest.TestCase):
+    """Application and repeat steps have three fields; a branch step has four,
+    the last its exact arm label."""
+
+    def template(self, steps):
+        return lean_render.encode_tree(["zkc.native-origin-template/0", "main", steps, [],
+                                        ["message", "main", "site", "site", "P", "V"]]).hex()
+
+    def test_three_field_and_branch_steps_render(self):
+        steps = [["apply", "main", "call"], ["repeat", "child", "rounds"], ["branch", "child", "choose", "then"]]
+        self.assertEqual(lean_render.origin(self.template(steps)),
+                         '⟨"main", [.apply "main" "call", .repeat "child" "rounds", .branch "child" "choose" "then"], '
+                         '["message", "main", "site", "site", "P", "V"]⟩')
+        tree = lean_render.template(self.template(steps))
+        origin_structure(tree)
+
+    def test_other_step_shapes_refuse(self):
+        for step in (["apply", "main", "call", "then"], ["repeat", "main"], ["branch", "main", "choose"],
+                     ["branch", "main", "choose", "then", "extra"], ["loop", "main", "site"],
+                     ["branch", "main", "choose", ["then"]]):
+            with self.subTest(step=step):
+                with self.assertRaisesRegex(Refused, "origin step"):
+                    lean_render.origin_step(step)
+                if all(isinstance(item, str) for item in step):
+                    with self.assertRaisesRegex(ValueError, "origin"):
+                        origin_structure(["zkc.native-origin-template/0", "main", [step], [],
+                                                 ["message", "main", "site", "site", "P", "V"]])
+
+    def test_branch_labels_are_origin_identifiers(self):
+        with self.assertRaisesRegex(ValueError, "origin identifier"):
+            origin_structure(["zkc.native-origin-template/0", "main", [["branch", "main", "choose", ""]], [],
+                                     ["message", "main", "site", "site", "P", "V"]])
 
 
 if __name__ == "__main__":

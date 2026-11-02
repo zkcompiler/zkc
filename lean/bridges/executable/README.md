@@ -17,6 +17,37 @@ group specializations of transcript observation. Unsupported specializations
 have no installed meaning. Aggregate layouts remain outside the flat physical
 type reader and require a separate formal extension.
 
+Capture fields are decoded by body kind: participant loops, conditionals and
+matches carry `[formal, parent]` rows, local control carries capture names,
+and a participant name list or a local row list refuses. Participant `if` and
+`match` render with their arms, and the validator's functions include those
+called only from an arm. `render_program` renders a whole program, every
+declaration included, as `ProgramArtifact` data for the structural admission of
+`Zkc.Executable.ProgramAdmission`. The renderer's ceilings are the carrier's
+own: 16,384 attributes and 16,384 bytes per attribute for an operation.
+
+## Program byte corpus
+
+`corpus.py` runs every case of the shared
+[program byte corpus](../../../common/tests/fixtures/program/README.md) through
+the native decoder (`zkc-program_codec-test --report`) and then the Lean
+program reader, and compares their admission decisions for the profile Lean
+claims. A natively admitted case must be admitted by `ProgramArtifact.admit`
+unless it uses a type or instruction outside the Lean vocabulary; a natively
+refused case whose rule Lean claims (declarations, lexical environments,
+capture rows, signatures and terminators) must be refused, and a Lean refusal
+must name the native class. This is differential coverage of the Lean reader of
+decoded programs, not an independent Lean byte reader: the native decoder reads
+the bytes, and Python's JSON parser stands in for it on refused cases. Cases
+whose rendered term exceeds the elaboration budget are recorded as not compared.
+`lean/bridges/common/check.py` runs it in the `lean-native` bridges stage; by
+hand:
+
+```sh
+python3 lean/bridges/executable/corpus.py \
+  --codec build/compiler/test/zkc-program_codec-test --output build/experiments/program-corpus
+```
+
 ## Reproduce
 
 From the repository root, with the compiler, the runtime CLI, the main Lean

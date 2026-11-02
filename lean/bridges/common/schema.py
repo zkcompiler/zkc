@@ -347,8 +347,15 @@ def origin_structure(value):
     identifier(entry)
     require(isinstance(steps, list) and len(steps) <= 64, "invalid origin steps")
     for step in steps:
-        kind, protocol, site = record(step, 3)
-        require(kind in ("apply", "repeat"), "invalid origin step kind")
+        record(step)
+        require(len(step) in (3, 4), "invalid origin step")
+        if len(step) == 3:
+            kind, protocol, site = step
+            require(kind in ("apply", "repeat"), "invalid origin step kind")
+        else:
+            kind, protocol, site, alternative = step
+            require(kind == "branch", "invalid origin step kind")
+            identifier(alternative)
         identifier(protocol)
         identifier(site)
     record(event)

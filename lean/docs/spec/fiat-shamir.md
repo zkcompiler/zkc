@@ -132,12 +132,17 @@ source-to-producer execution correspondence are separate obligations. The
 validator construction rule continues to refuse local requests, preserving
 the scope of its transform and adversarial meanings.
 
-A template keeps the native path (application and repeat steps) and event. Its
-model occurrence, the origin the transform absorbs, names a message by its
-qualified site and its sender and receiver, and a selected challenge by its
-qualified query site under the context's replaced service
-(`Template.origin`); a site is qualified by the path's applications as the
-structured semantics qualifies nested sites.
+A template keeps the native path and event. A path step is an application or
+a repeat (three fields), or a branch step (four fields) that keeps the selected
+arm's exact declared alternative and precedes only events of that arm; a branch
+adds no dynamic coordinate. Its model occurrence, the origin the transform
+absorbs, names a message by its qualified site and its sender and receiver, and
+a selected challenge by its qualified query site under the context's replaced
+service (`Template.origin`); a site is qualified by the path's applications as
+the structured semantics qualifies nested sites. Source occurrence resolution
+and the construction and executable occurrence rules admit application and
+repeat paths only: selected source regions are outside their profile, so a
+template with a branch step resolves to no source frame and is refused.
 
 `Domain.participant` interprets the actual instruction list once. An
 observation appends the nominal message to its transcript operand; a challenge

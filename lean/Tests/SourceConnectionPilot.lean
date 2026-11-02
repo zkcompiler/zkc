@@ -105,8 +105,8 @@ example : Structured.check snapshot = .ok program := kernel_admission
 def context : Context := .plain "main" ["P", "V"] 0 1
 def policy : Policy := ⟨"main", "P", "V", 0, "", [], [0,1,2,3,4], [], "zkc.framed/0", ""⟩
 def messageTemplate (site : String) : Template :=
-  ⟨"main", [⟨"repeat", "main", "outer"⟩, ⟨"repeat", "main", "inner"⟩,
-    ⟨"apply", "main", site⟩], ["message", "step", "message", "message", "P", "V"]⟩
+  ⟨"main", [.repeat "main" "outer", .repeat "main" "inner",
+    .apply "main" site], ["message", "step", "message", "message", "P", "V"]⟩
 def routing : Routing :=
   ⟨snapshot, context, .validator, 0, [messageTemplate "first", messageTemplate "second"], [], [], []⟩
 def stepInstructions (site : String) (guardRef helperRef stateRef : Nat) : List Zkc.Construction.Instruction := [

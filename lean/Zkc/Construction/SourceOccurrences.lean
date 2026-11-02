@@ -65,8 +65,8 @@ local and root service identities are retained across the call boundary. -/
 def descend (snapshot : Structured.Snapshot) (frame : Frame) (step : Step) : Option Frame := do
   if step.protocol ≠ frame.definition.name then none else do
     let (instruction, arguments) ← frameAt frame step.site
-    match step.kind, instruction with
-    | "apply", .instruction (.protocolApply name roles) _ _ [] _ => do
+    match step, instruction with
+    | .apply .., .instruction (.protocolApply name roles) _ _ [] _ => do
         let child ← function snapshot name
         let interface ← child.interface
         if interface.roles.length ≠ roles.length ∨ child.inputs.length ≠ arguments.length then none
@@ -74,10 +74,13 @@ def descend (snapshot : Structured.Snapshot) (frame : Frame) (step : Step) : Opt
           let mapped ← roles.mapM (frame.roles.lookup ·)
           return ⟨child, child.body, interface.roles.zip mapped,
             arguments.zipIdx.map fun (port, index) => port.map fun origin => ⟨index, origin.rootInput⟩⟩
-    | "repeat", .instruction (.protocolRepeat _ _ _ _) _ _ [.region inputs _ body] _ =>
+    | .repeat .., .instruction (.protocolRepeat _ _ _ _) _ _ [.region inputs _ body] _ =>
         let ports := none :: arguments.drop 1
         if inputs.length = ports.length then some { frame with body := body, ports := ports } else none
-    | _, _ => none
+    -- Selected source regions are outside this source profile: a branch step
+    -- resolves to no frame.
+    | .branch .., _ => none
+    | .apply .., _ | .repeat .., _ => none
 
 def follow (snapshot : Structured.Snapshot) : List Step → Frame → Option Frame
   | [], frame => some frame

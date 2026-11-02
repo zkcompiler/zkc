@@ -28,15 +28,30 @@ by a transcript operation is decoded; other parameters stay text.
 Bindings retain the complete list of physical specialization arguments from the
 five-field native binding record. The bridge never erases that list.
 
-Participant instructions are typed receives, local calls, counted loops, the
-yield that ends a loop body and the final return. A loop names its count, which
-must not exceed a static maximum, its induction variable, its carried values
-with their initial values, its captured values, its body and the names bound to
-what the last iteration yields. Local function bodies are operations on declared
-bindings, Boolean constants, conditional regions on captured values, counted
-iterations over an index range, explicit stops, region yields and the final
-return. Any other instruction is kept as unsupported, which the rule refuses.
-The carrier fixes no meaning.
+Participant instructions are typed receives, local calls, counted loops,
+selected conditionals and matches, the yield that ends a loop body or an arm,
+and the final return. A loop names its count, which must not exceed a static
+maximum, its induction variable, its carried values with their initial values,
+its capture rows, its body and the names bound to what the last iteration
+yields. A conditional names its Boolean condition, its capture rows, its two
+arms (true first) and its outputs; a match names its variant input, its capture
+rows, its arms in declaration order, each with its alternative, its payload
+bindings and its body, and its outputs. A capture row `[formal, parent]` binds
+a formal of the body to a parent value of the enclosing body; rows are kept as
+rows, so two formals may share one parent. Local function bodies are operations
+on declared bindings, Boolean constants, conditional regions on captured values,
+counted iterations over an index range, explicit stops, region yields and the
+final return; local control keeps capture names. The bridge decodes capture
+fields by body kind and refuses a participant name list or a local row list.
+Any other instruction is kept as unsupported, which the rule refuses. The
+carrier fixes no meaning.
+
+A participant loop body and every arm is a nested lexical environment: it sees
+its formals only (induction, carried and capture formals, or payload bindings
+and capture formals), and its bindings are not visible after it. Sites, message
+schemas and service ports stay participant-wide. `ProgramArtifact` carries a
+whole program in the same vocabulary: bindings, functions, participant
+definitions with their service ports, and entries.
 
 ## Meaning
 
@@ -45,12 +60,19 @@ initial transcript and the proof's message bytes, with the deployment's
 occurrence `Context`, a challenge function in any monad, a decoder and an
 instruction budget.
 
-- Work. Every receive, local call, loop, yield and return of the participant
-  and every instruction of a local body is charged one instruction. A local call
-  enters a frame and runs the function's body; every loop iteration runs the
-  loop body in a frame of its own, holding the index, the carried values and the
-  captures. The budget is checked before each charge, so a budget of `b`
-  executes exactly the first `b` charged steps.
+- Work. Every receive, local call, loop, branch, yield and return of the
+  participant and every instruction of a local body is charged one instruction.
+  A local call enters a frame and runs the function's body; every loop
+  iteration runs the loop body in a frame of its own, holding the index, the
+  carried values and the capture formals; a branch runs only its selected arm,
+  in a frame named by the branch site and the arm's alternative, holding the
+  capture formals. That frame, `FrameId.branch`, is the runner's runtime
+  occurrence step `["branch", site, alternative]`; the four-field
+  occurrence-template step `["branch", protocol, site, alternative]`
+  (`Construction.Step.branch`) is a different record. Each row binds its own
+  formal to its parent's value; the native runner's per-row storage charge is
+  an unmodelled resource. The budget is checked before each charge, so a budget
+  of `b` executes exactly the first `b` charged steps.
 - Framing. A receive reads an eight-byte little-endian length and that many
   bytes. A missing message cancels the run; a message that does not decode at
   the receive's physical type stops it after charging the receive. A decoded
@@ -106,8 +128,18 @@ instruction budget.
 - Control. A conditional runs the region its Boolean selects; an iteration runs
   its region for every index of its range, carrying what each iteration yields
   into the next; a participant loop runs its body for every index below its
-  count. A count above the static maximum, a missing name or a yield of the
-  wrong length is a contract failure. An explicit stop names its reason.
+  count. A participant conditional runs only the arm its Boolean selects and
+  binds its outputs to what that arm yields; the other arm is a static
+  inventory, not an executed trace. A count above the static maximum, a
+  non-Boolean condition, a missing name or a yield of the wrong length is a
+  contract failure. An explicit stop names its reason; a stop inside an arm
+  leaves the arm's frame with the others.
+- Unsupported instructions. The executable value model has no variant values,
+  so a participant match is outside the profile: reaching it stops with the
+  explicit refusal `Cause.unsupported "participant-match"`, uncharged, as
+  reaching an instruction kept as unsupported stops with its name. Such a stop
+  is a refusal of the profile, not a failure of the program; its outcome class
+  is `refused`.
 - Custody. The transcript is one affine unit. An observation or challenge must
   consume its live state; a stale state is a contract failure.
 - Stops. A stop leaves every active frame, innermost first, and retires the live
@@ -158,9 +190,12 @@ validator calls by name.
   with `reject`) read as a guard instruction.
 - A participant loop must count with an index data input, carry values whose
   sorts it keeps, hand on the live transcript in custody, carry at most one
-  transcript, capture data only, and yield its carried sorts; the reading is a
-  constructed loop with the same maximum, whose body is the reading of the loop
-  body.
+  transcript, capture copyable data only (never the transcript or a custody
+  permission), and yield its carried sorts; the reading is a constructed loop
+  with the same maximum, whose body is the reading of the loop body in the
+  scope of its formals, each capture formal denoting its parent.
+- The constructed instructions have no participant branch: a participant
+  conditional or match refuses with `unsupported "participant-branch"`.
 - Each operation is read through the vocabulary's meaning, with checked operand
   sorts, consumption of the live transcript and the live transcript as the only
   returned transcript. Function and binding symbols must be distinct, and every

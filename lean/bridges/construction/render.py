@@ -286,8 +286,9 @@ def local_service(attrs, binding, operands, result_kinds, retained, ports, place
     require(len(event) == 7 and event[0] == "query" and event[4] == port[4]
             and event[5] == method and event[6] == port[1], "local service occurrence")
     prefix = None
-    for kind, _, application in steps:
-        if kind == "apply":
+    for step in steps:
+        if step[0] == "apply":
+            application = step[2]
             prefix = application if prefix is None else f"apply_{len(prefix.encode('utf-8'))}_{prefix}_{application}"
     qualified = event[2] if prefix is None else f"apply_{len(prefix.encode('utf-8'))}_{prefix}_{event[2]}"
     require(site == qualified, "local service source site")

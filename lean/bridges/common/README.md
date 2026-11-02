@@ -30,6 +30,11 @@ python3 lean/bridges/common/verify_tests.py --output build/common-requests
 python3 lean/bridges/common/intent_tests.py --compiler build/compiler/zkc-compile --output build/common-intent
 ```
 
+`check.py` also runs the shared program byte corpus through the native decoder
+beside the reference tool and then the Lean program reader
+([`executable/corpus.py`](../executable/README.md#program-byte-corpus)), and
+records the agreement counts in its report.
+
 The native comparison reads original SSA independently of the export. Both
 references use the existing Structured tool's BLS scalar field, with an additive
 group model. The former Common differential executable used Z/97. Its independent

@@ -369,8 +369,8 @@ def native_origin(tree):
     _, entry, steps, _, event = tree
     path = ""
     if steps:
-        path = " path[" + ", ".join(f"<{kind}, {quoted(protocol)}, {quoted(site)}>"
-                                   for kind, protocol, site in steps) + "]"
+        path = " path[" + ", ".join(f"<{step[0]}, " + ", ".join(map(quoted, step[1:])) + ">"
+                                   for step in steps) + "]"
     arguments = list(map(quoted, event[1:]))
     if event[0] == "query":
         arguments[2] = event[3][6:]

@@ -41,7 +41,7 @@ def HasSort : Value F G → ValueSort → Prop
   | .limit => .exhausted
   | .kernel reason => reason
   | .explicit reason => reason
-  | .decode | .truncated | .contract => .refused
+  | .decode | .truncated | .contract | .unsupported _ => .refused
 
 /-- The outcome class of a run. -/
 def Result.outcome : Result F G → PIR.Outcome (List (Value F G))

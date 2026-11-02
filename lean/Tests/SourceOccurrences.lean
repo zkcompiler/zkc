@@ -87,7 +87,10 @@ example : valid snapshot context { queryTemplate with
 example : valid snapshot context { queryTemplate with
     event := queryTemplate.event.set 6 "role00000000" } = false := by decide +kernel
 example : valid snapshot context { queryTemplate with
-    steps := queryTemplate.steps.map fun step => { step with protocol := "wrong-caller" } } = false := by
+    steps := queryTemplate.steps.map fun step => match step with
+      | .apply _ site => .apply "wrong-caller" site
+      | .repeat _ site => .repeat "wrong-caller" site
+      | .branch _ site alternative => .branch "wrong-caller" site alternative } = false := by
   decide +kernel
 example : valid snapshot (context.mapReplacement (fun replacement => { replacement with service := 0 })) queryTemplate = false := by decide +kernel
 example : valid snapshot context { messageTemplate with
@@ -119,7 +122,7 @@ private def rootContext : Context :=
   Context.fiatShamir "Root" (["P", "V"]) 0 1 2 "random.F/0" (some (.draw "F")) "suite" ([("call.q", "delivery")])
 
 private def occurrence : Template :=
-  ⟨"Root", [⟨"apply", "Root", "call"⟩], ["query", "Child", "q", "input_0", "random.F/0", "draw", "V"]⟩
+  ⟨"Root", [.apply "Root" "call"], ["query", "Child", "q", "input_0", "random.F/0", "draw", "V"]⟩
 
 example : valid (source true) rootContext occurrence = true := by decide +kernel
 example : valid (source false) rootContext occurrence = false := by decide +kernel
@@ -150,7 +153,7 @@ private def inventedPath : Participant := { original with
   instructions := original.instructions.map fun instruction =>
     match instruction.operation with
     | .challenge suite field template =>
-        let changed : Template := { template with steps := [⟨"unknown", template.entry, "invented"⟩] }
+        let changed : Template := { template with steps := [.branch template.entry "invented" "then"] }
         { instruction with operation := .challenge suite field changed }
     | _ => instruction }
 

@@ -4,6 +4,10 @@
 Uses the explicit BLS scalar-field and additive-group test interpretation. Does not
 execute a production field/curve backend. Every selected source is natively
 verified before export. Reports include seeds and original-byte identities.
+
+It also runs the shared program byte corpus through the native decoder (the
+`zkc-program_codec-test` beside the reference tool) and then the Lean program
+reader (`bridges/executable/corpus.py`), and reports their agreement.
 """
 import argparse
 import copy
@@ -15,6 +19,7 @@ import random
 import subprocess
 import tempfile
 import shutil
+import sys
 
 from native_entry import native_subject
 from structured import render, entry
@@ -485,7 +490,13 @@ def main():
         negatives=suite.negatives(data)
         request_formats=suite.request_formats()
         control=suite.mutation_control()
+        codec=Path(binaries['reference']['path']).parent/'zkc-program_codec-test'
+        corpus_output=args.report.parent/'program-corpus'
+        subprocess.run([sys.executable,str(ROOT/'lean/bridges/executable/corpus.py'),'--codec',str(codec),
+                        '--output',str(corpus_output)],cwd=ROOT,check=True,timeout=3600)
+        program_corpus=json.loads((corpus_output/'report.json').read_text())['counts']
         report={'binaries':binaries,'seed':args.seed,'generated_cases':args.cases,'comparisons':suite.comparisons,
+                'program_corpus':program_corpus,
                 'negative_formats':negatives,'request_format_refusals':request_formats,
                 'mutation_control':control,'sources':suite.sources,
                 'sumcheck_controls':sumcheck_controls,'source_variation_checks':variation_checks,

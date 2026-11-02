@@ -4,16 +4,22 @@
 The input is a `zkc.native-proof/0` deployment. The renderer selects, in its
 exact `zkc.program/0` candidate, the participant that the program's entry map
 assigns to the deployment policy's entry and validator role, and renders it
-with the local functions it calls, including from loop bodies, and the
-operation bindings they use, in program order. Participant loops and their
-yields, and local conditionals, counted iterations, Boolean literals, stops and
-yields are rendered with their nested bodies. Physical types are split into a
-logical sort and a representation and re-encoded exactly. A transcript
-operation's single parameter is decoded as an occurrence template by the
-construction bridge's decoder, which re-encodes it exactly; other parameters
-stay text. Instructions outside the admitted subset are kept as unsupported for
-the Lean rule to refuse; a malformed record refuses the whole program. This is
-a tested data boundary: no meaning is assigned here.
+with the local functions it calls, including from loop bodies and from every
+arm of a participant conditional or match, and the operation bindings they use,
+in program order. `render_program` renders a whole program, every declaration
+included, for the structural admission of `Zkc.Executable.ProgramAdmission`.
+
+Participant loops, conditionals and matches, with their capture rows and
+nested bodies, and local conditionals, counted iterations, Boolean literals,
+stops and yields are rendered. Capture fields are decoded by body kind:
+participant control carries `[formal, parent]` rows and local control carries
+names, so a participant name list and a local row list both refuse. Physical
+types are split into a logical sort and a representation and re-encoded
+exactly. A transcript operation's single parameter is decoded as an occurrence
+template by the construction bridge's decoder, which re-encodes it exactly;
+other parameters stay text. Instructions outside the admitted subset are kept
+as unsupported for the Lean rule to refuse; a malformed record refuses the
+whole program. This is a tested data boundary: no meaning is assigned here.
 """
 
 import json
@@ -31,6 +37,9 @@ DEPLOYMENT = "zkc.native-proof/0"
 # an entry of an operation's parameter array, and every other decoded string.
 PARAMETER_BYTES = 16384
 STRING_BYTES = 4096
+# The carrier's bound on the attributes of one operation (program-bytes.md,
+# "Bounds and admission").
+OPERATION_ATTRIBUTES = 16384
 TRANSCRIPT_CONTRACTS = {"transcript.native.indexed.observe.data", "transcript.native.indexed.challenge"}
 
 
@@ -69,6 +78,19 @@ def names(values):
     return seq(values, string)
 
 
+def captures(values):
+    """Participant capture rows: `[formal, parent]` pairs of value names."""
+    require(isinstance(values, list), "expected capture rows")
+
+    def row(value):
+        require(isinstance(value, list), "expected capture rows")
+        formal, parent = record(value, 2)
+        require(isinstance(formal, str) and formal and isinstance(parent, str) and parent,
+                "expected capture rows")
+        return f"⟨{string(formal)}, {string(parent)}⟩"
+    return seq(values, row)
+
+
 def ports(values):
     return seq(values, lambda port: (lambda pair: f"({string(pair[0])}, {physical(pair[1])})")(record(port, 2)))
 
@@ -98,7 +120,8 @@ def step(item, bindings):
         require(binding in bindings, f"undeclared binding {binding!r}")
         contract = bindings[binding][1]
         require(isinstance(parameters, list), "parameters")
-        rendered = seq(parameters, lambda value: parameter(contract, value, len(parameters)))
+        rendered = seq(parameters, lambda value: parameter(contract, value, len(parameters)),
+                       OPERATION_ATTRIBUTES)
         return f".operation {string(site)} {string(binding)} {rendered} {names(inputs)} {names(outputs)}"
     if item[0] == "bool_constant":
         _, site, output, value = record(item, 4)
@@ -124,6 +147,18 @@ def step(item, bindings):
     return f".unsupported {string(item[0])}"
 
 
+def participant_body(items):
+    require(isinstance(items, list), "participant body")
+    return "[" + ", ".join(action(item) for item in items) + "]"
+
+
+def arm(value):
+    """A participant match arm: `[alternative, payload bindings, body]`."""
+    alternative, payload, body = record(value, 3)
+    require(isinstance(alternative, str), "match alternative")
+    return f"({string(alternative)}, {names(payload)}, {participant_body(body)})"
+
+
 def action(item):
     require(isinstance(item, list) and item and isinstance(item[0], str), "participant instruction")
     if item[0] == "receive":
@@ -133,14 +168,22 @@ def action(item):
         _, site, function, inputs, outputs = record(item, 5)
         return f".call {string(site)} {string(function)} {names(inputs)} {names(outputs)}"
     if item[0] == "loop":
-        _, site, count, carried, captures, body, outputs = record(item, 7)
+        _, site, count, carried, rows, body, outputs = record(item, 7)
         kind, value, maximum, induction = record(count, 4)
         require(kind == "value", "loop count")
         require(isinstance(maximum, str) and re.fullmatch(r"0|[1-9][0-9]*", maximum) is not None
                 and int(maximum) <= 1048576, "loop maximum")
-        require(isinstance(body, list), "loop body")
         return (f".loop {string(site)} {string(value)} {int(maximum)} {string(induction)} {pairs(carried)} "
-                f"{names(captures)} [" + ", ".join(action(inner) for inner in body) + f"] {names(outputs)}")
+                f"{captures(rows)} {participant_body(body)} {names(outputs)}")
+    if item[0] == "if":
+        _, site, condition, rows, yes, no, outputs = record(item, 7)
+        return (f".cond {string(site)} {string(condition)} {captures(rows)} {participant_body(yes)} "
+                f"{participant_body(no)} {names(outputs)}")
+    if item[0] == "match":
+        _, site, selector, rows, arms, outputs = record(item, 6)
+        require(isinstance(arms, list), "match arms")
+        return (f".select {string(site)} {string(selector)} {captures(rows)} "
+                f"[{', '.join(arm(value) for value in arms)}] {names(outputs)}")
     if item[0] == "yield":
         _, values = record(item, 2)
         return f".yield {names(values)}"
@@ -150,14 +193,30 @@ def action(item):
     return f".unsupported {string(item[0])}"
 
 
+def nested_bodies(item):
+    """The nested bodies of a participant instruction, in order: a loop body,
+    both arms of a conditional, or every arm of a match."""
+    if not isinstance(item, list) or not item:
+        return []
+    if item[0] == "loop" and len(item) == 7:
+        return [item[5]]
+    if item[0] == "if" and len(item) == 7:
+        return [item[4], item[5]]
+    if item[0] == "match" and len(item) == 6 and isinstance(item[4], list):
+        return [value[2] for value in item[4] if isinstance(value, list) and len(value) == 3]
+    return []
+
+
 def called(body):
-    """The local functions a participant body calls, including from loop bodies."""
+    """The local functions a participant body calls, including from loop bodies
+    and from every arm of a conditional or match."""
     found = set()
     for item in body:
         if isinstance(item, list) and item[:1] == ["local"] and len(item) == 5:
             found.add(item[2])
-        if isinstance(item, list) and item[:1] == ["loop"] and len(item) == 7 and isinstance(item[5], list):
-            found |= called(item[5])
+        for nested in nested_bodies(item):
+            if isinstance(nested, list):
+                found |= called(nested)
     return found
 
 
@@ -176,6 +235,82 @@ def used_bindings(steps):
         elif item[0] == "for" and len(item) == 9 and isinstance(item[7], list):
             found |= used_bindings(item[7])
     return found
+
+
+# The byte language's element bound for one array (program-bytes.md, "Bounds and
+# admission"). A whole program read here was already admitted by a decoder that
+# enforces every bound of that table; the renderer only refuses to exceed it.
+ARRAY_ELEMENTS = 32768
+
+
+def origin_record(value):
+    """A function origin: `[logical_definition, [[parameter, argument]...]]`."""
+    definition, assignments = record(value, 2)
+    require(isinstance(definition, str) and isinstance(assignments, list), "function origin")
+    for assignment in assignments:
+        parameter_name, argument = record(assignment, 2)
+        require(isinstance(parameter_name, str) and isinstance(argument, str), "function origin")
+
+
+def service(value):
+    """A participant service port: `[name, contract, input_index]`."""
+    name, contract, index = record(value, 3)
+    require(isinstance(contract, str) and isinstance(index, str)
+            and re.fullmatch(r"0|[1-9][0-9]*", index) is not None and len(index) <= 20, "service port")
+    return f"⟨{string(name)}, {string(contract)}, {int(index)}⟩"
+
+
+def render_program(program, namespace):
+    """A whole `zkc.program/0` value as `ProgramArtifact` data.
+
+    Every binding, function, participant and entry is rendered in program
+    order, used or not, with the record decoding of `render`. Admission belongs
+    to `Zkc.Executable.ProgramAdmission`: duplicate or unresolved names are
+    kept for it to refuse.
+    """
+    lean_render.namespace(namespace)
+    tag, bindings, functions, participants, entries = record(program, 5)
+    require(tag == PROGRAM, "expected zkc.program/0")
+    for value in (bindings, functions, participants, entries):
+        require(isinstance(value, list) and len(value) <= ARRAY_ELEMENTS, "program declarations")
+    declared = {}
+    rendered_bindings = []
+    for binding in bindings:
+        name, contract, arguments, implementation, physical_arguments = record(binding, 5)
+        require(isinstance(name, str) and isinstance(contract, str) and isinstance(implementation, str)
+                and isinstance(arguments, list) and all(isinstance(a, str) for a in arguments)
+                and isinstance(physical_arguments, list), "binding shape")
+        declared.setdefault(name, (name, contract, arguments, implementation, physical_arguments))
+        rendered_bindings.append(f"⟨{string(name)}, {string(contract)}, {seq(arguments, string)}, "
+                                 f"{string(implementation)}, {seq(physical_arguments, physical)}⟩")
+    rendered_functions = []
+    for function in functions:
+        kind, name, arguments, outputs, steps, origin_value = record(function, 6)
+        require(kind == "function" and isinstance(steps, list) and len(steps) <= ARRAY_ELEMENTS, "function shape")
+        origin_record(origin_value)
+        rendered_functions.append(
+            f"⟨{string(name)}, {ports(arguments)}, {seq(outputs, physical)}, "
+            f"{seq(steps, lambda item: step(item, declared), ARRAY_ELEMENTS)}⟩")
+    rendered_participants = []
+    for participant in participants:
+        kind, name, instance, role, inputs, results, body, services = record(participant, 8)
+        require(kind == "participant" and isinstance(body, list) and len(body) <= ARRAY_ELEMENTS,
+                "participant shape")
+        rendered_participants.append(
+            f"⟨{string(name)}, {string(instance)}, {string(role)}, {ports(inputs)}, {seq(results, physical)}, "
+            f"{seq(body, action, ARRAY_ELEMENTS)}, {seq(services, service)}⟩")
+    rendered_entries = []
+    for entry in entries:
+        kind, name, roles = record(entry, 3)
+        require(kind == "entry", "entry shape")
+        rendered_entries.append(f"⟨{string(name)}, {seq(roles, lambda pair: pair_text(record(pair, 2)))}⟩")
+    return (f"⟨{seq(rendered_bindings, str, ARRAY_ELEMENTS)}, {seq(rendered_functions, str, ARRAY_ELEMENTS)}, "
+            f"{seq(rendered_participants, str, ARRAY_ELEMENTS)}, {seq(rendered_entries, str, ARRAY_ELEMENTS)}⟩")
+
+
+def pair_text(pair):
+    first, second = pair
+    return f"({string(first)}, {string(second)})"
 
 
 def select(deployment):

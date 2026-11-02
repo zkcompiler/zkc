@@ -152,6 +152,14 @@ def custody (sorts : List ValueSort) (current : Nat) (references : List Nat) : B
     | some (.transcript _) => reference == current
     | _ => true
 
+/-- Whether a reference may be captured by a loop, whose body reads it in every
+iteration: data of a copyable type, never the transcript or a custody
+permission. -/
+def copyable (sorts : List ValueSort) (reference : Nat) : Bool :=
+  match (sorts[reference]? : Option ValueSort) with
+  | some (.data ty) => !ty.isCustody
+  | _ => false
+
 /-- Read participant instructions in the scope of the innermost participant
 frame: the constructed instructions with their charges, the receive plan, how
 the body ends and the reading state at its end. `helpers` are the helpers the
@@ -214,7 +222,7 @@ def readActions (vocabulary : Vocabulary) (validator : Validator) (helpers : Lis
       | _, .error refusal => .error refusal
   | .loop site count maximum induction carried captures body outputs :: rest, scope, R =>
       match lookupName scope count, (carried.map (·.2)).mapM (lookupName scope),
-          captures.mapM (lookupName scope) with
+          (captures.map (·.parent)).mapM (lookupName scope) with
       | .ok counter, .ok initial, .ok captured =>
           let sorts := initial.filterMap (R.sorts[·]?)
           let base := R.sorts.length
@@ -222,10 +230,10 @@ def readActions (vocabulary : Vocabulary) (validator : Validator) (helpers : Lis
               sorts.length = initial.length ∧ carried.length = initial.length ∧
               outputs.length = initial.length ∧ custody R.sorts R.current initial ∧
               (sorts.filter (· matches .transcript _)).length ≤ 1 ∧
-              captured.all (fun reference => R.sorts[reference]? matches some (.data _)) then
+              captured.all (copyable R.sorts) then
             match readActions vocabulary validator helpers inputs body
                 ((induction, base) :: (carried.map (·.1)).zip (List.range' (base + 1) initial.length) ++
-                  captures.zip captured)
+                  (captures.map (·.formal)).zip captured)
                 ⟨R.sorts ++ .data .index :: sorts,
                   match transcriptPosition sorts with
                   | some position => base + 1 + position
@@ -250,6 +258,7 @@ def readActions (vocabulary : Vocabulary) (validator : Validator) (helpers : Lis
       | .error refusal, _, _ => .error refusal
       | _, .error refusal, _ => .error refusal
       | _, _, .error refusal => .error refusal
+  | .cond .. :: _, _, _ | .select .. :: _, _, _ => .error (.unsupported "participant-branch")
   | .yield _ :: _ :: _, _, _ => .error (.unsupported "yield-not-final")
   | .ret _ :: _ :: _, _, _ => .error (.unsupported "return-not-final")
   | .unsupported name :: _, _, _ => .error (.unsupported name)
@@ -321,7 +330,7 @@ def readAction (vocabulary : Vocabulary) (validator : Validator) (helpers : List
       | _, .error refusal => .error refusal
   | .loop site count maximum induction carried captures body outputs, scope, R =>
       match lookupName scope count, (carried.map (·.2)).mapM (lookupName scope),
-          captures.mapM (lookupName scope) with
+          (captures.map (·.parent)).mapM (lookupName scope) with
       | .ok counter, .ok initial, .ok captured =>
           let sorts := initial.filterMap (R.sorts[·]?)
           let base := R.sorts.length
@@ -329,10 +338,10 @@ def readAction (vocabulary : Vocabulary) (validator : Validator) (helpers : List
               sorts.length = initial.length ∧ carried.length = initial.length ∧
               outputs.length = initial.length ∧ custody R.sorts R.current initial ∧
               (sorts.filter (· matches .transcript _)).length ≤ 1 ∧
-              captured.all (fun reference => R.sorts[reference]? matches some (.data _)) then
+              captured.all (copyable R.sorts) then
             match readActionList vocabulary validator helpers inputs body
                 ((induction, base) :: (carried.map (·.1)).zip (List.range' (base + 1) initial.length) ++
-                  captures.zip captured)
+                  (captures.map (·.formal)).zip captured)
                 ⟨R.sorts ++ .data .index :: sorts,
                   match transcriptPosition sorts with
                   | some position => base + 1 + position
@@ -354,6 +363,7 @@ def readAction (vocabulary : Vocabulary) (validator : Validator) (helpers : List
       | .error refusal, _, _ => .error refusal
       | _, .error refusal, _ => .error refusal
       | _, _, .error refusal => .error refusal
+  | .cond .., _, _ | .select .., _, _ => .error (.unsupported "participant-branch")
   | .yield _, _, _ => .error (.unsupported "yield-not-final")
   | .ret _, _, _ => .error (.unsupported "return-not-final")
   | .unsupported name, _, _ => .error (.unsupported name)
@@ -370,6 +380,8 @@ theorem readActionList_eq (vocabulary : Vocabulary) (validator : Validator) (hel
   | .yield _ :: _ :: _, _, _ => by simp [readActionList, readAction, readActions]
   | .ret _ :: _ :: _, _, _ => by simp [readActionList, readAction, readActions]
   | .unsupported _ :: _, _, _ => by simp [readActionList, readAction, readActions]
+  | .cond .. :: _, _, _ => by simp [readActionList, readAction, readActions]
+  | .select .. :: _, _, _ => by simp [readActionList, readAction, readActions]
   | .receive site schema peer output type :: rest, scope, R => by
       simp only [readActionList, readAction, readActions]
       cases sort : type.sort with
@@ -416,9 +428,9 @@ theorem readActionList_eq (vocabulary : Vocabulary) (validator : Validator) (hel
       | error refusal => rfl
       | ok counter =>
           cases initial : (carried.map (·.2)).mapM (lookupName scope) with
-          | error refusal => cases captures.mapM (lookupName scope) <;> rfl
+          | error refusal => cases (captures.map (·.parent)).mapM (lookupName scope) <;> rfl
           | ok initial =>
-              cases captured : captures.mapM (lookupName scope) with
+              cases captured : (captures.map (·.parent)).mapM (lookupName scope) with
               | error refusal => rfl
               | ok captured =>
                   simp only

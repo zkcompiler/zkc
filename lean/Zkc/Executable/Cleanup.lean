@@ -328,6 +328,33 @@ theorem loopK_cleaned
         · exact Cleans.stop nested' _ _ _
       · exact Cleans.stop nested' _ _ _
 
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Running a selected arm in its own frame cleans up: its yield leaves the
+arm's frame and hands the enclosing frames back unchanged. -/
+theorem armK_cleaned
+    (run : State F G → (List (Value F G) → State F G → m (Run F G)) → m (Run F G))
+    (runs : ∀ (s : State F G) exit, s.Nested →
+      (∀ values (s' : State F G), s'.Nested → s'.Keeps s → Cleans (exit values s')) →
+      Cleans (run s exit))
+    (site alternative : String) (bindings : Env F G) (s : State F G)
+    (done : List (Value F G) → State F G → m (Run F G)) (nested : s.Nested)
+    (dones : ∀ values (s' : State F G), s'.Nested → s'.frames = s.frames → Cleans (done values s')) :
+    Cleans (armK run site alternative bindings s done) := by
+  simp only [armK]
+  apply runs _ _ (nested.enter _ _)
+  intro yielded s' nested' keeps
+  obtain ⟨tail, ids⟩ := keeps
+  split
+  · rename_i inner below framesEq
+    rw [framesEq] at tail ids
+    simp only [List.tail_cons] at tail
+    simp only [List.map_cons, List.cons.injEq] at ids
+    obtain ⟨innerId, -⟩ := ids
+    have left := nested'.leave framesEq (frames := below) rfl (by rw [tail]; exact nested.active) .returned
+    rw [innerId] at left
+    exact dones yielded _ left tail
+  · exact Cleans.stop nested' _ _ _
+
 mutual
 /-- A participant body cleans up wherever it stops, and keeps its frames when
 it yields. -/
@@ -417,6 +444,40 @@ theorem runStep_cleaned :
           · exact Cleans.stop nested _ _ _
         · exact Cleans.stop nested _ _ _
       · exact Cleans.stop nested _ _ _
+  | .cond site condition captures yes no outputs, s, next, exit, nested, nexts, _ => by
+      have arms : ∀ (body : List Action) (alternative : String) (bindings : Env F G),
+          (∀ (s' : State F G) exit', s'.Nested →
+            (∀ values (s'' : State F G), s''.Nested → s''.Keeps s' → Cleans (exit' values s'')) →
+            Cleans (runK vocabulary validator context challenge decode budget body s' exit')) →
+          Cleans (armK (fun s' exit' => runK vocabulary validator context challenge decode budget body s' exit')
+            site alternative bindings s.charge fun results s' =>
+              if outputs.length = results.length then next (s'.bind outputs results)
+              else pure (s'.stop .contract (some site) none)) := by
+        intro body alternative bindings runs
+        exact armK_cleaned _ runs site alternative bindings s.charge _ nested.charge
+          (fun results s' nested' frames => by
+            split
+            · apply nexts
+              · exact nested'.congr (State.bind_keeps _ _ _).2 (State.bind_events _ _ _)
+              · have keeps := State.bind_keeps s' outputs results
+                unfold State.Keeps at keeps ⊢
+                rw [frames] at keeps
+                exact keeps
+            · exact Cleans.stop nested' _ _ _)
+      simp only [runStep]
+      split
+      · split
+        · split
+          · exact arms yes "then" _ (fun s' exit' nested' exits' => runK_cleaned yes s' exit' nested' exits')
+          · exact Cleans.stop nested _ _ _
+        · split
+          · exact arms no "else" _ (fun s' exit' nested' exits' => runK_cleaned no s' exit' nested' exits')
+          · exact Cleans.stop nested _ _ _
+        · exact Cleans.stop nested _ _ _
+      · exact Cleans.stop nested _ _ _
+  | .select site _ _ _ _, s, next, exit, nested, _, _ => by
+      simp only [runStep]
+      exact Cleans.stop nested _ _ _
   | .yield values, s, next, exit, nested, _, exits => by
       simp only [runStep]
       split

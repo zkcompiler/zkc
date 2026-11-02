@@ -51,13 +51,13 @@ def sourceCalls (program : Program) (context : Zkc.Construction.Context) : Excep
     | .instruction (.protocolApply library roles) _ _ [] application =>
         unless roles == context.roles do throw "construction-binding-call-roles"
         let queries := all.filter fun template =>
-          template.steps.head? == some (⟨"apply", context.entry, application⟩ : Step) &&
+          template.steps.head? == some (.apply context.entry application : Step) &&
           template.querySite?.isSome
         let query ← unique "source-query" queries
         let pair ← unique "source-delivery" (context.draws.filterMap fun (draw, delivery) =>
           if query.querySite? == some draw then SourceDelivery.resolve program.snapshot context draw delivery else none)
         unless pair.1 == query do throw "construction-binding-query-association"
-        let [⟨"apply", _, _⟩, ⟨"repeat", owner, _⟩] := query.steps
+        let [.apply _ _, .repeat owner _] := query.steps
           | throw "construction-binding-call-path"
         unless owner == library do throw "construction-binding-library-association"
         let messages := all.filter fun template => template.steps == query.steps && template.messageSite?.isSome

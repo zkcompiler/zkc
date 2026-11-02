@@ -234,10 +234,10 @@ example : templateOrigin context { message with entry := "other" } [] = none := 
 -- checked construction rule resolves those to the root service and qualified
 -- site; equality of the local port with the root port is not required.
 private def nestedMessage : Template :=
-  ⟨"main", [⟨"apply", "main", "reduce"⟩],
+  ⟨"main", [.apply "main" "reduce"],
     ["message", "Reduce", "m", "m", "P", "V"]⟩
 private def nestedQuery : Template :=
-  ⟨"main", [⟨"apply", "main", "reduce"⟩],
+  ⟨"main", [.apply "main" "reduce"],
     ["query", "Reduce", "q", "input_5", "random.extension/0", "draw", "V"]⟩
 example : templateOrigin context nestedMessage [] =
     some (.message "main" (nestedMessage.qualify "m") "P" "V") := by rfl

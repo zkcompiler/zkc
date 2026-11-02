@@ -39,7 +39,7 @@ prefix or parent encoding is supplied by the author. Selection against the
 original admitted participant still refuses this renamed occurrence. -/
 def renamed : Domain.ChallengeOccurrence := {
   suite := "suite", field := "field"
-  template := ⟨"entry", [⟨"apply", "entry", Zkc.Source.Structured.encodedLabel "longer"⟩],
+  template := ⟨"entry", [.apply "entry" (Zkc.Source.Structured.encodedLabel "longer")],
     ["query", "callee", Zkc.Source.Structured.encodedLabel "challenge", "input_0", "random", "draw", "V"]⟩ }
 example : Domain.ChargeSite.resolveLabel [renamed] "longer.challenge" =
     renamed.template.querySite? := by decide +kernel
