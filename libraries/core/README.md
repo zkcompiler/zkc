@@ -351,7 +351,8 @@ is false. See the [Boolean rules](../../docs/spec/language/definitions.md#boolea
 for mathematical formulas and resource checks.
 
 The [mathematics client](../../common/tests/fixtures/projects/mathematics/README.md) compares
-formal evaluation and vector arithmetic. The embedded scalar prelude supplies
+formal evaluation and vector arithmetic. The
+[installed scalar prelude](../../docs/spec/formats/contract-declarations.md#installed-source-declarations) supplies
 field arithmetic and equality, group addition/equality and `point * scalar`
 scaling, Boolean equality, and index arithmetic/equality. Its named functions
 and operators share the compiler's native operation identities. Asset-specific

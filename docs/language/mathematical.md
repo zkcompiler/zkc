@@ -77,7 +77,8 @@ The module import enables vector `+` and `*`; `vec::add` and `vec::scale` are
 named alternatives with the same native operations and shape checks. Import only
 `::{Vector, add}` to use names without changing the operator environment. Use
 `::{Vector, operator +}` to enable just addition. Scalar operators come from the
-embedded prelude, so they require no project file.
+[installed prelude](../spec/formats/contract-declarations.md#installed-source-declarations),
+so they require no project file.
 
 A generic library can bind an explicit interface implementation locally:
 

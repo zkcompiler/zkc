@@ -526,7 +526,7 @@ The explicit development entry `--source-format=zkc-layout` now connects the
 name/type/role/resource/effect checking, specialization, actual IR comparison and
 the Rust Host. Project manifests and explicit SDK and CLI module maps state their
 source format, so a `zkc-layout` project builds through `zkc.toml`; the Lean
-bridges still pass `--source-format=zkc` themselves. Nominal home-module methods, including generic aliases, use the
+bridges select each invocation's format from the package manifests. Nominal home-module methods, including generic aliases, use the
 ordinary invocation binder and resolved mode/effects. Imports do not extend
 method eligibility. Protocol methods derive their complete role substitution
 from an exact fixed-roster receiver map; legacy direct logical families still
@@ -972,10 +972,10 @@ Both readers keep a nominal record's role arguments in telescope order. The
 Rust supply reconstruction decides role membership by schema category, through
 one sorted index of each telescope substitution, so a permuted telescope of any
 length supplies each field at its substituted role. The structured-source
-export accepts the full `protocol.roles` roster within its 1 MiB file ceiling:
-each port scope listing all 1,024 roles adds 15,382 bytes, so a 1,024-role
-Protocol with one Boolean input per such scope publishes 67 of them and refuses
-at 68 with `structured-source-limit` "publication exceeds 1 MiB"
+export accepts the full `protocol.roles` roster within its 1 MiB file ceiling
+and refuses a larger publication with `structured-source-limit` "publication
+exceeds 1 MiB"; its measured roster profile is the
+[structured-source publication row](spec/contracts.md#current-producers-and-consumers)
 ([structured-source controls](../compiler/test/structured_source.py)).
 Application maps, oracle obligations, source correspondence and source claims
 read the exporter's source view, so they accept the same rosters and refuse a
@@ -993,30 +993,24 @@ linearly in roles ([roster capacity controls](../compiler/test/language_roster_c
 Work limits and output-size limits are separate: an admitted roster size does
 not guarantee that every program of that size fits every output budget. The
 generated Host package of a direct Protocol selection restates its role-indexed
-families at each signature, block argument and child deployment, about 235
-Entry JSON nodes per role; its 800,000-node carrier ceiling admits the full
-roster (about 240,000 nodes with one port, 369,000 with one port placed at
-every role). Its Host structure validation needs 1,303,066 interface work
-units with one port and 1,688,737 with one port placed at every role, beyond
-the 1,000,000-unit default, so a Rust Host admits it by raising its interface
-work selection within the 2^24 maximum, and the CLI by `--interface-limits`
-([Host allowances](spec/runtime/capacity.md#host-allowances)); under the
-default it refuses with `entry-interface-work-limit`. A distributed record's fields are expanded once per instance and
+families at each signature, block argument and child deployment; its carrier
+node ceiling admits the full roster
+([Host control artifact](spec/formats/entry.md#host-control-artifact)). Its Host
+structure validation needs more interface work than the default allowance
+([Host allowances](spec/runtime/capacity.md#host-allowances)), so a Rust Host
+admits it by raising its interface work selection within the maximum, and the
+CLI by `--interface-limits`; under the default it refuses with
+`entry-interface-work-limit`. A distributed record's fields are expanded once per instance and
 each placed role visits only the fields placed at it, so a 1,024-role record
 with one field per role checks in about 16.9 million units, growing linearly
 with its fields. Mathematical participant projection separately bounds roles
-times SSA nodes at 100,000 per common body ([limits](spec/ir/limits.md)): with
-one port per role it refuses from 312 roles, and a 1,024-role Protocol admits
-at most 97 nodes in its mathematical programs. The common-input inventory has
-its own frontend-owned bounds of 1,024 classes, 32,768 components and 32 path
-steps per Protocol, refused with `source.limit` "common inventory limit
-exceeded" ([Entry carrier](spec/formats/entry.md)). One input and one output
-per role derive no class, so a 1,024-role Protocol publishes and reads an empty
-inventory. A Boolean input at every role observed by a branch is one class;
-mathematical admission's separate 1,000,000-unit common-control allowance
-refuses that shape first, from 407 roles with one such input and from 210 such
-inputs at two roles, while 1,025 inputs at two roles refuse at source
-publication with the inventory limit.
+times SSA nodes per common body ([limits](spec/ir/limits.md)). The common-input
+inventory has its own frontend-owned bounds, refused with `source.limit`
+"common inventory limit exceeded" ([Entry carrier](spec/formats/entry.md)).
+The rosters each bound admits, including where mathematical admission's
+common-control allowance refuses before the inventory limit, are the measured
+profiles of their
+[register rows](spec/contracts.md#current-producers-and-consumers).
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Layout role assembly explicitly selects existing components of ordinary shared

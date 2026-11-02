@@ -610,7 +610,8 @@ JSON nesting to 256 and lexical nodes to 800,000 before structural decoding.
 The node ceiling is four times an interface document's, as its byte ceiling
 is: a Host artifact restates each signature, block-argument and deployment
 schema, so the generated wrapper of a Protocol selection grows by about 235
-nodes per role and its 1,024-role roster needs about 240,000.
+nodes per role. Its 1,024-role roster needs about 240,000 nodes with one port,
+and about 369,000 with one port placed at every role.
 Scalar tokens have at most ten bytes. Embedded program and package strings
 share the artifact byte ceiling; interface metadata retains its narrower string
 limit. Duplicate decoded keys, invalid Unicode and noncanonical numeric tokens
