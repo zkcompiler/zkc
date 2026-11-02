@@ -9,6 +9,7 @@
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
@@ -153,16 +154,21 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   if (!source || failed(admitStage(source->getOperation())))
     return error("evm.source", diagnostics);
   auto policy = options.policy;
-  if ((!policy.suite.empty() &&
-       policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0") ||
-      !policy.construction.empty() ||
+  if (!policy.construction.empty() ||
       (policy.suite.empty() &&
        (!policy.services.empty() || !policy.draws.empty() ||
         !policy.gates.empty())) ||
       policy.format != protocol::ProofFormat::Native)
     return error("evm.construction",
-                 "EVM requires framed transport with no transcript or the "
-                 "managed Keccak Fr64BE construction");
+                 "EVM requires framed transport with no transcript or a "
+                 "managed construction over a realized transcript suite");
+  if (!policy.suite.empty()) {
+    evm::NativeLayouts layouts(result->context);
+    if (auto realized =
+            evm::realizeTranscript(layouts, result->context, policy.suite);
+        !realized)
+      return realized.takeError();
+  }
   if (!policy.suite.empty() && policy.draws.empty()) {
     auto selected = selectNativeProofDraws(*source, policy, options.mathematics,
                                            options.oracleSelection);

@@ -177,14 +177,16 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 The EVM foundation supports installed prime/binomial-extension arithmetic,
 checked indices, finite folds/collects and typed structured value transport on
-Cancun or Prague. Authored empty transcripts and the managed BLS Fr Keccak
-construction use the common framed proof format. The maintained
+Cancun or Prague. Authored empty transcripts and managed constructions over a
+transcript suite whose facts the target realizes, the BLS Fr Keccak hash chain
+among the installed suites, use the common framed proof format. The maintained
 [Sumcheck project](../examples/projects/sumcheck-keccak/README.md) uses the native
 prover and EVM verifier over identical framed proof bytes. The
 [deployed tests](../common/tests/evm/README.md) compare complete primitive traces
 and failure frontiers. Root/path envelopes can be transported without
-authentication; cryptographic Merkle operations, curve operations, new transcript
-suites and full STARK verifier deployment need additional target support. These checks are
+authentication; cryptographic Merkle operations, curve operations, transcript
+families and decoders other than the realized ones and full STARK verifier
+deployment need additional target support. These checks are
 bounded execution evidence, not a formal lowering or cryptographic theorem.
 
 `zkc-cpu` composes the five compiled providers through an immutable

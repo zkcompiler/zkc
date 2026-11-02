@@ -1,4 +1,5 @@
 #include "../lib/Target/Evm/Arithmetic.h"
+#include "../lib/Target/Evm/Runtime.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -11,10 +12,13 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Stages.h"
@@ -441,6 +445,69 @@ proof Proof=Work {
         "let challenge=challenges.draw();let delivered=send V->P(challenge);",
         "");
     refuses(compileEvmEntry(originalSource(text)), "native-proof-policy");
+  });
+  cases.run("transcript suites are realized by their declared facts", [&] {
+    evm::NativeLayouts layouts(context);
+    unsigned realized = 0;
+    for (const auto &row : protocol::instances::domains()) {
+      if (!row.transcript)
+        continue;
+      const auto &facts = *row.transcript;
+      bool expected = facts.family == "hash-chain" &&
+                      facts.hash == "keccak256" && facts.bindsSuite &&
+                      facts.decoder == "fr64be";
+      auto suite = evm::realizeTranscript(layouts, context, row.identity);
+      if (!suite) {
+        auto message = toString(suite.takeError());
+        require(!expected && StringRef(message).contains("evm.construction"),
+                "a suite refused outside its facts: " + message);
+        if (facts.family == "hash-chain" && facts.decoder != "fr64be")
+          require(
+              StringRef(message).contains(facts.decoder + " challenge decoder"),
+              "a hash-chain suite refused without its decoder: " + message);
+        continue;
+      }
+      require(expected, "a suite without the realized facts was realized: " +
+                            row.identity);
+      ++realized;
+      // The reduction modulus is the challenge field's declared
+      // characteristic, and the runtime emits exactly that prime.
+      auto field = protocol::installedDomains().associatedIdentity(
+          row.identity, "ChallengeField");
+      const auto *challenge = protocol::instances::domain(field);
+      require(challenge && challenge->field && !challenge->field->extension,
+              "realized challenge field is not a declared prime field");
+      APInt modulus(256, challenge->field->characteristic, 10);
+      require(suite->challenge->modulus == modulus,
+              "realized modulus differs from the declared characteristic");
+      SmallString<80> digits;
+      modulus.toString(digits, 16, false, false, false);
+      auto helpers =
+          evm::detail::runtimeHelpers(EvmLimits{}, &suite->challenge->modulus);
+      require(StringRef(helpers).contains(("p := 0x" + digits).str()),
+              "emitted challenge prime differs from the catalog modulus");
+      require(evm::realizedChallengeField(layouts, context, field),
+              "realized challenge field is not admitted");
+    }
+    require(realized > 0, "no installed suite is realized");
+    auto plain = evm::detail::runtimeHelpers(EvmLimits{}, nullptr);
+    require(!StringRef(plain).contains("evm_challenge_prime") &&
+                !StringRef(plain).contains("evm_transcript_"),
+            "a program without a transcript received transcript helpers");
+  });
+  cases.run("a hash-chain suite refuses at its unrealized decoder", [&] {
+    auto text = proofSource("", "accepted:bool@V", "return(accepted=a*b==c);");
+    text = replaceFixture(std::move(text), "field(\"bls12-381.fr\")",
+                          "field(\"koala-bear.ext8-binomial3\")");
+    text = replaceFixture(
+        std::move(text), "\"hash-chain.keccak256.bls12-381.fr64be/0\"",
+        "\"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0\"");
+    auto compiled = compileEvmEntry(originalSource(text));
+    require(!compiled, "an unrealized challenge decoder compiled");
+    auto message = toString(compiled.takeError());
+    require(StringRef(message).contains("evm.construction") &&
+                StringRef(message).contains("rejection31le challenge decoder"),
+            "unexpected refusal: " + message);
   });
   for (StringRef expression : {"a*b==c", "a+b==c", "a-b==c", "!(a==b)",
                                "a==b && b==c", "a==b || b==c", "a+1==c"}) {

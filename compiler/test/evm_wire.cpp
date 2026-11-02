@@ -156,7 +156,7 @@ void emitStore(MLIRContext &context, unsigned ceiling) {
          << "if iszero(calldataload(96)) { " << set << "(p, n, i, 123) }\n"
          << "let value := " << read << "(p, n, i)\n"
          << "mstore(0, value) return(0, 32)\n}\n"
-         << evm::detail::runtimeHelpers(limits) << wire.definitions()
+         << evm::detail::runtimeHelpers(limits, nullptr) << wire.definitions()
          << "} } }\n";
 }
 void emitAppend(MLIRContext &context) {
@@ -191,7 +191,7 @@ void emitAppend(MLIRContext &context) {
          << ", mload(0x40)))) }\n"
          << "let result, length := " << helper << "(p, n, calldataload(32))\n"
          << "return(result, length)\n}\n"
-         << evm::detail::runtimeHelpers(limits) << wire.definitions()
+         << evm::detail::runtimeHelpers(limits, nullptr) << wire.definitions()
          << "} } }\n";
 }
 void emit(MLIRContext &context, StringRef kind, StringRef mode,
@@ -271,7 +271,7 @@ return(result, sub(cursor, result))
            << "return(encoded, length)\n";
   }
   outs() << "}\n"
-         << evm::detail::runtimeHelpers(limits) << wire.definitions()
+         << evm::detail::runtimeHelpers(limits, nullptr) << wire.definitions()
          << "} } }\n";
 }
 } // namespace

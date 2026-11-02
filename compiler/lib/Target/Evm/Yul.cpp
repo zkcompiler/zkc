@@ -14,6 +14,7 @@
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -43,6 +44,8 @@ private:
   const NativeProofPolicy &policy;
   const EvmLimits &limits;
   NativeLayouts layouts;
+  /// The realized transcript suite of the checked policy, when it has one.
+  std::optional<TranscriptRealization> realizedSuite;
   detail::Arithmetic arithmetic;
   WireGenerator wire;
   std::string text;
@@ -512,9 +515,15 @@ LogicalResult Exporter::function(func::FuncOp function) {
 
 LogicalResult Exporter::outer(func::FuncOp function) {
   const bool hasTranscript = !policy.suite.empty();
-  if ((hasTranscript &&
-       policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0") ||
-      !policy.construction.empty() ||
+  if (hasTranscript) {
+    auto realized =
+        realizeTranscript(layouts, *module.getContext(), policy.suite);
+    if (!realized)
+      return refuse(function, "unsupported checked construction policy: " +
+                                  toString(realized.takeError()));
+    realizedSuite = *realized;
+  }
+  if (!policy.construction.empty() ||
       (!hasTranscript && (!policy.services.empty() || !policy.draws.empty() ||
                           !policy.gates.empty())) ||
       policy.format != protocol::ProofFormat::Native)
@@ -538,8 +547,6 @@ LogicalResult Exporter::outer(func::FuncOp function) {
     auto capability = dyn_cast<runtime::CapabilityType>(type);
     return capability &&
            capability.getKind() == runtime::CapabilityKind::Transcript &&
-           capability.getIdentity() ==
-               "hash-chain.keccak256.bls12-381.fr64be/0" &&
            capability.getIdentity() == policy.suite;
   };
   // Descriptors are a neutral publication boundary. Compare the complete
@@ -834,7 +841,8 @@ Expected<std::string> Exporter::run() {
     return zkc::error("evm.yul",
                       "could not emit canonical invocation boundary");
   out << "}\n";
-  out << detail::runtimeHelpers(limits);
+  out << detail::runtimeHelpers(
+      limits, realizedSuite ? &realizedSuite->challenge->modulus : nullptr);
   for (auto function : module.getOps<func::FuncOp>())
     if (failed(this->function(function)))
       return zkc::error("evm.yul", "could not emit target function");

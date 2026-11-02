@@ -29,10 +29,18 @@ order, initial state, borrowed scopes and reached failures remain significant.
 Vector primitives cover construction, append, length, indexed access, split,
 sum and equality; other installed vector operations require target support.
 
-Proofs use either an authored empty transcript or the managed
-`hash-chain.keccak256.bls12-381.fr64be/0` construction. That suite reduces all
-64 big-endian request bytes modulo BLS Fr, independently of other arithmetic
-fields in the verifier. New transcript suites, external services, curve
+Proofs use either an authored empty transcript or a managed construction over
+a transcript suite that the target realizes. The target selects the
+realization by the suite's [transcript facts](../formats/contract-declarations.md#nominal-domains),
+never by its spelling: the `hash-chain` family over `keccak256`, binding the
+suite identity at initialization, with the `fr64be` decoder, whose challenge
+field is a prime field of at most 256 bits. That realization reduces all 64
+big-endian request bytes modulo the challenge field's declared characteristic,
+independently of other arithmetic fields in the verifier. Of the installed
+suites, `hash-chain.keccak256.bls12-381.fr64be/0` has these facts; a suite with
+another family, hash or decoder refuses with `evm.construction`, naming the
+fact the target does not realize. A program without a transcript has no
+challenge field and no transcript helpers. External services, curve
 operations, Merkle authentication and full FRI/STARK deployment require further
 target support.
 
@@ -86,6 +94,12 @@ Wire sites require the complete native message type and an exact supported
 installed codec. Supported leaves are Boolean, index, indices, bytes, the
 installed BLS Fr, BN254 Fr, Ristretto scalar and Plonky3 field/vector codecs,
 BLS Fr fixed arrays, and installed Keccak/Poseidon row-root and path envelopes.
+Every byte fact of a leaf comes from the catalog's
+[frame tags and codecs](../formats/contract-declarations.md#frame-tags-and-codecs):
+the codec row's tag and element width, the aggregate frame's tag, and the
+commitment row's digest and digest-word widths. A field coordinate has its
+base field's codec width. A codec whose widths the target's layouts do not
+realize refuses with `evm.wire-type`.
 Sequences and variants compose these leaves. Root/path support preserves their
 canonical envelopes; it performs no authentication. Unsupported inactive arms
 and empty-container element types still refuse compilation.

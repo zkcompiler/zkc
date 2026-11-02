@@ -1,7 +1,90 @@
 #include "Runtime.h"
+#include "llvm/ADT/SmallString.h"
 
 namespace zkc::evm::detail {
-std::string runtimeHelpers(const EvmLimits &limits) {
+namespace {
+// The transcript helpers of the realized suite: the keccak256 hash-chain
+// absorb and request frames and the fr64be reduction modulo the challenge
+// field's modulus.
+constexpr llvm::StringLiteral transcriptHelpers =
+    R"YUL(// Hash preimages use temporary exact-sized buffers. The fixed header is 73
+// bytes, plus the label and payload, including the domain's terminal NUL.
+function evm_write_be(p, value, n) {
+  for { let i := 0 } lt(i, n) { i := add(i, 1) } {
+    mstore8(add(p, i), shr(mul(sub(sub(n, 1), i), 8), value))
+  }
+}
+function evm_absorb(tag, label, labelLength, data, n) {
+  if gt(labelLength, 32) { evm_fault(1) }
+  evm_memory(data, n)
+  let size := add(add(73, labelLength), n)
+  let p := evm_alloc(size)
+  mstore(p, "zkc.hash-chain.absorb/0")
+  mstore(add(p, 24), mload(0x120))
+  mstore8(add(p, 56), tag)
+  evm_write_be(add(p, 57), labelLength, 8)
+  evm_write_be(add(p, 65), label, labelLength)
+  evm_write_be(add(p, add(65, labelLength)), n, 8)
+  mcopy(add(p, add(73, labelLength)), data, n)
+  let next := keccak256(p, size)
+  verbatim_1i_0o(hex"50", next)
+  mstore(0x120, next)
+  mstore(0x40, p)
+}
+function evm_transcript_debit(scope, generation) -> next {
+  evm_scope_check(scope)
+  if or(iszero(eq(scope, mload(0xa0))), iszero(eq(generation, mload(0xc0)))) {
+    evm_fault(5)
+  }
+  if or(eq(generation, 0xffffffffffffffff),
+        eq(mload(0xe0), 0xffffffffffffffff)) { evm_resource(7) }
+  next := add(generation, 1)
+  let draws := add(mload(0xe0), 1)
+  mstore(0xc0, next) mstore(0xe0, draws)
+  if eq(next, 0xffffffffffffffff) { evm_resource(7) }
+  let budget := mload(0x100)
+  if iszero(budget) { evm_resource(8) }
+  mstore(0x100, sub(budget, 1))
+}
+function evm_transcript_observe(scope, generation, frame, frameLength,
+                                occurrenceData, originLength) -> next {
+  next := evm_transcript_debit(scope, generation)
+  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
+  evm_absorb(1, 0x76616c7565, 5, frame, frameLength)
+}
+function evm_transcript_challenge(scope, generation, occurrenceData, originLength)
+  -> value, next {
+  next := evm_transcript_debit(scope, generation)
+  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
+  let lengthData := evm_alloc(32)
+  evm_write_be(lengthData, 64, 8)
+  // 25 domain bytes, 32 digest bytes, request frame (34), counter (8).
+  let p := evm_alloc(99)
+  mstore(p, "zkc.hash-chain.request/0")
+  mstore(add(p, 25), mload(0x120))
+  mstore8(add(p, 57), 2)
+  evm_write_be(add(p, 58), 9, 8)
+  evm_write_be(add(p, 66), 0x6368616c6c656e6765, 9)
+  evm_write_be(add(p, 75), 8, 8)
+  evm_write_be(add(p, 83), 64, 8)
+  evm_write_be(add(p, 91), 0, 8)
+  let high := keccak256(p, 99)
+  verbatim_1i_0o(hex"50", high)
+  evm_write_be(add(p, 91), 1, 8)
+  let low := keccak256(p, 99)
+  verbatim_1i_0o(hex"50", low)
+  // Full 512-bit reduction. 2^256 mod p is computed without overflowing.
+  let radix := addmod(mod(not(0), evm_challenge_prime()), 1, evm_challenge_prime())
+  value := addmod(mulmod(high, radix, evm_challenge_prime()), mod(low, evm_challenge_prime()), evm_challenge_prime())
+  mstore(0x40, p)
+  evm_absorb(2, 0x6368616c6c656e6765, 9, lengthData, 8)
+  mstore(0x40, lengthData)
+}
+)YUL";
+} // namespace
+
+std::string runtimeHelpers(const EvmLimits &limits,
+                           const llvm::APInt *challengeModulus) {
   // The fixed [0, 0x400) state is outside memoryguard's movable region.
   // 0x40 allocator; 0x80 active scope; 0xa0 transcript owner; 0xc0 generation;
   // 0xe0 draws; 0x100 remaining transitions; 0x120 chain digest;
@@ -18,10 +101,7 @@ function evm_decode(code) { evm_fail(0x5a4b4344, code) }
 function evm_fault(code) { evm_fail(0x5a4b4354, code) }
 function evm_resource(code) { evm_fail(0x5a4b4352, code) }
 function evm_source(code) { evm_fail(0x5a4b4353, code) }
-function evm_challenge_prime() -> p {
-  p := 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
-}
-function evm_alloc(n) -> p {
+@CHALLENGE_PRIME@function evm_alloc(n) -> p {
   p := mload(0x40)
   if gt(n, @MEMORY@) { evm_resource(1) }
   let end := add(p, and(add(n, 31), not(31)))
@@ -188,80 +268,7 @@ function evm_sha256(p, n) -> digest {
   if iszero(eq(returndatasize(), 32)) { evm_fault(7) }
   digest := mload(out) mstore(0x40, out)
 }
-// Hash preimages use temporary exact-sized buffers. The fixed header is 73
-// bytes, plus the label and payload, including the domain's terminal NUL.
-function evm_write_be(p, value, n) {
-  for { let i := 0 } lt(i, n) { i := add(i, 1) } {
-    mstore8(add(p, i), shr(mul(sub(sub(n, 1), i), 8), value))
-  }
-}
-function evm_absorb(tag, label, labelLength, data, n) {
-  if gt(labelLength, 32) { evm_fault(1) }
-  evm_memory(data, n)
-  let size := add(add(73, labelLength), n)
-  let p := evm_alloc(size)
-  mstore(p, "zkc.hash-chain.absorb/0")
-  mstore(add(p, 24), mload(0x120))
-  mstore8(add(p, 56), tag)
-  evm_write_be(add(p, 57), labelLength, 8)
-  evm_write_be(add(p, 65), label, labelLength)
-  evm_write_be(add(p, add(65, labelLength)), n, 8)
-  mcopy(add(p, add(73, labelLength)), data, n)
-  let next := keccak256(p, size)
-  verbatim_1i_0o(hex"50", next)
-  mstore(0x120, next)
-  mstore(0x40, p)
-}
-function evm_transcript_debit(scope, generation) -> next {
-  evm_scope_check(scope)
-  if or(iszero(eq(scope, mload(0xa0))), iszero(eq(generation, mload(0xc0)))) {
-    evm_fault(5)
-  }
-  if or(eq(generation, 0xffffffffffffffff),
-        eq(mload(0xe0), 0xffffffffffffffff)) { evm_resource(7) }
-  next := add(generation, 1)
-  let draws := add(mload(0xe0), 1)
-  mstore(0xc0, next) mstore(0xe0, draws)
-  if eq(next, 0xffffffffffffffff) { evm_resource(7) }
-  let budget := mload(0x100)
-  if iszero(budget) { evm_resource(8) }
-  mstore(0x100, sub(budget, 1))
-}
-function evm_transcript_observe(scope, generation, frame, frameLength,
-                                occurrenceData, originLength) -> next {
-  next := evm_transcript_debit(scope, generation)
-  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
-  evm_absorb(1, 0x76616c7565, 5, frame, frameLength)
-}
-function evm_transcript_challenge(scope, generation, occurrenceData, originLength)
-  -> value, next {
-  next := evm_transcript_debit(scope, generation)
-  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
-  let lengthData := evm_alloc(32)
-  evm_write_be(lengthData, 64, 8)
-  // 25 domain bytes, 32 digest bytes, request frame (34), counter (8).
-  let p := evm_alloc(99)
-  mstore(p, "zkc.hash-chain.request/0")
-  mstore(add(p, 25), mload(0x120))
-  mstore8(add(p, 57), 2)
-  evm_write_be(add(p, 58), 9, 8)
-  evm_write_be(add(p, 66), 0x6368616c6c656e6765, 9)
-  evm_write_be(add(p, 75), 8, 8)
-  evm_write_be(add(p, 83), 64, 8)
-  evm_write_be(add(p, 91), 0, 8)
-  let high := keccak256(p, 99)
-  verbatim_1i_0o(hex"50", high)
-  evm_write_be(add(p, 91), 1, 8)
-  let low := keccak256(p, 99)
-  verbatim_1i_0o(hex"50", low)
-  // Full 512-bit reduction. 2^256 mod p is computed without overflowing.
-  let radix := addmod(mod(not(0), evm_challenge_prime()), 1, evm_challenge_prime())
-  value := addmod(mulmod(high, radix, evm_challenge_prime()), mod(low, evm_challenge_prime()), evm_challenge_prime())
-  mstore(0x40, p)
-  evm_absorb(2, 0x6368616c6c656e6765, 9, lengthData, 8)
-  mstore(0x40, lengthData)
-}
-)YUL";
+@TRANSCRIPT@)YUL";
   auto replace = [&](llvm::StringRef key, uint64_t value) {
     size_t pos = 0;
     std::string replacement = std::to_string(value);
@@ -270,6 +277,25 @@ function evm_transcript_challenge(scope, generation, occurrenceData, originLengt
       pos += replacement.size();
     }
   };
+  auto insert = [&](llvm::StringRef key, llvm::StringRef replacement) {
+    size_t pos = text.find(key.str());
+    text.replace(pos, key.size(), replacement.str());
+  };
+  // Without a transcript, the program has no challenge field and no
+  // transcript helper.
+  std::string prime, helpers;
+  if (challengeModulus) {
+    llvm::SmallString<80> digits;
+    challengeModulus->toString(digits, 16, /*Signed=*/false,
+                               /*formatAsCLiteral=*/false,
+                               /*UpperCase=*/false);
+    prime =
+        ("function evm_challenge_prime() -> p {\n  p := 0x" + digits + "\n}\n")
+            .str();
+    helpers = transcriptHelpers.str();
+  }
+  insert("@CHALLENGE_PRIME@", prime);
+  insert("@TRANSCRIPT@", helpers);
   replace("@MEMORY@", limits.memoryBytes);
   replace("@ELEMENTS@", limits.publicElements);
   return text;

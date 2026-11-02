@@ -500,6 +500,7 @@ add_zkc_component(EvmTarget
   lib/Target/Evm/Arithmetic.cpp
   lib/Target/Evm/Lowering.cpp
   lib/Target/Evm/Runtime.cpp
+  lib/Target/Evm/Transcript.cpp
   lib/Target/Evm/Wire.cpp
   lib/Target/Evm/Yul.cpp
 )

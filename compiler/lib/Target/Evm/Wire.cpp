@@ -1,6 +1,7 @@
 #include "zkc/Target/Evm/Wire.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
@@ -10,7 +11,6 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 #include <map>
 
@@ -24,39 +24,59 @@ struct Frame {
   const ValueLayout *layout = nullptr;
   const FieldLayout *field = nullptr;
   unsigned tag = 0, coefficientWidth = 0;
+  /// The codec's element width, for Boolean, index, indices and bytes frames.
+  unsigned elementBytes = 0;
   std::string name;
   const FieldLayout *digestField = nullptr;
-  unsigned digestWordWidth = 0, pathLimit = 0;
+  unsigned digestBytes = 0, digestWordWidth = 0, pathLimit = 0;
 };
 
-// These are native codec byte identities, not a field/layout registry. Degree,
-// modulus, local strides and lanes always come from the shared layout owner.
-Expected<std::pair<unsigned, unsigned>> fieldFrame(StringRef identity) {
-  auto result = llvm::StringSwitch<std::pair<unsigned, unsigned>>(identity)
-                    .Case("zkcv.field.bls12-381.fr/0", {1, 32})
-                    .Case("zkcv.field.bn254.fr/0", {40, 32})
-                    .Case("zkcv.field.ristretto255.scalar/0", {13, 32})
-                    .Case("zkcv.field.koala-bear/0", {19, 4})
-                    .Case("zkcv.field.koala-bear.ext4-binomial3/0", {21, 4})
-                    .Case("zkcv.field.koala-bear.ext8-binomial3/0", {26, 4})
-                    .Case("zkcv.field.baby-bear/0", {90, 4})
-                    .Case("zkcv.field.baby-bear.ext4-binomial11/0", {93, 4})
-                    .Case("zkcv.field.goldilocks/0", {96, 8})
-                    .Case("zkcv.field.goldilocks.ext2-binomial7/0", {99, 8})
-                    .Case("zkcv.vector.bls12-381.fr/0", {66, 32})
-                    .Case("zkcv.vector.bn254.fr/0", {41, 32})
-                    .Case("zkcv.vector.ristretto255.scalar/0", {14, 32})
-                    .Case("zkcv.vector.koala-bear/0", {20, 4})
-                    .Case("zkcv.vector.koala-bear.ext4-binomial3/0", {22, 4})
-                    .Case("zkcv.vector.koala-bear.ext8-binomial3/0", {27, 4})
-                    .Case("zkcv.vector.baby-bear/0", {91, 4})
-                    .Case("zkcv.vector.baby-bear.ext4-binomial11/0", {94, 4})
-                    .Case("zkcv.vector.goldilocks/0", {97, 8})
-                    .Case("zkcv.vector.goldilocks.ext2-binomial7/0", {100, 8})
-                    .Default({0, 0});
-  if (!result.first)
-    return zkc::error("evm.wire-type", "no exact supported native field codec");
-  return result;
+// Every byte fact of a frame is the catalog's: the codec row's tag and element
+// width, the aggregate frame's tag and the commitment row's digest widths.
+// Degree, modulus, local strides and lanes come from the shared layout owner.
+namespace instances = protocol::instances;
+
+// The deployment ceiling on the siblings of one binary Merkle path frame.
+constexpr unsigned merklePathSiblings = 24;
+
+const instances::Codec *codecRow(StringRef kind, StringRef domain) {
+  const auto *codec = protocol::installedDomains().defaultCodec(kind, domain);
+  return codec ? instances::codec(codec->identity) : nullptr;
+}
+std::optional<unsigned> aggregateTag(StringRef constructor, StringRef domain) {
+  for (const auto &row : instances::aggregateFrames())
+    if (row.constructor == constructor && row.domain == domain)
+      return row.tag;
+  return std::nullopt;
+}
+// An element holds its field's coordinates in the ascending basis, each in
+// the base's own encoding: a coordinate has the element width of the base
+// field's codec, or of the field's own codec for a prime field.
+Expected<unsigned> coefficientWidth(const instances::CodecFrame &frame,
+                                    const FieldLayout &field) {
+  std::optional<unsigned> width = frame.elementBytes;
+  if (field.degree > 1) {
+    const auto *base = codecRow("field", field.base.getDomain());
+    width = base && base->frame ? base->frame->elementBytes : std::nullopt;
+  }
+  if (!width || !*width || !frame.elementBytes ||
+      *frame.elementBytes != field.degree * *width)
+    return zkc::error("evm.wire-type",
+                      "codec element width disagrees with its field structure");
+  return *width;
+}
+// The widths that the scalar and collection layouts of these kinds realize.
+unsigned realizedElementBytes(Kind kind) {
+  switch (kind) {
+  case Kind::Boolean:
+  case Kind::Bytes:
+    return 1;
+  case Kind::Index:
+  case Kind::Indices:
+    return 8;
+  default:
+    return 0;
+  }
 }
 
 Expected<Frame> frame(NativeLayouts &layouts, Type type) {
@@ -73,32 +93,33 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
   switch (result.layout->kind) {
   case Kind::Boolean:
     kind = "bool";
-    result.tag = 5;
     break;
   case Kind::Index:
     kind = "index";
-    result.tag = 31;
     break;
   case Kind::Indices:
     kind = "indices";
-    result.tag = 68;
     break;
   case Kind::Bytes:
     kind = "bytes";
-    result.tag = 70;
     break;
   case Kind::FieldArray: {
     auto array = cast<data::FieldArrayType>(type);
-    if (array.getDomain() != "bls12-381.fr")
+    auto tag = aggregateTag("field_array", array.getDomain());
+    const auto *scalar = codecRow("field", array.getDomain());
+    if (!tag || !scalar || !scalar->frame)
       return zkc::error("evm.wire-type",
                         "no native fixed-array codec for this field");
     auto field = layouts.field(
         algebra::FieldType::get(type.getContext(), array.getDomain()));
     if (!field)
       return field.takeError();
+    auto width = coefficientWidth(*scalar->frame, **field);
+    if (!width)
+      return width.takeError();
     result.field = *field;
-    result.tag = 64;
-    result.coefficientWidth = 32;
+    result.tag = *tag;
+    result.coefficientWidth = *width;
     return result;
   }
   case Kind::FixedVector:
@@ -112,11 +133,14 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
     break;
   }
   case Kind::Sequence:
-    result.tag = 69;
+  case Kind::Variant: {
+    auto tag = aggregateTag(
+        result.layout->kind == Kind::Sequence ? "sequence" : "variant", "");
+    if (!tag)
+      return zkc::error("evm.wire-type", "no native aggregate frame");
+    result.tag = *tag;
     return result;
-  case Kind::Variant:
-    result.tag = 65;
-    return result;
+  }
   case Kind::Field:
     kind = "field";
     domain = cast<algebra::FieldType>(type).getDomain();
@@ -129,41 +153,30 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
   if (!protocol::nativeMessageAtom(kind, domain))
     return zkc::error("evm.wire-type",
                       "type is outside the native message grammar");
-  auto *codec = protocol::installedDomains().defaultCodec(kind, domain);
-  if (!codec)
+  const auto *codec = codecRow(kind, domain);
+  if (!codec || !codec->frame)
     return zkc::error("evm.wire-type", "no uniquely selected native codec");
+  result.tag = codec->frame->tag;
+  const auto *tag = instances::frameTag(result.tag);
+  if (!tag)
+    return zkc::error("evm.wire-type", "codec frame names no frame tag");
   if (result.layout->kind == Kind::Root || result.layout->kind == Kind::Path) {
+    const auto *scheme = instances::domain(domain);
+    if (!scheme || !scheme->commitment || !scheme->commitment->digestBytes)
+      return zkc::error("evm.wire-type", "unsupported exact root/path codec");
+    result.digestBytes = *scheme->commitment->digestBytes;
+    using Layout = instances::FrameLayout;
     bool root = result.layout->kind == Kind::Root;
-    auto identity = StringRef(codec->identity);
-    StringRef prefix = root ? "zkcv.commitment." : "zkcv.proof.";
-    if (!identity.consume_front(prefix))
-      return zkc::error("evm.wire-type", "incompatible native envelope codec");
-    unsigned keccak =
-        llvm::StringSwitch<unsigned>(identity)
-            .Case("rows-merkle-keccak256.koala-bear/0", root ? 33 : 34)
-            .Case("rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
-                  root ? 35 : 36)
-            .Case("rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
-                  root ? 79 : 80)
-            .Default(0);
-    if (keccak) {
-      result.tag = keccak;
-      result.pathLimit = 24;
-    } else {
-      result.digestWordWidth =
-          llvm::StringSwitch<unsigned>(identity)
-              .Cases({"rows-merkle-poseidon2-16.koala-bear/0",
-                      "rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
-                     4)
-              .Cases({"rows-merkle-poseidon2-16.baby-bear/0",
-                      "rows-merkle-poseidon2-16.baby-bear.ext4-binomial11/0"},
-                     4)
-              .Cases({"rows-merkle-poseidon2-8.goldilocks/0",
-                      "rows-merkle-poseidon2-8.goldilocks.ext2-binomial7/0"},
-                     8)
-              .Default(0);
-      if (!result.digestWordWidth)
+    if (tag->layout == (root ? Layout::MerkleRoot : Layout::MerklePath)) {
+      if (!root)
+        result.pathLimit = merklePathSiblings;
+    } else if (tag->layout ==
+               (root ? Layout::DigestRoot : Layout::DigestProof)) {
+      // Digest words are canonical elements of the value field's prime base.
+      const auto &words = scheme->commitment->digestWordBytes;
+      if (!words || !*words || result.digestBytes % *words)
         return zkc::error("evm.wire-type", "unsupported exact root/path codec");
+      result.digestWordWidth = *words;
       auto valueField =
           protocol::installedDomains().associatedIdentity(domain, "ValueField");
       auto facts =
@@ -171,23 +184,28 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
       if (!facts)
         return facts.takeError();
       result.digestField = *facts;
-      result.tag = root ? 71 : 72;
+    } else {
+      return zkc::error("evm.wire-type", "unsupported exact root/path codec");
     }
     return result;
   }
   if (kind == "field" || kind == "vector") {
-    auto bytes = fieldFrame(codec->identity);
-    if (!bytes)
-      return bytes.takeError();
-    result.tag = bytes->first;
-    result.coefficientWidth = bytes->second;
     auto field =
         layouts.field(algebra::FieldType::get(type.getContext(), domain));
     if (!field)
       return field.takeError();
+    auto width = coefficientWidth(*codec->frame, **field);
+    if (!width)
+      return width.takeError();
+    result.coefficientWidth = *width;
     result.field = *field;
-  } else if (codec->identity != ("zkcv." + kind + "/0").str()) {
-    return zkc::error("evm.wire-type", "unsupported native codec identity");
+  } else {
+    // The Boolean, index, indices and bytes layouts realize fixed widths.
+    if (!codec->frame->elementBytes ||
+        *codec->frame->elementBytes !=
+            realizedElementBytes(result.layout->kind))
+      return zkc::error("evm.wire-type", "unsupported native codec width");
+    result.elementBytes = *codec->frame->elementBytes;
   }
   return result;
 }
@@ -313,7 +331,8 @@ void WireGenerator::Storage::scan(const Frame &f) {
   if (kind == Kind::Root || kind == Kind::Path) {
     bool root = kind == Kind::Root;
     if (root)
-      out << "if iszero(eq(n, 38)) { evm_decode(2) }\n";
+      out << "if iszero(eq(n, " << 6 + f.digestBytes
+          << ")) { evm_decode(2) }\n";
     else
       out << "if lt(n, 10) { evm_decode(2) }\n";
     out << "if iszero(eq(shr(208, mload(p)), " << header(f.tag)
@@ -325,8 +344,8 @@ void WireGenerator::Storage::scan(const Frame &f) {
              "count)\n";
       if (f.pathLimit)
         out << "if gt(count, " << f.pathLimit << ") { evm_resource(2) }\n";
-      out << "if iszero(eq(n, add(10, evm_wire_mul(count, 32)))) { "
-             "evm_decode(2) }\n";
+      out << "if iszero(eq(n, add(10, evm_wire_mul(count, " << f.digestBytes
+          << ")))) { evm_decode(2) }\n";
     }
     out << "evm_wire_retain(budget, n)\n}\n";
     return;
@@ -336,8 +355,7 @@ void WireGenerator::Storage::scan(const Frame &f) {
   bool collection = f.layout->collection.has_value() && !fixed;
   if (!aggregate && !collection) {
     uint64_t bytes =
-        kind == Kind::Boolean ? 7
-        : kind == Kind::Index ? 14
+        kind == Kind::Boolean || kind == Kind::Index ? 6 + f.elementBytes
         : fixed
             ? 6 + cast<data::FieldArrayType>(f.layout->logical).getLength() *
                       uint64_t(width(f))
@@ -364,7 +382,7 @@ void WireGenerator::Storage::scan(const Frame &f) {
         << "if iszero(eq(n, add(10, count))) { evm_decode(2) }\n"
         << "evm_wire_retain(budget, count)\n";
   } else if (kind == Kind::FieldVector || kind == Kind::Indices) {
-    auto wireStride = kind == Kind::Indices ? 8 : width(f);
+    auto wireStride = kind == Kind::Indices ? f.elementBytes : width(f);
     out << "evm_wire_elements(budget, count)\n"
         << "let bytes := evm_wire_mul(count, " << wireStride << ")\n"
         << "if iszero(eq(n, add(10, bytes))) { evm_decode(2) }\n"
@@ -408,8 +426,8 @@ void WireGenerator::Storage::canonical(const Frame &f) {
   if (f.digestField) {
     bool root = kind == Kind::Root;
     out << "let count := " << (root ? "1" : "evm_le(add(p, 6), 4)") << "\n"
-        << "for { let i := 0 } lt(i, mul(count, " << 32 / f.digestWordWidth
-        << ")) { i := add(i, 1) } {\n"
+        << "for { let i := 0 } lt(i, mul(count, "
+        << f.digestBytes / f.digestWordWidth << ")) { i := add(i, 1) } {\n"
         << "if iszero(lt(evm_le(add(add(p, " << (root ? 6 : 10) << "), mul(i, "
         << f.digestWordWidth << ")), " << f.digestWordWidth << "), "
         << number(f.digestField->modulus) << ")) { evm_decode(4) }\n}\n";
@@ -460,20 +478,22 @@ void WireGenerator::Storage::read(const Frame &f) {
   out << "function " << f.name << "_read(p) -> " << lanes(count) << " {\n";
   if (kind == Kind::Root || kind == Kind::Path) {
     out << "v1 := "
-        << (kind == Kind::Root ? "38"
-                               : "add(10, mul(evm_le(add(p, 6), 4), 32))")
+        << (kind == Kind::Root ? std::to_string(6 + f.digestBytes)
+                               : "add(10, mul(evm_le(add(p, 6), 4), " +
+                                     std::to_string(f.digestBytes) + "))")
         << " v0 := evm_alloc(v1) mcopy(v0, p, v1)\n";
   } else if (kind == Kind::Boolean)
     out << "v0 := byte(0, mload(add(p, 6)))\n";
   else if (kind == Kind::Index)
-    out << "v0 := evm_le(add(p, 6), 8)\n";
+    out << "v0 := evm_le(add(p, 6), " << f.elementBytes << ")\n";
   else if (kind == Kind::Field && f.field->degree == 1)
     out << "v0 := evm_le(add(p, 6), " << f.coefficientWidth << ")\n";
   else if (kind == Kind::Field || kind == Kind::FieldVector ||
            kind == Kind::FieldArray || kind == Kind::Indices) {
     bool scalar = kind == Kind::Field;
     unsigned degree = kind == Kind::Indices ? 1 : f.field->degree;
-    unsigned coefficient = kind == Kind::Indices ? 8 : f.coefficientWidth;
+    unsigned coefficient =
+        kind == Kind::Indices ? f.elementBytes : f.coefficientWidth;
     if (!scalar)
       out << "v1 := "
           << (kind == Kind::FieldArray
@@ -544,10 +564,10 @@ void WireGenerator::Storage::size(const Frame &f) {
   out << "function " << f.name << "_size(" << lanes(f.layout->lanes.size())
       << ", budget, depth) -> n {\nevm_wire_node(budget, depth)\n";
   if (kind == Kind::Boolean) {
-    out << "if gt(v0, 1) { evm_fault(10) } n := 7\n";
+    out << "if gt(v0, 1) { evm_fault(10) } n := " << 6 + f.elementBytes << "\n";
   } else if (kind == Kind::Index) {
     out << "if gt(v0, 0xffffffffffffffff) { evm_fault(10) }\n"
-        << "evm_wire_elements(budget, 1) n := 14\n";
+        << "evm_wire_elements(budget, 1) n := " << 6 + f.elementBytes << "\n";
   } else if (f.field) {
     bool scalar = kind == Kind::Field;
     std::string length = scalar ? "1" : "v1";
@@ -580,8 +600,8 @@ void WireGenerator::Storage::size(const Frame &f) {
     out << "let retained := evm_wire_mul(v1, "
         << f.layout->collection->strideBytes << ")\n"
         << "evm_memory(v0, retained) evm_wire_retain(budget, retained)\n"
-        << "n := evm_wire_add(10, evm_wire_mul(v1, "
-        << (kind == Kind::Bytes ? 1 : 8) << "))\n";
+        << "n := evm_wire_add(10, evm_wire_mul(v1, " << f.elementBytes
+        << "))\n";
     if (kind == Kind::Indices)
       out << "for { let i := 0 } lt(i, v1) { i := add(i, 1) } {\n"
           << "if gt(mload(add(v0, mul(i, 32))), 0xffffffffffffffff) { "
@@ -639,9 +659,11 @@ void WireGenerator::Storage::write(const Frame &f) {
   out << "function " << f.name << "_write(p, " << lanes(f.layout->lanes.size())
       << ") -> end {\nevm_wire_header(p, " << f.tag << ")\n";
   if (kind == Kind::Boolean)
-    out << "mstore8(add(p, 6), v0) end := add(p, 7)\n";
+    out << "mstore8(add(p, 6), v0) end := add(p, " << 6 + f.elementBytes
+        << ")\n";
   else if (kind == Kind::Index)
-    out << "evm_write_le(add(p, 6), v0, 8) end := add(p, 14)\n";
+    out << "evm_write_le(add(p, 6), v0, " << f.elementBytes
+        << ") end := add(p, " << 6 + f.elementBytes << ")\n";
   else if (f.field) {
     bool scalar = kind == Kind::Field;
     std::string length = scalar ? "1" : "v1";
@@ -664,10 +686,9 @@ void WireGenerator::Storage::write(const Frame &f) {
       out << "mcopy(add(p, 10), v0, v1)\n";
     else
       out << "for { let i := 0 } lt(i, v1) { i := add(i, 1) } {\n"
-          << "evm_write_le(add(add(p, 10), mul(i, 8)), mload(add(v0, mul(i, "
-             "32))), 8)\n}\n";
-    out << "end := add(add(p, 10), mul(v1, " << (kind == Kind::Bytes ? 1 : 8)
-        << "))\n";
+          << "evm_write_le(add(add(p, 10), mul(i, " << f.elementBytes
+          << ")), mload(add(v0, mul(i, 32))), " << f.elementBytes << ")\n}\n";
+    out << "end := add(add(p, 10), mul(v1, " << f.elementBytes << "))\n";
   } else if (kind == Kind::Sequence) {
     const auto &element =
         child(cast<data::SequenceType>(f.layout->logical).getElementType());

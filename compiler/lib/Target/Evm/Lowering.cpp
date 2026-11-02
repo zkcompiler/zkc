@@ -19,6 +19,7 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/SmallPtrSet.h"
 
@@ -26,7 +27,6 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::evm {
 namespace {
-constexpr StringLiteral suite = "hash-chain.keccak256.bls12-381.fr64be/0";
 using Values = SmallVector<Value>;
 using ValueMap = llvm::DenseMap<Value, Values>;
 
@@ -68,9 +68,15 @@ private:
         append_range(out, signature->lanes);
         return success();
       }
-      if (capability.getKind() != runtime::CapabilityKind::Transcript ||
-          capability.getIdentity() != suite)
+      if (capability.getKind() != runtime::CapabilityKind::Transcript)
         return failure();
+      // A transcript lowers only for a suite whose facts the EVM realizes.
+      auto realized =
+          realizeTranscript(layouts, *context, capability.getIdentity());
+      if (!realized) {
+        consumeError(realized.takeError());
+        return failure();
+      }
       out.push_back(i64);
     } else if (isa<runtime::ScopeType, exec::StopType>(type))
       out.push_back(i64);
