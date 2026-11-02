@@ -4,7 +4,7 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
-#include "zkc/Language/EntryBoundary.h"
+#include "zkc/Language/Layout.h"
 #include "zkc/Translation/Entry.h"
 #include "llvm/Support/MemoryBuffer.h"
 using namespace llvm;
@@ -48,8 +48,14 @@ int main() {
                 mlir::cast<mlir::ArrayAttr>(roles[1]).size() == 1,
             "native role components differ from source placement");
     Layouts layouts(entry);
-    auto plan = take(layouts.entryBoundary(entry.protocol(), entry.entry()));
-    require(plan.inputs.size() == 4 && plan.inputs.back().native.empty(),
+    auto port = take(layouts.protocolPort(entry.protocol().inputs[0]));
+    require(port.components.size() == 3 && port.body->fields.size() == 3 &&
+                port.body->fields[2].layout->leaves.empty() &&
+                llvm::none_of(port.components,
+                              [](const auto &component) {
+                                return component.fieldPath ==
+                                       std::vector<unsigned>{2};
+                              }),
             "empty ordinary supply disappeared during native observation");
   });
   cases.run("equal-typed candidate input substitution refuses", [&] {

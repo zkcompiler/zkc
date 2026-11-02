@@ -1,3 +1,4 @@
+#include "support/ExternalSupply.h"
 #include "support/NativeCases.h"
 #include "zkc/Language/Project.h"
 using namespace llvm;
@@ -469,13 +470,21 @@ int main() {
                               "public{statement}")),
             "source.entry");
   });
-  cases.run("setup initialization admits nested keys and refuses opening state",
-            [] {
-              take(close(replaceText(setupSource(), "pk:PK@P", "pk:(PK,)@P")));
-              refuses(close(replaceText(setupSource(), "pk:PK@P",
-                                        "pk:builtin(\"opening_state\",C)@P")),
-                      "source.ingress");
-            });
+  cases.run(
+      "setup initialization admits nested keys and publishes an "
+      "unconstructible opening state",
+      [] {
+        take(close(replaceText(setupSource(), "pk:PK@P", "pk:(PK,)@P")));
+        // Setup context values keep their recursive constructor demand,
+        // which the SDK's Entry admission applies to the operation.
+        auto entry = take(close(replaceText(
+            setupSource(), "pk:PK@P", "pk:builtin(\"opening_state\",C)@P")));
+        Layouts layouts(entry);
+        auto port = take(layouts.protocolPort(entry.protocol().inputs[1]));
+        zkc::test::requireWithheld(zkc::test::withheldSupply(*port.body, "pk"),
+                                   {"pk"},
+                                   "opening state lost its constructor mark");
+      });
 
   cases.run(
       "proof completion selects a prover Boolean and survives aliases", [] {

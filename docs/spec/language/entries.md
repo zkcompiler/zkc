@@ -105,16 +105,29 @@ through a numerical fragment retaining that checked source action and lexical
 owner. It does not make the raw Host constructor callable for that schema.
 
 Closing a checked Host invocation preserves its already typed ordinary arguments;
-it does not repeat external input construction. Direct native Protocol and proof
-selection still requires the consumed ordinary components to have an external
-supplier. Authored Function parameters follow the retained-value rule above. Semantic subject closure for either a
-protocol or proof retains the checked computation without asserting external
-supply or Host admission. All three closure contexts retain setup, scoped
+it does not repeat external input construction. Closing any selection, whether a
+direct Protocol, a proof, a checked Host child or a semantic subject, names no
+external operation, so closure does not judge external supply. It checks source
+legality and publishes exact schemas, permissions, sealing, custody, setup
+associations and component maps. The SDK's shared Entry admission and
+preparation layer is the only owner of the external-supply judgment, for the
+selected operation and supply mode
+([operation and supply mode](../runtime/entries.md#external-supply)). It is not
+the only refusal layer: source legality, construction legality, setup
+dependencies, schema/native consistency, backend capability, runtime carrier
+readers and EVM calldata validation keep their own owners. A package that no
+external operation can supply therefore compiles, and a proof whose sealed
+prover witness Verify never consumes admits Verify. Authored Function parameters
+follow the retained-value rule above. Every closure retains setup, scoped
 specialization, source-claim, message, relation and common-control checks.
 Generated signature admission independently checks exact whole-value schemas
 and Copy/Drop permissions, excluding logical handles and custody. Splitting an
 ancestor to form participant, public or setup records still requires its
-constructor and accessible fields, including zero-extent element templates.
+constructor and accessible fields, including zero-extent element templates; a
+public selection that crosses a sealed, custody-bearing, unconstructible,
+variant or associated ancestor, or a private field, is not publishable
+(`source.interface`). A logical record is never constructed whole, so splitting
+it needs no constructor.
 Setup context retains external assembly policy and exact builtin key suppliers.
 
 Only successful explicit source return roots are published. Normal joint-run
@@ -472,8 +485,10 @@ not automatically tied to a specific output setup.
 ## Ordinary component supply
 
 A transparent distributed root composed entirely of admitted ordinary fields can
-be supplied through its exact field-and-role roster. The bounded closed boundary
-plan reuses the checked schema, recursive placement and native component map.
+be supplied through its exact field-and-role roster. The published interface
+carries the checked schema, recursive placement and native component map, from
+which the SDK reconstructs the bounded supply plan for the selected operation
+([external supply](../runtime/entries.md#external-supply)).
 Every ordinary selection retains its original native coordinates and an explicit
 logical supply obligation even when it occupies no native slot. Native proof
 public indices remain a sorted flat expansion of the selected verifier data.

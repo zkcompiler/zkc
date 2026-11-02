@@ -5,7 +5,6 @@
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/Registry.h"
-#include "zkc/Language/EntryBoundary.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Stages.h"
@@ -156,20 +155,18 @@ scheme Demo = Round:
     llvm::errs() << llvm::toString(componentEntry.takeError());
     return 21;
   }
-  zkc::language::Layouts layouts(*componentEntry);
-  auto boundary = layouts.entryBoundary(componentEntry->protocol(),
-                                        componentEntry->entry());
-  if (!boundary) {
-    llvm::errs() << llvm::toString(boundary.takeError());
-    return 22;
-  }
-  if (boundary->inputs.size() != 4 || !boundary->inputs.back().native.empty())
-    return 23;
   auto componentOriginal = zkc::language::prepareOriginal(*componentEntry);
   if (!componentOriginal) {
     llvm::errs() << llvm::toString(componentOriginal.takeError());
     return 24;
   }
+  // Three native components; the empty field keeps a logical supply only.
+  const auto &componentPort =
+      componentOriginal->interface().selectedProtocol().inputs.front();
+  if (componentPort.components.size() != 3 ||
+      componentPort.schema->fields.size() != 3 ||
+      !componentPort.schema->fields.back().schema->leaves.empty())
+    return 23;
   auto componentPolicy = zkc::language::proofPolicy(*componentOriginal);
   if (!componentPolicy) {
     llvm::errs() << llvm::toString(componentPolicy.takeError());

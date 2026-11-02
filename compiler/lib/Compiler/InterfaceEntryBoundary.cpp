@@ -227,7 +227,10 @@ public:
       if (!charge(1) || step >= result.schema->fields.size())
         return fail("ordinary selection path is absent");
       const auto &schema = *result.schema;
+      // Splitting an ancestor needs its constructor; a logical record is
+      // never constructed whole.
       if (schema.custody || schema.sealed ||
+          (!logicalSchema(schema) && !schema.constructible) ||
           schema.kind == Type::Kind::Associated ||
           schema.kind == Type::Kind::Variant || !schema.fields[step].isPublic)
         return fail(

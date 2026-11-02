@@ -1,5 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -149,7 +150,13 @@ int main() {
         require(job && job->proof() && job->proof()->target &&
                     job->proof()->publicInputs.empty(),
                 "logical selected target became an ordinary public input");
-        refuses(closeEntry(project, "m::Proof"), "source.ingress");
+        // The proof publishes the handle exactly; the SDK's Entry admission
+        // refuses fresh external supply of it for the operation consuming it.
+        auto selected =
+            take(prepareOriginal(take(closeEntry(project, "m::Proof"))));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(selected.interface()), {"word"},
+            "logical handle lost its exact supply mark");
         auto source = original(anchored);
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
         if (auto error = compareInterface(source.entry(), view))
@@ -184,7 +191,9 @@ int main() {
             source.bytes(), source.entry().protocol().symbol, context));
         require(!snapshot.bytes.empty(),
                 "logical target disappeared from export");
-        refuses(proof(proofSource), "source.ingress");
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(take(proof(proofSource)).interface()),
+            {"word"}, "proof selection hid the logical handle's supply mark");
       });
   cases.run(
       "verifier holder may observe its own data without supplying it", [&] {
@@ -197,7 +206,9 @@ int main() {
         }
         text = replaceText(text, "roles(P,V)(word)", "roles(V,P)(word)");
         take(check(text));
-        refuses(proof(text), "source.ingress");
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(take(proof(text)).interface()), {"word"},
+            "verifier-held handle lost its supply mark");
       });
   cases.run("receiver anchor does not make witness data public", [&] {
     refuses(

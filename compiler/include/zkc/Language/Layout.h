@@ -59,7 +59,6 @@ private:
   std::variant<std::string, PolynomialLayout, QuotientLayout, OracleLayout>
       value;
 };
-struct EntryBoundaryPlan;
 struct Layout;
 struct LayoutField {
   std::string name;
@@ -194,8 +193,6 @@ public:
   /// Does not flatten storage or grant source access to private fields.
   llvm::Expected<ValuePlacement> placement(const Type &, const ValuePlacement &,
                                            unsigned participants);
-  llvm::Expected<EntryBoundaryPlan> entryBoundary(const Declaration &protocol,
-                                                  const Declaration &entry);
   /// Resolve a closed kind through the shared Contracts owner and the exact row
   /// layout.
   llvm::Expected<OracleKindLayout> oracleKind(const Type &);

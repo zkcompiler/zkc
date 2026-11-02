@@ -1562,8 +1562,6 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     // value does not need an external constructor; fresh input decoding must
     // establish that authority independently of the function signature.
     (void)operation;
-    // Protocol Entry assembly is checked from exact closed field/role slices
-    // by Layouts::entryBoundary before publishing ClosedEntry.
     // Compare canonical typed terms, including parameters absent from runtime
     // inputs. Source names are aliases; one closed identity has one ABI.
     std::map<std::tuple<std::string, std::string, std::string, std::string>,

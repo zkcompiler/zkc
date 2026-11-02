@@ -1,5 +1,9 @@
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Compiler/Language.h"
+#include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Language/EntryBoundary.h"
 #include "zkc/Language/Inspection.h"
 #include "llvm/Support/JSON.h"
@@ -37,6 +41,35 @@ std::string replace(StringRef before, StringRef after) {
   text.replace(at, before.size(), after.str());
   return text;
 }
+/// Published ordinary data components as (field path, role, native index).
+using Component = std::tuple<std::vector<unsigned>, unsigned, unsigned>;
+std::vector<Component> dataComponents(const InterfacePort &port) {
+  std::vector<Component> result;
+  for (const auto &component : port.components)
+    if (component.facet == InterfaceComponentFacet::Data)
+      result.emplace_back(component.path, component.role, component.native);
+  return result;
+}
+std::vector<std::vector<unsigned>> setupPaths(const LanguageInterface &view) {
+  std::vector<std::vector<unsigned>> result;
+  for (const auto &setup : view.setups)
+    for (const auto &input : setup.inputs)
+      result.push_back(input.path);
+  return result;
+}
+const InterfaceSchema &field(const InterfaceSchema &schema,
+                             ArrayRef<unsigned> path) {
+  const auto *current = &schema;
+  for (auto step : path)
+    current = current->fields.at(step).schema.get();
+  return *current;
+}
+/// The leaf's setup-key role from the catalog's type row.
+std::optional<zkc::protocol::SetupKey> leafKey(const InterfaceSchema &schema) {
+  if (schema.leaves.size() != 1)
+    return {};
+  return zkc::protocol::setupKey(zkc::protocol::typeKind(schema.leaves[0]));
+}
 } // namespace
 int main() {
   Cases cases;
@@ -48,16 +81,39 @@ int main() {
                 proof.publicInputs[0] == EntryInputSelection{0, {0}, 1, {}} &&
                 proof.publicInputs[1] == EntryInputSelection{0, {2}, 1, {}},
             "public paths or verifier role differ");
-    Layouts layouts(entry);
-    auto plan = take(layouts.entryBoundary(entry.protocol(), entry.entry()));
-    require(plan.inputs.size() == 4, "role-local ordinary roster differs");
-    require(plan.inputs[0].alias == "state_statement" &&
-                plan.inputs[0].native == std::vector<unsigned>{0} &&
-                plan.inputs[2].alias == "state_witness" &&
-                plan.inputs[2].native == std::vector<unsigned>{1} &&
-                plan.inputs[3].alias == "state_empty" &&
-                plan.inputs[3].native.empty(),
-            "native scatter or empty supply differs");
+    auto original = take(prepareOriginal(entry));
+    const auto &view = original.interface();
+    require(view.proof && view.proof->publicInputs == proof.publicInputs,
+            "published public selections differ");
+    const auto &port = view.selectedProtocol().inputs[0];
+    require(dataComponents(port) ==
+                std::vector<Component>{{{0}, 0, 0}, {{0}, 1, 0}, {{1}, 0, 1}},
+            "native scatter differs");
+    const auto &empty = field(*port.schema, {2});
+    require(port.schema->fields[2].name == "empty" &&
+                empty.kind == Type::Kind::Unit && empty.leaves.empty(),
+            "empty ordinary supply lost its logical field");
+    // The generated proof family publishes the role-local aliases.
+    auto produce = take(check(source.str() + R"(
+entry def Produce(public: Demo::Public, witness: Demo::Witness) -> Demo::Proof:
+    result <- Demo::prove(public, witness)
+    return result.proof
+)"));
+    auto host = take(prepareOriginal(take(closeEntry(produce, "m::Produce"))));
+    require(host.interface().host &&
+                host.interface().host->functions.size() == 1,
+            "Host family interface is missing");
+    std::vector<std::vector<std::string>> aliases;
+    for (const auto &parameter :
+         host.interface().host->functions.front().parameters) {
+      aliases.emplace_back();
+      for (const auto &member : parameter.schema->fields)
+        aliases.back().push_back(member.name);
+    }
+    require(aliases ==
+                std::vector<std::vector<std::string>>{
+                    {"state_statement", "state_empty"}, {"state_witness"}},
+            "published family aliases differ");
   });
   cases.run("written public selectors preserve authored fields and order", [] {
     auto project = take(analyze(take(capture({{"written", R"(
@@ -104,11 +160,14 @@ proof Demo=Run{prover P;verifier V;public{state.empty,state.flag};accept accepte
       refuses(check(replace(std::get<1>(item), std::get<2>(item))),
               "source.entry");
     });
-  cases.run("private empty assembly refuses independently of native storage",
-            [] {
-              auto project = take(check(replace("pub empty", "empty")));
-              refuses(closeEntry(project, "m::Demo"), "source.ingress");
-            });
+  cases.run("public selection through a private field is not publishable", [] {
+    // Closure selects no external operation and succeeds. The
+    // published statement still cannot select an ordinary value
+    // through a privacy barrier, so interface publication refuses.
+    auto project = take(check(replace("pub empty", "empty")));
+    auto entry = take(closeEntry(project, "m::Demo"));
+    refuses(prepareOriginal(entry), "source.interface");
+  });
   cases.run("generated proof families bind exact ordinary selections", [] {
     auto project = take(check(source.str() + R"(
 entry def Produce(public: Demo::Public, witness: Demo::Witness) -> Demo::Proof:
@@ -162,19 +221,26 @@ entry def Produce(public: Demo::Public, witness: Demo::Witness) -> Demo::Proof:
     return result.proof
 )"));
         auto entry = take(closeEntry(project, "m::Demo"));
-        Layouts layouts(entry);
-        auto plan =
-            take(layouts.entryBoundary(entry.protocol(), entry.entry()));
-        bool nonce = false, vk = false, commitment = false;
-        for (const auto &item : plan.inputs) {
-          nonce |= item.alias == "state_nonce" &&
-                   item.supplier == EntrySupplier::Argument;
-          vk |= item.alias == "state_vk" &&
-                item.supplier == EntrySupplier::SetupKey;
-          commitment |= item.alias == "state_commitment" &&
-                        item.supplier == EntrySupplier::Context;
-        }
-        require(nonce && vk && commitment,
+        auto original = take(prepareOriginal(entry));
+        const auto &view = original.interface();
+        const auto &state = *view.selectedProtocol().inputs[0].schema;
+        // The verifier key is initialized by its setup, the other setup
+        // members arrive through setup context, and the nonce stays an
+        // ordinary argument outside every setup.
+        require(setupPaths(view) ==
+                    std::vector<std::vector<unsigned>>{{0}, {1}, {2}},
+                "setup associations differ");
+        require(
+            leafKey(field(state, {0})) == zkc::protocol::SetupKey::Verifier &&
+                leafKey(field(state, {1})) == zkc::protocol::SetupKey::Prover &&
+                !leafKey(field(state, {2})) && !leafKey(field(state, {3})),
+            "setup-key leaves differ");
+        require(dataComponents(view.selectedProtocol().inputs[0]) ==
+                    std::vector<Component>{{{0}, 1, 0},
+                                           {{1}, 0, 1},
+                                           {{2}, 0, 2},
+                                           {{2}, 1, 2},
+                                           {{3}, 0, 3}},
                 "setup routing hid an ordinary sibling or fabricated data");
         bool witness = false;
         for (const auto &decl : project.declarations())
@@ -211,12 +277,18 @@ entry def Run(inputs: Round<2>::Inputs) -> Round<2>::RunResult:
   cases.run("ordinary zero arrays retain explicit public supply", [] {
     auto project = take(check(replace("() @V", "[(); 0] @V")));
     auto entry = take(closeEntry(project, "m::Demo"));
-    Layouts layouts(entry);
-    auto plan = take(layouts.entryBoundary(entry.protocol(), entry.entry()));
-    const auto &empty = plan.inputs.back();
-    require(empty.selection.path == std::vector<unsigned>{2} &&
-                empty.native.empty() && empty.schema->element &&
-                empty.schema->element->type.kind == Type::Kind::Unit,
+    auto original = take(prepareOriginal(entry));
+    const auto &view = original.interface();
+    const auto &port = view.selectedProtocol().inputs[0];
+    const auto &empty = field(*port.schema, {2});
+    require(view.proof->publicInputs.back().path == std::vector<unsigned>{2} &&
+                llvm::none_of(port.components,
+                              [](const auto &component) {
+                                return component.path ==
+                                       std::vector<unsigned>{2};
+                              }) &&
+                empty.fields.empty() && empty.element &&
+                empty.element->kind == Type::Kind::Unit,
             "zero array lost its template or logical supply");
   });
   cases.run(
@@ -227,16 +299,11 @@ pub protocol Forward roles(P, V)(state: (index @(P, V), index @P)) -> index @V:
     return state.0
 )"));
         auto entry = take(closeNativeRun(project, "m::Forward"));
-        Layouts layouts(entry);
-        auto plan =
-            take(layouts.entryBoundary(entry.protocol(), entry.entry()));
+        auto original = take(prepareOriginal(entry));
+        // P holds the whole product, V only its shared component.
         require(
-            plan.inputs.size() == 2 && plan.inputs[0].selection.path.empty() &&
-                plan.inputs[0].selection.role == 0 &&
-                plan.inputs[0].native == std::vector<unsigned>({0, 1}) &&
-                plan.inputs[1].selection.path == std::vector<unsigned>{0} &&
-                plan.inputs[1].selection.role == 1 &&
-                plan.inputs[1].native == std::vector<unsigned>{0},
+            dataComponents(original.interface().selectedProtocol().inputs[0]) ==
+                std::vector<Component>{{{0}, 0, 0}, {{0}, 1, 0}, {{1}, 0, 1}},
             "Product participation union authorized an unavailable sibling");
       });
   cases.run("permuted roles retain original native coordinates", [] {
@@ -248,12 +315,9 @@ pub protocol Forward roles(A, B)(state: Pair roles(B, A)) -> Pair roles(B, A):
     return state
 )"));
     auto entry = take(closeNativeRun(project, "m::Forward"));
-    Layouts layouts(entry);
-    auto plan = take(layouts.entryBoundary(entry.protocol(), entry.entry()));
-    require(plan.inputs.size() == 2 && plan.inputs[0].selection.role == 1 &&
-                plan.inputs[0].native == std::vector<unsigned>{0} &&
-                plan.inputs[1].selection.role == 0 &&
-                plan.inputs[1].native == std::vector<unsigned>{1},
+    auto original = take(prepareOriginal(entry));
+    require(dataComponents(original.interface().selectedProtocol().inputs[0]) ==
+                std::vector<Component>{{{0}, 1, 0}, {{1}, 0, 1}},
             "role permutation changed physical operand order");
   });
   cases.run("setup initialization assembles an ordinary product below a "
@@ -282,16 +346,19 @@ entry def Check(public: Demo::Public, proof: Demo::Proof) -> Demo::VerifyResult:
     return result
 )"));
               auto entry = take(closeEntry(project, "m::Demo"));
-              Layouts layouts(entry);
-              auto plan =
-                  take(layouts.entryBoundary(entry.protocol(), entry.entry()));
-              require(plan.inputs.size() == 3 &&
-                          plan.inputs[0].selection.path ==
-                              std::vector<unsigned>({0, 0}) &&
-                          plan.inputs[0].supplier == EntrySupplier::SetupKey &&
-                          plan.inputs[1].selection.path ==
-                              std::vector<unsigned>({0, 1}) &&
-                          plan.inputs[1].supplier == EntrySupplier::Argument,
+              auto original = take(prepareOriginal(entry));
+              const auto &view = original.interface();
+              const auto &state = *view.selectedProtocol().inputs[0].schema;
+              // Only the key is setup-initialized; its ordinary sibling stays
+              // a public argument below the same distributed root.
+              require(setupPaths(view) ==
+                              std::vector<std::vector<unsigned>>{{0, 0}} &&
+                          leafKey(field(state, {0, 0})) ==
+                              zkc::protocol::SetupKey::Verifier &&
+                          !leafKey(field(state, {0, 1})) &&
+                          dataComponents(view.selectedProtocol().inputs[0]) ==
+                              std::vector<Component>{
+                                  {{0, 0}, 1, 0}, {{0, 1}, 1, 1}, {{1}, 0, 2}},
                       "whole-parent constructibility hid a supplied setup key "
                       "or ordinary sibling");
               take(closeEntry(project, "m::Check"));
@@ -306,7 +373,11 @@ pub protocol Forward roles(P, V)(state: Empty roles(P, V)) -> Empty roles(P, V):
     return state
 )")
                                         .str()));
-          refuses(closeNativeRun(project, "m::Forward"), "source.ingress");
+          auto original = take(
+              prepareOriginal(take(closeNativeRun(project, "m::Forward"))));
+          zkc::test::requireWithheld(
+              zkc::test::withheldSupply(original.interface()), {"state"},
+              "empty restricted wrapper lost its supply mark");
         });
   cases.run(
       "public child selection cannot bypass a generated product constructor",
@@ -321,11 +392,15 @@ scheme ReceiveJob = Receive:
     accept result
     construction authored
 )"));
-        refuses(closeEntry(project, "m::ReceiveJob"), "source.ingress");
+        // Closure succeeds. Splitting the generated product for the public
+        // statement needs its constructor, so publication refuses, as the
+        // SDK's interface reader does for the same selection.
+        auto entry = take(closeEntry(project, "m::ReceiveJob"));
+        refuses(prepareOriginal(entry), "source.interface");
       });
-  cases.run("ordinary inspection beside a handle does not provide its origin",
-            [] {
-              auto project = take(check(R"(
+  cases.run(
+      "ordinary inspection beside a handle does not provide its origin", [] {
+        auto project = take(check(R"(
 domain F = field("bls12-381.fr")
 type K = builtin("oracle.table", F, 4)
 type O = builtin("oracle", K)
@@ -335,19 +410,23 @@ struct State roles(P, V):
 pub protocol Forward roles(P, V)(state: State roles(P, V)) -> State roles(P, V):
     return state
 )"));
-              const Declaration *protocol = nullptr;
-              for (const auto &decl : project.declarations())
-                if (decl.qualifiedName == "m::Forward")
-                  protocol = &decl;
-              require(protocol, "missing checked protocol");
-              Layouts layouts(project);
-              auto observed = take(layouts.protocolPort(protocol->inputs[0]));
-              auto point = take(observed.select({0}));
-              require(point.layout->type.kind == Type::Kind::Index &&
-                          point.offset == 0,
-                      "ordinary inspection lost its exact field slice");
-              refuses(closeNativeRun(project, "m::Forward"), "source.ingress");
-            });
+        const Declaration *protocol = nullptr;
+        for (const auto &decl : project.declarations())
+          if (decl.qualifiedName == "m::Forward")
+            protocol = &decl;
+        require(protocol, "missing checked protocol");
+        Layouts layouts(project);
+        auto observed = take(layouts.protocolPort(protocol->inputs[0]));
+        auto point = take(observed.select({0}));
+        require(point.layout->type.kind == Type::Kind::Index &&
+                    point.offset == 0,
+                "ordinary inspection lost its exact field slice");
+        auto original =
+            take(prepareOriginal(take(closeNativeRun(project, "m::Forward"))));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(original.interface()), {"state.table"},
+            "logical handle lost its supply mark");
+      });
   cases.run(
       "alias allocation reserves whole names and suffixes collisions", [] {
         std::vector<EntryInputSelection> selections{

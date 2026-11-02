@@ -7,9 +7,9 @@ use std::{
     process::Command,
 };
 use zkc::entry::{
-    self, BindingPolicy, FunctionEntry, FunctionInterface, FunctionOptions, FunctionRequest,
-    InvocationBinding, InvocationContext, Package, ProofContext, ProofEntry, ProofOperation,
-    ProofOptions, ProofRequest, RoleInputs, RunContext, RunEntry, RunRequest,
+    self, BindingPolicy, EntryError, EntryPhase, FunctionEntry, FunctionInterface, FunctionOptions,
+    FunctionRequest, InvocationBinding, InvocationContext, Package, ProofContext, ProofEntry,
+    ProofOperation, ProofOptions, ProofRequest, RoleInputs, RunContext, RunEntry, RunRequest,
 };
 
 /// The explicit pairing gate uses the compiler build selected by
@@ -179,37 +179,30 @@ fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
     let source =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/entry_components_opaque.zkc");
 
-    // Direct proof ingress cannot reconstruct a private sealed value.
-    // A typed Function signature can accept a retained value instead.
-    let external = Command::new(&compiler)
-        .arg("language-package")
-        .arg("--source-format=zkc-layout")
-        .arg(format!("--module=m={}", source.display()))
-        .arg("--entry=m::Demo")
-        .output()
-        .unwrap();
-    assert!(
-        !external.status.success(),
-        "external constructor was granted"
-    );
-    assert!(
-        String::from_utf8_lossy(&external.stderr).contains("source.ingress"),
-        "{}",
-        String::from_utf8_lossy(&external.stderr)
-    );
+    // Selecting the proof names no external operation, so it compiles. Fresh
+    // proving cannot reconstruct the private sealed witness; verifying never
+    // consumes it. A typed Function signature can accept a retained value.
+    let demo = compile(&compiler, &source, "Demo");
+    for operation in [None, Some(ProofOperation::Prove)] {
+        assert_refused(
+            admit_proof(demo.clone(), operation),
+            EntryPhase::Interface,
+            "entry-input-constructor",
+        );
+    }
+    admit_proof(demo, Some(ProofOperation::Verify)).unwrap();
 
     let import = admit_function(compile(&compiler, &source, "Import"));
     let forged = entry::Value::Record([("value".into(), false.into())].into());
-    let error = import
-        .prepare(FunctionRequest {
+    // A Function parameter admits retained values, so a fresh one is refused
+    // only when preparation decodes it.
+    assert_refused(
+        import.prepare(FunctionRequest {
             arguments: [("secret".into(), forged)].into(),
             ..Default::default()
-        })
-        .err()
-        .expect("typed Function input granted a sealed constructor");
-    assert!(
-        error.to_string().contains("entry-input-constructor"),
-        "{error}"
+        }),
+        EntryPhase::Preparation,
+        "entry-input-constructor",
     );
 
     let produce = admit_function(compile(&compiler, &source, "Produce"));
@@ -251,8 +244,9 @@ fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
                 .err()
                 .expect("external Run constructor was granted")
         };
-        assert!(
-            error.to_string().contains("entry-input-constructor"),
+        assert_eq!(
+            (error.phase, error.code()),
+            (EntryPhase::Interface, "entry-input-constructor"),
             "{error}"
         );
     }
@@ -296,6 +290,56 @@ fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
             );
         }
     }
+}
+
+/// This was a closure-time refusal. Closing a selection names no external
+/// operation, so it now compiles, and the SDK's Entry admission judges supply
+/// for the operation that consumes each input.
+#[test]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
+fn fresh_cpp_supply_is_judged_per_operation_at_admission() {
+    let compiler = compiler();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/entry_supply.zkc");
+
+    // A setup-context value keeps its recursive constructor demand. The
+    // prover consumes the unconstructible opening state; the verifier only
+    // its setup-initialized key, so it reaches setup authority instead.
+    let opened = compile(&compiler, &source, "OpenedJob");
+    for operation in [None, Some(ProofOperation::Prove)] {
+        assert_refused(
+            admit_proof(opened.clone(), operation),
+            EntryPhase::Interface,
+            "entry-input-constructor",
+        );
+    }
+    assert_refused(
+        admit_proof(opened, Some(ProofOperation::Verify)),
+        EntryPhase::Authority,
+        "entry-setup-authority",
+    );
+}
+
+fn admit_proof(
+    package: Package,
+    operation: Option<ProofOperation>,
+) -> Result<ProofEntry, EntryError> {
+    let options = ProofOptions {
+        binding: BindingPolicy::AllowAuthored,
+        ..Default::default()
+    };
+    match operation {
+        Some(operation) => {
+            ProofEntry::admit_operation(package, options, Default::default(), operation)
+        }
+        None => ProofEntry::admit(package, options, Default::default()),
+    }
+}
+
+fn assert_refused<T>(result: Result<T, EntryError>, phase: EntryPhase, code: &str) {
+    let Err(error) = result else {
+        panic!("{code} was not refused");
+    };
+    assert_eq!((error.phase, error.code()), (phase, code), "{error}");
 }
 
 fn assert_completed_call(report: &entry::FunctionReport, operation: &str) {

@@ -5,6 +5,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Transforms/RegionUtils.h"
+#include "support/InterfaceSupply.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
@@ -69,18 +70,21 @@ void closureRefuses(StringRef source, StringRef code,
   require(StringRef(message).contains(code), message);
 }
 // A retained Host argument may be forwarded without being externally
-// constructible. Exercise fresh native ingress independently of that path.
-void nativeIngressRefuses(StringRef source) {
+// constructible. A fresh native closure of the same call selects no external
+// operation: it publishes the withheld authority at exact coordinates, and the
+// SDK's Entry admission refuses fresh supply for an operation consuming it.
+void nativeIngressPublishes(StringRef source,
+                            std::vector<std::string> expected) {
   auto project = check(source);
   auto retained = must(closeEntry(project, "m::Demo"));
   require(retained.invocations().size() == 1,
           "retained wrapper must contain one native invocation");
   const auto &call = retained.invocations().front();
-  auto external =
-      closeInvocation(project, {call.kind, call.target, call.arguments, {}});
-  require(!external, "fresh native ingress accepted a restricted value");
-  require(namesIdentifier(toString(external.takeError()), "source.ingress"),
-          "fresh native ingress failed for another reason");
+  auto external = must(prepareOriginal(must(
+      closeInvocation(project, {call.kind, call.target, call.arguments, {}}))));
+  zkc::test::requireWithheld(
+      zkc::test::withheldSupply(external.interface()), expected,
+      "fresh native closure published other supply marks: ");
 }
 void nativeClosureRefuses(StringRef source, StringRef code,
                           StringRef protocol = "m::Run") {
@@ -88,6 +92,14 @@ void nativeClosureRefuses(StringRef source, StringRef code,
   require(!selected, "native Run closure unexpectedly accepted");
   auto message = toString(selected.takeError());
   require(StringRef(message).contains(code), message);
+}
+void nativeClosurePublishes(StringRef source, StringRef protocol,
+                            std::vector<std::string> expected) {
+  auto selected = must(prepareOriginal(
+      must(zkc::test::closeNativeRun(check(source), protocol))));
+  zkc::test::requireWithheld(
+      zkc::test::withheldSupply(selected.interface()), expected,
+      "native Run closure published other supply marks: ");
 }
 CheckedOriginal original(StringRef source) {
   return must(prepareOriginal(
@@ -249,8 +261,9 @@ protocol Run roles(P)(point:G@P,value:F@P)->(r:bool@P) {
 entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(encoding));
-  nativeIngressRefuses(R"(module m;type State=builtin("shake128_state");
-protocol Run roles(P)(s:State@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
+  nativeIngressPublishes(R"(module m;type State=builtin("shake128_state");
+protocol Run roles(P)(s:State@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
+                         {"s"});
   refuses(R"(module m;type State=builtin("shake128_state");
 protocol Run roles(P,V)(s:State@P)->(){let r=send P->V(s);return();})",
           "source.ingress");
@@ -285,10 +298,11 @@ enum Choice{Some(Fr),None()}
                        "entry fn Demo(inputs: Relay<Secret>::Inputs) { return "
                        "Relay<Secret>::run(inputs); }",
                    "source.ingress");
-  nativeIngressRefuses(
+  nativeIngressPublishes(
       prefix + "struct Secret{value:Fr}protocol Run "
                "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
-               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+      {"x", "x.value"});
   refuses(prefix + "interface I{type State:Invent;}", "source.type");
   auto emitted = nativeOriginal(prefix + R"(
 struct Secret{value:Fr}
@@ -547,19 +561,21 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
       prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
                "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry fn "
                "Demo(inputs: Run::Inputs) { return Run::run(inputs); }")));
-  nativeClosureRefuses(prefix +
-                           "#[sealed] struct Secret {pub x:bool}protocol "
-                           "Run<T:Type+Copy+Drop> "
-                           "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
-                           "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@P)"
-                           "{let result=Run<Secret>(x);return(r=result);}",
-                       "source.ingress", "m::Inspect");
-  nativeClosureRefuses(
+  // Direct selection publishes the restricted input; the SDK's Entry
+  // admission refuses its fresh supply.
+  nativeClosurePublishes(prefix +
+                             "#[sealed] struct Secret {pub x:bool}protocol "
+                             "Run<T:Type+Copy+Drop> "
+                             "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
+                             "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@"
+                             "P){let result=Run<Secret>(x);return(r=result);}",
+                         "m::Inspect", {"x"});
+  nativeClosurePublishes(
       prefix + "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop> "
                "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
                "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@P)"
                "{let result=Run<Secret>(x);return(r=result);}",
-      "source.ingress", "m::Inspect");
+      "m::Inspect", {"x", "x.x"});
   auto libraryCapture = must(capture({{"lib", R"(module lib;
         pub interface Boxed<F:Field>{type State;fn make(x:F)->State effects(stop, opaque);fn open(x:State)->F effects(stop, opaque);}
         pub module Box<F:Field>:Boxed<F>{type State: Type =F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
@@ -637,10 +653,11 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
                "=nested(x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { "
                "return Run::run(inputs); }");
   must(compileEntry(nestedConstructor));
-  nativeIngressRefuses(
+  nativeIngressPublishes(
       prefix + "#[sealed] enum Secret {A(bool)}protocol Run "
                "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
-               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+      {"x"});
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(prefix +
               "#[sealed] enum Secret {A(bool)}fn "

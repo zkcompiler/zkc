@@ -1,3 +1,4 @@
+#include "support/ExternalSupply.h"
 #include "support/NativeCases.h"
 #include "zkc/Language/CommonControl.h"
 #include "zkc/Language/Inspection.h"
@@ -238,10 +239,16 @@ pub protocol Run roles(P,V)(flag: bool @(P,V), pair: Pair roles(P,V)) -> Pair ro
         pair
     return result
 )"));
-    refuses(closeInvocation(
-                project,
-                {HostInvocation::Kind::Run, named(project, "Run").id, {}, {}}),
-            "source.ingress");
+    // A direct Run closes and publishes the private field; the SDK's Entry
+    // admission refuses its fresh supply.
+    auto direct = take(closeInvocation(
+        project,
+        {HostInvocation::Kind::Run, named(project, "Run").id, {}, {}}));
+    Layouts layouts(direct);
+    auto pair = take(layouts.protocolPort(direct.protocol().inputs[1]));
+    zkc::test::requireWithheld(zkc::test::withheldSupply(*pair.body, "pair"),
+                               {"pair.empty"},
+                               "private placed field lost its supply mark");
     auto entry = closed(project);
     const auto &body = *entry.protocol().body;
     require(body.values[body.results.front().index].placement ==

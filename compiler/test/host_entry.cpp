@@ -4,6 +4,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/LanguagePackage.h"
@@ -64,13 +65,20 @@ CompiledEntry opaqueCompiled(StringRef name) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
-  cases.run("opaque proof subjects do not claim external ingress", [] {
+  cases.run("opaque proof subjects publish their sealed witness", [] {
     auto project = opaqueProject(opaqueSource());
-    refuses(closeEntry(project, "m::Demo"), "source.ingress");
-    for (auto kind :
-         {HostInvocation::Kind::Prove, HostInvocation::Kind::Verify})
-      refuses(closeEntry(project, "m::Demo", {}, EntryKind::Proof, kind),
-              "source.ingress");
+    // Closure selects no external operation. Every selection publishes the
+    // sealed prover witness; the SDK's Entry admission decides whether the
+    // selected operation consumes it.
+    for (auto kind : std::initializer_list<std::optional<HostInvocation::Kind>>{
+             std::nullopt, HostInvocation::Kind::Prove,
+             HostInvocation::Kind::Verify}) {
+      auto original = take(prepareOriginal(
+          take(closeEntry(project, "m::Demo", {}, EntryKind::Proof, kind))));
+      zkc::test::requireWithheld(
+          zkc::test::withheldSupply(original.interface()), {"state.witness"},
+          "sealed proof witness lost its exact supply mark");
+    }
     auto subject = take(closeSubject(project, "m::Demo"));
     require(subject.entry().proof() && !subject.invocationKind(),
             "semantic proof subject acquired a Host operation");

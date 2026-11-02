@@ -949,8 +949,9 @@ and [source/native comparisons](../compiler/test/language_entry_components_trans
 cover these rules; [fresh source fixtures](../compiler/test/fixtures/entry-components/README.md)
 support independent Rust Run, proof and generated Host-family checks. Public
 classification and availability do not establish common-value agreement.
-Semantic subjects retain recursive schemas for inspection without claiming
-external supply. Source correspondence checks the complete role substitution
+No closure claims external supply: the SDK's Entry admission judges it per
+operation and supply mode, so Verify admits a proof whose sealed prover witness
+it never consumes. Source correspondence checks the complete role substitution
 and result mapping. These native checks establish no Lean correspondence.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.

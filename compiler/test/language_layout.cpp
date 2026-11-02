@@ -1,3 +1,4 @@
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -563,7 +564,13 @@ module BoolIdentity: Identity:
 pub protocol Demo roles(P)(value: BoolIdentity::Item @P) -> BoolIdentity::Item @P:
     return BoolIdentity::run(value)
 )"));
-    refuses(closeNativeRun(project, "m::Demo"), "source.ingress");
+    // The opaque member type is published; its fresh supply is the SDK's
+    // operation-specific judgment.
+    auto direct =
+        take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+    zkc::test::requireWithheld(zkc::test::withheldSupply(direct.interface()),
+                               {"value", "value.value"},
+                               "opaque interface member lost its supply mark");
   });
   cases.run("bodyless protocol is confined to interfaces", [] {
     refuses(check("protocol Demo roles(P)(value: bool @P) -> bool @P\n"),
@@ -645,7 +652,11 @@ pub struct Token:
 pub protocol Demo roles(P)(value: Token @P) -> Token @P:
     return value
 )"));
-    refuses(closeNativeRun(project, "m::Demo"), "source.ingress");
+    auto direct =
+        take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+    zkc::test::requireWithheld(zkc::test::withheldSupply(direct.interface()),
+                               {"value"},
+                               "affine record lost its custody supply mark");
     auto written = take(inspectWrittenSource(project));
     require(StringRef(written).contains("affine"),
             "authored resource restriction lost");

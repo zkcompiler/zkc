@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Transforms/RegionUtils.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -58,18 +59,21 @@ void closureRefuses(StringRef source, StringRef code,
   require(namesIdentifier(message, code), message);
 }
 // A retained Host argument may be forwarded without being externally
-// constructible. Exercise fresh native ingress independently of that path.
-void nativeIngressRefuses(StringRef source) {
+// constructible. A fresh native closure of the same call selects no external
+// operation: it publishes the withheld authority at exact coordinates, and the
+// SDK's Entry admission refuses fresh supply for an operation consuming it.
+void nativeIngressPublishes(StringRef source,
+                            std::vector<std::string> expected) {
   auto project = check(source);
   auto retained = must(closeEntry(project, "m::Demo"));
   require(retained.invocations().size() == 1,
           "retained wrapper must contain one native invocation");
   const auto &call = retained.invocations().front();
-  auto external =
-      closeInvocation(project, {call.kind, call.target, call.arguments, {}});
-  require(!external, "fresh native ingress accepted a restricted value");
-  require(namesIdentifier(toString(external.takeError()), "source.ingress"),
-          "fresh native ingress failed for another reason");
+  auto external = must(prepareOriginal(must(
+      closeInvocation(project, {call.kind, call.target, call.arguments, {}}))));
+  zkc::test::requireWithheld(
+      zkc::test::withheldSupply(external.interface()), expected,
+      "fresh native closure published other supply marks: ");
 }
 CheckedOriginal original(StringRef source) {
   return must(prepareOriginal(
@@ -377,10 +381,11 @@ protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);r
 entry fn Demo(inputs: Relay<Sequence<Secret>>::Inputs) { return Relay<Sequence<Secret>>::run(inputs); }
 )",
                  "source.ingress");
-  nativeIngressRefuses(prefix + sequence + R"(
+  nativeIngressPublishes(prefix + sequence + R"(
 struct Secret{value:Fr}
 protocol Run roles(P)(xs:Sequence<Secret>@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
-)");
+)",
+                         {"xs"});
   refuses(prefix + sequence + R"(
 struct A{pub value:Fr}struct B{pub value:Fr}
 fn bad(xs:Sequence<A>,x:B)->Sequence<A>{return append(xs,x);}

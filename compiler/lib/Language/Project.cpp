@@ -608,16 +608,11 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
 }
 namespace {
 Error validateClosedData(const ClosedEntry &entry, const Limits &limits,
-                         detail::Work &work, bool externalSupply) {
+                         detail::Work &work) {
   if (entry.protocolOrNull())
     if (auto error = detail::checkClosedSourceClaims(entry, work))
       return error;
   Layouts layouts(entry, limits);
-  if (externalSupply && entry.protocolOrNull()) {
-    auto boundary = layouts.entryBoundary(entry.protocol(), entry.entry());
-    if (!boundary)
-      return boundary.takeError();
-  }
   if (auto error = detail::checkSetups(entry, layouts, work))
     return error;
   std::function<Error(const Body &)> checkMessages =
@@ -704,14 +699,12 @@ Expected<ClosedEntry>
 closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
            std::optional<EntryKind> kind,
            std::optional<HostInvocation::Kind> operation) {
-  return ClosedEntry::closeSelected(project, name, limits, kind, operation,
-                                    ClosedEntry::ClosureContext::ExternalEntry);
+  return ClosedEntry::closeSelected(project, name, limits, kind, operation);
 }
 Expected<ClosedEntry>
 ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
                            const Limits &limits, std::optional<EntryKind> kind,
-                           std::optional<HostInvocation::Kind> operation,
-                           ClosureContext context) {
+                           std::optional<HostInvocation::Kind> operation) {
   if (auto error = checkScopedElaboration(project, limits))
     return std::move(error);
   auto selected = resolveEntry(project, name, limits, kind);
@@ -747,8 +740,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
   ClosedEntry entry(project, decl.id, storage);
   if (auto error = checkScopedSpecialization(entry, limits))
     return error;
-  if (auto error = validateClosedData(entry, limits, work,
-                                      context == ClosureContext::ExternalEntry))
+  if (auto error = validateClosedData(entry, limits, work))
     return error;
   if (auto error = detail::checkCommonControlRequirements(entry, work))
     return error;
@@ -773,8 +765,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
                                    op.span);
           // These arguments were checked as typed Host data. Closing their
           // deployment must not grant or demand external byte constructors.
-          auto child = closeProtocol(project, *call, limits,
-                                     ClosureContext::HostInvocation);
+          auto child = closeProtocol(project, *call, limits);
           if (!child)
             return child.takeError();
           if (auto e = work.charge(child->storage->work, op.span))
@@ -802,13 +793,12 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
 Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
                                       const HostInvocation &invocation,
                                       const Limits &limits) {
-  return ClosedEntry::closeProtocol(project, invocation, limits,
-                                    ClosedEntry::ClosureContext::ExternalEntry);
+  return ClosedEntry::closeProtocol(project, invocation, limits);
 }
 Expected<ClosedEntry>
 ClosedEntry::closeProtocol(const CheckedProject &project,
                            const HostInvocation &invocation,
-                           const Limits &limits, ClosureContext context) {
+                           const Limits &limits) {
   if (auto e = checkScopedElaboration(project, limits))
     return e;
   if (invocation.kind != HostInvocation::Kind::Run &&
@@ -826,7 +816,7 @@ ClosedEntry::closeProtocol(const CheckedProject &project,
                              "proof invocation requires a closed proof family",
                              target.span);
     return closeSelected(project, target.qualifiedName, limits,
-                         EntryKind::Proof, invocation.kind, context);
+                         EntryKind::Proof, invocation.kind);
   }
   if (target.kind != Declaration::Kind::Protocol)
     return detail::failure("source.host-invocation",
@@ -866,8 +856,7 @@ ClosedEntry::closeProtocol(const CheckedProject &project,
   ClosedEntry child(project, selected, storage);
   if (auto e = checkScopedSpecialization(child, limits))
     return e;
-  if (auto e = validateClosedData(child, limits, work,
-                                  context == ClosureContext::ExternalEntry))
+  if (auto e = validateClosedData(child, limits, work))
     return e;
   if (auto error = detail::checkCommonControlRequirements(child, work))
     return error;
@@ -885,22 +874,20 @@ Expected<ClosedEntry> closeSubject(const CheckedProject &project,
     return selected.takeError();
   const auto &declaration = project.declarations()[selected->declaration.index];
   if (declaration.kind == Declaration::Kind::Entry && declaration.proof())
-    return ClosedEntry::closeSelected(
-        project, name, limits, EntryKind::Proof, {},
-        ClosedEntry::ClosureContext::SemanticSubject);
+    return ClosedEntry::closeSelected(project, name, limits, EntryKind::Proof,
+                                      {});
   if (!declaration.generated ||
       declaration.generated->operation != HostInvocation::Kind::Run)
     return detail::failure("source.subject",
                            "subject must name a closed protocol or proof, not "
                            "a Host Entry function",
                            declaration.span);
-  return ClosedEntry::closeProtocol(
-      project,
-      {HostInvocation::Kind::Run,
-       declaration.generated->target,
-       std::move(selected->arguments),
-       {}},
-      limits, ClosedEntry::ClosureContext::SemanticSubject);
+  return ClosedEntry::closeProtocol(project,
+                                    {HostInvocation::Kind::Run,
+                                     declaration.generated->target,
+                                     std::move(selected->arguments),
+                                     {}},
+                                    limits);
 }
 
 const Declaration &ClosedEntry::entry() const {

@@ -1000,12 +1000,16 @@ llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
                                             llvm::StringRef,
                                             const Limits & = {},
                                             std::optional<EntryKind> = {});
+/// Closure checks source legality and publishes exact schemas, permissions,
+/// custody, setup associations and component maps. No closure judges external
+/// supply: closing a selection names no external operation, and the SDK's
+/// shared Entry admission owns that operation- and supply-mode-specific
+/// judgment.
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits & = {},
                                        std::optional<EntryKind> = {});
 /// Close a proof declaration or a protocol specialization for semantic export.
 /// An authored Host Entry function is not a protocol subject.
-/// Subjects retain semantic authority without claiming external supply.
 llvm::Expected<ClosedEntry> closeSubject(const CheckedProject &,
                                          llvm::StringRef, const Limits & = {});
 /// Operation intent is retained by generated child deployments. The complete
@@ -1124,15 +1128,11 @@ public:
 private:
   friend class Layouts;
   friend struct detail::DeclarationAccess;
-  enum class ClosureContext { ExternalEntry, HostInvocation, SemanticSubject };
   static llvm::Expected<ClosedEntry>
   closeSelected(const CheckedProject &, llvm::StringRef, const Limits &,
-                std::optional<EntryKind>, std::optional<HostInvocation::Kind>,
-                ClosureContext);
-  static llvm::Expected<ClosedEntry> closeProtocol(const CheckedProject &,
-                                                   const HostInvocation &,
-                                                   const Limits &,
-                                                   ClosureContext);
+                std::optional<EntryKind>, std::optional<HostInvocation::Kind>);
+  static llvm::Expected<ClosedEntry>
+  closeProtocol(const CheckedProject &, const HostInvocation &, const Limits &);
   friend llvm::Expected<ClosedEntry>
   closeSubject(const CheckedProject &, llvm::StringRef, const Limits &);
   ClosedEntry(CheckedProject checked, DeclarationId selected,
@@ -1149,8 +1149,8 @@ private:
   closeEntry(const CheckedProject &, llvm::StringRef, const Limits &,
              std::optional<EntryKind>, std::optional<HostInvocation::Kind>);
 };
-/// Close a native deployment for external supply. Checked Host calls use a
-/// private retained-value context instead of recreating constructor authority.
+/// Close one native deployment. Checked Host calls close their children the
+/// same way; their typed arguments never recreate constructor authority.
 llvm::Expected<ClosedEntry> closeInvocation(const CheckedProject &,
                                             const HostInvocation &,
                                             const Limits & = {});

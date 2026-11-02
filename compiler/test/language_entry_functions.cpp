@@ -1,4 +1,5 @@
 #include "../lib/Language/BindingWitness.h"
+#include "support/ExternalSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Language/Inspection.h"
@@ -169,10 +170,16 @@ int main() {
             require(!layout->constructible,
                     "typed passage granted a private or sealed constructor");
         }
-        // A raw Protocol entry still needs an external supplier. Its private
-        // component cannot be reconstructed from arbitrary fields or bytes.
-        refuses(zkc::test::closeNativeRun(project, "sample::Raw"),
-                "source.ingress");
+        // Closing a raw Protocol selects no external operation. It publishes
+        // the private component, whose fresh supply the SDK's Entry admission
+        // refuses: it cannot be reconstructed from arbitrary fields or bytes.
+        auto raw = take(zkc::test::closeNativeRun(project, "sample::Raw"));
+        Layouts rawLayouts(raw);
+        auto port = take(rawLayouts.protocolPort(raw.protocol().inputs[0]));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(*port.body, "value"),
+            {"value", "value.value"},
+            "raw Protocol port lost its private constructor marks");
       });
   cases.run("external static names are unique across captured namespaces", [] {
     auto captured = take(
@@ -458,9 +465,16 @@ int main() {
     )";
         auto entry = take(close(source));
         require(entry.invocations().size() == 1, "verifier closure missing");
-        refuses(
-            closeEntry(entry.project(), "sample::Family", {}, EntryKind::Proof),
-            "source.ingress");
+        // The direct proof selection publishes the sealed prover witness; the
+        // SDK's Entry admission demands its supply only from operations that
+        // consume it, so Verify never does.
+        auto family = take(closeEntry(entry.project(), "sample::Family", {},
+                                      EntryKind::Proof));
+        Layouts layouts(family);
+        auto secret = take(layouts.protocolPort(family.protocol().inputs[1]));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(*secret.body, "secret"), {"secret"},
+            "sealed prover witness lost its supply mark");
       });
   cases.run("lazy proof APIs retain ordinary arithmetic operator resolution",
             [] {

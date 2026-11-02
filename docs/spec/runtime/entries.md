@@ -186,6 +186,44 @@ registry constructors keep their explicit registry route for direct native
 programs. Asset admission establishes content identity and static reference
 coverage; it is not a judgment about an arena's meaning in the protocol.
 
+## External supply
+
+Source closure publishes exact schemas, permissions, sealing, custody, setup
+associations and component maps. It never decides external supply, because a
+closed selection names no operation
+([language rule](../language/entries.md#entry-functions)). This shared Entry admission and
+preparation layer, which `RunEntry`, `ProofEntry` and `FunctionEntry` implement
+and every adapter uses, including the CLI and the browser adapter, is the only
+owner of the external-supply judgment; adapters do not restate it. It is not
+the only refusal layer: source legality, construction legality, setup
+dependencies, schema/native consistency, backend capability, runtime carrier
+readers and EVM calldata validation keep their own owners.
+
+The judgment covers exactly the inputs that the selected operation consumes,
+each in one of four supply modes:
+
+| Supply mode | Requires | Never grants |
+|---|---|---|
+| Fresh external decoding | Recursive constructor authority: `constructible`, public fields, no sealing, custody or logical handle, including inactive alternatives and zero-extent element templates; a message codec for every native leaf | Anything beyond the decoded value |
+| Retained whole-value transport | An admitted output owner (`OpaqueValue`) whose complete schema equals the target's, with Copy and Drop and no custody | Fresh construction, field projection, setup authority or handle ingress |
+| Checked typed operand | A Host call's already typed value with its checked component association, and export permissions | An external constructor, or the import of an arbitrary native value |
+| Authorized setup and services | A setup pin through `SetupAuthority` and the key initializer; setup-bearing context values with recursive constructor checks; declared service allowances | Setup or service authority assembled from ordinary fields |
+
+| Operation | Consumed inputs | Supply modes | Refusal before issuance or execution |
+|---|---|---|---|
+| Run (`RunEntry::admit`) | Every participant's declared input ports | Fresh decoding; setup and services | `Interface`: `entry-input-constructor` (constructor, private field, sealing or element template), `entry-interface-native-binding` (handle or custody), `entry-input-codec`; then `Authority` for setups |
+| Prove (`ProofEntry::admit_operation`) | The prover's inputs and the public binding inputs | Fresh decoding; setup and services | As Run |
+| Verify (`ProofEntry::admit_operation`) | The verifier's inputs, the public binding inputs and the candidate proof; never a prover witness | Fresh decoding; setup and services | As Run |
+| Whole proof artifact (`ProofEntry::admit`) | Both participants' inputs | As Prove and Verify | As Run |
+| Function parameter (`FunctionEntry`) | Each authored parameter | Retained transport; fresh decoding of a hand-built value | `Interface`: `entry-input-custody` without Copy and Drop. `Preparation`: `entry-input-constructor` for a fresh value without authority, `entry-value-schema` for a retained value of another schema |
+| Function child deployment | Each static child, admitted with the Function | Checked typed operands; setup and services | The child's own admission, at `Interface` for its ports |
+
+A retained value never authorizes fresh construction, so a Function parameter
+whose schema withholds a constructor stays admissible and refuses only a fresh
+value at preparation. Direct Run and proof calls use the fresh route; their
+retained-value transport needs a typed binding codec that the current interface
+does not declare.
+
 ## Named run calls
 
 Rust `entry::RunEntry::admit` retains an authenticated package, validates its

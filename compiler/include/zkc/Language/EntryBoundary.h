@@ -12,18 +12,5 @@ llvm::Expected<std::vector<std::string>>
 entrySelectionAliases(llvm::ArrayRef<EntryInputSelection>,
                       llvm::ArrayRef<std::string> candidates,
                       uint64_t &remaining);
-enum class EntrySupplier { Argument, Context, SetupKey };
-struct EntryBoundaryItem {
-  EntryInputSelection selection;
-  std::shared_ptr<const Layout> schema;
-  /// Original native coordinates, never participant-local operand positions.
-  std::vector<unsigned> native;
-  std::string alias;
-  EntrySupplier supplier = EntrySupplier::Argument;
-};
-struct EntryBoundaryPlan {
-  /// Includes explicit empty ordinary values even when native is empty.
-  std::vector<EntryBoundaryItem> inputs;
-};
 } // namespace zkc::language
 #endif

@@ -1,3 +1,4 @@
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -269,8 +270,13 @@ protocol Forward roles(P,V)(x:Box::Item@(P,V))->(r:Box::Item@(P,V)){let r=Shared
             take(check(source + "entry fn Demo(inputs: Forward::Inputs) { "
                                 "return Forward::run(inputs); }"));
         take(zkc::test::closeProtocolDeployment(project, "m::Demo"));
-        refuses(zkc::test::closeNativeRun(project, "m::Forward"),
-                "source.ingress");
+        // Direct selection publishes the opaque representation; fresh
+        // external supply of it is the SDK's operation-specific judgment.
+        auto direct = take(prepareOriginal(
+            take(zkc::test::closeNativeRun(project, "m::Forward"))));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(direct.interface()), {"x", "x.value"},
+            "opaque associated representation lost its supply mark");
       });
   return cases.result();
 }

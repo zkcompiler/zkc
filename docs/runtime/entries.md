@@ -129,7 +129,11 @@ path even when the closed computation is identical. Use a named Entry function
 when that configuration should have one application-owned path.
 
 `inspect` describes the schema, choices and whether each input has an installed
-constructor. Add `--dry-run` to `run`, `prove` or `verify` to check actual inputs,
+constructor. Compilation does not decide whether an operation can supply its
+inputs: a proof whose prover witness has no external constructor still
+compiles, `prove` refuses that witness before execution with
+`entry-input-constructor`, and `verify` never reads it
+([supply rule](../spec/runtime/entries.md#external-supply)). Add `--dry-run` to `run`, `prove` or `verify` to check actual inputs,
 setup authority and bounds through the same native input validation as execution.
 It runs no protocol, issues no resources, reads no proof bytes and publishes no
 proof or result values. Verification does not read witness files. Output paths

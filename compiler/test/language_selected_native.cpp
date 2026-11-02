@@ -1,5 +1,6 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/ApplicationMap.h"
@@ -302,7 +303,11 @@ pub protocol Run roles(P,V)(value: Choice @(P,V)) -> bool @(P,V):
   });
   cases.run("branch forwarding retains one holder and multiple receivers", [&] {
     auto project = check(fixture("multireceiver"));
-    refuses(closeNativeRun(project, "m::Run"), "source.ingress");
+    auto direct =
+        take(prepareOriginal(take(closeNativeRun(project, "m::Run"))));
+    zkc::test::requireWithheld(
+        zkc::test::withheldSupply(direct.interface()), {"word"},
+        "direct selection hid the logical holder's supply mark");
     auto entry = take(closeSubject(project, "m::Run"));
     auto original = take(prepareOriginal(entry));
     auto module =

@@ -4,6 +4,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/SourceClaims.h"
@@ -1271,8 +1272,11 @@ int main() {
             "source.claim.target");
     auto project = take(check(fixture("components-local-fields")));
     take(prepareOriginal(take(closeSubject(project, "claims::Reduce"))));
-    refuses(zkc::test::closeNativeRun(project, "claims::Reduce"),
-            "source.ingress");
+    auto direct = take(prepareOriginal(
+        take(zkc::test::closeNativeRun(project, "claims::Reduce"))));
+    zkc::test::requireWithheld(
+        zkc::test::withheldSupply(direct.interface()), {"claim"},
+        "direct selection hid the pending residual's supply mark");
   });
   cases.run("pending output requires an actual residual relation", [] {
     auto source = editSource(
