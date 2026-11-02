@@ -56,8 +56,12 @@ public:
   resolve(const Declaration &, llvm::StringRef, Span, bool required = true,
           std::vector<ModuleLookup> *route = nullptr,
           std::optional<DeclarationId> *provider = nullptr);
-  bool recordReference(const Declaration &, DeclarationId, DeclarationId,
-                       llvm::StringRef, Span,
+  /// Resolve without recording a reference. A caller that keeps the result
+  /// records its route itself; a discarded lookup records nothing.
+  std::optional<DeclarationId> probe(const Declaration &, llvm::StringRef, Span,
+                                     std::optional<DeclarationId> *);
+  bool recordReference(const Declaration &, ReferenceRoute, DeclarationId,
+                       DeclarationId, llvm::StringRef, Span,
                        std::optional<std::string> abstractModule = {});
   std::optional<Type> type(const Declaration &, const SyntaxType &,
                            unsigned = 1, bool allowPlacement = false);
@@ -78,8 +82,10 @@ public:
   std::optional<std::vector<bool>>
   enclosingParameters(const Declaration &, const Declaration &, Span);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
-  std::optional<CallableReference> callable(const Declaration &,
-                                            llvm::StringRef, Span);
+  /// Resolve a callee. Without recording, the lookup only classifies the
+  /// written name and the caller records nothing.
+  std::optional<CallableReference>
+  callable(const Declaration &, llvm::StringRef, Span, bool record = true);
   std::optional<CallableReference> method(const Declaration &, const Type &,
                                           llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
@@ -144,8 +150,17 @@ private:
   bool externalSelection = false;
   std::map<std::string, std::set<uint32_t>> externalNames;
   bool checkingVisibility = false;
+  /// While set, references owned by this declaration are not recorded: a
+  /// placement pass resolves parts of a term whose names are already recorded.
+  std::optional<uint32_t> replayedOwner;
+  std::set<
+      std::tuple<uint32_t, ReferenceRoute, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, std::string, std::optional<std::string>>>
+      recordedReferences;
   std::function<bool(DeclarationId, llvm::StringRef)> loadBinding;
   std::map<std::string, DeclarationId> qualified;
+  /// Asset domain declaration -> the captured asset it names.
+  std::map<uint32_t, unsigned> assetDomains;
   // Keep the written interface route with its binder, including inherited
   // module parameters. Canonical interfaces alone lose facade provenance.
   std::map<std::string, DeclarationId> moduleParameterProviders;
@@ -178,8 +193,9 @@ private:
   std::vector<unsigned> entryStates;
   bool constructionsReady = false;
   bool constructions();
-  std::optional<DeclarationId> constructionMember(const Type &, llvm::StringRef,
-                                                  Span);
+  /// Select a provider's interface member and record its construction route.
+  std::optional<DeclarationId>
+  constructionMember(const Declaration &, const Type &, llvm::StringRef, Span);
   bool constructionCodec(Declaration &, const SyntaxConstruction &,
                          ConstructionDefinition &, const Substitution &);
   bool configureSetups(Declaration &, const Declaration &,
@@ -192,6 +208,11 @@ private:
   bool prepareOperators();
   std::optional<DeclarationId> member(const Declaration &, DeclarationId,
                                       llvm::StringRef, Span);
+  std::optional<DeclarationId> lookupPath(const Declaration &, llvm::StringRef,
+                                          Span, bool required,
+                                          std::vector<ModuleLookup> *,
+                                          std::optional<DeclarationId> *,
+                                          bool record);
   bool moduleContracts();
   bool retainAPI();
   bool signature(DeclarationId, unsigned = 1);

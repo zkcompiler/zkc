@@ -34,6 +34,25 @@ struct NameEnvironment {
   std::vector<std::map<std::string, SourceBinding>> visible;
 };
 struct AuthoringStorage;
+/// Defining source authorities, computed once after the last checking step.
+/// A unit is one captured file, named by its module path. Installation
+/// sources are not units: installed declarations enter through the
+/// installation identity.
+struct SourceAuthorities {
+  struct Unit {
+    std::string module;
+    SourceId source;
+    /// Direct dependency units, as sorted unique indices into `units`.
+    std::vector<unsigned> dependencies;
+    /// Lowercase SHA-256 hex over the unit's dependency closure.
+    std::string revision;
+  };
+  /// Sorted by module path.
+  std::vector<Unit> units;
+  /// The unit of each source, indexed by source; none for installation.
+  std::vector<std::optional<unsigned>> sources;
+  bool computed = false;
+};
 struct CheckedStorage {
   CheckedStorage(CapturedProject capture, std::string installation)
       : capture(std::move(capture)), installation(std::move(installation)) {}
@@ -65,6 +84,7 @@ struct CheckedStorage {
   std::vector<std::shared_ptr<const ScopedInvocationSource>> scopedInvocations;
   std::vector<std::shared_ptr<const IntrinsicCallSource>> intrinsicCalls;
   std::map<uint32_t, std::shared_ptr<const ScopedSource>> bodySources;
+  SourceAuthorities authorities;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;
@@ -137,6 +157,18 @@ struct Work {
 llvm::Error chargeSemanticIndex(const std::vector<Declaration> &, Work &);
 
 llvm::Error closeAssets(const CheckedProject &, ClosedStorage &, Work &);
+
+/// Compute every unit revision once, after all checking and the scoped
+/// witness check. `assetDomains` maps each asset domain declaration to the
+/// index of the captured asset it names.
+llvm::Error computeSourceAuthorities(CheckedStorage &,
+                                     const std::map<uint32_t, unsigned> &,
+                                     Work &);
+/// The defining source authority of a declaration path: the defining unit's
+/// revision when authored, the installation identity when installed, and none
+/// only for a generated declaration.
+llvm::Expected<std::optional<std::string>>
+definingAuthority(const CheckedStorage &, llvm::StringRef path);
 
 } // namespace zkc::language::detail
 #endif

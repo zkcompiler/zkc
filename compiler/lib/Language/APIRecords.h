@@ -12,6 +12,20 @@ struct ExportRecord {
   Span span;
   bool imported = false;
 };
+/// The resolution route that selected a reference. Every successful route
+/// records exactly one reference; a discarded lookup records none.
+enum class ReferenceRoute {
+  Path,
+  Import,
+  ImportName,
+  Method,
+  ModuleMember,
+  Implicit,
+  Service,
+  Notation,
+  Construction
+};
+llvm::StringRef referenceRouteName(ReferenceRoute);
 /// The provider is the source module selected by the written route. A facade
 /// reference therefore retains its facade provider and its canonical target.
 struct ReferenceRecord {
@@ -19,6 +33,7 @@ struct ReferenceRecord {
   Span span;
   std::string written;
   std::optional<std::string> abstractModule;
+  ReferenceRoute route;
 };
 struct APIRecords {
   std::vector<ExportRecord> exports;

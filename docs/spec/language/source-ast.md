@@ -280,8 +280,8 @@ remove either assumption.
 ## Source binding proposals
 
 `inspectSourceBindings` exports `zkc.source-bindings/0` beside the AST. Its
-root has `format`, `capture`, `installation`, `locals`, `unassociated_locals`
-and `declarations`. A local reference has `kind` (`read`, `call` or `assign`),
+root has `format`, `capture`, `installation`, `locals`, `unassociated_locals`,
+`declarations` and `units`. A local reference has `kind` (`read`, `call` or `assign`),
 `uses` and `binders`. The last two are nonempty arrays of written `{owner,path}` addresses. They retain every
 written occurrence of that parser node; a checker must validate the indicated
 scope and binding, not pick a same-spelled name from the document.
@@ -308,13 +308,34 @@ one work counter between structural indexing and proposal construction, rechecks
 the project's ceilings and bounds serialization by `apiInspectionBytes`. Refusal
 publishes no partial proposal.
 
-Each declaration lookup record contains `owner`, `written`, `provider`, `target`,
-`abstract_module`, `source` and `candidates`. Provider and target are separate
-`{name,source}` declaration references; `source` is a module and UTF-8 range,
-or null for an installed declaration, which has no written source. An
-abstract-module term is the resolver's selected binder, or null. Repeated
-resolver observations are retained in their original order. Private and
-installation references are not filtered through the public API view.
+Each declaration lookup record contains `owner`, `route`, `written`,
+`provider`, `target`, `abstract_module`, `source` and `candidates`. Provider and
+target are separate `{name,source}` declaration references; `source` is a module
+and UTF-8 range, or null for an installed declaration, which has no written
+source. An abstract-module term is the resolver's selected binder, or null.
+Private and installation references are not filtered through the public API
+view.
+
+Every successful declaration-resolution route records exactly one record per
+written occurrence, in resolver order; a lookup whose result is discarded
+records nothing. `route` names the resolution route:
+
+| Route | Records |
+|---|---|
+| `path` | A written path in a signature, associated type, constraint, conformance contract, construction provider, body callee or type, including qualified paths without an import |
+| `import`, `import-name` | An import's module and each selected name; a facade keeps its facade provider |
+| `method` | A home method; the provider is the method's module |
+| `module-member` | A member of a bound module parameter; `abstract_module` is its binder |
+| `implicit` | An installed declaration selected without a written path |
+| `service` | A managed service constructor in a protocol port |
+| `notation` | An operator, delimiter, indexing or reduction use, once its callee is fixed. The provider is the module whose declaration or body introduces the selected binding, which is the installed module for prelude operators; the target is the selected, or filtered, callable |
+| `construction` | A construction provider's interface member: `State`, `initialize`, `Record`, `write` and `finish`. The provider is the implementing module; a symbolic provider keeps the written route of its interface bound and its binder as `abstract_module` |
+
+Records are source occurrences. They stay separate from the deduplicated unit
+dependencies in `units`, which has one row per captured unit, sorted by module
+path: `module`, its [source authority](definitions.md#source-authority)
+`revision`, and `dependencies`, the sorted module paths of its direct
+dependency units. A unit's closure and its edges follow from these rows.
 
 Declaration lookup can precede body parsing. Its `candidates` therefore contains
 **all** AST addresses with exactly the observed source range, including different

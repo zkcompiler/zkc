@@ -255,7 +255,8 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     StringRef prefix = s.name;
     while (prefix.contains("::")) {
       prefix = prefix.rsplit("::").first;
-      auto id = resolve(context, prefix, s.span, false);
+      // A kept prefix is resolved again, and recorded, as its own type below.
+      auto id = probe(context, prefix, s.span, nullptr);
       if (!id) {
         if (types.diagnostic)
           return {};

@@ -1,17 +1,27 @@
 #include "Checker.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Diagnostics.h"
 using namespace llvm;
 namespace zkc::language::detail {
 std::optional<DeclarationId>
-Checker::constructionMember(const Type &provider, StringRef name, Span span) {
+Checker::constructionMember(const Declaration &owner, const Type &provider,
+                            StringRef name, Span span) {
   const Declaration *contract = nullptr;
+  std::optional<DeclarationId> source;
   if (provider.symbolic) {
     auto *parameter = types.parameter(provider.domain);
-    if (parameter && parameter->interface)
+    if (parameter && parameter->interface) {
       contract = &output.declarations[parameter->interface->index];
+      // A symbolic provider keeps the written route of its interface bound.
+      if (auto found = moduleParameterProviders.find(parameter->atom);
+          found != moduleParameterProviders.end())
+        source = found->second;
+    }
   } else if (auto *module = types.typeDeclaration(provider);
-             module && module->implementation)
+             module && module->implementation) {
     contract = types.typeDeclaration(*module->implementation);
+    source = module->id;
+  }
   if (!contract || contract->kind != Declaration::Kind::Interface) {
     types.fail("source.construction", "provider must implement an interface",
                span);
@@ -22,6 +32,13 @@ Checker::constructionMember(const Type &provider, StringRef name, Span span) {
   for (auto id : contract->members)
     if (output.declarations[id.index].name == name) {
       if (!signature(id))
+        return {};
+      if (!source)
+        source = contract->module;
+      if (!recordReference(
+              owner, ReferenceRoute::Construction, *source, id, name, span,
+              provider.symbolic ? std::optional(formatType(provider))
+                                : std::nullopt))
         return {};
       return id;
     }
@@ -45,7 +62,7 @@ bool Checker::constructionCodec(Declaration &decl,
   if (provider->kind != Type::Kind::Module)
     return types.fail("source.construction", "record format requires a module",
                       syntax.codec->span);
-  if (!constructionMember(*provider, "Record", syntax.codec->span))
+  if (!constructionMember(decl, *provider, "Record", syntax.codec->span))
     return false;
   auto record = types.associated(*provider, "Record", syntax.codec->span);
   if (!record || !types.executableType(*record, syntax.codec->span))
@@ -90,7 +107,7 @@ bool Checker::constructionCodec(Declaration &decl,
   }
   auto method = [&](StringRef name, ArrayRef<Type> inputs,
                     ArrayRef<Type> outputs, ConstructionMethod &selected) {
-    auto found = constructionMember(*provider, name, decl.span);
+    auto found = constructionMember(decl, *provider, name, decl.span);
     if (!found)
       return false;
     const auto &function = output.declarations[found->index];

@@ -220,7 +220,8 @@ bool Checker::constructions() {
           return types.fail("source.construction",
                             "transcript requires a module provider",
                             syntax.provider->span);
-        if (!constructionMember(*provider, "State", syntax.provider->span))
+        if (!constructionMember(decl, *provider, "State",
+                                syntax.provider->span))
           return false;
         auto stateType =
             types.associated(*provider, "State", syntax.provider->span);
@@ -234,7 +235,8 @@ bool Checker::constructions() {
               "source.construction",
               "source-created transcript state requires Copy and Drop",
               decl.span);
-        auto member = constructionMember(*provider, "initialize", decl.span);
+        auto member =
+            constructionMember(decl, *provider, "initialize", decl.span);
         if (!member)
           return false;
         const auto &factory = output.declarations[member->index];

@@ -332,8 +332,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
             return true;
           }
           // Resolve the authored name independently of the produced domain
-          // recipe.
-          auto selected = callable(argument);
+          // recipe. Inference already recorded this argument's route.
+          auto selected =
+              checker.callable(decl, argument.text, argument.span, false);
           if (!selected)
             return false;
           const auto &factory =

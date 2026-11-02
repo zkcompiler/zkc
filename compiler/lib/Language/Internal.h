@@ -74,6 +74,9 @@ struct OperatorBinding {
   Span span;
   std::shared_ptr<const NotationDescriptor> notation;
   std::optional<BoundNotationTarget> filtered = {};
+  /// The module whose declaration or body introduces this binding. A use
+  /// records it as the provider of its notation route.
+  DeclarationId module = {};
 };
 using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
 struct SyntaxSelector {

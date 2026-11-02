@@ -30,7 +30,9 @@ bool Checker::classifyServices() {
                 parameter.name == StringRef(port.type.name).split("::").first;
           }
         if (!bound) {
-          auto target = resolve(decl, port.type.name, port.type.span, false);
+          // A data port's type records its own route when the signature
+          // resolves it, so this classification records only a service.
+          auto target = probe(decl, port.type.name, port.type.span, nullptr);
           if (types.diagnostic)
             return false;
           if (!target)
@@ -43,8 +45,9 @@ bool Checker::classifyServices() {
               service = nullptr;
             if (service) {
               port.serviceConstructor = constructor.qualifiedName;
-              if (!recordReference(decl, constructor.module, *target,
-                                   port.type.name, port.type.span))
+              if (!recordReference(decl, ReferenceRoute::Service,
+                                   constructor.module, *target, port.type.name,
+                                   port.type.span))
                 return false;
             }
           }

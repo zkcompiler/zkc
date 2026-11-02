@@ -76,6 +76,7 @@ add_zkc_component(Language
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
   lib/Language/WrittenSource.cpp
+  lib/Language/SourceAuthorities.cpp
   lib/Language/SourceInstances.cpp
   lib/Language/NotationInspection.cpp
   lib/Language/NotationRecords.cpp

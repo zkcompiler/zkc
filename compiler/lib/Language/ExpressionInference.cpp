@@ -7,6 +7,7 @@
 #include "TypeInference.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
 #include <cassert>
 #include <numeric>
@@ -275,6 +276,16 @@ class ExpressionInference {
     fail("source.service", "expected a managed service binding", expr.span);
     return {};
   }
+  /// An operator or notation use records its route once its callee is fixed.
+  bool recordNotation(uint32_t id, DeclarationId provider,
+                      const CallableReference &target) {
+    const auto &expr = syntax.expressions[id];
+    return checker.recordReference(
+        decl, ReferenceRoute::Notation, provider, target.declaration,
+        expr.notation->symbol + expr.notation->closing, expr.span,
+        target.module ? std::optional(formatType(*target.module))
+                      : std::nullopt);
+  }
   bool finishCalls(unsigned begin, unsigned firstExpression, Span span) {
     std::optional<Diagnostic> incompleteCall;
     auto selected = operators->solve(span, [&] {
@@ -324,6 +335,8 @@ class ExpressionInference {
           checker.output.declarations[signature.target.declaration.index];
       output.callees.emplace(id, signature.target);
       output.operators.at(id).binding = selection.binding;
+      if (!recordNotation(id, selection.provider, signature.target))
+        return false;
       std::vector<unsigned> inputs(signature.inputs.size());
       std::iota(inputs.begin(), inputs.end(), 0);
       output.inputs.emplace(id, std::move(inputs));
@@ -970,6 +983,8 @@ class ExpressionInference {
                     {operatorBindingKey(binding, checker.output.declarations)},
                     binding.span});
         output.callees.emplace(id, target);
+        if (!recordNotation(id, binding.module, target))
+          break;
         const auto &callee =
             checker.output.declarations[target.declaration.index];
         types.equal(
@@ -987,8 +1002,8 @@ class ExpressionInference {
       for (auto &binding : *visible) {
         witness.family.push_back(
             operatorBindingKey(binding, checker.output.declarations));
-        candidates.push_back(
-            {binding.target, std::move(binding.arguments), binding.span});
+        candidates.push_back({binding.target, std::move(binding.arguments),
+                              binding.span, binding.module});
       }
       output.operators.emplace(id, std::move(witness));
       operators->add(id, expr.span, std::move(inputs), result.type,

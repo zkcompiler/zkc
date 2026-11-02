@@ -1083,6 +1083,8 @@ private:
   sourceInstancesData(const ClosedEntry &, const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
+  friend llvm::Expected<std::optional<std::string>>
+  sourceAuthority(const CheckedProject &, llvm::StringRef);
   friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
                                                      llvm::StringRef,
                                                      const Limits &,
@@ -1170,6 +1172,12 @@ std::string spelling(const Type &);
 /// Canonical identity of the installed Contracts data, not caller-supplied
 /// data.
 std::string installedCatalogIdentity();
+/// Defining source authority of a checked declaration path: the revision of
+/// its defining unit's dependency closure when authored, the installation
+/// identity when installed, and none only for a generated declaration. A
+/// missing authored authority refuses with `source.authority`.
+llvm::Expected<std::optional<std::string>>
+sourceAuthority(const CheckedProject &, llvm::StringRef path);
 } // namespace zkc::language
 
 #endif

@@ -81,7 +81,7 @@ std::optional<CallableReference> Checker::method(const Declaration &context,
       resolveHomeMethod(types, output.declarations, *output.declarationIndex,
                         context, receiver, name, span);
   if (target &&
-      !recordReference(context,
+      !recordReference(context, ReferenceRoute::Method,
                        output.declarations[target->declaration.index].module,
                        target->declaration, name, span))
     return {};
@@ -95,12 +95,14 @@ bool Checker::domainExpression(const Declaration &decl,
   if (expr.kind != Expression::Kind::Call || expr.binding ||
       expr.text == "index")
     return false;
-  auto target = callable(decl, expr.text, expr.span);
+  // Classification only: the call records its route when it is checked.
+  auto target = callable(decl, expr.text, expr.span, false);
   return target && output.declarations[target->declaration.index].kind ==
                        Declaration::Kind::DomainFunction;
 }
 std::optional<CallableReference> Checker::callable(const Declaration &decl,
-                                                   StringRef name, Span span) {
+                                                   StringRef name, Span span,
+                                                   bool record) {
   auto parts = name.split("::");
   if (!parts.second.empty())
     for (auto &parameter : decl.parameters) {
@@ -117,7 +119,8 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
         if (output.declarations[id.index].name == parts.second) {
           if (!signature(id))
             return {};
-          if (!recordReference(decl,
+          if (record &&
+              !recordReference(decl, ReferenceRoute::ModuleMember,
                                moduleParameterProviders.at(parameter.atom), id,
                                name, span, formatType(*module)))
             return {};
@@ -129,16 +132,26 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
   // A bound module member takes precedence over a nominal alternative.
   auto alternative = name.rsplit("::");
   if (!alternative.second.empty()) {
-    auto nominal = resolve(decl, alternative.first, span, false);
-    if (nominal &&
-        output.declarations[nominal->index].kind == Declaration::Kind::Variant)
+    std::optional<DeclarationId> provider;
+    auto nominal = probe(decl, alternative.first, span, &provider);
+    if (types.diagnostic)
+      return {};
+    if (nominal && output.declarations[nominal->index].kind ==
+                       Declaration::Kind::Variant) {
+      if (record && !recordReference(decl, ReferenceRoute::Path, *provider,
+                                     *nominal, alternative.first, span))
+        return {};
       return CallableReference{*nominal, {}};
+    }
   }
-  auto id = resolve(decl, name, span, false);
+  auto id = record ? resolve(decl, name, span, false)
+                   : probe(decl, name, span, nullptr);
   if (!id && !types.diagnostic && output.declarationIndex) {
     id = output.declarationIndex->implicit(name);
-    if (id && !recordReference(decl, output.declarations[id->index].module, *id,
-                               name, span))
+    if (id && record &&
+        !recordReference(decl, ReferenceRoute::Implicit,
+                         output.declarations[id->index].module, *id, name,
+                         span))
       return {};
   }
   if (!id && !types.diagnostic)

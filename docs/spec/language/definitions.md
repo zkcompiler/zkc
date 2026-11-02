@@ -225,6 +225,53 @@ both origins, an installed module with an empty buffer at
 declarations have empty spans. `capture().sources()` includes only captured
 inputs.
 
+### Source authority
+
+A *unit* is one captured file, named by its module path. The defining unit of a
+declaration is the unit holding its span; a generated declaration uses its
+family target's unit; an installed declaration has none, because installed
+declarations enter only through installation identity.
+
+Checking records one reference for every successful declaration-resolution
+route, with its route kind, as published in the
+[source bindings](source-ast.md#source-binding-proposals). A lookup whose result
+is discarded records nothing. The dependencies of a unit `u` are its parent
+file, its linked child files, and, for every recorded reference whose owner is
+defined in `u`, the defining units of the reference's provider and target. An
+abstract interface reference contributes only the interface member's unit, so
+a closed instance's concrete dispatch never enters a generic library's
+closure. The closure of `u` is the least set of units that contains `u` and is
+closed under dependencies. The assets of `u` are the captured assets named by
+asset domains and captured relations declared in its closure. Unrelated units,
+consumer Entry names, diagnostic paths and source ordering do not enter it.
+
+The revision of `u` is the lowercase SHA-256 hex of these fields, each framed
+by its u64 little-endian byte length; counts and byte lengths are decimal
+strings:
+
+1. `zkc.language.authority/0`;
+2. the capture's source format;
+3. the installation identity;
+4. the module path of `u`;
+5. the closure count, then, per closure unit sorted by module path, its module
+   path, byte length and the SHA-256 hex of its bytes;
+6. the edge count, then each dependency edge between closure units as its
+   `from` and `to` module paths, sorted by that pair;
+7. the asset count, then, per asset sorted by name, its name, format and the
+   SHA-256 hex of its bytes.
+
+A comment edit in any closure unit changes the revision. Lookup keys, symbols
+and companion keys do not change with it.
+
+The source authority of a declaration path is the revision of its defining unit
+when the declaration is authored, and the installation identity when it is
+installed. Only a generated declaration has no authority: its family identity
+already binds the capture and installation. An authored declaration without a
+computed authority refuses with `source.authority`; it never takes the generated
+case. Every revision is computed once, after all checking, and charged to
+checked work. Closed Entries read the checked project's revisions and never
+extend them.
+
 ## Definition checking and Entry closure
 
 Analysis first collects fixed declaration headers and body token ranges, resolves

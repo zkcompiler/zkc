@@ -118,8 +118,9 @@ Checker::operatorBinding(const Declaration &context,
                     source.target.span, "source.generic");
   if (!positions)
     return {};
-  OperatorBinding result{
-      source.symbol, *target, {}, source.span, source.notation};
+  OperatorBinding result{source.symbol, *target,         {},
+                         source.span,   source.notation, {},
+                         context.module};
   result.arguments.resize(callee.parameters.size());
   TypeInference equations(types);
   auto signature =

@@ -91,6 +91,29 @@ Error retainWrittenBodies(WrittenSources &written,
       return error;
   return Error::success();
 }
+StringRef referenceRouteName(ReferenceRoute route) {
+  switch (route) {
+  case ReferenceRoute::Path:
+    return "path";
+  case ReferenceRoute::Import:
+    return "import";
+  case ReferenceRoute::ImportName:
+    return "import-name";
+  case ReferenceRoute::Method:
+    return "method";
+  case ReferenceRoute::ModuleMember:
+    return "module-member";
+  case ReferenceRoute::Implicit:
+    return "implicit";
+  case ReferenceRoute::Service:
+    return "service";
+  case ReferenceRoute::Notation:
+    return "notation";
+  case ReferenceRoute::Construction:
+    return "construction";
+  }
+  llvm_unreachable("reference route");
+}
 } // namespace zkc::language::detail
 
 namespace zkc::language {
@@ -1292,6 +1315,7 @@ Expected<json::Value> sourceBindingsData(const CheckedProject &project,
       return candidates.takeError();
     declarations.push_back(json::Object{
         {"owner", owner.qualifiedName},
+        {"route", referenceRouteName(reference.route)},
         {"written", reference.written},
         {"provider", declaration(reference.provider)},
         {"target", declaration(reference.target)},
@@ -1299,13 +1323,32 @@ Expected<json::Value> sourceBindingsData(const CheckedProject &project,
         {"source", source(reference.span)},
         {"candidates", std::move(*candidates)}});
   }
+  // Each captured unit's revision and its direct dependency units. The
+  // closure and its edges follow from these rows.
+  const auto &authorities = project.storage->authorities;
+  if (!authorities.computed)
+    return detail::failure("source.authority",
+                           "source authorities were not computed");
+  json::Array units;
+  for (const auto &unit : authorities.units) {
+    if (auto error = work.charge(unit.module.size() + unit.revision.size() +
+                                 unit.dependencies.size() + 1))
+      return std::move(error);
+    json::Array dependencies;
+    for (auto dependency : unit.dependencies)
+      dependencies.push_back(authorities.units[dependency].module);
+    units.push_back(json::Object{{"module", unit.module},
+                                 {"revision", unit.revision},
+                                 {"dependencies", std::move(dependencies)}});
+  }
   json::Value value =
       json::Object{{"format", "zkc.source-bindings/0"},
                    {"capture", project.capture().identity()},
                    {"installation", project.installationIdentity()},
                    {"locals", std::move(references)},
                    {"unassociated_locals", std::move(unassociated)},
-                   {"declarations", std::move(declarations)}};
+                   {"declarations", std::move(declarations)},
+                   {"units", std::move(units)}};
   if (!jsonWithinByteLimit(value, limits.apiInspectionBytes))
     return detail::failure("source.limit",
                            "source binding export byte limit exceeded");

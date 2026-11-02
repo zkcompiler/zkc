@@ -237,7 +237,11 @@ Error Checker::run() {
     return types.takeError();
   output.names = std::make_shared<NameEnvironment>(
       NameEnvironment{std::move(modules), std::move(visible)});
-  return checkScopedSources(output, work);
+  if (auto error = checkScopedSources(output, work))
+    return error;
+  // The scoped witness check re-resolves but records nothing, so every
+  // recorded route is final here.
+  return computeSourceAuthorities(output, assetDomains, work);
 }
 std::shared_ptr<const SyntaxDeclaration>
 Checker::retainSyntax(DeclarationId owner) {
@@ -457,6 +461,7 @@ bool Checker::collect() {
                               source.target,
                           source.span);
       decl.domain = assetType(sort, found->identity());
+      assetDomains.emplace(decl.id.index, found - output.assets.begin());
     } else if (source.kind == Declaration::Kind::Domain) {
       auto sorts = protocol::domainSorts();
       auto sort = llvm::find_if(sorts, [&](const std::string &sort) {
@@ -550,6 +555,17 @@ std::optional<DeclarationId>
 Checker::resolve(const Declaration &context, StringRef name, Span span,
                  bool required, std::vector<ModuleLookup> *route,
                  std::optional<DeclarationId> *provider) {
+  return lookupPath(context, name, span, required, route, provider, true);
+}
+std::optional<DeclarationId>
+Checker::probe(const Declaration &context, StringRef name, Span span,
+               std::optional<DeclarationId> *provider) {
+  return lookupPath(context, name, span, false, nullptr, provider, false);
+}
+std::optional<DeclarationId>
+Checker::lookupPath(const Declaration &context, StringRef name, Span span,
+                    bool required, std::vector<ModuleLookup> *route,
+                    std::optional<DeclarationId> *provider, bool record) {
   if (!types.charge(1, span))
     return {};
   const auto written = name;
@@ -623,22 +639,38 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
   if (root && selectedProvider) {
     if (provider)
       *provider = selectedProvider;
-    if (checkingVisibility &&
-        !recordReference(context, *selectedProvider, *root, written, span))
+    if (record && checkingVisibility &&
+        !recordReference(context, ReferenceRoute::Path, *selectedProvider,
+                         *root, written, span))
       return {};
   }
   return root;
 }
-bool Checker::recordReference(const Declaration &owner, DeclarationId provider,
-                              DeclarationId target, StringRef written,
-                              Span span,
+bool Checker::recordReference(const Declaration &owner, ReferenceRoute route,
+                              DeclarationId provider, DeclarationId target,
+                              StringRef written, Span span,
                               std::optional<std::string> abstractModule) {
+  // Selection over a frozen project and the scoped witness check re-resolve
+  // checked names; only the checking pass records source references.
+  if (!checkingVisibility ||
+      (replayedOwner && *replayedOwner == owner.id.index))
+    return true;
   if (!types.charge(written.size() + 1 +
                         (abstractModule ? abstractModule->size() : 0),
                     span))
     return false;
+  // Checking may resolve one written occurrence more than once, for example a
+  // constructor name as a callee and then as its nominal type. The occurrence
+  // and its route are recorded once.
+  if (!recordedReferences
+           .emplace(owner.id.index, route, provider.index, target.index,
+                    span.source.index, span.begin, span.end, written.str(),
+                    abstractModule)
+           .second)
+    return true;
   output.api.references.push_back({owner.id, provider, target, span,
-                                   written.str(), std::move(abstractModule)});
+                                   written.str(), std::move(abstractModule),
+                                   route});
   return true;
 }
 bool Checker::retainAPI() {

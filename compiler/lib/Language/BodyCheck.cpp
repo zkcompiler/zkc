@@ -445,7 +445,8 @@ bool BodyChecker::statementBody(const Statement &s) {
       if (found != this->inference->callees.end())
         target = found->second.declaration;
     } else
-      target = checker.resolve(decl, expr.text, expr.span, false);
+      // Dispatch only; inference records the call's route.
+      target = checker.probe(decl, expr.text, expr.span, nullptr);
     if (checker.types.diagnostic)
       return false;
     if (target && checker.output.declarations[target->index].kind ==

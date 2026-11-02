@@ -433,6 +433,21 @@ zkc_source_project(zkc-source_instances-test
 add_zkc_test(source_bindings Language source-bindings)
 zkc_source_project(zkc-source_bindings-test
   "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
+# Source authorities are cross-checked over every maintained package and
+# compiler source fixture.
+add_zkc_test(source_authority Language source-authority)
+file(GLOB_RECURSE source_authority_inputs CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/../libraries/zkc.toml"
+  "${PROJECT_SOURCE_DIR}/../examples/projects/zkc.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/*.zkc")
+set(source_authority_packages "${CMAKE_CURRENT_BINARY_DIR}/source-authority-packages.json")
+execute_process(COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/support/source_packages.py" "${source_authority_packages}"
+  COMMAND_ERROR_IS_FATAL ANY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${source_authority_inputs} "${CMAKE_CURRENT_SOURCE_DIR}/support/source_packages.py")
+target_compile_definitions(zkc-source_authority-test PRIVATE
+  ZKC_SOURCE_PACKAGES="${source_authority_packages}")
 add_zkc_test(notation_semantics Language notation-semantics)
 add_zkc_test(language_arguments CpuTarget language-arguments)
 add_zkc_test(language_methods CpuTarget language-methods)

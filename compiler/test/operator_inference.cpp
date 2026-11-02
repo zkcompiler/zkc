@@ -39,7 +39,7 @@ Declaration signature(unsigned id, std::vector<Type> inputs, Type output) {
   return result;
 }
 OperatorInference::Candidate candidate(unsigned id) {
-  return {{{id}, {}}, {}, site};
+  return {{{id}, {}}, {}, site, {}};
 }
 struct Fixture {
   Limits limits;

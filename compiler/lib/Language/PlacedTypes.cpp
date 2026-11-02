@@ -1,5 +1,6 @@
 #include "Checker.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/ScopeExit.h"
 
 using namespace llvm;
 namespace zkc::language::detail {
@@ -237,10 +238,16 @@ std::optional<PlacedType> Checker::placedType(const Declaration &context,
   auto resolved = type(context, syntax, depth, true);
   if (!resolved)
     return {};
+  // The term above resolved and recorded every written name in it. The
+  // placement pass below resolves parts of the same term again, so it records
+  // no further reference for this owner.
+  auto replaying = replayedOwner;
+  replayedOwner = context.id.index;
+  auto restore = llvm::scope_exit([&] { replayedOwner = replaying; });
   PlacedType result{*resolved};
   const Declaration *alias = nullptr;
   if (syntax.kind == SyntaxType::Kind::Name) {
-    auto id = resolve(context, syntax.name, syntax.span, false);
+    auto id = probe(context, syntax.name, syntax.span, nullptr);
     if (types.diagnostic)
       return {};
     if (id && output.declarations[id->index].kind == Declaration::Kind::Alias)
