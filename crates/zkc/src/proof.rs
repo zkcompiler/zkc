@@ -5,7 +5,7 @@ mod inputs;
 mod interface;
 mod messages;
 use crate::execution::InputValue;
-use crate::execution::{Capacity, CpuExecution};
+use crate::execution::{Capacity, CpuExecution, InvocationLimits};
 pub use inputs::ProofInputs;
 use zkc_runtime::host::proof::{self as driver, ArtifactFailure, ArtifactReport};
 mod entropy;
@@ -68,6 +68,9 @@ pub struct NativeDeployment {
     choices: [String; 7],
     external_work_limit: u64,
     capacity: Capacity,
+    /// The allowances of the root this deployment creates for an invocation.
+    invocation: InvocationLimits,
+    loading_work: u64,
     setups: SetupAuthority,
     entry: NativeProofEntry,
     preparation: PreparedComputations<CpuBackend>,
@@ -527,6 +530,8 @@ impl NativeDeployment {
             choices,
             external_work_limit: crate::host::capacity::Allowances::EXTERNAL_WORK.default,
             capacity: Capacity::default(),
+            invocation: InvocationLimits::DEFAULT,
+            loading_work: crate::host::capacity::Allowances::LOADING_WORK.default,
             setups,
             preparation: PreparedComputations::new(
                 proof_entry.admitted(),
@@ -594,6 +599,33 @@ impl NativeDeployment {
         capacity.validate()?;
         self.capacity = capacity;
         Ok(self)
+    }
+    /// Select the allowances of the invocation root each later call creates,
+    /// separately from the runners' capacity. A root attached by an outer
+    /// invocation keeps that invocation's allowances.
+    pub fn with_invocation(mut self, limits: InvocationLimits) -> Result<Self> {
+        limits.validate()?;
+        self.invocation = limits;
+        Ok(self)
+    }
+    pub fn invocation(&self) -> InvocationLimits {
+        self.invocation
+    }
+    /// Select the loading work allowance of each input loading.
+    pub fn with_loading_work_limit(mut self, limit: u64) -> Result<Self> {
+        if !crate::host::capacity::Allowances::LOADING_WORK.admits(limit) {
+            return Err("native-proof-loading-work-limit".into());
+        }
+        self.loading_work = limit;
+        Ok(self)
+    }
+    pub(crate) fn loading(&self) -> crate::host::admission::LoadLimits {
+        self.capacity.loading(self.loading_work)
+    }
+    /// A new invocation root with this deployment's invocation allowances.
+    /// The selected role's runner keeps its own budget beside it.
+    pub(crate) fn invocation_root(&self) -> zkc_runtime::vm::ExecutionLedger {
+        self.invocation.root()
     }
     pub fn binding_scope(&self) -> crate::entry::BindingScope {
         if self.entry().binds_invocation() {
@@ -691,20 +723,17 @@ impl NativeDeployment {
             .or(self.invocation_ledger.as_ref())
     }
     /// This deployment with an invocation root: the attached one, or a new
-    /// root with the selected capacity for a low-level call.
+    /// root with the selected invocation allowances for a low-level call.
     fn rooted(&self) -> std::borrow::Cow<'_, Self> {
         if self.host_ledger().is_some() {
             std::borrow::Cow::Borrowed(self)
         } else {
-            std::borrow::Cow::Owned(
-                self.clone()
-                    .with_invocation_ledger(self.capacity.invocation_ledger()),
-            )
+            std::borrow::Cow::Owned(self.clone().with_invocation_ledger(self.invocation_root()))
         }
     }
-    /// Select one invocation's allowances. A proof-byte allowance above the
-    /// native proof limit refuses rather than being clamped.
-    pub(crate) fn with_invocation_limits(
+    /// Select one invocation's capacity and work allowances. A proof-byte
+    /// allowance above the native proof limit refuses rather than being clamped.
+    pub(crate) fn with_allowances(
         mut self,
         capacity: Capacity,
         external: u64,
@@ -932,6 +961,7 @@ impl NativeDeployment {
             ring_work_limit: self.ring_work_limit,
             external_work_limit: self.external_work_limit,
             cleanup_errors: Vec::new(),
+            invocation: self.host_ledger().cloned(),
         };
         match setup {
             Err(error) => report.outcome = Err(error),
@@ -1182,6 +1212,9 @@ pub struct NativeProofReport {
     pub cleanup_errors: Vec<String>,
     retained_outputs: Vec<zkc_runtime::vm::RetainedOutputs<Value>>,
     retained: Vec<zkc_runtime::vm::LiveReservation>,
+    /// The invocation root that charged this call, which also charges each
+    /// rendering of its diagnostics.
+    invocation: Option<zkc_runtime::vm::ExecutionLedger>,
 }
 fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
     json!({"origin":s.origin.json(),"role":s.role,"site":s.site,
@@ -1240,8 +1273,71 @@ impl NativeProofReport {
             "resource_count":self.resources.len(),"attempt_count":self.attempts.len(),
             "attempts":self.attempts.iter().take(16).map(|a|json!({"attempt":a.attempt,"decision":a.decision.as_ref().map_err(|e|message(e)),"stop":a.stop.as_ref().map(stop)})).collect::<Vec<_>>()})
     }
+    /// A bound of the rendered diagnostics: a fixed allowance for each attempt,
+    /// resource and cleanup record and for the report itself, plus every
+    /// string and coordinate the rendering copies, including the origin paths
+    /// of stops and early returns. It reads the retained records without
+    /// rendering them.
+    fn diagnostics_bound(&self) -> usize {
+        use crate::host::diagnostics::{json_bound, origin_bound, stop_bound, text_bound};
+        const RECORD: usize = 2048;
+        let attempts = self
+            .attempts
+            .iter()
+            .map(|attempt| {
+                RECORD
+                    .saturating_add(attempt.decision.as_ref().err().map_or(0, |e| text_bound(e)))
+                    .saturating_add(attempt.transcript.as_ref().map_or(0, json_bound))
+                    .saturating_add(attempt.return_at.as_ref().map_or(0, |(origin, site)| {
+                        origin_bound(origin).saturating_add(text_bound(site))
+                    }))
+                    .saturating_add(attempt.stop.as_ref().map_or(0, stop_bound))
+            })
+            .fold(0usize, usize::saturating_add);
+        let resources = self
+            .resources
+            .iter()
+            .map(|resource| RECORD.saturating_add(json_bound(resource)))
+            .fold(0usize, usize::saturating_add);
+        let cleanup = self
+            .cleanup_errors
+            .iter()
+            .map(|error| RECORD.saturating_add(text_bound(error)))
+            .fold(0usize, usize::saturating_add);
+        RECORD
+            .saturating_add(text_bound(&self.binding))
+            .saturating_add(self.attempt_policy.as_deref().map_or(0, text_bound))
+            .saturating_add(self.return_at.as_ref().map_or(0, |(origin, site)| {
+                origin_bound(origin).saturating_add(text_bound(site))
+            }))
+            .saturating_add(self.stop.as_ref().map_or(0, stop_bound))
+            .saturating_add(attempts)
+            .saturating_add(resources)
+            .saturating_add(cleanup)
+    }
     /// Payload-free execution diagnostics, including failed attempts and cleanup.
+    /// Rendering copies every attempt, resource and cleanup record, so its
+    /// bound is charged to the call's invocation root first. When the root
+    /// cannot afford it, the result is the bounded summary with
+    /// `"diagnostics": "omitted"`.
     pub fn diagnostics(&self) -> Json {
+        let bound = self.diagnostics_bound();
+        if let Some(root) = &self.invocation
+            && root
+                .charge(
+                    zkc_runtime::vm::WorkBudget {
+                        instructions: 0,
+                        iterations: 0,
+                        logical_bytes: bound as u64,
+                    },
+                    bound,
+                )
+                .is_err()
+        {
+            let mut summary = self.diagnostics_summary();
+            summary["diagnostics"] = json!("omitted");
+            return summary;
+        }
         let mut report = json!({});
         report["verification_decision"] = json!(self.verification.map(|decision| match decision {
             VerificationDecision::Accepted => "accepted",

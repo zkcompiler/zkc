@@ -501,9 +501,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 )
                 .unwrap()
             };
-            let one = repeated.capacity.invocation_ledger();
+            let one = repeated.invocation_root();
             assert_eq!(rooted(&one, 1).attempts.len(), 1);
-            let three = repeated.capacity.invocation_ledger();
+            let three = repeated.invocation_root();
             let counted = rooted(&three, 3);
             assert_eq!(counted.attempts.len(), 3);
             let (one, three) = (one.snapshot(), three.snapshot());
@@ -516,13 +516,11 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert_eq!(three.total_value_bytes, one.total_value_bytes + 2 * attempt);
             // A root that affords only two attempts' buffers refuses the third
             // attempt; the runners' own budgets are untouched.
-            let tight = zkc_runtime::vm::ExecutionLedger::new(
-                zkc_runtime::vm::ValueBudget {
-                    total_bytes: one.total_value_bytes + attempt + attempt / 2,
-                    ..repeated.capacity.values
-                },
-                repeated.capacity.work,
-            );
+            let tight = InvocationLimits {
+                total_bytes: one.total_value_bytes + attempt + attempt / 2,
+                ..InvocationLimits::DEFAULT
+            }
+            .root();
             let refused = rooted(&tight, 3);
             assert!(refused.outcome.is_err());
             assert_eq!(refused.attempts.len(), 3);
@@ -531,6 +529,43 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert!(
                 tight.snapshot().total_value_bytes <= one.total_value_bytes + attempt + attempt / 2
             );
+
+            // Rendering the diagnostics copies every attempt record, so its
+            // bound is charged to the call's root first, as a fresh
+            // allocation that holds nothing live afterwards.
+            let root = repeated.invocation_root();
+            let counted = rooted(&root, 3);
+            let executed = root.snapshot();
+            let rendered = counted.diagnostics();
+            assert_eq!(rendered["attempts"].as_array().unwrap().len(), 3);
+            assert!(rendered.get("diagnostics").is_none());
+            let charged = root.snapshot();
+            let rendering = charged.total_value_bytes - executed.total_value_bytes;
+            assert!(rendering >= rendered.to_string().len());
+            assert_eq!(
+                charged.logical_bytes - executed.logical_bytes,
+                rendering as u64
+            );
+            assert_eq!(charged.live_reserved_bytes, executed.live_reserved_bytes);
+            // Each rendering charges again.
+            let _ = counted.diagnostics();
+            assert_eq!(
+                root.snapshot().total_value_bytes,
+                charged.total_value_bytes + rendering
+            );
+            // A root that cannot afford the rendering yields the bounded
+            // summary, which keeps the outcome and the attempt count.
+            let tight = InvocationLimits {
+                total_bytes: executed.total_value_bytes + rendering - 1,
+                ..InvocationLimits::DEFAULT
+            }
+            .root();
+            let counted = rooted(&tight, 3);
+            assert_eq!(tight.snapshot(), executed);
+            let summary = counted.diagnostics();
+            assert_eq!(summary["diagnostics"], "omitted");
+            assert_eq!(summary["attempt_count"], 3);
+            assert_eq!(tight.snapshot(), executed);
             if let Some(counts) = report.execution_counts.json() {
                 assert_eq!(counts["events"]["created_frames"], 6);
                 assert_eq!(counts["events"]["backend_enter_calls"], 6);
@@ -578,6 +613,7 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
         external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         cleanup_errors: vec![],
+        invocation: None,
     }
 }
 #[test]

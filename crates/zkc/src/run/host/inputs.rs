@@ -329,7 +329,7 @@ pub(super) fn prepare<'a>(
     }
     let policy = host.limits.capacity.backend();
     // Loading, its file reads and setup cache hits charge the invocation root.
-    let mut admission = Admission::new(host.limits.capacity.loading())?
+    let mut admission = Admission::new(host.limits.loading())?
         .with_material(imports.material())
         .with_shared_ledger(Some(invocation.clone()))
         .with_retained_inputs(host.retained_inputs);

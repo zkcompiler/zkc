@@ -87,7 +87,15 @@ impl EntryHost {
         if request.arguments.len() != self.signature().parameters.len() {
             return Err(EntryCondition::InputNames.into());
         }
-        let ledger = self.options.limits.capacity.invocation_ledger();
+        // The interpreter and every reached child share this root, so the
+        // record's instruction and iteration selections are the meter they
+        // pool: a Function invocation's aggregate work is bounded across its
+        // children, which a standalone run never pools.
+        let limits = &self.options.limits;
+        let ledger = limits.invocation.pooled(
+            limits.capacity.work.instructions,
+            limits.capacity.work.iterations,
+        );
         let context_live = zkc_runtime::host::wire::reserve_allocation(
             Some(&ledger),
             deployment::context_bytes(&request.context),
@@ -414,16 +422,25 @@ impl Execution<'_> {
         self.usage.dispatches += 1;
         Ok(())
     }
-    /// Partition the remaining aggregate allowance once per native invocation.
-    /// Keep transport/result space beside the runners' full live reservations.
+    /// Partition the root's remaining live allowance once per native
+    /// invocation, within each runner's own live allowance, and keep
+    /// transport/result space beside the runners' full live reservations.
+    /// Children run on what remains of the pooled instruction and iteration
+    /// meter.
     fn child_capacity(&self, runners: usize) -> crate::execution::Capacity {
-        let mut capacity = self.host.options.limits.capacity;
-        capacity.values.live_bytes = capacity
-            .values
-            .live_bytes
-            .saturating_sub(self.ledger.snapshot().live_reserved_bytes)
-            / 2
-            / runners.max(1);
+        let limits = &self.host.options.limits;
+        let used = self.ledger.snapshot();
+        let mut capacity = limits.capacity;
+        capacity.values.live_bytes = capacity.values.live_bytes.min(
+            limits
+                .invocation
+                .live_bytes
+                .saturating_sub(used.live_reserved_bytes)
+                / 2
+                / runners.max(1),
+        );
+        capacity.work.instructions = capacity.work.instructions.saturating_sub(used.instructions);
+        capacity.work.iterations = capacity.work.iterations.saturating_sub(used.iterations);
         capacity
     }
     /// The policy record a child receives: the partitioned capacity and what

@@ -65,7 +65,7 @@ impl InputSource {
                     .checked_mul(2)
                     .and_then(|n| n.checked_add(512))
                     .ok_or("artifact-input-work-limit")?;
-                let retained = zkc_runtime::host::wire::reserve_allocation(Some(ledger), bound)?;
+                let retained = super::admission::reserve_input(Some(ledger), bound as u64, bound)?;
                 let mut captured = Vec::new();
                 captured
                     .try_reserve_exact(bytes.len())

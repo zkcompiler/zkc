@@ -776,14 +776,15 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
     let field = d["calculations"][0]["results"][0].clone();
     d["functions"][0]["body"]["operations"].as_array_mut().unwrap().push(json!({"op":"numeric","calculation":"sum","operands":[0,1],"results":[definition(3,field)]}));
     d["functions"][0]["body"]["returns"] = json!([3]);
+    let logical_bound = one.usage.execution.logical_bytes + 16 * 1024;
+    let fresh_bound = one.usage.execution.total_value_bytes + 16 * 1024;
     for logical in [false, true] {
+        // The root's own allowance bounds the children's sum.
         let mut options = FunctionOptions::default();
         if logical {
-            options.limits.capacity.work.logical_bytes =
-                one.usage.execution.logical_bytes + 16 * 1024;
+            options.limits.invocation.logical_bytes = logical_bound;
         } else {
-            options.limits.capacity.values.total_bytes =
-                one.usage.execution.total_value_bytes + 16 * 1024;
+            options.limits.invocation.total_bytes = fresh_bound;
         }
         let entry = FunctionEntry::admit(capture(&d), options.clone(), BTreeMap::new()).unwrap();
         let report = entry.prepare(input()).unwrap().execute();
@@ -791,10 +792,26 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
         assert!(report.failure.is_some());
         assert_eq!(report.calls.len(), 1);
         assert!(report.calls[0].completed);
-        assert!(report.usage.execution.logical_bytes <= options.limits.capacity.work.logical_bytes);
-        assert!(
-            report.usage.execution.total_value_bytes <= options.limits.capacity.values.total_bytes
-        );
+        assert!(report.usage.execution.logical_bytes <= options.limits.invocation.logical_bytes);
+        assert!(report.usage.execution.total_value_bytes <= options.limits.invocation.total_bytes);
+        // The same number as each runner's own allowance bounds only that
+        // runner. Each child fits it, so the invocation completes although
+        // their sum exceeds it.
+        let mut options = FunctionOptions::default();
+        if logical {
+            options.limits.capacity.work.logical_bytes = logical_bound;
+        } else {
+            options.limits.capacity.values.total_bytes = fresh_bound;
+        }
+        let entry = FunctionEntry::admit(capture(&d), options, BTreeMap::new()).unwrap();
+        let report = entry.prepare(input()).unwrap().execute();
+        assert!(report.is_success(), "{}", report.diagnostics());
+        assert_eq!(report.calls.len(), 2);
+        if logical {
+            assert!(report.usage.execution.logical_bytes > logical_bound);
+        } else {
+            assert!(report.usage.execution.total_value_bytes > fresh_bound);
+        }
     }
 }
 #[test]
@@ -2567,7 +2584,7 @@ fn result_encoding_charges_the_function_invocation_ledger() {
     // Leave the execution's own work and less than the encoder's first
     // 512-byte buffer reservation: execution completes, encoding refuses.
     let mut options = FunctionOptions::default();
-    options.limits.capacity.work.logical_bytes = before.logical_bytes + 511;
+    options.limits.invocation.logical_bytes = before.logical_bytes + 511;
     let report = identity_entry(options)
         .prepare(request(vec![("flag", true.into())]))
         .unwrap()
@@ -2611,6 +2628,35 @@ fn function_policy_owns_child_ring_sequence_and_attempt_settings() {
         .err()
         .unwrap();
         assert_eq!(error.code(), code);
+    }
+    // The invocation root's own allowances and the loading work refuse
+    // above their maxima too.
+    for (change, code) in [
+        (
+            (|limits: &mut crate::run::HostLimits| {
+                limits.invocation.live_bytes =
+                    Allowances::INVOCATION_LIVE_BYTES.maximum as usize + 1
+            }) as fn(&mut crate::run::HostLimits),
+            "native-invocation-limit",
+        ),
+        (
+            |limits| limits.loading_work = Allowances::LOADING_WORK.maximum + 1,
+            "bundle-loading-work-limit",
+        ),
+    ] {
+        let mut options = FunctionOptions::default();
+        change(&mut options.limits);
+        let error = FunctionEntry::admit(
+            capture(&proof_document(true)),
+            options,
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            (error.phase, error.code()),
+            (crate::entry::EntryPhase::Admission, code)
+        );
     }
     // Explicit retries follow the standalone proof Entry: only a producing
     // deployment with a completion choice accepts them.

@@ -384,10 +384,9 @@ fn main() {
                         .unwrap_or_else(|| panic!("{name}: capacity {kind} did not stop"));
                     let expected = match kind {
                         "work" => "artifact-stopped:Limit",
-                        "live" => "artifact-input-bytes-limit",
-                        // Loading work shares the cumulative byte ceiling; wire
-                        // scanning is charged before reserving decoded values.
-                        "total" => "artifact-input-work-limit",
+                        // The loaded pool stays within one runner's live and
+                        // fresh allowances; loading work is its own allowance.
+                        "live" | "total" => "artifact-input-bytes-limit",
                         "wire" => "native-capacity-wire",
                         _ => "native-wire-limit",
                     };

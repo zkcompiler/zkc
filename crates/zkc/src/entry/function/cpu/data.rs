@@ -380,9 +380,8 @@ fn load_ingress(
         host.cpu.clone(),
         host.options.limits.installation.clone(),
     )?;
-    let mut admission =
-        crate::host::admission::Admission::new(host.options.limits.capacity.loading())?
-            .with_shared_ledger(Some(ledger.clone()));
+    let mut admission = crate::host::admission::Admission::new(host.options.limits.loading())?
+        .with_shared_ledger(Some(ledger.clone()));
     for (input, spelling) in inputs.iter().zip(&s.leaves) {
         let ty =
             PhysicalType::default_for(host.types[spelling].clone()).map_err(|e| e.to_string())?;

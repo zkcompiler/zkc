@@ -163,6 +163,16 @@ Participant assembly scatters by original native index before appending services
 independent adapters. Availability and public classification confer no
 common-control agreement; its trusted input-binding requirements remain separate.
 
+The input-binding producer derives the trusted common-input context from actual
+inputs. `RunEntry::common_input_context(request)` prepares a named request without
+issuing resources and returns the canonical context its participants' inputs
+determine, charging the invocation root;
+`BackendRun::common_input_context(inputs, value_budget, work_budget)` does the
+same for caller-owned backend values. Disagreeing participants refuse with
+`input-binding-Value`. Hash the context to obtain its pin and distribute that pin
+through the application's own trusted context; producing or hashing bytes
+confers no authority. The CLI command `zkc common-inputs` uses the same producer.
+
 `BackendRun::bind_common_inputs(context_bytes, externally_trusted_pin)` derives
 requirements from the authenticated package's selected Protocol inventory. The
 returned `InputBoundBackendRun::start_role` checks actual inputs before creating
@@ -325,7 +335,9 @@ source `Accepted` or `Rejected` variant when verification completes, so a
 `zkc_runtime::vm::Contracts` context and an independently installed
 `WireBackend`. It checks the source interface and logical participant ABI, then
 reuses the Runtime joint Host. Calls supply typed backend values in that ABI's
-order. Each executing backend is linked independently before frame entry.
+order, the participants' `RunLimits` and, separately, the invocation root's
+`InvocationLimits`. Each executing backend is linked independently before frame
+entry.
 
 This small adapter supports data-only run packages. Setup assets, services and
 proof packages require their owning adapters and refuse here. Inaccessible source

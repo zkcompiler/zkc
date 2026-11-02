@@ -75,9 +75,9 @@ zkc prove example::Proof
 zkc verify example::Proof
 ```
 
-Omitted names require one eligible Entry: `run` considers Entry functions;
-`prove` and `verify` consider proof Entries. `inspect`, `compile`, `bindings`
-consider both kinds. `prepare` without an output override prepares all project Entries;
+Omitted names require one eligible Entry: `run` and `common-inputs` consider
+Entry functions; `prove` and `verify` consider proof Entries. `inspect`,
+`compile`, `bindings` consider both kinds. `prepare` without an output override prepares all project Entries;
 with `--output` it selects one Entry across both kinds. An explicitly ambiguous short name
 requires qualification. A unique Entry of the wrong kind is an error.
 
@@ -201,7 +201,9 @@ Rehashing an unknown package does not authorize it. Authored proof jobs require
 
 Direct proof commands use `--service=ROLE.NAME=COUNT`,
 `--transcript-budget=COUNT` and `--context=HEX` for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
-sets [native limits](../spec/runtime/capacity.md); Entry functions also accept
+sets the [native limits](../spec/runtime/capacity.md) of each operation and
+participant runner; the invocation root keeps its own default
+[allowances](../spec/runtime/capacity.md#host-allowances). Entry functions also accept
 `--limits=FILE` for [work limits](../spec/runtime/joint.md).
 `prove` accepts services of the selected prover; `verify` accepts services of the
 selected verifier. Other roles refuse.
@@ -305,6 +307,17 @@ material. Its `inputs` maps supply only the named setup/key ports excluded from
 generated ordinary records; inspection exposes their schemas. Context cannot
 replace source call operands. Defaults cover children without
 setup slots. Required setup authority must be supplied explicitly.
+
+Participants that run a static Run deployment in separate processes check their
+inputs against one pinned common-input context. `zkc common-inputs
+--deployment=ID --input=ROLE=FILE ... --output=FILE` selects a Function Entry
+and one of its Run deployments, prepares it from one named input document per
+role without issuing resources, writes the
+[common-input context](../spec/formats/input-bindings.md#production) those
+inputs determine and reports its SHA-256. Disagreeing participants refuse with
+`input-binding-Value` and publish nothing. Producing or hashing the context
+confers no authority: distribute its pin through the application's own trusted
+context.
 
 The [Rust SDK guide](../../crates/zkc/README.md) explains generated arguments,
 package admission, reusable Hosts, preparation, typed reports and proof calls.

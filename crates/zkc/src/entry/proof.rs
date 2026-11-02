@@ -33,11 +33,16 @@ pub enum BindingScope {
 #[derive(Clone, Debug)]
 pub struct ProofOptions {
     pub installation: zkc_cpu::CpuInstallation,
+    /// The selected role's runner, cumulative across its attempts.
     pub capacity: Capacity,
     pub external_work: u64,
     pub ring_work: u64,
     pub sequence_work: u64,
     pub interface: super::InterfaceLimits,
+    /// Each call's invocation root, separate from the runner's capacity.
+    pub invocation: crate::execution::InvocationLimits,
+    /// Each input loading's work ([`Allowances::LOADING_WORK`]).
+    pub loading_work: u64,
     pub binding: BindingPolicy,
 }
 impl Default for ProofOptions {
@@ -48,6 +53,8 @@ impl Default for ProofOptions {
             ring_work: Allowances::RING_WORK.default,
             sequence_work: Allowances::SEQUENCE_WORK.default,
             interface: super::InterfaceLimits::DEFAULT,
+            invocation: crate::execution::InvocationLimits::DEFAULT,
+            loading_work: Allowances::LOADING_WORK.default,
             binding: BindingPolicy::default(),
             installation: Default::default(),
         }
@@ -71,6 +78,10 @@ impl ProofOptions {
         if !Allowances::SEQUENCE_WORK.admits(self.sequence_work) {
             return Err("native-proof-sequence-work-limit".into());
         }
+        if !Allowances::LOADING_WORK.admits(self.loading_work) {
+            return Err("native-proof-loading-work-limit".into());
+        }
+        self.invocation.validate()?;
         self.interface.validate().map_err(|e| e.to_string())
     }
 }
@@ -344,7 +355,7 @@ impl ProofEntry {
             n.with_capacity(options.capacity)
         })
         .and_then(|n| {
-            n.with_invocation_limits(
+            n.with_allowances(
                 options.capacity,
                 options.external_work,
                 options.ring_work,
@@ -352,6 +363,8 @@ impl ProofEntry {
                 zkc_format::proof::MAX_PROOF_BYTES,
             )
         })
+        .and_then(|n| n.with_invocation(options.invocation))
+        .and_then(|n| n.with_loading_work_limit(options.loading_work))
         .map_err(|e| E::new(P::Admission, e))?;
         interface
             .check_proof(&native)
@@ -439,6 +452,14 @@ impl ProofEntry {
     pub fn capacity(&self) -> Capacity {
         self.native.capacity()
     }
+    /// The allowances of each call's invocation root.
+    pub fn invocation(&self) -> crate::execution::InvocationLimits {
+        self.native.invocation()
+    }
+    /// A new invocation root for one call.
+    pub(crate) fn invocation_root(&self) -> zkc_runtime::vm::ExecutionLedger {
+        self.native.invocation_root()
+    }
     pub fn package(&self) -> &Package {
         &self.package
     }
@@ -488,7 +509,7 @@ impl ProofEntry {
         proof: Option<&[u8]>,
         attempts: Option<AttemptOptions>,
     ) -> EntryResult<ProofReport> {
-        let invocation = self.native.capacity().invocation_ledger();
+        let invocation = self.native.invocation_root();
         let mut imports = crate::host::setups::VerifierKeys::new(
             self.native.capacity().backend().ark_bounds(),
             self.installation().clone(),
@@ -562,13 +583,14 @@ impl ProofEntry {
         let native = self
             .native
             .clone()
-            .with_invocation_limits(
+            .with_allowances(
                 capacity,
                 limits.external_work,
                 limits.ring_work,
                 limits.sequence_work,
                 proof_bytes,
             )
+            .and_then(|n| n.with_loading_work_limit(limits.loading_work))
             .map_err(|e| E::new(P::Preparation, e))?
             .with_shared_ledger(ledger);
         let mut imports = crate::host::setups::VerifierKeys::new(
@@ -608,7 +630,7 @@ impl ProofEntry {
     ) -> EntryResult<()> {
         // A check is an invocation of its own: one root from conversion
         // through loading.
-        let ledger = self.native.capacity().invocation_ledger();
+        let ledger = self.native.invocation_root();
         self.check_inputs_rooted(request, operation, attempts, ledger)
     }
     fn check_inputs_rooted(
@@ -842,7 +864,7 @@ impl ProofEntry {
             request,
             attempts,
             encode_results,
-            self.native.capacity().invocation_ledger(),
+            self.native.invocation_root(),
             Vec::new(),
         )
     }
@@ -1095,6 +1117,7 @@ impl ProofOptions {
 #[cfg(test)]
 mod publication_tests {
     use super::*;
+    use crate::execution::InvocationLimits;
     use sha2::{Digest, Sha256};
     #[test]
     fn encoded_envelopes_hold_result_and_buffer_allowances_until_handoff() {
@@ -1188,12 +1211,13 @@ mod publication_tests {
                 Package::MAX_BYTES,
             )
             .unwrap();
-            let mut capacity = Capacity::default();
-            capacity.work.logical_bytes = logical_bytes;
             ProofEntry::admit(
                 package,
                 ProofOptions {
-                    capacity,
+                    invocation: InvocationLimits {
+                        logical_bytes,
+                        ..InvocationLimits::DEFAULT
+                    },
                     binding: BindingPolicy::AllowAuthored,
                     ..Default::default()
                 },
@@ -1209,7 +1233,7 @@ mod publication_tests {
                 ..Default::default()
             })
         };
-        let report = prove(Capacity::default().work.logical_bytes).unwrap();
+        let report = prove(InvocationLimits::DEFAULT.logical_bytes).unwrap();
         assert!(report.is_success());
         let used = report.invocation_ledger().snapshot();
         // Conversion reads both Boolean descriptions; the binding root's
@@ -1241,7 +1265,7 @@ mod publication_tests {
             "interface":interface.to_string(),"artifact":artifact,"assets":[],
             "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
                 "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
-        let prove = |capacity: Capacity| {
+        let prove = |capacity: Capacity, invocation: InvocationLimits| {
             let package = Package::capture(
                 frame.as_bytes(),
                 &Sha256::digest(frame.as_bytes()).into(),
@@ -1252,6 +1276,7 @@ mod publication_tests {
                 package,
                 ProofOptions {
                     capacity,
+                    invocation,
                     binding: BindingPolicy::AllowAuthored,
                     ..Default::default()
                 },
@@ -1271,19 +1296,30 @@ mod publication_tests {
             .execute(None)
             .unwrap()
         };
-        let result = prove(Capacity::default());
+        let result = prove(Capacity::default(), InvocationLimits::DEFAULT);
         // The call's root holds its Host-side work: decoding, conversion,
         // loading, the binding root, the proof buffer, result custody and
         // reconstruction. The runner's work stays in its own budget.
         let work = result.report.invocation_ledger().snapshot().logical_bytes;
         assert!(result.report.native.usage.logical_bytes <= work + 511);
         assert!(result.encode_results().unwrap().is_some());
-        // The execution's own work fits; the first 512-byte result buffer
-        // does not, so encoding refuses without a partial buffer and without
-        // replaying any earlier charge.
+        // The same number as the runner's own logical-work allowance bounds
+        // only the runner, which fits it; the root keeps its own allowance.
         let mut capacity = Capacity::default();
         capacity.work.logical_bytes = work + 511;
-        let result = prove(capacity);
+        let result = prove(capacity, InvocationLimits::DEFAULT);
+        assert!(result.report.is_success());
+        assert!(result.encode_results().unwrap().is_some());
+        // The execution's own work fits the root; the first 512-byte result
+        // buffer does not, so encoding refuses without a partial buffer and
+        // without replaying any earlier charge.
+        let result = prove(
+            Capacity::default(),
+            InvocationLimits {
+                logical_bytes: work + 511,
+                ..InvocationLimits::DEFAULT
+            },
+        );
         assert!(result.report.is_success());
         let before = result.report.invocation_ledger().snapshot();
         assert_eq!(result.encode_results().err().unwrap(), "entry-output-limit");
@@ -1296,7 +1332,7 @@ mod publication_tests {
             before.live_reserved_bytes
         );
     }
-    fn entry(capacity: Capacity) -> ProofEntry {
+    fn entry(invocation: InvocationLimits) -> ProofEntry {
         let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
         let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
             "interface":interface.to_string(),"artifact":artifact,"assets":[],
@@ -1311,7 +1347,7 @@ mod publication_tests {
         ProofEntry::admit(
             package,
             ProofOptions {
-                capacity,
+                invocation,
                 binding: BindingPolicy::AllowAuthored,
                 ..Default::default()
             },
@@ -1331,8 +1367,77 @@ mod publication_tests {
         )
     }
     #[test]
+    fn invocation_and_loading_allowances_refuse_above_their_maxima() {
+        use crate::host::capacity::Allowances;
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
+        let admit = |options: ProofOptions| {
+            let package = Package::capture(
+                frame.as_bytes(),
+                &Sha256::digest(frame.as_bytes()).into(),
+                Package::MAX_BYTES,
+            )
+            .unwrap();
+            ProofEntry::admit(
+                package,
+                ProofOptions {
+                    binding: BindingPolicy::AllowAuthored,
+                    ..options
+                },
+                Default::default(),
+            )
+        };
+        let admitted = admit(ProofOptions::default()).unwrap();
+        assert_eq!(admitted.invocation(), InvocationLimits::DEFAULT);
+        for (options, code) in [
+            (
+                ProofOptions {
+                    invocation: InvocationLimits {
+                        total_bytes: InvocationLimits::MAXIMUM.total_bytes + 1,
+                        ..InvocationLimits::DEFAULT
+                    },
+                    ..Default::default()
+                },
+                "native-invocation-limit",
+            ),
+            (
+                ProofOptions {
+                    loading_work: Allowances::LOADING_WORK.maximum + 1,
+                    ..Default::default()
+                },
+                "native-proof-loading-work-limit",
+            ),
+        ] {
+            let refused = admit(options).err().unwrap();
+            assert_eq!((refused.phase, refused.code()), (P::Admission, code));
+        }
+        // The deployment's own selections refuse the same way.
+        let native = admitted.native.clone();
+        assert_eq!(
+            native
+                .clone()
+                .with_invocation(InvocationLimits {
+                    live_bytes: InvocationLimits::MAXIMUM.live_bytes + 1,
+                    ..InvocationLimits::DEFAULT
+                })
+                .err()
+                .unwrap(),
+            "native-invocation-limit"
+        );
+        assert_eq!(
+            native
+                .with_loading_work_limit(Allowances::LOADING_WORK.maximum + 1)
+                .err()
+                .unwrap(),
+            "native-proof-loading-work-limit"
+        );
+    }
+    #[test]
     fn decoded_request_documents_charge_the_call_root_at_preflight() {
-        let host = entry(Capacity::default());
+        let host = entry(InvocationLimits::DEFAULT);
         let call = preflight(&host, false).unwrap();
         // Both decoded documents are fresh allocations of the call's root,
         // live until conversion consumes them.
@@ -1346,9 +1451,10 @@ mod publication_tests {
         assert!(root.snapshot().total_value_bytes > held.total_value_bytes);
         // A root that cannot afford the decoded documents refuses at
         // preflight, before any setup import, loading or execution.
-        let mut capacity = Capacity::default();
-        capacity.work.logical_bytes = held.logical_bytes - 1;
-        let host = entry(capacity);
+        let host = entry(InvocationLimits {
+            logical_bytes: held.logical_bytes - 1,
+            ..InvocationLimits::DEFAULT
+        });
         let refused = preflight(&host, false).err().unwrap();
         assert_eq!(
             (refused.phase, refused.code()),
@@ -1357,7 +1463,7 @@ mod publication_tests {
     }
     #[test]
     fn reader_copies_are_new_allocations_charged_to_the_call_root() {
-        let host = entry(Capacity::default());
+        let host = entry(InvocationLimits::DEFAULT);
         let result = std::sync::Arc::new(preflight(&host, true).unwrap().execute(None).unwrap());
         let ledger = result.report.invocation_ledger().clone();
         let owned = result.encode_results_owned().unwrap().unwrap();
@@ -1387,7 +1493,7 @@ mod publication_tests {
         );
         drop(retained);
         // A root without room for another copy refuses it.
-        let free = Capacity::default().values.live_bytes - ledger.snapshot().live_reserved_bytes;
+        let free = InvocationLimits::DEFAULT.live_bytes - ledger.snapshot().live_reserved_bytes;
         let hold = ledger.reserve_live(free - first.len() + 1).unwrap();
         assert_eq!(owned.copy().unwrap_err(), "entry-output-limit");
         drop(hold);

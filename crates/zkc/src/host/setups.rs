@@ -71,16 +71,18 @@ impl VerifierKeys {
             // Output preflight may have imported before the invocation ledger was
             // installed. Charge its retained snapshot on the first ledger use.
             if !imported.charged && self.ledger.is_some() {
-                self.retained
-                    .extend(zkc_runtime::host::wire::reserve_allocation(
-                        self.ledger.as_ref(),
-                        bound,
-                    )?);
+                self.retained.extend(super::admission::reserve_input(
+                    self.ledger.as_ref(),
+                    bound as u64,
+                    bound,
+                )?);
                 imported.charged = true;
             }
             return Ok(imported.key.clone());
         }
-        let guard = zkc_runtime::host::wire::reserve_allocation(self.ledger.as_ref(), bound)?;
+        // Imported setup material is loaded input: a root that cannot hold its
+        // retained snapshot refuses with the loading allowance it exhausted.
+        let guard = super::admission::reserve_input(self.ledger.as_ref(), bound as u64, bound)?;
         self.retained.extend(guard);
         let key = self
             .material

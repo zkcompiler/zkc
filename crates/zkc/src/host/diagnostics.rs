@@ -52,6 +52,77 @@ pub(crate) fn stop(value: &Stop) -> Json {
         "cleanup_errors":value.cleanup_errors.iter().take(4).map(|e|message(&e.code)).collect::<Vec<_>>(),
         "cleanup_omitted":value.cleanup_errors.len().saturating_sub(4)})
 }
+/// Fixed allowance of one rendered node: a JSON value, string, array element
+/// or object member, with its allocation header.
+const NODE: usize = 256;
+/// A bound of one string copied into a rendering.
+pub(crate) fn text_bound(value: &str) -> usize {
+    NODE.saturating_add(value.len())
+}
+/// A bound of a JSON tree copied into a rendering, read without serializing it.
+pub(crate) fn json_bound(value: &Json) -> usize {
+    NODE.saturating_add(match value {
+        Json::String(s) => s.len(),
+        Json::Array(items) => items.iter().map(json_bound).fold(0, usize::saturating_add),
+        Json::Object(members) => members
+            .iter()
+            .map(|(key, value)| key.len().saturating_add(json_bound(value)))
+            .fold(0, usize::saturating_add),
+        _ => 0,
+    })
+}
+/// A bound of a complete rendered origin: its names and every path element,
+/// each with its site, alternative and decimal coordinate.
+pub(crate) fn origin_bound(value: &Origin) -> usize {
+    value
+        .path
+        .iter()
+        .map(|element| {
+            NODE.saturating_add(match element {
+                PathElement::Branch { site, alternative }
+                | PathElement::Match { site, alternative } => {
+                    site.len().saturating_add(alternative.len())
+                }
+                PathElement::Conditional { site, .. }
+                | PathElement::For { site, .. }
+                | PathElement::Loop { site, .. } => site.len().saturating_add(20),
+            })
+        })
+        .fold(
+            NODE.saturating_mul(4)
+                .saturating_add(value.session.len())
+                .saturating_add(value.entry.len())
+                .saturating_add(value.instance.len()),
+            usize::saturating_add,
+        )
+}
+/// A bound of a complete rendered stop. Its kind is rendered with debug
+/// formatting, which can escape each byte of a message into several characters.
+pub(crate) fn stop_bound(value: &Stop) -> usize {
+    let kind = match &value.kind {
+        StopKind::Explicit(reason) => reason.len(),
+        StopKind::Backend(error) => error.code.len(),
+        StopKind::Decode(_) | StopKind::Limit | StopKind::Cancelled => 0,
+    };
+    let local = value.local.as_ref().map_or(0, |local| {
+        text_bound(&local.site)
+            .saturating_add(text_bound(&local.function))
+            .saturating_add(local.instruction.as_deref().map_or(0, text_bound))
+    });
+    value
+        .cleanup_errors
+        .iter()
+        .map(|error| text_bound(&error.code))
+        .fold(
+            NODE.saturating_mul(8)
+                .saturating_add(origin_bound(&value.origin))
+                .saturating_add(text_bound(&value.role))
+                .saturating_add(value.site.as_deref().map_or(0, text_bound))
+                .saturating_add(NODE.saturating_add(kind.saturating_mul(10)))
+                .saturating_add(local),
+            usize::saturating_add,
+        )
+}
 /// Clone a bounded prefix directly from a native diagnostic tree. Never clone
 /// the original strings, complete arrays, or large intermediate trees first.
 pub(crate) fn values<'a>(values: impl Iterator<Item = &'a Json>) -> Json {

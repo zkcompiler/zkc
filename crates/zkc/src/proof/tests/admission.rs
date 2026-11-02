@@ -319,7 +319,7 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     // never clamped to the limit.
     assert_eq!(
         host.clone()
-            .with_invocation_limits(
+            .with_allowances(
                 host.capacity,
                 host.external_work_limit,
                 host.ring_work_limit,
@@ -339,7 +339,7 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
         capacity.values.live_bytes /= 2;
         let shared = host
             .clone()
-            .with_invocation_limits(
+            .with_allowances(
                 capacity,
                 host.external_work_limit,
                 host.ring_work_limit,
@@ -409,7 +409,7 @@ fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
     child_capacity.values.live_bytes /= 2;
     let host = host
         .clone()
-        .with_invocation_limits(
+        .with_allowances(
             child_capacity,
             host.external_work_limit,
             host.ring_work_limit,

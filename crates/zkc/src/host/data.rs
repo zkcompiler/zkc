@@ -55,7 +55,9 @@ impl PreparedData {
     ) -> Result<Self> {
         let backend = codec(capacity, cpu.clone(), installation)?;
         capacity.check_wire(wire.len())?;
-        let mut admission = super::admission::Admission::new(capacity.loading())?;
+        let mut admission = super::admission::Admission::new(
+            capacity.loading(super::capacity::Allowances::LOADING_WORK.default),
+        )?;
         let id = admission.native_wire(&backend, ty.clone(), wire.as_slice(), None)?;
         admission.data(id, ty.kind())?;
         let value = cpu
@@ -89,7 +91,9 @@ impl PreparedData {
         installation: zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         let backend = codec(capacity, cpu.clone(), installation)?;
-        let mut admission = super::admission::Admission::new(capacity.loading())?;
+        let mut admission = super::admission::Admission::new(
+            capacity.loading(super::capacity::Allowances::LOADING_WORK.default),
+        )?;
         let ty = value.physical_type();
         let input = super::request::InputValue::from(value);
         let id = admission.native_data(&backend, ty.clone(), &input, None)?;

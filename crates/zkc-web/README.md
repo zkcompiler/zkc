@@ -87,8 +87,9 @@ its own inputs.
 
 The constructor options accepted by the generated `ProofSession` also include
 `operation` (`both`, `prove`,
-`verify`), the existing SDK `capacity` record, `package_bytes`, `external_work`,
-and `allow_authored`. The provider set is fixed at admission; a different
+`verify`), the existing SDK `capacity` record of per-operation and runner
+limits, `package_bytes`, `external_work`, and `allow_authored`. Each call's
+invocation root keeps the SDK's default invocation allowances. The provider set is fixed at admission; a different
 installation requires a fresh Worker and admission. The SDK checks actual
 compiled provider support and exact package bindings without reselection.
 
@@ -124,8 +125,10 @@ The result keeps the call's invocation root and every reservation in it: the
 proof, the encoded outputs and the retained report text. Each `proof`,
 `outputs` and `report` getter call takes a new copy in Wasm memory; it is
 charged to that root before copying and refuses with `entry-output-limit` when
-the root cannot afford another copy. When the rendered diagnostics do not fit
-the root, the report keeps the outcome and replaces `diagnostics` with
+the root cannot afford another copy. Rendering the native diagnostics is charged
+to that root first; when the root cannot afford it, `diagnostics` is the bounded
+summary marked `"diagnostics": "omitted"`. When the rendered report text does
+not fit the root, the report keeps the outcome and replaces `diagnostics` with
 `{"omitted":"entry-output-limit"}`.
 Publication does not guarantee delivery to the client.
 

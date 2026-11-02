@@ -141,6 +141,8 @@ pub(super) fn admit(
                             ring_work: options.limits.ring_work,
                             sequence_work: options.limits.sequence_work,
                             interface: options.limits.interface,
+                            invocation: options.limits.invocation,
+                            loading_work: options.limits.loading_work,
                             binding: options.binding,
                             installation: options.limits.installation.clone(),
                         },

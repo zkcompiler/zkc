@@ -245,15 +245,17 @@ explicit result values. No source evaluation or protocol-specific execution loop
 is added.
 
 Each preparation creates the run's [invocation root](capacity.md#invocation-ledgers)
-with the admitted capacity. Request conversion, setup imports, loading and
+with the admitted invocation allowances (`HostLimits::invocation`), separate
+from the participants' capacity. Request conversion, setup imports, loading and
 `InputBoundRunEntry::prepare`'s common-input inspection and canonical encoding
 of every role charge it before execution; wire transport and report storage
 charge it during execution. Participants keep their own per-runner budgets.
 When they finish, the root reserves the returned values the report retains, and
 reconstruction holds the named results' live bytes; `RunReport::encode_results`
 charges each `zkc.entry-outputs/0` buffer, which keeps its live allowance until
-it is dropped. `HostLimits` selects the run's external, Ring and sequence work;
-`with_ring_work_limit` sets the same Ring allowance.
+it is dropped. `HostLimits` selects the run's external, Ring and sequence work
+and the loading work of each input loading; `with_ring_work_limit` sets the
+same Ring allowance.
 
 Retained Host calls transport already typed ordinary values from admitted
 outputs or calculations without repeating external constructor checks. They
@@ -325,11 +327,13 @@ assembles shared operands from these public values. Private overrides refuse;
 native admission still checks canonical agreement. Setup imports may reuse
 identical canonical bytes under the same authorized pin within an invocation;
 each native operand retains its usual resource charge. Each call has one
-[invocation root](capacity.md#invocation-ledgers), created at its preflight or
-at `prove`, `verify` or `prove_attempts`. It charges decoded request documents,
+[invocation root](capacity.md#invocation-ledgers), created with
+`ProofOptions::invocation` at its preflight or at `prove`, `verify` or
+`prove_attempts`. It charges decoded request documents,
 output-setup imports, conversion, loading, the binding root, every attempt's
-proof buffer, the returned values the call retains, reconstruction and every
-result encoding. The selected role's runner keeps its own budget beside it.
+proof buffer, the returned values the call retains, reconstruction, every
+result encoding and every rendering of the report's diagnostics. The selected
+role's runner keeps its own budget, `ProofOptions::capacity`, beside it.
 
 `preflight_document_call` owns common request assembly: requested output codecs
 are checked before loading documents, public data precedes the witness, and
@@ -780,16 +784,28 @@ while native result constructors and service/setup authority remain restricted.
 
 `PreparedFunction` executes only reached Host control and calls. Numerical work
 uses `LocalRunner`; native joint/proof work uses its existing Host. One shared
-`ExecutionLedger` charges work and conservative retained payload reservations
-before effects across the outer invocation and child VM instances. Parent values
-remain reserved while children run. This is payload/work policy, not a process
-RSS guarantee. `FunctionReport::invocation_ledger` exposes the ledger, and
+`ExecutionLedger`, the invocation root with `FunctionOptions::limits.invocation`,
+charges work and conservative retained payload reservations before effects
+across the outer invocation and child VM instances. Parent values remain
+reserved while children run. This is payload/work policy, not a process RSS
+guarantee. `FunctionReport::invocation_ledger` exposes the ledger, and
 `FunctionResultEncoder::encode_report` charges result encoding to it.
+
+The interpreter and every reached child runner charge their instructions and
+loop iterations to one cumulative meter in that root, an invocation-scope
+[allowance](capacity.md#host-allowances) that the capacity record's
+`instructions` and `iterations` select: by default 1,000,000 instructions and
+100,000 iterations, at most 2^32 of each. The interpreter charges one
+instruction per call and operation and one iteration per loop step; each
+reached child runs on what remains. A Function invocation's aggregate work must
+be bounded across its children, so its runners pool their fuel there. A
+standalone run or proof instead gives each runner its own fuel from the same
+record fields, and its root meters no instruction.
 
 `FunctionOptions::limits` is the same Host policy record a standalone run
 admits. Each reached child receives what remains of its dispatch, wire, external,
 Ring and sequence allowances after earlier children, divided equally across a
-joint roster. A producing proof child applies the explicit attempt authorization
+joint roster, and of the pooled instruction and iteration meter. A producing proof child applies the explicit attempt authorization
 that `FunctionOptions::attempts` names for its deployment, exactly as
 `ProofEntry::prove_attempts` does; admission refuses an authorization for an
 unknown deployment (`entry-host-attempts`), a verifying deployment
@@ -803,10 +819,12 @@ call never reaches. The validation decodes and imports real material, so it
 charges the invocation root; a reached child's loading is a second real
 allocation and charges the root again.
 
-The selected live-byte limit covers the whole Entry invocation. Before starting
-one native child, the Host subtracts live parent reservations and assigns half
-of the remainder to child runners, divided equally across a joint roster. The
-other half remains available for bounded native transport and result transfer.
+The invocation live allowance (`FunctionOptions::limits.invocation.live_bytes`)
+covers the whole Entry invocation. Before starting one native child, the Host
+subtracts live parent reservations from it and assigns half of the remainder to
+child runners, divided equally across a joint roster and within each runner's
+own live allowance. The other half remains available for bounded native
+transport and result transfer.
 Each runner reserves its entire assigned allowance until its results and native
 report are released. Numerical results acquire a parent reservation before the
 child releases its own. This conservative policy can refuse a nested computation

@@ -418,9 +418,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                 );
                 assert!(report.cleanup_errors.is_empty());
                 // Setup imports are bounded before expensive parsing.
-                let mut limits = HostLimits::default();
-                limits.capacity.values.total_bytes =
-                    inputs.setups.values().map(Vec::len).sum::<usize>() - 1;
+                let limits = HostLimits {
+                    loading_work: inputs.setups.values().map(Vec::len).sum::<usize>() as u64 - 1,
+                    ..Default::default()
+                };
                 let bounded = RunHost::admit(
                     &raw,
                     &Sha256::digest(&raw).into(),
@@ -539,12 +540,28 @@ fn request_structure_and_all_setup_lengths_precede_material_import() {
 #[test]
 fn typed_wire_work_is_reserved_before_scanning() {
     let (raw, _) = fixture("indices");
-    let mut limits = HostLimits::default();
-    limits.capacity.values.total_bytes = 1;
-    let host = host(&raw, limits);
+    let limits = HostLimits {
+        loading_work: 1,
+        ..Default::default()
+    };
+    let bounded = host(&raw, limits);
     let inputs = request(|| InputValue::Wire(vec![0; 10].into()));
     // The work refusal precedes even framing of this malformed input.
-    assert_eq!(refusal(&host, &inputs), "artifact-input-work-limit");
+    assert_eq!(refusal(&bounded, &inputs), "artifact-input-work-limit");
+    // Loading work is its own allowance: the runners' fresh-allocation
+    // allowance bounds the loaded pool, not the loading work.
+    let mut limits = HostLimits::default();
+    limits.capacity.values.total_bytes = 1;
+    assert_ne!(
+        refusal(&host(&raw, limits), &inputs),
+        "artifact-input-work-limit"
+    );
+    // A selection above the loading work maximum refuses at admission.
+    let limits = HostLimits {
+        loading_work: crate::run::Allowances::LOADING_WORK.maximum + 1,
+        ..Default::default()
+    };
+    assert_eq!(limits.validate().unwrap_err(), "bundle-loading-work-limit");
 }
 
 #[test]
@@ -824,12 +841,16 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
     };
     assert!(host.prepare_typed(&raw_inputs).is_err());
     // The invocation root holds the setup import and the loaded pool
-    // together, so it refuses before the pool alone exceeds its bound.
+    // together, so it refuses before the pool alone exceeds its bound, and
+    // names the loading allowance it could not afford.
     let mut limits = HostLimits::default();
-    limits.capacity.values.live_bytes = 2 * material.value().retained_bytes()
+    limits.invocation.live_bytes = 2 * material.value().retained_bytes()
         + Value::VerifierKey(Arc::new(keys.verifier_key().clone())).retained_bytes()
         - 1;
-    assert_eq!(refusal(&admit(limits), &inputs), "Limit");
+    assert_eq!(
+        refusal(&admit(limits), &inputs),
+        "artifact-input-bytes-limit"
+    );
     limits = HostLimits::default();
     limits.capacity.value_bytes = material.value().retained_bytes() - 1;
     assert!(refusal(&admit(limits), &inputs).contains("output-bytes"));

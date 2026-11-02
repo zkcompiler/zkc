@@ -83,7 +83,7 @@ impl ProofEntry {
         }
         // The call's invocation root starts with request decoding: each
         // decoded document is a fresh allocation, held until conversion.
-        let invocation = self.capacity().invocation_ledger();
+        let invocation = self.invocation_root();
         let mut documents = Vec::new();
         let mut decoded = |values: &NamedValues| {
             let bytes = super::value::request_bytes(values.values());

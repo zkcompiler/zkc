@@ -148,18 +148,32 @@ impl BackendRun {
     /// Start the common Host with caller-owned backend instances and values.
     /// The common linker independently checks each actual installation again.
     ///
-    /// The invocation root has the selected value and work budgets. It charges
-    /// wire transport, received payload decoding and report storage, and the
-    /// report keeps it ([`joint::Report::invocation_ledger`]). Each runner
-    /// keeps its own budget from the same selection beside the root.
+    /// The invocation root has the selected `invocation` allowances. It
+    /// charges wire transport, received payload decoding and report storage,
+    /// and the report keeps it ([`joint::Report::invocation_ledger`]). Each
+    /// runner keeps its own budget from `limits` beside the root. A selection
+    /// above the invocation maximum refuses before any runner exists.
     pub fn execute<B: WireBackend, H: joint::Hooks<B>>(
         &self,
         session: &str,
         inputs: Vec<joint::RoleInput<B>>,
         limits: joint::RunLimits,
+        invocation: crate::execution::InvocationLimits,
         hooks: &mut H,
     ) -> Result<joint::Report<B>, joint::StartError<B>> {
-        let root = ExecutionLedger::new(limits.values, limits.work);
+        if let Err(code) = invocation.validate() {
+            return Err(joint::StartError {
+                failure: joint::Failure {
+                    kind: joint::FailureKind::Limit,
+                    detail: joint::Text {
+                        text: code,
+                        omitted_bytes: 0,
+                    },
+                },
+                inputs,
+            });
+        }
+        let root = invocation.root();
         joint::run_with_ledgers(
             &self.bundle,
             session,
@@ -193,9 +207,11 @@ impl InputBoundBackendRun {
     /// independently checks installations, capabilities, inputs and budgets.
     ///
     /// Each started participant is its own invocation, as in an independent
-    /// process: the selected budgets form its invocation root. Common input
-    /// inspection and encoding charge it before the Runner exists, and the
-    /// Runner shares it, so both draw on one allowance.
+    /// process, whose only runner shares its root: the selected budgets are
+    /// that one invocation's allowance. Common input inspection and encoding
+    /// charge the root before the Runner exists, and the Runner charges it
+    /// after; the Runner's own ledger counts its part of the same selection,
+    /// so it never binds before the root.
     pub fn start_role<B: WireBackend>(
         &self,
         session: &str,

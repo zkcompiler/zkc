@@ -339,10 +339,9 @@ pub(super) fn context_check(
                             role,
                             context,
                             &keys,
-                            host.options.limits.capacity,
+                            &host.options.limits,
                             ledger,
                             host.cpu.clone(),
-                            host.options.limits.installation.clone(),
                         )
                         .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
                     }
@@ -360,10 +359,9 @@ pub(super) fn context_check(
                     }],
                     &v.private,
                     &keys,
-                    host.options.limits.capacity,
+                    &host.options.limits,
                     ledger,
                     host.cpu.clone(),
-                    host.options.limits.installation.clone(),
                 )
                 .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
             }
@@ -408,20 +406,20 @@ pub(super) fn context_bytes(context: &InvocationContext) -> usize {
 /// Authenticate context material independently of unavailable source arguments.
 /// This validates declarations and immutable data without issuing resources or
 /// asking a child to execute with invented public/witness values.
-#[allow(clippy::too_many_arguments)]
 fn check_context_data(
     interface: &crate::entry::Interface,
     role: &crate::entry::interface::RolePorts,
     context: &crate::entry::RoleInputs,
     keys: &BTreeMap<String, std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>>,
-    capacity: crate::execution::Capacity,
+    limits: &crate::run::HostLimits,
     ledger: &zkc_runtime::vm::ExecutionLedger,
     cpu: CpuExecution,
-    installation: zkc_cpu::CpuInstallation,
 ) -> std::result::Result<(), String> {
     use crate::execution::InputValue;
     use crate::host::admission::{Admission, Input, KeySource};
     use zkc_runtime::vm::PhysicalType;
+    let capacity = limits.capacity;
+    let installation = limits.installation.clone();
     let registry = zkc_cpu::SetupRegistry::new(
         keys.values().map(|k| k.as_ref().clone()).collect(),
         &capacity.backend(),
@@ -460,8 +458,7 @@ fn check_context_data(
             Ok(leaves)
         })
         .collect::<std::result::Result<Vec<_>, String>>()?;
-    let mut admission =
-        Admission::new(capacity.loading())?.with_shared_ledger(Some(ledger.clone()));
+    let mut admission = Admission::new(limits.loading())?.with_shared_ledger(Some(ledger.clone()));
     for (port, inputs) in ports.iter().zip(&descriptions) {
         for ((original, spelling), input) in port.native.iter().zip(&port.schema.leaves).zip(inputs)
         {

@@ -254,6 +254,7 @@ fn independent_backend_executes_authenticated_source_application() {
                 values,
             }],
             joint::RunLimits::default(),
+            crate::execution::InvocationLimits::DEFAULT,
             &mut joint::NoHooks,
         )
         .unwrap();
@@ -267,9 +268,60 @@ fn independent_backend_executes_authenticated_source_application() {
     assert_eq!(used.instructions, 0);
     assert_eq!(used.live_reserved_bytes, report.report_bytes);
     assert!(report.report_bytes > 0);
+    let report_bytes = report.report_bytes;
+    let mut report = report;
+    let (_, backend) = report.backends.pop().unwrap();
     drop(report);
     assert_eq!(root.snapshot().live_reserved_bytes, 0);
     assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
+
+    // The root takes its own allowance, not the runners': a root that cannot
+    // hold the report's records refuses them, while the runner, under the
+    // default runner limits, completes its work.
+    let run = |backend: Arithmetic, invocation| {
+        let values = [20, 22]
+            .map(|value| Number {
+                value,
+                ty: backend.ty.clone(),
+            })
+            .to_vec();
+        entry.execute(
+            "sdk",
+            vec![joint::RoleInput {
+                role: "role00000000".into(),
+                backend,
+                values,
+            }],
+            joint::RunLimits::default(),
+            invocation,
+            &mut joint::NoHooks,
+        )
+    };
+    let mut limited = run(
+        backend,
+        crate::execution::InvocationLimits {
+            live_bytes: report_bytes - 1,
+            ..crate::execution::InvocationLimits::DEFAULT
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        &limited.outcome,
+        joint::Outcome::DriverFailed(failure) if failure.detail.text == "joint-report-limit"
+    ));
+    let (_, backend) = limited.backends.pop().unwrap();
+    // A selection above the maximum refuses before any runner exists.
+    let refused = run(
+        backend,
+        crate::execution::InvocationLimits {
+            logical_bytes: crate::execution::InvocationLimits::MAXIMUM.logical_bytes + 1,
+            ..crate::execution::InvocationLimits::DEFAULT
+        },
+    )
+    .err()
+    .unwrap();
+    assert_eq!(refused.failure.detail.text, "native-invocation-limit");
+    assert_eq!(refused.inputs.len(), 1);
 }
 #[test]
 fn typed_backend_values_do_not_grant_source_constructor_authority() {
@@ -594,6 +646,7 @@ fn execution_rechecks_the_actual_backend_catalog() {
                     values,
                 }],
                 joint::RunLimits::default(),
+                crate::execution::InvocationLimits::DEFAULT,
                 &mut joint::NoHooks
             )
             .is_err()
@@ -699,6 +752,7 @@ fn independent_codec_backend_reaches_the_same_common_driver_after_bounded_decodi
                 values,
             }],
             joint::RunLimits::default(),
+            crate::execution::InvocationLimits::DEFAULT,
             &mut joint::NoHooks,
         )
         .unwrap();
