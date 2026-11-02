@@ -186,7 +186,8 @@ prover and EVM verifier over identical framed proof bytes. The
 and failure frontiers. Root/path envelopes can be transported without
 authentication; cryptographic Merkle operations, curve operations, transcript
 families and decoders other than the realized ones and full STARK verifier
-deployment need additional target support. These checks are
+deployment need additional target support. Conditional participant completion
+in the verifier refuses with `evm.completion`. These checks are
 bounded execution evidence, not a formal lowering or cryptographic theorem.
 
 `zkc-cpu` composes the five compiled providers through an immutable

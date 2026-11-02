@@ -355,6 +355,31 @@ module { "protocol.module"() ({
     require(StringRef(diagnostics).contains("evm.unsupported-type"),
             "unsupported capability lost its type refusal");
   });
+  cases.run("conditional verifier completion refuses by name", [&] {
+    auto source = close(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+module { "protocol.module"() ({
+  "protocol.func"() ({ ^entry(%a:!F,%b:!F,%go:i1):
+    %same = algebra.field_equal %a,%b : (!F,!F)->i1
+    "protocol.finish_if"(%go,%same) {owner="V",site="early"} : (i1,i1)->()
+    "protocol.return"(%same) : (i1)->()
+  }) {sym_name="main",function_type=(!F,!F,i1)->i1,roles=["V"],
+      input_roles=[["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+    unsigned completions = 0;
+    source->walk([&](Operation *op) {
+      completions += op->getName().getStringRef() == "protocol.finish_if";
+    });
+    require(completions == 1, "closed candidate lost its completion");
+    diagnostics.clear();
+    refuses(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}),
+            "evm.completion");
+    require(StringRef(diagnostics)
+                    .contains("[evm.completion] protocol.finish_if") &&
+                !StringRef(diagnostics).contains("evm.unsupported-operation"),
+            "completion did not refuse by name: " + diagnostics);
+  });
   constexpr StringLiteral bytesSource = R"zkc(
 module scalar;
 type Bytes=builtin("bytes");

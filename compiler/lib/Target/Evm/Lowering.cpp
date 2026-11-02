@@ -1424,6 +1424,22 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   auto candidate = endpoint.candidateSnapshot();
   if (auto error = checkEndpointClosure(*source, *candidate, endpoint.role()))
     return std::move(error);
+  // The selected closure holds only the verifier's own completions. This
+  // target realizes no conditional completion outcome, so one refuses by name
+  // before realization rather than through the generic operation refusal.
+  Operation *completion = nullptr;
+  candidate->walk([&](Operation *op) {
+    if (op->getName().getStringRef() != "protocol.finish_if")
+      return WalkResult::advance();
+    completion = op;
+    return WalkResult::interrupt();
+  });
+  if (completion) {
+    completion->emitError("[evm.completion] protocol.finish_if: conditional "
+                          "participant completion has no EVM realization");
+    return zkc::error("evm.completion", "conditional participant completion "
+                                        "has no EVM realization");
+  }
   auto *context = candidate->getContext();
   context->getOrLoadDialect<EvmDialect>();
   context->getOrLoadDialect<scf::SCFDialect>();

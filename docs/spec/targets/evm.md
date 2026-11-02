@@ -12,7 +12,10 @@ participant and its transitive executable symbols. Selection retains the full
 checked construction source separately from the executable closure. Target
 legality examines reachable operations and types, including nested helpers;
 unsupported reachable code refuses compilation. Unused producer mathematics
-does not make a supported verifier illegal.
+does not make a supported verifier illegal. The target realizes no conditional
+participant completion: a `protocol.finish_if` in the selected verifier refuses
+with `evm.completion` before realization. Completions owned by other
+participants do not enter the verifier closure.
 
 Arithmetic consumes the installed domain catalog: prime fields with a modulus
 of at most 256 bits and installed ascending binomial extensions of degree 2–8.
