@@ -11,16 +11,8 @@ use zkc_runtime::vm::{LogicalType, PhysicalType};
 const SETUP_BYTES: usize = crate::execution::MaterialLimits::DEFAULT.setup_bytes;
 
 fn package(document: &Value, artifact: &str) -> Package {
-    let bytes =
-        json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},"assets":[]})
-        .to_string();
-    Package::capture(
-        bytes.as_bytes(),
-        &Sha256::digest(bytes.as_bytes()).into(),
-        Package::MAX_BYTES,
-    )
-    .unwrap()
+    let (bytes, pin) = crate::entry::testing::package(document, artifact);
+    Package::capture(&bytes, &pin, Package::MAX_BYTES).unwrap()
 }
 fn physical(logical: &str) -> String {
     PhysicalType::default_for(LogicalType::parse(logical).unwrap())
@@ -554,113 +546,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     );
 }
 
-pub(in crate::entry) fn proof_fixture() -> (Value, String) {
-    let boolean = physical("bool");
-    let candidate = json!([
-        "zkc.program/0",
-        [],
-        [],
-        [
-            [
-                "participant",
-                "v",
-                "root",
-                "role00000000",
-                [["x", boolean]],
-                [boolean],
-                [["return", ["x"]]],
-                []
-            ],
-            [
-                "participant",
-                "p",
-                "root",
-                "role00000001",
-                [["x", boolean], ["w", boolean]],
-                [boolean],
-                [["return", ["w"]]],
-                []
-            ]
-        ],
-        [[
-            "entry",
-            "main",
-            [["role00000000", "v"], ["role00000001", "p"]]
-        ]]
-    ])
-    .to_string();
-    let descriptor = json!([
-        "zkc.native-proof-descriptor/0",
-        [
-            "zkc.native-proof-policy/0",
-            "main",
-            "role00000001",
-            "role00000000",
-            "0",
-            "",
-            [],
-            ["0"],
-            [],
-            "zkc.framed/0",
-            "",
-            []
-        ],
-        "zkc.native-origin/0",
-        [],
-        [["role00000000", "0", "bool", "zkcv.bool/0"]],
-        [],
-        [],
-        [],
-        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
-    ]);
-    let artifact = json!([
-        "zkc.native-proof/0",
-        digest("original"),
-        descriptor,
-        crate::io::bytes::hash(&zkc_format::logical::encode_tree(&descriptor).unwrap()),
-        candidate,
-        digest(&candidate),
-        [
-            [
-                "role00000000",
-                "v",
-                [["0", "bool"]],
-                [["0", "bool"]],
-                [],
-                "0"
-            ],
-            [
-                "role00000001",
-                "p",
-                [["0", "bool"], ["1", "bool"]],
-                [["1", "bool"]],
-                [],
-                ""
-            ]
-        ],
-        [
-            "true",
-            "false",
-            "false",
-            "true",
-            "false",
-            "true",
-            crate::entry::OracleSelection::default()
-                .canonical_json()
-                .unwrap()
-        ],
-        []
-    ])
-    .to_string();
-    let boolean = schema("boolean", "bool", json!(["bool"]));
-    let doc = json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
-        "toolchain":"test-toolchain","entry":"数学::証明₂","protocol":"main","relations":[],
-        "protocols":[{"symbol":"main","roles":["検証者","証明者"],"services":[],"common_input_requirements":[],"clauses":[],
-            "inputs":[port("公開",0,json!([0]),json!([0,1]),boolean.clone()),port("秘密",1,json!([1]),json!([1]),boolean.clone())],
-            "outputs":[port("受理",0,json!([0]),json!([0]),boolean.clone()),port("結果",1,json!([1]),json!([1]),boolean)]}],
-        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[{"port":0,"path":[],"role":"検証者"}],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"gates":[],"construction":{"kind":"authored", "format": "zkc.framed/0"}}});
-    (doc, artifact)
-}
+pub(in crate::entry) use crate::entry::testing::authored_proof as proof_fixture;
 fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {
     let groups = interface.input_groups();
     let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();

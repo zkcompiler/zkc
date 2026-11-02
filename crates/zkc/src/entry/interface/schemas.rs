@@ -428,3 +428,23 @@ pub(in crate::entry) fn check_export(schema: &Schema) -> std::result::Result<(),
     }
     Ok(())
 }
+/// Whether every leaf of `schema` is message data by the leaf facts of the
+/// interface that states it: the published codec permission that the SDK
+/// admits inputs against.
+pub(in crate::entry) fn message_data(types: &BTreeMap<String, Leaf>, schema: &Schema) -> bool {
+    schema
+        .leaves
+        .iter()
+        .all(|leaf| types.get(leaf).is_some_and(|leaf| leaf.message))
+}
+/// [`message_data`] for a schema held without its interface, such as an
+/// opaque value's: each leaf fact is derived from its spelling as reading the
+/// interface derived it. That reading admitted the spellings under its work
+/// allowance, so deriving them again is bounded by their length.
+#[cfg(feature = "cpu")]
+pub(in crate::entry) fn spelled_message_data(schema: &Schema) -> bool {
+    schema.leaves.iter().all(|leaf| {
+        let mut work = usize::MAX;
+        Leaf::parse(leaf, &mut work).is_ok_and(|leaf| leaf.message)
+    })
+}

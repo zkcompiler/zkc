@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use wasm_bindgen::prelude::*;
 use zkc::{
     entry::{
-        self, BindingPolicy, Package, ProofEntry, ProofOperation, ProofOptions,
+        self, BindingPolicy, InterfaceLimits, Package, ProofEntry, ProofOperation, ProofOptions,
         memory::ProofCallOptions,
     },
     execution::{Capacity, CpuInstallation, providers::Provider},
@@ -18,6 +18,7 @@ type Result<T> = std::result::Result<T, String>;
 #[serde(default, deny_unknown_fields)]
 struct Options {
     capacity: Option<Json>,
+    interface_limits: Option<Json>,
     package_bytes: Option<usize>,
     allow_authored: bool,
     operation: Operation,
@@ -47,7 +48,8 @@ pub struct ProofSession {
 #[wasm_bindgen]
 impl ProofSession {
     /// Options are bounded JSON, not a new package or proof format. `capacity`
-    /// uses the SDK's existing capacity record. Empty authority means no setups.
+    /// uses the SDK's existing capacity record and `interface_limits` its
+    /// interface allowance record. Empty authority means no setups.
     #[wasm_bindgen(constructor)]
     pub fn new(package: &[u8], pin: &[u8], options: &str, authority: &[u8]) -> Result<Self> {
         if options.len() > 64 * 1024 {
@@ -76,6 +78,13 @@ impl ProofSession {
             || Ok(Capacity::default()),
             |v| Capacity::parse(v.to_string().as_bytes()),
         )?;
+        // Admission reads the package's interface under this selection. A
+        // selection above a maximum refuses with that allowance's code before
+        // any package byte is read.
+        let interface = options.interface_limits.map_or_else(
+            || Ok(InterfaceLimits::DEFAULT),
+            |v| InterfaceLimits::parse(v.to_string().as_bytes()),
+        )?;
         let pin = pin.try_into().map_err(|_| "entry-package-pin")?;
         let capture_started = now();
         let package = Package::capture(
@@ -92,6 +101,7 @@ impl ProofSession {
         };
         let mut settings = ProofOptions {
             capacity,
+            interface,
             installation,
             binding: if options.allow_authored {
                 BindingPolicy::AllowAuthored
@@ -462,5 +472,124 @@ mod tests {
         );
         // Setups and named inputs have separate allowances.
         assert_ne!(limits.setup_bytes, limits.reference_bytes);
+    }
+    #[test]
+    fn interface_selections_refuse_above_their_maxima_before_any_package() {
+        let admit = |record: &Json| {
+            let options = json!({ "interface_limits": record }).to_string();
+            ProofSession::new(&[], &[0; 32], &options, &[])
+                .err()
+                .unwrap()
+        };
+        // A lowered and a raised selection are accepted; the unpinned package
+        // refuses next.
+        let lowered = InterfaceLimits {
+            work: 64,
+            descriptor_bytes: 64,
+        };
+        for selection in [lowered, InterfaceLimits::MAXIMUM] {
+            assert_eq!(admit(&selection.record()), "entry-package-identity");
+        }
+        // One above a maximum refuses with that allowance's own code.
+        for (field, code) in [
+            (1, "entry-interface-work-limit"),
+            (2, "entry-interface-descriptor-bytes-limit"),
+        ] {
+            let mut record = InterfaceLimits::MAXIMUM.record();
+            let maximum: u64 = record[field].as_str().unwrap().parse().unwrap();
+            record[field] = json!((maximum + 1).to_string());
+            assert_eq!(admit(&record), code);
+        }
+        let mut other = InterfaceLimits::DEFAULT.record();
+        other[0] = json!("zkc.material-limits/0");
+        assert_eq!(admit(&other), "interface-limits-format");
+    }
+    /// Admission reads the package's interface under the selected
+    /// allowances: a lowered selection refuses what the default admits, and a
+    /// raised one admits what the default refuses.
+    #[cfg(feature = "test-utils")]
+    #[test]
+    fn interface_selections_bound_the_admitted_interface_read() {
+        use zkc::entry::testing;
+        let (interface, artifact) = testing::authored_proof();
+        let admit = |interface: &Json, selection: Option<InterfaceLimits>| {
+            let (package, pin) = testing::package(interface, &artifact);
+            let mut options = json!({ "allow_authored": true });
+            if let Some(selection) = selection {
+                options["interface_limits"] = selection.record();
+            }
+            ProofSession::new(&package, &pin, &options.to_string(), &[])
+                .map(drop)
+                .map_err(|error| {
+                    let refusal: Json = serde_json::from_str(&error).unwrap();
+                    let text =
+                        |field: &str| refusal["sdk_refusal"][field].as_str().unwrap().to_owned();
+                    (text("phase"), text("code"))
+                })
+        };
+        let refused = |code: &str| Err(("interface".to_owned(), code.to_owned()));
+        let work = |work| InterfaceLimits {
+            work,
+            ..InterfaceLimits::DEFAULT
+        };
+        assert_eq!(admit(&interface, None), Ok(()));
+        assert_eq!(
+            admit(&interface, Some(work(64))),
+            refused("entry-interface-work-limit")
+        );
+        assert_eq!(
+            admit(
+                &interface,
+                Some(InterfaceLimits {
+                    descriptor_bytes: 64,
+                    ..InterfaceLimits::DEFAULT
+                })
+            ),
+            refused("entry-interface-descriptor-bytes-limit")
+        );
+        // Schema validation charges each port's display type twice, once for
+        // the port and once for its schema. Take the shortest display type
+        // at the fixture's four ports that the default work allowance
+        // refuses, then the least work selection that admits it.
+        let least = |mut low: usize, mut high: usize, admits: &dyn Fn(usize) -> bool| {
+            while low < high {
+                let middle = low + (high - low) / 2;
+                if admits(middle) {
+                    high = middle;
+                } else {
+                    low = middle + 1;
+                }
+            }
+            low
+        };
+        let padded = |length: usize| {
+            let mut padded = interface.clone();
+            let display = json!("t".repeat(length));
+            for direction in ["inputs", "outputs"] {
+                for port in padded["protocols"][0][direction].as_array_mut().unwrap() {
+                    port["type"] = display.clone();
+                    port["schema"]["type"] = display.clone();
+                }
+            }
+            padded
+        };
+        let length = least(1, 256 * 1024, &|length| {
+            admit(&padded(length), None).is_err()
+        });
+        assert_eq!(admit(&padded(length - 1), None), Ok(()));
+        let padded = padded(length);
+        assert_eq!(admit(&padded, None), refused("entry-interface-work-limit"));
+        // The least admitting selection is honored exactly, neither clamped
+        // to the default nor rounded.
+        let needed = least(
+            InterfaceLimits::DEFAULT.work + 1,
+            InterfaceLimits::MAXIMUM.work,
+            &|selected| admit(&padded, Some(work(selected))).is_ok(),
+        );
+        assert_eq!(admit(&padded, Some(work(needed))), Ok(()));
+        assert_eq!(
+            admit(&padded, Some(work(needed - 1))),
+            refused("entry-interface-work-limit")
+        );
     }
 }

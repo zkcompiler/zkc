@@ -1,6 +1,10 @@
 //! Logical application values. Layout and constructor authority come from the
 //! authenticated source interface, never from a caller-supplied type spelling.
-use super::interface::raw::{Field, Kind, Schema};
+use super::interface::{
+    raw::{Field, Kind, Schema},
+    schemas,
+    syntax::Leaf,
+};
 use crate::execution::InputValue;
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_cpu::Value as NativeValue;
@@ -153,9 +157,7 @@ pub(in crate::entry) fn needs_opaque(schema: &Schema) -> bool {
         || (matches!(
             schema.kind,
             Kind::Boolean | Kind::Index | Kind::Field | Kind::Group | Kind::Builtin
-        ) && schema.leaves.iter().any(|s| {
-            !zkc_runtime::vm::LogicalType::parse(s).is_ok_and(|t| t.is_native_message_data())
-        }))
+        ) && !schemas::spelled_message_data(schema))
         || schema.kind == Kind::Associated
         || schema
             .element
@@ -237,17 +239,25 @@ impl From<InputValue> for Value {
     }
 }
 
-pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) -> Result<()> {
-    flatten_checked(schema, value, out, false)
+/// Flatten an input value of `schema` into native leaves. `types` are the leaf
+/// facts of the interface that states `schema`.
+pub(super) fn flatten(
+    types: &BTreeMap<String, Leaf>,
+    schema: &Schema,
+    value: Value,
+    out: &mut Vec<InputValue>,
+) -> Result<()> {
+    flatten_checked(types, schema, value, out, false)
 }
 fn flatten_checked(
+    types: &BTreeMap<String, Leaf>,
     schema: &Schema,
     value: Value,
     out: &mut Vec<InputValue>,
     retained: bool,
 ) -> Result<()> {
     if let Value::Opaque(value) = value {
-        return flatten_checked(schema, value.open(schema)?, out, true);
+        return flatten_checked(types, schema, value.open(schema)?, out, true);
     }
     if !retained {
         if schema.is_logical()
@@ -277,15 +287,15 @@ fn flatten_checked(
                 return Err("entry-input-shape".into());
             }
             for (field, value) in schema.fields.iter().zip(values) {
-                flatten_checked(&field.schema, value, out, retained)?;
+                flatten_checked(types, &field.schema, value, out, retained)?;
             }
             Ok(())
         }
         (Kind::Associated, Value::Associated(value)) if retained => {
-            flatten_checked(&schema.fields[0].schema, *value, out, true)
+            flatten_checked(types, &schema.fields[0].schema, *value, out, true)
         }
         (Kind::Record, Value::Record(values)) => {
-            flatten_fields(&schema.fields, values, out, retained)
+            flatten_fields(types, &schema.fields, values, out, retained)
         }
         (
             Kind::Variant,
@@ -301,7 +311,7 @@ fn flatten_checked(
                 .find(|(_, arm)| arm.name == alternative)
                 .ok_or("entry-input-alternative")?;
             let mut payload = Vec::new();
-            flatten_fields(&arm.fields, fields, &mut payload, retained)?;
+            flatten_fields(types, &arm.fields, fields, &mut payload, retained)?;
             out.push(InputValue::Variant {
                 alternative: index,
                 payload,
@@ -312,11 +322,7 @@ fn flatten_checked(
             Kind::Boolean | Kind::Index | Kind::Field | Kind::Group | Kind::Builtin,
             Value::Leaf(value),
         ) => {
-            if !retained
-                && !schema.leaves.iter().all(|s| {
-                    zkc_runtime::vm::LogicalType::parse(s).is_ok_and(|t| t.is_native_message_data())
-                })
-            {
+            if !retained && !schemas::message_data(types, schema) {
                 return Err("entry-input-codec".into());
             }
             if !matches!(
@@ -335,6 +341,7 @@ fn flatten_checked(
     }
 }
 fn flatten_fields(
+    types: &BTreeMap<String, Leaf>,
     fields: &[Field],
     mut values: BTreeMap<String, Value>,
     out: &mut Vec<InputValue>,
@@ -345,7 +352,7 @@ fn flatten_fields(
     }
     for field in fields {
         let value = values.remove(&field.name).ok_or("entry-input-fields")?;
-        flatten_checked(&field.schema, value, out, retained)?;
+        flatten_checked(types, &field.schema, value, out, retained)?;
     }
     Ok(())
 }

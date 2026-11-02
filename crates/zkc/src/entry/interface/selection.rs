@@ -58,10 +58,7 @@ impl Interface {
         let selected = protocol.inputs.get(port as usize).ok_or(E::Selection)?;
         let (schema, native) = validate::project_role(selected, path, index as u32)?;
         schemas::check_import(schema).map_err(|_| E::Selection)?;
-        require(
-            schema.leaves.iter().all(|l| self.types[l].message),
-            E::Selection,
-        )?;
+        require(schemas::message_data(&self.types, schema), E::Selection)?;
         Ok(OrdinaryInput {
             interface: self,
             port,

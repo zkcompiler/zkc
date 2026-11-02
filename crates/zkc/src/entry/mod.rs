@@ -84,6 +84,8 @@ pub mod outputs;
 
 #[cfg(feature = "cpu")]
 pub mod bindings;
+#[cfg(all(feature = "cpu", any(test, feature = "test-utils")))]
+pub mod testing;
 
 #[cfg(feature = "cpu")]
 mod backend;

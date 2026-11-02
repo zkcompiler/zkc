@@ -358,7 +358,7 @@ fn load_ingress(
     let _planning = charge(ledger, metadata(s))?;
 
     let mut inputs = Vec::new();
-    crate::entry::value::flatten(s, v, &mut inputs)?;
+    crate::entry::value::flatten(&host.interface.types, s, v, &mut inputs)?;
     let backend = backend(
         host.options.limits.capacity,
         host.cpu.clone(),

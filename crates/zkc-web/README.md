@@ -91,11 +91,29 @@ its own inputs.
 The constructor options accepted by the generated `ProofSession` also include
 `operation` (`both`, `prove`,
 `verify`), the existing SDK `capacity` record of per-operation, runner and
-invocation limits, `package_bytes`, `external_work`, and `allow_authored`. The
+invocation limits, the SDK's `interface_limits` record of interface admission
+allowances, `package_bytes`, `external_work`, and `allow_authored`. The
 `capacity` record's byte selections bound each call's invocation root, and the
 session keeps the default material allowances. The provider set is fixed at admission; a different
 installation requires a fresh Worker and admission. The SDK checks actual
 compiled provider support and exact package bindings without reselection.
+
+Admission reads the package's interface under the `interface_limits`
+selection, in the same record the CLI's `--interface-limits` reads:
+
+```js
+await client.admit({ package: packageBytes, pin: authorizedPin,
+  options: { interface_limits: ['zkc.interface-limits/0', '2000000', '16777216'] } });
+```
+
+The fields are the interface work and descriptor allowances. A lowered
+selection refuses an interface that exhausts it, and a raised work selection,
+up to its maximum, admits an interface the default refuses. A selection above
+a maximum refuses with that allowance's code, `entry-interface-work-limit` or
+`entry-interface-descriptor-bytes-limit`. The client and Worker refuse a
+malformed record, including another tag, with `web-options-interface-limits`;
+the generated `ProofSession` refuses another tag with
+`interface-limits-format`. Without the option the session takes the defaults.
 
 `ready` resolves after module initialization; callers may queue admission before
 it resolves. Every method returns a promise except the immediate lifecycle
@@ -107,8 +125,10 @@ resolves with its diagnostics. Require `report.success` and, for verification,
 parsed JSON numbers may exceed JavaScript's exact range. Pass `budget` and
 `external_work` as `bigint`, canonical decimal strings or safe integer numbers.
 The client preserves the complete unsigned 64-bit range. Byte lengths,
-`package_bytes` and capacity size fields must fit wasm32. SDK capacity semantics
-and hard ceilings remain independently enforced by Rust.
+`package_bytes` and capacity size fields must fit wasm32; interface allowance
+fields need not, because Rust refuses any selection above a maximum with that
+allowance's code. SDK capacity semantics and hard ceilings remain independently
+enforced by Rust.
 
 Inputs are borrowed by default: the client snapshots the supplied byte views at
 enqueue, leaving caller buffers reusable. For an explicit consuming transfer:

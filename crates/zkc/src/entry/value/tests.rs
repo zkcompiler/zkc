@@ -38,6 +38,15 @@ fn output(s: &Schema, values: Vec<NativeValue>) -> Value {
     assert!(values.next().is_none());
     value
 }
+/// Flatten under the leaf facts of an interface that states `s`.
+fn flatten(s: &Schema, value: Value, out: &mut Vec<InputValue>) -> Result<()> {
+    let types = s
+        .leaves
+        .iter()
+        .map(|leaf| (leaf.clone(), Leaf::parse(leaf, &mut 1_000_000).unwrap()))
+        .collect();
+    super::flatten(&types, s, value, out)
+}
 fn opaque(value: Value) -> OpaqueValue {
     let Value::Opaque(value) = value else {
         panic!("expected opaque storage")

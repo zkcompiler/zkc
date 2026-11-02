@@ -148,7 +148,7 @@ mod cpu {
                 None,
             )
             .unwrap();
-        let public = arguments::values(view.public_ports(), public, None).unwrap();
+        let public = arguments::values(&view, view.public_ports(), public, None).unwrap();
         let private = decoder
             .decode(&groups[1], br#"{"state_witness":false}"#, None)
             .unwrap();
@@ -176,7 +176,7 @@ mod cpu {
             panic!()
         };
         assert_eq!(b.last(), Some(&0));
-        assert!(arguments::values(view.public_ports(), NamedValues::new(), None).is_err());
+        assert!(arguments::values(&view, view.public_ports(), NamedValues::new(), None).is_err());
         arguments::check_proof_ports(&view, ProofOperation::Verify).unwrap();
     }
     #[test]
@@ -350,7 +350,7 @@ fn nested_setup_native_positions_and_duplicate_vk_supply_are_exact() {
         .into()
     };
     assert_eq!(
-        arguments::values(view.public_ports(), supplied(), Some(&keys))
+        arguments::values(&view, view.public_ports(), supplied(), Some(&keys))
             .unwrap()
             .len(),
         2
@@ -358,12 +358,12 @@ fn nested_setup_native_positions_and_duplicate_vk_supply_are_exact() {
     let mut duplicate = supplied();
     duplicate.insert("setup_vk".into(), zkc_cpu::Value::Bool(false).into());
     assert_eq!(
-        arguments::values(view.public_ports(), duplicate, Some(&keys)).unwrap_err(),
+        arguments::values(&view, view.public_ports(), duplicate, Some(&keys)).unwrap_err(),
         "entry-input-names"
     );
     let mut missing = supplied();
     missing.remove("setup_statement");
-    assert!(arguments::values(view.public_ports(), missing, Some(&keys)).is_err());
+    assert!(arguments::values(&view, view.public_ports(), missing, Some(&keys)).is_err());
 }
 #[test]
 fn aliases_are_bounded_deterministic_and_do_not_change_coordinates() {
@@ -607,7 +607,8 @@ fn argument_iteration_order_does_not_reorder_the_native_abi() {
         ("state_witness".into(), zkc_cpu::Value::Bool(false).into()),
     ]
     .into();
-    let values = crate::entry::arguments::values(ports.into_iter().rev(), supplied, None).unwrap();
+    let values =
+        crate::entry::arguments::values(&view, ports.into_iter().rev(), supplied, None).unwrap();
     assert!(
         matches!(&values[0], crate::execution::InputValue::Native(v) if matches!(v.as_ref(), zkc_cpu::Value::Bool(true)))
     );

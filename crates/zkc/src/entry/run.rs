@@ -285,7 +285,12 @@ impl RunEntry {
                 .roles
                 .remove(&role.name)
                 .ok_or(super::EntryCondition::InputRoles)?;
-            let inputs = arguments::values(self.interface.input_ports(role), values.inputs, None)?;
+            let inputs = arguments::values(
+                &self.interface,
+                self.interface.input_ports(role),
+                values.inputs,
+                None,
+            )?;
             let services = arguments::services(self.interface.services(role), values.services)?;
             roles.push(native::RoleInputs {
                 role: role.native_name.clone(),

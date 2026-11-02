@@ -63,7 +63,8 @@ restates it, so the generated Host of a full roster needs a raised work
 selection. Every reader of an interface takes the selection explicitly, so
 static inspection (`FunctionInterface::deployment_interfaces`), checked
 inspection, bindings generation and backend admission read as admission does,
-and the CLI selects it with `--interface-limits`. A caller may also lower the compiler's phase
+the CLI selects it with `--interface-limits` and the browser adapter with its
+`interface_limits` option. A caller may also lower the compiler's phase
 limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
 identities permit descriptor reuse without introducing cyclic schema references.

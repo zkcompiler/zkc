@@ -848,7 +848,7 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
 fn pcs_schemas_preserve_independent_boundaries() {
     let kzg = "multilinear.kzg.bls12-381/0";
     let rows = "rows.merkle-keccak256.koala-bear/0";
-    for (head, domain, participants, constructible, _message) in [
+    for (head, domain, participants, constructible, message) in [
         ("commitment", kzg, true, true, true),
         ("proof", kzg, true, true, true),
         ("commitments", rows, true, true, false),
@@ -868,12 +868,9 @@ fn pcs_schemas_preserve_independent_boundaries() {
             participants,
             "{head}"
         );
-        #[cfg(feature = "cpu")]
         assert_eq!(
-            zkc_runtime::vm::LogicalType::parse(&leaf)
-                .unwrap()
-                .is_native_message_data(),
-            _message,
+            syntax::Leaf::parse(&leaf, &mut 1_000_000).unwrap().message,
+            message,
             "{head}"
         );
         if !constructible {

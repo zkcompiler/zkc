@@ -476,8 +476,8 @@ maximum refuses without clamping:
 | Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
 | External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::external_work`, `ProofOptions::external_work` |
 | Service draws | Draws | 1,000,000 | 1,000,000 | Operation (one managed service or transcript) | Request service budgets and `transcript_budget` |
-| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 2^24 | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::work`); the same selection in every SDK interface read; CLI `--interface-limits` |
-| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::descriptor_bytes`); the same selection in every SDK interface read; CLI `--interface-limits` |
+| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 2^24 | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::work`); the same selection in every SDK interface read; CLI `--interface-limits`; browser adapter `interface_limits` |
+| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::descriptor_bytes`); the same selection in every SDK interface read; CLI `--interface-limits`; browser adapter `interface_limits` |
 | Dispatches | Joint and Function dispatch occurrences, including repeated loop steps | 32,768 | 32,768 | Invocation | `HostLimits::steps` |
 | Function service draws | Draws reserved for children before their roots are issued | 64,000,000 | 32,768,000,000 | Invocation | `FunctionOptions::service_draws` |
 | Journal events | Retained Function call receipts, including failed calls | 256 | 4,096 | Invocation | `FunctionOptions::journal_events` |
@@ -580,6 +580,11 @@ The record follows the same rules, and another tag refuses with
 allowance's code. Publication never replaces the selection file, and `prepare`
 repeats the option in the commands it reports. Without the option the CLI takes
 the defaults.
+
+The browser adapter selects the interface allowances with its
+`interface_limits` option, the same record under the same rules. The session's
+admission reads its package's interface under the selection, and without the
+option takes the defaults.
 
 The capacity record's live, fresh and logical byte selections bound the root
 that a Run, Proof or Function invocation creates, whether the CLI's

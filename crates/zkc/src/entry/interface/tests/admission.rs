@@ -218,7 +218,8 @@ fn setup_variant_remains_a_supplied_operand_for_every_alternative() {
         ]
         .into();
         let values =
-            crate::entry::arguments::values(view.public_ports(), supplied, Some(&vk)).unwrap();
+            crate::entry::arguments::values(&view, view.public_ports(), supplied, Some(&vk))
+                .unwrap();
         assert_eq!(values.len(), 2);
         let crate::execution::InputValue::Wire(bytes) = &values[0] else {
             panic!("initialized key")
@@ -228,7 +229,8 @@ fn setup_variant_remains_a_supplied_operand_for_every_alternative() {
     // Neither setup metadata nor the inactive Empty alternative supplies a value.
     let missing = [("setup_unit".into(), crate::entry::Value::Unit)].into();
     assert_eq!(
-        crate::entry::arguments::values(view.public_ports(), missing, Some(&vk)).unwrap_err(),
+        crate::entry::arguments::values(&view, view.public_ports(), missing, Some(&vk))
+            .unwrap_err(),
         "entry-input-names"
     );
 }

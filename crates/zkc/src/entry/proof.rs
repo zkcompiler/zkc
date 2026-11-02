@@ -755,7 +755,12 @@ impl ProofEntry {
             capacity,
             material.setup_bytes,
         )?;
-        let public = arguments::values(self.interface.public_ports(), request.public, Some(&keys))?;
+        let public = arguments::values(
+            &self.interface,
+            self.interface.public_ports(),
+            request.public,
+            Some(&keys),
+        )?;
         let inputs = arguments::proof_inputs(
             &self.interface,
             role,

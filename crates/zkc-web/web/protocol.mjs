@@ -80,11 +80,25 @@ function capacity(value) {
     work.map(v => natural(v, false)), sizes.map(v => natural(v, true))];
 }
 
+// Unlike capacity sizes, these need not fit wasm32: Rust refuses a selection
+// above an allowance's maximum, including one beyond the address space, with
+// that allowance's code.
+function interfaceLimits(value) {
+  value = dataArray(value, 'web-options-interface-limits', 3);
+  if (value[0] !== 'zkc.interface-limits/0') fail('web-options-interface-limits');
+  return [value[0], ...value.slice(1).map(v => {
+    if (typeof v !== 'string') fail('web-options-interface-limits');
+    return u64(v, 'web-options-interface-limits').toString();
+  })];
+}
+
 export function options(value = {}) {
-  record(value, ['capacity', 'package_bytes', 'allow_authored', 'operation', 'external_work', 'providers'], 'web-options');
+  record(value, ['capacity', 'interface_limits', 'package_bytes', 'allow_authored', 'operation',
+    'external_work', 'providers'], 'web-options');
   const out = {};
   for (const [key, v] of Object.entries(value)) {
     if (key === 'capacity') out[key] = capacity(v);
+    if (key === 'interface_limits') out[key] = interfaceLimits(v);
     if (key === 'package_bytes') out[key] = size(v, 'web-wasm32-package-bytes');
     if (key === 'external_work') out[key] = u64(v, 'web-options-external-work');
     if (key === 'allow_authored') {

@@ -36,7 +36,7 @@ pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
     for role in interface.roles() {
         for port in interface.input_ports(role) {
             if port.key.is_none() {
-                check_input(&port.schema)?;
+                check_input(interface, &port.schema)?;
             }
         }
         for port in interface.output_ports(role) {
@@ -75,7 +75,7 @@ pub(super) fn check_host_ports(
         for port in interface.public_ports() {
             check_host_input(interface, port)?;
             if port.key.is_none() {
-                check_codec(&port.schema)?;
+                check_codec(interface, &port.schema)?;
             }
         }
     }
@@ -87,7 +87,7 @@ fn check_host_input(interface: &Interface, port: InputPort<'_>) -> Result<(), St
         // Setup-bearing context values arrive through the external context map,
         // while source data comes from retained typed operands.
         if !interface.is_source_data(port) {
-            check_input(&port.schema)?;
+            check_input(interface, &port.schema)?;
         }
     }
     Ok(())
@@ -105,7 +105,7 @@ pub(super) fn check_proof_ports(
     check_role_boundary(interface, Some(&role.name))?;
     for port in interface.public_ports().chain(interface.input_ports(role)) {
         if port.key.is_none() {
-            check_input(&port.schema)?;
+            check_input(interface, &port.schema)?;
         }
     }
     for port in interface.output_ports(role) {
@@ -113,19 +113,19 @@ pub(super) fn check_proof_ports(
     }
     Ok(())
 }
-pub(super) fn check_input(schema: &Schema) -> Result<(), String> {
+fn check_input(interface: &Interface, schema: &Schema) -> Result<(), String> {
     super::interface::schemas::check_import(schema)?;
-    check_codec(schema)
+    check_codec(interface, schema)
 }
-fn check_codec(schema: &Schema) -> Result<(), String> {
-    if !schema.leaves.iter().all(|leaf| {
-        zkc_runtime::vm::LogicalType::parse(leaf).is_ok_and(|ty| ty.is_native_message_data())
-    }) {
+/// The interface's leaf facts are the published codec permission.
+fn check_codec(interface: &Interface, schema: &Schema) -> Result<(), String> {
+    if !super::interface::schemas::message_data(&interface.types, schema) {
         return Err("entry-input-codec".into());
     }
     Ok(())
 }
 pub(super) fn values<'a>(
+    interface: &Interface,
     ports: impl Iterator<Item = InputPort<'a>>,
     mut values: NamedValues,
     public_keys: Option<&BTreeMap<u32, &[u8]>>,
@@ -160,7 +160,7 @@ pub(super) fn values<'a>(
             }
             _ => {
                 let value = values.remove(&port.name).ok_or(C::InputNames)?;
-                value::flatten(&port.schema, value, &mut inputs)?;
+                value::flatten(&interface.types, &port.schema, value, &mut inputs)?;
             }
         }
         if inputs.len() != port.native.len() {
@@ -223,7 +223,7 @@ pub(super) fn proof_inputs(
     public_bytes: usize,
     installation: &zkc_cpu::CpuInstallation,
 ) -> Result<Vec<InputValue>, String> {
-    let private = values(interface.named_inputs(role), private, None)?;
+    let private = values(interface, interface.named_inputs(role), private, None)?;
     let private_coordinates: Vec<_> = interface
         .named_inputs(role)
         .flat_map(|p| p.definition.native.iter().copied())

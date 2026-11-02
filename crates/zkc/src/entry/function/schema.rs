@@ -166,9 +166,7 @@ impl FunctionInterface {
         crate::entry::interface::schemas::check_import(s)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Request, e))?;
         super::require(
-            s.leaves
-                .iter()
-                .all(|s| self.types.get(s).is_some_and(|t| t.message)),
+            crate::entry::interface::schemas::message_data(&self.types, s),
             "entry-input-codec",
         )
     }

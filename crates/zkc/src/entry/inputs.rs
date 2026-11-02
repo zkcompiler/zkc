@@ -22,11 +22,7 @@ impl InputInterface<'_> {
             Self::Deployment(v) => &v.types,
             Self::Function(v) => &v.types,
         };
-        if schema
-            .leaves
-            .iter()
-            .all(|s| types.get(s).is_some_and(|t| t.message))
-        {
+        if super::interface::schemas::message_data(types, schema) {
             Ok(())
         } else {
             Err("entry-input-codec".into())

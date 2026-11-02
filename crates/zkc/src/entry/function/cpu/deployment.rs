@@ -238,8 +238,13 @@ pub(super) fn context_check(
                     return Err(EntryCondition::InputKey.into());
                 }
             } else {
-                crate::entry::value::flatten(&p.schema, data::duplicate(value), &mut Vec::new())
-                    .map_err(|e| EntryError::at(EntryPhase::Request, e))?;
+                crate::entry::value::flatten(
+                    &interface.types,
+                    &p.schema,
+                    data::duplicate(value),
+                    &mut Vec::new(),
+                )
+                .map_err(|e| EntryError::at(EntryPhase::Request, e))?;
             }
         }
         crate::entry::arguments::check_draw_budgets(services)
@@ -454,7 +459,7 @@ fn check_context_data(
                 };
                 leaves.push(value);
             } else {
-                crate::entry::value::flatten(&p.schema, value, &mut leaves)?;
+                crate::entry::value::flatten(&interface.types, &p.schema, value, &mut leaves)?;
             }
             Ok(leaves)
         })
