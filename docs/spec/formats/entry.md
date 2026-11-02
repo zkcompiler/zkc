@@ -148,7 +148,8 @@ binding.
 An ordinary explicit wrapper has one custody leaf; a distributed wrapper has
 one per declaration role, in telescope order. `roles` contains declaration-order
 role parameter names only for nominal distributed records, at most 1,024, the
-catalog limit `record.roles`; other schemas have an empty array. The temporary brace-profile alternative below also has an empty
+catalog limit `record.roles`; other schemas have an empty array. The brace-profile alternative below, which the
+[contract register](../contracts.md#current-producers-and-consumers) records under recursive record placement, also has an empty
 array. These names are definition metadata, not protocol participants.
 `element` is required-nullable and non-null exactly for a fixed array, including
 length zero. Every expanded array field has that complete element schema.
@@ -159,7 +160,7 @@ Alternatives have exactly `name` and payload `fields`. Offsets include the whole
 custody prefix and count each handle once. Distributed record fields require
 placement formulas in their declaring record's role telescope, after static
 specialization. Ordinary fields, alternative payloads and expanded structural
-fields require null, as do fields of the temporary brace-profile alternative.
+fields require null, as do fields of the brace-profile alternative.
 Private and zero-storage fields remain in declaration
 order. Privacy is part of schema consistency and identity; the independent
 reader does not reconstruct lexical home authority for internal source clauses.

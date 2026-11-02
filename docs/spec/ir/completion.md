@@ -32,7 +32,8 @@ The same operation is used in protocol, participant, exec and physical profiles.
 In a participant its owner must equal the participant role. A mathematical
 function containing this action cannot be applied as a reusable component:
 entry completion must never be silently retargeted by inlining. Reusable
-component-local exits require a separate future scope contract.
+component-local exits are outside this contract and need their own scope
+contract.
 
 A normal final return and an early return can expose different live resource
 roots. Existing affine-use and repeat-origin invariants still apply. The attempt

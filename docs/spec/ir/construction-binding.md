@@ -118,7 +118,7 @@ ordered complete input names, literal domain tag and whether they are queries.
 The DAG records typed inputs, literal integers/bytes, canonical encoders,
 concatenation, lengths, full hashes and challenge conversions. DAG integers are
 local IDs, not source identities; the complete source/candidate digests fix the
-subject. Local profiles currently admit field challenges through big- or
+subject. Local profiles admit field challenges through big- or
 little-endian modular reduction, with its exact distribution as an external
 premise. They do not claim that modular reduction is uniform. Native profiles
 retain the installed field/scalar-index/product-index law and gate framing.

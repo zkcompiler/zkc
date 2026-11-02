@@ -16,9 +16,9 @@ signatures, capabilities and implementation requirements. IR owns their MLIR
 projection, lowering, application associations and stage admission.
 
 Protocol, Relation, Algebra, Poly and Data retain their mathematical and protocol
-meaning until the last responsible consumer. Crypto and Commitment currently
-own types and attributes, with installed actions reached through Exec. A future
-scheme operation needs a consumer that requires its distinct semantics; an empty
+meaning until the last responsible consumer. Crypto and Commitment own types
+and attributes, with installed actions reached through Exec. A scheme
+operation is added only with a consumer that requires its distinct semantics; an empty
 operation inventory is not a reason to manufacture operations or merge owners.
 Func/SCF/CF provide ordinary functions and control. Tensor/Linalg provide
 structured computations with admitted scalar meanings. Their use does not grant
@@ -55,8 +55,8 @@ These interfaces expose structural call information, without purity, inlining,
 implementation admission, or successful execution guarantees. The standard
 optional `arg_attrs` and `res_attrs` arrays index the actual ABI, including
 scope and outcome; formation requires one dictionary per corresponding port.
-Byte publication refuses nonempty dictionaries until it has an interpretation
-for them, so an annotation is never silently discarded.
+Byte publication has no interpretation for nonempty dictionaries and refuses
+them, so an annotation is never silently discarded.
 ABI-sized empty dictionaries are semantically inert and are accepted by native
 body readers and correspondence checks, including ordinary function calls.
 Wrong dictionary arity fails binding/application formation. Native admission
@@ -413,7 +413,7 @@ A transformation must stay within the comparison relation of each required
 checker on its crossing, as well as its observation and budget contract. A
 reader that recognizes algebraic rearrangement does not enlarge a different
 reader's structural relation. Extending a checked relation is a separate change;
-until then its unsupported rewrites refuse that profile. This does not prohibit
+a rewrite outside the checked relation refuses that profile. This does not prohibit
 a separately admitted optimization profile or require every consumer to support
 the same equivalences.
 

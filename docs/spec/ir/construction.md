@@ -314,9 +314,9 @@ does not imply transcript or proof-format compatibility.
 
 For iterated construction, dynamic coordinates are explicit semantic inputs to
 the observation/challenge operation. Optimization preserves those inputs;
-a future transformation that peels a loop must substitute the induction value
+a transformation that peels a loop must substitute the induction value
 and supply the required correspondence, rather than infer an origin from a changed
-runtime frame. The current iterated admission retains the original loop structure.
+runtime frame. Iterated admission retains the original loop structure.
 
 Explicit [external construction data](../realization/external-constructions.md)
 keeps its separate contract. Its copyable Monero/OpenVM states are checked data,
@@ -480,7 +480,7 @@ root/alias bindings, dynamic paths, guards/stops and later disclosure. A private
 guard is not automatically public observation. Distribution laws, root
 initialization assumptions, honest delivery and observers are separate premises.
 See the [observation requirements](../../compiler/pipeline.md#analysis-boundary).
-Their preservation does not require implementing the future affine analyzer.
+Their preservation does not depend on an affine analyzer.
 
 Readers admit only this proof contract. Native structural checking does not
 inherit an independent Lean source interpreter, a proof about another carrier,
@@ -663,5 +663,6 @@ coordinates, witness schema/slot/peer and control order. Full candidate
 comparison remains an additional check. The independent Rust deployment reader
 must authenticate the descriptor, operation parameters and complete transport
 slot coverage against the actual native program; a descriptor hash alone is
-not source authority. Lean is an independently maintained pending consumer;
-these native checks supply no formal grinding or compound-query theorem.
+not source authority. Lean is an independently maintained consumer whose
+adaptation the [contract register](../contracts.md) records; these native checks
+supply no formal grinding or compound-query theorem.

@@ -119,8 +119,8 @@ exact source emitted by `authorR1CSSumcheck` for that independently supplied
 relation, ignoring locations only. This pins matrix coefficients, ordered public
 layout, relation identity, assignment construction, zero claim, weight draws,
 component applications and decision provenance. Renamed or algebraically
-rewritten source requires a future equivalence contract; it is not silently
-accepted. The adapter itself remains trusted and differentially tested.
+rewritten source is refused: accepting it requires a separate equivalence
+contract. The adapter itself remains trusted and differentially tested.
 
 The authoring envelope is BLS12-381 Fr, at most 8 constraints, 128 columns and
 1024 nonzero canonical matrix terms. Other fields and larger inputs refuse

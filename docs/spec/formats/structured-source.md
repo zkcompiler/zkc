@@ -189,9 +189,9 @@ Resource restriction and sealing are independent: a linear or affine record
 may expose public observations while retaining its custody and home-only
 construction/destruction. The `sealed` Boolean records explicit source access
 restriction; it is not inferred from the resource tag. Candidate/source
-correspondence checks its exact authored value. The independent Lean consumer
-does not yet read this distinction; the
-[formal reader status](../contracts.md#formal-reader-status) records the gap.
+correspondence checks its exact authored value. The
+[formal reader status](../contracts.md#formal-reader-status) records how the
+independent Lean consumer reads this carrier.
 
 The terms use the existing typed origin grammar, including closed static
 arguments. Placements carry the per-field participant authority; participant
@@ -208,13 +208,12 @@ structured attribute exactly from the checked closed source. A standalone MLIR e
 cannot establish its frontend provenance. Projection removes this context
 with the other original-only contracts; provenance uses the retained original.
 
-The current independent Lean consumer profile reconstructs Boolean/index/field/group, tuple, bounded
+The independent Lean consumer profile reconstructs Boolean/index/field/group, tuple, bounded
 array, field-vector and recursively declared record layouts, then compares
-exact native types, offsets and role scopes. It does not yet read recursive
-distributed schemas or the updated Entry schema; the
-[formal reader status](../contracts.md#formal-reader-status) records that gap,
-and native publication does not wait for it. The following describes the
-existing narrower formal profile. It checks a single holder for each
+exact native types, offsets and role scopes. Distributed records are outside
+that profile; the [formal reader status](../contracts.md#formal-reader-status)
+records the carriers it refuses, and native publication does not depend on
+it. The following describes that narrower formal profile. It checks a single holder for each
 linear source port. A protocol with any retained clauses must associate every
 linear port with one relation, with consistent relation identity for repeated
 uses of the same closed type. The relation comes from actual checked
@@ -415,7 +414,7 @@ by this profile; no origin is inferred from its symbol. Local and protocol
 origins are decoded by definition kind and do not share a binding-value grammar.
 
 Math helpers are private.
-Native protocol formation currently permits no explicit `sym_visibility`
+Native protocol formation permits no explicit `sym_visibility`
 attribute, including an explicit `public`; its retained visibility is the
 default `public`. The general function record does not override that formation
 restriction or impose the Math helper's private-only rule on protocol calls.
@@ -572,9 +571,10 @@ Ownership is checked independently of operand types:
 | Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
-The descriptor can represent selection of any admitted value type. The current
-native mathematical verifier admits Boolean, scalar-field and group selection in this
-profile; vector and index selection are not yet native export paths.
+The descriptor can represent selection of any admitted value type. The native
+mathematical verifier admits Boolean, index, scalar-field and group selection in
+this profile, and each exports as `["select", type]`; it refuses vector
+selection (`mathematical-dependencies`).
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected participant guards are outside this source
@@ -595,9 +595,10 @@ output scopes never erase preceding effects or stops.
 
 These rows describe the original oracle-level subject, before semantic
 realization. The native exporter checks the common protocol formation rules,
-including dormant declarations. Integration of these rows into the independent
-Lean wire reader is pending under the Lean owner. The existing Lean profile
-refuses logical oracle execution; decoding will not by itself extend its
+including dormant declarations. The
+[contract register](../contracts.md#current-producers-and-consumers) records
+which of these rows the independent Lean wire reader decodes. That reader
+refuses logical oracle execution, and decoding does not by itself extend its
 participant theorems.
 Component seam derivation also refuses logical oracle instructions when linear
 component analysis is active. An empty proposal set asserts no oracle seam.
@@ -716,8 +717,9 @@ security.
 condition templates and ordered virtual footprints from the verified original.
 `protocol-check-oracle-obligations ORIGINAL.mlir REPORT.json --symbol=NAME`
 checks the complete report against a fresh derivation. The independent Lean
-derivation from the decoded structured snapshot is supplied for Lean-owned
-integration; it is not part of the currently landed reader profile.
+derivation from the decoded structured snapshot is a Lean-owned consumer outside
+the Lean structured reader profile; the
+[contract register](../contracts.md#current-producers-and-consumers) records it.
 The exact array grammar is:
 
 ```text
@@ -918,7 +920,9 @@ and Local ownership. Native scope/outcome ports belong to the admitted CFG;
 they are not logical value ports in this descriptor. Binding names confer no
 semantics by themselves. The exporter reuses the native logical catalogue for
 these ABI checks. The independent Lean consumer admits its documented subset,
-which does not yet include nominal resource-unit rows. There is no
+which excludes nominal resource-unit rows; the
+[contract register](../contracts.md#foundation-interfaces) records that missing
+consumer. There is no
 reader for retired per-primitive MLIR operation names.
 
 Here `I` is index, `B` Boolean, `F` the binding's nominal field, and `V` an
@@ -1195,9 +1199,9 @@ site, parameters or regions. Their all-input meanings are fixed by the
 including zero for a shift count of at least 64. An extra descriptor slot,
 wrong carrier, unexpected attribute or Local spelling is refused.
 
-These descriptors extend the native producer's `/0` vocabulary. Independent
-readers with a closed operation inventory must refuse them until their own
-interpretation is installed; native export does not establish formal support.
+These descriptors extend the native producer's `/0` vocabulary. An independent
+reader with a closed operation inventory refuses each of them that its installed
+interpretation does not cover; native export does not establish formal support.
 
 ### Total vector prefix restriction
 

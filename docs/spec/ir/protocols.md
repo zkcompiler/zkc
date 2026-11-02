@@ -1156,8 +1156,8 @@ registry-managed root aliases. An affine RNG token is not such a reference
 merely because its value was copied.
 
 The supplied native participant carrier can be independently admitted and
-executed without a source correspondence claim. A Lean interpretation and
-correspondence for this native profile remain open. Independently formalized
+executed without a source correspondence claim. No Lean interpretation or
+correspondence is claimed for this native profile. Independently formalized
 source models have their own subjects and admission contracts.
 
 ## Conditional completion extension

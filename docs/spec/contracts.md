@@ -28,7 +28,7 @@ receipt audit. Consumer requirement coverage does not change an independently
 valid receipt's meaning or proof status.
 
 Compiler representation ownership follows [serialization boundaries](../compiler/serialization.md).
-Native source analyses now consume retained MLIR and bounded operation views;
+Native source analyses consume retained MLIR and bounded operation views;
 structured source, claims and source correspondence remain external projections.
 Oracle realization checks typed proposals against actual bodies before record
 publication. Upstream bytecode is accepted at the structured IR input boundary,
@@ -72,9 +72,14 @@ projection, Program production and source common-input requirement binding are
 integrated; the explicit
 [fresh-compiler pairing gates](../../common/tests/README.md#fresh-compiler-pairing)
 execute compiled packages. The [formal reader status](#formal-reader-status)
-records the independent formal interpretation. Native proof request/codec
-reconstruction explicitly refuses the selected-control profile until
-conditional correspondence is implemented.
+records the independent formal interpretation. Native proof construction,
+request planning, codec emission and oracle realization planning have no
+conditional correspondence for selected control: each refuses selected control
+reachable from the selected entry's static closure, with
+`native-proof-control-profile`, `native-request-control-profile`,
+`native-codec-control-profile` and `oracle-realization-control-profile`
+respectively. The IR session's selected-control-on-the-proof-path package
+receives that feature.
 
 The explicit [trusted input-binding context](formats/input-bindings.md) binds
 an independently derived exact component inventory and actual canonical values
