@@ -198,7 +198,8 @@ def test_subject_export_preserves_raw_interface_and_rejects_reserialization(clai
     export["admission"]["interface_sha256"] = claims.digest(raw.removesuffix("\n").encode())
     emitted = {"language-emit": arguments["source"].decode(), "language-interface": raw}
     source, exact, parsed = bridge.native_subject(
-        lambda command: emitted[command[1]], "compiler", ["--subject=test::Protocol"])
+        lambda command: emitted[command[1]], "compiler",
+        ["--source-format=zkc", "--subject=test::Protocol"])
     arguments.update(source=source.encode(), interface_text=exact)
     claims.bind_export(export, **arguments)
     assert exact == raw and parsed == interface
@@ -214,8 +215,9 @@ def test_protocol_bridge_does_not_discover_a_child_from_a_host(flags):
     bridge = load("explicit_native_subject_refusal", "lean/bridges/common/native_entry.py")
     def unexpected(_command):
         pytest.fail("ambiguous subject reached the compiler")
+    # The source format is selected, so the refusal is about the subject.
     with pytest.raises(ValueError, match="one explicit --subject"):
-        bridge.native_subject(unexpected, "compiler", flags)
+        bridge.native_subject(unexpected, "compiler", ["--source-format=zkc", *flags])
 
 
 def test_component_proposals_remain_unresolved_and_separate_from_request(claims):
