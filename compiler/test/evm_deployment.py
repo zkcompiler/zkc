@@ -127,3 +127,23 @@ proof Proof=Queries {
     policy = json.loads(native['artifact'])[2][1]
     assert len(policy[11]) == 1 and policy[11][0][1] == '0'
     commands.run([compiler, 'language-evm', *selection], refuses='evm.construction')
+
+with case('a Yul export refusal joins the diagnostics captured before it'):
+    # Every message site adds its origin template to the static invocation
+    # root, so 512 sites exceed the declared root ceiling only at Yul export.
+    sites = 512
+    sends = ''.join(f'  let r{i}=send P->V(flag);\n' for i in range(sites))
+    source = OUT / 'wide-root.zkc'
+    source.write_text(f'''module wide;
+protocol Echo roles(P,V)(flag:bool@(P,V))->(accepted:bool@V) {{
+{sends}  let accepted=r{sites - 1}==flag;
+  return(accepted=accepted);
+}}
+proof Proof=Echo{{prover P;verifier V;public{{flag}};accept accepted;construction authored;}}
+''')
+    observation = OUT / 'wide-root.json'
+    commands.run([compiler, 'language-evm', '--source-format=zkc', f'--module=wide={source}',
+                  '--entry=wide::Proof', f'--diagnostics={observation}'], refuses='evm.root-limit')
+    diagnostics = json.loads(observation.read_text())['diagnostics']
+    assert [d['code'] for d in diagnostics[:2]] == ['evm.yul', 'evm.diagnostics'], diagnostics
+    assert '[evm.root-limit]' in diagnostics[1]['message'], diagnostics

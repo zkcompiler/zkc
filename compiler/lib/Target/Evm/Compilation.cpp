@@ -205,7 +205,7 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
                       error("evm.diagnostics", diagnostics));
   auto yul = evm::exportYul(**module, *described, policy, options.limits);
   if (!yul)
-    return yul.takeError();
+    return joinErrors(yul.takeError(), error("evm.diagnostics", diagnostics));
   result->source = bytes.str();
   result->digest = digest(bytes);
   result->yul = std::move(*yul);

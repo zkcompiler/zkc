@@ -193,11 +193,8 @@ authentication, and every path envelope is bounded by the declared path ceiling,
 whose maximum admits every path native admits; cryptographic Merkle operations, curve operations, transcript
 families and decoders other than the realized ones and full STARK verifier
 deployment need additional target support. Conditional participant completion
-in the verifier refuses with `evm.completion`. A Yul export refusal reports
-`evm.yul` without the exporter's tagged reason, such as `[evm.wire-type]` or
-`[evm.root-limit]`, which the [refusal codes](spec/targets/evm.md#refusal-codes)
-join to it. These checks are bounded execution evidence, not a formal lowering
-or cryptographic theorem.
+in the verifier refuses with `evm.completion`. These checks are bounded
+execution evidence, not a formal lowering or cryptographic theorem.
 
 `zkc-cpu` composes the five compiled providers through an immutable
 `CpuInstallation`. Reduced installations restrict operation, layout, codec,
