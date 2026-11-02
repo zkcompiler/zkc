@@ -90,9 +90,10 @@ its own inputs.
 
 The constructor options accepted by the generated `ProofSession` also include
 `operation` (`both`, `prove`,
-`verify`), the existing SDK `capacity` record of per-operation and runner
-limits, `package_bytes`, `external_work`, and `allow_authored`. Each call's
-invocation root keeps the SDK's default invocation allowances, and the session the default material allowances. The provider set is fixed at admission; a different
+`verify`), the existing SDK `capacity` record of per-operation, runner and
+invocation limits, `package_bytes`, `external_work`, and `allow_authored`. The
+`capacity` record's byte selections bound each call's invocation root, and the
+session keeps the default material allowances. The provider set is fixed at admission; a different
 installation requires a fresh Worker and admission. The SDK checks actual
 compiled provider support and exact package bindings without reselection.
 

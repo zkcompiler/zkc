@@ -29,9 +29,9 @@ lower the allowance.
 | `value_bytes` | Retained bytes of one native value | 64 MiB | 64 MiB | Operation |
 | `instructions` | Executed instructions | 1,000,000 | 2^32 | Runner; Invocation in a Function |
 | `iterations` | Entered loop iterations | 100,000 | 2^32 | Runner; Invocation in a Function |
-| `logical_bytes` | Logical work bytes | 4 GiB | 4 GiB (2^32) | Runner |
-| `live_bytes` | Live retained payload bytes | 64 MiB | 64 MiB | Runner |
-| `total_bytes` | Cumulative fresh allocation bytes | 256 MiB | 256 MiB | Runner |
+| `logical_bytes` | Logical work bytes | 4 GiB | 4 GiB (2^32) | Invocation; each standalone runner |
+| `live_bytes` | Live retained payload bytes | 64 MiB | 64 MiB | Invocation; each standalone runner |
+| `total_bytes` | Cumulative fresh allocation bytes | 256 MiB | 256 MiB | Invocation; each standalone runner |
 
 Scopes are the extents over which a counter accumulates: one operation (a
 value, collection, frame, message, service, admission algorithm or call), one
@@ -39,10 +39,15 @@ participant runner (cumulative across the attempts of one proof call), one
 attempt, one invocation, whose
 [accounting root](#invocation-ledgers) runs from input preparation through
 output publication, or one admitted Entry across all of its calls. In every invocation each field selects one allowance. The
-last three bound every runner's own ledger only. The invocation root has its
-own [allowances](#host-allowances), which this record does not select; equal
-numbers never merge them, and a runner's charges reach the root only when the
-runner shares it.
+last three are the invocation's: they are the allowances of its
+[accounting root](#invocation-ledgers), which charges every Host allocation of
+the invocation, from request conversion, context and loading through
+diagnostics and result products, and every allocation of a runner that shares
+it. Such a runner draws its byte budgets from what the root has left. A
+standalone runner, which does not share the root, keeps its own ledger, which
+the same three fields bound. There is no separate root allowance: the maximum
+of each field is the most a record selects, and usage reported on a refusal
+never exceeds the selection.
 
 Instructions and iterations are the fuel of each standalone runner. A root
 that no runner shares meters no instruction or iteration. In a Function
@@ -203,9 +208,9 @@ path. This completes under the default record.
 [invocation root](#invocation-ledgers). Its cloneable handle shares atomic
 instruction, iteration, logical-byte and cumulative fresh-byte allowances
 across the Host scopes of one invocation and the runners that share it. The
-Host builds it from the invocation's own allowances (`InvocationLimits`) and,
-when runners share it, from the meter they pool. Each runner keeps its own
-limits and backend-local retention/validation ledger.
+Host builds it from the selected capacity record's byte fields and, when
+runners share it, from the meter they pool. Each runner keeps its own limits
+and backend-local retention/validation ledger.
 When an invocation's runners share its root, as a Function's children do, every
 participant of a joint child, every proof attempt and every numerical child
 receives a clone of the same handle from the Host. Creating a child never
@@ -262,11 +267,10 @@ allocation identity cannot transfer authority.
 ## Invocation ledgers
 
 Every Entry kind keeps one invocation accounting root: an `ExecutionLedger`
-with the invocation's own live, fresh and logical-work
-[allowances](#host-allowances) (`InvocationLimits`), separate from every
-runner's allowances in the capacity record. It runs from input preparation
-through output publication. Before each effect, it charges the Host-side work
-and storage of:
+whose live, fresh and logical-work allowances are the selected capacity
+record's `live_bytes`, `total_bytes` and `logical_bytes`. It runs from input
+preparation through output publication. Before each effect, it charges the
+Host-side work and storage of:
 
 - request document decoding and request conversion;
 - setup imports, including reuse of a persistent import, and input loading
@@ -281,15 +285,16 @@ and storage of:
 
 | Entry kind | Root | Runners |
 |---|---|---|
-| Run | Created at preparation from `HostLimits::invocation`; a run started by an outer invocation uses the outer root | Each participant keeps its own budget beside the root |
-| Proof | Created from `ProofOptions::invocation` (`NativeDeployment::with_invocation`) at the call's preflight (`preflight_call`, `preflight_document_call`) or at `prove`, `verify` or `prove_attempts`, and kept by `ProofCall`, `ProofReport` and `ProofResult`; a proof started by an outer invocation uses the outer root | The selected role's runner, and each attempt's runner, keep their own budgets beside the root |
-| Function | Created at preparation from `FunctionOptions::limits.invocation`, with the pooled instruction and iteration meter, and shared with every reached child | Child runners share the root; each receives a partitioned live allowance and what remains of the pooled meter |
-| Backend run | `BackendRun::execute` creates it from its `InvocationLimits` argument; the report keeps it | Each participant keeps its own budget from the selected `RunLimits` beside the root |
+| Run | Created at preparation from `HostLimits::capacity`; a run started by an outer invocation uses the outer root | Each participant keeps its own ledger beside the root, which the same record bounds |
+| Proof | Created from `ProofOptions::capacity` (`NativeDeployment::with_capacity`) at the call's preflight (`preflight_call`, `preflight_document_call`) or at `prove`, `verify` or `prove_attempts`, and kept by `ProofCall`, `ProofReport` and `ProofResult`; a proof started by an outer invocation uses the outer root | The selected role's runner, and each attempt's runner, keep their own ledgers beside the root, which the same record bounds |
+| Function | Created at preparation from `FunctionOptions::limits.capacity`, with the pooled instruction and iteration meter, and shared with every reached child | Child runners share the root; each draws its byte budgets from what the root has left, with a partitioned live allowance, and runs on what remains of the pooled meter |
+| Backend run | `BackendRun::execute` creates it from the byte budgets of the selected `RunLimits`; the report keeps it | Each participant keeps its own ledger from the same `RunLimits` beside the root |
 | Backend participant | `InputBoundBackendRun::start_role` creates one for each started participant from the selected budgets, an invocation of its own as in an independent process | The started runner shares it, so the selection is that one invocation's allowance |
 
-Per-runner budgets are sublimits beside the root. A runner that does not share
-the root keeps its own instruction and iteration fuel and its own logical-work
-and retained-value ledger, so a roster never pools fuel. Its Host and the
+A runner that does not share the root keeps its own instruction and iteration
+fuel and its own logical-work and retained-value ledger, which the record's
+fields bound beside the root, so a roster never pools fuel and the root bounds
+the Host's allocations rather than the standalone runners'. Its Host and the
 runner exchange custody at the runner's boundaries. Loaded inputs pass to the
 runner when it starts, and the root's reservation of them ends there. Returned
 values pass back when it finishes. The Host then reserves their retained bytes
@@ -331,13 +336,15 @@ beyond their retained storage.
 
 ### Root refusals
 
-The root's ledger refuses without naming the allowance it could not afford.
-Each charge the Host makes reports the code of its charged item instead, never
-the ledger's generic limit. Where an item has separate work and bytes codes, the
-Host charges its logical work and its bytes separately and reports the work
-code when the root's logical work allowance refuses and the bytes code when its
-fresh or live byte allowance does. The work is charged first, so a bytes
-refusal leaves it committed; committed charges are never refunded.
+Each charge the Host makes reports the code of its charged item, never the
+ledger's generic limit. A charge of an item with separate work and bytes codes
+is all or nothing: its logical work, its fresh bytes and the live bytes it
+holds are committed together, or the charge refuses and leaves the root's usage
+unchanged, so a refused item leaves no residual charge for a later charge to
+meet. Its refusal reports the bytes code when the root's fresh or live byte
+allowance refuses, including when its logical work allowance refuses too, and
+the work code when only the logical work allowance does. Committed charges are
+never refunded.
 
 | Charged item | Work refused | Bytes refused |
 |---|---|---|
@@ -347,11 +354,13 @@ refusal leaves it committed; committed charges are never refunded.
 | A completed attempt's proof retained by the call | `native-attempt-proof-work-limit` | `native-attempt-proof-bytes-limit` |
 | A Function's invocation context, frames, environments, call receipts and typed values, and its children's requests and results | `entry-host-work-limit` | `entry-host-bytes-limit` |
 | Request documents and their conversion | `entry-request-limit` | `entry-request-limit` |
-| Common-input inspection and context encoding | `input-binding-Limit` | `input-binding-Limit` |
+| Common-input inspection and context encoding | `input-binding-work-limit` | `input-binding-bytes-limit` |
 | Result reconstruction, named result encodings and copies of retained results | `entry-output-limit` | `entry-output-limit` |
 | Returned values taken into custody | — | `bundle-output-limit` (run), `native-output-limit` (proof) |
 | A native run's output encodings | `bundle-output-limit` | `bundle-output-limit` |
 
+The [input-binding format](../formats/input-bindings.md)'s own ceilings refuse
+with `input-binding-Limit`, apart from these root refusals.
 A Function interpreter's own charge of its pooled meter refuses with
 `entry-host-instruction-limit` or `entry-host-iteration-limit`, naming the
 exhausted meter. A rendering of diagnostics that the root cannot afford is the
@@ -399,8 +408,7 @@ while the full operand-read charge accounts for reading its fragments.
 ## Host allowances
 
 The Host policy record owns each native allowance beside the capacity record's
-per-operation and per-runner fields, including the invocation root's own
-allowances. Each names its unit and scope and has one default and one maximum,
+fields. Each names its unit and scope and has one default and one maximum,
 defined once (`run::Allowances`, with `run::Scope`); a selection above the
 maximum refuses without clamping:
 
@@ -417,16 +425,14 @@ maximum refuses without clamping:
 | Journal events | Retained Function call receipts, including failed calls | 256 | 4,096 | Invocation | `FunctionOptions::journal_events` |
 | Attempts | Completed or discarded trials of one producing proof call | 1 | 1,024 | Invocation | `AttemptOptions::count`, `FunctionOptions::attempts` |
 | Attempt proof bytes | Proof buffer bytes of one attempt, including framing | 16 MiB | 16 MiB | Attempt | `AttemptOptions::proof_bytes` |
-| Invocation live bytes | Live retained bytes of the invocation root: Host-retained storage, values in the Host's custody, and the whole live allowance of each runner that shares the root | 64 MiB | 64 MiB | Invocation | `HostLimits::invocation`, `ProofOptions::invocation` (`InvocationLimits::live_bytes`) |
-| Invocation total bytes | Cumulative fresh allocation bytes of the invocation root | 256 MiB | 256 MiB | Invocation | `HostLimits::invocation`, `ProofOptions::invocation` (`InvocationLimits::total_bytes`) |
-| Invocation logical bytes | Logical work bytes of the invocation root | 4 GiB (2^32) | 4 GiB (2^32) | Invocation | `HostLimits::invocation`, `ProofOptions::invocation` (`InvocationLimits::logical_bytes`) |
 | Function instructions | Instructions of the Function interpreter and every reached child | 1,000,000 | 2^32 | Invocation | `FunctionOptions::limits.capacity` (`instructions`) |
 | Function iterations | Loop iterations of the Function interpreter and every reached child | 100,000 | 2^32 | Invocation | `FunctionOptions::limits.capacity` (`iterations`) |
 | Loading work | Loading work units of one input loading: one per input node, wire scan or native measurement, plus each byte read and each retained estimate, including cache hits | 2^28 | 2^28 | Operation (one input loading) | `HostLimits::loading_work`, `ProofOptions::loading_work` |
 | Public bytes | Wire bytes of one proof call's public statement, counted at every role operand a public value initializes, including shared owners | 64 MiB | 64 MiB | Operation (one proof call) | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::public_bytes`) |
 | Reference bytes | Bytes of the named references one memory request binds | 256 MiB | 256 MiB | Invocation | `ProofOptions::material` (`MaterialLimits::reference_bytes`) |
-| Setup bytes | Setup material of one invocation, counted at every copy the Host holds: each verifier-key copy for a proof's public port, and the material of every deployment of a Function invocation | 64 MiB | 64 MiB | Invocation | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::setup_bytes`) |
+| Setup bytes | Setup material of one invocation, counted at every copy the Host holds: each verifier-key copy for a proof's public port, and the material of every deployment of a Function invocation | 64 MiB | 256 MiB | Invocation | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::setup_bytes`) |
 | Retained imports | Retained bytes of the setup imports an admitted proof Entry keeps for reuse across its calls | 64 MiB | 64 MiB | Entry | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::retained_imports`) |
+| Prepared data | Retained bytes of one prepared datum: its native value and canonical wire bytes together | 64 MiB | 64 MiB | Operation (one prepared datum) | None: the `PreparedData` constructors take the default |
 
 The Function service-draw maximum is one maximal service allowance for every
 dispatch a Function can make. The joint Host's message, cumulative wire and
@@ -440,7 +446,9 @@ retains. None derives from a runner's capacity, even where the numbers agree.
 Exceeding one refuses with `entry-input-limit`, `entry-request-limit` or
 `entry-setup-limit` respectively. A setup file is read only up to the
 remaining setup allowance, and one that it cannot hold refuses with
-`entry-setup-limit`.
+`entry-setup-limit`. Setup material defaults to 64 MiB, and a Host may select
+up to 256 MiB, as large commitment setups need; the other material allowances'
+defaults are their maxima.
 Imports that do not fit the retained-import allowance are imported for the call
 without being retained. A selection above a maximum refuses with that
 allowance's own code: `entry-public-bytes-limit`,
@@ -451,15 +459,20 @@ allowance and takes these defaults. A browser session keeps its setup and
 named input copies within the setup and reference allowances, because every
 call binds all of them.
 
-The invocation allowances (`InvocationLimits`) bound the root that a Run,
-Proof or Function invocation creates; a selection above their maxima refuses
-with `native-invocation-limit`. `NativeDeployment::with_invocation` and
-`with_loading_work_limit` select them for a low-level proof deployment, and
-`BackendRun::execute` takes the invocation allowances of a backend run as an
-argument. The CLI and the browser adapter select no invocation allowance and
-take these defaults. The default and maximum numbers of the root's three
-allowances equal a runner's, yet each is its own allowance. A child invocation
-charges its outer root and takes none of its own.
+The capacity record's live, fresh and logical byte selections bound the root
+that a Run, Proof or Function invocation creates, whether the CLI's
+`--capacity` record, the browser adapter's `capacity` record or an SDK
+selection. `NativeDeployment::with_capacity` selects them for a low-level
+proof deployment, beside `with_loading_work_limit` for its loading work, and
+`BackendRun::execute` takes them in its `RunLimits`. A child invocation charges
+its outer root and takes none of its own.
+
+`PreparedData` retains each prepared datum, its decoded native value and its
+canonical wire bytes together, within the prepared-data allowance; exceeding it
+refuses with `native-data-bytes-limit`. Preparation belongs to no invocation,
+so neither a runner's allowances nor a root bound what a datum retains, while
+the capacity record still bounds its decoding and every use charges its
+invocation's loading.
 
 The Function instruction and iteration allowances are the meter that a
 Function invocation's interpreter and every reached child pool in the root,

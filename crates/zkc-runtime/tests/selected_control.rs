@@ -830,26 +830,34 @@ fn inspection_and_encoding_charge_one_invocation_ledger_across_roles() {
     context
         .check_role("P", &backend, &inputs, &one_role)
         .unwrap();
+    // A root refusal names the root allowance that refused, apart from the
+    // format's own limits.
     assert_eq!(
         context.check_role("V", &backend, &inputs, &one_role),
-        Err(E::Limit)
+        Err(E::WorkLimit)
     );
+    assert_eq!(E::WorkLimit.to_string(), "input-binding-work-limit");
     assert_eq!(backend.encodes.get(), 3);
     // Inspection reads charge logical work before the value is encoded.
     let short_read = limited_ledger(read - 1, usize::MAX);
     assert_eq!(
         context.check_role("P", &backend, &inputs, &short_read),
-        Err(E::Limit)
+        Err(E::WorkLimit)
     );
     assert_eq!(backend.encodes.get(), 3);
-    // Canonical encoding charges its bound as fresh allocation before encoding.
+    // Canonical encoding charges its bound as fresh allocation before
+    // encoding, together with its work: the refused encoding commits neither.
     let short_fresh = limited_ledger(u64::MAX, encoded - 1);
     assert_eq!(
         context.check_role("P", &backend, &inputs, &short_fresh),
-        Err(E::Limit)
+        Err(E::BytesLimit)
     );
+    assert_eq!(E::BytesLimit.to_string(), "input-binding-bytes-limit");
     assert_eq!(backend.encodes.get(), 3);
-    assert_eq!(short_fresh.snapshot().live_reserved_bytes, 0);
+    let refused = short_fresh.snapshot();
+    assert_eq!(refused.live_reserved_bytes, 0);
+    assert_eq!(refused.total_value_bytes, 0);
+    assert_eq!(refused.logical_bytes, read);
     context
         .check_role("P", &backend, &inputs, &limited_ledger(u64::MAX, encoded))
         .unwrap();
@@ -1316,7 +1324,8 @@ fn inventories_are_exact_even_when_components_have_equal_types() {
     let context = InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap();
     let actual = [TestValue::Bool(true), TestValue::Bool(false)];
     for (fault, expected) in [
-        (host::Fault::EncodeOversizeBound, E::Limit),
+        // An encoding bound no root affords refuses as the root's bytes.
+        (host::Fault::EncodeOversizeBound, E::BytesLimit),
         (host::Fault::EncodeOverrun, E::Codec),
     ] {
         let backend = Host {

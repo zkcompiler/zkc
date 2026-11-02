@@ -176,11 +176,12 @@ fn backend_for(
     )
     .map_err(|e| e.to_string())
 }
-/// Charge and hold a typed value's Host storage in the invocation root; a
-/// refusal names the root allowance that refused.
+/// Charge and hold a typed value's Host storage in the invocation root,
+/// together; a refusal names the root allowance that refused.
 fn charge(ledger: &ExecutionLedger, fresh: usize) -> DataResult<Arc<LiveReservation>> {
-    RootCharge::FUNCTION.charge(ledger, 0, fresh)?;
-    RootCharge::FUNCTION.hold(ledger, fresh).map(Arc::new)
+    RootCharge::FUNCTION
+        .charge_and_hold(ledger, 0, fresh, fresh)
+        .map(Arc::new)
 }
 fn measure_native_value(
     backend: &CpuBackend,

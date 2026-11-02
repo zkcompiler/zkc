@@ -842,7 +842,7 @@ fn independent_concurrent_hosts_charge_the_same_ledger_before_execution() {
 }
 
 #[test]
-fn standalone_runs_keep_one_root_beside_separate_runner_fuel() {
+fn standalone_runs_keep_one_record_bounded_root_beside_separate_runner_fuel() {
     let (raw, request) = fixture("bool");
     let request = request.to_string();
     let run = |limits| {
@@ -858,8 +858,9 @@ fn standalone_runs_keep_one_root_beside_separate_runner_fuel() {
     // take custody of them.
     let loaded = root.snapshot();
     assert!(loaded.logical_bytes > 0 && loaded.live_reserved_bytes > 0);
-    // A root that cannot afford the loading names the loading allowance it
-    // exhausted: the loaded input bytes, or the loading work.
+    // The selected record bounds the root: one that cannot afford the loading
+    // names the loading allowance it exhausted, the loaded input bytes or the
+    // loading work.
     let refusal = |limits| {
         host(&raw, limits)
             .prepare(request.as_bytes())
@@ -867,13 +868,13 @@ fn standalone_runs_keep_one_root_beside_separate_runner_fuel() {
             .unwrap()
     };
     let mut limits = HostLimits::default();
-    limits.invocation.total_bytes = loaded.total_value_bytes - 1;
+    limits.capacity.values.total_bytes = loaded.total_value_bytes - 1;
     assert_eq!(refusal(limits), "artifact-input-bytes-limit");
     let mut limits = HostLimits::default();
-    limits.invocation.live_bytes = loaded.live_reserved_bytes - 1;
+    limits.capacity.values.live_bytes = loaded.live_reserved_bytes - 1;
     assert_eq!(refusal(limits), "artifact-input-bytes-limit");
     let mut limits = HostLimits::default();
-    limits.invocation.logical_bytes = loaded.logical_bytes - 1;
+    limits.capacity.work.logical_bytes = loaded.logical_bytes - 1;
     assert_eq!(refusal(limits), "artifact-input-work-limit");
     let report = prepared.execute();
     let execution = report.execution.as_ref().unwrap();
@@ -902,28 +903,15 @@ fn standalone_runs_keep_one_root_beside_separate_runner_fuel() {
     assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
     // A root that holds the records but not the returned values refuses
     // custody: the report releases them instead of retaining them unreserved.
+    // The record's live selection bounds that root, not only each runner.
     let mut limits = HostLimits::default();
-    limits.invocation.live_bytes = used.live_reserved_bytes - 1;
+    limits.capacity.values.live_bytes = used.live_reserved_bytes - 1;
     let report = run(limits);
     assert_eq!(report.failure.as_deref(), Some("bundle-output-limit"));
     let execution = report.execution.as_ref().unwrap();
     assert_eq!(execution.outcome, Outcome::Completed);
     assert!(execution.roles.iter().all(|role| role.outputs.is_empty()));
     assert_eq!(execution.unreserved_output_bytes(), 0);
-    // The same number as each runner's own live allowance bounds only that
-    // runner: the runners complete and the root, with its own allowance,
-    // takes custody of their values.
-    let mut limits = HostLimits::default();
-    limits.capacity.values.live_bytes = used.live_reserved_bytes - 1;
-    let report = run(limits);
-    assert!(report.failure.is_none(), "{:?}", report.failure);
-    let execution = report.execution.as_ref().unwrap();
-    assert_eq!(execution.outcome, Outcome::Completed);
-    assert!(execution.roles.iter().all(|role| !role.outputs.is_empty()));
-    assert_eq!(
-        report.invocation_ledger().snapshot().live_reserved_bytes,
-        used.live_reserved_bytes
-    );
     // Rendering repeats each record's path, so it charges the root first; a
     // root that cannot afford it renders the bounded summary instead.
     let report = run(HostLimits::default());
@@ -933,7 +921,7 @@ fn standalone_runs_keep_one_root_beside_separate_runner_fuel() {
     assert!(rendered["reached"].is_array());
     assert!(root.snapshot().total_value_bytes > before.total_value_bytes);
     let mut limits = HostLimits::default();
-    limits.invocation.total_bytes = before.total_value_bytes + 1;
+    limits.capacity.values.total_bytes = before.total_value_bytes + 1;
     let report = run(limits);
     let summary = report.diagnostics();
     assert_eq!(summary["diagnostics"], "omitted");
@@ -1024,13 +1012,13 @@ fn common_input_inspection_charges_one_invocation_ledger_for_all_roles() {
         (loaded.logical_bytes + inspection / 2, false),
     ] {
         let mut limits = HostLimits::default();
-        limits.invocation.logical_bytes = allowance;
+        limits.capacity.work.logical_bytes = allowance;
         let (host, request, bindings) = bound_bool_run(limits);
         let prepared = host.prepare(&request).unwrap();
         let result = prepared.check_common_inputs(&bindings);
         assert_eq!(result.is_ok(), admitted, "{allowance}");
         if !admitted {
-            assert_eq!(result.unwrap_err(), "input-binding-Limit");
+            assert_eq!(result.unwrap_err(), "input-binding-work-limit");
         }
     }
 }
@@ -1070,14 +1058,9 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
         json!(Allowances::SEQUENCE_WORK.default)
     );
     assert_eq!(limits.loading_work, Allowances::LOADING_WORK.default);
-    assert_eq!(
-        limits.invocation,
-        crate::execution::InvocationLimits::DEFAULT
-    );
-    assert_eq!(
-        record["invocation"]["live_bytes"],
-        json!(Allowances::INVOCATION_LIVE_BYTES.default)
-    );
+    // The capacity record's byte fields are the invocation's; the policy
+    // record selects no separate root allowance.
+    assert!(record.get("invocation").is_none());
     assert_eq!(
         record["loading"]["work"],
         json!(Allowances::LOADING_WORK.default)
@@ -1092,9 +1075,9 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
         ("sequence", "bundle-sequence-work-limit"),
         ("external", "bundle-limits"),
         ("loading", "bundle-loading-work-limit"),
-        ("live", "native-invocation-limit"),
-        ("total", "native-invocation-limit"),
-        ("logical", "native-invocation-limit"),
+        ("live", "native-capacity-limit"),
+        ("total", "native-capacity-limit"),
+        ("logical", "native-capacity-limit"),
         ("public", "entry-public-bytes-limit"),
         ("reference", "entry-reference-bytes-limit"),
         ("setup", "entry-setup-bytes-limit"),
@@ -1116,18 +1099,16 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
                 raised.loading_work = Allowances::LOADING_WORK.maximum + 1;
             }
             "live" => {
-                lowered.invocation.live_bytes = 0;
-                raised.invocation.live_bytes =
-                    Allowances::INVOCATION_LIVE_BYTES.maximum as usize + 1;
+                lowered.capacity.values.live_bytes = 0;
+                raised.capacity.values.live_bytes = Capacity::HARD_MAX.values.live_bytes + 1;
             }
             "total" => {
-                lowered.invocation.total_bytes = 0;
-                raised.invocation.total_bytes =
-                    Allowances::INVOCATION_TOTAL_BYTES.maximum as usize + 1;
+                lowered.capacity.values.total_bytes = 0;
+                raised.capacity.values.total_bytes = Capacity::HARD_MAX.values.total_bytes + 1;
             }
             "logical" => {
-                lowered.invocation.logical_bytes = 0;
-                raised.invocation.logical_bytes = Allowances::INVOCATION_LOGICAL_BYTES.maximum + 1;
+                lowered.capacity.work.logical_bytes = 0;
+                raised.capacity.work.logical_bytes = Capacity::HARD_MAX.work.logical_bytes + 1;
             }
             "public" => {
                 lowered.material.public_bytes = 0;
@@ -1157,7 +1138,7 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
     // Admission refuses a selection above a maximum; it is never clamped.
     let (raw, _) = fixture("bool");
     let mut raised = HostLimits::default();
-    raised.invocation.live_bytes = Allowances::INVOCATION_LIVE_BYTES.maximum as usize + 1;
+    raised.capacity.values.live_bytes = Capacity::HARD_MAX.values.live_bytes + 1;
     assert_eq!(
         RunHost::admit(
             &raw,
@@ -1167,7 +1148,7 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
         )
         .err()
         .unwrap(),
-        "native-invocation-limit"
+        "native-capacity-limit"
     );
     // The builder selects the same record field the policy owns.
     let (raw, _) = fixture("bool");

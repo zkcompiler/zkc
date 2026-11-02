@@ -5,7 +5,7 @@ mod inputs;
 mod interface;
 mod messages;
 use crate::execution::InputValue;
-use crate::execution::{Capacity, CpuExecution, InvocationLimits};
+use crate::execution::{Capacity, CpuExecution};
 pub use inputs::ProofInputs;
 use zkc_runtime::host::proof::{self as driver, ArtifactFailure, ArtifactReport};
 mod entropy;
@@ -58,8 +58,9 @@ pub struct NativeDeployment {
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-    /// Charges the invocation's Host-side binding-root encoding when no
-    /// shared ledger exists; standalone runners keep their own budgets.
+    /// Charges the invocation's Host-side work when no shared ledger exists;
+    /// standalone runners keep their own ledgers, which the same record
+    /// bounds.
     invocation_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     retained_inputs: bool,
     operation: Option<bool>,
@@ -67,9 +68,10 @@ pub struct NativeDeployment {
     publication: String,
     choices: [String; 7],
     external_work_limit: u64,
+    /// The selected record: per-operation ceilings, each runner's fuel, and
+    /// the byte allowances of the root this deployment creates for an
+    /// invocation.
     capacity: Capacity,
-    /// The allowances of the root this deployment creates for an invocation.
-    invocation: InvocationLimits,
     loading_work: u64,
     setups: SetupAuthority,
     entry: NativeProofEntry,
@@ -530,7 +532,6 @@ impl NativeDeployment {
             choices,
             external_work_limit: crate::host::capacity::Allowances::EXTERNAL_WORK.default,
             capacity: Capacity::default(),
-            invocation: InvocationLimits::DEFAULT,
             loading_work: crate::host::capacity::Allowances::LOADING_WORK.default,
             setups,
             preparation: PreparedComputations::new(
@@ -600,17 +601,6 @@ impl NativeDeployment {
         self.capacity = capacity;
         Ok(self)
     }
-    /// Select the allowances of the invocation root each later call creates,
-    /// separately from the runners' capacity. A root attached by an outer
-    /// invocation keeps that invocation's allowances.
-    pub fn with_invocation(mut self, limits: InvocationLimits) -> Result<Self> {
-        limits.validate()?;
-        self.invocation = limits;
-        Ok(self)
-    }
-    pub fn invocation(&self) -> InvocationLimits {
-        self.invocation
-    }
     /// Select the loading work allowance of each input loading.
     pub fn with_loading_work_limit(mut self, limit: u64) -> Result<Self> {
         if !crate::host::capacity::Allowances::LOADING_WORK.admits(limit) {
@@ -622,10 +612,11 @@ impl NativeDeployment {
     pub(crate) fn loading(&self) -> crate::host::admission::LoadLimits {
         self.capacity.loading(self.loading_work)
     }
-    /// A new invocation root with this deployment's invocation allowances.
-    /// The selected role's runner keeps its own budget beside it.
+    /// A new invocation root that the selected capacity record bounds. The
+    /// selected role's runner keeps its own ledger beside it, which the same
+    /// record bounds.
     pub(crate) fn invocation_root(&self) -> zkc_runtime::vm::ExecutionLedger {
-        self.invocation.root()
+        self.capacity.root()
     }
     pub fn binding_scope(&self) -> crate::entry::BindingScope {
         if self.entry().binds_invocation() {

@@ -1,12 +1,14 @@
 //! Explicitly retained immutable data. Reuse grants no invocation authority.
-use super::capacity::Capacity;
+use super::capacity::{Allowances, Capacity};
 use crate::io::bytes::Result;
 use std::sync::Arc;
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, SetupRegistry, Value};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 /// Decoded immutable data and its canonical bytes, owned by the application.
-/// Every invocation checks its own type, policy, setup and loading budgets.
+/// The prepared-data allowance ([`Allowances::PREPARED_BYTES`]) bounds what
+/// one datum retains; the capacity record bounds its decoding. Every
+/// invocation checks its own type, policy, setup and loading budgets.
 /// Capabilities and setup keys use their separate Host APIs.
 /// The native wire profile fixes bytes by physical type and value; invocation
 /// domains and capacity may restrict admission but cannot change the encoding.
@@ -63,7 +65,7 @@ impl PreparedData {
         let value = cpu
             .enter(|| admission.load(&backend, &capacity.backend()))?
             .remove(0);
-        Self::retain(value, wire, capacity)
+        Self::retain(value, wire)
     }
     /// Freeze a native value and its canonical encoding. Use Native inputs
     /// directly when a private value should remain unencoded.
@@ -113,15 +115,19 @@ impl PreparedData {
         if value.retained_bytes() > estimate {
             return Err("artifact-input-size-estimate".into());
         }
-        Self::retain(value, wire, capacity)
+        Self::retain(value, wire)
     }
-    fn retain(value: Value, wire: Vec<u8>, capacity: Capacity) -> Result<Self> {
-        // Charge both representations: retaining a cache is an explicit cost.
+    fn retain(value: Value, wire: Vec<u8>) -> Result<Self> {
+        Self::retain_within(value, wire, Allowances::PREPARED_BYTES.default)
+    }
+    /// Retain both representations within `allowance` bytes: retaining a
+    /// cache is an explicit cost, which no runner's allowance bounds.
+    fn retain_within(value: Value, wire: Vec<u8>, allowance: u64) -> Result<Self> {
         let retained = value
             .retained_bytes()
             .checked_add(wire.len())
             .ok_or("native-data-bytes-limit")?;
-        if retained > capacity.values.live_bytes.min(capacity.values.total_bytes) {
+        if retained as u64 > allowance {
             return Err("native-data-bytes-limit".into());
         }
         Ok(Self(Arc::new(Data {
@@ -208,15 +214,30 @@ mod tests {
         let value = Value::Bool(true);
         let ty = value.physical_type();
         let wire = backend.encode_native_value(&value).unwrap();
+        // Retention has its own allowance: a runner's live allowance that
+        // holds the decoded value but not its wire copy as well does not
+        // bound it.
         let mut single = capacity;
         single.values.live_bytes = value.retained_bytes();
+        let decoded = PreparedData::from_wire(ty, wire.clone(), single).unwrap();
+        let retained = decoded.retained_bytes();
+        assert!(retained > single.values.live_bytes);
         assert_eq!(
-            PreparedData::from_wire(ty, wire, single).unwrap_err(),
+            PreparedData::from_value(value.clone(), single)
+                .unwrap()
+                .retained_bytes(),
+            retained
+        );
+        // The allowance itself bounds both representations together.
+        assert_eq!(
+            PreparedData::retain_within(value.clone(), wire.clone(), retained as u64 - 1)
+                .unwrap_err(),
             "native-data-bytes-limit"
         );
+        PreparedData::retain_within(value, wire, retained as u64).unwrap();
         assert_eq!(
-            PreparedData::from_value(value, single).unwrap_err(),
-            "native-data-bytes-limit"
+            Allowances::PREPARED_BYTES.default,
+            Allowances::PREPARED_BYTES.maximum
         );
         // An in-process value with no native wire profile cannot be prepared.
         let point = Value::point(vec![zkc_cpu::Scalar::from(7); 4], &capacity.backend()).unwrap();

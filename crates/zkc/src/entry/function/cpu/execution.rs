@@ -88,15 +88,12 @@ impl EntryHost {
         if request.arguments.len() != self.signature().parameters.len() {
             return Err(EntryCondition::InputNames.into());
         }
-        // The interpreter and every reached child share this root, so the
-        // record's instruction and iteration selections are the meter they
-        // pool: a Function invocation's aggregate work is bounded across its
-        // children, which a standalone run never pools.
-        let limits = &self.options.limits;
-        let ledger = limits.invocation.pooled(
-            limits.capacity.work.instructions,
-            limits.capacity.work.iterations,
-        );
+        // The selected record bounds this root, which the interpreter and
+        // every reached child share: its byte fields bound the whole
+        // invocation, and its instruction and iteration selections are the
+        // meter they pool, so a Function invocation's aggregate work is
+        // bounded across its children, which a standalone run never pools.
+        let ledger = self.options.limits.capacity.pooled_root();
         let context_live = RootCharge::FUNCTION
             .reserve_bytes(Some(&ledger), deployment::context_bytes(&request.context))
             .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
@@ -426,25 +423,19 @@ impl Execution<'_> {
         self.usage.dispatches += 1;
         Ok(())
     }
-    /// Partition the root's remaining live allowance once per native
-    /// invocation, within each runner's own live allowance, and keep
-    /// transport/result space beside the runners' full live reservations.
-    /// Children run on what remains of the pooled instruction and iteration
-    /// meter.
+    /// A child's byte budgets are drawn from what the root has left: half of
+    /// its remaining live allowance, partitioned once per native invocation,
+    /// keeps transport/result space beside the runners' full live
+    /// reservations, and the remaining fresh and logical allowances bound its
+    /// runners, which charge the root too. Children run on what remains of
+    /// the pooled instruction and iteration meter.
     fn child_capacity(&self, runners: usize) -> crate::execution::Capacity {
-        let limits = &self.host.options.limits;
+        let record = self.host.options.limits.capacity;
         let used = self.ledger.snapshot();
-        let mut capacity = limits.capacity;
-        capacity.values.live_bytes = capacity.values.live_bytes.min(
-            limits
-                .invocation
-                .live_bytes
-                .saturating_sub(used.live_reserved_bytes)
-                / 2
-                / runners.max(1),
-        );
-        capacity.work.instructions = capacity.work.instructions.saturating_sub(used.instructions);
-        capacity.work.iterations = capacity.work.iterations.saturating_sub(used.iterations);
+        let mut capacity = record.drawn_from(&self.ledger);
+        capacity.values.live_bytes = capacity.values.live_bytes / 2 / runners.max(1);
+        capacity.work.instructions = record.work.instructions.saturating_sub(used.instructions);
+        capacity.work.iterations = record.work.iterations.saturating_sub(used.iterations);
         capacity
     }
     /// The policy record a child receives: the partitioned capacity and what
@@ -519,19 +510,17 @@ impl Execution<'_> {
             .returned_values()
             .ok_or_else(|| self.fail("entry-host-numeric-stopped"))?;
         let metadata = c.results.iter().map(data::metadata).sum::<usize>();
-        RootCharge::FUNCTION
-            .charge(&self.ledger, 0, metadata)
-            .map_err(|e| self.fail(e))?;
         let bytes = values
             .iter()
             .map(RuntimeValue::retained_bytes)
             .sum::<usize>()
             .saturating_add(metadata);
-        // Reserve the parent's exact retained result while the child still owns
-        // its full live allowance. No gap exposes unreserved native backings.
+        // Charge the result's new metadata and reserve the parent's exact
+        // retained result, together, while the child still owns its full live
+        // allowance. No gap exposes unreserved native backings.
         let live = std::sync::Arc::new(
             RootCharge::FUNCTION
-                .hold(&self.ledger, bytes)
+                .charge_and_hold(&self.ledger, 0, metadata, bytes)
                 .map_err(|e| self.fail(e))?,
         );
         let outputs = values.to_vec();

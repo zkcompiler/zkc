@@ -148,32 +148,27 @@ impl BackendRun {
     /// Start the common Host with caller-owned backend instances and values.
     /// The common linker independently checks each actual installation again.
     ///
-    /// The invocation root has the selected `invocation` allowances. It
+    /// The selected `limits` bound the invocation: their live, fresh and
+    /// logical byte budgets are the invocation root's allowances. The root
     /// charges wire transport, received payload decoding and report storage,
     /// and the report keeps it ([`joint::Report::invocation_ledger`]). Each
-    /// runner keeps its own budget from `limits` beside the root. A selection
-    /// above the invocation maximum refuses before any runner exists.
+    /// runner keeps its own ledger beside the root, which the same `limits`
+    /// bound.
     pub fn execute<B: WireBackend, H: joint::Hooks<B>>(
         &self,
         session: &str,
         inputs: Vec<joint::RoleInput<B>>,
         limits: joint::RunLimits,
-        invocation: crate::execution::InvocationLimits,
         hooks: &mut H,
     ) -> Result<joint::Report<B>, joint::StartError<B>> {
-        if let Err(code) = invocation.validate() {
-            return Err(joint::StartError {
-                failure: joint::Failure {
-                    kind: joint::FailureKind::Limit,
-                    detail: joint::Text {
-                        text: code,
-                        omitted_bytes: 0,
-                    },
-                },
-                inputs,
-            });
-        }
-        let root = invocation.root();
+        let root = ExecutionLedger::new(
+            limits.values,
+            WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: limits.work.logical_bytes,
+            },
+        );
         joint::run_with_ledgers(
             &self.bundle,
             session,
@@ -227,7 +222,9 @@ impl InputBoundBackendRun {
             // Capacity exhaustion keeps its own class; a refused binding keeps
             // its exact code.
             let error = match error {
-                BindingError::Limit => RuntimeError::Limit,
+                BindingError::Limit | BindingError::WorkLimit | BindingError::BytesLimit => {
+                    RuntimeError::Limit
+                }
                 error => RuntimeError::Backend(BackendError::new(error.to_string())),
             };
             return Err(LoadError {

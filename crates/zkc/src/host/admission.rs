@@ -167,8 +167,8 @@ fn add(total: &mut usize, amount: usize, limit: usize, error: &str) -> Result<()
 
 /// Reserve loaded input storage, such as a captured reference or imported
 /// setup material, in the invocation root when there is one: its loading work
-/// as logical work, then its bytes as fresh and live allocation. A refusal
-/// names the loading allowance the root could not afford,
+/// as logical work and its bytes as fresh and live allocation, together. A
+/// refusal names the loading allowance the root could not afford,
 /// `artifact-input-work-limit` or `artifact-input-bytes-limit`.
 pub(crate) fn reserve_input(
     ledger: Option<&zkc_runtime::vm::ExecutionLedger>,
@@ -370,9 +370,12 @@ impl<'a> Admission<'a> {
                 .checked_add(bytes)
                 .ok_or("entry-host-loading-limit")?
         };
-        let live = super::capacity::RootCharge::LOADING
-            .charge(ledger, work as u64, bytes)
-            .and_then(|()| super::capacity::RootCharge::LOADING.hold(ledger, bytes))?;
+        let live = super::capacity::RootCharge::LOADING.charge_and_hold(
+            ledger,
+            work as u64,
+            bytes,
+            bytes,
+        )?;
         let values = self.load(backend, policy)?;
         Ok((values, live))
     }

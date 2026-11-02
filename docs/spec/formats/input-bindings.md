@@ -63,10 +63,18 @@ that role's required components against the pinned expectations. It bounds each
 value, descriptor path and canonical encoding, and charges inspection and
 encoding to the caller's [invocation ledger](../runtime/capacity.md#invocation-ledgers):
 each inspected value's retained bytes as logical work, and each canonical
-encoding bound as fresh allocation held live until its comparison ends. All
-roles of one invocation share that ledger. Failure creates no runtime frame or
-semantic action. Ordinary runner loading still independently admits complete inputs,
-backend authority, services, custody and budgets.
+encoding bound as logical work and as fresh allocation held live until its
+comparison ends. All roles of one invocation share that ledger. Failure creates
+no runtime frame or semantic action. Ordinary runner loading still independently
+admits complete inputs, backend authority, services, custody and budgets.
+
+The format's own ceilings refuse with `input-binding-Limit`: the 4 MiB context,
+its groups and components, path depth and extents, and an input list beyond the
+port ceiling. A charge the ledger cannot afford is a
+[root refusal](../runtime/capacity.md#root-refusals) instead, all or nothing,
+naming the allowance that refused: `input-binding-work-limit` for its logical
+work, and `input-binding-bytes-limit` for its fresh or live bytes, including
+when its logical work does not fit either.
 
 ## Production
 
@@ -80,7 +88,8 @@ ledger in the same way. Every observed component of one group must agree: equal
 canonical bytes, or the inactive marker on every one, or the producer refuses
 with `input-binding-Value`. `ContextProducer::encode(ledger)` requires an
 observed component for every group (`input-binding-Input` otherwise), emits the
-canonical bytes `admit_pinned` accepts, and charges them as fresh allocation.
+canonical bytes `admit_pinned` accepts, and charges them as logical work and
+fresh allocation.
 A producer may observe one role or all of them; observing all of them also
 checks the participants' agreement before distribution.
 

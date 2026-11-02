@@ -569,7 +569,7 @@ mod encoding_tests {
         assert!(used.total_value_bytes > 0);
         let attempt = |logical_bytes: u64| {
             let mut limits = HostLimits::default();
-            limits.invocation.logical_bytes = logical_bytes;
+            limits.capacity.work.logical_bytes = logical_bytes;
             entry(limits)
                 .prepare(RunRequest {
                     session: "encoding".into(),
@@ -641,7 +641,7 @@ mod encoding_tests {
         // that work and less than the first 512-byte buffer reservation, so
         // the run completes and encoding refuses without a partial buffer.
         let mut limits = HostLimits::default();
-        limits.invocation.logical_bytes = before.logical_bytes + 511;
+        limits.capacity.work.logical_bytes = before.logical_bytes + 511;
         let report = completed(limits);
         let retained = report.native.invocation_ledger().snapshot();
         assert_eq!(

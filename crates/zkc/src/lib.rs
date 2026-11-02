@@ -18,7 +18,7 @@ pub mod source_names;
 pub mod execution {
     pub use zkc_cpu::{CpuExecution, CpuInstallation, providers};
 
-    pub use crate::host::capacity::{Capacity, InvocationLimits, MaterialLimits};
+    pub use crate::host::capacity::{Capacity, MaterialLimits};
     pub use crate::host::data::PreparedData;
     pub use crate::host::input_source::InputSource;
     pub use crate::host::material::ProverMaterial;

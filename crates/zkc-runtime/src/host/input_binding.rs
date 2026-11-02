@@ -1,9 +1,8 @@
 //! Explicit externally pinned admission context. This is neither source
 //! requirement derivation nor a certificate that peers used the same pin.
-use super::wire::{WireBackend, reserve_allocation};
+use super::wire::{RootRefusal, WireBackend, reserve_root};
 use crate::vm::{
     EntryRole, ExecutionLedger, Limits, LiveReservation, PhysicalType, Program, Type, Value,
-    WorkBudget,
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -69,7 +68,15 @@ pub struct InputRequirement {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BindingError {
+    /// A ceiling of the context format: its bytes, groups, components, path
+    /// depth, an extent, or the number of a role's inputs.
     Limit,
+    /// The invocation root's logical work allowance refused inspection or
+    /// encoding.
+    WorkLimit,
+    /// The invocation root's fresh or live byte allowance refused an
+    /// encoding.
+    BytesLimit,
     Identity,
     Subject,
     Requirements,
@@ -79,7 +86,11 @@ pub enum BindingError {
 }
 impl std::fmt::Display for BindingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "input-binding-{self:?}")
+        match self {
+            Self::WorkLimit => f.write_str("input-binding-work-limit"),
+            Self::BytesLimit => f.write_str("input-binding-bytes-limit"),
+            other => write!(f, "input-binding-{other:?}"),
+        }
     }
 }
 impl std::error::Error for BindingError {}
@@ -403,6 +414,19 @@ fn check_ports<V: Value>(roles: &[EntryRole], role: &str, inputs: &[Option<&V>])
     }
     Ok(())
 }
+/// Charge inspection or encoding to the invocation root before its effect, all
+/// or nothing; a refusal names the root allowance that refused.
+fn charge_root(
+    ledger: &ExecutionLedger,
+    work: u64,
+    fresh: usize,
+    live: usize,
+) -> Result<LiveReservation> {
+    reserve_root(ledger, work, fresh, live).map_err(|refusal| match refusal {
+        RootRefusal::Work => BindingError::WorkLimit,
+        RootRefusal::Bytes => BindingError::BytesLimit,
+    })
+}
 /// One component's canonical observation, holding the live allowance of its
 /// encoding while it is retained.
 struct Observed {
@@ -421,18 +445,8 @@ fn observe<B: WireBackend>(
     backend: &B,
     ledger: &ExecutionLedger,
 ) -> Result<Option<Observed>> {
-    let inspect = |value: &B::Value| {
-        ledger
-            .charge(
-                WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: value.retained_bytes() as u64,
-                },
-                0,
-            )
-            .map_err(|_| BindingError::Limit)
-    };
+    let inspect =
+        |value: &B::Value| charge_root(ledger, value.retained_bytes() as u64, 0, 0).map(drop);
     inspect(root)?;
     backend
         .validate_value(root)
@@ -503,7 +517,7 @@ fn observe<B: WireBackend>(
             let bound = backend
                 .encoding_bound(&value)
                 .map_err(|_| BindingError::Codec)?;
-            live = reserve_allocation(Some(ledger), bound).map_err(|_| BindingError::Limit)?;
+            live = Some(charge_root(ledger, bound as u64, bound, bound)?);
             let bytes = backend
                 .encode_wire(&value)
                 .map_err(|_| BindingError::Codec)?;
@@ -603,16 +617,7 @@ impl ContextProducer {
         if bytes.len() > Limits::ARTIFACT_BYTES {
             return Err(BindingError::Limit);
         }
-        ledger
-            .charge(
-                WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: bytes.len() as u64,
-                },
-                bytes.len(),
-            )
-            .map_err(|_| BindingError::Limit)?;
+        drop(charge_root(ledger, bytes.len() as u64, bytes.len(), 0)?);
         Ok(bytes)
     }
 }

@@ -964,10 +964,9 @@ fn function_results_are_encoded_under_the_invocation_ledger() {
         .as_u64()
         .unwrap();
     std::fs::remove_file(&results).unwrap();
-    // The encoder draws on the invocation root, which keeps its own
-    // allowance: the record's logical work bounds each runner only. The same
-    // number that would leave the root no room for the first 512-byte result
-    // buffer leaves the results published.
+    // Execution fits, but the first 512-byte result buffer does not: the
+    // encoder draws on the invocation root, which the record's logical work
+    // bounds, and publishes nothing.
     let capacity = dir.path().join("capacity.json");
     std::fs::write(
         &capacity,
@@ -984,8 +983,8 @@ fn function_results_are_encoded_under_the_invocation_ledger() {
     )
     .unwrap();
     let report = run("run", &options, &invocation(Some(&capacity)));
-    assert_eq!(report["status"], "executed", "{report}");
+    assert_eq!(report["code"], "entry-output-limit", "{report}");
+    assert_eq!(report["phase"], "results");
     assert_eq!(report["capacity"][5][2], json!((used + 511).to_string()));
-    assert!(report["results_published"].as_bool().unwrap());
-    assert!(results.exists());
+    assert!(!results.exists());
 }

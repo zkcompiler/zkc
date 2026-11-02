@@ -3,6 +3,7 @@ use super::admission::LoadLimits;
 use crate::io::bytes::*;
 use serde_json::{Value as Json, json};
 use zkc_cpu::{CpuBackend, Policy};
+use zkc_runtime::host::wire::{RootRefusal, reserve_root};
 use zkc_runtime::vm::{ExecutionLedger, Limits, LiveReservation, ValueBudget, WorkBudget};
 
 /// The extent over which one allowance counts. Allowances with equal numbers
@@ -13,8 +14,9 @@ pub enum Scope {
     /// Function makes to it.
     Entry,
     /// One Entry invocation, from input preparation through output
-    /// publication: the invocation accounting root, and the instruction meter
-    /// that a Function's interpreter and reached children pool there.
+    /// publication: the invocation accounting root that the capacity record's
+    /// byte fields bound, and the instruction meter that a Function's
+    /// interpreter and reached children pool there.
     Invocation,
     /// One participant runner, cumulative across the attempts of one proof
     /// call.
@@ -41,10 +43,9 @@ impl Allowance {
         value <= self.maximum
     }
 }
-/// The Host policy owner of every native allowance beside the per-operation
-/// and per-runner fields of the [`Capacity`] record: the invocation root's
-/// [`InvocationLimits`], the supplied material's [`MaterialLimits`], loading
-/// work, and the work allowances below. Run, proof and Function entries read
+/// The Host policy owner of every native allowance beside the fields of the
+/// [`Capacity`] record: the supplied material's [`MaterialLimits`], loading
+/// work, prepared data, and the work allowances below. Run, proof and Function entries read
 /// their defaults and maxima from here; each child of a Function invocation
 /// receives what remains of the parent's selected cumulative allowance.
 pub struct Allowances;
@@ -133,27 +134,6 @@ impl Allowances {
         default: zkc_format::proof::MAX_PROOF_BYTES as u64,
         maximum: zkc_format::proof::MAX_PROOF_BYTES as u64,
     };
-    /// Bytes the invocation root holds live at once.
-    pub const INVOCATION_LIVE_BYTES: Allowance = Allowance {
-        unit: "live retained bytes of the invocation root",
-        scope: Scope::Invocation,
-        default: InvocationLimits::DEFAULT.live_bytes as u64,
-        maximum: InvocationLimits::MAXIMUM.live_bytes as u64,
-    };
-    /// Fresh allocation charged to the invocation root, never refunded.
-    pub const INVOCATION_TOTAL_BYTES: Allowance = Allowance {
-        unit: "cumulative fresh allocation bytes of the invocation root",
-        scope: Scope::Invocation,
-        default: InvocationLimits::DEFAULT.total_bytes as u64,
-        maximum: InvocationLimits::MAXIMUM.total_bytes as u64,
-    };
-    /// Logical work charged to the invocation root.
-    pub const INVOCATION_LOGICAL_BYTES: Allowance = Allowance {
-        unit: "logical work bytes of the invocation root",
-        scope: Scope::Invocation,
-        default: InvocationLimits::DEFAULT.logical_bytes,
-        maximum: InvocationLimits::MAXIMUM.logical_bytes,
-    };
     /// The pooled instruction meter of a Function invocation: its interpreter
     /// and every reached child share the root, so the record's `instructions`
     /// bound their sum, and each child runs on what remains.
@@ -197,7 +177,9 @@ impl Allowances {
     };
     /// Setup material supplied with one invocation, counting every copy the
     /// Host holds: each verifier-key copy a proof makes for a public port, and
-    /// for a Function invocation the material of all of its deployments.
+    /// for a Function invocation the material of all of its deployments. Large
+    /// commitment setups can exceed the default, so a Host may select up to
+    /// the larger maximum.
     pub const SETUP_BYTES: Allowance = Allowance {
         unit: "setup material bytes, counted at every copy",
         scope: Scope::Invocation,
@@ -212,6 +194,17 @@ impl Allowances {
         scope: Scope::Entry,
         default: MaterialLimits::DEFAULT.retained_imports as u64,
         maximum: MaterialLimits::MAXIMUM.retained_imports as u64,
+    };
+    /// Bytes one prepared datum ([`PreparedData`](crate::execution::PreparedData))
+    /// retains: its decoded native value and its canonical wire bytes
+    /// together. Preparation belongs to no invocation, so neither a runner's
+    /// allowances nor an invocation root bound it; exceeding it refuses with
+    /// `native-data-bytes-limit`.
+    pub const PREPARED_BYTES: Allowance = Allowance {
+        unit: "retained bytes of one prepared datum, native value and canonical wire bytes together",
+        scope: Scope::Operation,
+        default: 64 << 20,
+        maximum: 64 << 20,
     };
 }
 
@@ -242,7 +235,12 @@ impl MaterialLimits {
         setup_bytes: 64 << 20,
         retained_imports: 64 << 20,
     };
-    pub const MAXIMUM: Self = Self::DEFAULT;
+    /// The most a Host may select. Setup material may be raised above its
+    /// default; the other material allowances may only be lowered.
+    pub const MAXIMUM: Self = Self {
+        setup_bytes: 256 << 20,
+        ..Self::DEFAULT
+    };
     /// Refuse a selection above an installed maximum with that allowance's
     /// code, without clamping it.
     pub fn validate(&self) -> Result<()> {
@@ -286,12 +284,14 @@ impl Default for MaterialLimits {
 }
 
 /// The refusal codes of one kind of Host work and storage that an invocation
-/// root charges. The root's ledger refuses without naming the allowance it
-/// could not afford, so the Host charges each effect's work and bytes
-/// separately and reports the code of the allowance that refused: `work` when
-/// the root's logical work allowance refuses, `bytes` when its fresh or live
-/// byte allowance does. Work is charged first, so a bytes refusal leaves that
-/// work committed; committed charges are never refunded.
+/// root charges. Each charge is all or nothing
+/// ([`reserve_root`](zkc_runtime::host::wire::reserve_root)): its logical
+/// work, its fresh bytes and the live bytes it holds are committed together,
+/// or the charge refuses and leaves the root's usage unchanged, so a refused
+/// item leaves no residual charge for a later charge to meet. A refusal
+/// reports `bytes` when the root's fresh or live byte allowance refuses,
+/// including when its logical work allowance refuses too, and `work` when
+/// only the logical work allowance does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct RootCharge {
     pub(crate) work: &'static str,
@@ -327,36 +327,37 @@ impl RootCharge {
         work: "entry-host-work-limit",
         bytes: "entry-host-bytes-limit",
     };
-    /// Charge known work and fresh bytes before their effect: the work, then
-    /// the bytes.
+    /// Charge known work and fresh bytes before their effect, together.
     pub(crate) fn charge(self, ledger: &ExecutionLedger, work: u64, fresh: usize) -> Result<()> {
-        let budget = |logical_bytes| WorkBudget {
-            instructions: 0,
-            iterations: 0,
-            logical_bytes,
-        };
-        ledger.charge(budget(work), 0).map_err(|_| self.work)?;
-        ledger.charge(budget(0), fresh).map_err(|_| self.bytes)?;
-        Ok(())
+        self.charge_and_hold(ledger, work, fresh, 0).map(drop)
     }
-    /// Hold live bytes in the root without a fresh charge, as for custody
-    /// that passes without a new allocation.
-    pub(crate) fn hold(self, ledger: &ExecutionLedger, bytes: usize) -> Result<LiveReservation> {
-        Ok(ledger.reserve_live(bytes).map_err(|_| self.bytes)?)
+    /// Charge work and fresh bytes and hold live bytes before their effect,
+    /// together: all of them are committed, or none is.
+    pub(crate) fn charge_and_hold(
+        self,
+        ledger: &ExecutionLedger,
+        work: u64,
+        fresh: usize,
+        live: usize,
+    ) -> Result<LiveReservation> {
+        reserve_root(ledger, work, fresh, live).map_err(|refusal| {
+            String::from(match refusal {
+                RootRefusal::Work => self.work,
+                RootRefusal::Bytes => self.bytes,
+            })
+        })
     }
-    /// Charge and hold storage the Host allocates: its work, its fresh bytes,
-    /// then its live bytes. Without a root nothing is charged.
+    /// Charge and hold storage the Host allocates: its work, its fresh bytes
+    /// and its live bytes, together. Without a root nothing is charged.
     pub(crate) fn reserve(
         self,
         ledger: Option<&ExecutionLedger>,
         work: u64,
         bytes: usize,
     ) -> Result<Option<LiveReservation>> {
-        let Some(ledger) = ledger else {
-            return Ok(None);
-        };
-        self.charge(ledger, work, bytes)?;
-        self.hold(ledger, bytes).map(Some)
+        ledger
+            .map(|ledger| self.charge_and_hold(ledger, work, bytes, bytes))
+            .transpose()
     }
     /// Charge and hold storage whose logical work equals its bytes, as a copy
     /// reads every byte it writes.
@@ -366,71 +367,6 @@ impl RootCharge {
         bytes: usize,
     ) -> Result<Option<LiveReservation>> {
         self.reserve(ledger, bytes as u64, bytes)
-    }
-}
-
-/// The invocation accounting root's own allowances. They are separate from
-/// every runner's allowances in [`Capacity`], even where the numbers agree:
-/// the root charges the Host's work and storage for the whole invocation,
-/// together with the runners that share it, while each runner's ledger counts
-/// only that runner. A selection above [`InvocationLimits::MAXIMUM`] refuses
-/// with `native-invocation-limit`; it is never clamped.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InvocationLimits {
-    /// Bytes the root holds live at once: Host-retained storage, values in the
-    /// Host's custody, and the whole live allowance of each runner that shares
-    /// the root.
-    pub live_bytes: usize,
-    /// Cumulative fresh allocation charged to the root, never refunded.
-    pub total_bytes: usize,
-    /// Cumulative logical work charged to the root.
-    pub logical_bytes: u64,
-}
-impl InvocationLimits {
-    pub const DEFAULT: Self = Self {
-        live_bytes: Limits::VALUE_BYTES,
-        total_bytes: Limits::TOTAL_VALUE_BYTES,
-        logical_bytes: Limits::LOGICAL_BYTES,
-    };
-    pub const MAXIMUM: Self = Self::DEFAULT;
-    /// Refuse a selection above the installed maximum without clamping it.
-    pub fn validate(&self) -> Result<()> {
-        if self.live_bytes > Self::MAXIMUM.live_bytes
-            || self.total_bytes > Self::MAXIMUM.total_bytes
-            || self.logical_bytes > Self::MAXIMUM.logical_bytes
-        {
-            return Err("native-invocation-limit".into());
-        }
-        Ok(())
-    }
-    /// A root that no runner shares. Host-side work is never metered in
-    /// instructions or iterations, so it has no allowance of either.
-    pub(crate) fn root(&self) -> ExecutionLedger {
-        self.pooled(0, 0)
-    }
-    /// A root that runners share, with the instruction and iteration meter
-    /// they pool there.
-    pub(crate) fn pooled(&self, instructions: u64, iterations: u64) -> ExecutionLedger {
-        ExecutionLedger::new(
-            ValueBudget {
-                live_bytes: self.live_bytes,
-                total_bytes: self.total_bytes,
-            },
-            WorkBudget {
-                instructions,
-                iterations,
-                logical_bytes: self.logical_bytes,
-            },
-        )
-    }
-    pub fn record(&self) -> Json {
-        json!({"live_bytes":self.live_bytes,"total_bytes":self.total_bytes,
-            "logical_bytes":self.logical_bytes})
-    }
-}
-impl Default for InvocationLimits {
-    fn default() -> Self {
-        Self::DEFAULT
     }
 }
 
@@ -445,8 +381,11 @@ impl Default for InvocationLimits {
 /// Function invocation they are the meter that its interpreter and reached
 /// children pool in the invocation root, each child running on what remains
 /// ([`Allowances::FUNCTION_INSTRUCTIONS`]). Logical work and the live and
-/// cumulative fresh bytes bound each runner's own ledger only; the invocation
-/// root has its own allowances ([`InvocationLimits`]).
+/// cumulative fresh bytes are the invocation's: they bound the invocation
+/// accounting root ([`Capacity::root`]), and each runner's byte budgets are
+/// sublimits drawn from what the root has left ([`Capacity::drawn_from`]),
+/// never a second selection. [`Capacity::HARD_MAX`] is the most a record may
+/// select.
 #[derive(Clone, Copy, Debug)]
 pub struct Capacity {
     /// Maximum elements in one numeric collection or complete nested message.
@@ -458,11 +397,11 @@ pub struct Capacity {
     /// Retained bytes in one native value.
     pub value_bytes: usize,
     /// Instructions and loop iterations per runner (cumulative for proof
-    /// retries; pooled in a Function invocation), and logical work bytes per
-    /// runner.
+    /// retries; pooled in a Function invocation), and logical work bytes of
+    /// the whole invocation.
     pub work: WorkBudget,
-    /// Live retained payload and cumulative fresh allocation, in bytes, per
-    /// runner.
+    /// Live retained payload and cumulative fresh allocation, in bytes, of
+    /// the whole invocation.
     pub values: ValueBudget,
 }
 impl Default for Capacity {
@@ -518,6 +457,50 @@ impl Capacity {
             max_value_bytes: self.value_bytes,
             ..Policy::default()
         }
+    }
+    /// The invocation accounting root this record selects. Its live, fresh
+    /// and logical byte allowances are the record's, so they bound every
+    /// allocation the invocation charges there: request conversion, context,
+    /// loading, diagnostics, result products and every runner that shares the
+    /// root. A root that no runner shares meters no instruction or iteration;
+    /// those fields are each standalone runner's own fuel.
+    pub(crate) fn root(&self) -> ExecutionLedger {
+        ExecutionLedger::new(
+            self.values,
+            WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: self.work.logical_bytes,
+            },
+        )
+    }
+    /// The root of a Function invocation: its interpreter and every reached
+    /// child share it and pool the record's instruction and iteration meter
+    /// there.
+    pub(crate) fn pooled_root(&self) -> ExecutionLedger {
+        ExecutionLedger::new(self.values, self.work)
+    }
+    /// The budgets that a runner sharing `root`, the root this record
+    /// selects, draws from it: the record's per-operation ceilings and fuel,
+    /// with live, fresh and logical byte budgets of what the root has left.
+    /// The runner's charges reach the root too, so the root bounds the
+    /// invocation's aggregate.
+    pub(crate) fn drawn_from(&self, root: &ExecutionLedger) -> Self {
+        let used = root.snapshot();
+        let mut drawn = *self;
+        drawn.values.live_bytes = self
+            .values
+            .live_bytes
+            .saturating_sub(used.live_reserved_bytes);
+        drawn.values.total_bytes = self.values.total_bytes.saturating_sub(
+            used.total_value_bytes
+                .saturating_add(used.pending_value_bytes),
+        );
+        drawn.work.logical_bytes = self.work.logical_bytes.saturating_sub(
+            used.logical_bytes
+                .saturating_add(used.pending_logical_bytes),
+        );
+        drawn
     }
     /// The per-bind loading sublimits under the selected loading work
     /// allowance ([`Allowances::LOADING_WORK`]). The loaded pool passes to the
@@ -610,9 +593,6 @@ mod tests {
             (Allowances::DISPATCHES, Scope::Invocation),
             (Allowances::ATTEMPTS, Scope::Invocation),
             (Allowances::ATTEMPT_PROOF_BYTES, Scope::Attempt),
-            (Allowances::INVOCATION_LIVE_BYTES, Scope::Invocation),
-            (Allowances::INVOCATION_TOTAL_BYTES, Scope::Invocation),
-            (Allowances::INVOCATION_LOGICAL_BYTES, Scope::Invocation),
             (Allowances::FUNCTION_INSTRUCTIONS, Scope::Invocation),
             (Allowances::FUNCTION_ITERATIONS, Scope::Invocation),
             (Allowances::LOADING_WORK, Scope::Operation),
@@ -620,6 +600,7 @@ mod tests {
             (Allowances::REFERENCE_BYTES, Scope::Invocation),
             (Allowances::SETUP_BYTES, Scope::Invocation),
             (Allowances::RETAINED_IMPORTS, Scope::Entry),
+            (Allowances::PREPARED_BYTES, Scope::Operation),
         ];
         for (allowance, scope) in allowances {
             assert!(!allowance.unit.is_empty());
@@ -639,22 +620,7 @@ mod tests {
             Allowances::SERVICE_DRAWS.scope,
             Allowances::FUNCTION_SERVICE_DRAWS.scope
         );
-        // The root's allowances and a runner's agree in number by default, yet
-        // each is its own allowance with its own scope and unit.
         let runner = Capacity::default();
-        assert_eq!(
-            Allowances::INVOCATION_LIVE_BYTES.default,
-            runner.values.live_bytes as u64
-        );
-        assert_ne!(Allowances::INVOCATION_LIVE_BYTES.scope, Scope::Runner);
-        assert_eq!(
-            Allowances::INVOCATION_LOGICAL_BYTES.default,
-            runner.work.logical_bytes
-        );
-        assert_ne!(
-            Allowances::LOADING_WORK.unit,
-            Allowances::INVOCATION_TOTAL_BYTES.unit
-        );
         // The Function meters are the record's own selections, pooled.
         assert_eq!(
             Allowances::FUNCTION_INSTRUCTIONS.default,
@@ -679,6 +645,7 @@ mod tests {
             Allowances::REFERENCE_BYTES,
             Allowances::SETUP_BYTES,
             Allowances::RETAINED_IMPORTS,
+            Allowances::PREPARED_BYTES,
         ] {
             assert_ne!(allowance.scope, Scope::Runner);
         }
@@ -728,17 +695,61 @@ mod tests {
         };
         lowered.validate().unwrap();
         assert_eq!(lowered.public_bytes, MaterialLimits::DEFAULT.public_bytes);
+        // Setup material defaults to 64 MiB, and a Host may select up to
+        // 256 MiB, as the CLI and invocation documents read before their
+        // material had its own allowance.
+        assert_eq!(MaterialLimits::DEFAULT.setup_bytes, 64 << 20);
+        assert_eq!(MaterialLimits::MAXIMUM.setup_bytes, 256 << 20);
+        let raised = MaterialLimits {
+            setup_bytes: 256 << 20,
+            ..MaterialLimits::DEFAULT
+        };
+        raised.validate().unwrap();
+        assert_eq!(
+            MaterialLimits {
+                setup_bytes: (256 << 20) + 1,
+                ..MaterialLimits::DEFAULT
+            }
+            .validate()
+            .unwrap_err(),
+            "entry-setup-bytes-limit"
+        );
+    }
+    #[cfg(feature = "files")]
+    #[test]
+    fn a_raised_setup_selection_reads_material_beyond_the_default() {
+        // A file read after 64 MiB of an invocation's setup material is held
+        // fits a selection at the maximum and not the default.
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("setup.zkvk");
+        std::fs::write(&path, [0; 64]).unwrap();
+        let held = MaterialLimits::DEFAULT.setup_bytes;
+        let read = |setup_bytes| {
+            crate::entry::files::read_setup_material(&path, Capacity::default(), setup_bytes, held)
+        };
+        assert_eq!(read(MaterialLimits::MAXIMUM.setup_bytes).unwrap().len(), 64);
+        assert_eq!(
+            read(MaterialLimits::DEFAULT.setup_bytes).unwrap_err(),
+            "entry-setup-limit"
+        );
     }
     #[test]
     fn root_refusals_name_the_allowance_that_refused() {
         let root = |live_bytes, total_bytes, logical_bytes| {
-            InvocationLimits {
-                live_bytes,
-                total_bytes,
-                logical_bytes,
+            Capacity {
+                values: ValueBudget {
+                    live_bytes,
+                    total_bytes,
+                },
+                work: WorkBudget {
+                    logical_bytes,
+                    ..WorkBudget::default()
+                },
+                ..Capacity::default()
             }
             .root()
         };
+        let untouched = zkc_runtime::vm::ExecutionLedgerUsage::default();
         for family in [
             RootCharge::LOADING,
             RootCharge::BINDING,
@@ -747,28 +758,49 @@ mod tests {
             RootCharge::FUNCTION,
         ] {
             assert_ne!(family.work, family.bytes);
-            // The logical work allowance refuses before any byte is charged.
-            let ledger = root(64, 64, 7);
+            for (ledger, code) in [
+                // The logical work allowance refuses.
+                (root(64, 64, 7), family.work),
+                // The fresh byte allowance refuses.
+                (root(64, 7, 64), family.bytes),
+                // The live byte allowance refuses.
+                (root(7, 64, 64), family.bytes),
+                // A byte allowance and the work allowance both refuse.
+                (root(64, 7, 7), family.bytes),
+            ] {
+                assert_eq!(family.reserve_bytes(Some(&ledger), 8).err().unwrap(), code);
+                // The refused item leaves no residual work or bytes, so an
+                // affordable charge after it is not refused.
+                assert_eq!(ledger.snapshot(), untouched);
+                drop(family.reserve_bytes(Some(&ledger), 7).unwrap().unwrap());
+            }
+            // A bytes refusal of one item commits none of its work: the next
+            // item, which needs all of the work allowance, still fits.
+            let ledger = root(64, 8, 8);
+            assert_eq!(family.charge(&ledger, 8, 9).err().unwrap(), family.bytes);
             assert_eq!(
-                family.reserve_bytes(Some(&ledger), 8).err().unwrap(),
-                family.work
-            );
-            assert_eq!(ledger.snapshot().total_value_bytes, 0);
-            // The fresh byte allowance refuses after the work is committed.
-            let ledger = root(64, 7, 64);
-            assert_eq!(
-                family.reserve_bytes(Some(&ledger), 8).err().unwrap(),
+                family.charge_and_hold(&ledger, 8, 9, 0).err().unwrap(),
                 family.bytes
             );
-            assert_eq!(ledger.snapshot().logical_bytes, 8);
-            // The live byte allowance refuses after both are committed.
+            assert_eq!(ledger.snapshot(), untouched);
+            let held = family.charge_and_hold(&ledger, 8, 8, 8).unwrap();
+            let used = ledger.snapshot();
+            assert_eq!(
+                (
+                    used.logical_bytes,
+                    used.total_value_bytes,
+                    used.live_reserved_bytes
+                ),
+                (8, 8, 8)
+            );
+            drop(held);
+            // Custody that passes without a new allocation holds live bytes
+            // only.
             let ledger = root(7, 64, 64);
             assert_eq!(
-                family.reserve_bytes(Some(&ledger), 8).err().unwrap(),
+                family.charge_and_hold(&ledger, 0, 0, 8).err().unwrap(),
                 family.bytes
             );
-            assert_eq!(ledger.snapshot().total_value_bytes, 8);
-            assert_eq!(family.hold(&ledger, 8).err().unwrap(), family.bytes);
             // An affordable reservation holds its bytes until dropped, and
             // no root charges nothing.
             let ledger = root(8, 8, 8);
@@ -780,41 +812,83 @@ mod tests {
         }
     }
     #[test]
-    fn invocation_allowances_refuse_above_their_maxima() {
-        assert_eq!(InvocationLimits::default(), InvocationLimits::DEFAULT);
-        InvocationLimits::MAXIMUM.validate().unwrap();
-        for limits in [
-            InvocationLimits {
-                live_bytes: InvocationLimits::MAXIMUM.live_bytes + 1,
-                ..InvocationLimits::DEFAULT
+    fn the_record_bounds_the_invocation_root_and_runners_draw_from_it() {
+        let work = |logical_bytes| WorkBudget {
+            instructions: 0,
+            iterations: 0,
+            logical_bytes,
+        };
+        let mut record = Capacity {
+            values: ValueBudget {
+                live_bytes: 100,
+                total_bytes: 200,
             },
-            InvocationLimits {
-                total_bytes: InvocationLimits::MAXIMUM.total_bytes + 1,
-                ..InvocationLimits::DEFAULT
-            },
-            InvocationLimits {
-                logical_bytes: InvocationLimits::MAXIMUM.logical_bytes + 1,
-                ..InvocationLimits::DEFAULT
-            },
-        ] {
-            assert_eq!(limits.validate().unwrap_err(), "native-invocation-limit");
-        }
-        // A root that no runner shares meters no instruction or iteration.
-        let root = InvocationLimits::DEFAULT.root();
-        for work in [
+            ..Capacity::default()
+        };
+        record.work.logical_bytes = 300;
+        // The root's live, fresh and logical allowances are the record's own
+        // selections, not a separate allowance at its maximum.
+        let root = record.root();
+        root.charge(work(300), 200).unwrap();
+        assert!(root.charge(work(0), 1).is_err());
+        assert!(root.charge(work(1), 0).is_err());
+        let held = root.reserve_live(100).unwrap();
+        assert!(root.reserve_live(1).is_err());
+        drop(held);
+        // A root that no runner shares meters no instruction or iteration; a
+        // Function's root pools the record's meter.
+        for fuel in [
             WorkBudget {
                 instructions: 1,
-                iterations: 0,
-                logical_bytes: 0,
+                ..work(0)
             },
             WorkBudget {
-                instructions: 0,
                 iterations: 1,
-                logical_bytes: 0,
+                ..work(0)
             },
         ] {
-            assert!(root.charge(work, 0).is_err());
+            assert!(record.root().charge(fuel, 0).is_err());
+            record.pooled_root().charge(fuel, 0).unwrap();
         }
+        // A runner that shares the root draws its byte budgets from what the
+        // root has left, and keeps the record's fuel and per-operation
+        // ceilings.
+        let root = record.pooled_root();
+        root.charge(work(30), 50).unwrap();
+        let held = root.reserve_live(40).unwrap();
+        let drawn = record.drawn_from(&root);
+        assert_eq!(
+            (
+                drawn.values.live_bytes,
+                drawn.values.total_bytes,
+                drawn.work.logical_bytes
+            ),
+            (60, 150, 270)
+        );
+        assert_eq!(drawn.work.instructions, record.work.instructions);
+        assert_eq!(drawn.value_bytes, record.value_bytes);
+        drop(held);
+        assert_eq!(record.drawn_from(&root).values.live_bytes, 100);
+        // The hard maximum is the most a record selects.
+        for selection in [
+            ValueBudget {
+                live_bytes: Capacity::HARD_MAX.values.live_bytes + 1,
+                ..Capacity::HARD_MAX.values
+            },
+            ValueBudget {
+                total_bytes: Capacity::HARD_MAX.values.total_bytes + 1,
+                ..Capacity::HARD_MAX.values
+            },
+        ] {
+            let raised = Capacity {
+                values: selection,
+                ..Capacity::default()
+            };
+            assert_eq!(raised.validate().unwrap_err(), "native-capacity-limit");
+        }
+        let mut raised = Capacity::default();
+        raised.work.logical_bytes = Capacity::HARD_MAX.work.logical_bytes + 1;
+        assert_eq!(raised.validate().unwrap_err(), "native-capacity-limit");
     }
     #[test]
     fn loading_work_is_its_own_allowance() {
@@ -848,9 +922,8 @@ mod tests {
         let parsed = Capacity::parse(record.to_string().as_bytes()).unwrap();
         assert_eq!(parsed.work, Capacity::HARD_MAX.work);
         // A Function's root pools the record's instruction and iteration
-        // selections beside the root's own logical-work maximum.
-        let root =
-            InvocationLimits::MAXIMUM.pooled(parsed.work.instructions, parsed.work.iterations);
+        // selections beside its logical-work selection.
+        let root = parsed.pooled_root();
         root.charge(parsed.work, 0).unwrap();
         let used = root.snapshot();
         assert_eq!(

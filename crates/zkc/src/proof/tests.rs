@@ -2,6 +2,14 @@ use super::*;
 use zkc_runtime::host::wire::ProofWriter;
 use zkc_runtime::interpreter::Runner;
 mod admission;
+/// The invocation root of the default record with the fresh and logical
+/// selections `total_bytes` and `logical_bytes`.
+fn root_of(total_bytes: usize, logical_bytes: u64) -> zkc_runtime::vm::ExecutionLedger {
+    let mut record = Capacity::default();
+    record.values.total_bytes = total_bytes;
+    record.work.logical_bytes = logical_bytes;
+    record.root()
+}
 #[test]
 fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
     use zkc_runtime::vm::{ExecutionLedger, Program, StopKind, ValueBudget};
@@ -470,8 +478,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 work: deployment.capacity.work,
                 values: deployment.capacity.values,
             };
-            let attempt = |limits: InvocationLimits| {
-                let root = limits.root();
+            let attempt = |root: zkc_runtime::vm::ExecutionLedger| {
                 let report = execute(
                     &deployment.clone().with_invocation_ledger(root.clone()),
                     &inputs,
@@ -480,25 +487,20 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 .unwrap();
                 (report, root.snapshot())
             };
-            let (completed, used) = attempt(InvocationLimits::DEFAULT);
+            let default = Capacity::default();
+            let (completed, used) = attempt(default.root());
             assert!(completed.outcome.is_ok(), "{:?}", completed.outcome);
-            for (limits, code) in [
+            for (root, code) in [
                 (
-                    InvocationLimits {
-                        total_bytes: used.total_value_bytes - 1,
-                        ..InvocationLimits::DEFAULT
-                    },
+                    root_of(used.total_value_bytes - 1, default.work.logical_bytes),
                     "native-attempt-proof-bytes-limit",
                 ),
                 (
-                    InvocationLimits {
-                        logical_bytes: used.logical_bytes - 1,
-                        ..InvocationLimits::DEFAULT
-                    },
+                    root_of(default.values.total_bytes, used.logical_bytes - 1),
                     "native-attempt-proof-work-limit",
                 ),
             ] {
-                let (refused, _) = attempt(limits);
+                let (refused, _) = attempt(root);
                 assert_eq!(refused.outcome.as_ref().unwrap_err(), code);
                 assert_eq!(refused.attempts[0].decision.as_ref().unwrap_err(), code);
             }
@@ -562,11 +564,10 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert_eq!(three.total_value_bytes, one.total_value_bytes + 2 * attempt);
             // A root that affords only two attempts' buffers refuses the third
             // attempt; the runners' own budgets are untouched.
-            let tight = InvocationLimits {
-                total_bytes: one.total_value_bytes + attempt + attempt / 2,
-                ..InvocationLimits::DEFAULT
-            }
-            .root();
+            let tight = root_of(
+                one.total_value_bytes + attempt + attempt / 2,
+                Capacity::default().work.logical_bytes,
+            );
             let refused = rooted(&tight, 3);
             assert!(refused.outcome.is_err());
             assert_eq!(refused.attempts.len(), 3);
@@ -601,11 +602,10 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             );
             // A root that cannot afford the rendering yields the bounded
             // summary, which keeps the outcome and the attempt count.
-            let tight = InvocationLimits {
-                total_bytes: executed.total_value_bytes + rendering - 1,
-                ..InvocationLimits::DEFAULT
-            }
-            .root();
+            let tight = root_of(
+                executed.total_value_bytes + rendering - 1,
+                Capacity::default().work.logical_bytes,
+            );
             let counted = rooted(&tight, 3);
             assert_eq!(tight.snapshot(), executed);
             let summary = counted.diagnostics();

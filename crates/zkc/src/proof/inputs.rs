@@ -536,13 +536,14 @@ pub(super) fn prepare(
     if retain_root {
         host.capacity.check_wire(encoding.size())?;
     }
-    encoding_retained.extend(RootCharge::BINDING.reserve_bytes(
+    // Encoding the root reads every byte it writes; a retained encoding is
+    // also a fresh allocation the call holds. One charge covers both.
+    let retained = if retain_root { encoding.size() } else { 0 };
+    encoding_retained.extend(RootCharge::BINDING.reserve(
         host.host_ledger(),
-        if retain_root { encoding.size() } else { 0 },
+        (encoding.size() as u64).saturating_add(retained as u64),
+        retained,
     )?);
-    if let Some(ledger) = host.host_ledger() {
-        RootCharge::BINDING.charge(ledger, encoding.size() as u64, 0)?;
-    }
     let (root, binding) =
         binding::encode_binding(&encoding, retain_root).map_err(|e| e.to_string())?;
     Ok(Prepared {

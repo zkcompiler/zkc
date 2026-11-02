@@ -132,8 +132,10 @@ a prover key uses its separate authenticated material constructor. Foreign
 capabilities or key handles cannot enter through ordinary native data.
 
 `PreparedData::from_wire` decodes a canonical native frame once;
-`from_value` validates and encodes native data once. Both retain immutable data
-and its exact physical type and wire bytes under an explicit `Capacity`.
+`from_value` validates and encodes native data once. Both decode or encode
+under an explicit `Capacity` and retain immutable data and its exact physical
+type and wire bytes within the
+[prepared-data allowance](capacity.md#host-allowances), never a runner's.
 The handle shares storage across clones and exposes its retained payload size,
 including the wire copy. Its lifetime belongs to the application. Preparation
 does not authorize a statement, import setup keys, issue capabilities or retain

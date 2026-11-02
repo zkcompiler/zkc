@@ -190,6 +190,63 @@ impl ProofWriter {
     }
 }
 
+/// The invocation-root allowance that refused a Host charge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RootRefusal {
+    /// The root's logical work allowance.
+    Work,
+    /// The root's cumulative fresh or live byte allowance.
+    Bytes,
+}
+
+/// Charge Host work and storage to an invocation root before its effect, all
+/// or nothing: `work` logical work bytes, `fresh` fresh allocation bytes, and
+/// `live` bytes that the returned reservation holds until it drops. Either
+/// the root affords every part and all of them are committed, or the charge
+/// refuses, names the allowance that refused and leaves the root's usage as
+/// it was, so a refused item leaves no residual charge for a later charge to
+/// meet. A charge that a byte allowance and the work allowance both refuse
+/// names the bytes.
+pub fn reserve_root(
+    ledger: &ExecutionLedger,
+    work: u64,
+    fresh: usize,
+    live: usize,
+) -> Result<LiveReservation, RootRefusal> {
+    // Withhold the fresh bytes and hold the live bytes before committing any
+    // work: both are released uncommitted when a later part refuses.
+    let withheld = ledger.reserve_output(fresh, false);
+    if withheld.bytes() < fresh {
+        release(withheld);
+        return Err(RootRefusal::Bytes);
+    }
+    let held = match ledger.reserve_live(live) {
+        Ok(held) => held,
+        Err(_) => {
+            release(withheld);
+            return Err(RootRefusal::Bytes);
+        }
+    };
+    let work = WorkBudget {
+        instructions: 0,
+        iterations: 0,
+        logical_bytes: work,
+    };
+    if ledger.charge(work, 0).is_err() {
+        release(withheld);
+        return Err(RootRefusal::Work);
+    }
+    withheld
+        .settle(fresh, 0)
+        .expect("the withheld bytes cover the fresh charge");
+    Ok(held)
+}
+/// Release withheld capacity that no effect used: nothing is committed.
+fn release(withheld: crate::vm::execution_ledger::AllocationReservation) {
+    // Settling nothing never exceeds what was withheld.
+    let _ = withheld.settle(0, 0);
+}
+
 /// Charge cumulative allocation/work and retain live storage until the guard drops.
 pub fn reserve_allocation(
     ledger: Option<&ExecutionLedger>,
@@ -231,6 +288,62 @@ mod tests {
                 logical_bytes: 1024,
             },
         )
+    }
+
+    #[test]
+    fn a_root_charge_commits_every_part_or_none() {
+        let root = |live_bytes, total_bytes, logical_bytes| {
+            ExecutionLedger::new(
+                crate::vm::ValueBudget {
+                    live_bytes,
+                    total_bytes,
+                },
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes,
+                },
+            )
+        };
+        let untouched = crate::vm::ExecutionLedgerUsage::default();
+        for (ledger, refusal) in [
+            (root(64, 64, 7), RootRefusal::Work),
+            (root(64, 7, 64), RootRefusal::Bytes),
+            (root(7, 64, 64), RootRefusal::Bytes),
+            // Both a byte allowance and the work allowance refuse.
+            (root(64, 7, 7), RootRefusal::Bytes),
+        ] {
+            assert_eq!(reserve_root(&ledger, 8, 8, 8).err(), Some(refusal));
+            // The refused charge leaves no residual work or bytes, so an
+            // affordable charge after it is not refused.
+            assert_eq!(ledger.snapshot(), untouched);
+            let held = reserve_root(&ledger, 7, 7, 7).unwrap();
+            assert_eq!(held.bytes(), 7);
+        }
+        // An affordable charge commits each part exactly; dropping its
+        // reservation releases only the live bytes.
+        let ledger = root(10, 10, 10);
+        let held = reserve_root(&ledger, 3, 5, 7).unwrap();
+        let used = ledger.snapshot();
+        assert_eq!(
+            (
+                used.logical_bytes,
+                used.total_value_bytes,
+                used.live_reserved_bytes,
+                used.pending_value_bytes
+            ),
+            (3, 5, 7, 0)
+        );
+        drop(held);
+        let used = ledger.snapshot();
+        assert_eq!(
+            (
+                used.logical_bytes,
+                used.total_value_bytes,
+                used.live_reserved_bytes
+            ),
+            (3, 5, 0)
+        );
     }
 
     #[test]

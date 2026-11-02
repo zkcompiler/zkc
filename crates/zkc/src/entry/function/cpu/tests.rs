@@ -827,12 +827,13 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
     let logical_bound = one.usage.execution.logical_bytes + 16 * 1024;
     let fresh_bound = one.usage.execution.total_value_bytes + 16 * 1024;
     for logical in [false, true] {
-        // The root's own allowance bounds the children's sum.
+        // The record's selection bounds the whole invocation: each child fits
+        // it, yet their sum does not, and the reported usage stays within it.
         let mut options = FunctionOptions::default();
         if logical {
-            options.limits.invocation.logical_bytes = logical_bound;
+            options.limits.capacity.work.logical_bytes = logical_bound;
         } else {
-            options.limits.invocation.total_bytes = fresh_bound;
+            options.limits.capacity.values.total_bytes = fresh_bound;
         }
         let entry = FunctionEntry::admit(capture(&d), options.clone(), BTreeMap::new()).unwrap();
         let report = entry.prepare(input()).unwrap().execute();
@@ -840,26 +841,9 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
         assert!(report.failure.is_some());
         assert_eq!(report.calls.len(), 1);
         assert!(report.calls[0].completed);
-        assert!(report.usage.execution.logical_bytes <= options.limits.invocation.logical_bytes);
-        assert!(report.usage.execution.total_value_bytes <= options.limits.invocation.total_bytes);
-        // The same number as each runner's own allowance bounds only that
-        // runner. Each child fits it, so the invocation completes although
-        // their sum exceeds it.
-        let mut options = FunctionOptions::default();
-        if logical {
-            options.limits.capacity.work.logical_bytes = logical_bound;
-        } else {
-            options.limits.capacity.values.total_bytes = fresh_bound;
-        }
-        let entry = FunctionEntry::admit(capture(&d), options, BTreeMap::new()).unwrap();
-        let report = entry.prepare(input()).unwrap().execute();
-        assert!(report.is_success(), "{}", report.diagnostics());
-        assert_eq!(report.calls.len(), 2);
-        if logical {
-            assert!(report.usage.execution.logical_bytes > logical_bound);
-        } else {
-            assert!(report.usage.execution.total_value_bytes > fresh_bound);
-        }
+        let selected = options.limits.capacity;
+        assert!(report.usage.execution.logical_bytes <= selected.work.logical_bytes);
+        assert!(report.usage.execution.total_value_bytes <= selected.values.total_bytes);
     }
 }
 #[test]
@@ -1702,7 +1686,7 @@ fn parent_live_reservations_limit_child_construction_before_effects() {
     // not for the first child call's receipt, the child dispatch refuses with
     // the same code before any receipt or child exists.
     let prepared = entry.prepare(joint_request()).unwrap();
-    let remaining = entry.host.options.limits.invocation.live_bytes
+    let remaining = entry.host.options.limits.capacity.values.live_bytes
         - prepared.ledger.snapshot().live_reserved_bytes;
     let room = crate::host::diagnostics::SCRATCH_BYTES + 32 * 1024;
     let parent = prepared.ledger.reserve_live(remaining - room).unwrap();
@@ -2651,7 +2635,7 @@ fn result_encoding_charges_the_function_invocation_ledger() {
     // Leave the execution's own work and less than the encoder's first
     // 512-byte buffer reservation: execution completes, encoding refuses.
     let mut options = FunctionOptions::default();
-    options.limits.invocation.logical_bytes = before.logical_bytes + 511;
+    options.limits.capacity.work.logical_bytes = before.logical_bytes + 511;
     let report = identity_entry(options)
         .prepare(request(vec![("flag", true.into())]))
         .unwrap()
@@ -2696,15 +2680,15 @@ fn function_policy_owns_child_ring_sequence_and_attempt_settings() {
         .unwrap();
         assert_eq!(error.code(), code);
     }
-    // The invocation root's own allowances and the loading work refuse
-    // above their maxima too.
+    // The record's byte selections, which bound the invocation root, and
+    // the loading work refuse above their maxima too.
     for (change, code) in [
         (
             (|limits: &mut crate::run::HostLimits| {
-                limits.invocation.live_bytes =
-                    Allowances::INVOCATION_LIVE_BYTES.maximum as usize + 1
+                limits.capacity.values.live_bytes =
+                    crate::execution::Capacity::HARD_MAX.values.live_bytes + 1
             }) as fn(&mut crate::run::HostLimits),
-            "native-invocation-limit",
+            "native-capacity-limit",
         ),
         (
             |limits| limits.loading_work = Allowances::LOADING_WORK.maximum + 1,
