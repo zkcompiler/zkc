@@ -60,11 +60,14 @@ fn parse(spelling: &str, depth: usize, remaining: &mut usize) -> Result<Leaf> {
                     .any(|b| b.is_ascii_whitespace() || b == b'@'),
             E::Schema,
         )?;
-        require(
-            matches!(head, "sequence" | "field_array" | "fixed_vector"),
-            E::Schema,
-        )?;
-        let row = zkc_catalog::constructor(head).ok_or(E::Schema)?;
+        // A structural constructor has a Type or Nat parameter.
+        let row = zkc_catalog::constructor(head)
+            .filter(|row| {
+                row.parameters
+                    .iter()
+                    .any(|parameter| matches!(parameter, Kind::Type | Kind::Nat))
+            })
+            .ok_or(E::Schema)?;
         let body = body.strip_suffix('>').ok_or(E::Schema)?;
         let mut parts = Vec::new();
         let (mut start, mut nesting) = (0, 0usize);
@@ -106,6 +109,11 @@ fn parse(spelling: &str, depth: usize, remaining: &mut usize) -> Result<Leaf> {
                 Kind::Domain(sort) => {
                     charge(remaining, 1)?;
                     require(domain(sort, part), E::Schema)?;
+                    // A frame over a domain needs the catalog's aggregate frame
+                    // row; without it the type is valid local data.
+                    leaf.message &= zkc_catalog::CATALOG.aggregate_frames.iter().any(|row| {
+                        row.constructor == head && row.domain.map(|d| d.name()) == Some(part)
+                    });
                 }
                 Kind::Nat => {
                     charge(remaining, 1)?;
@@ -209,99 +217,41 @@ fn native_name(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
 }
 
-// Ground domain spellings in the native source carrier. These are declaration
-// identities and sorts, not a promise that any CPU codec/provider is installed.
+// Ground domain spellings in the native source carrier: the catalog's
+// installed domains of the sort. These are declaration identities and sorts,
+// not a promise that any CPU codec/provider is installed.
 fn domain(sort: &str, identity: &str) -> bool {
-    match sort {
-        "Field" => matches!(
-            identity,
-            "bn254.fr"
-                | "bls12-381.fr"
-                | "ristretto255.scalar"
-                | "koala-bear"
-                | "koala-bear.ext4-binomial3"
-                | "koala-bear.ext8-binomial3"
-                | "baby-bear"
-                | "baby-bear.ext4-binomial11"
-                | "goldilocks"
-                | "goldilocks.ext2-binomial7"
-                | "gf2-64.pentanomial-4-3-1"
-                | "gf2-64.pentanomial-4-3-1.ext3-trinomial1"
-        ),
-        "Group" => matches!(
-            identity,
-            "bn254.g1"
-                | "bn254.g2"
-                | "bn254.gt"
-                | "bls12-381.g1"
-                | "bls12-381.g2"
-                | "bls12-381.gt"
-                | "ristretto255.group"
-                | "edwards25519.prime"
-        ),
-        "Commitment" => {
-            identity == "multilinear.kzg.bls12-381/0"
-                || matches!(
-                    identity,
-                    "rows.merkle-keccak256.koala-bear/0"
-                        | "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"
-                        | "rows.merkle-keccak256.koala-bear.ext4-binomial3/0"
-                        | "rows.merkle-poseidon2-16.koala-bear/0"
-                        | "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"
-                        | "rows.merkle-poseidon2-16.baby-bear/0"
-                        | "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0"
-                        | "rows.merkle-poseidon2-8.goldilocks/0"
-                        | "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0"
-                )
-        }
-        "Transcript" => transcript_field(identity).is_some(),
-        "Slot" => {
-            !identity.is_empty()
-                && identity.as_bytes()[0].is_ascii_alphabetic()
-                && native_name(identity)
-        }
-        _ => false,
+    if sort == "Slot" {
+        return !identity.is_empty()
+            && identity.as_bytes()[0].is_ascii_alphabetic()
+            && native_name(identity);
     }
+    installed(identity).is_some_and(|row| row.sort == sort)
+}
+fn installed(identity: &str) -> Option<&'static zkc_catalog::InstalledDomain> {
+    zkc_catalog::DomainIdentity::parse(identity).map(zkc_catalog::installed_domain)
 }
 /// Metadata profile only; native admission independently checks installation.
 pub(super) fn block_transcript(suite: &str) -> bool {
-    matches!(
-        suite,
-        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"
-            | "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
-    )
+    installed(suite).is_some_and(|row| {
+        row.sort == "Transcript" && row.capabilities.contains(&"IndexBlockTranscript")
+    })
 }
+/// The installed challenge field of a transcript suite.
 pub(super) fn transcript_field(suite: &str) -> Option<&'static str> {
-    match suite {
-        "merlin3.bls12-381.fr64be/0"
-        | "spongefish0.8.0.keccak.bls12-381.fr64be/0"
-        | "hash-chain.keccak256.bls12-381.fr64be/0" => Some("bls12-381.fr"),
-        "merlin3.ristretto255.scalar64le/0" => Some("ristretto255.scalar"),
-        "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
-        | "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0" => {
-            Some("koala-bear.ext8-binomial3")
-        }
-        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0" => {
-            Some("koala-bear.ext4-binomial3")
-        }
-        "merlin3.baby-bear.ext4-binomial11.rejection31le/0" => Some("baby-bear.ext4-binomial11"),
-        "merlin3.goldilocks.ext2-binomial7.rejection64le/0" => Some("goldilocks.ext2-binomial7"),
-        _ => None,
-    }
+    let row = installed(suite).filter(|row| row.sort == "Transcript")?;
+    row.members
+        .iter()
+        .find(|(member, _)| *member == "ChallengeField")
+        .map(|(_, field)| field.name())
 }
-pub(super) fn service_field(contract: &str) -> Option<&str> {
-    let field = contract.strip_prefix("random.")?.strip_suffix("/0")?;
-    matches!(
-        field,
-        "bn254.fr"
-            | "bls12-381.fr"
-            | "ristretto255.scalar"
-            | "koala-bear.ext8-binomial3"
-            | "koala-bear.ext4-binomial3"
-            | "baby-bear.ext4-binomial11"
-            | "goldilocks.ext2-binomial7"
-    )
-    .then_some(field)
+/// The installed field of a random service contract.
+pub(super) fn service_field(contract: &str) -> Option<&'static str> {
+    zkc_catalog::CATALOG
+        .random_services
+        .iter()
+        .find(|row| row.contract == contract)
+        .map(|row| row.field.name())
 }
 
 #[cfg(test)]
@@ -327,6 +277,32 @@ mod tests {
         assert!(!local.message && local.participants);
         let key = Leaf::parse("verifier_key:multilinear.kzg.bls12-381/0", &mut 200_000).unwrap();
         assert!(key.copy && key.drop && key.needs_setup && !key.participants);
+    }
+
+    #[test]
+    fn domains_suites_and_services_are_the_installed_rows() {
+        for row in zkc_catalog::CATALOG.domains {
+            let name = row.identity.name();
+            assert!(domain(row.sort, name), "{name}");
+            let challenge = row
+                .members
+                .iter()
+                .find(|(member, _)| *member == "ChallengeField")
+                .map(|(_, field)| field.name());
+            assert_eq!(transcript_field(name), challenge, "{name}");
+            assert_eq!(
+                block_transcript(name),
+                row.capabilities.contains(&"IndexBlockTranscript"),
+                "{name}"
+            );
+        }
+        for row in zkc_catalog::CATALOG.random_services {
+            assert_eq!(service_field(row.contract), Some(row.field.name()));
+        }
+        assert!(!domain("Field", "bn254.g1"));
+        assert!(!domain("Field", "unknown"));
+        assert_eq!(service_field("random.koala-bear/0"), None);
+        assert_eq!(service_field("random.unknown/0"), None);
     }
 
     #[test]

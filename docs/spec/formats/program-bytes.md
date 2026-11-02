@@ -60,7 +60,10 @@ Entry = ["entry", name, list([role, participant_name])]
 
 The origin is mandatory on every serialized function. It is not `null` and
 cannot be omitted even when its assignment list is empty. An internal compiler
-model with an unresolved origin is not a different public record shape.
+model with an unresolved origin is not a different public record shape. Each
+origin static argument is a canonical natural at most 1,048,576, an admitted
+type spelling, or a domain or codec identity that the catalog installs; an
+origin grants no permission.
 Results are ordered type strings, while inputs are ordered named ports.
 `input_index` is a canonical natural identifying an actual participant input.
 Entry role maps are nonempty and reference declared participants. Duplicate

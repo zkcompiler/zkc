@@ -173,6 +173,40 @@ fn source_options(value: &Value) -> Result<crate::entry::CompileOptions> {
     Ok(options)
 }
 
+/// Whether the target realizes a managed construction over `suite`, selected
+/// by the installed suite's transcript facts and never by its spelling: the
+/// `hash-chain` family over `keccak256`, binding the suite identity, with the
+/// `fr64be` decoder over a prime challenge field below 2^256
+/// (`docs/spec/targets/evm.md`).
+fn realized_suite(suite: &str) -> bool {
+    use zkc_catalog::{ByteHash, ChallengeDecoder, DomainFacts, FieldStructure, TranscriptFamily};
+    // 2^256 in decimal.
+    const BOUND: &str =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+    let Some(row) = zkc_catalog::DomainIdentity::parse(suite).map(zkc_catalog::installed_domain)
+    else {
+        return false;
+    };
+    let DomainFacts::Transcript(facts) = row.facts else {
+        return false;
+    };
+    let realized = facts.family == TranscriptFamily::HashChain
+        && facts.hash == Some(ByteHash::Keccak256)
+        && facts.binds_suite
+        && facts.decoder == ChallengeDecoder::Fr64Be;
+    let challenge = row
+        .members
+        .iter()
+        .find(|(member, _)| *member == "ChallengeField")
+        .map(|(_, field)| zkc_catalog::installed_domain(*field).facts);
+    realized
+        && matches!(challenge, Some(DomainFacts::Field(field))
+            if field.structure == FieldStructure::Prime
+                && (field.characteristic.len() < BOUND.len()
+                    || (field.characteristic.len() == BOUND.len()
+                        && field.characteristic < BOUND)))
+}
+
 fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) -> Result<()> {
     let code = "evm-source-descriptor";
     let array = |value: &Value, size| value.as_array().is_some_and(|items| items.len() == size);
@@ -203,10 +237,9 @@ fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) 
         || (1..=3).any(|i| !name(&policy[i]))
         || policy[2] == policy[3]
         || natural(&policy[4]).is_none_or(|n| n >= 1024)
-        || !matches!(
-            policy[5].as_str(),
-            Some("" | "hash-chain.keccak256.bls12-381.fr64be/0")
-        )
+        || !policy[5]
+            .as_str()
+            .is_some_and(|suite| suite.is_empty() || realized_suite(suite))
         || policy[9] != "zkc.framed/0"
         || policy[10] != ""
         || descriptor[6] != serde_json::json!([])

@@ -31,7 +31,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
                 owner.group == Some(domain)
             }
         })?;
-        (owner.provider, owner.physical(kind)?)
+        (owner.provider(), owner.physical(kind)?)
     };
     if binding.implementation != format!("{provider}/{}", binding.contract) {
         return None;

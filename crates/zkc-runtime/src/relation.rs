@@ -87,21 +87,9 @@ fn presentation(field: Identity) -> Result<usize> {
         Error("bundle-field")
     })
 }
-/// Coordinates per element: `koala-bear.ext8-binomial3` is F_p[X]/(X^8 - 3)
-/// and `koala-bear.ext4-binomial3` is F_p[X]/(X^4 - 3), each in the ascending
-/// basis (docs/spec/domains/values.md).
+/// Residue coordinates per element, from the field's installed structure.
 pub fn degree(field: Identity) -> Option<usize> {
-    if is_prime(field) {
-        Some(1)
-    } else if field == Identity::KoalaBearExt8 {
-        Some(8)
-    } else if matches!(field, Identity::KoalaBearExt4 | Identity::BabyBearExt4) {
-        Some(4)
-    } else if field == Identity::GoldilocksExt2 {
-        Some(2)
-    } else {
-        None
-    }
+    field.residue_degree()
 }
 
 fn below_modulus(field: Identity, n: u64) -> bool {

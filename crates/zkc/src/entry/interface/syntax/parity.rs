@@ -44,6 +44,11 @@ fn check(spelling: &str) {
     assert_eq!(portable.copy, native.is_duplicable(), "copy: {spelling}");
     assert_eq!(portable.drop, native.is_discardable(), "drop: {spelling}");
     assert_eq!(
+        portable.message,
+        native.is_native_message_data(),
+        "message: {spelling}"
+    );
+    assert_eq!(
         portable.constructible,
         native_constructible(&native),
         "constructible: {spelling}"

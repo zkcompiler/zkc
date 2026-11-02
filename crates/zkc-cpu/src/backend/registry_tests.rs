@@ -2756,3 +2756,43 @@ fn actual_handler_timing_metadata_refuses_a_weakened_expected_contract_before_fr
     };
     assert_eq!(error.backend.active_frames(), 0);
 }
+
+#[test]
+fn a_row_without_a_catalog_declaration_refuses_installation() {
+    const UNDECLARED: &[crate::bindings::Contract] =
+        &[crate::bindings::field::operation("field.undeclared")
+            .implemented_by(&["plonky3/field.undeclared"])];
+    const DECLARED: &[crate::bindings::Contract] =
+        &[crate::bindings::field::operation("field.add").implemented_by(&["plonky3/field.add"])];
+    fn handler(_: &mut CpuBackend, _: &Invocation<'_>, _: &[Value]) -> Result<Vec<Value>> {
+        Err(refused("kernel-operands"))
+    }
+    let mut registry = Registry::default();
+    let refusal = registry.pure_shaped(UNDECLARED, handler).err().unwrap();
+    assert!(format!("{refusal:?}").contains("implementation-contract-undeclared"));
+    assert!(registry.get("plonky3/field.undeclared").is_none());
+    registry.pure_shaped(DECLARED, handler).unwrap();
+    // The installed row's ports and parameter rule are the declaration's.
+    let binding = binding("field.add", &["koala-bear"], "plonky3/field.add");
+    let declared = binding.logical_signature().unwrap();
+    let signature = registry
+        .get("plonky3/field.add")
+        .unwrap()
+        .signature(&binding)
+        .unwrap();
+    assert_eq!(signature.attributes, declared.attributes);
+    assert_eq!(
+        signature
+            .inputs
+            .iter()
+            .chain(&signature.outputs)
+            .map(|ty| ty.logical().clone())
+            .collect::<Vec<_>>(),
+        declared
+            .inputs
+            .iter()
+            .chain(&declared.outputs)
+            .cloned()
+            .collect::<Vec<_>>()
+    );
+}

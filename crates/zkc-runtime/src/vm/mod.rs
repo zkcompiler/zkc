@@ -10,6 +10,7 @@ pub use aggregate_bindings::AggregateImplementationFamily;
 pub(crate) mod backend;
 mod bindings;
 mod contracts;
+mod installed;
 mod physical;
 pub use contracts::{
     AggregateChildRule, AuthorizationId, ContractSupport, Contracts, ContractsBuilder,

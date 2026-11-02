@@ -26,7 +26,7 @@ fn binding(domain: domains::NativeDomain, mode: &str, mask: &str) -> OperationBi
     OperationBinding {
         contract: format!("numerical.{mode}"),
         arguments: vec![domain.field.name().into(), mask.into()],
-        implementation: format!("{}/numerical.{mode}", domain.provider),
+        implementation: format!("{}/numerical.{mode}", domain.provider()),
         physical_arguments: vec![],
     }
 }
@@ -137,7 +137,7 @@ fn exercise<F>(
         let add = OperationBinding {
             contract: "vector.add".into(),
             arguments: vec![domain.field.name().into()],
-            implementation: format!("{}/vector.add", domain.provider),
+            implementation: format!("{}/vector.add", domain.provider()),
             physical_arguments: vec![],
         };
         let output = one(
@@ -178,7 +178,7 @@ fn exercise<F>(
             let binding = OperationBinding {
                 contract: format!("vector.{operation}"),
                 arguments: vec![domain.field.name().into()],
-                implementation: format!("{}/vector.{operation}", domain.provider),
+                implementation: format!("{}/vector.{operation}", domain.provider()),
                 physical_arguments: vec![],
             };
             let result = one(backend(Policy::default()), binding, &[], args)
@@ -331,7 +331,7 @@ fn native_advertisements_close_fields_modes_masks_and_providers_independently() 
                     };
                     assert_eq!(
                         native.prepare_binding(&wrong).is_some(),
-                        provider == domain.provider
+                        provider == domain.provider()
                     );
                 }
                 for arguments in [
@@ -354,7 +354,7 @@ fn native_advertisements_close_fields_modes_masks_and_providers_independently() 
                 let wrong_mode = OperationBinding {
                     implementation: format!(
                         "{}/numerical.{}",
-                        domain.provider,
+                        domain.provider(),
                         if mode == "map" { "sum" } else { "map" }
                     ),
                     ..binding

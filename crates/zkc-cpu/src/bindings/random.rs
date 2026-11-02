@@ -1,32 +1,20 @@
 //! Fixed native randomness operations.
 use super::*;
-pub(crate) const fn operation(
-    name: &'static str,
-    inputs: &'static [Type],
-    outputs: &'static [Type],
-    attributes: AttributeRule,
-) -> Contract {
-    Contract::new(name, inputs, outputs, attributes, resolve)
+pub(crate) const fn operation(name: &'static str) -> Contract {
+    Contract::new(name, resolve)
 }
 fn resolve(
     binding: &OperationBinding,
-    row: &Contract,
+    _row: &Contract,
     selection: Selection,
 ) -> Option<BoundSignature> {
     if !matches!(selection, Selection::Default) {
         return None;
     }
     let domain = support::field_domain(binding)?;
-    if binding.contract == "random.index"
-        && !matches!(
-            domain.field,
-            Identity::KoalaBearExt8
-                | Identity::KoalaBearExt4
-                | Identity::BabyBearExt4
-                | Identity::GoldilocksExt2
-        )
-    {
+    // UniformIndex sampling needs the field's installed index randomness.
+    if binding.contract == "random.index" && !domain.field.holds("IndexRandomness") {
         return None;
     }
-    support::domain_signature(binding, row, selection, domain)
+    support::domain_signature(binding, selection, domain)
 }

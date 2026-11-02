@@ -33,12 +33,13 @@ impl Implementation {
         if binding.contract != self.contract {
             return None;
         }
+        // Physical arguments are an installation calling convention of the
+        // operations that declare it.
         if !binding.physical_arguments.is_empty()
-            && !binding.contract.starts_with("sequence.")
-            && !binding.contract.starts_with("field_array.")
-            && !binding.contract.starts_with("fixed_vector.")
-            && binding.contract != "representation.convert"
-            && binding.contract != "transcript.native.indexed.observe.data"
+            && !zkc_runtime::catalog::INSTALLATION
+                .physical_arguments
+                .iter()
+                .any(|row| row.operation == binding.contract)
         {
             return None;
         }
@@ -136,6 +137,11 @@ impl Registry {
         deterministic: bool,
     ) -> Result<()> {
         for row in contracts {
+            // A row realizes a catalog declaration; without one there is no
+            // signature to resolve, so installation refuses the row.
+            if zkc_runtime::catalog::operation(row.name).is_none() {
+                return Err(refused("implementation-contract-undeclared"));
+            }
             for implementation in row.implementations {
                 self.insert(
                     (*implementation).into(),

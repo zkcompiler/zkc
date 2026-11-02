@@ -4,9 +4,9 @@ use zkc_kernels::arkworks::bn254::{G1, G2, encode_scalar};
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (tag, width, count) = match value {
-        Value::Bn254Vector(v) => (41, 32usize, v.len()),
-        Value::Bn254G1Vector(v) => (47, 32, v.len()),
-        Value::Bn254G2Vector(v) => (49, 64, v.len()),
+        Value::Bn254Vector(v) => (super::tags::BN254_VECTOR, 32usize, v.len()),
+        Value::Bn254G1Vector(v) => (super::tags::BN254_G1_VECTOR, 32, v.len()),
+        Value::Bn254G2Vector(v) => (super::tags::BN254_G2_VECTOR, 64, v.len()),
         _ => return None,
     };
     Some((|| {

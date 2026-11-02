@@ -1,7 +1,7 @@
 //! Structural materialization; family owners select domains and applicability.
 use super::*;
 use crate::domains::NativeDomain;
-use zkc_runtime::vm::{OperationSignature, PhysicalType};
+use zkc_runtime::vm::PhysicalType;
 
 pub(super) fn field_domain(binding: &OperationBinding) -> Option<NativeDomain> {
     let [name] = binding.arguments.as_slice() else {
@@ -28,73 +28,31 @@ pub(super) fn ports(
     }
 }
 
-// Independently authored here: do not import the runtime's literal refinement.
-fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
-    match (field, rule) {
-        (
-            Identity::BabyBear
-            | Identity::BabyBearExt4
-            | Identity::Goldilocks
-            | Identity::GoldilocksExt2,
-            AttributeRule::FieldDecimal,
-        ) => AttributeRule::ResidueLiteral(field),
-        (
-            Identity::BabyBear
-            | Identity::BabyBearExt4
-            | Identity::Goldilocks
-            | Identity::GoldilocksExt2,
-            AttributeRule::FieldDecimals,
-        ) => AttributeRule::ResidueLiterals(field),
-        (Identity::Ristretto255Scalar, AttributeRule::FieldDecimal) => {
-            AttributeRule::RistrettoDecimal
-        }
-        (Identity::Ristretto255Scalar, AttributeRule::FieldDecimals) => {
-            AttributeRule::RistrettoDecimals
-        }
-        (
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
-            AttributeRule::FieldDecimal,
-        ) => AttributeRule::KoalaBearDecimal,
-        (
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
-            AttributeRule::FieldDecimals,
-        ) => AttributeRule::KoalaBearDecimals,
-        (Identity::Binary64, AttributeRule::FieldDecimal) => AttributeRule::Binary64Literal,
-        (Identity::Binary64, AttributeRule::FieldDecimals) => AttributeRule::Binary64Literals,
-        (Identity::Binary64Ext3, AttributeRule::FieldDecimal) => AttributeRule::Binary64Ext3Literal,
-        (Identity::Binary64Ext3, AttributeRule::FieldDecimals) => {
-            AttributeRule::Binary64Ext3Literals
-        }
-        (Identity::Bn254Fr, AttributeRule::FieldDecimal) => AttributeRule::Bn254Decimal,
-        (Identity::Bn254Fr, AttributeRule::FieldDecimals) => AttributeRule::Bn254Decimals,
-        _ => rule,
-    }
-}
-
+/// The declared signature with each port in the family's representation. A
+/// family that has no representation of a declared port, or whose
+/// representation implements another logical type, refuses the binding.
 pub(super) fn materialize(
-    row: &Contract,
-    field: Identity,
+    binding: &OperationBinding,
     ports: PortTransform,
-    make: impl Fn(Type) -> Option<PhysicalType>,
+    make: impl Fn(&LogicalType) -> Option<PhysicalType>,
 ) -> Option<BoundSignature> {
-    let make = |kind| {
-        let ty = make(kind)?;
-        if matches!(ports, PortTransform::Msb) && kind == Type::Table {
+    let declared = declared(binding)?;
+    let make = |logical: &LogicalType| {
+        let ty = make(logical).filter(|ty| ty.logical() == logical)?;
+        if matches!(ports, PortTransform::Msb) && ty.kind() == Type::Table {
             PhysicalType::new(ty.logical().clone(), Representation::TableMsb).ok()
         } else {
             Some(ty)
         }
     };
-    let mut inputs = row
+    let mut inputs = declared
         .inputs
         .iter()
-        .copied()
         .map(&make)
         .collect::<Option<Vec<_>>>()?;
-    let mut outputs = row
+    let mut outputs = declared
         .outputs
         .iter()
-        .copied()
         .map(make)
         .collect::<Option<Vec<_>>>()?;
     if let PortTransform::Diagonal {
@@ -113,16 +71,15 @@ pub(super) fn materialize(
     Some(OperationSignature {
         inputs,
         outputs,
-        attributes: literal_rule(row.attributes, field),
+        attributes: declared.attributes,
     })
 }
 
 pub(super) fn domain_signature(
     binding: &OperationBinding,
-    row: &Contract,
     selection: Selection,
     domain: NativeDomain,
 ) -> Option<BoundSignature> {
-    let ports = ports(binding, selection, domain.provider)?;
-    materialize(row, domain.field, ports, |kind| domain.physical(kind))
+    let ports = ports(binding, selection, domain.provider())?;
+    materialize(binding, ports, |logical| domain.physical(logical.kind()))
 }

@@ -83,36 +83,17 @@ pub(crate) fn apply(
     Ok(vec![value])
 }
 
-/// Independent native port facts, also used for exact implementation assembly.
+/// Native implementations of catalog contracts. Ports and parameter rules
+/// come from each declaration; rows name only contract and implementation.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{field, poly};
-    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
-        field::operation(
-            "vector.from_point",
-            &[Point],
-            &[Vector],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/vector.from_point"]),
-        field::operation("vector.to_point", &[Vector], &[Point], AttributeRule::None)
-            .implemented_by(&["arkworks/vector.to_point"]),
-        field::operation(
-            "vector.from_table",
-            &[Table],
-            &[Vector],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/vector.from_table"]),
-        field::operation("vector.to_table", &[Vector], &[Table], AttributeRule::None)
-            .implemented_by(&["arkworks/vector.to_table"]),
-        poly::operation(
-            "poly.equality_weights",
-            &[Point],
-            &[Vector],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/poly.equality_weights"]),
+        field::operation("vector.from_point").implemented_by(&["arkworks/vector.from_point"]),
+        field::operation("vector.to_point").implemented_by(&["arkworks/vector.to_point"]),
+        field::operation("vector.from_table").implemented_by(&["arkworks/vector.from_table"]),
+        field::operation("vector.to_table").implemented_by(&["arkworks/vector.to_table"]),
+        poly::operation("poly.equality_weights")
+            .implemented_by(&["arkworks/poly.equality_weights"]),
     ]
 };
 

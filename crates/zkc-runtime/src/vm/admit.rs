@@ -225,17 +225,6 @@ fn site(sites: &mut BTreeSet<String>, site: &str) -> Result<()> {
     }
     Ok(())
 }
-/// Operations whose natural attributes are vector sizes, positions or degrees.
-const VECTOR_EXTENTS: [&str; 8] = [
-    "vector.splat",
-    "vector.powers",
-    "vector.at",
-    "vector.length_check",
-    "poly.degree_check",
-    "random.vector",
-    "vector.gather",
-    "vector.matvec",
-];
 fn natural_syntax(value: &str) -> Result<()> {
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
         return Err(err(ErrorCode::Attributes, "expected-natural"));
@@ -678,13 +667,8 @@ fn local_body(
                 } else {
                     "interactive-kernel-parameters"
                 };
-                let contract = binding.declaration().contract.as_str();
-                let natural_limit = if contract == "curve.at" || VECTOR_EXTENTS.contains(&contract)
-                {
-                    1_048_576
-                } else {
-                    u64::MAX
-                };
+                let natural_limit =
+                    super::operations::natural_parameter_bound(&binding.declaration().contract);
                 if sig.attributes == AttributeRule::NumericalExpression {
                     super::operations::numerical::parameters(binding.declaration(), a)?;
                 } else {

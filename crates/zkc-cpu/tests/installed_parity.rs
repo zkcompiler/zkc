@@ -1,10 +1,9 @@
-//! The CPU backend's hand-written domain, transcript and codec tables against
-//! the installed-instance and installation documents that the catalog build
-//! projects into `CATALOG` and `INSTALLATION` (whose fidelity
-//! `crates/zkc-catalog/tests/installed.rs` checks row for row). Every known
-//! difference is listed with its reason: the consumer step that derives the
-//! table from the catalog removes the entry. Any other difference, or a listed
-//! one that no longer occurs, fails.
+//! The CPU backend's implemented domains and transcript suites against the
+//! installed-instance and installation documents, read here independently of
+//! the generated projection. The backend names which fields, groups and suites
+//! it implements; providers, challenge fields, representations and codecs come
+//! from the catalog, so these checks keep the implementation inventory complete
+//! and every derived codec declared.
 use serde_json::Value;
 use std::collections::BTreeSet;
 use zkc_cpu::domains::{INSTALLED, TRANSCRIPTS};
@@ -141,17 +140,14 @@ fn installed_domains_cover_the_fields_and_groups_with_their_providers() {
     }
     for row in INSTALLED {
         let field = row.field.name();
-        if row.provider != default_provider(&installed, field) {
-            found.insert(format!("provider {field}"));
-        }
         if let Some(group) = row.group {
             let group = group.name();
             if member(domain(&declared, group), "Scalar") != Some(field) {
                 found.insert(format!("scalar {group}"));
             }
-            if row.provider != default_provider(&installed, group) {
-                found.insert(format!("provider {group}"));
-            }
+        }
+        if row.provider() != default_provider(&installed, row.group.unwrap_or(row.field).name()) {
+            found.insert(format!("provider {field}"));
         }
     }
     agree("installed domains", found, &[]);
@@ -190,10 +186,10 @@ fn transcripts_are_the_installed_suites() {
     }
     for row in TRANSCRIPTS {
         let suite = row.suite.name();
-        if member(domain(&declared, suite), "ChallengeField") != Some(row.domain.field.name()) {
+        if member(domain(&declared, suite), "ChallengeField") != Some(row.domain().field.name()) {
             found.insert(format!("challenge field {suite}"));
         }
-        if row.provider != default_provider(&installed, suite) {
+        if row.provider() != default_provider(&installed, suite) {
             found.insert(format!("provider {suite}"));
         }
     }
@@ -201,7 +197,7 @@ fn transcripts_are_the_installed_suites() {
 }
 
 #[test]
-fn codec_formatter_spellings() {
+fn every_domain_codec_is_declared() {
     let declared = declarations();
     let codecs = rows(&declared, "codecs")
         .iter()
@@ -219,45 +215,10 @@ fn codec_formatter_spellings() {
             }
         }
     }
-    assert!(spellings.len() > found.len());
-    // The formatter appends a field suffix to every kind, so the nullary
-    // index, indices and bytes codecs come out as spellings that no codec row
-    // declares. The consumer step that reads codec identities from the
-    // catalog removes these entries.
-    const PHANTOM: &str = "formatted for a field although the codec is nullary";
-    let fields = [
-        "bls12-381.fr",
-        "ristretto255.scalar",
-        "koala-bear",
-        "koala-bear.ext8-binomial3",
-        "koala-bear.ext4-binomial3",
-        "baby-bear",
-        "baby-bear.ext4-binomial11",
-        "goldilocks",
-        "goldilocks.ext2-binomial7",
-        "gf2-64.pentanomial-4-3-1",
-        "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
-        "bn254.fr",
-    ];
-    let phantoms = fields
-        .iter()
-        .flat_map(|field| {
-            ["index", "indices", "bytes"]
-                .into_iter()
-                .map(move |kind| format!("zkcv.{kind}.{field}/0"))
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(phantoms.len(), 36);
-    agree(
-        "codec formatter",
-        found,
-        &phantoms
-            .iter()
-            .map(|spelling| (spelling.as_str(), PHANTOM))
-            .collect::<Vec<_>>(),
-    );
+    agree("domain codecs", found, &[]);
+    // Nullary codecs keep their nullary identity.
     for nullary in ["zkcv.index/0", "zkcv.indices/0", "zkcv.bytes/0"] {
-        assert!(codecs.contains(nullary) && !spellings.contains(nullary));
+        assert!(codecs.contains(nullary) && spellings.contains(nullary));
     }
 }
 

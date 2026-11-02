@@ -13,26 +13,42 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
     if crate::operations::halo2curves::is_resident(ty) {
         use zkc_kernels::halo2curves::bn254 as kernel;
         return match (ty.kind(), ty.logical().identity()) {
-            (Type::Vector, Identity::Bn254Fr) => {
-                Some((41, 32, std::mem::size_of::<kernel::ScalarElement>()))
-            }
-            (Type::Groups, Identity::Bn254G1) => {
-                Some((47, 32, std::mem::size_of::<kernel::G1Element>()))
-            }
-            (Type::Groups, Identity::Bn254G2) => {
-                Some((49, 64, std::mem::size_of::<kernel::G2Element>()))
-            }
+            (Type::Vector, Identity::Bn254Fr) => Some((
+                super::tags::BN254_VECTOR,
+                32,
+                std::mem::size_of::<kernel::ScalarElement>(),
+            )),
+            (Type::Groups, Identity::Bn254G1) => Some((
+                super::tags::BN254_G1_VECTOR,
+                32,
+                std::mem::size_of::<kernel::G1Element>(),
+            )),
+            (Type::Groups, Identity::Bn254G2) => Some((
+                super::tags::BN254_G2_VECTOR,
+                64,
+                std::mem::size_of::<kernel::G2Element>(),
+            )),
             _ => Option::None,
         };
     }
     if crate::operations::blst::is_resident(ty) {
         use zkc_kernels::blst::bls12_381 as kernel;
         return match ty.kind() {
-            Type::Vector => Some((66, 32, std::mem::size_of::<kernel::Scalar>())),
-            Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => {
-                Some((67, 48, std::mem::size_of::<kernel::G1>()))
-            }
-            Type::Groups => Some((52, 96, std::mem::size_of::<kernel::G2>())),
+            Type::Vector => Some((
+                super::tags::BLS_VECTOR,
+                32,
+                std::mem::size_of::<kernel::Scalar>(),
+            )),
+            Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => Some((
+                super::tags::BLS_G1_VECTOR,
+                48,
+                std::mem::size_of::<kernel::G1>(),
+            )),
+            Type::Groups => Some((
+                super::tags::BLS_G2_VECTOR,
+                96,
+                std::mem::size_of::<kernel::G2>(),
+            )),
             _ => Option::None,
         };
     }
@@ -63,8 +79,8 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
     if let Some(scheme) = crate::merkle::Scheme::from_identity(ty.logical().identity()) {
         let width = scheme.digest_bytes();
         return match ty.kind() {
-            Commitment => Some((71, width, width)),
-            Proof => Some((72, width, width)),
+            Commitment => Some((super::tags::DIGEST_ROOT, width, width)),
+            Proof => Some((super::tags::DIGEST_PROOF, width, width)),
             _ => Option::None,
         };
     }
@@ -288,7 +304,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
                 out.try_reserve_exact(width)
                     .map_err(|_| crate::exhausted("wire-bytes"))?;
                 out.extend_from_slice(super::super::MAGIC);
-                out.push(67);
+                out.push(super::tags::BLS_G1_VECTOR);
                 out.extend_from_slice(&(v.len() as u32).to_le_bytes());
                 for x in v.iter() {
                     out.extend_from_slice(&x.to_bytes().map_err(crate::ark)?);
@@ -369,18 +385,26 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
     }
     if ty.kind() == Type::Matrix {
         return match tag {
-            23 => matrix::<crate::Scalar>(bytes, backend.policy()),
-            45 => matrix::<crate::Bn254Scalar>(bytes, backend.policy()),
-            24 => matrix::<crate::RistrettoScalar>(bytes, backend.policy()),
-            75 => matrix::<crate::Binary64>(bytes, backend.policy()),
-            78 => matrix::<crate::Binary64Ext3>(bytes, backend.policy()),
+            super::tags::BLS_MATRIX => matrix::<crate::Scalar>(bytes, backend.policy()),
+            super::tags::BN254_MATRIX => matrix::<crate::Bn254Scalar>(bytes, backend.policy()),
+            super::tags::RISTRETTO_MATRIX => {
+                matrix::<crate::RistrettoScalar>(bytes, backend.policy())
+            }
+            super::tags::BINARY_MATRIX => matrix::<crate::Binary64>(bytes, backend.policy()),
+            super::tags::BINARY_EXT3_MATRIX => {
+                matrix::<crate::Binary64Ext3>(bytes, backend.policy())
+            }
             _ => Err(unsupported()),
         };
     }
-    if matches!(tag, 71 | 72) {
+    if matches!(tag, super::tags::DIGEST_ROOT | super::tags::DIGEST_PROOF) {
         let scheme = crate::merkle::Scheme::from_identity(ty.logical().identity())
             .ok_or_else(unsupported)?;
-        let digests = &bytes[if tag == 71 { 6 } else { 10 }..];
+        let digests = &bytes[if tag == super::tags::DIGEST_ROOT {
+            6
+        } else {
+            10
+        }..];
         // Canonical digest encodings only; framing alone authenticates nothing.
         if !scheme.valid_digests(digests) {
             return Err(invalid(DecodeReason::Scalar));
@@ -389,7 +413,7 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
         copy.try_reserve_exact(digests.len())
             .map_err(|_| Error::Limit)?;
         copy.extend_from_slice(digests);
-        return Ok(if tag == 71 {
+        return Ok(if tag == super::tags::DIGEST_ROOT {
             Value::MerkleDigest(scheme, copy.into())
         } else {
             Value::MerkleProof(scheme, copy.into())
@@ -421,16 +445,16 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
     if crate::operations::halo2curves::is_resident(ty) {
         use zkc_kernels::halo2curves::bn254 as kernel;
         let decoded = match tag {
-            41 => kernel::ScalarVector::from_bytes(&bytes[10..])
+            super::tags::BN254_VECTOR => kernel::ScalarVector::from_bytes(&bytes[10..])
                 .map(|v| Value::HaloVector(std::sync::Arc::new(v))),
-            47 => kernel::G1Vector::from_bytes(&bytes[10..])
+            super::tags::BN254_G1_VECTOR => kernel::G1Vector::from_bytes(&bytes[10..])
                 .map(|v| Value::HaloG1Vector(std::sync::Arc::new(v))),
-            49 => kernel::G2Vector::from_bytes(&bytes[10..])
+            super::tags::BN254_G2_VECTOR => kernel::G2Vector::from_bytes(&bytes[10..])
                 .map(|v| Value::HaloG2Vector(std::sync::Arc::new(v))),
             _ => return Err(unsupported()),
         };
         return decoded.map_err(|e| match e {
-            kernel::Error::InvalidEncoding => invalid(if tag == 41 {
+            kernel::Error::InvalidEncoding => invalid(if tag == super::tags::BN254_VECTOR {
                 DecodeReason::Scalar
             } else {
                 DecodeReason::Group
@@ -441,50 +465,56 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
     if crate::operations::blst::is_resident(ty) {
         use zkc_kernels::blst::bls12_381 as kernel;
         return match tag {
-            66 => kernel::ScalarVector::try_from_fn((bytes.len() - 10) / 32, |i| {
-                kernel::decode_scalar(&bytes[10 + i * 32..10 + (i + 1) * 32])
-            })
-            .map(|v| Value::BlstVector(std::sync::Arc::new(v)))
-            .map_err(|e| resident_decode_error(e, DecodeReason::Scalar)),
-            67 => kernel::G1Vector::try_from_fn((bytes.len() - 10) / 48, |i| {
-                kernel::G1::from_bytes(&bytes[10 + i * 48..10 + (i + 1) * 48])
-            })
-            .map(|v| Value::BlstG1Vector(std::sync::Arc::new(v)))
-            .map_err(|e| resident_decode_error(e, DecodeReason::Group)),
-            52 => kernel::G2Vector::try_from_fn((bytes.len() - 10) / 96, |i| {
-                kernel::G2::from_bytes(&bytes[10 + i * 96..10 + (i + 1) * 96])
-            })
-            .map(|v| Value::BlstG2Vector(std::sync::Arc::new(v)))
-            .map_err(|e| resident_decode_error(e, DecodeReason::Group)),
+            super::tags::BLS_VECTOR => {
+                kernel::ScalarVector::try_from_fn((bytes.len() - 10) / 32, |i| {
+                    kernel::decode_scalar(&bytes[10 + i * 32..10 + (i + 1) * 32])
+                })
+                .map(|v| Value::BlstVector(std::sync::Arc::new(v)))
+                .map_err(|e| resident_decode_error(e, DecodeReason::Scalar))
+            }
+            super::tags::BLS_G1_VECTOR => {
+                kernel::G1Vector::try_from_fn((bytes.len() - 10) / 48, |i| {
+                    kernel::G1::from_bytes(&bytes[10 + i * 48..10 + (i + 1) * 48])
+                })
+                .map(|v| Value::BlstG1Vector(std::sync::Arc::new(v)))
+                .map_err(|e| resident_decode_error(e, DecodeReason::Group))
+            }
+            super::tags::BLS_G2_VECTOR => {
+                kernel::G2Vector::try_from_fn((bytes.len() - 10) / 96, |i| {
+                    kernel::G2::from_bytes(&bytes[10 + i * 96..10 + (i + 1) * 96])
+                })
+                .map(|v| Value::BlstG2Vector(std::sync::Arc::new(v)))
+                .map_err(|e| resident_decode_error(e, DecodeReason::Group))
+            }
             _ => Err(unsupported()),
         };
     }
     match tag {
-        66 => values!(
+        super::tags::BLS_VECTOR => values!(
             32,
             zkc_kernels::arkworks::bls12_381::decode_scalar,
             Vector,
             Scalar
         ),
-        41 => values!(
+        super::tags::BN254_VECTOR => values!(
             32,
             zkc_kernels::arkworks::bn254::decode_scalar,
             Bn254Vector,
             Scalar
         ),
-        74 => values!(
+        super::tags::BINARY_VECTOR => values!(
             8,
             zkc_kernels::plonky3::binary::decode,
             Binary64Vector,
             Scalar
         ),
-        77 => values!(
+        super::tags::BINARY_EXT3_VECTOR => values!(
             24,
             zkc_kernels::plonky3::binary::decode_ext3,
             Binary64Ext3Vector,
             Scalar
         ),
-        14 => values!(
+        super::tags::RISTRETTO_VECTOR => values!(
             32,
             |b: &[u8; 32]| Option::<crate::RistrettoScalar>::from(
                 crate::RistrettoScalar::from_canonical_bytes(*b)
@@ -493,17 +523,23 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
             RistrettoVector,
             Scalar
         ),
-        67 => values!(48, crate::G1::from_bytes, Groups, Group),
-        47 => values!(32, crate::Bn254G1::from_bytes, Bn254G1Vector, Group),
-        49 => values!(64, crate::Bn254G2::from_bytes, Bn254G2Vector, Group),
-        52 => values!(96, crate::Bls12381G2::from_bytes, Bls12381G2Vector, Group),
-        82 => values!(
+        super::tags::BLS_G1_VECTOR => values!(48, crate::G1::from_bytes, Groups, Group),
+        super::tags::BN254_G1_VECTOR => {
+            values!(32, crate::Bn254G1::from_bytes, Bn254G1Vector, Group)
+        }
+        super::tags::BN254_G2_VECTOR => {
+            values!(64, crate::Bn254G2::from_bytes, Bn254G2Vector, Group)
+        }
+        super::tags::BLS_G2_VECTOR => {
+            values!(96, crate::Bls12381G2::from_bytes, Bls12381G2Vector, Group)
+        }
+        super::tags::EDWARDS_GROUPS => values!(
             32,
             |b: &[u8; 32]| crate::EdwardsPrime::from_bytes(b).ok_or(()),
             EdwardsGroups,
             Group
         ),
-        17 => values!(
+        super::tags::RISTRETTO_GROUPS => values!(
             32,
             |b: &[u8; 32]| curve25519_dalek::ristretto::CompressedRistretto(*b)
                 .decompress()

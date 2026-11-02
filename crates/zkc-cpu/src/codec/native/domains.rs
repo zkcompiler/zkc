@@ -4,13 +4,13 @@ use zkc_runtime::vm::Value as _;
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (tag, width, count) = match value {
-        Value::Binary64Vector(v) => (74, 8, v.len()),
-        Value::Binary64Ext3Vector(v) => (77, 24, v.len()),
-        Value::Vector(v) => (66, 32, v.len()),
-        Value::RistrettoVector(v) => (14, 32, v.len()),
-        Value::RistrettoGroups(v) => (17, 32, v.len()),
-        Value::EdwardsGroups(v) => (82, 32, v.len()),
-        Value::Bls12381G2Vector(v) => (52, 96, v.len()),
+        Value::Binary64Vector(v) => (super::tags::BINARY_VECTOR, 8, v.len()),
+        Value::Binary64Ext3Vector(v) => (super::tags::BINARY_EXT3_VECTOR, 24, v.len()),
+        Value::Vector(v) => (super::tags::BLS_VECTOR, 32, v.len()),
+        Value::RistrettoVector(v) => (super::tags::RISTRETTO_VECTOR, 32, v.len()),
+        Value::RistrettoGroups(v) => (super::tags::RISTRETTO_GROUPS, 32, v.len()),
+        Value::EdwardsGroups(v) => (super::tags::EDWARDS_GROUPS, 32, v.len()),
+        Value::Bls12381G2Vector(v) => (super::tags::BLS_G2_VECTOR, 96, v.len()),
         _ => return None,
     };
     Some((|| {

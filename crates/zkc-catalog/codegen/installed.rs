@@ -93,7 +93,7 @@ impl Identities {
              impl DomainIdentity {{\n\
              /// Every installed domain, in declared order.\n\
              pub const ALL: &'static [Self] = &[{all}];\n\
-             pub fn name(self) -> &'static str {{ match self {{ {name} }} }}\n\
+             pub const fn name(self) -> &'static str {{ match self {{ {name} }} }}\n\
              /// The exact declared identity; no other spelling parses.\n\
              pub fn parse(name: &str) -> Option<Self> {{ match name {{ {parse} _ => None, }} }}\n\
              }}\n"

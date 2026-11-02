@@ -35,13 +35,18 @@ impl TypeArgument {
     }
 }
 
+/// A structural constructor: a catalog constructor with a Type or Nat
+/// parameter.
+fn structural_constructor(row: &zkc_catalog::TypeConstructor) -> bool {
+    row.parameters
+        .iter()
+        .any(|parameter| matches!(parameter, Kind::Type | Kind::Nat))
+}
 fn constructor(name: &str) -> Result<Type> {
-    match name {
-        "sequence" => Ok(Type::Sequence),
-        "field_array" => Ok(Type::FieldArray),
-        "fixed_vector" => Ok(Type::FixedVector),
-        _ => Err(invalid("uninstalled structural constructor")),
-    }
+    zkc_catalog::constructor(name)
+        .filter(|row| structural_constructor(row))
+        .and_then(|_| Type::parse_kind(name).ok())
+        .ok_or_else(|| invalid("uninstalled structural constructor"))
 }
 fn declaration(kind: Type) -> &'static zkc_catalog::TypeConstructor {
     zkc_catalog::constructor(kind.name()).expect("installed structural declaration")

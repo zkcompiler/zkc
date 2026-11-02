@@ -35,10 +35,10 @@ pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
         return None;
     }
     match ty.kind() {
-        Type::Sequence => Some(69),
-        Type::Variant => Some(65),
-        Type::Indices => Some(68),
-        Type::Bytes => Some(70),
+        Type::Sequence => Some(super::tags::SEQUENCE),
+        Type::Variant => Some(super::tags::VARIANT),
+        Type::Indices => Some(super::tags::INDICES),
+        Type::Bytes => Some(super::tags::BYTES),
         _ => None,
     }
 }
@@ -186,7 +186,7 @@ pub(super) fn peak(policy: &Policy, charge: usize, wire: usize) -> Result<()> {
 }
 fn width(value: &Value, policy: &Policy, key: &crate::SetupRegistry) -> Result<usize> {
     if let Value::Sequence(v) = value {
-        if tag(&value.physical_type()) != Some(69) {
+        if tag(&value.physical_type()) != Some(super::tags::SEQUENCE) {
             return Err(unsupported());
         }
         v.validate(policy).map_err(Error::Backend)?;
@@ -197,7 +197,7 @@ fn width(value: &Value, policy: &Policy, key: &crate::SetupRegistry) -> Result<u
         return Ok(n);
     }
     if let Value::Variant(v) = value {
-        if tag(&value.physical_type()) != Some(65) {
+        if tag(&value.physical_type()) != Some(super::tags::VARIANT) {
             return Err(unsupported());
         }
         v.validate().map_err(Error::Backend)?;
@@ -348,7 +348,7 @@ pub(super) fn scan(
     counts.admit(policy)?;
     if let Some(tag) = tag(ty) {
         let n = header(bytes, tag)?;
-        if tag == 69 {
+        if tag == super::tags::SEQUENCE {
             policy
                 .vector_width(n, crate::VALUE_SLOT_BYTES)
                 .map_err(|_| Error::Limit)?;
@@ -376,7 +376,7 @@ pub(super) fn scan(
             policy.output(total, usize::MAX).map_err(|_| Error::Limit)?;
             return Ok(total);
         }
-        if tag == 65 {
+        if tag == super::tags::VARIANT {
             let arm = ty
                 .variant_payload(n)
                 .ok_or_else(|| invalid(DecodeReason::Header))?;
@@ -394,7 +394,7 @@ pub(super) fn scan(
             policy.output(total, usize::MAX).map_err(|_| Error::Limit)?;
             return Ok(total);
         }
-        if tag == 70 {
+        if tag == super::tags::BYTES {
             policy.bytes(n).map_err(|_| Error::Limit)?;
             if bytes.len() != add(10, n)? {
                 return Err(invalid(DecodeReason::Length));
@@ -429,7 +429,7 @@ pub(super) fn scan(
         super::pcs::preflight(key, tag, bytes)?;
         counts.add(
             0,
-            if tag == 6 {
+            if tag == super::tags::KZG_COMMITMENT {
                 1
             } else {
                 bytes.len().saturating_sub(87) / 96
@@ -456,7 +456,7 @@ fn read(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result<Value> 
         return backend.decode_native_value(ty, bytes);
     };
     let n = header(bytes, tag)?;
-    if tag == 69 {
+    if tag == super::tags::SEQUENCE {
         let physical = ty.sequence_element().ok_or_else(unsupported)?;
         let mut values = Vec::new();
         values.try_reserve_exact(n).map_err(|_| Error::Limit)?;
@@ -468,7 +468,7 @@ fn read(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result<Value> 
             .map(Value::Sequence)
             .map_err(Error::Backend);
     }
-    if tag == 65 {
+    if tag == super::tags::VARIANT {
         let arm = ty.variant_payload(n).ok_or_else(unsupported)?;
         let mut payload = Vec::new();
         payload
@@ -482,7 +482,7 @@ fn read(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result<Value> 
             .map(Value::Variant)
             .map_err(Error::Backend);
     }
-    if tag == 70 {
+    if tag == super::tags::BYTES {
         let mut out = Vec::new();
         out.try_reserve_exact(n).map_err(|_| Error::Limit)?;
         out.extend_from_slice(&bytes[10..]);

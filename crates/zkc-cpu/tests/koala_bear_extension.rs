@@ -67,7 +67,7 @@ fn nominal_admission_and_native_signatures_are_independent() {
     assert!(
         zkc_cpu::domains::TRANSCRIPTS
             .iter()
-            .any(|t| t.domain.field == identity && t.suite == Identity::Merlin3KoalaBearExt8)
+            .any(|t| t.domain().field == identity && t.suite == Identity::Merlin3KoalaBearExt8)
     );
     for kind in [
         Type::Field,

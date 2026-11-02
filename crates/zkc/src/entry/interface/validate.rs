@@ -4,6 +4,9 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The catalog's protocol role roster ceiling.
+const PROTOCOL_ROLES: usize = zkc_catalog::limit("protocol.roles") as usize;
+
 pub(super) struct Checked {
     pub selected: usize,
     pub common: Vec<super::common::Requirement>,
@@ -102,7 +105,7 @@ pub(super) fn check(
         }
         let mut roles = BTreeMap::new();
         require(
-            !protocol.roles.is_empty() && protocol.roles.len() <= 1024,
+            !protocol.roles.is_empty() && protocol.roles.len() <= PROTOCOL_ROLES,
             E::Schema,
         )?;
         for (index, role) in protocol.roles.iter().enumerate() {

@@ -2,21 +2,11 @@
 use super::*;
 use zkc_runtime::vm::{LogicalType, PhysicalType};
 
-pub(crate) const fn challenge(
-    name: &'static str,
-    inputs: &'static [Type],
-    outputs: &'static [Type],
-    attributes: AttributeRule,
-) -> Contract {
-    Contract::new(name, inputs, outputs, attributes, derive)
+pub(crate) const fn challenge(name: &'static str) -> Contract {
+    Contract::new(name, derive)
 }
-pub(crate) const fn observation(
-    name: &'static str,
-    inputs: &'static [Type],
-    outputs: &'static [Type],
-    attributes: AttributeRule,
-) -> Contract {
-    Contract::new(name, inputs, outputs, attributes, observe).selectable()
+pub(crate) const fn observation(name: &'static str) -> Contract {
+    Contract::new(name, observe).selectable()
 }
 
 fn suite(binding: &OperationBinding) -> Option<crate::domains::NativeTranscript> {
@@ -35,7 +25,7 @@ fn state(suite: Identity) -> Option<PhysicalType> {
 }
 fn derive(
     binding: &OperationBinding,
-    row: &Contract,
+    _row: &Contract,
     selection: Selection,
 ) -> Option<BoundSignature> {
     if !matches!(selection, Selection::Default) || binding.arguments.len() != 1 {
@@ -47,10 +37,8 @@ fn derive(
         "transcript.native.indexed.indices"
             | "transcript.native.indexed.indices.search"
             | "transcript.native.indexed.indices.gated"
-    ) && !matches!(
-        t.suite,
-        Identity::HashChainKeccak256KoalaBearExt4 | Identity::HashChainKeccak256KoalaBearExt8
-    ) {
+    ) && !t.suite.has_index_block_transcript()
+    {
         return None;
     }
     // UniformIndex requires an explicit suite installation.
@@ -61,12 +49,12 @@ fn derive(
     {
         return None;
     }
-    let ports = support::ports(binding, selection, t.provider)?;
-    support::materialize(row, t.domain.field, ports, |kind| {
-        if kind == Type::Transcript {
+    let ports = support::ports(binding, selection, t.provider())?;
+    support::materialize(binding, ports, |logical| {
+        if logical.kind() == Type::Transcript {
             state(t.suite)
         } else {
-            t.domain.physical(kind)
+            t.domain().physical(logical.kind())
         }
     })
 }
@@ -97,10 +85,10 @@ fn observe(
         {
             return None;
         }
-        support::ports(binding, selection, t.provider)?;
+        support::ports(binding, selection, t.provider())?;
         let state = state(t.suite)?;
         return Some(zkc_runtime::vm::OperationSignature {
-            inputs: vec![state.clone(), payload, t.domain.physical(Type::Indices)?],
+            inputs: vec![state.clone(), payload, t.domain().physical(Type::Indices)?],
             outputs: vec![state],
             attributes: AttributeRule::NativeMessageTemplate,
         });

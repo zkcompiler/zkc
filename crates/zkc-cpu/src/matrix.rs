@@ -207,7 +207,7 @@ pub(crate) trait Wire: Coefficient {
 }
 impl Wire for crate::Bn254Scalar {
     const WIDTH: usize = 32;
-    const TAG: u8 = 45;
+    const TAG: u8 = crate::fields::tag("matrix", zkc_runtime::vm::Identity::Bn254Fr);
     fn decode(bytes: &[u8]) -> Result<Self> {
         zkc_kernels::arkworks::bn254::decode_scalar(bytes).map_err(crate::ark)
     }
@@ -221,7 +221,7 @@ impl Wire for crate::Bn254Scalar {
 }
 impl Wire for crate::Scalar {
     const WIDTH: usize = 32;
-    const TAG: u8 = 23;
+    const TAG: u8 = crate::fields::tag("matrix", zkc_runtime::vm::Identity::Bls12381Fr);
     fn decode(bytes: &[u8]) -> Result<Self> {
         zkc_kernels::arkworks::bls12_381::decode_scalar(bytes).map_err(crate::ark)
     }
@@ -235,7 +235,7 @@ impl Wire for crate::Scalar {
 }
 impl Wire for crate::RistrettoScalar {
     const WIDTH: usize = 32;
-    const TAG: u8 = 24;
+    const TAG: u8 = crate::fields::tag("matrix", zkc_runtime::vm::Identity::Ristretto255Scalar);
     fn decode(bytes: &[u8]) -> Result<Self> {
         let a = bytes.try_into().map_err(|_| refused("wire-length"))?;
         Option::from(Self::from_canonical_bytes(a)).ok_or_else(|| refused("noncanonical-scalar"))
@@ -250,7 +250,7 @@ impl Wire for crate::RistrettoScalar {
 }
 impl Wire for crate::Binary64 {
     const WIDTH: usize = zkc_kernels::plonky3::binary::WIDTH;
-    const TAG: u8 = 75;
+    const TAG: u8 = crate::fields::tag("matrix", zkc_runtime::vm::Identity::Binary64);
     fn decode(bytes: &[u8]) -> Result<Self> {
         zkc_kernels::plonky3::binary::decode(bytes).map_err(crate::field_error)
     }
@@ -264,7 +264,7 @@ impl Wire for crate::Binary64 {
 }
 impl Wire for crate::Binary64Ext3 {
     const WIDTH: usize = zkc_kernels::plonky3::binary::EXT3_WIDTH;
-    const TAG: u8 = 78;
+    const TAG: u8 = crate::fields::tag("matrix", zkc_runtime::vm::Identity::Binary64Ext3);
     fn decode(bytes: &[u8]) -> Result<Self> {
         zkc_kernels::plonky3::binary::decode_ext3(bytes).map_err(crate::field_error)
     }

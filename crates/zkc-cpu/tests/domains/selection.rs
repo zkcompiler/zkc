@@ -174,7 +174,7 @@ fn scalar_selection_signatures_cover_every_installed_nominal_owner() {
             let binding = OperationBinding {
                 contract: contract.into(),
                 arguments: vec![identity.name().into()],
-                implementation: format!("{}/{contract}", owner.provider),
+                implementation: format!("{}/{contract}", owner.provider()),
                 physical_arguments: vec![],
             };
             let native = cpu
@@ -182,7 +182,7 @@ fn scalar_selection_signatures_cover_every_installed_nominal_owner() {
                 .expect("installed native scalar owner");
             assert_eq!(native, binding.signature().unwrap(), "{}", identity.name());
             for provider in ["native", "arkworks", "dalek", "plonky3"] {
-                if provider == owner.provider {
+                if provider == owner.provider() {
                     continue;
                 }
                 let mut wrong = binding.clone();

@@ -170,88 +170,32 @@ fn fold_work(len: usize) -> Result<u64> {
         .ok_or_else(|| exhausted("numerical-work"))
 }
 
-/// Independent native port facts, also used for exact implementation assembly.
+/// Native implementations of catalog contracts. Ports and parameter rules
+/// come from each declaration; rows name only contract and implementation.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{control, poly};
-    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
-        control::operation("bool.and", &[Bool, Bool], &[Bool], AttributeRule::None)
-            .implemented_by(&["arkworks/bool.and"]),
-        control::operation("bool.not", &[Bool], &[Bool], AttributeRule::None)
-            .implemented_by(&["arkworks/bool.not"]),
-        control::operation("bool.or", &[Bool, Bool], &[Bool], AttributeRule::None)
-            .implemented_by(&["arkworks/bool.or"]),
-        control::operation("control.require", &[Bool], &[], AttributeRule::None)
-            .implemented_by(&["arkworks/control.require"]),
-        poly::operation("poly.table_arity", &[Table], &[Index], AttributeRule::None)
-            .implemented_by(&["arkworks/poly.table_arity"]),
-        poly::operation(
-            "poly.product_sum",
-            &[Table, Table],
-            &[Field],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/poly.product_sum"]),
-        poly::operation(
-            "poly.product_round",
-            &[Table, Table],
-            &[Round],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/poly.product_round"]),
-        poly::operation("poly.fold", &[Table, Field], &[Table], AttributeRule::None)
-            .implemented_by(&["arkworks/poly.fold"]),
-        poly::operation(
-            "poly.evaluate",
-            &[Table, Point],
-            &[Field],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/poly.evaluate"]),
-        poly::operation("poly.empty_point", &[], &[Point], AttributeRule::None)
-            .implemented_by(&["arkworks/poly.empty_point"]),
-        poly::operation(
-            "poly.append_point",
-            &[Point, Field],
-            &[Point],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/poly.append_point"]),
+        control::operation("bool.and").implemented_by(&["arkworks/bool.and"]),
+        control::operation("bool.not").implemented_by(&["arkworks/bool.not"]),
+        control::operation("bool.or").implemented_by(&["arkworks/bool.or"]),
+        control::operation("control.require").implemented_by(&["arkworks/control.require"]),
+        poly::operation("poly.table_arity").implemented_by(&["arkworks/poly.table_arity"]),
+        poly::operation("poly.product_sum").implemented_by(&["arkworks/poly.product_sum"]),
+        poly::operation("poly.product_round").implemented_by(&["arkworks/poly.product_round"]),
+        poly::operation("poly.fold").implemented_by(&["arkworks/poly.fold"]),
+        poly::operation("poly.evaluate").implemented_by(&["arkworks/poly.evaluate"]),
+        poly::operation("poly.empty_point").implemented_by(&["arkworks/poly.empty_point"]),
+        poly::operation("poly.append_point").implemented_by(&["arkworks/poly.append_point"]),
     ]
 };
 // Setup-dependent operations are installed separately from pure mathematics.
 pub(crate) const PCS_CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::pcs;
-    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
-        pcs::operation(
-            "pcs.commit",
-            &[ProverKey, Table],
-            &[Commitment, OpeningState],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/pcs.commit"]),
-        pcs::operation(
-            "pcs.open",
-            &[OpeningState, Point],
-            &[Field, Proof],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/pcs.open"]),
-        pcs::operation(
-            "pcs.check",
-            &[VerifierKey, Commitment, Point, Field, Proof],
-            &[Bool],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/pcs.check"]),
-        pcs::operation(
-            "pcs.equal",
-            &[Commitment, Commitment],
-            &[Bool],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/pcs.equal"]),
+        pcs::operation("pcs.commit").implemented_by(&["arkworks/pcs.commit"]),
+        pcs::operation("pcs.open").implemented_by(&["arkworks/pcs.open"]),
+        pcs::operation("pcs.check").implemented_by(&["arkworks/pcs.check"]),
+        pcs::operation("pcs.equal").implemented_by(&["arkworks/pcs.equal"]),
     ]
 };
 pub(crate) const SPECIAL_IMPLEMENTATIONS: &[(&str, &str)] =

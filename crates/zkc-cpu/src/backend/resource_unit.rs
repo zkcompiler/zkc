@@ -2,32 +2,13 @@
 //! and transcript capabilities.
 use super::CpuBackend;
 use crate::{Result, Value, refused};
-use zkc_runtime::vm::{
-    AttributeRule, BoundSignature, Invocation, LogicalType, OperationBinding, OperationSignature,
-    PhysicalType,
-};
+use zkc_runtime::vm::{BoundSignature, Invocation, OperationBinding};
+/// The catalog-resolved signature of the logical implementation.
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
-    let [domain] = binding.arguments.as_slice() else {
-        return None;
-    };
     if binding.implementation != format!("logical/{}", binding.contract) {
         return None;
     }
-    let ty = PhysicalType::default_for(LogicalType::resource_unit(
-        zkc_runtime::vm::ResourceDomain::parse(domain).ok()?,
-    ))
-    .ok()?;
-    let (inputs, outputs) = match binding.contract.as_str() {
-        "resource_unit.create" => (vec![], vec![ty]),
-        "resource_unit.pass" => (vec![ty.clone()], vec![ty]),
-        "resource_unit.consume" => (vec![ty], vec![]),
-        _ => return None,
-    };
-    Some(OperationSignature {
-        inputs,
-        outputs,
-        attributes: AttributeRule::None,
-    })
+    binding.signature().ok()
 }
 pub(super) fn execute(
     backend: &mut CpuBackend,

@@ -25,7 +25,8 @@ impl BundleLimits {
     pub const HARD_MAX: Self = Self {
         bytes: 16 * 1024 * 1024,
         candidate_bytes: crate::vm::Limits::ARTIFACT_BYTES,
-        roles: 1024,
+        // The catalog's protocol role roster ceiling.
+        roles: zkc_catalog::limit("protocol.roles") as usize,
         steps: 32768,
         depth: 256,
         nodes: 250_000,

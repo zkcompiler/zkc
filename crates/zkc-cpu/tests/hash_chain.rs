@@ -303,7 +303,7 @@ fn nominal_identity_provider_and_index_capability() {
         assert!(
             zkc_cpu::domains::TRANSCRIPTS
                 .iter()
-                .any(|t| t.suite == suite && t.domain.field == field && t.provider == provider)
+                .any(|t| t.suite == suite && t.domain().field == field && t.provider() == provider)
         );
     }
     assert!(OCTIC.has_index_transcript());

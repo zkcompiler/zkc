@@ -150,40 +150,14 @@ impl Type {
         !self.is_duplicable()
     }
     /// Wire codec availability for a nominal leaf, independently of
-    /// the catalog's message-data profile and complete aggregate permissions.
+    /// the catalog's message-data profile and complete aggregate permissions:
+    /// the catalog declares the constructor's `Encodes` capability.
     pub fn is_serializable(self) -> bool {
-        match self {
-            Self::QuotientMatrix
-            | Self::Shake128State
-            | Self::Sequence
-            | Self::FieldArray
-            | Self::FixedVector
-            | Self::Variant
-            | Self::ResourceUnit
-            | Self::Rng
-            | Self::Nonce
-            | Self::Transcript
-            | Self::OpeningStates
-            | Self::ProverKey
-            | Self::VerifierKey
-            | Self::OpeningState => false,
-            Self::Index
-            | Self::Bytes
-            | Self::Indices
-            | Self::Matrix
-            | Self::Vector
-            | Self::Polynomial
-            | Self::Field
-            | Self::Table
-            | Self::Point
-            | Self::Round
-            | Self::Bool
-            | Self::Commitment
-            | Self::Commitments
-            | Self::Proof
-            | Self::Group
-            | Self::Groups => true,
-        }
+        let name = self.name();
+        zkc_catalog::CATALOG
+            .capabilities
+            .iter()
+            .any(|row| row.name.strip_prefix("Encodes.") == Some(name))
     }
     /// Copy permission guaranteed by the constructor head alone.
     /// `FixedVector` and `Variant` conservatively return false; their complete
@@ -199,45 +173,48 @@ impl Type {
         zkc_catalog::constructor(self.name())
             .is_some_and(|row| row.drop && !row.parameters.contains(&zkc_catalog::Kind::Type))
     }
+    /// Every constructor head the runtime names; `variant` has its own
+    /// formation and every other head is a catalog constructor.
+    pub const ALL: [Self; 30] = [
+        Self::Sequence,
+        Self::FieldArray,
+        Self::FixedVector,
+        Self::Variant,
+        Self::ResourceUnit,
+        Self::Index,
+        Self::Indices,
+        Self::Bytes,
+        Self::Shake128State,
+        Self::QuotientMatrix,
+        Self::Matrix,
+        Self::Vector,
+        Self::Polynomial,
+        Self::Field,
+        Self::Table,
+        Self::Point,
+        Self::Round,
+        Self::Bool,
+        Self::Rng,
+        Self::Commitment,
+        Self::Commitments,
+        Self::OpeningStates,
+        Self::Proof,
+        Self::ProverKey,
+        Self::VerifierKey,
+        Self::OpeningState,
+        Self::Group,
+        Self::Nonce,
+        Self::Transcript,
+        Self::Groups,
+    ];
+    /// The head of a declared catalog constructor. `variant` has its own
+    /// spelling and no constructor row.
     pub(crate) fn parse_kind(name: &str) -> Result<Self, AdmissionError> {
-        let ty = match name {
-            "sequence" => Self::Sequence,
-            "field_array" => Self::FieldArray,
-            "fixed_vector" => Self::FixedVector,
-            "resource_unit" => Self::ResourceUnit,
-            "index" => Self::Index,
-            "indices" => Self::Indices,
-            "bytes" => Self::Bytes,
-            "shake128_state" => Self::Shake128State,
-            "quotient_matrix" => Self::QuotientMatrix,
-            "matrix" => Self::Matrix,
-            "vector" => Self::Vector,
-            "polynomial" => Self::Polynomial,
-            "field" => Self::Field,
-            "table" => Self::Table,
-            "point" => Self::Point,
-            "round" => Self::Round,
-            "bool" => Self::Bool,
-            "rng" => Self::Rng,
-            "commitments" => Self::Commitments,
-            "opening_states" => Self::OpeningStates,
-            "commitment" => Self::Commitment,
-            "proof" => Self::Proof,
-            "prover_key" => Self::ProverKey,
-            "verifier_key" => Self::VerifierKey,
-            "opening_state" => Self::OpeningState,
-            "group" => Self::Group,
-            "nonce" => Self::Nonce,
-            "transcript" => Self::Transcript,
-            "groups" => Self::Groups,
-            _ => {
-                return Err(AdmissionError::new(
-                    ErrorCode::Type,
-                    "unknown or opaque executable type",
-                ));
-            }
-        };
-        Ok(ty)
+        zkc_catalog::constructor(name)
+            .and_then(|_| Self::ALL.into_iter().find(|ty| ty.name() == name))
+            .ok_or_else(|| {
+                AdmissionError::new(ErrorCode::Type, "unknown or opaque executable type")
+            })
     }
 }
 

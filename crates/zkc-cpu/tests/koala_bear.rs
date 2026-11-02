@@ -62,7 +62,7 @@ fn numerical_identity_and_independent_installation_have_no_crypto_associations()
     assert!(
         !zkc_cpu::domains::TRANSCRIPTS
             .iter()
-            .any(|t| t.domain.field == KOALA_BEAR.field)
+            .any(|t| t.domain().field == KOALA_BEAR.field)
     );
     assert!(zkc_cpu::domains::for_identity(Identity::None).is_none());
     for (kind, repr) in [

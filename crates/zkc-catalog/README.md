@@ -24,10 +24,14 @@ a target still admits each implementation it runs.
 
 `tests/installed.rs` checks that every authored row and fact reaches the
 projection in order. `tests/validation_cases.rs` runs the
-[shared validation cases](../../common/catalog/README.md). The
-`installed_parity` tests of `zkc-runtime` and `zkc-cpu` compare these tables
-with the hand-written runtime and backend tables and list each known
-difference until its consumer reads the catalog.
+[shared validation cases](../../common/catalog/README.md). The runtime, the CPU
+backend and the SDK read these tables; the `installed_parity` tests of
+`zkc-runtime` and `zkc-cpu` keep their Rust names of domains, constructors,
+representations, services and implemented suites a bijection with the rows.
+
+`limit`, `codec_tag`, `instance_tag` and `aggregate_frame_tag` are `const`
+lookups, so a constant derived from a row fails the build when the row is
+removed or loses its frame.
 
 Runtime admission interprets the table's kinded scopes, signatures, requirements,
 parameter rules, history facets and type permissions. Consumers still check actual arguments, profile

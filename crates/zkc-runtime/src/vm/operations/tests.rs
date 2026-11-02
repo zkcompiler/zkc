@@ -754,3 +754,41 @@ fn index_blocks_require_explicit_keccak_installation_and_exact_ports() {
         }
     }
 }
+
+#[test]
+fn natural_parameter_bounds_follow_the_catalog_validator() {
+    use zkc_catalog::ParameterValidator as V;
+    let bounded = zkc_catalog::CATALOG
+        .operations
+        .iter()
+        .filter(|row| natural_parameter_bound(row.name) != u64::MAX)
+        .map(|row| row.name)
+        .collect::<std::collections::BTreeSet<_>>();
+    for row in zkc_catalog::CATALOG.operations {
+        let extent = matches!(
+            row.parameters.validator,
+            V::Extent | V::MatrixVector | V::GatherIndices
+        );
+        assert_eq!(bounded.contains(row.name), extent, "{}", row.name);
+        if extent {
+            assert_eq!(natural_parameter_bound(row.name), 1_048_576, "{}", row.name);
+        }
+    }
+    // Vector sizes, positions, degrees and the curve vector index.
+    assert_eq!(
+        bounded,
+        std::collections::BTreeSet::from([
+            "curve.at",
+            "poly.degree_check",
+            "random.vector",
+            "vector.at",
+            "vector.gather",
+            "vector.length_check",
+            "vector.matvec",
+            "vector.powers",
+            "vector.splat",
+        ])
+    );
+    assert_eq!(natural_parameter_bound("field.add"), u64::MAX);
+    assert_eq!(natural_parameter_bound("undeclared.operation"), u64::MAX);
+}

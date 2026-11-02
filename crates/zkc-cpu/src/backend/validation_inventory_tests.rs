@@ -86,7 +86,7 @@ fn storage_widths_preserve_existing_charges() {
 }
 
 macro_rules! collection_tests {
-    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => { $(
+    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident),)*) => { $(
         #[allow(non_snake_case)]
         mod $id {
             use super::*;
