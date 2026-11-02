@@ -960,6 +960,31 @@ int main() {
       refuses(protocol::oracleRequirements(*source, "main", {}),
               "oracle-realization-control-profile");
     });
+    // Only Alice demands the selection, so projection places it at Alice
+    // alone and the projected comparison reads it where Alice sends it.
+    auto demanded = replaceText(
+        dormant,
+        R"mlir(%z = algebra.field_add %k, %cx : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">)mlir",
+        R"mlir(%t = algebra.group_equal %g, %y : (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> i1
+%z = func.call @choose(%t, %k, %cx) : (i1, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">)mlir");
+    for (bool simplify : {false, true})
+      cases.run(
+          Twine("a selection one role demands projects to that role") +
+              (simplify ? " after simplification" : ""),
+          [&] {
+            auto source = admitted(context, demanded);
+            auto target = projected(*source, simplify);
+            require(succeeded(admitStage(*target)),
+                    "projected selection refused");
+            llvm::StringMap<unsigned> placed;
+            target->walk([&](Operation *op) {
+              auto participant = op->getParentOfType<pir::ParticipantOp>();
+              if (participant && op->getName().getStringRef() == "data.branch")
+                ++placed[participant.getRole()];
+            });
+            require(placed.lookup("Alice") == 1 && !placed.contains("Bob"),
+                    "the selection was not placed where demanded");
+          });
   }
   return cases.result();
 }

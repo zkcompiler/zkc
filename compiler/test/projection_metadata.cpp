@@ -534,6 +534,57 @@ void statementRecords(MLIRContext &context) {
   require(failed(mathematical::verifyProjectionPreserved(*projected, *lowered)),
           "lowering admitted a changed relation declaration");
 }
+// A two-role Protocol selection over a variant with `arms` alternatives.
+std::string selectedRegion(unsigned arms) {
+  std::string alternatives, labels, regions;
+  for (unsigned i = 0; i < arms; ++i) {
+    std::string label = "a" + std::to_string(i);
+    std::string separator = i ? ", " : "";
+    alternatives += separator + "#data.alternative<\"" + label + "\">";
+    labels += separator + "\"" + label + "\"";
+    regions += separator + "{\n   \"protocol.yield\"() : ()->()\n  }";
+  }
+  return "!Wide = !data.variant<#data.identity<[\"atom\", \"Wide\"]>, [" +
+         alternatives +
+         "]>\nmodule { \"protocol.module\"() ({\n"
+         " \"protocol.func\"() ({ ^entry(%choice:!Wide):\n"
+         "  \"protocol.branch\"(%choice) (" +
+         regions + ") {site=\"choose\",roles=[\"P\",\"V\"],output_roles=[]," +
+         "alternatives=[" + labels +
+         "]} : (!Wide)->()\n"
+         "  \"protocol.return\"() : ()->()\n"
+         " }) {sym_name=\"main\",function_type=(!Wide)->(),roles=[\"P\",\"V\"],"
+         "input_roles=[[\"P\",\"V\"]],output_roles=[]} : ()->()\n"
+         "}) {profile=#protocol.profile<protocol>} : ()->() }";
+}
+// Retained projection metadata records at most 256 arms per selected region,
+// a bound of its own below the 512 arms a selected region may form with.
+void retainedArmLimit(MLIRContext &context) {
+  for (unsigned arms : {256u, 257u}) {
+    auto source = parseSourceString<ModuleOp>(selectedRegion(arms), &context);
+    require(bool(source) && succeeded(zkc::admitStage(*source)),
+            "wide selected region did not form");
+    std::string diagnostics;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &d) {
+      diagnostics += d.str() + "\n";
+      return success();
+    });
+    auto projected = copy(*source);
+    PassManager manager(&context);
+    manager.addPass(protocol::createProjectProtocolPass());
+    bool admitted = succeeded(manager.run(*projected)) &&
+                    succeeded(zkc::admitStage(*projected));
+    if (arms == 256)
+      require(admitted, "256 retained arms refused: " + diagnostics);
+    else
+      require(!admitted &&
+                  diagnostics.find("mathematical-projection") !=
+                      std::string::npos &&
+                  diagnostics.find("invalid retained selected arms") !=
+                      std::string::npos,
+              "257 retained arms were not refused: " + diagnostics);
+  }
+}
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -545,6 +596,7 @@ int main() {
   suppliedMaterialization(context);
   scheduling(context);
   statementRecords(context);
+  retainedArmLimit(context);
   auto common = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(common), "common fixture refused");
   auto projected = copy(*common);

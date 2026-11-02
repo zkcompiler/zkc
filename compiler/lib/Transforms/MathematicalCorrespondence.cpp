@@ -13,12 +13,23 @@ namespace zkc::mathematical {
 namespace {
 using Environment = ValueCorrespondence::Environment;
 using Term = ValueCorrespondence::Term;
+// Preparation and participant edges keep every Math selection where the source
+// has it, so their ordered comparison reads it in place.
 bool expression(Operation *op) {
   return isProtocolValueExpression(op) && !isa<data::BranchOp>(op);
 }
 
 Operation *nextAction(Operation *op) {
   while (op && expression(op))
+    op = op->getNextNode();
+  return op;
+}
+// Projection places total mathematics, a Math selection included, only where a
+// role demands it. The projected comparison reads a selection as one total
+// value through the operation that consumes it; that value keeps its selector,
+// captures, payloads and every arm's yields.
+Operation *nextProjectedAction(Operation *op) {
+  while (op && isProtocolValueExpression(op))
     op = op->getNextNode();
   return op;
 }
@@ -306,7 +317,7 @@ class Correspondence {
   LogicalResult projectedBlock(Block &source, Block &target, Environment left,
                                Environment right, StringAttr role,
                                ArrayRef<Value> outputs, unsigned depth) {
-    Operation *cursor = nextAction(&target.front());
+    Operation *cursor = nextProjectedAction(&target.front());
     return projectedSequence(source, cursor, left, right, role, outputs, depth);
   }
   LogicalResult projectedSequence(Block &source, Operation *&cursor,
@@ -339,7 +350,7 @@ class Correspondence {
           terms.bind(left, result, terms.value(arguments, value));
         continue;
       }
-      if (expression(&op) || isa<protocol_ir::StatementOp>(op))
+      if (isProtocolValueExpression(&op) || isa<protocol_ir::StatementOp>(op))
         continue;
       if (isa<protocol_ir::MathematicalReturnOp, protocol_ir::ProtocolYieldOp>(
               op)) {
@@ -352,15 +363,7 @@ class Correspondence {
         cursor = cursor->getNextNode();
         continue;
       }
-      if (isa<data::BranchOp>(op)) {
-        if (!isa_and_nonnull<data::BranchOp>(cursor) ||
-            op.getAttrDictionary() != cursor->getAttrDictionary() ||
-            !operands(left, op.getOperands(), right, cursor->getOperands()) ||
-            failed(selectedRegions(&op, cursor, left, right, Substitution{},
-                                   depth)) ||
-            !results(left, &op, right, cursor))
-          return fail("projected selected mathematics differs");
-      } else if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+      if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
         if (!is_contained(branch.getRoles(), role))
           continue;
         auto actual =
@@ -549,7 +552,7 @@ class Correspondence {
           return fail("projected completion correspondence differs");
       } else
         return fail("unsupported prepared operation");
-      cursor = nextAction(cursor->getNextNode());
+      cursor = nextProjectedAction(cursor->getNextNode());
     }
     return cursor ? fail("projection added an ordered operation") : success();
   }

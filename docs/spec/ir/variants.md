@@ -23,6 +23,7 @@ own boundary; none narrows formation:
 | --- | --- | --- |
 | MLIR formation and logical type data | 512 | Type verification; `structured-data` |
 | [Selected regions](control.md#selected-protocol-and-mathematical-regions) | 512 arms | `selected-control-limit` |
+| [Retained projection metadata](control.md#selected-protocol-and-mathematical-regions) | 256 arms per Protocol selected region | `mathematical-projection` |
 | [Portable descriptor](#portable-representation) | 64 | `variant-type` when a formed variant is spelled |
 | [Program `match`](../formats/program-bytes.md#bounds-and-admission) | 64 arms | `local-match-shape`, `interactive-match-shape` |
 | [Source variants](../language/definitions.md#types-and-static-terms) | 64 | `source.limit` |

@@ -253,12 +253,24 @@ exact yields. Retained action records associate each arm label with its nested
 actions; moving an action between arms changes its occurrence. A participant's
 stop or Entry completion affects that participant alone.
 
+Retained projection metadata records at most 256 arms for each Protocol
+selected region. This bound belongs to the metadata alone: it is neither the
+512-arm region limit nor a role bound. A projected unit whose region has more
+arms refuses with `mathematical-projection` when its metadata is admitted.
+
 `data.branch` has no Protocol roster or action permissions. Its inputs, payloads
 and results must be total mathematical data, and every arm admits only installed
 total operations and acyclic total helpers. It cannot contain a service, Local
 call, ordered guard, logical handle or resource. `data.yield` closes each arm.
 This form does not introduce an unregistered SCF operation or grant ordered
-execution to Math. Polynomial observations requiring a selected degree adapter
+execution to Math. Projection places a Math selection, like other total
+mathematics, only at the roles that demand one of its results; formation still
+checks every arm of the source and of each participant. The projected comparison
+reads the selection as one total value where a participant consumes it. That
+value retains the selector, the captures, each alternative's payloads and every
+arm's yields, so a changed selector, payload association or arm yield refuses,
+as does a consumer that no longer reads the selection. Preparation and
+participant comparisons keep each selection at its position. Polynomial observations requiring a selected degree adapter
 remain an explicit unsupported profile. Numerical realization uses the
 [recursive computation recipes](computation.md#realization), preserving selected
 scope entry, arm-local work/allocation and independently checked payload,
