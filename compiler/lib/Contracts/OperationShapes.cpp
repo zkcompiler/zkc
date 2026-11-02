@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Support/Json.h"
@@ -50,18 +51,19 @@ StringRef fieldModulus(StringRef identity) {
 }
 
 unsigned fieldBitPatternWidth(StringRef identity) {
-  // Closed presentations; see docs/spec/domains/values.md. The catalogue must
-  // agree that the row is a field of characteristic two without PrimeField.
-  static const struct {
-    StringRef field;
-    unsigned width;
-  } binaryFields[] = {{"gf2-64.pentanomial-4-3-1", 64},
-                      {"gf2-64.pentanomial-4-3-1.ext3-trinomial1", 192}};
-  const auto &catalog = installedDomains();
-  for (const auto &entry : binaryFields)
-    if (entry.field == identity && fieldModulus(identity) == "2" &&
-        !catalog.hasFact("PrimeField", {identity.str()}))
-      return entry.width;
+  // The number of GF(2) coordinates of a characteristic-two extension field
+  // (docs/spec/domains/values.md): its degree over the prime subfield, and
+  // over BaseField its degree times the base's width. Other fields have none.
+  const auto *row = instances::domain(identity);
+  if (!row || !row->field || row->field->characteristic != "2" ||
+      !row->field->extension)
+    return 0;
+  const auto &extension = *row->field->extension;
+  if (extension.over == instances::ExtensionBase::PrimeSubfield)
+    return extension.degree;
+  for (const auto &member : row->members)
+    if (member.member == "BaseField")
+      return extension.degree * fieldBitPatternWidth(member.identity);
   return 0;
 }
 

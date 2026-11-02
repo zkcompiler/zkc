@@ -89,39 +89,11 @@ const generated::Domain &row(StringRef identity) {
   require(found, "missing generated domain " + identity);
   return *found;
 }
-std::optional<std::string> member(const generated::Domain &domain,
-                                  StringRef name) {
-  for (const auto &m : domain.members)
-    if (m.member == name)
-      return m.identity;
-  return std::nullopt;
-}
-// Rows along BaseField extensions.
-std::vector<const generated::Domain *> baseChain(StringRef identity) {
-  std::vector<const generated::Domain *> chain{&row(identity)};
-  while (chain.back()->field && chain.back()->field->extension &&
-         chain.back()->field->extension->over ==
-             generated::ExtensionBase::BaseField)
-    chain.push_back(&row(*member(*chain.back(), "BaseField")));
-  return chain;
-}
 const generated::Codec *codecFor(StringRef kind, StringRef identity) {
   for (const auto &codec : generated::codecs())
     if (codec.kind == kind && codec.domain == identity)
       return &codec;
   return nullptr;
-}
-// Field elements as GF(2) coordinates; zero for other characteristics.
-unsigned binaryWidth(StringRef identity) {
-  const auto &domain = row(identity);
-  if (!domain.field || domain.field->characteristic != "2")
-    return 0;
-  if (!domain.field->extension)
-    return 1;
-  const auto &extension = *domain.field->extension;
-  return extension.over == generated::ExtensionBase::PrimeSubfield
-             ? extension.degree
-             : extension.degree * binaryWidth(*member(domain, "BaseField"));
 }
 std::vector<std::string> identities() {
   std::vector<std::string> result{""};
@@ -591,43 +563,6 @@ int main(int argc, char **argv) {
     if (!found.empty())
       throw std::runtime_error("installed dump differs from its fixture: " +
                                join(found, "; "));
-  });
-
-  cases.run("coset conventions for every domain", [&] {
-    std::vector<std::string> found;
-    for (const auto &identity : identities()) {
-      const auto *hand = cosetConvention(identity);
-      const generated::Domain *root = nullptr;
-      if (const auto *domain = generated::domain(identity);
-          domain && domain->field)
-        for (const auto *link : baseChain(identity))
-          if (link->field->twoAdic) {
-            root = link;
-            break;
-          }
-      bool same = bool(hand) == bool(root);
-      if (hand && root) {
-        const auto &facts = *root->field->twoAdic;
-        same = hand->identity == facts.convention &&
-               hand->rootField == root->identity &&
-               hand->maximalRoot == facts.maximalRoot &&
-               hand->maxLogSize == facts.twoAdicity &&
-               facts.ordering == "powers" &&
-               hand->order == "shift * root(size)^i; i = 0..size-1";
-      }
-      if (!same)
-        found.push_back(identity);
-    }
-    agree("coset conventions", found, {});
-  });
-
-  cases.run("binary bit-pattern widths for every domain", [&] {
-    std::vector<std::string> found;
-    for (const auto &identity : identities())
-      if (fieldBitPatternWidth(identity) !=
-          (generated::domain(identity) ? binaryWidth(identity) : 0))
-        found.push_back(identity);
-    agree("bit-pattern widths", found, {});
   });
 
   cases.run("resident canonical-frame representations", [&] {

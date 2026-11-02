@@ -1,5 +1,6 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
@@ -55,36 +56,48 @@ bool isHistoryTransition(llvm::StringRef key) {
   return contracts && contracts->history.has_value();
 }
 const CosetConvention *cosetConvention(llvm::StringRef field) {
-  // ark-bn254 0.6.0 Fr uses generator 5. Its maximal two-adic root is
-  // 5^((r - 1) / 2^28); smaller roots are successive powers of two of it.
-  static const CosetConvention bn254{"bn254.fr.two-adic.generator5/0",
-                                     "bn254.fr",
-                                     "19103219067921713944291392827692070036145"
-                                     "651957329286315305642004821462161904",
-                                     "shift * root(size)^i; i = 0..size-1", 28};
-  if (field == "bn254.fr")
-    return &bn254;
-  static const CosetConvention koala{"koala-bear.two-adic.1791270792/0",
-                                     "koala-bear", "1791270792",
-                                     "shift * root(size)^i; i = 0..size-1", 24};
-  // Plonky3 0.8.0 baby-bear/src/baby_bear.rs: TwoAdicData's entry 27
-  // is 0x1a427a41; test_baby_bear_two_adicity_generators checks every root
-  // against its successive squares. Goldilocks goldilocks/src/goldilocks.rs
-  // TWO_ADIC_GENERATORS[32] is 0x185629dcda58878c; TwoAdicField indexes it.
-  static const CosetConvention baby{"baby-bear.two-adic.440564289/0",
-                                    "baby-bear", "440564289",
-                                    "shift * root(size)^i; i = 0..size-1", 27};
-  static const CosetConvention goldilocks{
-      "goldilocks.two-adic.1753635133440165772/0", "goldilocks",
-      "1753635133440165772", "shift * root(size)^i; i = 0..size-1", 32};
-  const auto *registered = plonky3Field(field);
-  if (!registered)
-    return nullptr;
-  // Even a nonbase extension shift uses the BASE root and two-adicity.
-  for (const auto *convention : {&koala, &baby, &goldilocks})
-    if (registered->base == convention->rootField)
-      return convention;
-  return nullptr;
+  // A prime field's declared two-adic convention, which its extensions along
+  // BaseField share: even a nonbase extension shift uses the base root and
+  // two-adicity. Cosets list `shift * root^i` in order.
+  struct Conventions {
+    llvm::StringMap<CosetConvention> roots;
+    llvm::StringMap<const CosetConvention *> fields;
+  };
+  static const Conventions conventions = [] {
+    Conventions result;
+    for (const auto &row : instances::domains()) {
+      if (!row.field || !row.field->twoAdic)
+        continue;
+      const auto &facts = *row.field->twoAdic;
+      if (facts.ordering != "powers")
+        llvm::report_fatal_error(
+            llvm::Twine("unknown coset ordering of ") + row.identity, false);
+      result.roots.try_emplace(
+          row.identity,
+          CosetConvention{facts.convention, row.identity, facts.maximalRoot,
+                          "shift * root(size)^i; i = 0..size-1",
+                          facts.twoAdicity});
+    }
+    for (const auto &row : instances::domains()) {
+      const instances::Domain *link = &row;
+      while (link && link->field && !link->field->twoAdic &&
+             link->field->extension &&
+             link->field->extension->over ==
+                 instances::ExtensionBase::BaseField) {
+        const instances::Domain *base = nullptr;
+        for (const auto &member : link->members)
+          if (member.member == "BaseField")
+            base = instances::domain(member.identity);
+        link = base;
+      }
+      if (link && link->field && link->field->twoAdic)
+        result.fields.try_emplace(row.identity,
+                                  &result.roots.find(link->identity)->second);
+    }
+    return result;
+  }();
+  auto found = conventions.fields.find(field);
+  return found == conventions.fields.end() ? nullptr : found->second;
 }
 const OperationContracts *operationContracts(llvm::StringRef key) {
   const auto *application = findOperationShape(key);
