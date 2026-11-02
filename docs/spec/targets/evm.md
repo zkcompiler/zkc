@@ -97,6 +97,7 @@ identity.
 | `forks` | Per fork: `name`, solc `evmVersion` (`solc`), engine `hardfork`, consensus `transaction_gas_cap` or null, `runtime_code_bytes`, `initcode_bytes` and the named consensus `rules` |
 | `default_fork` | The fork selected when a caller names none |
 | `validation_gas` | The per-transaction gas budget of validation runs on a fork without a `transaction_gas_cap` |
+| `validation_gas_maximum` | The most gas any validation transaction requests, and the block gas limit of validation runs |
 | `limits` | Per deployment ceiling: `name`, `minimum` and `maximum` |
 | `reverts` | Per revert class: `class` and its four-byte ASCII `tag` |
 
@@ -119,8 +120,8 @@ build validates the same file independently and generates the typed
 `zkc::evm_target` module, which the SDK and CLI read for forks, solc settings,
 the ABI and selector, and ceilings. Shared refusal cases in
 `common/targets/evm-validation-cases.json` name the rule each validator must
-report. The deployed-validation runner reads the declaration's forks and refuses
-to run when a fork's engine hardfork has a different transaction gas cap or
+report. The deployed-validation runner reads the declaration's forks and
+validation gas maximum, and refuses to run when a fork's engine hardfork has a different transaction gas cap or
 code size limits; the validation harness checks the declaration with
 `generate.py` and reads every target fact from it. Every reader validates the
 facts it uses; an artifact's self-stated numbers are not authority. The `zkc.evm-source/0` response names the
@@ -238,8 +239,10 @@ Callers cannot supply per-call budgets through the verifier ABI.
 
 Validation runs request one transaction budget per fork, for deployment and
 calls alike: the fork's consensus `transaction_gas_cap`, or the declaration's
-`validation_gas` for a fork without one. Only the deployed-validation runner and
-harness read `validation_gas`. It is never a deployment ceiling, never reaches
+`validation_gas` for a fork without one. `validation_gas` and every declared
+`transaction_gas_cap` are at most `validation_gas_maximum`, so no default budget
+exceeds it; the runner refuses an explicit request above it. Only the
+deployed-validation runner and harness read `validation_gas` and its maximum. It is never a deployment ceiling, never reaches
 compilation, and never overrides the selected fork's gas rules. A runtime at the
 fork's code size ceiling deploys within the budget.
 

@@ -43,6 +43,7 @@
     }
   ],
   "validation_gas": 20000000,
+  "validation_gas_maximum": 100000000,
   "limits": [
     {"name": "participant_loop_maximum", "minimum": 1, "maximum": 10},
     {"name": "public_elements", "minimum": 1, "maximum": 1024},

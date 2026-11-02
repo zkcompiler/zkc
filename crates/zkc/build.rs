@@ -518,6 +518,7 @@ fn validate_evm_target(declaration: &Json) -> Result<(), String> {
             "default_fork",
             "forks",
             "validation_gas",
+            "validation_gas_maximum",
             "limits",
             "reverts",
         ],
@@ -687,11 +688,38 @@ fn validate_evm_target(declaration: &Json) -> Result<(), String> {
             "default_fork must name a declared fork",
         ));
     }
-    natural(
+    // Every validation transaction requests at most the declared maximum: the
+    // validation gas, and the consensus cap of a fork that declares one.
+    let maximum = natural(
+        &declaration["validation_gas_maximum"],
+        "validation-gas",
+        "validation_gas_maximum",
+    )?;
+    if natural(
         &declaration["validation_gas"],
         "validation-gas",
         "validation_gas",
-    )?;
+    )? > maximum
+    {
+        return Err(refusal(
+            "validation-gas",
+            "validation_gas exceeds validation_gas_maximum",
+        ));
+    }
+    for fork in forks {
+        if fork["transaction_gas_cap"]
+            .as_u64()
+            .is_some_and(|cap| cap > maximum)
+        {
+            return Err(refusal(
+                "validation-gas",
+                format!(
+                    "fork {} transaction_gas_cap exceeds validation_gas_maximum",
+                    fork["name"].as_str().unwrap()
+                ),
+            ));
+        }
+    }
 
     let limits = nonempty_list(&declaration["limits"], "limit", "limits")?;
     for limit in limits {

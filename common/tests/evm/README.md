@@ -69,8 +69,10 @@ for calls and deployment alike, so a runtime at the fork's code size ceiling
 always deploys. Deployment
 failure sets `phase=deployment` and `runtime_gas=null`. Transaction admission,
 JSON, runtime pin and trace-capacity errors use `error` and nonzero process exit;
-they are not EVM false/revert/halt. Limits are 4 MiB JSON, 100 million gas per
-transaction, 16,384 primitive events and 32 MiB captured preimages. Exceeding a
+they are not EVM false/revert/halt. A request above the declaration's
+`validation_gas_maximum` refuses with `runner-gas-cap`; that maximum is also the
+block gas limit of every run. Other limits are 4 MiB JSON, 16,384 primitive
+events and 32 MiB captured preimages. Exceeding a
 trace limit refuses the result, so no truncated trace can pass the oracle.
 
 Keccak events capture memory after a successful opcode and the actual resulting

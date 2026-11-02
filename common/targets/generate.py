@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 
 FORMAT = "zkc.evm-target/0"
-KEYS = ("format", "abi", "solc", "default_fork", "forks", "validation_gas", "limits", "reverts")
+KEYS = ("format", "abi", "solc", "default_fork", "forks", "validation_gas", "validation_gas_maximum",
+        "limits", "reverts")
 FORK_KEYS = ("name", "solc", "hardfork", "transaction_gas_cap", "runtime_code_bytes",
              "initcode_bytes", "rules")
 # The emitted verifier copies memory with MCOPY.
@@ -207,7 +208,15 @@ def validate(document):
         _unique([fork[key] for fork in forks], "fork", f"fork {key}")
     if document["default_fork"] not in [fork["name"] for fork in forks]:
         raise Refusal("default-fork", "default_fork must name a declared fork")
-    _natural(document["validation_gas"], "validation-gas", "validation_gas")
+    # Every validation transaction requests at most the declared maximum: the
+    # validation gas, and the consensus cap of a fork that declares one.
+    maximum = _natural(document["validation_gas_maximum"], "validation-gas", "validation_gas_maximum")
+    if _natural(document["validation_gas"], "validation-gas", "validation_gas") > maximum:
+        raise Refusal("validation-gas", "validation_gas exceeds validation_gas_maximum")
+    for fork in forks:
+        if fork["transaction_gas_cap"] is not None and fork["transaction_gas_cap"] > maximum:
+            raise Refusal("validation-gas",
+                          f"fork {fork['name']} transaction_gas_cap exceeds validation_gas_maximum")
 
     limits = _list(document["limits"], "limit", "limits")
     for limit in limits:

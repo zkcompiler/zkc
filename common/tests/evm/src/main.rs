@@ -23,17 +23,16 @@ use std::{
 const MAX_JSON: u64 = 4 * 1024 * 1024;
 const MAX_TRACE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_EVENTS: usize = 16384;
-const MAX_GAS: u64 = 100_000_000;
 const MAX_REPEAT: u64 = 8;
 
 /// The installed EVM target declaration, `zkc.evm-target/0`. The runner reads
-/// its forks and validation gas, and checks each fork's consensus facts against
-/// the pinned engine.
+/// its forks, validation gas and validation gas maximum, and checks each fork's
+/// consensus facts against the pinned engine.
 const DECLARATION: &str = include_str!("../../../targets/evm.json");
 const DECLARATION_FORMAT: &str = "zkc.evm-target/0";
 
 // Every declared field is required, so a missing or unknown one refuses; the
-// runner reads only the fork facts and the validation gas.
+// runner reads only the fork facts, the validation gas and its maximum.
 #[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,6 +43,7 @@ struct Declaration {
     default_fork: String,
     forks: Vec<ForkRow>,
     validation_gas: u64,
+    validation_gas_maximum: u64,
     limits: Value,
     reverts: Value,
 }
@@ -69,18 +69,27 @@ struct Fork {
     budget: u64,
 }
 
+/// The declared facts the runner uses: the forks, and the most gas any
+/// validation transaction may request, which is also every run's block gas
+/// limit.
+struct Target {
+    forks: Vec<Fork>,
+    gas_maximum: u64,
+}
+
 /// Parses the declaration and checks the facts the runner uses: unique
 /// lowercase fork names, a declared default, validation gas within the
-/// runner's own bound, and for each fork an engine hardfork whose transaction
+/// declared maximum, and for each fork an engine hardfork whose transaction
 /// gas cap and code size limits equal the declared ones. A fork's budget is
 /// its consensus cap, or the validation gas when it declares none.
-fn check_declaration(text: &str) -> Result<Vec<Fork>, String> {
+fn check_declaration(text: &str) -> Result<Target, String> {
     let declaration: Declaration =
         serde_json::from_str(text).map_err(|e| format!("target-declaration: {e}"))?;
     if declaration.format != DECLARATION_FORMAT {
         return Err("target-declaration: format".into());
     }
-    if !(1..=MAX_GAS).contains(&declaration.validation_gas) {
+    let gas_maximum = declaration.validation_gas_maximum;
+    if !(1..=gas_maximum).contains(&declaration.validation_gas) {
         return Err("target-declaration: validation gas".into());
     }
     let mut forks: Vec<Fork> = Vec::new();
@@ -106,9 +115,9 @@ fn check_declaration(text: &str) -> Result<Vec<Fork>, String> {
         let budget = row
             .transaction_gas_cap
             .unwrap_or(declaration.validation_gas);
-        if budget > MAX_GAS {
+        if budget > gas_maximum {
             return Err(format!(
-                "target-declaration: fork {} budget exceeds the runner's bound",
+                "target-declaration: fork {} budget exceeds the validation gas maximum",
                 row.name
             ));
         }
@@ -124,18 +133,21 @@ fn check_declaration(text: &str) -> Result<Vec<Fork>, String> {
     {
         return Err("target-declaration: default fork".into());
     }
-    Ok(forks)
+    Ok(Target { forks, gas_maximum })
 }
 
-static FORKS: LazyLock<Result<Vec<Fork>, String>> =
-    LazyLock::new(|| check_declaration(DECLARATION));
+static TARGET: LazyLock<Result<Target, String>> = LazyLock::new(|| check_declaration(DECLARATION));
+
+fn target() -> &'static Target {
+    TARGET.as_ref().expect("checked declaration")
+}
 
 /// A request's fork: an index into the declared forks, spelled by its name.
 #[derive(Clone, Copy)]
 struct EvmFork(usize);
 impl EvmFork {
     fn declared(self) -> &'static Fork {
-        &FORKS.as_ref().expect("checked declaration")[self.0]
+        &target().forks[self.0]
     }
     fn spec(self) -> SpecId {
         self.declared().spec
@@ -152,8 +164,9 @@ impl Serialize for EvmFork {
 impl<'de> Deserialize<'de> for EvmFork {
     fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
         let name = String::deserialize(decoder)?;
-        let forks = FORKS.as_ref().map_err(serde::de::Error::custom)?;
-        forks
+        let target = TARGET.as_ref().map_err(serde::de::Error::custom)?;
+        target
+            .forks
             .iter()
             .position(|fork| fork.name == name)
             .map(Self)
@@ -355,7 +368,8 @@ fn run(request: Request) -> Result<Value, String> {
     let deploy_gas = request
         .deployment_gas_limit
         .unwrap_or(request.fork.budget());
-    if gas_limit > MAX_GAS || deploy_gas > MAX_GAS {
+    let gas_maximum = target().gas_maximum;
+    if gas_limit > gas_maximum || deploy_gas > gas_maximum {
         return Err("runner-gas-cap".into());
     }
     let creation = unhex(&request.creation_bytecode)?;
@@ -378,7 +392,7 @@ fn run(request: Request) -> Result<Value, String> {
         .with_db(db)
         .modify_cfg_chained(|cfg| cfg.set_spec_and_mainnet_gas_params(request.fork.spec()))
         .modify_block_chained(|block| {
-            block.gas_limit = MAX_GAS;
+            block.gas_limit = gas_maximum;
             block.basefee = 0;
         });
     let mut evm = context.build_mainnet_with_inspector(Trace::default());
@@ -485,7 +499,7 @@ fn run(request: Request) -> Result<Value, String> {
 fn main() {
     let result = (|| {
         // A declaration the engine contradicts refuses every request.
-        FORKS.as_ref().map_err(Clone::clone)?;
+        TARGET.as_ref().map_err(Clone::clone)?;
         let mut bytes = Vec::new();
         io::stdin()
             .take(MAX_JSON + 1)
@@ -511,8 +525,13 @@ mod tests {
 
     #[test]
     fn declared_forks_match_the_engine() {
-        let forks = check_declaration(DECLARATION).unwrap();
+        let target = check_declaration(DECLARATION).unwrap();
+        let forks = target.forks;
         let declaration: Value = serde_json::from_str(DECLARATION).unwrap();
+        assert_eq!(
+            target.gas_maximum,
+            declaration["validation_gas_maximum"].as_u64().unwrap()
+        );
         let rows = declaration["forks"].as_array().unwrap();
         assert_eq!(forks.len(), rows.len());
         for (fork, row) in forks.iter().zip(rows) {
@@ -527,11 +546,34 @@ mod tests {
     }
 
     #[test]
+    fn requested_gas_above_the_declared_maximum_refuses() {
+        let request = |gas_limit, deployment_gas_limit| Request {
+            creation_bytecode: String::new(),
+            calldata: String::new(),
+            gas_limit: Some(gas_limit),
+            fork: EvmFork(0),
+            deployment_gas_limit: Some(deployment_gas_limit),
+            expected_runtime_bytecode: None,
+            repeat_count: None,
+        };
+        let maximum = target().gas_maximum;
+        for (call, deployment) in [(maximum + 1, maximum), (maximum, maximum + 1)] {
+            assert_eq!(
+                run(request(call, deployment)).err().as_deref(),
+                Some("runner-gas-cap")
+            );
+        }
+    }
+
+    #[test]
     fn engine_disagreements_and_unknown_fields_refuse() {
         let declaration: Value = serde_json::from_str(DECLARATION).unwrap();
-        let edits: [(&str, Value); 10] = [
+        let maximum = declaration["validation_gas_maximum"].as_u64().unwrap();
+        let edits: [(&str, Value); 12] = [
             ("/validation_gas", json!(0)),
-            ("/validation_gas", json!(MAX_GAS + 1)),
+            ("/validation_gas", json!(maximum + 1)),
+            ("/validation_gas_maximum", json!(0)),
+            ("/validation_gas_maximum", Value::Null),
             ("/forks/0/runtime_code_bytes", json!(24577)),
             ("/forks/0/initcode_bytes", json!(49153)),
             ("/forks/0/transaction_gas_cap", json!(16777216)),
