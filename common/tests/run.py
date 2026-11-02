@@ -72,7 +72,10 @@ def lean_native(args):
     output = reports_root() / "lean/native"
     # The structured suites of this run share one executable store. Each child is
     # given the store; this process's environment is left unchanged.
-    store = {"ZKC_TOOL_STORE": str(output / "tool-store")}
+    # The Lean bridges select a package's source format through the SDK and
+    # the compiler this run builds, so the suites receive both.
+    store = {"ZKC_TOOL_STORE": str(output / "tool-store"), "ZKC_COMPILER_BIN": str(compiler),
+             "ZKC_NATIVE_BIN": str(output_directory("native"))}
     stages = [stage for stage in NATIVE_STAGES if stage in (args.stage or NATIVE_STAGES)]
     selection = dict(format="zkc.validation-selection/0", stages=stages, subjects=args.subject,
                      coverage="full" if set(stages) == set(NATIVE_STAGES) and not args.subject else "partial",

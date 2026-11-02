@@ -16,14 +16,27 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import interface as language_interface, policy as native_policy, source_format  # noqa: E402
-from bridges.common.lean_render import ROOT, digest  # noqa: E402
+from bridges.common.lean_render import ROOT, digest, require  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.pipeline import source_claims  # noqa: E402
 
 
+def selection(subject):
+    """The source format of a subject: its project's, as the SDK reports it,
+    which its explicit module sources must share."""
+    if subject.project is None:
+        return source_format.option(subject.modules.values())
+    formats = {source_format.of_project(subject.project / "zkc.toml")}
+    explicit = [ROOT / path for path in subject.get("source", "modules", {}).values()]
+    if explicit:
+        formats.add(source_format.of_sources(explicit))
+    require(len(formats) == 1, f"{subject.name}: mixed source formats {sorted(formats)}")
+    return source_format.OPTION + formats.pop()
+
+
 def options(subject, entry, extra=(), *, protocol=False):
-    return [source_format.option(subject.modules.values()), f"--{'subject' if protocol else 'entry'}={entry}",
+    return [selection(subject), f"--{'subject' if protocol else 'entry'}={entry}",
             *subject.module_arguments(), *subject.compiler_options, *extra]
 
 

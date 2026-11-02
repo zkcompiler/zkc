@@ -529,7 +529,7 @@ The explicit development entry `--source-format=zkc-layout` now connects the
 name/type/role/resource/effect checking, specialization, actual IR comparison and
 the Rust Host. Project manifests and explicit SDK and CLI module maps state their
 source format, so a `zkc-layout` project builds through `zkc.toml`; the Lean
-bridges select each invocation's format from the package manifests. Nominal home-module methods, including generic aliases, use the
+bridges take a package's format from the SDK's project inspection. Nominal home-module methods, including generic aliases, use the
 ordinary invocation binder and resolved mode/effects. Imports do not extend
 method eligibility. Protocol methods derive their complete role substitution
 from an exact fixed-roster receiver map; legacy direct logical families still

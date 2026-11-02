@@ -60,23 +60,27 @@ def main():
             path.write_text(value)
         runner.check("exact-generated:" + path.name, path.read_text() == value)
 
+    # A project-backed subject takes its root manifest's source format from the
+    # SDK; the explicit module map takes the format of the modules it names.
+    table = ROOT / "examples/projects/table/zkc.toml"
+    two_batches = ROOT / "lean/fixtures/reusable-aggregate/zkc.toml"
     subjects = [
         ("table", "table_relation::CheckMembership<example::F>",
-         project_arguments(ROOT / "examples/projects/table/zkc.toml"), "TableMembership"),
+         project_arguments(table), "TableMembership", table),
         ("batch", "batch_opening::CheckBatch<batch_opening::Scalar>",
          ["--module=batch_opening=lean/bridges/construction/fixtures/batch-opening.zkc",
-          *project_arguments(ROOT / "libraries/core/traversal/zkc.toml")], "BatchOpening"),
+          *project_arguments(ROOT / "libraries/core/traversal/zkc.toml")], "BatchOpening", None),
         ("two-batches", "reusable_aggregate::TwoBatches<batch_opening::Scalar>",
-         project_arguments(ROOT / "lean/fixtures/reusable-aggregate/zkc.toml"),
-         "ReusableAggregateTwoBatches"),
+         project_arguments(two_batches), "ReusableAggregateTwoBatches", two_batches),
     ]
     try:
-        for name, subject, modules, stem in subjects:
+        for name, subject, modules, stem, project in subjects:
             if args.subject and name not in args.subject:
                 continue
             directory = args.output / name
             directory.mkdir(exist_ok=True)
-            flags = source_format.with_option(["--subject=" + subject, *modules])
+            flags = source_format.with_option(["--subject=" + subject, *modules],
+                                              None if project is None else source_format.of_project(project))
 
             def run(mode, *arguments):
                 return runner.run([args.compiler, mode, *arguments], name=name + ":" + mode).stdout

@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """Every compiler invocation of the Lean bridges selects a declared source format.
 
-The selection comes from the package manifests that list the module sources,
-from the fixture declarations, or from an explicit caller selection, always
-through `bridges/common/source_format.py`; no bridge or check spells the
-compiler option itself. A missing or unknown selection, an undeclared source
-and a mixed closure refuse before the compiler runs.
+The selection of a source a package lists, and of a project-backed invocation,
+is the one the SDK's project inspection reports, with the SDK's own refusals of
+a missing, unknown or mixed selection anywhere in a closure. Only a fixture
+that no package lists takes the fixture declarations; an explicit caller
+selection is validated. Every selection goes through
+`bridges/common/source_format.py`; no bridge or check spells the compiler
+option itself. An undeclared source and a mixed invocation refuse before the
+compiler runs, and without the SDK a package's selection refuses.
+
+Controls that inspect packages need the SDK executable (`ZKC_NATIVE_BIN`) and a
+compiler executable (`ZKC_COMPILER_BIN`); without them they are skipped and
+name the build to run.
 """
+import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 LEAN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LEAN))
@@ -19,6 +28,22 @@ from bridges.common import native_entry, source_format  # noqa: E402
 from bridges.common.lean_render import Refused  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, manifest  # noqa: E402
 import check as structured  # noqa: E402
+sys.path.append(str(LEAN.parent / "common/tests/support"))
+from toolchain import Missing, Toolchain  # noqa: E402
+
+
+def missing_sdk():
+    """Why the SDK's project inspection cannot run here, or None."""
+    try:
+        tools = Toolchain()
+        tools.runtime, tools.compiler
+    except Missing as error:
+        return f"the SDK's project inspection is unavailable: {error}"
+    return None
+
+
+MISSING_SDK = missing_sdk()
+requires_sdk = unittest.skipIf(MISSING_SDK is not None, MISSING_SDK or "")
 
 
 class Spelling(unittest.TestCase):
@@ -30,14 +55,16 @@ class Spelling(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+@requires_sdk
 class DeclaredSelections(unittest.TestCase):
     def test_every_subject_resolves_a_declared_format(self):
         for subject in manifest.load_all():
             with self.subTest(subject=subject.name):
-                self.assertIn(source_format.of_sources(subject.modules.values()), source_format.FORMATS)
+                expected = (source_format.of_project(subject.project / "zkc.toml") if subject.project is not None
+                            else source_format.of_sources(subject.modules.values()))
+                self.assertIn(expected, source_format.FORMATS)
                 selected = pipeline_compile.options(subject, "entry")[0]
-                self.assertEqual(source_format.require_option([selected]),
-                                 source_format.of_sources(subject.modules.values()))
+                self.assertEqual(source_format.require_option([selected]), expected)
 
     def test_every_structured_fixture_resolves_a_declared_format(self):
         for stem, spec in structured.fixture_table().items():
@@ -47,10 +74,17 @@ class DeclaredSelections(unittest.TestCase):
                            else structured.fixture(stem)[1].values())
                 self.assertIn(source_format.of_sources(sources), source_format.FORMATS)
 
-    def test_package_and_fixture_sources_resolve(self):
+    def test_package_sources_resolve(self):
         root = source_format.ROOT
-        for path in ["examples/projects/schnorr/main.zkc", "libraries/protocols/sigma/schnorr/lib.zkc",
-                     "lean/bridges/common/fixtures/factor-openings.zkc",
+        for path in ["examples/projects/schnorr/main.zkc", "libraries/protocols/sigma/schnorr/lib.zkc"]:
+            with self.subTest(source=path):
+                self.assertIn(source_format.of_source(root / path), source_format.FORMATS)
+
+
+class FixtureSelections(unittest.TestCase):
+    def test_unpackaged_fixture_sources_resolve(self):
+        root = source_format.ROOT
+        for path in ["lean/bridges/common/fixtures/factor-openings.zkc",
                      "compiler/test/fixtures/structured-source/scoped-control.zkc"]:
             with self.subTest(source=path):
                 self.assertIn(source_format.of_source(root / path), source_format.FORMATS)
@@ -62,7 +96,7 @@ class Refusals(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name).resolve()
 
-    def package(self, name, value=None, modules=("main.zkc",)):
+    def package(self, name, value=None, modules=("main.zkc",), dependencies=()):
         directory = self.root / name
         directory.mkdir(parents=True)
         lines = ['format = "zkc.project/0"']
@@ -72,6 +106,9 @@ class Refusals(unittest.TestCase):
         for index, module in enumerate(modules):
             (directory / module).write_text("module m;\n")
             lines.append(f'm{index} = "{module}"')
+        lines.append("[dependencies]")
+        for dependency in dependencies:
+            lines.append(f'{dependency} = "../{dependency}"')
         (directory / "zkc.toml").write_text("\n".join(lines) + "\n")
         return [directory / module for module in modules]
 
@@ -79,35 +116,66 @@ class Refusals(unittest.TestCase):
         with self.assertRaisesRegex(Refused, pattern):
             source_format.of_sources(paths, root=self.root, declarations=declarations or {})
 
+    @requires_sdk
     def test_missing_and_unknown_manifest_selections_refuse(self):
-        self.refuses("missing source-format", self.package("missing"))
-        self.refuses("unknown source-format 'zkc2'", self.package("unknown", "zkc2"))
+        # The SDK's manifest reader refuses both, with its own code.
+        self.refuses("the SDK refuses the package: source-project-format", self.package("missing"))
+        self.refuses("the SDK refuses the package: source-project-format", self.package("unknown", "zkc2"))
+
+    @requires_sdk
+    def test_dependency_only_manifest_disagreement_refuses(self):
+        # Every manifest of a closure states one selection, including one that
+        # lists no module and only names dependencies.
+        leaf = self.package("leaf", "zkc", modules=("lib.zkc",))
+        self.package("middle", "zkc-layout", modules=(), dependencies=("leaf",))
+        main = self.package("main", "zkc", dependencies=("middle",))
+        self.refuses("the SDK refuses the package: source-project-mixed-format", main + leaf)
+        with self.assertRaisesRegex(Refused, "the SDK refuses the package: source-project-mixed-format"):
+            source_format.of_project(self.root / "main/zkc.toml")
+        # The leaf's own closure is consistent.
+        self.assertEqual(source_format.of_sources(leaf, root=self.root, declarations={}), "zkc")
+
+    def test_package_without_the_sdk_refuses(self):
+        (source,) = self.package("unbuilt", "zkc")
+        empty = self.root / "no-tools"
+        empty.mkdir()
+        with mock.patch.dict(os.environ, {"ZKC_NATIVE_BIN": str(empty), "ZKC_COMPILER_BIN": str(empty)}):
+            self.refuses("the SDK's project inspection selects its source format", [source])
 
     def test_undeclared_source_refuses(self):
         loose = self.root / "loose.zkc"
         loose.write_text("module m;\n")
         self.refuses("no package manifest lists it", [loose])
+
+    @requires_sdk
+    def test_unlisted_package_source_refuses(self):
         listed = self.package("other", "zkc")
         unlisted = listed[0].with_name("unlisted.zkc")
         unlisted.write_text("module m;\n")
         self.refuses("no package manifest lists it", [unlisted])
 
-    def test_mixed_closure_refuses(self):
+    @requires_sdk
+    def test_mixed_invocation_refuses(self):
         self.refuses("mixed source formats", self.package("first", "zkc") + self.package("second", "zkc-layout"))
 
-    def test_declared_selection_is_forwarded_exactly(self):
+    @requires_sdk
+    def test_package_selection_is_forwarded_exactly(self):
         (layout,) = self.package("layout", "zkc-layout")
         self.assertEqual(source_format.option([layout], root=self.root, declarations={}),
                          source_format.OPTION + "zkc-layout")
+        self.assertEqual(source_format.of_project(self.root / "layout/zkc.toml"), "zkc-layout")
+        # A package decides over the declaration of an enclosing fixture directory.
+        declared = {self.root / "fixtures": "zkc-layout"}
+        (listed,) = self.package("fixtures/package", "zkc")
+        self.assertEqual(source_format.of_source(listed, root=self.root, declarations=declared), "zkc")
+
+    def test_fixture_declaration_is_forwarded_exactly(self):
         fixtures = self.root / "fixtures"
         fixtures.mkdir()
         (fixtures / "a.zkc").write_text("module a;\n")
         declared = {fixtures: "zkc-layout"}
         self.assertEqual(source_format.of_source(fixtures / "a.zkc", root=self.root, declarations=declared),
                          "zkc-layout")
-        # A package manifest decides over the declaration of an enclosing fixture directory.
-        (listed,) = self.package("fixtures/package", "zkc")
-        self.assertEqual(source_format.of_source(listed, root=self.root, declarations=declared), "zkc")
 
     def test_explicit_selection_is_validated(self):
         arguments = ["--module=m=" + str(self.root / "derived.zkc"), "--subject=m::P"]

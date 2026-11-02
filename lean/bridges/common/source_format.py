@@ -1,22 +1,40 @@
 """The source-format selection of every compiler invocation the Lean bridges make.
 
-Every authored source package states its grammar in the required top-level
-`source-format` key of its `zkc.toml`, `"zkc"` or `"zkc-layout"`, and the
-compiler requires that selection as `--source-format` with every explicit
-module map. The bridges never assume a grammar. The format of a module source
-is the `source-format` of the package manifests that list it, found among the
-manifests of its enclosing directories; a fixture source that no package lists
-takes the format declared for its directory in `fixture-formats.toml`. The
-sources of one invocation must agree. A missing or unknown selection, an
-undeclared source and a mixed closure refuse before the compiler runs. Nothing
-here reads source text to infer a grammar.
+Every authored source package states its grammar, `"zkc"` or `"zkc-layout"`, in
+its `zkc.toml`, and the compiler requires that selection as `--source-format`
+with every explicit module map. The bridges never assume a grammar and never
+read a manifest's selection themselves: the SDK's manifest reader owns that
+rule. A package's selection is the `source_format` its project inspection
+(`zkc inspect --view=project`) reports, after the SDK has refused a missing,
+unknown or mixed selection anywhere in the package's closure, dependency-only
+manifests included.
+
+A project-backed invocation takes the selection of its root manifest
+(`of_project`). For an explicit module map, a source belongs to the packages
+that list it in the project graphs of the package manifests of its enclosing
+directories, and takes their selection; a refused graph refuses the source.
+Only a fixture source that no package lists takes the format declared for its
+directory in `fixture-formats.toml`. The sources of one invocation must agree.
+An undeclared source and a mixed invocation refuse before the compiler runs.
+Nothing here reads source text to infer a grammar.
+
+The SDK executable is the native build's `zkc` (`ZKC_NATIVE_BIN`), and its
+project inspection names the compiler build's `zkc-compile`
+(`ZKC_COMPILER_BIN`), which that view does not run. Without them a package's
+selection refuses rather than falling back to another reading of its manifest.
 """
 
 from functools import lru_cache
+import json
 from pathlib import Path
+import subprocess
+import sys
 import tomllib
 
 from bridges.common.lean_render import ROOT, Refused, require
+
+sys.path.append(str(ROOT / "common/tests/support"))
+from toolchain import Missing, Toolchain  # noqa: E402
 
 FORMATS = ("zkc", "zkc-layout")
 OPTION = "--source-format="
@@ -31,14 +49,44 @@ def selected(value, origin):
 
 
 @lru_cache(maxsize=None)
-def _manifest(path):
-    with Path(path).open("rb") as stream:
-        return tomllib.load(stream)
+def _graph(manifest):
+    """The SDK's project graph of a package manifest; the SDK's refusal code refuses."""
+    try:
+        tools = Toolchain()
+        command = [tools.runtime, "--json", "inspect", "--view=project", f"--project={manifest}",
+                   f"--compiler={tools.compiler}"]
+    except Missing as error:
+        raise Refused(f"{manifest}: the SDK's project inspection selects its source format: {error}") from None
+    result = subprocess.run(command, capture_output=True, text=True, timeout=120)
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise Refused(f"{manifest}: the SDK's project inspection failed: {result.stderr.strip()}") from None
+    require(isinstance(report, dict) and report.get("format") == "zkc.tool-inspection/0",
+            f"{manifest}: unexpected SDK inspection report")
+    require(report.get("status") == "inspected",
+            f"{manifest}: the SDK refuses the package: {report.get('code')}")
+    graph = report.get("project_graph")
+    require(isinstance(graph, dict) and graph.get("format") == "zkc.project-graph/0"
+            and isinstance(graph.get("packages"), list), f"{manifest}: unexpected SDK project graph")
+    return graph
 
 
-def of_manifest(path):
-    """The `source-format` a package manifest states."""
-    return selected(_manifest(Path(path).resolve()).get("source-format"), path)
+def _package_format(manifest, package):
+    """The selection the SDK reports for one package of a project graph."""
+    require(isinstance(package, dict) and "source_format" in package,
+            f"{manifest}: the SDK's project graph reports no source_format; rebuild the SDK")
+    return selected(package["source_format"], f"{manifest}: SDK project graph")
+
+
+def of_project(manifest):
+    """The selection of a project-backed invocation: its root manifest's, as the SDK reports it."""
+    manifest = Path(manifest).resolve()
+    graph = _graph(manifest)
+    roots = [package for package in graph["packages"]
+             if isinstance(package, dict) and Path(package.get("manifest", "")).resolve() == manifest]
+    require(len(roots) == 1, f"{manifest}: the SDK's project graph has no root package")
+    return _package_format(manifest, roots[0])
 
 
 @lru_cache(maxsize=1)
@@ -53,8 +101,9 @@ def _declarations():
 def of_source(path, *, root=ROOT, declarations=None):
     """The format of one module source.
 
-    The package manifests within `root` that list the source decide; they must
-    agree. A source no manifest lists takes its nearest declared fixture
+    The packages that list the source, in the SDK's project graphs of the
+    package manifests of its enclosing directories within `root`, decide; they
+    must agree. A source no package lists takes its nearest declared fixture
     directory's format.
     """
     root = Path(root).resolve()
@@ -63,13 +112,15 @@ def of_source(path, *, root=ROOT, declarations=None):
     owners = set()
     for directory in source.parents:
         manifest = directory / "zkc.toml"
-        if manifest.is_file() and any((directory / listed).resolve() == source
-                                      for listed in _manifest(manifest).get("modules", {}).values()):
-            owners.add(of_manifest(manifest))
+        if manifest.is_file():
+            for package in _graph(manifest)["packages"]:
+                modules = package.get("modules", {}) if isinstance(package, dict) else {}
+                if any(Path(listed).resolve() == source for listed in modules.values()):
+                    owners.add(_package_format(manifest, package))
         if directory == root:
             break
     if owners:
-        require(len(owners) == 1, f"{path}: its package manifests state different source formats")
+        require(len(owners) == 1, f"{path}: its packages state different source formats")
         return owners.pop()
     declared = [(directory, value) for directory, value in
                 (_declarations() if declarations is None else declarations).items()
