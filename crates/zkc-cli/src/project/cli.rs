@@ -18,7 +18,9 @@ pub(crate) struct Source {
     pub cache: Option<super::CompilationCache>,
 }
 impl Source {
-    pub fn load(args: &Arguments<'_>) -> Result<Self> {
+    /// The selected project and its resolved settings. Selecting them neither
+    /// resolves nor runs a compiler; the compiler argument is returned unread.
+    fn select<'a>(args: &Arguments<'a>) -> Result<(Project, super::ResolvedSettings, &'a str)> {
         let mut manifest = None;
         let mut source_format = None;
         let mut modules = BTreeMap::new();
@@ -93,6 +95,10 @@ impl Source {
             None => Project::discover()?,
         };
         let settings = project.settings(args.value("--profile"), &overrides)?;
+        Ok((project, settings, compiler))
+    }
+    pub fn load(args: &Arguments<'_>) -> Result<Self> {
+        let (project, settings, compiler) = Self::select(args)?;
         let dumps = args
             .value("--dump")
             .map(|s| s.split(',').map(str::to_owned).collect::<Vec<_>>())
@@ -174,11 +180,14 @@ impl Source {
         Ok(())
     }
     pub fn describe(&self, report: &mut Json) {
-        report["settings"] = json!(self.settings);
-        report["mode"] = json!("project");
+        Self::describe_project(&self.project, &self.settings, report);
         report["compiler"] = json!(self.compiler.path());
-        report["options"] = json!(self.settings.options());
-        if let Some(path) = self.project.manifest() {
+    }
+    fn describe_project(project: &Project, settings: &super::ResolvedSettings, report: &mut Json) {
+        report["settings"] = json!(settings);
+        report["mode"] = json!("project");
+        report["options"] = json!(settings.options());
+        if let Some(path) = project.manifest() {
             report["project"] = json!(path);
         }
     }
@@ -325,17 +334,19 @@ pub(crate) fn inspect(args: &Arguments<'_>) -> Json {
                 .map_err(|e| e.code)?
                 .capabilities()
                 .map_err(|e| compiler_error(&mut report, e))?;
+        } else if view == "project" {
+            // The manifest closure alone answers this view; no compiler runs,
+            // so none is resolved.
+            let (project, settings, _) = Source::select(args)?;
+            Source::describe_project(&project, &settings, &mut report);
+            if !args.positional.is_empty() {
+                return Err("cli-usage".into());
+            }
+            report["project_graph"] = json!(project.graph().ok_or("source-project-required")?);
         } else {
             let source = Source::load(args)?;
             source.describe(&mut report);
             match view {
-                "project" => {
-                    if !args.positional.is_empty() {
-                        return Err("cli-usage".into());
-                    }
-                    report["project_graph"] =
-                        json!(source.project.graph().ok_or("source-project-required")?);
-                }
                 "api" | "placement" | "notations" => {
                     let checked = source
                         .compiler
@@ -521,6 +532,50 @@ mod tests {
                     format!("--source-format={format}")
                 ]
             );
+        }
+    }
+    #[test]
+    fn the_project_view_reads_its_closure_without_a_compiler() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        for (name, body) in [("leaf", ""), ("top", "[dependencies]\nleaf='../leaf'\n")] {
+            let package = root.join(name);
+            std::fs::create_dir(&package).unwrap();
+            std::fs::write(package.join("main.zkc"), format!("module {name};\n")).unwrap();
+            std::fs::write(
+                package.join("zkc.toml"),
+                format!(
+                    "format=\"zkc.project/0\"\nsource-format=\"zkc-layout\"\n\
+                     [modules]\n{name}='main.zkc'\n{body}"
+                ),
+            )
+            .unwrap();
+        }
+        let manifest = root.join("top/zkc.toml");
+        let missing = root.join("missing/zkc-compile");
+        let inspect_view = |view: &'static str, compiler: Option<&str>| {
+            let mut options = vec![("--view", Some(view)), ("--project", manifest.to_str())];
+            options.extend(compiler.map(|path| ("--compiler", Some(path))));
+            inspect(&Arguments {
+                positional: vec![],
+                options,
+            })
+        };
+        // Neither an absent nor an unresolvable compiler stops the view.
+        for compiler in [None, missing.to_str()] {
+            let report = inspect_view("project", compiler);
+            assert_eq!(report["status"], "inspected", "{report}");
+            let packages = report["project_graph"]["packages"].as_array().unwrap();
+            assert_eq!(packages.len(), 2, "{report}");
+            for package in packages {
+                assert_eq!(package["source_format"], "zkc-layout", "{report}");
+            }
+            assert!(report.get("compiler").is_none(), "{report}");
+        }
+        // Views that check the source still resolve their compiler first.
+        for view in ["api", "placement", "notations"] {
+            let report = inspect_view(view, missing.to_str());
+            assert_eq!(report["code"], "source-compiler-missing", "{report}");
         }
     }
 }
