@@ -19,5 +19,19 @@ llvm::Expected<llvm::json::Value> sourceBindingsData(const CheckedProject &,
                                                      const Limits & = {});
 llvm::Expected<llvm::json::Value> sourceInstancesData(const ClosedEntry &,
                                                       const Limits & = {});
+/// One native site of an emitted definition and the authored expression of
+/// the source operation emission assigned it to. `owner` is the span of the
+/// declaration whose written syntax holds that expression.
+struct EmittedSite {
+  std::string definition, site;
+  Span owner = {};
+  std::optional<uint32_t> expression = {};
+};
+/// The written nodes of each site's originating expression, exactly as the
+/// written-source index places that expression in its owner; a site without
+/// an expression has none. Spans never select a node.
+llvm::Expected<std::vector<llvm::json::Array>>
+writtenSiteNodes(const CheckedProject &, llvm::ArrayRef<EmittedSite>,
+                 const Limits & = {});
 } // namespace zkc::language
 #endif

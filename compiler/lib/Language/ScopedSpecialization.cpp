@@ -271,7 +271,8 @@ class SpecializationCheck {
       const auto &op = original.operations[i];
       const auto &out = actual.operations[i];
       if (!same(op.span, out.span) || op.statement != out.statement ||
-          op.site != out.site || !same(out.results, mapped(op.results)))
+          op.site != out.site || op.expression != out.expression ||
+          !same(out.results, mapped(op.results)))
         return refuse(op.span, "operation occurrence differs");
       if (bool(op.binding) != bool(out.binding))
         return refuse(op.span, "call witness coverage differs");

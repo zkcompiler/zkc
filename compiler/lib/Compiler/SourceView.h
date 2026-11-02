@@ -88,6 +88,8 @@ struct OriginalAccess {
   static mlir::OwningOpRef<mlir::ModuleOp>
   clone(const CheckedOriginal &, mlir::IRMapping *mapping = nullptr);
   static llvm::Expected<protocol::SourceView> read(const CheckedOriginal &);
+  /// The record of the emission that printed the original's exact bytes.
+  static const EmissionRecord &emission(const CheckedOriginal &);
 };
 } // namespace zkc::language::detail
 #endif

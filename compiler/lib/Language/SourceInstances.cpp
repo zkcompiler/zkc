@@ -316,6 +316,36 @@ Expected<json::Value> sourceInstancesData(const ClosedEntry &entry,
   ownJsonStrings(value);
   return value;
 }
+Expected<std::vector<json::Array>>
+writtenSiteNodes(const CheckedProject &project, ArrayRef<EmittedSite> sites,
+                 const Limits &limits) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  if (!project.storage->writtenSources)
+    return detail::failure("source.syntax", "written source was not retained");
+  detail::Work work{limits};
+  auto written = detail::indexWrittenSource(
+      project, *project.storage->writtenSources, work);
+  if (!written)
+    return written.takeError();
+  std::vector<json::Array> result;
+  for (const auto &site : sites) {
+    if (auto e = work.charge(1))
+      return std::move(e);
+    if (!site.expression) {
+      result.emplace_back();
+      continue;
+    }
+    auto nodes = detail::encodeWrittenAddresses(
+        written->at(site.owner,
+                    {detail::LexicalNode::Kind::Expression, *site.expression}),
+        work);
+    if (!nodes)
+      return nodes.takeError();
+    result.push_back(std::move(*nodes));
+  }
+  return result;
+}
 Expected<std::string> inspectSourceInstances(const ClosedEntry &entry,
                                              const Limits &limits) {
   auto value = sourceInstancesData(entry, limits);

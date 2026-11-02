@@ -2226,6 +2226,7 @@ private:
         } else {
           Expression product;
           product.kind = Expression::Kind::DomainProduct;
+          product.synthesized = true;
           product.span = {span.source, decl.expressions[*domain].span.begin,
                           previousEnd};
           product.children = {*domain, *nextDomain};
@@ -2253,6 +2254,7 @@ private:
         region.span.end = previousEnd;
         Expression lambda;
         lambda.kind = Expression::Kind::Lambda;
+        lambda.synthesized = true;
         lambda.span = {span.source, binding.span.begin, previousEnd};
         lambda.payloads = {{binding}};
         lambda.regions.push_back(decl.bodies.size());

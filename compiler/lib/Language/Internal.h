@@ -219,6 +219,10 @@ struct Expression {
   bool grouped = false;
   bool shorthand = false;
   bool filteredReduction = false;
+  /// Constructed by the parser's expansion or by later elaboration, so the
+  /// written tree has no node for it. Its operations originate from the
+  /// enclosing written expression.
+  bool synthesized = false;
 };
 struct Statement {
   enum class Kind {

@@ -15,13 +15,14 @@ class EmissionBudget;
 /// scoped Func callbacks and an exec.fold/collect occurrence. All insertions
 /// use the caller's budget listener; publication requires a final budget check.
 /// The scoped constructor is required exactly for ordered source bodies.
-llvm::Expected<llvm::SmallVector<mlir::Value>>
-emitFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
-           const Type &, llvm::ArrayRef<llvm::SmallVector<mlir::Value>>,
-           mlir::OpBuilder &, mlir::Location, mlir::Block &definitions,
-           Layouts &, llvm::StringRef prefix, llvm::StringRef site,
-           EmissionBudget &, uint64_t &remaining,
-           exec::ScopedExecutionBuilder *scoped = nullptr);
+llvm::Expected<llvm::SmallVector<mlir::Value>> emitFinite(
+    const ClosedEntry &, const Body &, const FiniteComputation &, const Type &,
+    llvm::ArrayRef<llvm::SmallVector<mlir::Value>>, mlir::OpBuilder &,
+    mlir::Location, mlir::Block &definitions, Layouts &, llvm::StringRef prefix,
+    llvm::StringRef site, EmissionBudget &, uint64_t &remaining,
+    exec::ScopedExecutionBuilder *scoped = nullptr,
+    llvm::function_ref<void(llvm::StringRef symbol, llvm::StringRef part)>
+        generated = {});
 /// Read the supplied descriptor, adapters and occurrence relationally. This
 /// checker never invokes the emitter or constructs an expected MLIR module.
 /// Scoped callers supply an already-entered cursor over formed IR. Comparison

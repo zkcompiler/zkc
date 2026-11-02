@@ -21,8 +21,9 @@
 #include <vector>
 
 namespace llvm::json {
+class Array;
 class Value;
-}
+} // namespace llvm::json
 
 namespace zkc::language {
 using source::Diagnostic;
@@ -530,6 +531,10 @@ struct Operation {
   std::optional<CallBinding> binding = {};
   /// An authored selector, independent of generated operation ordinals.
   std::optional<std::string> site = {};
+  /// The authored expression this operation originates from, within the
+  /// owning lexical declaration. Operations derived from one expression share
+  /// it; a generated operation has none.
+  std::optional<uint32_t> expression = {};
 };
 struct Body {
   enum class Mode { Math, Local, Protocol, Oracle } mode;
@@ -976,6 +981,7 @@ class CheckedProject;
 class Analysis;
 class ClosedEntry;
 struct NotationInspectionOptions;
+struct EmittedSite;
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         const CaptureOptions & = {});
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
@@ -1081,6 +1087,9 @@ private:
   sourceBindingsData(const CheckedProject &, const Limits &);
   friend llvm::Expected<llvm::json::Value>
   sourceInstancesData(const ClosedEntry &, const Limits &);
+  friend llvm::Expected<std::vector<llvm::json::Array>>
+  writtenSiteNodes(const CheckedProject &, llvm::ArrayRef<EmittedSite>,
+                   const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
   friend llvm::Expected<std::optional<std::string>>

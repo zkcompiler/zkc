@@ -86,6 +86,7 @@ bool Checker::prepareOraclePredicates() {
     root.notationEnvironment = source.bodies.front().notationEnvironment;
     std::optional<uint32_t> conjunction;
     auto append = [&](Expression expression) {
+      expression.synthesized = true;
       auto index = uint32_t(target.expressions.size());
       target.expressions.push_back(std::move(expression));
       return index;
@@ -150,6 +151,7 @@ bool Checker::prepareOraclePredicates() {
     if (!conjunction) {
       Expression truth;
       truth.kind = Expression::Kind::Boolean;
+      truth.synthesized = true;
       truth.text = "true";
       truth.span = decl.span;
       conjunction = target.expressions.size();

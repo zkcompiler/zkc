@@ -36,6 +36,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include <set>
 using namespace llvm;
 namespace zkc::language {
@@ -61,6 +62,61 @@ class Emitter {
   Error failure = Error::success();
   uint64_t siteOrdinal = 0, remaining, nextOutlined = 0;
   std::optional<std::pair<std::string, std::string>> selectedSiteScope;
+  /// Receives generated definitions and emitted sites when requested.
+  EmissionRecord *record = nullptr;
+  /// The native definition being emitted, and the lexical owner and
+  /// originating expression of the source operation being emitted.
+  std::string currentDefinition;
+  const Declaration *currentOwner = nullptr;
+  std::optional<uint32_t> currentExpression;
+  std::map<std::pair<std::string, std::string>, unsigned> recordedSites;
+  std::map<std::string, unsigned> recordedGenerated;
+  /// A control region function is published inside the definition whose
+  /// instruction enters it, so its sites belong to that definition.
+  std::map<std::string, std::string> regionOwners;
+  std::string enclosingDefinition(mlir::Operation *op) const {
+    for (; op; op = op->getParentOp())
+      if (auto name = op->getAttrOfType<mlir::StringAttr>("sym_name")) {
+        auto owner = regionOwners.find(name.str());
+        return owner == regionOwners.end() ? name.str() : owner->second;
+      }
+    return {};
+  }
+  /// Assign each native site, at its first insertion, to the source operation
+  /// being emitted.
+  void observe(mlir::Operation *op) {
+    auto site = op->getAttrOfType<mlir::StringAttr>(
+        mlir::isa<mlir::func::CallOp>(op) ? "runtime.site" : "site");
+    if (!site || site.getValue().empty())
+      return;
+    auto definition = enclosingDefinition(op->getParentOp());
+    if (definition.empty())
+      return;
+    auto key = std::make_pair(std::move(definition), site.str());
+    if (recordedSites.count(key))
+      return;
+    recordedSites.emplace(key, record->sites.size());
+    EmittedSite emitted{key.first, key.second};
+    if (currentOwner && currentExpression) {
+      emitted.owner = currentOwner->span;
+      emitted.expression = currentExpression;
+    }
+    record->sites.push_back(std::move(emitted));
+  }
+  /// Record a generated definition and the native instruction, in the
+  /// definition being emitted, that creates or reuses it.
+  void generated(StringRef symbol, StringRef purpose, StringRef part,
+                 StringRef site) {
+    if (!record)
+      return;
+    auto [at, inserted] =
+        recordedGenerated.try_emplace(symbol.str(), record->generated.size());
+    if (inserted)
+      record->generated.push_back(
+          {symbol.str(), purpose.str(), part.str(), {}});
+    record->generated[at->second].origins.emplace_back(currentDefinition,
+                                                       site.str());
+  }
   template <class T> std::optional<T> take(Expected<T> value) {
     if (!value) {
       failure = value.takeError();
@@ -299,6 +355,9 @@ class Emitter {
     }
     auto found = maps.find(key);
     if (found == maps.end()) {
+      // A reused adapter belongs to no single caller's expression.
+      SaveAndRestore<std::optional<uint32_t>> shared(currentExpression,
+                                                     std::nullopt);
       std::string identity =
           "zkc.source.map:" + std::to_string(helper.symbol.size()) + ":" +
           helper.symbol + ":";
@@ -389,6 +448,8 @@ class Emitter {
       callback.returned(result);
       found = maps.emplace(std::move(key), name).first;
     }
+    generated(found->second + "_domain", "map", "domain", site);
+    generated(found->second + "_body", "map", "body", site);
     Values operands = vectors;
     llvm::append_range(operands, captures);
     return scoped->invoke(
@@ -486,6 +547,7 @@ class Emitter {
     return builder.getArrayAttr(clauses);
   }
   mlir::func::FuncOp outline(mlir::TypeRange inputs, mlir::TypeRange outputs,
+                             StringRef part, StringRef site,
                              bool region = true) {
     std::string name;
     do {
@@ -497,6 +559,9 @@ class Emitter {
       return {};
     }
     symbols.insert(name);
+    generated(name, region ? "control" : "custody", part, site);
+    if (region)
+      regionOwners.emplace(name, currentDefinition);
     builder.setInsertionPointToEnd(definitions);
     SmallVector<mlir::Type> arguments{runtime::ScopeType::get(&context)};
     llvm::append_range(arguments, inputs);
@@ -540,7 +605,7 @@ class Emitter {
     mlir::func::FuncOp helper;
     {
       mlir::OpBuilder::InsertionGuard guard(builder);
-      helper = outline(inputs.getTypes(), outputs, false);
+      helper = outline(inputs.getTypes(), outputs, contract, site, false);
       if (!helper)
         return {};
       builder.setInsertionPointToEnd(&helper.front());
@@ -593,7 +658,7 @@ class Emitter {
     mlir::func::FuncOp helper;
     {
       mlir::OpBuilder::InsertionGuard guard(builder);
-      helper = outline(*flat, *flat);
+      helper = outline(*flat, *flat, "unpack", site);
       if (!helper)
         return {};
       builder.setInsertionPointToEnd(&helper.front());
@@ -716,6 +781,13 @@ class Emitter {
           error("source.mode", "mathematical bodies have no ordered regions");
       return false;
     }
+    // A declaration's span is its lexical owner's: closed instances and
+    // scoped helpers copy it from the declaration whose syntax they check.
+    SaveAndRestore<std::string> definitionScope(
+        currentDefinition, enclosingDefinition(block.getParentOp()));
+    SaveAndRestore<const Declaration *> ownerScope(currentOwner, &decl);
+    SaveAndRestore<std::optional<uint32_t>> expressionScope(currentExpression,
+                                                            std::nullopt);
     builder.setInsertionPointToEnd(&block);
     std::vector<Values> values(source.values.size());
     auto *previous = scoped;
@@ -835,6 +907,7 @@ class Emitter {
       if (selectedSiteScope)
         site = nativeSelectedSite(selectedSiteScope->first,
                                   selectedSiteScope->second, site);
+      currentExpression = op.expression;
       Values result;
       if (auto *projection = std::get_if<Projection>(&op.action)) {
         auto selected =
@@ -1260,12 +1333,14 @@ class Emitter {
           result = Values(actual->getResults());
         }
       } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
-        auto emitted =
-            take(emitFinite(project, source, *finite,
-                            source.values[op.results.front().index].type,
-                            values, builder, location, *definitions, layouts,
-                            "finite_" + decl.symbol + "_" + site, site, budget,
-                            remaining, scoped));
+        auto emitted = take(emitFinite(
+            project, source, *finite,
+            source.values[op.results.front().index].type, values, builder,
+            location, *definitions, layouts,
+            "finite_" + decl.symbol + "_" + site, site, budget, remaining,
+            scoped, [&](StringRef symbol, StringRef part) {
+              generated(symbol, "finite", part, site);
+            }));
         if (!emitted)
           return false;
         result = std::move(*emitted);
@@ -1368,7 +1443,7 @@ class Emitter {
           SmallVector<mlir::func::FuncOp> arms;
           for (unsigned i = 0; i < 2; ++i) {
             mlir::OpBuilder::InsertionGuard insertion(builder);
-            auto arm = outline({}, {});
+            auto arm = outline({}, {}, i ? "reject" : "accept", site);
             if (!arm)
               return false;
             builder.setInsertionPointToEnd(&arm.front());
@@ -1724,7 +1799,8 @@ class Emitter {
           unsigned forwarded =
               loop ? inputs.size() - 2 - resultTypes.size() : 0;
           SmallVector<mlir::func::FuncOp> arms;
-          for (const auto &region : control->regions) {
+          for (unsigned index = 0; index < control->regions.size(); ++index) {
+            const auto &region = control->regions[index];
             mlir::OpBuilder::InsertionGuard guard(builder);
             SmallVector<mlir::Type> arguments;
             for (unsigned i = 0; i < region->inputs; ++i) {
@@ -1736,7 +1812,12 @@ class Emitter {
                 return false;
               llvm::append_range(arguments, *native);
             }
-            auto arm = outline(arguments, resultTypes);
+            auto arm = outline(arguments, resultTypes,
+                               match   ? StringRef(labels[index])
+                               : loop  ? StringRef("body")
+                               : index ? StringRef("else")
+                                       : StringRef("then"),
+                               site);
             if (!arm || !body(decl, *region, arm.front(), true, forwarded))
               return false;
             arms.push_back(arm);
@@ -1773,6 +1854,7 @@ class Emitter {
         offset += count;
       }
     }
+    currentExpression = std::nullopt;
     if (source.stopped) {
       if (!scoped) {
         failure = error("source.emission", "stop requires scoped execution");
@@ -2319,10 +2401,22 @@ public:
       return error("source.limit", "emitted operation limit exceeded");
     return std::move(module);
   }
+  /// Record generated definitions and emitted sites into this target.
+  void recordInto(EmissionRecord *target) {
+    record = target;
+    if (record)
+      budget.observer = [this](mlir::Operation *op) { observe(op); };
+  }
   Expected<std::string> run() {
     auto built = build();
     if (!built)
       return built.takeError();
+    if (record)
+      for (auto &definition : record->generated) {
+        llvm::sort(definition.origins);
+        definition.origins.erase(llvm::unique(definition.origins),
+                                 definition.origins.end());
+      }
     std::string result;
     mlir::AsmState state(**built, canonicalPrintingFlags());
     BoundedStream stream(result, limits.irBytes);
@@ -2403,7 +2497,8 @@ emitMathematicalUnpack(mlir::OpBuilder &builder, mlir::Location location,
 }
 Expected<std::string> emitOriginal(const ClosedEntry &project,
                                    mlir::MLIRContext &context,
-                                   const Limits &limits) {
+                                   const Limits &limits,
+                                   EmissionRecord *record) {
   if (auto e = checkLimits(limits))
     return e;
   if (project.project().checkedWork() > limits.work ||
@@ -2421,7 +2516,9 @@ Expected<std::string> emitOriginal(const ClosedEntry &project,
                  "native dialects must be loaded before source emission");
   if (project.entry().kind == Declaration::Kind::EntryFunction)
     return emitHostOriginal(project, context, limits);
-  return Emitter(project, context, limits).run();
+  Emitter emitter(project, context, limits);
+  emitter.recordInto(record);
+  return emitter.run();
 }
 Expected<mlir::OwningOpRef<mlir::ModuleOp>>
 buildNumericalOriginal(const ClosedEntry &project, const Declaration &fragment,

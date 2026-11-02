@@ -38,6 +38,9 @@ private:
   std::optional<uint32_t> bindingPatternRoot;
   bool retiresCustody(const Pattern &, const Type &, unsigned = 1);
   bool retainExpressionValues = false;
+  /// The innermost expression being evaluated; every operation emitted while
+  /// it is evaluated originates from it.
+  std::optional<uint32_t> originatingExpression;
   Placement *placement = nullptr;
   const ValuePlacement *contextualPlacement = nullptr;
   /// Uninstantiated constructor field schema: category guidance, not roles.

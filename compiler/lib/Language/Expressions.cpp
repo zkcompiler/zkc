@@ -64,6 +64,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       fail("source.limit", "expression depth limit exceeded", expr.span);
     return {};
   }
+  SaveAndRestore<std::optional<uint32_t>> origin(
+      originatingExpression, expr.synthesized ? originatingExpression : id);
   using K = Expression::Kind;
   using T = Type::Kind;
   if (this->oracleMode() && !oracleExpression(expr))

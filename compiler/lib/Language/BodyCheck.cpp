@@ -227,6 +227,7 @@ BodyChecker::emitResults(decltype(Operation::action) action,
           body.values.back().type, body.values.back().span, usageGuard));
   }
   body.operations.push_back({std::move(action), ids, span, statement});
+  body.operations.back().expression = originatingExpression;
   return ids;
 }
 std::optional<Components> BodyChecker::combine(ArrayRef<ValueId> args,
@@ -358,6 +359,11 @@ bool BodyChecker::statementBody(const Statement &s) {
   SaveAndRestore patternScope(
       bindingPattern, s.kind == Statement::Kind::Let ? &s.pattern : nullptr);
   const auto &expr = syntax.expressions[s.expression];
+  // Operations a statement emits outside expression evaluation originate from
+  // its written root expression.
+  SaveAndRestore<std::optional<uint32_t>> origin(
+      originatingExpression,
+      expr.synthesized ? originatingExpression : std::optional(s.expression));
   if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
       expr.binding && syntax.bindings[expr.binding->index].service) {
     if (syntax.layoutSyntax && orderedRoot)

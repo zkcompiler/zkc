@@ -999,6 +999,11 @@ does not, and lookup keys, instance symbols and companion keys stay unchanged
 Across every maintained package and compiler fixture the largest canonical key
 is 398 bytes, at most 202 bytes longer than its lookup key, against the
 131,072-byte preimage bound.
+The source correspondence export publishes emission's record of every generated
+definition, with its purpose, part and origins, and one occurrence row per
+published site with its written nodes; the producer refuses a definition row
+outside the instance and generated inventory
+([correspondence controls](../compiler/test/source_correspondence.cpp)).
 Generated Entry families walk their roster once per phase and each port only at
 its placed roles, so a trivial 1,024-role Protocol closes and publishes its
 interface within the 32,000,000-unit phase work ceiling, with work growing

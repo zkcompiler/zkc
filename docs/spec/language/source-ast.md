@@ -358,7 +358,8 @@ soundness theorem are still required.
 Ordinary Host functions are outside the structured protocol export profile.
 
 The root has exactly `format`, `admission`, `source_ast`, `bindings`, `snapshot`,
-`instances`, `instance_rows` and `rows`. `admission` is the same association used by the
+`instances`, `instance_rows`, `generated`, `generated_rows`, `occurrences` and
+`rows`. `admission` is the same association used by the
 [source-claim export](claims.md): original-byte SHA-256, protocol symbol,
 interface SHA-256, capture and installation. `source_ast` and `bindings` use the
 formats above. `snapshot` is the actual [structured source](../formats/structured-source.md)
@@ -490,3 +491,59 @@ this document; the latter contains one `{instance,rows}` entry per instance.
 in the actual snapshot's domain, relation, binding and definition tables. Empty
 rows remain explicit for closed declarations without a standalone exported row.
 The association never guesses a definition from its printed name.
+
+### Generated definitions and occurrences
+
+Emission assigns every native site and creates every generated helper, and it
+records both for the exact bytes it prints; the artifact projects that record,
+so there is no second site derivation.
+
+```text
+generated      := [{symbol, purpose, part, origins: [{definition, site}...]}...]
+generated_rows := [{generated, rows: [[table, index]...]}...]
+occurrences    := [{definition, site, nodes: [{owner, path}...]}...]
+```
+
+`generated` lists every definition that emission generates for a source
+operation rather than closing from a declaration. `purpose` is `control` (an
+outlined control region or check arm), `custody` (an outlined custody
+operation), `finite` (a finite domain, callback or array adapter) or `map` (a
+shared map domain or body adapter); `part` is the emitter's local
+discriminator, such as an arm label, `domain` or `body`, or the custody
+primitive. `origins` lists, sorted and unique, every `(definition, site)` that
+created or reused the helper: the definition holding the creating instruction
+and that instruction's site. A pure mathematical instruction publishes no site,
+so its origin keeps the site emission assigned it. A control region is
+published inside the definition whose instruction enters it, so its sites and
+origins name that definition. `symbol` is unique, and so is
+`(purpose, part, origins)`. `generated_rows` has the shape of `instance_rows`.
+
+`occurrences` has one row per nonempty site of every snapshot definition,
+including nested regions and stop terminators, in definition order and then
+block preorder. `nodes` is exactly the written-index entry of the originating
+expression of the source operation the site was emitted for, within that
+operation's lexical owner. Checking sets the originating expression on every
+operation it emits; specialization preserves it, and its comparison refuses a
+changed one. Operations derived from one expression share it, so several sites
+may share nodes. A site with no expression has `[]`; an expression without a
+written node refuses the export, and a span never selects a node. Every node is
+kept.
+
+Before publication the producer enforces the completeness invariant, which
+`checkCorrespondenceInventory` also checks: every domain row and every
+function or oracle definition row of the snapshot is the symbol of exactly one
+`instances` or `generated` entry; every realize, finite, collect and map row has
+its `computation` row association; binding rows are identified by their
+contract and arguments. A row of another producer is a new `purpose`, never an
+exemption. Every occurrence names a snapshot definition and one of its sites,
+and every origin names a snapshot definition. The export check is canonical
+equality, so any edit refuses.
+
+Occurrences, `generated` entries and their `origins` are exact-artifact
+associations, not edit-stable author addresses: a new use changes sites, paths
+and origins. Lean keys companions on authored owners, template or instance
+symbols and [companion keys](companions.md), and reusable generated-body laws
+on `purpose` and `part`; it does not key on site names, occurrence rows,
+`origins` or generated symbols. An ordered occurrence path comes from
+traversing the exact snapshot's applications, repeats and regions; `origins`
+is provenance, never call ancestry.

@@ -42,6 +42,18 @@ with case("complete Schnorr subject exports one bounded source artifact"):
     assert artifact["snapshot"][2] == artifact["admission"]["original_sha256"]
     assert len(artifact["rows"]) > 10
     assert len(artifact["bindings"]["locals"]) > 10
+    # Every domain, function and oracle row names exactly one closed instance
+    # or generated definition, and every site has its occurrence row.
+    owners = [item["symbol"] for item in artifact["instances"]["instances"]]
+    owners += [item["symbol"] for item in artifact["generated"]]
+    assert len(owners) == len(set(owners))
+    for table in (4, 7):
+        for row in artifact["snapshot"][table]:
+            if table == 4 or row[0] in ("function", "oracle"):
+                assert row[1] in owners
+    assert len(artifact["generated_rows"]) == len(artifact["generated"])
+    assert artifact["occurrences"]
+    assert any(occurrence["nodes"] for occurrence in artifact["occurrences"])
 
 with case("source correspondence requires a unique check-only selection"):
     for extra in (["--source-correspondence"],

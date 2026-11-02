@@ -29,6 +29,8 @@ class FiniteEmitter {
   std::vector<unsigned> bodyPorts, predicatePorts;
   Values domainOperands, captures, initial;
   exec::ScopedExecutionBuilder *scoped;
+  /// Reports each generated definition with its part.
+  function_ref<void(StringRef, StringRef)> generated;
   template <class T> std::optional<T> take(Expected<T> value) {
     if (!value) {
       failure = value.takeError();
@@ -148,6 +150,8 @@ class FiniteEmitter {
     auto sequence = data::SequenceType::get(builder.getContext(), element);
     auto suffix = "_array_" + std::to_string(index);
     auto name = prefix + suffix;
+    if (generated)
+      generated(name, StringRef(suffix).drop_front());
     auto signature =
         builder.getFunctionType(mlir::ValueRange(input).getTypes(), {sequence});
     {
@@ -248,6 +252,8 @@ class FiniteEmitter {
     }
     auto output =
         data::DomainType::get(builder.getContext(), itemTypes[shape.result]);
+    if (generated)
+      generated(prefix + "_domain", "domain");
     auto *declaration =
         make("data.domain", {}, {},
              {text("sym_name", prefix + "_domain"),
@@ -406,6 +412,8 @@ class FiniteEmitter {
       actualOutputs = {
           exec::OutcomeType::get(builder.getContext(), adapterOutputs)};
     }
+    if (generated)
+      generated(prefix + suffix.str(), suffix.drop_front());
     SmallVector<mlir::NamedAttribute> attrs{
         text("sym_name", prefix + suffix.str()),
         text("sym_visibility", "private"),
@@ -512,11 +520,13 @@ public:
                 mlir::OpBuilder &builder, mlir::Location location,
                 mlir::Block &definitions, Layouts &layouts, StringRef prefix,
                 StringRef site, EmissionBudget &budget, uint64_t &remaining,
-                exec::ScopedExecutionBuilder *scoped)
+                exec::ScopedExecutionBuilder *scoped,
+                function_ref<void(StringRef, StringRef)> generated)
       : project(project), finite(finite), resultType(resultType),
         values(values), builder(builder), location(location),
         definitions(definitions), layouts(layouts), prefix(prefix), site(site),
-        budget(budget), remaining(remaining), scoped(scoped) {
+        budget(budget), remaining(remaining), scoped(scoped),
+        generated(generated) {
     (void)!!failure;
   }
   Expected<Values> run() {
@@ -572,13 +582,14 @@ emitFinite(const ClosedEntry &project, const Body &source,
            ArrayRef<SmallVector<mlir::Value>> values, mlir::OpBuilder &builder,
            mlir::Location location, mlir::Block &definitions, Layouts &layouts,
            StringRef prefix, StringRef site, EmissionBudget &budget,
-           uint64_t &remaining, exec::ScopedExecutionBuilder *scoped) {
+           uint64_t &remaining, exec::ScopedExecutionBuilder *scoped,
+           function_ref<void(StringRef, StringRef)> generated) {
   if (bool(scoped) != (source.mode == Body::Mode::Local))
     return error("source.emission",
                  "ordered finite emission requires its scoped builder");
   return FiniteEmitter(project, finite, resultType, values, builder, location,
                        definitions, layouts, prefix, site, budget, remaining,
-                       scoped)
+                       scoped, generated)
       .run();
 }
 } // namespace zkc::language
