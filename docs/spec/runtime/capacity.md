@@ -337,14 +337,17 @@ beyond their retained storage.
 ### Root refusals
 
 Each charge the Host makes reports the code of its charged item, never the
-ledger's generic limit. A charge of an item with separate work and bytes codes
-is all or nothing: its logical work, its fresh bytes and the live bytes it
-holds are committed together, or the charge refuses and leaves the root's usage
-unchanged, so a refused item leaves no residual charge for a later charge to
-meet. Its refusal reports the bytes code when the root's fresh or live byte
-allowance refuses, including when its logical work allowance refuses too, and
-the work code when only the logical work allowance does. Committed charges are
-never refunded.
+ledger's generic limit. Every charge to the root is all or nothing: its logical
+work, its fresh bytes and the live bytes it holds are committed together, or
+the charge refuses and leaves the root's usage unchanged, so a refused item
+leaves no residual charge for a later charge to meet. This holds for every row
+below, whether the item has separate work and bytes codes or one code for
+both, and for the charges the runtime makes in the root: proof and joint
+transport buffers, received payload decoding and joint report storage. A
+refusal of an item with separate codes reports the bytes code when the root's
+fresh or live byte allowance refuses, including when its logical work
+allowance refuses too, and the work code when only the logical work allowance
+does. Committed charges are never refunded.
 
 | Charged item | Work refused | Bytes refused |
 |---|---|---|
@@ -428,10 +431,10 @@ maximum refuses without clamping:
 | Function instructions | Instructions of the Function interpreter and every reached child | 1,000,000 | 2^32 | Invocation | `FunctionOptions::limits.capacity` (`instructions`) |
 | Function iterations | Loop iterations of the Function interpreter and every reached child | 100,000 | 2^32 | Invocation | `FunctionOptions::limits.capacity` (`iterations`) |
 | Loading work | Loading work units of one input loading: one per input node, wire scan or native measurement, plus each byte read and each retained estimate, including cache hits | 2^28 | 2^28 | Operation (one input loading) | `HostLimits::loading_work`, `ProofOptions::loading_work` |
-| Public bytes | Wire bytes of one proof call's public statement, counted at every role operand a public value initializes, including shared owners | 64 MiB | 64 MiB | Operation (one proof call) | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::public_bytes`) |
-| Reference bytes | Bytes of the named references one memory request binds | 256 MiB | 256 MiB | Invocation | `ProofOptions::material` (`MaterialLimits::reference_bytes`) |
-| Setup bytes | Setup material of one invocation, counted at every copy the Host holds: each verifier-key copy for a proof's public port, and the material of every deployment of a Function invocation | 64 MiB | 256 MiB | Invocation | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::setup_bytes`) |
-| Retained imports | Retained bytes of the setup imports an admitted proof Entry keeps for reuse across its calls | 64 MiB | 64 MiB | Entry | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::retained_imports`) |
+| Public bytes | Wire bytes of one proof call's public statement, counted at every role operand a public value initializes, including shared owners | 64 MiB | 64 MiB | Operation (one proof call) | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::public_bytes`), CLI `--material-limits` |
+| Reference bytes | Bytes of the named references one memory request binds | 256 MiB | 256 MiB | Invocation | `ProofOptions::material` (`MaterialLimits::reference_bytes`), CLI `--material-limits` |
+| Setup bytes | Setup material of one invocation, counted at every copy the Host holds: each verifier-key copy for a proof's public port, and the material of every deployment of a Function invocation | 64 MiB | 256 MiB | Invocation | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::setup_bytes`), CLI `--material-limits` |
+| Retained imports | Retained bytes of the setup imports an admitted proof Entry keeps for reuse across its calls | 64 MiB | 64 MiB | Entry | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::retained_imports`), CLI `--material-limits` |
 | Prepared data | Retained bytes of one prepared datum: its native value and canonical wire bytes together | 64 MiB | 64 MiB | Operation (one prepared datum) | None: the `PreparedData` constructors take the default |
 
 The Function service-draw maximum is one maximal service allowance for every
@@ -454,10 +457,24 @@ without being retained. A selection above a maximum refuses with that
 allowance's own code: `entry-public-bytes-limit`,
 `entry-reference-bytes-limit`, `entry-setup-bytes-limit` or
 `entry-retained-imports-limit`. A Function's children take the material
-allowances of `FunctionOptions::limits`. The CLI selects no material
-allowance and takes these defaults. A browser session keeps its setup and
+allowances of `FunctionOptions::limits`. A browser session keeps its setup and
 named input copies within the setup and reference allowances, because every
 call binds all of them.
+
+The CLI's `run`, `prove`, `verify` and `common-inputs` commands select the
+material allowances with `--material-limits=PATH`. The selection also bounds
+the setup material that `--key` and an invocation document read before
+execution. The CLI reports the effective record, including defaults:
+
+```text
+["zkc.material-limits/0", "public_bytes", "reference_bytes", "setup_bytes",
+ "retained_imports"]
+```
+
+The record follows the capacity record's rules: all entries are canonical
+decimal strings, the file is at most 4 KiB and has exact arity, and another tag
+refuses with `material-limits-format`. A selection above a maximum refuses with
+that allowance's code. Without the option the CLI takes the defaults.
 
 The capacity record's live, fresh and logical byte selections bound the root
 that a Run, Proof or Function invocation creates, whether the CLI's

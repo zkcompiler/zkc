@@ -161,6 +161,7 @@ fn execute(
             BindingScope::Authored => "authored",
         });
         report["capacity"] = options.proof.capacity.record();
+        report["material_limits"] = options.proof.material.record();
         report["phase"] = json!("inputs");
         report["role_names"] = json!(
             host.interface()

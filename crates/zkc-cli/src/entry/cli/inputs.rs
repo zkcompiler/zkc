@@ -66,6 +66,13 @@ impl Options {
             options.proof.capacity = capacity;
             options.run.capacity = capacity;
         }
+        // The material allowances bound the setup material that `--key`
+        // reads below, so they are selected first.
+        if let Some(file) = args.value("--material-limits") {
+            let material = crate::execution::MaterialLimits::parse(&read(file, 4096)?)?;
+            options.proof.material = material;
+            options.run.material = material;
+        }
         if let Some(file) = args.value("--limits") {
             options.run = options.run.with_work_limits(&read(file, 4096)?)?;
         }

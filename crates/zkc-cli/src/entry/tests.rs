@@ -988,3 +988,123 @@ fn function_results_are_encoded_under_the_invocation_ledger() {
     assert_eq!(report["capacity"][5][2], json!((used + 511).to_string()));
     assert!(!results.exists());
 }
+
+#[test]
+fn material_limits_select_the_setup_material_that_invocations_and_keys_read() {
+    use zkc::execution::MaterialLimits;
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &joint_setup_package());
+    let bounds = zkc_cpu::Policy::default().ark_bounds();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
+    let (verifier, prover) = (keys.verifier_key(), keys.prover_key());
+    let verifier_bytes = verifier.to_bytes(&bounds).unwrap();
+    std::fs::write(dir.path().join("verifier.key"), &verifier_bytes).unwrap();
+    std::fs::write(
+        dir.path().join("prover.key"),
+        prover.to_bytes(&bounds).unwrap(),
+    )
+    .unwrap();
+    let input = dir.path().join("arguments.json");
+    std::fs::write(
+        &input,
+        r#"{"flag":{"P":{"value":true},"V":{"value":false}}}"#,
+    )
+    .unwrap();
+    let context = dir.path().join("invocations.json");
+    std::fs::write(
+        &context,
+        json!({"format":"zkc.entry-invocations/0","deployments":{
+            "child.Pair":{"operation":"run","authority":{"format":"zkc.entry-setups/0",
+                "keys":{"pcs":hex(&verifier.metadata().key_id())}},"session":"setup-test",
+                "services":{},"setups":{"pcs":"verifier.key"},"inputs":{"P":{
+                    "pk":{"file":"prover.key","fingerprint":hex(&prover.material_fingerprint())}
+                }}}
+        }})
+        .to_string(),
+    )
+    .unwrap();
+    let selection = dir.path().join("material.json");
+    let select = |setup_bytes: u64| {
+        let mut record = MaterialLimits::DEFAULT.record();
+        record[3] = json!(setup_bytes.to_string());
+        std::fs::write(&selection, record.to_string()).unwrap();
+        format!("--material-limits={}", selection.display())
+    };
+    let check = |extra: &[String]| {
+        let arguments = [
+            "--dry-run".into(),
+            format!("--input={}", input.display()),
+            format!("--invocations={}", context.display()),
+        ];
+        run("run", &options, &[&arguments[..], extra].concat())
+    };
+    // Without a selection the defaults apply, and the report gives the
+    // effective record.
+    let default = check(&[]);
+    assert_eq!(default["status"], "inputs-checked", "{default}");
+    assert_eq!(default["material_limits"], MaterialLimits::DEFAULT.record());
+    // The selected setup allowance bounds the material that the invocation
+    // document reads.
+    let length = verifier_bytes.len() as u64;
+    let below = check(&[select(length - 1)]);
+    assert_eq!(below["code"], "entry-setup-limit", "{below}");
+    let exact = check(&[select(length)]);
+    assert_eq!(exact["status"], "inputs-checked", "{exact}");
+    assert_eq!(exact["material_limits"][3], json!(length.to_string()));
+    // Setup material may be raised to its maximum and never above it.
+    let maximum = MaterialLimits::MAXIMUM.setup_bytes as u64;
+    let raised = check(&[select(maximum)]);
+    assert_eq!(raised["status"], "inputs-checked", "{raised}");
+    assert_eq!(raised["material_limits"][3], json!(maximum.to_string()));
+    let above = check(&[select(maximum + 1)]);
+    assert_eq!(above["code"], "entry-setup-bytes-limit", "{above}");
+    // The selection file is an input that publication never replaces.
+    let results = format!("--results={}", selection.display());
+    let protected = run(
+        "run",
+        &options,
+        &[
+            format!("--input={}", input.display()),
+            format!("--invocations={}", context.display()),
+            select(length),
+            results,
+        ],
+    );
+    assert_eq!(protected["code"], "entry-output-path", "{protected}");
+    let mut kept = MaterialLimits::DEFAULT.record();
+    kept[3] = json!(length.to_string());
+    assert_eq!(
+        std::fs::read_to_string(&selection).unwrap(),
+        kept.to_string()
+    );
+    // Key files given with `--key` are read under the same allowance.
+    let common = dir.path().join("common");
+    std::fs::create_dir(&common).unwrap();
+    let package = pinned(&common, &common_input_package());
+    let produce = |limits: String| {
+        let path = common.join("value.json");
+        std::fs::write(&path, json!({"value":true}).to_string()).unwrap();
+        run(
+            "common-inputs",
+            &package,
+            &[
+                "--deployment=child.Pair".into(),
+                format!("--input=P={}", path.display()),
+                format!("--input=V={}", path.display()),
+                format!("--key=pcs={}", dir.path().join("verifier.key").display()),
+                format!("--output={}", common.join("context").display()),
+                limits,
+            ],
+        )
+    };
+    let below = produce(select(length - 1));
+    assert_eq!(below["code"], "entry-setup-limit", "{below}");
+    let read = produce(select(length));
+    assert_ne!(read["code"], "entry-setup-limit", "{read}");
+    assert_eq!(read["material_limits"][3], json!(length.to_string()));
+}

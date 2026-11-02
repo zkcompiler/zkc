@@ -272,9 +272,37 @@ impl MaterialLimits {
         }
         Ok(())
     }
+    /// Stable report record, in the format [`Self::parse`] reads, so a
+    /// reported selection can be supplied again.
     pub fn record(&self) -> Json {
-        json!({"public_bytes":self.public_bytes,"reference_bytes":self.reference_bytes,
-            "setup_bytes":self.setup_bytes,"retained_imports":self.retained_imports})
+        json!([
+            "zkc.material-limits/0",
+            self.public_bytes.to_string(),
+            self.reference_bytes.to_string(),
+            self.setup_bytes.to_string(),
+            self.retained_imports.to_string()
+        ])
+    }
+    /// Parse the application's bounded selection file. Unknown fields are
+    /// refused, and a selection above a maximum refuses with that allowance's
+    /// code, never clamped.
+    pub fn parse(bytes: &[u8]) -> Result<Self> {
+        let value = parse(bytes, 4096)?;
+        let row = array(&value, 5)?;
+        if text(&row[0])? != "zkc.material-limits/0" {
+            return Err("material-limits-format".into());
+        }
+        // A count beyond the address space exceeds every maximum, so it
+        // reaches validation as such and refuses with its allowance's code.
+        let size = |v| natural(v).map(|n| usize::try_from(n).unwrap_or(usize::MAX));
+        let result = Self {
+            public_bytes: size(&row[1])?,
+            reference_bytes: size(&row[2])?,
+            setup_bytes: size(&row[3])?,
+            retained_imports: size(&row[4])?,
+        };
+        result.validate()?;
+        Ok(result)
     }
 }
 impl Default for MaterialLimits {
@@ -713,6 +741,64 @@ mod tests {
             .validate()
             .unwrap_err(),
             "entry-setup-bytes-limit"
+        );
+    }
+    #[test]
+    fn material_limit_records_read_back_and_refuse_above_their_maxima() {
+        let parse = |record: &Json| MaterialLimits::parse(record.to_string().as_bytes());
+        // A reported record reads back as the selection it reports, defaults
+        // included.
+        let raised = MaterialLimits {
+            setup_bytes: MaterialLimits::MAXIMUM.setup_bytes,
+            ..MaterialLimits::DEFAULT
+        };
+        assert_eq!(
+            raised.record(),
+            json!([
+                "zkc.material-limits/0",
+                "67108864",
+                "268435456",
+                "268435456",
+                "67108864"
+            ])
+        );
+        for selection in [MaterialLimits::DEFAULT, raised, MaterialLimits::MAXIMUM] {
+            assert_eq!(parse(&selection.record()).unwrap(), selection);
+        }
+        // One above a maximum refuses with that allowance's own code, as
+        // does a count beyond every maximum.
+        for (field, code) in [
+            (1, "entry-public-bytes-limit"),
+            (2, "entry-reference-bytes-limit"),
+            (3, "entry-setup-bytes-limit"),
+            (4, "entry-retained-imports-limit"),
+        ] {
+            let mut record = MaterialLimits::MAXIMUM.record();
+            let selected: u64 = record[field].as_str().unwrap().parse().unwrap();
+            record[field] = json!((selected + 1).to_string());
+            assert_eq!(parse(&record).unwrap_err(), code);
+            record[field] = json!(u64::MAX.to_string());
+            assert_eq!(parse(&record).unwrap_err(), code);
+        }
+        // Another record, a missing or extra field and a number that is not
+        // a canonical decimal string refuse before any selection applies.
+        let mut other = MaterialLimits::DEFAULT.record();
+        other[0] = json!("zkc.native-capacity/0");
+        assert_eq!(parse(&other).unwrap_err(), "material-limits-format");
+        let mut short = MaterialLimits::DEFAULT.record();
+        short.as_array_mut().unwrap().pop();
+        assert_eq!(parse(&short).unwrap_err(), "artifact-record");
+        let mut long = MaterialLimits::DEFAULT.record();
+        long.as_array_mut().unwrap().push(json!("0"));
+        assert_eq!(parse(&long).unwrap_err(), "artifact-record");
+        for spelling in [json!(64), json!("064"), json!("-1")] {
+            let mut record = MaterialLimits::DEFAULT.record();
+            record[3] = spelling;
+            assert!(parse(&record).is_err());
+        }
+        assert_eq!(
+            MaterialLimits::parse(&[b' '; 4097]).unwrap_err(),
+            "artifact-byte-limit"
         );
     }
     #[cfg(feature = "files")]

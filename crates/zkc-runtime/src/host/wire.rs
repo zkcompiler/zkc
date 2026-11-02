@@ -247,28 +247,17 @@ fn release(withheld: crate::vm::execution_ledger::AllocationReservation) {
     let _ = withheld.settle(0, 0);
 }
 
-/// Charge cumulative allocation/work and retain live storage until the guard drops.
+/// Charge storage that the Host writes to an invocation root and hold it until
+/// the guard drops: `bytes` of logical work, fresh allocation and live bytes,
+/// all or nothing, as [`reserve_root`] charges. A refused charge leaves the
+/// root's usage as it was. Without a root nothing is charged.
 pub fn reserve_allocation(
     ledger: Option<&ExecutionLedger>,
     bytes: usize,
-) -> Result<Option<LiveReservation>, String> {
-    let Some(ledger) = ledger else {
-        return Ok(None);
-    };
+) -> Result<Option<LiveReservation>, RootRefusal> {
     ledger
-        .charge(
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: bytes as u64,
-            },
-            bytes,
-        )
-        .map_err(|e| e.to_string())?;
-    ledger
-        .reserve_live(bytes)
-        .map(Some)
-        .map_err(|e| e.to_string())
+        .map(|ledger| reserve_root(ledger, bytes as u64, bytes, bytes))
+        .transpose()
 }
 
 #[cfg(test)]
@@ -372,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn writer_preflight_precedes_ledger_and_failed_live_reservation_precedes_append() {
+    fn writer_preflight_precedes_ledger_and_a_refused_reservation_precedes_append() {
         let ledger = ledger(40);
         let mut writer = ProofWriter::with_shared_ledger(
             ProofFormat::Native,
@@ -385,20 +374,56 @@ mod tests {
         assert_eq!(writer.message(&[0; 2]), Err(FormatError::Limit));
         assert_eq!(ledger.snapshot(), before);
         assert_eq!((writer.messages(), writer.bytes_written()), (0, 40));
-        // Size fits, so cumulative work is charged before live capacity refuses.
+        // Size fits, but live capacity refuses the message's buffer: its work
+        // and fresh bytes are refused with it, so nothing is appended or
+        // charged.
         assert_eq!(writer.message(&[0]), Err(FormatError::Limit));
-        let used = ledger.snapshot();
-        assert_eq!(
-            (
-                used.logical_bytes,
-                used.total_value_bytes,
-                used.live_reserved_bytes
-            ),
-            (49, 49, 40)
-        );
+        assert_eq!(ledger.snapshot(), before);
         assert_eq!((writer.messages(), writer.bytes_written()), (0, 40));
         drop(writer);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    }
+
+    #[test]
+    fn a_refused_allocation_leaves_no_residue() {
+        let root = |live_bytes, total_bytes, logical_bytes| {
+            ExecutionLedger::new(
+                crate::vm::ValueBudget {
+                    live_bytes,
+                    total_bytes,
+                },
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes,
+                },
+            )
+        };
+        let untouched = crate::vm::ExecutionLedgerUsage::default();
+        // Each allowance alone refuses; the refusal names the bytes whenever
+        // a byte allowance refuses.
+        for (ledger, refusal) in [
+            (root(7, 64, 64), RootRefusal::Bytes),
+            (root(64, 7, 64), RootRefusal::Bytes),
+            (root(64, 64, 7), RootRefusal::Work),
+        ] {
+            assert_eq!(reserve_allocation(Some(&ledger), 8).err(), Some(refusal));
+            assert_eq!(ledger.snapshot(), untouched);
+            // Nothing refused remains to be met: the largest affordable
+            // allocation still fits.
+            let held = reserve_allocation(Some(&ledger), 7).unwrap().unwrap();
+            assert_eq!(held.bytes(), 7);
+            let used = ledger.snapshot();
+            assert_eq!(
+                (
+                    used.logical_bytes,
+                    used.total_value_bytes,
+                    used.live_reserved_bytes
+                ),
+                (7, 7, 7)
+            );
+        }
+        assert!(reserve_allocation(None, usize::MAX).unwrap().is_none());
     }
 
     #[test]

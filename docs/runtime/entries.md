@@ -201,10 +201,16 @@ Rehashing an unknown package does not authorize it. Authored proof jobs require
 
 Direct proof commands use `--service=ROLE.NAME=COUNT`,
 `--transcript-budget=COUNT` and `--context=HEX` for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
-sets the [native limits](../spec/runtime/capacity.md) of each operation and
-participant runner; the invocation root keeps its own default
-[allowances](../spec/runtime/capacity.md#host-allowances). Entry functions also accept
-`--limits=FILE` for [work limits](../spec/runtime/joint.md).
+selects the [capacity record](../spec/runtime/capacity.md#application-capacity):
+its live, fresh and logical byte fields bound the invocation root, from request
+decoding through result publication, and each standalone participant runner;
+its other fields bound each operation and runner. `--material-limits=FILE`
+selects the [material allowances](../spec/runtime/capacity.md#host-allowances)
+for the public statement, named references, setup material and retained
+imports. Setup material, including key files read with `--key`, defaults to
+64 MiB and may be raised up to 256 MiB; a selection above a maximum refuses.
+Entry functions also accept `--limits=FILE` for
+[work limits](../spec/runtime/joint.md).
 `prove` accepts services of the selected prover; `verify` accepts services of the
 selected verifier. Other roles refuse.
 [Retries](attempts.md) require an Entry completion selection and an explicit count.

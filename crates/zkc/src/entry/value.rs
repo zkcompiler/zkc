@@ -382,7 +382,8 @@ pub(super) fn charge_conversion(
 /// returned native value is read once as logical work, and each schema node of
 /// the description is a fresh allocation. The returned guard holds the
 /// reconstructed nodes' live allowance in the invocation root; the native
-/// leaves they share were already reserved when the Host took custody.
+/// leaves they share were already reserved when the Host took custody. The
+/// work, fresh and live parts are charged together or not at all.
 pub(super) fn charge_reconstruction<'a>(
     ledger: &zkc_runtime::vm::ExecutionLedger,
     schemas: impl IntoIterator<Item = &'a Schema>,
@@ -405,18 +406,7 @@ pub(super) fn charge_reconstruction<'a>(
         .map(nodes)
         .fold(0usize, usize::saturating_add)
         .saturating_mul(NODE_BYTES);
-    ledger
-        .charge(
-            zkc_runtime::vm::WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: read as u64,
-            },
-            fresh,
-        )
-        .map_err(|_| "entry-output-limit")?;
-    ledger
-        .reserve_live(fresh)
+    zkc_runtime::host::wire::reserve_root(ledger, read as u64, fresh, fresh)
         .map_err(|_| "entry-output-limit".into())
 }
 

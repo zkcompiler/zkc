@@ -4,8 +4,11 @@ use zkc::proof::{AttemptPolicy, NativeDeployment};
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Value};
 
 // An empty test provider distinguishes refusal before issuance from reaching
-// the issuance phase. The expected byte total is computed from public codec
+// the issuance phase. The runner's own byte total is computed from public codec
 // estimates and actual entry occurrences, independently of the host planner.
+// The selected record also bounds the invocation root, which holds the Host's
+// binding root and retained encodings beside the loaded pool, so that total is
+// a lower bound of the smallest selection that reaches issuance.
 pub fn private_input_admission_boundary(
     deployment: &NativeDeployment,
     envelope: &Json,
@@ -94,14 +97,45 @@ pub fn private_input_admission_boundary(
             )
         }
     };
+    // Below the smallest sufficient selection, preparation refuses with the
+    // bytes code of the root charge that did not fit, never a generic limit.
+    let reaches_issuance = |bytes| match execute(bytes) {
+        Ok(report) => {
+            assert_eq!(
+                report.outcome.unwrap_err(),
+                "native-proof-test-entropy-port"
+            );
+            assert!(report.cleanup_errors.is_empty());
+            true
+        }
+        Err(error) => {
+            assert!(
+                [
+                    "artifact-input-bytes-limit",
+                    "native-proof-binding-bytes-limit"
+                ]
+                .contains(&error.as_str()),
+                "{bytes}: {error}"
+            );
+            false
+        }
+    };
+    let (mut low, mut high) = (0, deployment.capacity().values.live_bytes);
+    assert!(reaches_issuance(high));
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if reaches_issuance(middle) {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    assert!(low >= required, "{low} < {required}");
+    // One unit below, the binding root's retained encoding, the root's last
+    // charge before issuance, does not fit.
     assert_eq!(
-        execute(required - 1).err().unwrap(),
-        "artifact-input-bytes-limit"
+        execute(low - 1).err().unwrap(),
+        "native-proof-binding-bytes-limit"
     );
-    let report = execute(required).unwrap();
-    assert_eq!(
-        report.outcome.unwrap_err(),
-        "native-proof-test-entropy-port"
-    );
-    assert!(report.cleanup_errors.is_empty());
+    assert!(reaches_issuance(low));
 }

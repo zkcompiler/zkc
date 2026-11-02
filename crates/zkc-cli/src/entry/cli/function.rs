@@ -19,6 +19,7 @@ pub(super) fn execute(
     let options = Options::parse(args)?;
     let capacity = options.run.capacity;
     report["capacity"] = capacity.record();
+    report["material_limits"] = options.run.material.record();
     report["phase"] = json!("invocation");
     let output_setups = invocation.results.is_some() && interface.result_requires_setup();
     let mut bindings = files::Invocations::load(

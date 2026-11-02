@@ -130,7 +130,9 @@ impl HostLimits {
             "ring_work_per_role":self.ring_work,"sequence_work_per_role":self.sequence_work},
             "interface":{"work":self.interface.work,"descriptor_bytes":self.interface.descriptor_bytes},
             "loading":{"work":self.loading_work},
-            "material":self.material.record()})
+            "material":{"public_bytes":self.material.public_bytes,
+                "reference_bytes":self.material.reference_bytes,"setup_bytes":self.material.setup_bytes,
+                "retained_imports":self.material.retained_imports}})
     }
     /// The per-bind loading sublimits under the selected loading work.
     pub(crate) fn loading(&self) -> crate::host::admission::LoadLimits {

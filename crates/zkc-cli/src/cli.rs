@@ -7,6 +7,7 @@ pub use render::human;
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
+const MATERIAL_LIMITS: Opt = Opt::new("--material-limits=LIMITS");
 const THREADS: Opt = Opt::new("--threads=COUNT").unsigned_range(1, 256);
 const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
@@ -41,6 +42,8 @@ Outside a project, input and proof paths must be explicit unless the input group
 Function arguments use one parameter-named arguments.json map. Static child context
 uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip result publication.
 --threads=COUNT selects 1..=256 shared CPU workers (default: 1), including with --dry-run.
+--capacity=LIMITS selects the native capacity record. --material-limits=LIMITS selects the
+material allowances; setup material may be raised from 64 MiB up to 256 MiB.
 Dry-run validates inputs without executing numerical work.";
 const COMMANDS: &[Command] = &[
     Command {
@@ -147,6 +150,7 @@ Pinned packages support only the Entry view.",
             INVOCATIONS,
             AUTHORED,
             CAPACITY,
+            MATERIAL_LIMITS,
             Opt::new("--limits=LIMITS"),
             RESULTS,
             Opt::new("--no-results"),
@@ -171,6 +175,7 @@ Pinned packages support only the Entry view.",
             Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
+            MATERIAL_LIMITS,
             AUTHORED,
             Opt::new("--attempts=COUNT").unsigned(),
             RESULTS,
@@ -194,6 +199,7 @@ Pinned packages support only the Entry view.",
             Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
+            MATERIAL_LIMITS,
             AUTHORED,
             RESULTS,
         ),
@@ -211,6 +217,7 @@ Pinned packages support only the Entry view.",
             Opt::new("--output=FILE"),
             SETUPS,
             CAPACITY,
+            MATERIAL_LIMITS,
             Opt::new("--limits=LIMITS"),
         ),
         description: "Prepare the selected Function Entry's static Run deployment ID with one named input\nFILE per role, and write the canonical zkc.input-bindings/0 context those inputs determine.\nEvery observed common component must agree. The report gives the context SHA-256;\nthe application distributes that pin through its own trusted context. Producing a\ncontext confers no trust, and nothing is issued or executed.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).",

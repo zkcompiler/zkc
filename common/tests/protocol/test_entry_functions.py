@@ -222,7 +222,12 @@ entry fn Main(x:bool,count:index)->bool{
     assert value == ('5' if numeric else True)
     refused, _ = execute(toolchain, journal, directory, package, pin, 'bounded-many',
                           arguments(8), flags=flags, refuses=True)
-    assert refused['code'] in {'Limit', 'entry-host-numeric-stopped'}
+    # The Function's own charge of the pooled meter refuses naming the exhausted
+    # meter; only a numerical child can instead stop on it with its limit stop.
+    expected = {'entry-host-instruction-limit'}
+    if numeric:
+        expected.add('entry-host-numeric-stopped')
+    assert refused['code'] in expected
     usage = refused['execution']['usage']
     assert usage['instructions'] <= ceiling
     calls = refused['execution']['calls']

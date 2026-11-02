@@ -410,12 +410,11 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
             assert_eq!(encodings.len(), 1);
             assert_eq!(producer.backend().host.encodes.get(), 1);
             assert_eq!(producer.usage().instructions, 1);
+            // The refused append is refused whole: the second message's
+            // buffer charges neither work nor fresh bytes.
             let used = ledger.snapshot();
             assert_eq!(used.live_reserved_bytes, 0);
-            assert_eq!(
-                used.total_value_bytes,
-                loaded.total_value_bytes + 40 + 5124 + 15
-            );
+            assert_eq!(used.total_value_bytes, loaded.total_value_bytes + 40 + 5124);
             drop(producer);
             assert_eq!(ledger.snapshot(), used);
         }
@@ -560,15 +559,15 @@ fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
 
 #[test]
 fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counters() {
-    // Wire oversize, overlapping live storage, then cumulative allocation refusal.
-    for (length, live_bytes, total_bytes, charged) in [
-        (4097usize, 16384, 65536, false),
-        (7, 2 * 64 + 64 + records(2), 65536, true),
-        (7, 1024 + records(2), 8 + 7 + 63 + records(2), false),
+    // Wire oversize, overlapping live storage, then cumulative allocation
+    // refusal. A refused replacement leaves no charge behind.
+    for (length, live_bytes, total_bytes) in [
+        (4097usize, 16384, 65536),
+        (7, 2 * 64 + 64 + records(2), 65536),
+        (7, 1024 + records(2), 8 + 7 + 63 + records(2)),
     ] {
         let mut replacement = Vec::with_capacity(length.max(64));
         replacement.resize(length, 0);
-        let capacity = replacement.capacity();
         let ledger = ExecutionLedger::new(
             ValueBudget {
                 live_bytes,
@@ -629,14 +628,8 @@ fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counter
             2 * 64 + 7 + records(2)
         );
         assert_eq!(used.live_reserved_bytes, 7 + records(2));
-        assert_eq!(
-            used.total_value_bytes,
-            before.total_value_bytes + if charged { capacity } else { 0 }
-        );
-        assert_eq!(
-            used.logical_bytes,
-            before.logical_bytes + if charged { capacity as u64 } else { 0 }
-        );
+        assert_eq!(used.total_value_bytes, before.total_value_bytes);
+        assert_eq!(used.logical_bytes, before.logical_bytes);
         drop(report);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
@@ -1137,8 +1130,11 @@ fn shared_decode_capacity_refuses_before_materialization_and_keeps_consumed_work
     assert_eq!((report.messages, report.bytes), (1, 55));
     assert!(report.cancelled.is_some());
     assert_eq!(validator.backend().decodes.get(), 0);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
-    assert!(ledger.snapshot().total_value_bytes > 0);
+    // Reading the received seven-byte message is consumed work; its refused
+    // decoded allocation leaves no fresh charge behind.
+    let used = ledger.snapshot();
+    assert_eq!(used.live_reserved_bytes, 0);
+    assert_eq!((used.logical_bytes, used.total_value_bytes), (7, 0));
 }
 
 #[test]

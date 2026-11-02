@@ -28,6 +28,7 @@ pub(super) fn produce(
     let child = FunctionInterface::run_deployment_package(&package, id)?;
     let run = RunEntry::admit_with_cpu(child, options.run.clone(), options.setups, cpu.clone())?;
     report["capacity"] = options.run.capacity.record();
+    report["material_limits"] = options.run.material.record();
     report["phase"] = json!("inputs");
     let mut documents =
         files::Documents::with_installation(options.run.capacity, run.installation().clone())?;

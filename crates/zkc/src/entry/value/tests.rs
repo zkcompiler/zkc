@@ -470,3 +470,53 @@ fn binding_fingerprint_includes_nested_alternative_payloads() {
     variant.alternatives[0].name = "Changed".into();
     assert_ne!(schema_fingerprint(&variant), fingerprint);
 }
+
+#[test]
+fn a_refused_reconstruction_charge_leaves_no_residue() {
+    // A record of two indices is three schema nodes; one index leaf is read.
+    let shape = record("Pair", vec![("a", true, index()), ("b", true, index())]);
+    let leaf = NativeValue::Index(7);
+    let (read, nodes) = (leaf.retained_bytes(), 3 * NODE_BYTES);
+    let root = |live_bytes, total_bytes, logical_bytes| {
+        zkc_runtime::vm::ExecutionLedger::new(
+            zkc_runtime::vm::ValueBudget {
+                live_bytes,
+                total_bytes,
+            },
+            zkc_runtime::vm::WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes,
+            },
+        )
+    };
+    // Each of the root's allowances refuses on its own; a live refusal after
+    // the work and fresh bytes fit commits neither of them.
+    for ledger in [
+        root(nodes - 1, nodes, read as u64),
+        root(nodes, nodes - 1, read as u64),
+        root(nodes, nodes, read as u64 - 1),
+    ] {
+        assert_eq!(
+            charge_reconstruction(&ledger, [&shape], [&leaf]).err(),
+            Some("entry-output-limit".into())
+        );
+        assert_eq!(
+            ledger.snapshot(),
+            zkc_runtime::vm::ExecutionLedgerUsage::default()
+        );
+    }
+    let ledger = root(nodes, nodes, read as u64);
+    let held = charge_reconstruction(&ledger, [&shape], [&leaf]).unwrap();
+    let used = ledger.snapshot();
+    assert_eq!(
+        (
+            used.logical_bytes,
+            used.total_value_bytes,
+            used.live_reserved_bytes
+        ),
+        (read as u64, nodes, nodes)
+    );
+    drop(held);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
