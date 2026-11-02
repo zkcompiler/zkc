@@ -6,16 +6,27 @@ pub(in crate::entry) fn check(bytes: &[u8]) -> Result<()> {
     check_limit(bytes, super::super::package::INTERFACE_BYTES)
 }
 pub(in crate::entry) fn check_limit(bytes: &[u8], limit: usize) -> Result<()> {
-    check_document(bytes, limit, 6 * 256 * 1024)
+    check_document(bytes, limit, 6 * 256 * 1024, INTERFACE_NODES)
 }
+
+/// Lexical node ceilings. An interface document is metadata within 4 MiB. A
+/// Host carrier has four times its byte ceiling and restates each signature,
+/// block-argument and deployment schema, so its node ceiling scales with bytes.
+const INTERFACE_NODES: usize = 200_000;
+const CARRIER_NODES: usize = 800_000;
 
 /// Executable carriers embed serialized programs and packages. Their string
 /// payloads share the document ceiling; metadata uses its narrower string cap.
 pub(in crate::entry) fn check_carrier(bytes: &[u8], limit: usize) -> Result<()> {
-    check_document(bytes, limit, limit)
+    check_document(bytes, limit, limit, CARRIER_NODES)
 }
 
-fn check_document(bytes: &[u8], limit: usize, string_limit: usize) -> Result<()> {
+fn check_document(
+    bytes: &[u8],
+    limit: usize,
+    string_limit: usize,
+    node_limit: usize,
+) -> Result<()> {
     if bytes.len() > limit {
         return Err(InterfaceError::Limit);
     }
@@ -75,7 +86,7 @@ fn check_document(bytes: &[u8], limit: usize, string_limit: usize) -> Result<()>
                 }
             }
         }
-        if depth > 256 || nodes > 200_000 {
+        if depth > 256 || nodes > node_limit {
             return Err(InterfaceError::Limit);
         }
     }
@@ -99,6 +110,21 @@ mod tests {
         assert!(check_carrier(bytes.as_bytes(), 4 * 1024 * 1024).is_ok());
         assert!(matches!(
             check_carrier(bytes.as_bytes(), bytes.len() - 1),
+            Err(InterfaceError::Limit)
+        ));
+    }
+
+    #[test]
+    fn carriers_have_four_times_the_interface_node_ceiling() {
+        let nodes = |count: usize| format!("[{}]", vec!["0"; count - 1].join(","));
+        let limit = 16 * 1024 * 1024;
+        assert!(matches!(
+            check(nodes(INTERFACE_NODES + 1).as_bytes()),
+            Err(InterfaceError::Limit)
+        ));
+        assert!(check_carrier(nodes(CARRIER_NODES).as_bytes(), limit).is_ok());
+        assert!(matches!(
+            check_carrier(nodes(CARRIER_NODES + 1).as_bytes(), limit),
             Err(InterfaceError::Limit)
         ));
     }
