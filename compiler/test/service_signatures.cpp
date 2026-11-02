@@ -14,7 +14,7 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   cases.run("service signatures inspect nominal native types", [&] {
-    for (const auto &service : zkc::protocol::randomServices)
+    for (const auto &service : zkc::protocol::randomServices())
       for (StringRef name : {"draw", "index", "indices"}) {
         auto method = zkc::protocol::serviceMethod(service.contract, name);
         if (!method)

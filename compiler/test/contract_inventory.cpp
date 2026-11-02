@@ -50,7 +50,7 @@ int main() {
                                   {"nonresidue", field.nonresidue},
                                   {"coordinateBytes", field.coordinateBytes},
                                   {"montgomery32", field.montgomery32}});
-  for (const auto &service : randomServices)
+  for (const auto &service : randomServices())
     services.push_back(
         json::Object{{"contract", service.contract}, {"field", service.field}});
   for (const auto &codec : catalog.allCodecs())

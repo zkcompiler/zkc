@@ -395,7 +395,7 @@ json::Value catalogueSlot(const UsedIdentities &used) {
                                        ? json::Value(nullptr)
                                        : json::Value(domain.modulus)});
   }
-  for (const auto &service : randomServices) {
+  for (const auto &service : randomServices()) {
     if (!used.services.contains(service.contract))
       continue;
     json::Array methods{"draw"};

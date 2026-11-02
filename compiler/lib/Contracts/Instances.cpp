@@ -1,4 +1,5 @@
 #include "zkc/Contracts/Instances.h"
+#include "zkc/Contracts/Services.h"
 
 namespace zkc::protocol {
 #define ZKC_INSTALLED_INSTANCE_TABLES
@@ -51,4 +52,14 @@ const FieldForm *fieldForm(llvm::StringRef field) {
   return nullptr;
 }
 } // namespace installation
+
+llvm::ArrayRef<RandomService> randomServices() {
+  static const std::vector<RandomService> services = [] {
+    std::vector<RandomService> result;
+    for (const auto &row : instances::randomServices())
+      result.push_back({row.contract, row.field});
+    return result;
+  }();
+  return services;
+}
 } // namespace zkc::protocol

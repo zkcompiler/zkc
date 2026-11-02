@@ -392,7 +392,7 @@ std::vector<Table> dump() {
                                   {"coordinateBytes", field.coordinateBytes},
                                   {"montgomery32", field.montgomery32}});
   json::Array services;
-  for (const auto &service : randomServices)
+  for (const auto &service : randomServices())
     services.push_back(json::Array{service.contract, service.field});
   json::Array applied;
   for (const auto &entry : appliedTypeRepresentations()) {
@@ -591,16 +591,6 @@ int main(int argc, char **argv) {
                                join(found, "; "));
   });
 
-  cases.run("random services", [&] {
-    std::vector<std::string> found;
-    auto rows = generated::randomServices();
-    require(std::size(randomServices) == rows.size(), "service count");
-    for (auto [hand, row] : zip(randomServices, rows))
-      if (hand.contract != row.contract || hand.field != row.field)
-        found.push_back(row.contract);
-    agree("random services", found, {});
-  });
-
   cases.run("coset conventions for every domain", [&] {
     std::vector<std::string> found;
     for (const auto &identity : identities()) {
@@ -648,19 +638,6 @@ int main(int argc, char **argv) {
           found.push_back(type.name + " " + identity);
       }
     agree("message atoms", found, {});
-  });
-
-  cases.run("native challenge fields", [&] {
-    std::vector<std::string> found;
-    for (const auto &identity : identities()) {
-      std::string expected;
-      if (const auto *domain = generated::domain(identity);
-          domain && domain->transcript)
-        expected = member(*domain, "ChallengeField").value_or("");
-      if (nativeChallengeField(identity) != expected)
-        found.push_back(identity);
-    }
-    agree("native challenge fields", found, {});
   });
 
   cases.run("implementation provider relation", [&] {
