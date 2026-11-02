@@ -1,10 +1,12 @@
 #include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/Cpu/LanguageSelection.h"
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/NativePlanTypes.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
 #include "support/Formation.h"
 #include "support/NativeBindings.h"
+#include "support/ProtocolDeployment.h"
 #include "support/ScopedFixture.h"
 #include "support/VariantFixture.h"
 #include "zkc/Compiler/Diagnostics.h"
@@ -457,18 +459,30 @@ int main() {
       [&] {
         MLIRContext context(registry);
         context.loadAllAvailableDialects();
-        SmallVector<data::AlternativeAttr> alternatives;
-        for (unsigned i = 0; i < 33; ++i)
-          alternatives.push_back(data::AlternativeAttr::get(
-              &context, StringAttr::get(&context, "arm" + std::to_string(i)),
-              ArrayRef<Type>{IntegerType::get(&context, 1)}));
+        auto identity =
+            data::importVariantIdentity(&context, json::Value("NativeWide"));
+        auto flag = IntegerType::get(&context, 1);
+        // The byte profile bounds immediate payload entries more tightly than
+        // native formation does.
         auto logical = data::VariantType::get(
-            &context,
-            data::importVariantIdentity(&context, json::Value("NativeWide")),
-            alternatives);
+            &context, identity,
+            {data::AlternativeAttr::get(&context,
+                                        StringAttr::get(&context, "arm"),
+                                        SmallVector<Type>(129, flag))});
         auto physical = take(defaultPlanType(logical));
         accept(empty.checkType(physical));
         refuses(encodeBoundType(physical, true), "variant-type");
+        // Alternative counts share one ceiling: a variant that forms also
+        // has a portable spelling.
+        SmallVector<data::AlternativeAttr> alternatives;
+        for (unsigned i = 0; i < VariantAlternativeCeiling; ++i)
+          alternatives.push_back(data::AlternativeAttr::get(
+              &context, StringAttr::get(&context, "arm" + std::to_string(i)),
+              ArrayRef<Type>{flag}));
+        auto wide = take(defaultPlanType(
+            data::VariantType::get(&context, identity, alternatives)));
+        accept(empty.checkType(wide));
+        take(encodeBoundType(wide, true));
       });
   cases.run(
       "native bindings retain provider and hidden numerical dependencies", [&] {
@@ -560,6 +574,49 @@ int main() {
     refuses(compileRun(arithmetic("bls12-381.fr"), "omitted.mlir", options,
                        registry),
             "cpu-target-unavailable");
+  });
+  // The source-language boundary pins a compilation by its typed source
+  // identity, policy and entry; it does not read the artifact bytes again.
+  cases.run("language boundary compares typed compilation results", [&] {
+    constexpr StringLiteral source = R"(module sample;
+      protocol Work roles(P,V)(x:bool@(P,V),y:bool@P)->(value:bool@P,ok:bool@V){
+        let ok@V=x;return(value=y,ok=ok);
+      }
+      pub proof Family=Work{prover P;verifier V;public{x};accept ok;construction authored;})";
+    auto proof = original(source, "sample::Family");
+    auto selection = take(language::proofPolicy(proof));
+    NativeProofOptions native;
+    native.policy = NativeProofSelection{selection};
+    auto compiled = take(
+        compileNativeProof(proof.bytes(), "boundary.mlir", native, registry));
+    require(compiled.identity == proof.identity(),
+            "compiled proof lost its source identity");
+    compiled.deployment = "not an artifact";
+    accept(language::detail::checkCompiledProof(proof, selection, compiled));
+    auto identity = compiled.identity;
+    compiled.identity = std::string(64, '0');
+    reject(language::detail::checkCompiledProof(proof, selection, compiled),
+           "source.entry");
+    compiled.identity = identity;
+    std::swap(compiled.policy.producer, compiled.policy.validator);
+    reject(language::detail::checkCompiledProof(proof, selection, compiled),
+           "source.entry");
+    auto project = take(
+        language::analyze(
+            take(language::capture({{"sample", source.str(), "sample.zkc"}})))
+            .checkedProject());
+    auto run = take(language::prepareOriginal(
+        take(closeNativeRun(project, "sample::Work"))));
+    RunOptions options;
+    options.entry = run.interface().selectedProtocol().symbol;
+    auto bundle =
+        take(compileRun(run.bytes(), "boundary.mlir", options, registry));
+    require(bundle.entry == options.entry && bundle.identity == run.identity(),
+            "compiled run lost its entry or source identity");
+    bundle.bundle = "not an artifact";
+    accept(language::detail::checkCompiledRun(run, options.entry, bundle));
+    reject(language::detail::checkCompiledRun(run, "other", bundle),
+           "source.entry");
   });
   cases.run(
       "withholding preferred resident implementation uses canonical fallback",

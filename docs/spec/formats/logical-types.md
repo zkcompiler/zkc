@@ -56,8 +56,9 @@ equal moduli do not merge distinct nominal domains. Extensions retain their
 associated base and selected basis through complete catalog and layout records.
 
 The type table contains at most 4096 entries. Expanded traversal has depth at
-most 64, at most 200,000 nodes and at most 64 MiB of metadata; a variant has at
-most 512 alternatives and each alternative at most 512 payloads. Enclosing
+most 64, at most 200,000 nodes and at most 64 MiB of metadata; a variant obeys
+the [variant alternative ceiling](../ir/variants.md#type-and-value) and each
+alternative has at most 512 payloads. Enclosing
 formats may impose stricter limits. Sharing must not bypass expanded-work
 limits. Unknown tags, wrong arities, wrong JSON kinds, malformed Unicode,
 unknown constructors, inconsistent argument kinds and duplicate alternatives

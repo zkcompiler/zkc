@@ -467,6 +467,73 @@ void scheduling(MLIRContext &context) {
   });
   require(guards == 1, "generic transforms erased the zero-result guard");
 }
+// A retained statement names its relation declaration. Identity, signature
+// and purposes are read from that declaration, so a statement record carries
+// no copy of them and a changed declaration is a changed projection.
+void statementRecords(MLIRContext &context) {
+  auto common = parseSourceString<ModuleOp>(fixture, &context);
+  require(bool(common), "statement fixture refused");
+  auto projected = copy(*common);
+  run(*projected, protocol::createProjectProtocolPass());
+  auto statement = [](ModuleOp module) {
+    auto record = *unit(module)
+                       .getBody()
+                       .front()
+                       .getOps<protocol_ir::ProjectionOp>()
+                       .begin();
+    auto interface = cast<DictionaryAttr>(record.getInterfaces()[0]);
+    auto statements = interface.getAs<ArrayAttr>("statements");
+    require(statements && statements.size() == 1,
+            "statement fixture lost its retained statement");
+    return std::pair{record, cast<DictionaryAttr>(statements[0])};
+  };
+  SmallVector<StringRef> keys;
+  for (auto field : statement(*projected).second)
+    keys.push_back(field.getName().getValue());
+  require(keys == SmallVector<StringRef>{"acceptance", "inputs", "relation",
+                                         "selectors"},
+          "statement record copies its relation declaration");
+  ScopedDiagnosticHandler silence(&context,
+                                  [](Diagnostic &) { return success(); });
+  {
+    // A stale copy beside the symbol is refused, even when it is accurate.
+    auto stale = copy(*projected);
+    auto [record, fields] = statement(*stale);
+    NamedAttrList extended(fields);
+    extended.set("relation_revision", StringAttr::get(&context, "0"));
+    auto interface = cast<DictionaryAttr>(record.getInterfaces()[0]);
+    NamedAttrList updated(interface);
+    updated.set("statements",
+                ArrayAttr::get(&context, {extended.getDictionary(&context)}));
+    record.setInterfacesAttr(
+        ArrayAttr::get(&context, {updated.getDictionary(&context)}));
+    require(failed(zkc::admitStage(*stale)),
+            "statement record admitted a copied relation field");
+  }
+  auto changeRevision = [&](ModuleOp module) {
+    bool changed = false;
+    module->walk([&](relation::DeclareOp declaration) {
+      declaration.setRevision("other");
+      changed = true;
+    });
+    require(changed, "statement fixture lost its relation declaration");
+  };
+  {
+    auto changed = copy(*projected);
+    changeRevision(*changed);
+    require(succeeded(zkc::admitStage(*changed)),
+            "a self-consistent declaration change lost formation");
+    require(failed(mathematical::verifyProjectionPreserved(*common, *changed)),
+            "projection admitted a changed relation declaration");
+  }
+  auto lowered = copy(*projected);
+  run(*lowered, protocol::createLowerMathPass());
+  changeRevision(*lowered);
+  require(succeeded(zkc::admitStage(*lowered)),
+          "a lowered declaration change lost formation");
+  require(failed(mathematical::verifyProjectionPreserved(*projected, *lowered)),
+          "lowering admitted a changed relation declaration");
+}
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -477,6 +544,7 @@ int main() {
   profileEdges(context);
   suppliedMaterialization(context);
   scheduling(context);
+  statementRecords(context);
   auto common = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(common), "common fixture refused");
   auto projected = copy(*common);

@@ -882,8 +882,8 @@ references; it does not attach callee entry indices to caller instructions.
 Participant projection deliberately erases declaration contracts and formula
 links, and the statement's selected-target reference. The artifact retains
 helper bodies and domains for execution preparation, but does not retain the
-original protocol contract subject. It retains the existing statement
-identity/ABI projection. No certificate for the
+original protocol contract subject. It retains each statement's relation
+declaration, which keeps the relation identity and ABI. No certificate for the
 original contracts is transported through these transforms by this metadata.
 
 `protocol.statement` references a non-callable `relation.declare` symbol and
@@ -972,13 +972,16 @@ Statement operands must be entry ports in this profile. A retained computed
 expression or a composed statement needs a separate extension. Statements have
 a retention effect, so ordinary DCE cannot remove them. They do not create
 participant execution demand. Projection retains the original function type, input/result role sets,
-per-role argument and service-port maps, relation signatures and external
-identities, explicit purposes, selectors, acceptance indices, and ordered
-source action occurrences in one `protocol.projection` operation directly
-inside the generated `protocol.module` symbol table. Relation, participant, entry
-and generated-callee references are actual MLIR symbol references. Symbol
-renaming updates them and the operation keeps private referenced declarations
-live through symbol DCE.
+per-role argument and service-port maps, each statement's relation symbol, entry
+ports, selectors and acceptance index, and ordered source action occurrences in
+one `protocol.projection` operation directly inside the generated
+`protocol.module` symbol table. A statement record names its relation and copies
+nothing from it: the retained `relation.declare` alone carries the signature,
+external identity and explicit purposes. Projection drops only the declaration's
+`formula` link, and every later stage keeps each named declaration unchanged.
+Relation, participant, entry and generated-callee references are actual MLIR
+symbol references. Symbol renaming updates them and the operation keeps private
+referenced declarations live through symbol DCE.
 
 An acceptance index identifies the original common result. The retained
 per-role result maps identify each corresponding participant result. Service input

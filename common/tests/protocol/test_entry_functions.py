@@ -1,4 +1,5 @@
 """Source Entry functions share native calculation, proof and cumulative policy."""
+import hashlib
 import json
 
 import pytest
@@ -464,3 +465,29 @@ entry fn Produce(complete:bool){return Core::prove(Core::Public{},Core::Witness{
     calls = report['execution']['calls']
     assert calls[-1]['operation'] == operation
     assert calls[-1]['completed'] is not stopped
+
+
+UNPACKED_RECORDS = {
+    'one-field': ('pub struct Secret:\n    pub value: index\n',
+                  'value: Secret', '', {'value': {'value': 7}}),
+    'two-field': ('pub struct Secret:\n    pub value: index\n    pub flag: bool\n',
+                  'value: Secret', '', {'value': {'value': 7, 'flag': True}}),
+    # A sealed record has no external constructor; its home module builds it.
+    'sealed': ('#[sealed]\npub struct Secret:\n    value: index\n', 'x: index',
+               '    value = Secret {value: x}\n', {'x': 7}),
+}
+
+
+@pytest.mark.parametrize('record', sorted(UNPACKED_RECORDS))
+def test_host_unpack_yields_each_record_field(toolchain, journal, directory, record):
+    declaration, parameter, prelude, arguments = UNPACKED_RECORDS[record]
+    path = directory / 'entry.zkc'
+    path.write_text(declaration + f'entry def Echo({parameter}) -> index:\n' + prelude +
+                    '    fields = unpack(value)\n    return fields.0\n')
+    package = directory / 'Echo.zkpkg'
+    package.write_text(journal.run([toolchain.compiler, 'language-package',
+                                    '--source-format=zkc-layout', '--entry=example::Echo',
+                                    f'--module=example={path}']))
+    pin = hashlib.sha256(package.read_bytes()).hexdigest()
+    _, value = execute(toolchain, journal, directory, package, pin, record, arguments)
+    assert value == '7'

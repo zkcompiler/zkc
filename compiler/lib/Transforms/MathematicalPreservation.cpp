@@ -45,28 +45,51 @@ Type logicalType(Type type) {
     return physical.getLogical();
   return type;
 }
+// Retained statements name their relation declarations, which carry the
+// identity, signature and purposes. Projection erases only the formula link;
+// every later stage keeps each named declaration unchanged.
+LogicalResult verifyRetainedRelations(protocol_ir::ProtocolModuleOp before,
+                                      protocol_ir::ProtocolModuleOp after,
+                                      protocol_ir::ProjectionOp record) {
+  SymbolTable original(before), retained(after);
+  for (auto item : record.getInterfaces()) {
+    auto interface = dyn_cast<DictionaryAttr>(item);
+    auto statements =
+        interface ? interface.getAs<ArrayAttr>("statements") : ArrayAttr();
+    if (!statements)
+      return refuse(record, "invalid retained statement inventory");
+    for (auto statement : statements) {
+      auto fields = dyn_cast<DictionaryAttr>(statement);
+      auto name =
+          fields ? fields.getAs<FlatSymbolRefAttr>("relation") : nullptr;
+      auto source = name ? original.lookup<relation::DeclareOp>(name.getValue())
+                         : relation::DeclareOp();
+      auto target = name ? retained.lookup<relation::DeclareOp>(name.getValue())
+                         : relation::DeclareOp();
+      if (!source || !target)
+        return refuse(record, "retained statement lost its relation");
+      NamedAttrList expected(source->getAttrs());
+      if (before.getProfile() == protocol_ir::Profile::Protocol)
+        expected.erase("formula");
+      if (expected.getDictionary(after.getContext()) !=
+          target->getAttrDictionary())
+        return refuse(record, "compilation changed a retained relation");
+    }
+  }
+  return success();
+}
 } // namespace
-ArrayAttr statementBindings(zkc::protocol_ir::MathematicalOp program,
-                            SymbolTableCollection &symbols) {
+ArrayAttr statementBindings(zkc::protocol_ir::MathematicalOp program) {
   Builder builder(program.getContext());
   SmallVector<Attribute> statements;
   for (auto statement :
        program.getBody().front().getOps<zkc::protocol_ir::StatementOp>()) {
-    auto declaration =
-        symbols.lookupNearestSymbolFrom<zkc::relation::DeclareOp>(
-            statement, statement.getRelationAttr());
     SmallVector<Attribute> ports;
     for (auto input : statement.getInputs())
       ports.push_back(
           builder.getI64IntegerAttr(cast<BlockArgument>(input).getArgNumber()));
     statements.push_back(builder.getDictionaryAttr(
         {builder.getNamedAttr("relation", statement.getRelationAttr()),
-         builder.getNamedAttr("relation_type", declaration.getSignatureAttr()),
-         builder.getNamedAttr("relation_kind", declaration.getKindAttr()),
-         builder.getNamedAttr("relation_key", declaration.getKeyAttr()),
-         builder.getNamedAttr("relation_revision",
-                              declaration.getRevisionAttr()),
-         builder.getNamedAttr("relation_purposes", declaration.getPurposes()),
          builder.getNamedAttr("inputs", builder.getArrayAttr(ports)),
          builder.getNamedAttr("selectors", statement.getSelectors()),
          builder.getNamedAttr("acceptance", statement.getAcceptanceAttr())}));
@@ -312,6 +335,8 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
     if (!result || prior.getInterfaces() != result.getInterfaces())
       return refuse(candidate,
                     "projected compilation changed or lost a frozen interface");
+    if (failed(verifyRetainedRelations(before, after, result)))
+      return failure();
     if (before.getProfile() == protocol_ir::Profile::Participant &&
         after.getProfile() != protocol_ir::Profile::Participant &&
         failed(verifyMathLowering(before, after, policy.calculationBatching)))
@@ -364,7 +389,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
         interface.get("output_roles") != program.getOutputRoles())
       return refuse(result,
                     "role projection changed a declared source interface");
-    if (interface.get("statements") != statementBindings(program, symbolTables))
+    if (interface.get("statements") != statementBindings(program))
       return refuse(result,
                     "role projection changed statement inputs or acceptance");
     auto compare = [&](auto &&self, Block &block, ArrayAttr mapped,
@@ -472,9 +497,11 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
                        interface.getAs<ArrayAttr>("actions"), 0)))
       return failure();
   }
-  return count == interfaces.size()
-             ? verifyProjectedValues(before, after)
-             : refuse(result, "role projection added a source interface");
+  if (count != interfaces.size())
+    return refuse(result, "role projection added a source interface");
+  if (failed(verifyRetainedRelations(before, after, result)))
+    return failure();
+  return verifyProjectedValues(before, after);
 }
 
 } // namespace zkc::mathematical

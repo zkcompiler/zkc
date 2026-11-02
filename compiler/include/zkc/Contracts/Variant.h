@@ -16,6 +16,9 @@ struct VariantDescriptor {
   std::vector<VariantAlternative> alternatives;
 };
 inline constexpr size_t VariantSpellingBytes = 256 * 1024;
+/// The one alternative ceiling of the Data type language. MLIR formation,
+/// selected regions, this portable descriptor and Program `match` apply it.
+inline constexpr size_t VariantAlternativeCeiling = 64;
 /// Logical, self-contained nominal identity. Both directions check formation,
 /// canonical spelling and bounded recursive payloads; physical types are
 /// refused.

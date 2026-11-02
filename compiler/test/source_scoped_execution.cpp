@@ -936,7 +936,8 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
             finite::VerificationResult outcome{
                 finite::VerificationStatus::Mismatch, {}};
             auto *cursor = ports.first(&function.front());
-            auto pure = [](mlir::Operation *, ValueRange, mlir::Operation *&)
+            auto pure = [](mlir::Operation *, ValueRange, mlir::Operation *&,
+                           const finite::HelperPosition &)
                 -> FailureOr<SmallVector<mlir::Value>> { return failure(); };
             auto checked = finite::verifyExpression(
                 request, function.getArguments().drop_front(), cursor, pure,

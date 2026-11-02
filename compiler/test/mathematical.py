@@ -275,17 +275,22 @@ negative += [
     ("called helper must be private", mixed.replace('private @helper','@helper'), "mathematical-formation"),
     ("unavailable explicit restriction", receives.replace('%one = protocol.exchange', f'%n = protocol.restrict_roles %a {{roles=["Bob"]}} : {F}\n%one = protocol.exchange'), "mathematical-formation"),
 ]
-with case("nested pass verification and module metadata preservation"):
+with case("nested pass verification and unowned module metadata"):
+    nested = '--pass-pipeline=builtin.module(protocol.module(func.func(canonicalize),protocol.func(cse)))'
     decorated = mixed.replace('module {', 'module attributes {test.tag="retained"} {',1)
-    optimized = commands.verified(decorated, None, '--pass-pipeline=builtin.module(protocol.module(func.func(canonicalize),protocol.func(cse)))')
-    _, ir = project(optimized)
-    assert 'test.tag = "retained"' in ir
+    optimized = commands.verified(decorated, None, nested)
+    assert 'test.tag = "retained"' in optimized
+    # Preparation owns no builtin-module attribute, so projection refuses it.
+    commands.verified(optimized, 'mathematical-module', '--zkc-project-protocol')
+    project(commands.verified(mixed, None, nested))
 
 with case("statement relation stays live before projection"):
     optimized = commands.verified(schnorr, None, '--symbol-dce')
     assert '@schnorr_relation' in optimized
     _, ir = project(optimized)
-    assert 'relation_type =' in ir
+    # The retained statement names its declaration; it does not copy it.
+    assert 'relation = @schnorr_relation' in ir
+    assert 'relation_type' not in ir and 'relation_revision' not in ir
 
 with case("deep SSA demand uses an iterative traversal"):
     terms = []

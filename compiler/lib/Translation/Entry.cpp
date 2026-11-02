@@ -231,8 +231,45 @@ class SourceArtifact {
           entry_detail::requiresNumericalConstruction(body, source, layouts);
       if (!numericalConstruction)
         return numericalConstruction.takeError();
-      if (auto *construct = std::get_if<Construct>(&source.action);
-          construct && !*numericalConstruction) {
+      auto *construct = std::get_if<Construct>(&source.action);
+      if (construct && construct->kind == Construct::Kind::Unpack &&
+          construct->operands.size() == 1 &&
+          body.values[construct->operands.front().index].type.kind !=
+              Type::Kind::Associated) {
+        // A source unpack returns the record's fields as one tuple. The Host
+        // carrier eliminates the record into one value per field and rebuilds
+        // that tuple, exactly as native emission does. An associated value's
+        // unpack is its single field itself.
+        if (source.results.size() != 1)
+          return error("entry.construct", "Host unpack needs one record");
+        auto record = ids.find(construct->operands.front().index);
+        if (record == ids.end())
+          return error("entry.scope", "checked Host operand does not dominate");
+        auto output = source.results.front();
+        const auto &tuple = body.values[output.index].type;
+        json::Array fields, successors;
+        for (const auto &field : tuple.arguments) {
+          successors.push_back(next);
+          auto v = value(field);
+          if (!v)
+            return v.takeError();
+          fields.push_back(std::move(*v));
+        }
+        steps.push_back(json::Object{{"op", "unpack"},
+                                     {"operands", json::Array{record->second}},
+                                     {"results", std::move(fields)}});
+        ids.emplace(output.index, next);
+        auto packed = value(tuple);
+        if (!packed)
+          return packed.takeError();
+        steps.push_back(
+            json::Object{{"op", "construct"},
+                         {"alternative", ""},
+                         {"operands", std::move(successors)},
+                         {"results", json::Array{std::move(*packed)}}});
+        continue;
+      }
+      if (construct && !*numericalConstruction) {
         op["op"] =
             construct->kind == Construct::Kind::Unpack ? "unpack" : "construct";
         if (construct->kind != Construct::Kind::Unpack)

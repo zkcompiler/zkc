@@ -202,7 +202,7 @@ and zero-trip bodies. In particular:
 | Ports, captures and carried/output name lists | 1,024 |
 | Operation attributes | 16,384 |
 | Static instructions across all definitions and nested bodies | 65,536 |
-| Match alternatives | 32 |
+| Match alternatives | The [variant alternative ceiling](../ir/variants.md#type-and-value) |
 
 JSON nesting counts the record and list arrays, not just control constructs.
 Consequently the 64-level body bound does not authorize 64 nested `if` records.
@@ -238,6 +238,7 @@ The shared [byte fixtures](../../../common/tests/fixtures/program/bytes.json)
 provide exact UTF-8 inputs and expected static-admission decisions. Both the
 compiler codec test and Rust reader consume this same corpus. It includes
 alternate JSON whitespace/escapes, explicit stops, local and participant loops,
-conditional completion, and malformed or unresolved records in dormant work.
+conditional completion, a match at the variant alternative ceiling and one
+beyond it, and malformed or unresolved records in dormant work.
 An independent formal reader can consume these fixtures without invoking the
 compiler. Their agreement is bounded evidence, not a proof of either reader.

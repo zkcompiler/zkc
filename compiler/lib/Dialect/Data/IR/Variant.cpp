@@ -62,7 +62,8 @@ LogicalResult AlternativeAttr::verify(function_ref<InFlightDiagnostic()> emit,
 LogicalResult VariantType::verify(function_ref<InFlightDiagnostic()> emit,
                                   IdentityAttr identity,
                                   ArrayRef<AlternativeAttr> alternatives) {
-  if (!identity || alternatives.empty() || alternatives.size() > 512)
+  if (!identity || alternatives.empty() ||
+      alternatives.size() > protocol::VariantAlternativeCeiling)
     return emit() << "variant requires an identity and alternatives";
   llvm::SmallDenseSet<StringAttr, 8> names;
   for (auto arm : alternatives)

@@ -4,6 +4,9 @@ use serde_json::Value as Json;
 use std::{collections::BTreeMap, sync::Arc};
 
 type Result<T> = std::result::Result<T, AdmissionError>;
+/// A match lists one arm per alternative, so the variant alternative ceiling
+/// of the Data type language bounds its arms.
+const MATCH_ALTERNATIVES: usize = 64;
 fn err(code: ErrorCode, detail: &str) -> AdmissionError {
     AdmissionError::new(code, detail)
 }
@@ -256,7 +259,7 @@ impl Decoder<'_> {
                 Some("match") => {
                     let a = record(v, "match", 6)?;
                     let mut arms = Vec::new();
-                    for arm in list(&a[4], 32)? {
+                    for arm in list(&a[4], MATCH_ALTERNATIVES)? {
                         let arm = array(arm)?;
                         if arm.len() != 3 {
                             return Err(err(ErrorCode::Record, "match arm arity"));
@@ -395,7 +398,7 @@ impl Decoder<'_> {
                 Some("match") => {
                     let a = record(v, "match", 6)?;
                     let mut arms = Vec::new();
-                    for arm in list(&a[4], 32)? {
+                    for arm in list(&a[4], MATCH_ALTERNATIVES)? {
                         let arm = array(arm)?;
                         if arm.len() != 3 {
                             return Err(err(ErrorCode::Record, "match arm arity"));

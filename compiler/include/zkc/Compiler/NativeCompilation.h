@@ -22,6 +22,9 @@ struct CompiledNativeProof {
   std::string deployment;
   /// Complete policy after occurrence selection and strict admission.
   NativeProofPolicy policy;
+  /// SHA-256 of the exact source bytes the deployment pins. Callers compare
+  /// it and the policy as typed values instead of reading the deployment.
+  std::string identity;
 };
 /// Owned, source-checked compilation. A host must authenticate the resulting
 /// deployment independently; hashes inside a supplied artifact are not

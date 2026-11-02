@@ -218,8 +218,9 @@ struct DirectBody {
     limits.finiteSite = source.getSite();
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
-    auto pure = [](Operation *, ValueRange,
-                   Operation *&) -> FailureOr<SmallVector<Value>> {
+    auto pure =
+        [](Operation *, ValueRange, Operation *&,
+           const finite::HelperPosition &) -> FailureOr<SmallVector<Value>> {
       return failure();
     };
     auto *cursor = view->first(&function.front());

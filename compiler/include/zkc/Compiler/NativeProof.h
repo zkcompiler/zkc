@@ -6,6 +6,7 @@
 #include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/JSON.h"
 #include <memory>
+#include <tuple>
 namespace zkc {
 class CompilationObservation;
 namespace mathematical {
@@ -26,6 +27,23 @@ struct NativeProofPolicy {
   /// Explicit selected block occurrences; absence selects an ungated block.
   std::vector<std::pair<std::string, unsigned>> gates;
 };
+inline bool operator==(const NativeProofPolicy &a, const NativeProofPolicy &b) {
+  return std::tie(a.entry, a.producer, a.validator, a.suite, a.construction,
+                  a.format, a.acceptance, a.services, a.publicInputs, a.draws,
+                  a.gates) == std::tie(b.entry, b.producer, b.validator,
+                                       b.suite, b.construction, b.format,
+                                       b.acceptance, b.services, b.publicInputs,
+                                       b.draws, b.gates);
+}
+inline bool operator!=(const NativeProofPolicy &a, const NativeProofPolicy &b) {
+  return !(a == b);
+}
+/// Check a typed policy with the rules and refusal codes of its JSON reader,
+/// which runs this same check after decoding. The JSON text and nesting
+/// ceilings bound only the text. A selection has no draws yet: occurrence
+/// selection resolves them.
+llvm::Error checkNativeProofPolicy(const NativeProofPolicy &policy,
+                                   bool selection = false);
 llvm::Expected<NativeProofPolicy> parseNativeProofPolicy(llvm::StringRef text);
 llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
 /// Resolve the ordered query/delivery occurrences of the explicitly selected

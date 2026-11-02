@@ -18,7 +18,8 @@ mlir::FailureOr<CollectFold> readCollectFold(mlir::Operation *producer,
 using ComposedHelperReader =
     llvm::function_ref<mlir::FailureOr<llvm::SmallVector<mlir::Value>>(
         mlir::Operation *, mlir::ValueRange, mlir::Operation *&,
-        mlir::Value collected, mlir::Value position, mlir::Value element)>;
+        const HelperPosition &, mlir::Value collected, mlir::Value position,
+        mlir::Value element)>;
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 verifyCollectFold(const CollectFold &, mlir::ValueRange producerInputs,
                   mlir::ValueRange consumerInputs, mlir::Operation *&,

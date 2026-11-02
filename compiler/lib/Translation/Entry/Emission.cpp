@@ -351,7 +351,28 @@ class Emitter {
         auto inputs = operands(inputIds, env);
         if (!inputs)
           return inputs.takeError();
-        if (name.starts_with("data."))
+        if (name == "data.unpack" && inputIds.size() == 1 &&
+            source.values[inputIds.front().index].type.kind !=
+                Type::Kind::Associated) {
+          // A source unpack returns the record's fields as one tuple. Native
+          // elimination yields one value per field; rebuild the tuple. An
+          // associated value's unpack is its single field itself.
+          auto record =
+              inputs->size() == 1
+                  ? dyn_cast<data::ValueType>(inputs->front().getType())
+                  : data::ValueType();
+          if (!record || outputTypes->size() != 1)
+            return error("entry.construct", "Host unpack needs one record");
+          SmallVector<mlir::Type> fields;
+          for (auto field : record.getLayout().getFields())
+            fields.push_back(data::valueType(field.getLayout()));
+          auto *unpack = make(name, fields, *inputs);
+          append_range(
+              values, make("data.construct", *outputTypes, unpack->getResults(),
+                           {builder.getNamedAttr("alternative",
+                                                 builder.getStringAttr(""))})
+                          ->getResults());
+        } else if (name.starts_with("data."))
           append_range(values,
                        make(name, *outputTypes, *inputs, attrs)->getResults());
         else

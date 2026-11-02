@@ -21,7 +21,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Optional lane realization | 1,000,000 work units; exhaustion retains ordered execution |
 | Required finite expressions and polynomial expansion | Separate cumulative allowances of 100,000 each |
 | Numerical normalization and frontier | 4,000,000 construction units per lowering subject; context/frontier readers share the existing 4,000,000-unit realization checking account; independent unit normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
-| Numerical recipe materialization and correspondence | Separate allowances of 4,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; existing recipe limits also apply |
+| Numerical recipe materialization and correspondence | Separate allowances of 4,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; selected regions nest at most 64 levels, counted cumulatively across helper crossings; existing recipe limits also apply |
 | Native R1CS reduction adapter | BLS Fr; at most 8 rows, 128 columns and 1,024 nonzero terms |
 
 Ring depth counts an input or literal as one level. Each addition or

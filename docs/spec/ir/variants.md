@@ -14,6 +14,15 @@ identity. Equal physical layouts do not identify distinct nominal variants.
 Generic instantiation retains every static actual, including a phantom actual
 that does not occur in a payload.
 
+A variant has at most 64 alternatives. This alternative ceiling belongs to the
+Data type language. MLIR formation, selected regions, the portable descriptor
+below, logical type records and Program `match` all apply it, in the compiler
+and in every independent reader, so a variant that forms can be selected over,
+spelled and matched. It is the largest power of two for which a variant with
+that many alternatives still fits the program format's 4096-byte type string;
+the spelling bound applies separately, so long labels or payloads can refuse
+sooner. A boundary with a stricter bound states it and refuses there.
+
 A value contains exactly one alternative label and that alternative's payload.
 An inactive payload does not exist. Nested variants obey the same rule. Copy and
 drop permissions are independently the conjunction of those permissions over
@@ -105,7 +114,7 @@ length. This bounds expansion work proportionally to input size, including
 modules with many distinct small graphs; it is not a wall-clock guarantee. A string counts as one node and its compact JSON byte length; an array
 counts as one plus its children's node counts, and two bracket bytes plus child
 byte lengths and separating commas. Variant nesting remains at most eight,
-alternatives 32, and immediate payload entries 128. Bounds are simultaneous;
+alternatives within the ceiling above, and immediate payload entries 128. Bounds are simultaneous;
 none promises every combination fits. The containing artifact retains its
 existing byte and structural limits. Ordinary nontype fields retain their own
 limits; a `variant:` prefix in a literal attribute does not enlarge them.

@@ -534,7 +534,14 @@ class Reader {
       return result->values;
     }
     if (c.total) {
-      auto result = helperReader(helper, args, cursor);
+      // Helper operations continue this reader's occurrence sequence.
+      if (limits.finiteSite.empty()) {
+        fail();
+        return {};
+      }
+      auto site = [this] { return issueSite(); };
+      auto result = helperReader(helper, args, cursor,
+                                 HelperPosition{site, limits.selectedDepth});
       if (failed(result)) {
         fail();
         return {};
@@ -543,6 +550,12 @@ class Reader {
     }
     fail();
     return {};
+  }
+  FailureOr<std::string> issueSite() {
+    auto expected = nextSite();
+    if (!valid)
+      return failure();
+    return expected;
   }
   SmallVector<Value> transition(ValueRange state, ValueRange items,
                                 ValueRange env, Value position = {}) {
@@ -574,12 +587,14 @@ class Reader {
           *callback,
           {state, item, ValueRange(consumerEnv).take_front(consumer.arguments),
            ValueRange(consumerEnv).drop_front(consumer.arguments)});
-      if (failed(environment)) {
+      if (failed(environment) || limits.finiteSite.empty()) {
         fail();
         return {};
       }
+      auto site = [this] { return issueSite(); };
       auto results =
           composedHelper(callback->symbol, environment->actuals, cursor,
+                         HelperPosition{site, limits.selectedDepth},
                          composition->collected, position, element[0]);
       if (failed(results)) {
         fail();

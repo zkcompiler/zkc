@@ -545,11 +545,10 @@ struct MetadataVerifier {
     for (auto item : statements) {
       if (!remaining--)
         return refuse(record, "projection metadata work limit");
+      // A statement names its relation declaration; the declaration alone
+      // carries the identity, signature and purposes.
       auto statement = dyn_cast<DictionaryAttr>(item);
-      if (!keys(statement,
-                {"relation", "relation_type", "relation_kind", "relation_key",
-                 "relation_revision", "relation_purposes", "inputs",
-                 "selectors", "acceptance"}))
+      if (!keys(statement, {"relation", "inputs", "selectors", "acceptance"}))
         return refuse(record, "invalid retained statement fields");
       auto relationRef = statement.getAs<FlatSymbolRefAttr>("relation");
       auto declaration =
@@ -563,11 +562,6 @@ struct MetadataVerifier {
       if (!declaration || !ports || !selectors ||
           ports.size() != selectors.size() || !acceptance ||
           !type.getResult(*acceptance).isSignlessInteger(1) ||
-          statement.get("relation_type") != declaration.getSignatureAttr() ||
-          statement.get("relation_kind") != declaration.getKindAttr() ||
-          statement.get("relation_key") != declaration.getKeyAttr() ||
-          statement.get("relation_revision") != declaration.getRevisionAttr() ||
-          statement.get("relation_purposes") != declaration.getPurposes() ||
           ports.size() != declaration.getSignature().getNumInputs())
         return refuse(record,
                       "statement no longer matches its relation or acceptance");

@@ -4,6 +4,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -52,6 +53,90 @@ void mismatch(ModuleOp original, ModuleOp candidate) {
       failed(computation::verifyComputationRealization(original, candidate)) &&
           diagnosed,
       "actual selected candidate mutation escaped correspondence");
+}
+OwningOpRef<ModuleOp> admittedText(MLIRContext &context, StringRef text) {
+  auto result = parseSourceString<ModuleOp>(text, &context);
+  require(bool(result) && succeeded(admitStage(*result)),
+          "generated Math admission failed");
+  return result;
+}
+constexpr StringLiteral finiteDeclarations =
+    R"(!F = !algebra.field<"bls12-381.fr">
+module { "protocol.module"() ({
+ "data.domain"() ({ ^entry(%lo:ui64,%hi:ui64):
+   %d = "data.domain_range"(%lo,%hi) : (ui64,ui64)->!data.domain<ui64>
+   "data.domain_yield"(%d) : (!data.domain<ui64>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(ui64,ui64)->!data.domain<ui64>} : ()->()
+)";
+constexpr StringLiteral finiteEntry = R"(
+ "protocol.func"() ({ ^entry(%enabled:i1,%count:ui64,%value:!F):
+   %zero = "data.index"() {value=0:ui64} : ()->ui64
+   %total = "data.finite_fold"(%zero,%count,%value,%value,%enabled) {domain=@items,step=@outer} : (ui64,ui64,!F,!F,i1)->!F
+   "protocol.return"(%total) : (!F)->()
+ }) {sym_name="main",function_type=(i1,ui64,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)";
+// A fold step whose body is `levels` nested selected regions. The innermost
+// then-arm runs `innermost`, reading %c<levels>, %a<levels> and %x<levels>.
+std::string nestedStep(StringRef name, unsigned levels, StringRef innermost) {
+  std::string region = innermost.str();
+  for (unsigned level = levels; level; --level) {
+    auto arm = [&](StringRef label) {
+      return "  ^" + label.str() + "(%c" + std::to_string(level) + ":i1,%a" +
+             std::to_string(level) + ":!F,%x" + std::to_string(level) +
+             ":!F):\n";
+    };
+    auto outer = std::to_string(level - 1);
+    auto branch = "  %r" + std::to_string(level) + " = \"data.branch\"(%c" +
+                  outer + ",%c" + outer + ",%a" + outer + ",%x" + outer +
+                  ") ({\n" + arm("then") + region + "  }, {\n" + arm("else") +
+                  "  \"data.yield\"(%a" + std::to_string(level) +
+                  ") : (!F)->()\n  }) {alternatives=[\"then\",\"else\"]} : "
+                  "(i1,i1,!F,!F)->!F\n";
+    region = branch + (level > 1 ? "  \"data.yield\"(%r" +
+                                       std::to_string(level) + ") : (!F)->()\n"
+                                 : "  return %r1 : !F\n");
+  }
+  return " func.func private @" + name.str() +
+         "(%a0:!F,%i:ui64,%lo:ui64,%hi:ui64,%x0:!F,%c0:i1)->!F {\n" + region +
+         " }\n";
+}
+// Two fold steps, each with fewer than 64 nested selected regions, chained
+// through a fold in the innermost arm of the outer step.
+std::string helperChain(unsigned outer, unsigned inner) {
+  auto last = std::to_string(outer);
+  std::string text = finiteDeclarations.str();
+  text += nestedStep("inner", inner,
+                     "  \"data.yield\"(%x" + std::to_string(inner) +
+                         ") : (!F)->()\n");
+  text += nestedStep(
+      "outer", outer,
+      "  %z = \"data.index\"() {value=0:ui64} : ()->ui64\n"
+      "  %n = \"data.index\"() {value=1:ui64} : ()->ui64\n"
+      "  %t = \"data.finite_fold\"(%z,%n,%a" +
+          last + ",%x" + last + ",%c" + last +
+          ") {domain=@items,step=@inner} : (ui64,ui64,!F,!F,i1)->!F\n"
+          "  \"data.yield\"(%t) : (!F)->()\n");
+  return text + finiteEntry.str();
+}
+// A fold step with a primitive in the helper body and a selected region whose
+// arms have no instructions of their own.
+std::string helperSites() {
+  std::string text = finiteDeclarations.str();
+  text +=
+      R"( func.func private @outer(%state:!F,%i:ui64,%lo:ui64,%hi:ui64,%value:!F,%enabled:i1)->!F {
+   %sum = algebra.field_add %state,%value : (!F,!F)->!F
+   %result = "data.branch"(%enabled,%state,%sum) ({
+   ^then(%acc:!F,%x:!F):
+     "data.yield"(%x) : (!F)->()
+   }, {
+   ^else(%acc:!F,%x:!F):
+     "data.yield"(%acc) : (!F)->()
+   }) {alternatives=["then","else"]} : (i1,!F,!F)->!F
+   return %result : !F
+ }
+)";
+  return text + finiteEntry.str();
 }
 } // namespace
 int main() {
@@ -314,5 +399,64 @@ int main() {
           require(changed, "mutation did not find actual selected instruction");
           mismatch(*source, *candidate);
         });
+  // The finite reader issues the occurrence of every helper operation. A
+  // candidate cannot rename one within the finite occurrence namespace.
+  for (StringRef mutation : {"selected region", "primitive"})
+    cases.run("helper " + mutation + " occurrence is derived, not read", [&] {
+      auto original = admittedText(context, helperSites());
+      auto source = logical(*original);
+      auto candidate = computation::proposeComputationRealization(*source);
+      require(bool(candidate) &&
+                  succeeded(computation::verifyComputationRealization(
+                      *source, *candidate)),
+              "helper occurrence positive control refused");
+      Operation *target = nullptr;
+      if (mutation == "selected region") {
+        auto unit =
+            cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+        auto closure = take(protocol::readSourceExecutionClosure(unit));
+        for (const auto &[name, body] : closure.bodies)
+          for (const auto &step : body)
+            if (isa<exec::TestOp>(step.operation) && step.outputs.size() == 1 &&
+                isa<algebra::FieldType>(step.outputs.front().getType()))
+              target = step.operation;
+      } else
+        candidate->walk([&](exec::ApplyOp op) {
+          auto binding =
+              SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                  op, op.getBindingAttr());
+          if (binding && binding.getContract() == "field.add")
+            target = op;
+        });
+      require(target, "helper occurrence fixture lost its instruction");
+      // Rename the occurrence consistently, including the scope entries of a
+      // selected region, so that the candidate remains admitted.
+      auto site = target->getAttrOfType<StringAttr>("site");
+      auto renamed = StringAttr::get(&context, site.getValue() + "_mutated");
+      candidate->walk([&](Operation *op) {
+        if (op->getAttr("site") == site)
+          op->setAttr("site", renamed);
+      });
+      mismatch(*source, *candidate);
+    });
+  cases.run("selected nesting is cumulative across helper crossings", [&] {
+    auto within = admittedText(context, helperChain(20, 20));
+    auto source = logical(*within);
+    auto candidate = computation::proposeComputationRealization(*source);
+    require(bool(candidate) &&
+                succeeded(computation::verifyComputationRealization(
+                    *source, *candidate)),
+            "chained helpers within the nesting bound refused");
+    // Each step stays below 64 levels; together they exceed it.
+    auto deep = admittedText(context, helperChain(40, 40));
+    auto deepSource = logical(*deep);
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    auto deepCandidate =
+        computation::proposeComputationRealization(*deepSource);
+    require(!deepCandidate || failed(computation::verifyComputationRealization(
+                                  *deepSource, *deepCandidate)),
+            "chained helpers exceeded the selected nesting bound");
+  });
   return cases.result();
 }

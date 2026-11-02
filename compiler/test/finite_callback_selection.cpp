@@ -263,8 +263,9 @@ bool compare(ModuleOp source, ModuleOp candidate) {
   auto function = selected(candidate);
   auto *cursor = ports.first(&function.front());
   // Bulk correspondence interprets the original func.call closure itself.
-  auto noOrderedReader = [](Operation *, ValueRange,
-                            Operation *&) -> FailureOr<SmallVector<Value>> {
+  auto noOrderedReader =
+      [](Operation *, ValueRange, Operation *&,
+         const finite::HelperPosition &) -> FailureOr<SmallVector<Value>> {
     return failure();
   };
   finite::VerificationLimits limits;

@@ -138,7 +138,7 @@ impl VariantDescriptor {
         }
         let arms = root[1]
             .as_array()
-            .filter(|a| !a.is_empty() && a.len() <= 32)
+            .filter(|a| !a.is_empty() && a.len() <= 64)
             .ok_or_else(|| invalid("alternatives"))?;
         budget.allocate(512 + 4 * spelling.len() + 256 * arms.len())?;
         let mut labels = BTreeSet::new();

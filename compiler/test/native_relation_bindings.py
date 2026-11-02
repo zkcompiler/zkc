@@ -42,8 +42,19 @@ for family in ['r1cs', 'air']:
         path.write_text(changed)
         commands.run([compiler, 'protocol-check-proof', source, policy, path],
                      refuses='native-proof-correspondence')
-        changed = candidate.replace('relation_revision = "0"', 'relation_revision = "other"')
+        # A statement names its relation; it carries no copy of the declaration.
+        assert 'relation_revision' not in candidate
+        changed, count = re.subn(r'(\bselectors = \[)', r'relation_revision = "0", \1',
+                                 candidate, count=1)
+        assert count == 1
         commands.verified(changed, 'mathematical-projection')
+        # A self-consistent but changed declaration is a different statement.
+        changed = candidate.replace('revision = "0"', 'revision = "other"', 1)
+        assert changed != candidate
+        commands.verified(changed)
+        path.write_text(changed)
+        commands.run([compiler, 'protocol-check-proof', source, policy, path],
+                     refuses='native-proof-correspondence')
         binding = re.search(r'contract = "field.equal"[^\n]*sym_name = "([^"]+)"', candidate)
         assert binding
         changed, count = re.subn(

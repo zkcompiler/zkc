@@ -1,4 +1,5 @@
 #include "../../Compiler/LanguageDiagnostics.h"
+#include "LanguageSelection.h"
 #include "zkc/Compiler/NativeCompilation.h"
 #include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Compiler/Observation.h"
@@ -9,6 +10,25 @@ namespace zkc::language {
 namespace {
 constexpr StringLiteral filename = "zkc-language-original.mlir";
 }
+namespace detail {
+Error checkCompiledProof(const CheckedOriginal &original,
+                         const NativeProofPolicy &selection,
+                         const CompiledNativeProof &compiled) {
+  // Occurrence selection adds only the draws.
+  auto selected = compiled.policy;
+  selected.draws.clear();
+  if (compiled.identity != original.identity() || selected != selection)
+    return error("source.entry",
+                 "compiled proof selected another source or policy");
+  return Error::success();
+}
+Error checkCompiledRun(const CheckedOriginal &original, StringRef entry,
+                       const CompiledRun &compiled) {
+  if (compiled.identity != original.identity() || compiled.entry != entry)
+    return error("source.entry", "compiled bundle selected another protocol");
+  return Error::success();
+}
+} // namespace detail
 StringRef CompiledEntry::bytes() const {
   if (auto *run = std::get_if<CompiledRun>(&compiled))
     return run->bundle;
@@ -56,23 +76,8 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
       return located(compiled.takeError());
     // Native compilation independently checks the full deployment. Pin its
     // source and policy again at the source-language ownership boundary.
-    auto parsed = json::parse(compiled->deployment);
-    if (!parsed)
-      return parsed.takeError();
-    auto *deployment = parsed->getAsArray();
-    const json::Array *descriptor = deployment && deployment->size() == 9
-                                        ? (*deployment)[2].getAsArray()
-                                        : nullptr;
-    auto selected = compiled->policy;
-    selected.draws.clear();
-    if (!descriptor || descriptor->size() != 9 ||
-        (*deployment)[0].getAsString() != "zkc.native-proof/0" ||
-        (*deployment)[1].getAsString() != original.identity() ||
-        encodeNativeProofPolicy(selected) !=
-            encodeNativeProofPolicy(selection) ||
-        (*descriptor)[1] != encodeNativeProofPolicy(compiled->policy))
-      return error("source.entry",
-                   "compiled proof selected another source or policy");
+    if (auto e = detail::checkCompiledProof(original, selection, *compiled))
+      return std::move(e);
     return CompiledEntry(original, EntryArtifact(std::move(*compiled)),
                          options);
   }
@@ -88,12 +93,8 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
       compileRun(original.bytes(), filename, run, mlir::DialectRegistry());
   if (!compiled)
     return located(compiled.takeError());
-  auto bundle = json::parse(compiled->bundle);
-  if (!bundle)
-    return bundle.takeError();
-  auto *object = bundle->getAsObject();
-  if (!object || object->getString("entry") != protocol.symbol)
-    return error("source.entry", "compiled bundle selected another protocol");
+  if (auto e = detail::checkCompiledRun(original, protocol.symbol, *compiled))
+    return std::move(e);
   return CompiledEntry(original, EntryArtifact(std::move(*compiled)), options);
 }
 } // namespace zkc::language

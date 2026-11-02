@@ -787,24 +787,30 @@ int main() {
                               "binding-representation");
 #endif
       });
-  cases.run("native formation retains its wider variant shape allowance", [&] {
+  cases.run("native formation shares the alternative ceiling", [&] {
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
     auto identity = data::importVariantIdentity(&context, "BoundaryWidth");
     auto boolean = IntegerType::get(&context, 1);
-    for (unsigned count : {32u, 33u}) {
+    for (unsigned count : {unsigned(VariantAlternativeCeiling),
+                           unsigned(VariantAlternativeCeiling + 1)}) {
       SmallVector<data::AlternativeAttr> arms;
       for (unsigned i = 0; i < count; ++i)
         arms.push_back(data::AlternativeAttr::get(
             &context, StringAttr::get(&context, "arm" + std::to_string(i)),
             ArrayRef<Type>{boolean}));
-      auto native = data::VariantType::get(&context, identity, arms);
-      require(succeeded(verifyLogicalType(emit, native)),
-              "wire width limit leaked into native formation");
-      if (count == 32)
-        roundTrip(context, take(encodeBoundType(native, false)), false);
-      else
-        refuses(encodeBoundType(native, false), "variant-type");
+      ScopedDiagnosticHandler silence(&context,
+                                      [](Diagnostic &) { return success(); });
+      auto native = data::VariantType::getChecked(
+          emit, &context, identity, ArrayRef<data::AlternativeAttr>(arms));
+      if (count > VariantAlternativeCeiling) {
+        require(!native, "native formation exceeded the alternative ceiling");
+        continue;
+      }
+      require(native && succeeded(verifyLogicalType(emit, native)),
+              "native formation refused the alternative ceiling");
+      roundTrip(context, take(encodeBoundType(native, false)), false);
     }
+    // Native formation keeps its wider payload allowance.
     for (unsigned count : {128u, 129u}) {
       SmallVector<Type> payload(count, boolean);
       auto arm = data::AlternativeAttr::get(

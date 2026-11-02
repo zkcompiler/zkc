@@ -72,7 +72,8 @@ LogicalResult verifySelectedControl(Operation *op) {
   };
   auto alternatives = op->getAttrOfType<ArrayAttr>("alternatives");
   if (!isSelectedControl(op) || !op->getNumOperands() || !alternatives ||
-      alternatives.empty() || alternatives.size() > 256 ||
+      alternatives.empty() ||
+      alternatives.size() > protocol::VariantAlternativeCeiling ||
       alternatives.size() != op->getNumRegions())
     return refuse("expected selector and exactly one region per alternative");
   Type type = op->getOperand(0).getType();

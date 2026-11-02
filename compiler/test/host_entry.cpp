@@ -1013,5 +1013,68 @@ entry def Run(inputs: Zero::Inputs) -> Zero::RunResult:
             "extra generic forwarding should remain structurally valid");
     refuses(readHostFunctions(*module), "source.correspondence");
   });
+  // `unpack` returns a tuple of the record's fields. A Host body eliminates
+  // the record into one value per field and rebuilds that tuple from them.
+  struct UnpackCase {
+    const char *name, *record;
+    unsigned fields;
+    bool rebuildRecord;
+  };
+  for (const UnpackCase &item :
+       {UnpackCase{"one-field", "pub struct Secret:\n    value: index\n", 1,
+                   false},
+        UnpackCase{"two-field",
+                   "pub struct Secret:\n    value: index\n    flag: bool\n", 2,
+                   false},
+        UnpackCase{"sealed",
+                   "#[sealed]\npub struct Secret:\n    value: index\n", 1,
+                   false},
+        UnpackCase{"reconstructed", "pub struct Secret:\n    value: index\n", 1,
+                   true}})
+    cases.run(std::string("Host unpack of a ") + item.name + " record", [=] {
+      std::string source = item.record;
+      source += item.rebuildRecord
+                    ? "entry def Echo(value: Secret) -> Secret:\n"
+                    : "entry def Echo(value: Secret) -> index:\n";
+      source += "    fields = unpack(value)\n";
+      source += item.rebuildRecord ? "    return Secret {value: fields.0}\n"
+                                   : "    return fields.0\n";
+      auto fields = item.fields;
+      CaptureOptions options;
+      options.format = "zkc-layout";
+      auto project =
+          take(analyze(take(capture({{"m", source, "unpack.zkc"}}, options)))
+                   .checkedProject());
+      auto entry = take(compileEntry(take(prepareOriginal(
+          take(closeEntry(project, "m::Echo", {}, EntryKind::Function))))));
+      auto artifact = take(json::parse(entry.bytes()));
+      bool unpacked = false;
+      for (const auto &function :
+           *artifact.getAsObject()->getArray("functions")) {
+        const auto &operations =
+            *function.getAsObject()->getObject("body")->getArray("operations");
+        for (size_t i = 0; i < operations.size(); ++i) {
+          const auto &op = *operations[i].getAsObject();
+          if (op.getString("op") != "unpack")
+            continue;
+          const auto &outputs = *op.getArray("results");
+          require(outputs.size() == fields,
+                  "Host unpack did not yield one value per field");
+          require(i + 1 < operations.size(),
+                  "Host unpack lost its tuple reconstruction");
+          const auto &rebuilt = *operations[i + 1].getAsObject();
+          json::Array ids;
+          for (const auto &output : outputs)
+            ids.push_back(*output.getAsObject()->getInteger("id"));
+          require(rebuilt.getString("op") == "construct" &&
+                      rebuilt.getString("alternative") == "" &&
+                      *rebuilt.getArray("operands") == ids &&
+                      rebuilt.getArray("results")->size() == 1,
+                  "Host unpack did not rebuild the source tuple");
+          unpacked = true;
+        }
+      }
+      require(unpacked, "Host artifact lost the source unpack");
+    });
   return cases.result();
 }

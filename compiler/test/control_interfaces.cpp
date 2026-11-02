@@ -6,9 +6,12 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
 #include "support/NativeCases.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/SelectedControl.h"
 
 using namespace mlir;
 using namespace zkc;
@@ -196,5 +199,45 @@ int main() {
         });
         require(failed(verify(*module)), "malformed branch segments accepted");
       });
+  // Formation, selected regions and the portable descriptor share one
+  // alternative ceiling; one more alternative refuses at each of them.
+  cases.run("variant alternative ceiling", [&] {
+    auto descriptor = [](size_t count) {
+      protocol::VariantDescriptor result{llvm::json::Value("Wide"), {}};
+      for (size_t i = 0; i < count; ++i)
+        result.alternatives.push_back({"a" + std::to_string(i), {}});
+      return result;
+    };
+    const auto ceiling = protocol::VariantAlternativeCeiling;
+    auto spelling = protocol::encodeVariant(descriptor(ceiling));
+    require(spelling && protocol::decodeVariant(*spelling),
+            "the portable descriptor refused the ceiling");
+    require(!protocol::encodeVariant(descriptor(ceiling + 1)),
+            "the portable descriptor exceeded the ceiling");
+    require(!data::importVariantType(&context, descriptor(ceiling + 1)),
+            "variant formation exceeded the ceiling");
+    auto type = data::importVariantType(&context, descriptor(ceiling));
+    require(bool(type), "variant formation refused the ceiling");
+    OpBuilder builder(&context);
+    auto location = builder.getUnknownLoc();
+    OwningOpRef<ModuleOp> module = ModuleOp::create(location);
+    builder.setInsertionPointToEnd(module->getBody());
+    auto function = func::FuncOp::create(builder, location, "select",
+                                         builder.getFunctionType({type}, {}));
+    auto *entry = function.addEntryBlock();
+    builder.setInsertionPointToEnd(entry);
+    SmallVector<Attribute> labels;
+    for (auto alternative : type.getAlternatives())
+      labels.push_back(alternative.getLabel());
+    auto branch = data::BranchOp::create(
+        builder, location, TypeRange{}, ValueRange{entry->getArgument(0)},
+        builder.getArrayAttr(labels), labels.size());
+    for (auto &arm : branch.getArms()) {
+      builder.setInsertionPointToEnd(&arm.emplaceBlock());
+      data::YieldOp::create(builder, location, ValueRange{});
+    }
+    require(succeeded(verifySelectedControl(branch)),
+            "a selected region refused the ceiling");
+  });
   return cases.result();
 }

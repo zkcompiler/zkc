@@ -43,6 +43,10 @@ struct CompiledRun {
   std::optional<std::string> correspondence;
   /// zkc.compiled-public-coin/0: structural view and compilation identities.
   std::optional<std::string> publicCoin;
+  /// The protocol entry the bundle runs and the SHA-256 of the exact source
+  /// bytes it was compiled from. Callers compare these typed values instead
+  /// of reading them back from the bundle.
+  std::string entry, identity;
 };
 /// Compile Protocol IR through the native protocol pipeline. This API
 /// enforces 16 MiB text, nesting 64 and 4096-byte entry/filename limits.

@@ -155,6 +155,8 @@ an `alternatives` string array, and one closed single-block arm per alternative.
 An `i1` selector has exactly `["then", "else"]`; an ordinary `!data.variant`
 selector has exactly its declared labels in declaration order. Unknown,
 repeated, missing or reordered alternatives refuse. No default arm is admitted.
+A selected region has at most as many arms as the
+[variant alternative ceiling](variants.md#type-and-value) admits.
 
 An arm receives its alternative's exact ordered payload types followed by all
 capture types. Boolean arms have no payload. The selector itself is evaluated

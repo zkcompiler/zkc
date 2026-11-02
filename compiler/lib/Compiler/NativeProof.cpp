@@ -749,8 +749,59 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
                      p.construction,
                      std::move(gates)};
 }
+Error checkNativeProofPolicy(const NativeProofPolicy &p, bool selection) {
+  auto identifier = [](StringRef s) {
+    return name(s) && s.size() <= 128 && all_of(s, [](unsigned char c) {
+             return llvm::isAlnum(c) || c == '_' || c == '.' || c == '-';
+           });
+  };
+  // The suite is checked below against the installed challenge fields.
+  if (!identifier(p.entry) || !identifier(p.producer) ||
+      !identifier(p.validator) ||
+      (!p.construction.empty() && !identifier(p.construction)))
+    return error("native-proof-policy");
+  if (p.acceptance >= maxPorts || p.services.size() > maxPorts ||
+      p.publicInputs.size() > maxPorts || p.draws.size() > 64 ||
+      (selection && !p.draws.empty()) || p.producer == p.validator)
+    return error("native-proof-policy");
+  auto increasing = [](ArrayRef<unsigned> ports) {
+    for (auto [i, port] : enumerate(ports))
+      if (port >= maxPorts || (i && ports[i - 1] >= port))
+        return false;
+    return true;
+  };
+  if (!increasing(p.services))
+    return error("native-proof-policy");
+  if (p.format == protocol::ProofFormat::RawBytes && p.construction.empty() &&
+      !p.suite.empty())
+    return error("native-proof-format");
+  if (!p.construction.empty()
+          ? p.services.empty() ||
+                (!p.suite.empty() &&
+                 protocol::nativeChallengeField(p.suite).empty())
+      : p.suite.empty()
+          ? !p.services.empty() || !p.draws.empty()
+          : protocol::nativeChallengeField(p.suite).empty() ||
+                p.services.size() != 1 || (!selection && p.draws.empty()))
+    return error("native-proof-policy");
+  if (!increasing(p.publicInputs))
+    return error("native-proof-policy");
+  std::set<StringRef> sites;
+  for (const auto &[query, delivery] : p.draws)
+    if (!name(query) || !name(delivery) || !sites.insert(query).second ||
+        !sites.insert(delivery).second)
+      return error("native-proof-policy");
+  if (p.gates.size() > 64 || (!p.gates.empty() && p.suite.empty()))
+    return error("native-proof-policy");
+  std::set<StringRef> gatedSites;
+  for (const auto &[site, bits] : p.gates)
+    if (!name(site) || bits > 64 || !gatedSites.insert(site).second)
+      return error("native-proof-policy");
+  return Error::success();
+}
 namespace {
-Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
+// Decode the JSON shape only; every policy rule is the typed check's.
+Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selection) {
   if (text.size() > 1024 * 1024 || !mlirNestingWithinLimit(text))
     return error("native-proof-policy-limit");
   auto parsed = parseJson(text);
@@ -773,75 +824,49 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
                            {5u, &p.suite},
                            {10u, &p.construction}}) {
     auto s = (*a)[i].getAsString();
-    bool optional = i == 5 || (i == 10 && s && s->empty());
-    if (!s || (!optional && !name(*s)))
-      return error("native-proof-policy");
-    if (!optional && (s->size() > 128 || !all_of(*s, [](unsigned char c) {
-                        return llvm::isAlnum(c) || c == '_' || c == '.' ||
-                               c == '-';
-                      })))
+    if (!s)
       return error("native-proof-policy");
     *target = s->str();
   }
   auto acceptance = number((*a)[4]);
-  auto *services = (*a)[6].getAsArray();
-  auto *inputs = (*a)[7].getAsArray(), *draws = (*a)[8].getAsArray();
-  if (!acceptance || !services || services->size() > maxPorts || !inputs ||
-      inputs->size() > maxPorts || !draws || draws->size() > 64 ||
-      (selectDraws && !draws->empty()) || p.producer == p.validator)
+  auto *services = (*a)[6].getAsArray(), *inputs = (*a)[7].getAsArray();
+  auto *draws = (*a)[8].getAsArray(), *gates = (*a)[11].getAsArray();
+  if (!acceptance || !services || !inputs || !draws || !gates)
     return error("native-proof-policy");
   p.acceptance = *acceptance;
-  for (const auto &value : *services) {
-    auto service = number(value);
-    if (!service || (!p.services.empty() && p.services.back() >= *service))
-      return error("native-proof-policy");
-    p.services.push_back(*service);
-  }
-  if (p.format == protocol::ProofFormat::RawBytes && p.construction.empty() &&
-      !p.suite.empty())
-    return error("native-proof-format");
-  if (!p.construction.empty()
-          ? p.services.empty() ||
-                (!p.suite.empty() &&
-                 protocol::nativeChallengeField(p.suite).empty())
-      : p.suite.empty()
-          ? !p.services.empty() || !draws->empty()
-          : protocol::nativeChallengeField(p.suite).empty() ||
-                p.services.size() != 1 || (!selectDraws && draws->empty()))
+  auto ports = [](const json::Array &values, std::vector<unsigned> &out) {
+    for (const auto &value : values) {
+      auto port = number(value);
+      if (!port)
+        return false;
+      out.push_back(*port);
+    }
+    return true;
+  };
+  if (!ports(*services, p.services) || !ports(*inputs, p.publicInputs))
     return error("native-proof-policy");
-  for (const auto &input : *inputs) {
-    auto port = number(input);
-    if (!port || (!p.publicInputs.empty() && p.publicInputs.back() >= *port))
-      return error("native-proof-policy");
-    p.publicInputs.push_back(*port);
-  }
-  std::set<std::string> sites;
+  auto pair = [](const json::Value &value) -> const json::Array * {
+    auto *items = value.getAsArray();
+    return items && items->size() == 2 ? items : nullptr;
+  };
   for (const auto &item : *draws) {
-    auto *d = item.getAsArray();
-    if (!d || d->size() != 2)
-      return error("native-proof-policy");
-    auto query = (*d)[0].getAsString(), delivery = (*d)[1].getAsString();
-    if (!query || !delivery || !name(*query) || !name(*delivery) ||
-        !sites.insert(query->str()).second ||
-        !sites.insert(delivery->str()).second)
+    auto *draw = pair(item);
+    auto query = draw ? (*draw)[0].getAsString() : std::nullopt;
+    auto delivery = draw ? (*draw)[1].getAsString() : std::nullopt;
+    if (!query || !delivery)
       return error("native-proof-policy");
     p.draws.emplace_back(query->str(), delivery->str());
   }
-  auto *gates = (*a)[11].getAsArray();
-  if (!gates || gates->size() > 64 || (!gates->empty() && p.suite.empty()))
-    return error("native-proof-policy");
-  std::set<std::string> gatedSites;
   for (const auto &item : *gates) {
-    auto *gate = item.getAsArray();
-    if (!gate || gate->size() != 2)
-      return error("native-proof-policy");
-    auto site = (*gate)[0].getAsString();
-    auto bits = number((*gate)[1]);
-    if (!site || !name(*site) || !bits || *bits > 64 ||
-        !gatedSites.insert(site->str()).second)
+    auto *gate = pair(item);
+    auto site = gate ? (*gate)[0].getAsString() : std::nullopt;
+    auto bits = gate ? number((*gate)[1]) : std::nullopt;
+    if (!site || !bits)
       return error("native-proof-policy");
     p.gates.emplace_back(site->str(), *bits);
   }
+  if (auto e = checkNativeProofPolicy(p, selection))
+    return std::move(e);
   return p;
 }
 } // namespace
@@ -1838,18 +1863,17 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
     ModuleOp source, const NativeProofPolicy &selection,
     MathematicalSelectionPolicy mathematicalSelection,
     const protocol::OracleRealizationPolicy &oracleSelection) {
-  auto policy =
-      readProofPolicy(printJson(encodeNativeProofPolicy(selection)), true);
-  if (!policy)
-    return policy.takeError();
+  if (auto e = checkNativeProofPolicy(selection, true))
+    return std::move(e);
+  auto policy = selection;
   auto prepared =
-      prepareProof(source, *policy, mathematicalSelection, oracleSelection);
+      prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!prepared)
     return prepared.takeError();
   SymbolTable symbols(unit(*prepared->module));
-  auto program = symbols.lookup<pir::MathematicalOp>(policy->entry);
+  auto program = symbols.lookup<pir::MathematicalOp>(policy.entry);
   auto admitted =
-      admit(program, *policy, prepared->origins, DrawSelection::Service,
+      admit(program, policy, prepared->origins, DrawSelection::Service,
             prepared->construction ? &*prepared->construction : nullptr);
   if (!admitted)
     return admitted.takeError();
@@ -1857,7 +1881,7 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
     if (auto e = admitConstruction(program, *prepared->construction,
                                    admitted->events))
       return std::move(e);
-  policy->draws = std::move(admitted->draws);
+  policy.draws = std::move(admitted->draws);
   // Every paired loop needs actual count correspondence, including loops
   // without events. Reverse requests additionally need a deterministic
   // source relation. Construction checks the emitted candidate separately;
@@ -1866,10 +1890,12 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
   if (!projected)
     return error("native-proof-projection");
   auto requests = detail::planNativeRequests(
-      unit(*projected), *policy, admitted->events, prepared->realization.get());
+      unit(*projected), policy, admitted->events, prepared->realization.get());
   if (!requests)
     return requests.takeError();
-  return parseNativeProofPolicy(printJson(encodeNativeProofPolicy(*policy)));
+  if (auto e = checkNativeProofPolicy(policy))
+    return std::move(e);
+  return policy;
 }
 static Expected<NativeProofConstruction> constructNativeProofChecked(
     ModuleOp source, const NativeProofPolicy &policy,
@@ -1879,10 +1905,8 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
     NativeProofBindingProfile bindingProfile =
         NativeProofBindingProfile::NativeHistory) {
   // Validate public API callers too; policy structs are not admission tokens.
-  auto checked =
-      parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
-  if (!checked)
-    return checked.takeError();
+  if (auto e = checkNativeProofPolicy(policy))
+    return std::move(e);
   auto preparedSource =
       prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!preparedSource)

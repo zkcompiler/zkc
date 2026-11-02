@@ -142,7 +142,8 @@ class ScopedCorrespondence {
       limits.collectionSumSite = sumSite;
       limits.collectionSumLocation = sum->operation->getLoc();
     }
-    auto pure = [](Operation *, ValueRange, Operation *&) -> FailureOr<Values> {
+    auto pure = [](Operation *, ValueRange, Operation *&,
+                   const finite::HelperPosition &) -> FailureOr<Values> {
       return failure();
     };
     auto *begin = actual[cursor].operation;

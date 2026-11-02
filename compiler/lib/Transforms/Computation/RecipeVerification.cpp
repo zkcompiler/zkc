@@ -129,10 +129,10 @@ class RecipeReader {
     return true;
   }
 
-  FailureOr<SmallVector<Value>> readHelper(Operation *helper, ValueRange args,
-                                           Operation *&at, Value collected = {},
-                                           Value position = {},
-                                           Value element = {}) {
+  FailureOr<SmallVector<Value>>
+  readHelper(Operation *helper, ValueRange args, Operation *&at,
+             const finite::HelperPosition &occurrence, Value collected = {},
+             Value position = {}, Value element = {}) {
     // Only exact bounded closure snapshots are available here. Lookup
     // is read-only: this verifier cannot run either normalizer.
     auto normalized = helpers.lookup(helper);
@@ -165,29 +165,47 @@ class RecipeReader {
       }
       if (collected && is_contained(operands, collected))
         return failure();
-      if (isa<data::BranchOp>(op)) {
-        auto site = at ? at->getAttrOfType<StringAttr>("site") : StringAttr{};
-        auto outputs = site && siteBytes
-                           ? selected(&op, at, operands, site.getValue(),
-                                      *siteBytes, invocationPolicy, 0)
-                           : FailureOr<SmallVector<Value>>(failure());
-        if (failed(outputs) || outputs->size() != op.getNumResults())
+      // The enclosing finite reader issues this operation's occurrence; the
+      // candidate's own site is never the expectation.
+      auto site = occurrence.site();
+      if (failed(site) || !siteBytes)
+        return failure();
+      auto *begin = at;
+      bool finite = finite::isComputation(&op);
+      bool branch = isa<data::BranchOp>(op);
+      SmallVector<Value> results;
+      if (branch) {
+        auto outputs = selected(&op, at, operands, *site, *siteBytes,
+                                invocationPolicy, occurrence.depth);
+        if (failed(outputs))
           return failure();
-        for (auto [before, after] : zip(op.getResults(), *outputs))
-          values[before] = after;
-      } else if (finite::isComputation(&op)) {
-        auto results = finiteRecipe(&op, at, operands);
-        if (failed(results) || results->size() != op.getNumResults())
+        results = std::move(*outputs);
+      } else if (finite) {
+        auto outputs = finiteRecipe(&op, at, operands, *site, occurrence.depth);
+        if (failed(outputs))
           return failure();
-        for (auto [a, b] : zip(op.getResults(), *results))
-          values[a] = b;
+        results = std::move(*outputs);
       } else {
         auto value = recipe(&op, at, operands);
         if (!value || op.getNumResults() != 1 ||
             !representation(op.getResult(0).getType(), value.getType()))
           return failure();
-        values[op.getResult(0)] = value;
+        results.push_back(value);
       }
+      // As on the entry path: generated instructions stay inside this
+      // occurrence's namespace, and a primitive root keeps it exactly.
+      if (results.size() != op.getNumResults() ||
+          (!branch && !occurrences(begin, at, *site, finite)))
+        return failure();
+      if (!finite && !results.empty() && !isa<poly::ObserveQuotientOp>(op)) {
+        auto *root = ports.producer(results.back());
+        auto rootSite =
+            root ? root->getAttrOfType<StringAttr>("site") : StringAttr();
+        if (!rootSite || rootSite.getValue() != *site)
+          return failure();
+      }
+      for (auto [before, after] : zip(op.getResults(), results))
+        values[before] = after;
     }
     SmallVector<Value> results;
     for (Value v : body.back().getOperands()) {
@@ -198,10 +216,11 @@ class RecipeReader {
     }
     return results;
   }
-  FailureOr<SmallVector<Value>> finiteRecipe(Operation *source,
-                                             Operation *&cursor,
-                                             ValueRange inputs,
-                                             bool root = false) {
+  // The finite reader owns the occurrence sequence under `site` and carries
+  // the enclosing selected nesting `depth` into total helper reads.
+  FailureOr<SmallVector<Value>>
+  finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs,
+               StringRef site, unsigned depth, bool root = false) {
     auto inherited = activeSubject;
     auto inheritedChild = nextChild;
     auto subject = root || !activeSubject
@@ -220,13 +239,17 @@ class RecipeReader {
     auto *begin = cursor;
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
+    auto limits = finiteLimits;
+    limits.finiteSite = site;
+    limits.selectedDepth = depth;
     auto result = finite::verifyExpression(
         source, inputs, cursor,
-        [&](Operation *helper, ValueRange args,
-            Operation *&at) -> FailureOr<SmallVector<Value>> {
-          return readHelper(helper, args, at);
+        [&](Operation *helper, ValueRange args, Operation *&at,
+            const finite::HelperPosition &occurrence)
+            -> FailureOr<SmallVector<Value>> {
+          return readHelper(helper, args, at, occurrence);
         },
-        sourceRoot, finiteLimits, outcome, {allowFiniteBulk, false});
+        sourceRoot, limits, outcome, {allowFiniteBulk, false});
     if (failed(result) &&
         (outcome.status == finite::VerificationStatus::OptionalCapacity ||
          outcome.status == finite::VerificationStatus::RequiredCapacity))
@@ -734,17 +757,22 @@ public:
           if (complete) {
             finite::VerificationResult composedOutcome{
                 finite::VerificationStatus::Mismatch, {}};
+            auto limits = finiteLimits;
+            limits.finiteSite = *site;
+            limits.selectedDepth = depth;
             auto read = finite::verifyCollectFold(
                 *pair, inputs, consumerInputs, at,
-                [&](Operation *helper, ValueRange args, Operation *&where) {
-                  return readHelper(helper, args, where);
+                [&](Operation *helper, ValueRange args, Operation *&where,
+                    const finite::HelperPosition &occurrence) {
+                  return readHelper(helper, args, where, occurrence);
                 },
                 [&](Operation *helper, ValueRange args, Operation *&where,
-                    Value collected, Value position, Value element) {
-                  return readHelper(helper, args, where, collected, position,
-                                    element);
+                    const finite::HelperPosition &occurrence, Value collected,
+                    Value position, Value element) {
+                  return readHelper(helper, args, where, occurrence, collected,
+                                    position, element);
                 },
-                finiteLimits, composedOutcome);
+                limits, composedOutcome);
             if (succeeded(read)) {
               results = *read;
               cursor = at;
@@ -759,7 +787,7 @@ public:
       if (composed) {
         // Both source callbacks have been read against this actual traversal.
       } else if (finite) {
-        auto read = finiteRecipe(&op, cursor, inputs, true);
+        auto read = finiteRecipe(&op, cursor, inputs, *site, depth, true);
         if (failed(read)) {
           if (compositionFailure &&
               finiteOutcome.status == finite::VerificationStatus::Mismatch)

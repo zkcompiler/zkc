@@ -719,8 +719,8 @@ public:
               zkc::runtime::BindingOp>(op)) {
         auto *copy = builder.clone(op);
         // Participant projection does not retain the original Math closure or
-        // transport declaration contracts. Its statement manifest keeps only
-        // the relation identity and ABI required by executable admission.
+        // transport declaration contracts. The retained declaration keeps
+        // only the relation identity and ABI that its statements name.
         if (isa<relation::DeclareOp>(copy))
           copy->removeAttr("formula");
       }
@@ -751,8 +751,7 @@ public:
            builder.getNamedAttr("roles", program.getRoles()),
            builder.getNamedAttr("input_roles", program.getInputRoles()),
            builder.getNamedAttr("output_roles", program.getOutputRoles()),
-           builder.getNamedAttr("statements",
-                                statementBindings(program, sourceSymbols)),
+           builder.getNamedAttr("statements", statementBindings(program)),
            builder.getNamedAttr("participants",
                                 builder.getArrayAttr(participants)),
            builder.getNamedAttr(
@@ -1015,11 +1014,17 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   }
   auto common =
       dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(source.getBody()->front());
-  if (!common || common.getProfile() != zkc::protocol_ir::Profile::Protocol ||
-      source->hasAttr("pir.mathematical_interfaces")) {
+  if (!common || common.getProfile() != zkc::protocol_ir::Profile::Protocol) {
     diagnostics::emit(source.emitError(), "mathematical-module",
-                      "expected the 'protocol' profile without preexisting "
-                      "projection metadata");
+                      "expected the 'protocol' profile");
+    return {};
+  }
+  // Preparation owns no attribute of the enclosing builtin module. Metadata it
+  // does not interpret would otherwise travel unchecked into its candidates.
+  if (!source->getAttrDictionary().empty()) {
+    diagnostics::emit(source.emitError(), "mathematical-module",
+                      "the enclosing module has attributes that preparation "
+                      "does not own");
     return {};
   }
   scope.propose(policy);

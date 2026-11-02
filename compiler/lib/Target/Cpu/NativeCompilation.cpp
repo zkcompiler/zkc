@@ -304,8 +304,12 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     viewReport.emplace();
     raw_string_ostream(*viewReport) << record;
   }
-  return CompiledRun{Compilation(std::move(result)), std::move(*bundle),
-                     std::move(report), std::move(viewReport)};
+  return CompiledRun{Compilation(std::move(result)),
+                     std::move(*bundle),
+                     std::move(report),
+                     std::move(viewReport),
+                     options.entry,
+                     toHex(SHA256::hash(arrayRefFromStringRef(text)), true)};
 }
 Expected<CompiledNativeProof>
 compileNativeProof(StringRef text, StringRef filename,
@@ -452,7 +456,8 @@ compileNativeProof(StringRef text, StringRef filename,
           *original, *result->module, text, *policy, options,
           constructed->descriptor, constructed->wireSites, encoded))
     return diagnostics.failure(std::move(e));
+  // The deployment pins this source digest; verification compared it above.
   return CompiledNativeProof{Compilation(std::move(result)), std::move(encoded),
-                             std::move(*policy)};
+                             std::move(*policy), digest(text)};
 }
 } // namespace zkc
