@@ -160,7 +160,7 @@ Every byte fact of a leaf comes from the catalog's
 the codec row's tag and element width, the aggregate frame's tag, and the
 commitment row's digest and digest-word widths. A field coordinate has its
 base field's codec width. A codec whose widths the target's layouts do not
-realize refuses with `evm.wire-type`.
+realize refuses Yul export; its diagnostic carries the `[evm.wire-type]` tag.
 Sequences and variants compose these leaves. Root/path support preserves their
 canonical envelopes; it performs no authentication. Unsupported inactive arms
 and empty-container element types still refuse compilation.
@@ -315,3 +315,84 @@ See the [Sumcheck project](../../../examples/projects/sumcheck-keccak/README.md)
 for commands and the [deployed validation adapter](../../../common/tests/evm/README.md)
 for execution, mutation and trace controls. These tests establish bounded
 agreement for their subjects, not a general target refinement theorem.
+
+## Refusal codes
+
+The compiler and the SDK each refuse with their own codes; a code names the
+boundary that refused, and its detail is diagnostic text. A compiler refusal
+reaches an SDK caller inside `source-compilation`, whose diagnostics carry the
+compiler's code and detail.
+
+The compiler's EVM target refuses, in pipeline order:
+
+| Code | Refuses |
+|---|---|
+| `evm.options` | A `language-evm` invocation with a CPU or observation option: `--cpu-target=`, `--dump=` or `--release-storage` |
+| `evm.fork` | `--evm-version=` on another command or given twice, or a fork name or selection that is not a declared fork |
+| `evm.limits` | A deployment ceiling outside its declared minimum and maximum |
+| `evm.source-limit` | An original over 16 MiB, empty, nested beyond the MLIR nesting limit or with a filename over 4,096 bytes, or a `zkc.evm-source/0` response over 16 MiB |
+| `evm.source` | An original that does not parse or is not admitted at its stage; the detail is the captured diagnostics |
+| `evm.entry` | A selected Entry that is not a checked proof Entry, a proof without exactly one native Boolean acceptance, or a lowered module without exactly one EVM entry function |
+| `evm.construction` | An explicit construction, services, draws or gates without a transcript suite, a non-native proof format, or a transcript suite the target does not realize: not an installed hash-chain suite over Keccak-256 that binds its identity, decodes `fr64be` and has a prime challenge field |
+| `evm.field` | A field without an exact installed prime modulus below 2^256, or an extension that is not a declared binomial extension of degree 2 to 8 over such a prime field |
+| `evm.descriptor` | A common construction descriptor that is not the policy's `zkc.native-proof-descriptor/0` with a selection |
+| `evm.closed-execution` | A constructed module the closed-execution pipeline refuses; the detail is the captured diagnostics |
+| `evm.endpoint` | A checked endpoint that is not exactly one selected validator with one checked projection record, unconsumed inputs or affine results, a transcript capability other than the managed suite's, a public row that does not name the validator, port and type, outputs out of source order, or an acceptance that is not exactly one Boolean |
+| `evm.layout` | A public input type without an EVM value layout: not complete Copy and Drop logical data, a vector object other than a commitment or proof, or no local EVM representation |
+| `evm.completion` | A `protocol.finish_if` in the selected verifier |
+| `evm.participant-loop-maximum` | A `protocol.loop` in the selected verifier whose checked maximum exceeds the deployment's `participant_loop_maximum` |
+| `evm.lowering` | A reachable operation or type without an EVM realization; the joined `evm.diagnostics` names it with `[evm.unsupported-operation]` or `[evm.unsupported-type]` |
+| `evm.control-flow` | A lowered function whose control flow cannot be structured, such as a statically infinite loop |
+| `evm.target-legality` | An operation or type that remains outside the closed target after lowering or before export |
+| `evm.yul` | A Yul export failure at the invocation boundary or in a target function; the joined `evm.diagnostics` carries the exporter's tagged reason: `[evm.wire-type]` for a message type without a supported wire frame, `[evm.wire-operation]` for a sequence, bytes or variant operation without a wire implementation, `[evm.arithmetic]` for a field or vector operation without an implementation, and `[evm.root-limit]` for a static invocation root above `root_bytes` |
+
+`evm.diagnostics` is never a refusal of its own: it joins a lowering or export
+refusal with every diagnostic captured so far.
+
+The SDK refuses, by phase:
+
+| Code | Refuses |
+|---|---|
+| `evm-option-unsupported` | A CPU-only option on an EVM build: `--cache`, `--dump`, `--report` or `--release-storage`, a profile that releases storage, or `evm::Options` that release storage |
+| `evm-fork` | A fork spelling that is not a declared fork name, or a response `fork` that is not a string |
+| `evm-solc-required`, `evm-solc-pin-required` | A command-line EVM build without `--solc` or without `--solc-sha256` |
+| `evm-artifact-limit` | A compiler response, tool JSON or encoded file over 16 MiB |
+| `evm-json` | A response or tool document that is not bounded JSON: invalid, a duplicate key, a non-natural number, or beyond the node or depth limit |
+| `evm-source-format` | A response that is not an object with exactly the [source response](#source-response) members and formats, or with an empty `yul` or `entry` |
+| `evm-target-declaration` | A response whose `declaration` is not the installed declaration's identity |
+| `evm-source-options` | Response options that do not decode, release storage, or differ from the requested options or fork |
+| `evm-source-limits` | Response `limits` that do not name exactly the declared ceilings, or a ceiling outside its declared range; at call encoding, a missing or out-of-range ceiling |
+| `evm-source-identity` | A `capture`, `installation`, `original` or `compiler` that is not a SHA-256 digest, or public rows that do not name the validator and the policy's public ports in order |
+| `evm-source-descriptor` | A descriptor or policy outside the exact shape the target realizes, or a selection that is not the normalized requested oracle selection |
+| `evm-solc-path` | A solc path that cannot be canonicalized |
+| `evm-solc-pin` | A pin that is not a SHA-256 digest, a snapshot whose digest differs from it, or a path that no longer names the snapshotted executable |
+| `evm-solc-snapshot-unsupported` | A platform that cannot take an immutable executable snapshot |
+| `evm-solc-limit` | A solc executable or output over 16 MiB |
+| `evm-solc-io` | A snapshot, temporary directory or process failure |
+| `evm-solc-timeout` | A solc run longer than 120 seconds |
+| `evm-solc-failed` | A solc run that exits unsuccessfully |
+| `evm-solc-version` | A solc whose `--version` output does not name the pinned release |
+| `evm-solc-diagnostic` | A solc output with an error |
+| `evm-solc-contract` | A solc output without exactly one `verifier.yul` contract |
+| `evm-solc-bytecode` | Creation or deployed bytecode that is not hexadecimal |
+| `evm-compiler-pin` | A compiler identity that is not a SHA-256 digest |
+| `evm-cache-key` | A reused artifact whose build key is not the key of this source, compiler, solc and settings |
+| `evm-artifact-pin` | An expected manifest pin that is not a digest, or a manifest whose SHA-256 differs from it |
+| `evm-artifact-read` | An artifact directory or file that is unreadable, not a regular file, or over 16 MiB |
+| `evm-artifact-directory` | An artifact directory that is a symbolic link |
+| `evm-manifest` | A manifest with unknown or mistyped fields, an undeclared fork, another format or solc release, other than six files, or identities that are not digests |
+| `evm-artifact-files` | A manifest without one of the six artifact files |
+| `evm-artifact-identity` | An artifact file over 16 MiB or whose SHA-256 differs from its manifest entry |
+| `evm-artifact-settings` | A manifest `evm_version` other than the source fork, or a `solc-input.json` other than the declared input |
+| `evm-artifact-source` | A `verifier.yul` other than the source's Yul, or an `abi.json` other than the declared ABI |
+| `evm-code-size` | Empty creation or runtime bytecode, or bytecode above the fork's initcode or runtime code ceiling |
+| `evm-artifact-build-key` | A manifest build key other than the recomputed key |
+| `evm-output-path` | A destination that cannot be made absolute or whose parent cannot be resolved |
+| `evm-output-exists` | A destination where anything, including a dangling symbolic link, exists |
+| `evm-output-stage` | A failure to stage the sibling directory or its files |
+| `evm-output-publish` | A failure of the no-replace rename, including a destination that appears concurrently |
+| `evm-atomic-publication-unsupported` | Publication on a platform without the atomic directory publisher |
+| `evm-calldata-limit` | Public inputs, context or proof above their byte ceilings, calldata above `calldata_bytes`, or a size computation that overflows |
+
+A [target declaration](#target-declaration) that breaks a rule refuses the build
+instead: the generator and the SDK build each name the broken rule.
