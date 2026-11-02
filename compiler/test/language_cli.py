@@ -46,6 +46,31 @@ with case('diagnostic source indices include both installed catalog modules'):
     assert [s['path'] for s in sources[-2:]] == ['<installation>/catalog/zkc::prelude',
                                                '<installation>/catalog/zkc::records']
 
+with case('structured diagnostics carry a refusal code apart from its detail'):
+    observation = OUT / 'option-refusal.json'
+    commands.run([compiler, 'language-check', f'--diagnostics={observation}', *options,
+                  '--subject=transfer::Transfer'], refuses='source.options')
+    record = json.loads(observation.read_text())
+    assert record['completed'] is False
+    assert record['diagnostics'] == [{
+        'code': 'source.options',
+        'message': '--subject is exclusive with --entry and --entry-kind',
+        'related': []}], record['diagnostics']
+
+with case('a compiler refusal keeps its code through the driver'):
+    # Nine ports of 128 Boolean leaves exceed the aggregate leaf limit while
+    # the checked original is prepared.
+    source = OUT / 'wide-ports.zkc'
+    ports = ','.join(f'a{i}:[bool;128]@P' for i in range(9))
+    source.write_text(f'module wide;protocol Run roles(P)({ports})->(){{return();}}'
+                      'entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
+    observation = OUT / 'limit-refusal.json'
+    commands.run([compiler, 'language-package', '--source-format=zkc', f'--module=wide={source}',
+                  '--entry=wide::Demo', f'--diagnostics={observation}'], refuses='source.limit')
+    diagnostics = json.loads(observation.read_text())['diagnostics']
+    assert diagnostics[0]['code'] == 'source.limit', diagnostics
+    assert 'source.limit' not in diagnostics[0]['message'], diagnostics
+
 with case('definition checking never treats empty Entry selection as omission'):
     for args in [
         ['--source-format=zkc', '--entry=', *modules],

@@ -359,7 +359,10 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
         toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=sample={source}', 'sample::Demo', f'--output={refused}',
     ], refuses='source-compilation'))
-    assert 'source.limit' in result['diagnostics']
+    # The SDK reports the compiler's refusal code as a field of its diagnostics.
+    refusal = result['compiler_diagnostics']['diagnostics'][0]
+    assert refusal['code'] == 'source.limit', result['compiler_diagnostics']
+    assert 'source.limit' not in refusal['message'], refusal
     assert not refused.exists()
 
 

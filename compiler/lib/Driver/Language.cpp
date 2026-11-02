@@ -139,6 +139,13 @@ int runLanguageCompiler(int argc, char **argv) {
         [&](const DiagnosticError &error) {
           messages.push_back(error.diagnostic());
         },
+        [&](const Refusal &refusal) {
+          // The code stays a field. A multi-line detail continues on uncoded
+          // lines, as it renders.
+          auto [line, rest] = StringRef(refusal.detail).split('\n');
+          append(refusal.code, line);
+          appendLines(rest);
+        },
         [&](const CompilationError &error) {
           for (const auto &refusal : ArrayRef(error.refusals).take_front(16))
             append(refusal.code, refusal.detail);
