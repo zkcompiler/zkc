@@ -341,3 +341,12 @@ package admission, reusable Hosts, preparation, typed reports and proof calls.
 Generated wrappers check exact package identity before preparation; schema
 equality alone cannot select a different deployment. Authority and invocation
 context are separate from ordinary arguments.
+
+The generated Host of a large Protocol roster restates each role's family at
+every signature, block argument and child deployment, so validating it can need
+more than the default
+[interface work allowance](../spec/runtime/capacity.md#host-allowances); the
+Host of a full 1,024-role roster does. A Rust application raises
+`FunctionOptions::limits.interface`, up to the installed maximum, and inspects
+child deployments with `FunctionInterface::deployment_interfaces_with` under
+the same selection. The CLI takes the default allowance.

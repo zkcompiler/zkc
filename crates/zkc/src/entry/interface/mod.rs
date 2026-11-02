@@ -57,7 +57,8 @@ impl std::error::Error for InterfaceError {}
 /// reconstruction each have their own cumulative work allowance; the schema
 /// summaries and each reconstructed input or output supply plan each charge
 /// their retained descriptors against the descriptor allowance. A Host may
-/// select lower allowances; a selection above `MAXIMUM` refuses.
+/// lower either allowance or raise the work allowance up to `MAXIMUM`; a
+/// selection above `MAXIMUM` refuses without clamping.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InterfaceLimits {
     /// Work units of one admission algorithm.
@@ -70,7 +71,17 @@ impl InterfaceLimits {
         work: 1_000_000,
         descriptor_bytes: 16 * 1024 * 1024,
     };
-    pub const MAXIMUM: Self = Self::DEFAULT;
+    /// The most a Host may select. A Function Host's structure validation
+    /// checks each schema at every signature, block argument and deployment
+    /// that restates it, so the generated Host of a trivial 1,024-role
+    /// Protocol needs about 1.3 million work units in that one algorithm with
+    /// one port, and 1.7 million with one port placed at every role. The work
+    /// maximum, 2^24, is about ten times the larger; the descriptor allowance
+    /// can only be lowered.
+    pub const MAXIMUM: Self = Self {
+        work: 1 << 24,
+        ..Self::DEFAULT
+    };
     /// Refuse a selection above the installed maximum without clamping it.
     pub fn validate(&self) -> Result<()> {
         require(

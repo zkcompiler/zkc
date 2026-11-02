@@ -25,7 +25,8 @@ pub(super) fn produce(
     let options = Options::parse(args)?;
     report["deployment"] = json!(id);
     report["phase"] = json!("admission");
-    let child = FunctionInterface::run_deployment_package(&package, id)?;
+    let child =
+        FunctionInterface::run_deployment_package_with(&package, id, options.run.interface)?;
     let run = RunEntry::admit_with_cpu(child, options.run.clone(), options.setups, cpu.clone())?;
     report["capacity"] = options.run.capacity.record();
     report["material_limits"] = options.run.material.record();

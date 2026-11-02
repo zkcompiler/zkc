@@ -3133,3 +3133,105 @@ fn child_refusals_keep_their_phase_and_schema_path() {
     assert_eq!(diagnostics["failure"]["phase"], "Preparation");
     assert_eq!(diagnostics["failure"]["code"], "native-proof-proof-limit");
 }
+
+/// Static inspection reads the Host structure and every child interface under
+/// the Host's selected interface allowances, as admission does, so each needs
+/// the same least allowances.
+#[test]
+fn deployment_inspection_takes_the_selected_interface_allowances() {
+    use crate::entry::InterfaceLimits;
+    let package = capture(&joint_document());
+    let limits = |work| InterfaceLimits {
+        work,
+        ..InterfaceLimits::DEFAULT
+    };
+    let descriptors = |descriptor_bytes| InterfaceLimits {
+        descriptor_bytes,
+        ..InterfaceLimits::DEFAULT
+    };
+    // The least selection of one allowance under which a path succeeds; this
+    // fixture needs far less than a million of either.
+    let least = |select: &dyn Fn(usize) -> InterfaceLimits,
+                 admits: &dyn Fn(InterfaceLimits) -> bool| {
+        let (mut low, mut high) = (1, 1_000_000);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if admits(select(middle)) {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        low
+    };
+    let inspect = |l| FunctionInterface::deployment_interfaces_with(&package, l);
+    let context = |l| FunctionInterface::run_deployment_package_with(&package, "joint", l);
+    let admit = |l| {
+        FunctionEntry::admit(
+            package.clone(),
+            FunctionOptions {
+                limits: HostLimits {
+                    interface: l,
+                    ..HostLimits::default()
+                },
+                ..FunctionOptions::default()
+            },
+            BTreeMap::from([("joint".into(), SetupAuthority::default())]),
+        )
+    };
+    for select in [&limits as &dyn Fn(usize) -> InterfaceLimits, &descriptors] {
+        assert_eq!(
+            least(select, &|l| inspect(l).is_ok()),
+            least(select, &|l| admit(l).is_ok())
+        );
+    }
+    // The child interface retains the most descriptors, so inspection needs
+    // exactly what reading the child needs: it reads the child under the
+    // selection rather than the default.
+    let child = context(InterfaceLimits::DEFAULT).unwrap();
+    let needed = least(&descriptors, &|l| inspect(l).is_ok());
+    assert!(least(&descriptors, &|l| context(l).is_ok()) < needed);
+    assert_eq!(
+        least(&descriptors, &|l| {
+            crate::entry::BoundInterface::read_with(&child, l).is_ok()
+        }),
+        needed
+    );
+
+    let work = least(&limits, &|l| inspect(l).is_ok());
+    let refusal = |result: Result<()>| result.map_err(|e| (e.phase, e.code().to_owned()));
+    let limit = |phase| Err((phase, "entry-interface-limit".to_owned()));
+    for selected in [limits(work - 1), limits(64)] {
+        assert_eq!(
+            refusal(inspect(selected).map(drop)),
+            limit(EntryPhase::Interface)
+        );
+        assert_eq!(
+            refusal(admit(selected).map(drop)),
+            limit(EntryPhase::Interface)
+        );
+    }
+    assert_eq!(
+        refusal(context(limits(64)).map(drop)),
+        limit(EntryPhase::Interface)
+    );
+    // A raised selection up to the maximum is honored; above it every path
+    // refuses as policy, without clamping.
+    let maximum = limits(InterfaceLimits::MAXIMUM.work);
+    assert_eq!(inspect(maximum).unwrap().len(), 1);
+    context(maximum).unwrap();
+    admit(maximum).unwrap();
+    let above = limits(InterfaceLimits::MAXIMUM.work + 1);
+    assert_eq!(
+        refusal(inspect(above).map(drop)),
+        limit(EntryPhase::Admission)
+    );
+    assert_eq!(
+        refusal(context(above).map(drop)),
+        limit(EntryPhase::Admission)
+    );
+    assert_eq!(
+        refusal(admit(above).map(drop)),
+        limit(EntryPhase::Admission)
+    );
+}

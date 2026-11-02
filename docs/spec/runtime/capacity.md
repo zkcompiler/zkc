@@ -476,8 +476,8 @@ maximum refuses without clamping:
 | Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
 | External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::external_work`, `ProofOptions::external_work` |
 | Service draws | Draws | 1,000,000 | 1,000,000 | Operation (one managed service or transcript) | Request service budgets and `transcript_budget` |
-| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 1,000,000 | Operation | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::work`) |
-| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::descriptor_bytes`) |
+| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 2^24 | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::work`); the same selection in `FunctionInterface::deployment_interfaces_with` and `run_deployment_package_with` |
+| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::descriptor_bytes`); the same selection in `FunctionInterface::deployment_interfaces_with` and `run_deployment_package_with` |
 | Dispatches | Joint and Function dispatch occurrences, including repeated loop steps | 32,768 | 32,768 | Invocation | `HostLimits::steps` |
 | Function service draws | Draws reserved for children before their roots are issued | 64,000,000 | 32,768,000,000 | Invocation | `FunctionOptions::service_draws` |
 | Journal events | Retained Function call receipts, including failed calls | 256 | 4,096 | Invocation | `FunctionOptions::journal_events` |
@@ -496,6 +496,23 @@ The Function service-draw maximum is one maximal service allowance for every
 dispatch a Function can make. The joint Host's message, cumulative wire and
 report storage allowances are listed with
 [joint dispatch](joint.md#joint-dispatch-and-handoff).
+
+A Host may raise the interface work allowance above its default, up to its
+maximum; the descriptor allowance can only be lowered. A Function Host's
+structure validation checks each schema at every signature, block argument and
+child deployment that restates it, so a large roster's generated Host needs
+more work there than its own interface or any child interface. The generated
+Host of a trivial 1,024-role Protocol needs 1,303,066 units with one port and
+1,688,737 with one port placed at every role, beyond the default; the maximum
+is about ten times the larger. Static inspection reads the Host structure and
+every child interface under the selection that admits them:
+`FunctionInterface::deployment_interfaces_with` and
+`run_deployment_package_with` take it, while `deployment_interfaces` and
+`run_deployment_package` take the defaults. The CLI selects no interface
+allowance and takes the defaults. A selection above the maximum refuses at
+`Admission` with `entry-interface-limit` before any interface is read; an
+interface that exhausts a selected allowance refuses at `Interface` with the
+same code.
 
 The material allowances (`MaterialLimits`) bound what an application supplies
 beside its named values: a proof call's public statement, a memory request's

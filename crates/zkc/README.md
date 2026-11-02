@@ -128,7 +128,9 @@ material does not retain invocation authority or reservations.
 
 An automatic protocol Entry or a closed generic selector such as `Echo<index>`
 also generates function bindings. For functions with child deployments, inspect
-`FunctionInterface::deployment_interfaces(&package)`, supply a `SetupAuthority`
+`FunctionInterface::deployment_interfaces(&package)`, or
+`deployment_interfaces_with(&package, limits)` under the interface allowances
+the Host selects in `FunctionOptions::limits.interface`, supply a `SetupAuthority`
 for each exact child ID at admission, and supply matching `InvocationBinding`
 values in `InvocationContext` when preparing. Ordinary source arguments cannot
 replace setup authority or child policies. `RunContext` defaults to a fresh

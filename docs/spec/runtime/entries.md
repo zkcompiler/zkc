@@ -34,21 +34,27 @@ the joint runtime ceiling, and role-bearing records with at most 16 role
 parameters. Native leaf parsing retains its own structural bounds.
 
 The Host policy record selects the interface admission allowances
-(`InterfaceLimits` in `HostLimits::interface` and `ProofOptions::interface`;
+(`InterfaceLimits` in `HostLimits::interface`, `ProofOptions::interface` and
+`FunctionOptions::limits.interface`;
 [Host allowances](capacity.md#host-allowances)). Validation has a cumulative
-work allowance, by default 1,000,000. Supply reconstruction and public
+work allowance, by default 1,000,000 and at most 2^24. Supply reconstruction and public
 selection indexing share another, independent of native storage width. Portable
 schema summaries, the CPU's reconstructed native descriptor cache and each
 reconstructed input/output supply plan each charge their retained descriptors
 and residual requirements, including zero-storage schemas, against the
-descriptor allowance, by default 16 MiB. A Host may lower either allowance; a
+descriptor allowance, by default 16 MiB. A Host may lower either allowance and
+raise the work allowance up to its maximum; a
 selection above the installed maximum refuses at `Admission` with
 `entry-interface-limit`, and an interface that exceeds a selected allowance
 refuses at `Interface` with the same code. Reconstruction computes each port's
 placed roles once and walks the port only at those roles; per-node facts are
 computed once per schema node, and roles are indexed by name. Its work therefore
 grows with ports times placed roles times schema size, so a full 1,024-role
-roster fits the default allowance. A caller may also lower the compiler's phase
+roster fits the default allowance. A Function Host's structure validation checks
+each schema at every signature, block argument and child deployment that
+restates it, so the generated Host of a full roster needs a raised work
+selection, which static inspection takes as admission does
+(`FunctionInterface::deployment_interfaces_with`). A caller may also lower the compiler's phase
 limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
 identities permit descriptor reuse without introducing cyclic schema references.

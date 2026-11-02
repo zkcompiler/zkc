@@ -28,7 +28,11 @@ pub(super) fn execute(
         output_setups,
     )?;
     bindings.protect(&mut destinations)?;
-    let deployments = crate::entry::FunctionInterface::deployment_interfaces(&package)?;
+    // Children are read under the same interface selection that admits them.
+    let deployments = crate::entry::FunctionInterface::deployment_interfaces_with(
+        &package,
+        options.run.interface,
+    )?;
     let requirements = json!(
         deployments
             .iter()

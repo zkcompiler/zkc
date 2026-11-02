@@ -1680,6 +1680,20 @@ fn interface_admission_allowances_are_host_policy() {
         ] {
             assert_eq!(admit(lowered), limit(EntryPhase::Interface));
         }
+        // The work allowance can be raised above its default, up to the
+        // installed maximum.
+        for work in [
+            InterfaceLimits::DEFAULT.work + 1,
+            InterfaceLimits::MAXIMUM.work,
+        ] {
+            assert_eq!(
+                admit(InterfaceLimits {
+                    work,
+                    ..InterfaceLimits::DEFAULT
+                }),
+                Ok(())
+            );
+        }
         // A selection above the installed maximum is refused as policy.
         for raised in [
             InterfaceLimits {

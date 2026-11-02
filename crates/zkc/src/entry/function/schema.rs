@@ -37,7 +37,16 @@ impl FunctionInterface {
     pub fn deployment_interfaces(
         package: &crate::entry::Package,
     ) -> super::Result<Vec<DeploymentInterface>> {
-        super::admission::interfaces(package)
+        Self::deployment_interfaces_with(package, crate::entry::InterfaceLimits::DEFAULT)
+    }
+    /// Static context requirements under the Host's selected interface
+    /// admission allowances, the selection its `FunctionEntry` admits with
+    /// (`FunctionOptions::limits.interface`).
+    pub fn deployment_interfaces_with(
+        package: &crate::entry::Package,
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<Vec<DeploymentInterface>> {
+        super::admission::interfaces(package, limits)
     }
     /// The authenticated package of one static Run deployment, for producing
     /// its common-input context. This imports no setup authority.
@@ -45,7 +54,16 @@ impl FunctionInterface {
         package: &crate::entry::Package,
         id: &str,
     ) -> super::Result<crate::entry::Package> {
-        super::admission::run_deployment(package, id)
+        Self::run_deployment_package_with(package, id, crate::entry::InterfaceLimits::DEFAULT)
+    }
+    /// One Run deployment's package under the Host's selected interface
+    /// admission allowances, the selection that admits the child.
+    pub fn run_deployment_package_with(
+        package: &crate::entry::Package,
+        id: &str,
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<crate::entry::Package> {
+        super::admission::run_deployment(package, id, limits)
     }
     pub fn read(package: &crate::entry::Package) -> super::Result<Self> {
         Self::read_with(package, crate::entry::InterfaceLimits::DEFAULT)

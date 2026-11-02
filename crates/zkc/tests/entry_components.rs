@@ -8,9 +8,11 @@ use std::{
 };
 use zkc::entry::{
     self, BindingPolicy, EntryError, EntryPhase, FunctionEntry, FunctionInterface, FunctionOptions,
-    FunctionRequest, InvocationBinding, InvocationContext, Package, ProofContext, ProofEntry,
-    ProofOperation, ProofOptions, ProofRequest, RoleInputs, RunContext, RunEntry, RunRequest,
+    FunctionRequest, InterfaceLimits, InvocationBinding, InvocationContext, Package, ProofContext,
+    ProofEntry, ProofOperation, ProofOptions, ProofRequest, RoleInputs, RunContext, RunEntry,
+    RunRequest,
 };
+use zkc::run::HostLimits;
 
 /// The explicit pairing gate uses the compiler build selected by
 /// `ZKC_COMPILER_BIN`; a relative path is resolved from the checkout root.
@@ -322,41 +324,91 @@ fn fresh_cpp_supply_is_judged_per_operation_at_admission() {
 /// The protocol roster ceiling is reachable from source: a trivial 1,024-role
 /// Protocol and its generated Entry families close within the default compiler
 /// work ceiling, and the SDK admits its run package with every participant.
+/// Its generated Host wrapper is admitted under a raised interface work
+/// selection, with one port and with one port placed at every role.
 #[test]
 #[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
 fn fresh_cpp_full_protocol_roster_is_admitted() {
     let roles: Vec<String> = (0..1024).map(|role| format!("R{role}")).collect();
-    let source = Path::new(env!("CARGO_TARGET_TMPDIR")).join("full_protocol_roster.zkc");
-    std::fs::write(
-        &source,
-        format!(
-            "module m;protocol Many roles({})(x:index@R0)->(r:bool@R1){{let r@R1=true;return(r=r);}}",
-            roles.join(",")
-        ),
-    )
-    .unwrap();
-    let compile = |command: &str, selection: &str| {
-        let output = Command::new(compiler())
-            .arg(command)
-            .arg("--source-format=zkc")
-            .arg(format!("--module=m={}", source.display()))
-            .arg(selection)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        output.stdout
-    };
-    // Selecting the Protocol publishes its generated per-role families.
-    compile("language-interface", "--entry=m::Many");
-    let output = compile("language-package", "--subject=m::Many");
-    let run = RunEntry::admit(capture(&output), Default::default(), Default::default()).unwrap();
-    let groups = run.interface().input_groups();
-    assert_eq!(groups.len(), 1024);
-    assert!(groups.iter().map(|group| group.name()).eq(roles.iter()));
+    let roster = roles.join(",");
+    for (name, port) in [
+        ("one_port", "R0".to_owned()),
+        ("shared_port", format!("({roster})")),
+    ] {
+        let source =
+            Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("full_protocol_roster_{name}.zkc"));
+        std::fs::write(
+            &source,
+            format!(
+                "module m;protocol Many roles({roster})(x:index@{port})->(r:bool@R1){{let r@R1=true;return(r=r);}}"
+            ),
+        )
+        .unwrap();
+        let compile = |command: &str, selection: &str| {
+            let output = Command::new(compiler())
+                .arg(command)
+                .arg("--source-format=zkc")
+                .arg(format!("--module=m={}", source.display()))
+                .arg(selection)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output.stdout
+        };
+        // Selecting the Protocol publishes its generated per-role families.
+        compile("language-interface", "--entry=m::Many");
+        let output = compile("language-package", "--subject=m::Many");
+        let run =
+            RunEntry::admit(capture(&output), Default::default(), Default::default()).unwrap();
+        let groups = run.interface().input_groups();
+        assert_eq!(groups.len(), 1024);
+        assert!(groups.iter().map(|group| group.name()).eq(roles.iter()));
+
+        // The generated Host wrapper restates every role-indexed family at each
+        // signature, block argument and child deployment. Validating that
+        // structure needs more than the default interface work allowance, so
+        // the Host raises its selection; an eighth of the installed maximum
+        // suffices for either port shape.
+        let wrapper = capture(&compile("language-package", "--entry=m::Many"));
+        let limits = |work| InterfaceLimits {
+            work,
+            ..InterfaceLimits::DEFAULT
+        };
+        let raised = limits(InterfaceLimits::MAXIMUM.work / 8);
+        let host = admit_function_with(wrapper.clone(), raised).unwrap();
+        let template = host.interface().input_group().template().to_string();
+        assert!(template.contains("\"R0\"") && template.contains("\"R1023\""));
+
+        // The default allowance refuses the same wrapper, both in static
+        // inspection and in admission, with the interface allowance's code.
+        let children = FunctionInterface::deployment_interfaces_with(&wrapper, raised).unwrap();
+        let admit = |interface| {
+            FunctionEntry::admit(
+                wrapper.clone(),
+                function_options(interface),
+                authority(&children),
+            )
+        };
+        for refused in [
+            FunctionInterface::deployment_interfaces(&wrapper).map(drop),
+            admit(InterfaceLimits::DEFAULT).map(drop),
+        ] {
+            assert_refused(refused, EntryPhase::Interface, "entry-interface-limit");
+        }
+        // A selection above the installed maximum refuses as policy before
+        // any interface is read, rather than being clamped to the maximum.
+        let above = limits(InterfaceLimits::MAXIMUM.work + 1);
+        for refused in [
+            FunctionInterface::deployment_interfaces_with(&wrapper, above).map(drop),
+            admit(above).map(drop),
+        ] {
+            assert_refused(refused, EntryPhase::Admission, "entry-interface-limit");
+        }
+    }
 }
 
 fn admit_proof(
@@ -396,20 +448,36 @@ fn assert_completed_call(report: &entry::FunctionReport, operation: &str) {
 }
 
 fn admit_function(package: Package) -> FunctionEntry {
-    let children = FunctionInterface::deployment_interfaces(&package).unwrap();
-    let authority = children
-        .iter()
-        .map(|child| (child.id().to_owned(), Default::default()))
-        .collect();
-    FunctionEntry::admit(
-        package,
-        FunctionOptions {
-            binding: BindingPolicy::AllowAuthored,
+    admit_function_with(package, InterfaceLimits::DEFAULT).unwrap()
+}
+
+/// Inspect and admit under one interface selection, as a Host does.
+fn admit_function_with(
+    package: Package,
+    interface: InterfaceLimits,
+) -> Result<FunctionEntry, EntryError> {
+    let children = FunctionInterface::deployment_interfaces_with(&package, interface)?;
+    FunctionEntry::admit(package, function_options(interface), authority(&children))
+}
+
+fn function_options(interface: InterfaceLimits) -> FunctionOptions {
+    FunctionOptions {
+        limits: HostLimits {
+            interface,
             ..Default::default()
         },
-        authority,
-    )
-    .unwrap()
+        binding: BindingPolicy::AllowAuthored,
+        ..Default::default()
+    }
+}
+
+fn authority(
+    children: &[entry::DeploymentInterface],
+) -> std::collections::BTreeMap<String, entry::SetupAuthority> {
+    children
+        .iter()
+        .map(|child| (child.id().to_owned(), Default::default()))
+        .collect()
 }
 
 fn invoke_function(host: &FunctionEntry, arguments: Json) -> entry::FunctionReport {
