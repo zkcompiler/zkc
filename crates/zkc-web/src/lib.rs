@@ -504,6 +504,37 @@ mod tests {
         other[0] = json!("zkc.material-limits/0");
         assert_eq!(admit(&other), "interface-limits-format");
     }
+    /// The browser transport forwards both records as opaque JSON; the session
+    /// is their only reader and refuses a malformed one with the SDK's code.
+    #[test]
+    fn malformed_capacity_and_interface_records_refuse_with_the_sdk_codes() {
+        let admit = |options: Json| {
+            ProofSession::new(&[], &[0; 32], &options.to_string(), &[])
+                .err()
+                .unwrap()
+        };
+        let mut capacity = Capacity::default().record();
+        capacity[0] = json!("zkc.material-limits/0");
+        assert_eq!(
+            admit(json!({ "capacity": capacity })),
+            "native-capacity-format"
+        );
+        assert_eq!(
+            admit(json!({ "capacity": ["zkc.native-capacity/0", "1"] })),
+            "artifact-record"
+        );
+        let mut limits = InterfaceLimits::DEFAULT.record();
+        limits[1] = json!(1);
+        assert_eq!(admit(json!({ "interface_limits": limits })), "tree-kind");
+        assert_eq!(
+            admit(json!({ "interface_limits": ["zkc.interface-limits/0", "1"] })),
+            "artifact-record"
+        );
+        assert_eq!(
+            admit(json!({ "interface_limits": { "tag": "zkc.interface-limits/0" } })),
+            "artifact-json-kind"
+        );
+    }
     /// Admission reads the package's interface under the selected
     /// allowances: a lowered selection refuses what the default admits, and a
     /// raised one admits what the default refuses.

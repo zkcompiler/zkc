@@ -110,10 +110,11 @@ The fields are the interface work and descriptor allowances. A lowered
 selection refuses an interface that exhausts it, and a raised work selection,
 up to its maximum, admits an interface the default refuses. A selection above
 a maximum refuses with that allowance's code, `entry-interface-work-limit` or
-`entry-interface-descriptor-bytes-limit`. The client and Worker refuse a
-malformed record, including another tag, with `web-options-interface-limits`;
-the generated `ProofSession` refuses another tag with
-`interface-limits-format`. Without the option the session takes the defaults.
+`entry-interface-descriptor-bytes-limit`. The client and Worker forward the
+`capacity` and `interface_limits` records as opaque JSON data; the generated
+`ProofSession` is their only reader and refuses a malformed record with the
+SDK's code, such as `interface-limits-format` for another tag. Without the
+option the session takes the defaults.
 
 `ready` resolves after module initialization; callers may queue admission before
 it resolves. Every method returns a promise except the immediate lifecycle
@@ -124,11 +125,10 @@ resolves with its diagnostics. Require `report.success` and, for verification,
 `report.accepted === true`. Keep `reportText` for lossless diagnostic integers:
 parsed JSON numbers may exceed JavaScript's exact range. Pass `budget` and
 `external_work` as `bigint`, canonical decimal strings or safe integer numbers.
-The client preserves the complete unsigned 64-bit range. Byte lengths,
-`package_bytes` and capacity size fields must fit wasm32; interface allowance
-fields need not, because Rust refuses any selection above a maximum with that
-allowance's code. SDK capacity semantics and hard ceilings remain independently
-enforced by Rust.
+The client preserves the complete unsigned 64-bit range. Byte lengths and
+`package_bytes` must fit wasm32. The SDK enforces capacity and interface
+allowance semantics and hard ceilings, including capacity size fields that do
+not fit wasm32.
 
 Inputs are borrowed by default: the client snapshots the supplied byte views at
 enqueue, leaving caller buffers reusable. For an explicit consuming transfer:
