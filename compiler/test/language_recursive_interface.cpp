@@ -18,6 +18,8 @@
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include <filesystem>
+#include <functional>
+#include <set>
 
 using namespace llvm;
 using namespace zkc;
@@ -29,6 +31,59 @@ using K = Type::Kind;
 using F = InterfaceComponentFacet;
 std::string digest(StringRef value) {
   return toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
+}
+/// Fixture paths whose authority row is null, as for a generated
+/// declaration; every other fixture nominal is authored, at one fixed revision
+/// per path.
+std::set<std::string> generatedFixturePaths;
+std::optional<std::string> fixtureAuthority(StringRef path) {
+  if (generatedFixturePaths.count(path.str()))
+    return std::nullopt;
+  return digest("fixture revision " + path.str());
+}
+/// The revision-bound identity of a fixture type: SHA-256 of its canonical
+/// key over the fixture authorities.
+std::string canonicalKey(const Type &type) {
+  return take(canonicalTypeKey(
+      type, [](StringRef path) -> Expected<std::optional<std::string>> {
+        return fixtureAuthority(path);
+      }));
+}
+std::string identityOf(const Type &type) { return digest(canonicalKey(type)); }
+/// Give a hand-built layout the identity a checked project would.
+void identify(Layout &layout) {
+  layout.identity = {canonicalKey(layout.type), identityOf(layout.type)};
+}
+/// The carrier's authority table: one sorted row per nominal path that any
+/// retained term names.
+json::Array authorityRows(const json::Array &records) {
+  std::set<std::string> paths;
+  std::function<void(const json::Value &)> walk = [&](const json::Value &v) {
+    auto *items = v.getAsArray();
+    if (!items)
+      return;
+    if (items->size() == 4 && (*items)[0] == json::Value("nominal")) {
+      auto kind = (*items)[1].getAsString();
+      if (kind && *kind != "associated")
+        paths.insert((*items)[2].getAsString()->str());
+    }
+    for (const auto &item : *items)
+      walk(item);
+  };
+  for (const auto &record : records)
+    walk(record);
+  json::Array rows;
+  for (const auto &path : paths) {
+    auto authority = fixtureAuthority(path);
+    rows.push_back(json::Array{path, authority ? json::Value(*authority)
+                                               : json::Value(nullptr)});
+  }
+  return rows;
+}
+/// A retained declaration carrier with no protocol rows.
+json::Value carrier(json::Array records) {
+  auto authorities = authorityRows(records);
+  return json::Array{std::move(records), json::Array{}, std::move(authorities)};
 }
 /// A placement tree with the telescope's role names instead of ordinals.
 json::Value placementNames(const ValuePlacement &value,
@@ -65,21 +120,20 @@ json::Value retainedRow(const Type &type, StringRef resource, bool sealed,
   if (placed)
     for (const auto &role : placed->roles)
       roles.push_back(role);
-  return json::Array{
-      take(encodeStaticTerm(type)),
-      resource,
-      sealed,
-      std::move(members),
-      std::move(roles),
-      resource == "ordinary"
-          ? json::Value(nullptr)
-          : json::Value("zkl_resource_" + digest(typeIdentity(type)))};
+  return json::Array{take(encodeStaticTerm(type)),
+                     resource,
+                     sealed,
+                     std::move(members),
+                     std::move(roles),
+                     resource == "ordinary"
+                         ? json::Value(nullptr)
+                         : json::Value("zkl_resource_" + identityOf(type))};
 }
 std::shared_ptr<InterfaceSchema> schema(Type type,
                                         std::vector<std::string> leaves = {}) {
   auto result = std::make_shared<InterfaceSchema>();
   result->kind = type.kind;
-  result->identity = digest(typeIdentity(type));
+  result->identity = identityOf(type);
   result->type = spelling(type);
   result->permissions = {true, true};
   result->constructible = !isLogicalValue(type);
@@ -211,18 +265,16 @@ Fixture fixture() {
   // This fixture does not claim that a checked source constructed these
   // records.
   auto term = [](const Type &type) { return take(encodeStaticTerm(type)); };
-  json::Value declarations = json::Array{
-      json::Array{
-          retainedRow(innerType, "ordinary", false,
-                      json::Array{json::Array{"left", term(handleType)},
-                                  json::Array{"right", term(handleType)}},
-                      inner.get()),
-          retainedRow(outerType, "ordinary", false,
-                      json::Array{json::Array{"sources", term(innerType)},
-                                  json::Array{"flag", term(Type(K::Boolean))},
-                                  json::Array{"empty", term(arrayType)}},
-                      outer.get())},
-      json::Array{}, json::Array{}};
+  json::Value declarations = carrier(json::Array{
+      retainedRow(innerType, "ordinary", false,
+                  json::Array{json::Array{"left", term(handleType)},
+                              json::Array{"right", term(handleType)}},
+                  inner.get()),
+      retainedRow(outerType, "ordinary", false,
+                  json::Array{json::Array{"sources", term(innerType)},
+                              json::Array{"flag", term(Type(K::Boolean))},
+                              json::Array{"empty", term(arrayType)}},
+                  outer.get())});
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -258,8 +310,8 @@ Fixture fixture() {
 Fixture custodyFixture() {
   Type wrapperType(K::LogicalRecord, "sample::Ticket");
   Type tokenType(K::Record, "sample::Token");
-  auto token = schema(tokenType, {"resource_unit:zkl_resource_" +
-                                  digest(typeIdentity(tokenType))});
+  auto token = schema(tokenType,
+                      {"resource_unit:zkl_resource_" + identityOf(tokenType)});
   token->custody = 1;
   token->permissions = {false, true};
   token->constructible = false;
@@ -292,14 +344,12 @@ Fixture custodyFixture() {
   context.loadAllAvailableDialects();
   auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
   require(bool(module), "custody fixture does not parse");
-  json::Value declarations = json::Array{
-      json::Array{
-          retainedRow(wrapperType, "affine", false,
-                      json::Array{json::Array{
-                          "token", take(encodeStaticTerm(tokenType))}},
-                      wrapper.get()),
-          retainedRow(tokenType, "affine", false, json::Array{}, token.get())},
-      json::Array{}, json::Array{}};
+  json::Value declarations = carrier(json::Array{
+      retainedRow(
+          wrapperType, "affine", false,
+          json::Array{json::Array{"token", take(encodeStaticTerm(tokenType))}},
+          wrapper.get()),
+      retainedRow(tokenType, "affine", false, json::Array{}, token.get())});
   module->getBody()->front().setAttr(
       "source_declarations",
       take(importDeclarationData(&context, declarations)));
@@ -345,22 +395,26 @@ void schemaHashParity() {
   Type rootType(K::Record, "sample::GeneratedInputs");
   auto scalar = std::make_shared<Layout>();
   scalar->type = Type(K::Boolean);
+  identify(*scalar);
   scalar->permissions = {true, true};
   scalar->constructible = true;
   scalar->leaves = {"bool"};
   auto element = std::make_shared<Layout>();
   element->type = elementType;
+  identify(*element);
   element->permissions = {true, true};
   element->constructible = false;
   element->leaves = {"bool"};
   element->fields = {{"hidden", scalar, 0, {}, false, {}}};
   auto array = std::make_shared<Layout>();
   array->type = arrayType;
+  identify(*array);
   array->permissions = {true, true};
   array->constructible = false;
   array->element = element;
   Layout root;
   root.type = rootType;
+  identify(root);
   root.generatedIdentity = digest("captured generated family");
   root.permissions = {true, true};
   root.constructible = false;
@@ -412,11 +466,13 @@ void logicalSchemaHashParity() {
   Type rootType(K::LogicalRecord, "sample::DistributedWrapper");
   auto scalar = std::make_shared<Layout>();
   scalar->type = Type(K::Boolean);
+  identify(*scalar);
   scalar->permissions = {true, true};
   scalar->constructible = true;
   scalar->leaves = {"bool"};
   auto child = std::make_shared<Layout>();
   child->type = childType;
+  identify(*child);
   child->roleParameters = {"A", "B"};
   child->permissions = {true, true};
   child->leaves = {"bool", "bool"};
@@ -424,10 +480,12 @@ void logicalSchemaHashParity() {
                    {"second", scalar, 1, {}, false, DataPlacement{{1}}}};
   auto array = std::make_shared<Layout>();
   array->type = arrayType;
+  identify(*array);
   array->element = child;
   array->permissions = {true, true};
   Layout root;
   root.type = rootType;
+  identify(root);
   root.roleParameters = {"P", "V"};
   root.permissions = {true, true};
   root.leaves = {"bool", "bool"};
@@ -555,14 +613,12 @@ module {"protocol.module"() ({
   kind.arguments = {Type(K::Index), four};
   Type handleType(K::Oracle);
   handleType.arguments = {kind};
-  json::Value declarations = json::Array{
-      json::Array{retainedRow(
-          stateType, "ordinary", false,
-          json::Array{
-              json::Array{"handle", take(encodeStaticTerm(handleType))},
-              json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}},
-          state.get())},
-      json::Array{}, json::Array{}};
+  json::Value declarations = carrier(json::Array{retainedRow(
+      stateType, "ordinary", false,
+      json::Array{
+          json::Array{"handle", take(encodeStaticTerm(handleType))},
+          json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}},
+      state.get())});
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -811,15 +867,13 @@ module {"protocol.module"() ({
  input_roles=[["role00000001"],["role00000000"],["role00000000"]],output_roles=[["role00000001"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->()}
 )mlir";
-  json::Value declarations = json::Array{
-      json::Array{retainedRow(
-          stateType, "ordinary", false,
-          json::Array{
-              json::Array{"verifier", take(encodeStaticTerm(verifierType))},
-              json::Array{"prover", take(encodeStaticTerm(proverType))},
-              json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}},
-          state.get())},
-      json::Array{}, json::Array{}};
+  json::Value declarations = carrier(json::Array{retainedRow(
+      stateType, "ordinary", false,
+      json::Array{
+          json::Array{"verifier", take(encodeStaticTerm(verifierType))},
+          json::Array{"prover", take(encodeStaticTerm(proverType))},
+          json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}},
+      state.get())});
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -1196,7 +1250,8 @@ struct State roles(P,V):
   });
   // The reader joins each retained row to its schema: the row's telescope,
   // member formulas and custody slot must agree with the schema it names.
-  auto rereadCarrier = [](Fixture f, function_ref<void(json::Array &)> edit) {
+  auto rereadCarrier = [](Fixture f, function_ref<void(json::Array &)> edit,
+                          unsigned table = 0) {
     mlir::DialectRegistry registry;
     registerDialects(registry);
     mlir::MLIRContext context(registry);
@@ -1206,7 +1261,7 @@ struct State roles(P,V):
     auto &unit = module->getBody()->front();
     auto declarations =
         take(exportDeclarationData(unit.getAttr("source_declarations")));
-    edit(*(*declarations.getAsArray())[0].getAsArray());
+    edit(*(*declarations.getAsArray())[table].getAsArray());
     unit.setAttr("source_declarations",
                  take(importDeclarationData(&context, declarations)));
     f.native.clear();
@@ -1221,6 +1276,34 @@ struct State roles(P,V):
   auto row = [](json::Array &records, unsigned index) -> json::Array & {
     return *records[index].getAsArray();
   };
+  cases.run("retained authority rows bind identities and generation", [&] {
+    // A changed revision changes every identity hashed over it, so the
+    // record no longer names its schema.
+    auto changed = rereadCarrier(
+        custodyFixture(),
+        [&](json::Array &rows) {
+          (*rows[0].getAsArray())[1] = digest("another revision");
+        },
+        2);
+    require(StringRef(changed).contains("source.interface"),
+            "unexpected refusal: " + changed);
+    auto unsorted = rereadCarrier(
+        custodyFixture(),
+        [&](json::Array &rows) { std::swap(rows[0], rows[1]); }, 2);
+    require(StringRef(unsorted).contains("retained authority rows differ"),
+            "unexpected refusal: " + unsorted);
+    // Only a generated declaration has a null authority, even when every
+    // identity is consistently hashed over that null row.
+    generatedFixturePaths = {"sample::Token"};
+    auto nulled = custodyFixture();
+    generatedFixturePaths.clear();
+    auto read = readInterface(nulled.native, printJson(nulled.document));
+    require(!read, "a null authority on an authored schema was admitted");
+    auto message = toString(read.takeError());
+    require(StringRef(message).contains(
+                "retained authority differs from schema generation"),
+            "unexpected refusal: " + message);
+  });
   cases.run(
       "retained telescopes, formulas and slots agree with the schema", [&] {
         auto edited = [](const std::string &message, StringRef reason) {

@@ -68,6 +68,10 @@ class Reader {
     bool setup = false, verifierKey = false, proverKey = false;
   };
   std::map<std::string, NativeLeaf> nativeLeaves;
+  /// The retained carrier's authority rows: path to revision, none for a
+  /// generated declaration. Revision-bound identities are recomputed over
+  /// exactly these rows.
+  std::map<std::string, std::optional<std::string>> retainedAuthorities;
   bool fail(StringRef message) {
     if (!failure)
       failure = error("source.interface", message);
@@ -2029,14 +2033,30 @@ class Reader {
       }
     return result;
   }
+  /// SHA-256 of the canonical key over the carrier's authority rows. A path
+  /// without a row has no identity.
+  std::optional<std::string> canonicalIdentity(const Type &type) {
+    auto key = canonicalTypeKey(
+        type, [&](StringRef path) -> Expected<std::optional<std::string>> {
+          auto found = retainedAuthorities.find(path.str());
+          if (found == retainedAuthorities.end())
+            return error("source.interface",
+                         "retained nominal path has no authority row");
+          return found->second;
+        });
+    if (!key) {
+      consumeError(key.takeError());
+      return fail("retained nominal path has no authority row"), std::nullopt;
+    }
+    if (!charge(key->size()))
+      return {};
+    return toHex(SHA256::hash(arrayRefFromStringRef(*key)), true);
+  }
   std::optional<std::string> retainedIdentity(const json::Value &value) {
     auto type = retainedType(value);
     if (!type)
       return {};
-    auto identity = typeIdentity(*type);
-    if (!charge(identity.size()))
-      return {};
-    return toHex(SHA256::hash(arrayRefFromStringRef(identity)), true);
+    return canonicalIdentity(*type);
   }
   bool retainedSchemaType(const Type &type, const InterfaceSchema &schema,
                           unsigned depth = 0) {
@@ -2045,12 +2065,10 @@ class Reader {
         failure = error("source.limit", "retained schema type depth exceeded");
       return false;
     }
-    auto identity = typeIdentity(type);
-    if (!charge(identity.size() + 1))
+    auto identity = canonicalIdentity(type);
+    if (!identity || !charge(1))
       return false;
-    if (schema.kind != type.kind ||
-        toHex(SHA256::hash(arrayRefFromStringRef(identity)), true) !=
-            schema.identity ||
+    if (schema.kind != type.kind || *identity != schema.identity ||
         schema.type != spelling(type))
       return fail("retained field static type differs from complete schema");
     if (type.kind == Type::Kind::Array) {
@@ -2082,8 +2100,27 @@ class Reader {
       return fail("logical record declaration carrier is absent");
     }
     auto *tables = declarations->getAsArray();
-    if (!tables || tables->size() != 3 || !(*tables)[0].getAsArray())
+    if (!tables || tables->size() != 3 || !(*tables)[0].getAsArray() ||
+        !(*tables)[2].getAsArray())
       return fail("logical declaration tables differ");
+    // Authority rows are sorted by path; a revision is SHA-256 hex and null
+    // marks a generated declaration.
+    retainedAuthorities.clear();
+    for (const auto &value : *(*tables)[2].getAsArray()) {
+      auto *row = value.getAsArray();
+      auto path =
+          row && row->size() == 2 ? (*row)[0].getAsString() : std::nullopt;
+      auto revision = path ? (*row)[1].getAsString() : std::nullopt;
+      if (!path || !charge(path->size() + 66) ||
+          ((*row)[1].kind() != json::Value::Null &&
+           (!revision || !hash(*revision))) ||
+          (!retainedAuthorities.empty() &&
+           retainedAuthorities.rbegin()->first >= *path))
+        return fail("retained authority rows differ");
+      retainedAuthorities.emplace(
+          path->str(), revision ? std::optional<std::string>(revision->str())
+                                : std::nullopt);
+    }
     std::map<std::string, const json::Array *> records;
     // Nominal rows retain [type, resource, sealed, members, roles, slot].
     // Product members are [name, type, placement]; variant members are
@@ -2185,6 +2222,12 @@ class Reader {
             if (!type || type->kind != schema.kind ||
                 spelling(*type) != schema.type)
               return fail("retained nominal source identity differs");
+            // Only a generated declaration has no authored or installed
+            // authority.
+            auto authority = retainedAuthorities.find(type->domain);
+            if (authority == retainedAuthorities.end() ||
+                authority->second.has_value() != schema.generated.empty())
+              return fail("retained authority differs from schema generation");
             if (record[2].getAsBoolean() != schema.sealed)
               return fail("retained sealing policy differs from schema");
             // The row's telescope is the schema's role telescope, and its

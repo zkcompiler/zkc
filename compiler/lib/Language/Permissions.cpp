@@ -102,6 +102,7 @@ Semantics::productFields(const Type &type, Span span, unsigned depth,
   // Placement checks walk each field of a wide record once per placed role;
   // reuse the substituted declaration instead of expanding it again.
   computed.reset();
+  // A lookup key suffices: this view's memo never outlives its declarations.
   auto key = typeIdentity(type);
   if (!charge(key.size(), span))
     return nullptr;
@@ -168,6 +169,7 @@ bool Semantics::oracleField(const TypeField &field) {
 bool Semantics::logicalRecord(const Type &type, Span span) {
   if (!chargeType(type, span))
     return false;
+  // A lookup key suffices: this view's memo never outlives its declarations.
   auto key = typeIdentity(type);
   if (checkedLogicalRecords.count(key))
     return true;

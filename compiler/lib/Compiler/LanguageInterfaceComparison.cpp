@@ -107,12 +107,10 @@ class Comparison {
     }
     if (!compared.emplace(&source, &actual).second)
       return true;
-    auto identity = typeIdentity(source.type);
-    if (!charge(identity.size()))
+    if (!charge(source.identity.key.size()))
       return false;
     bool logical = detail::logicalLayout(source);
-    if (!text(toHex(SHA256::hash(arrayRefFromStringRef(identity)), true),
-              actual.identity) ||
+    if (!text(source.identity.digest, actual.identity) ||
         !text(spelling(source.type), actual.type) ||
         source.type.kind != actual.kind ||
         source.generatedIdentity != actual.generated ||

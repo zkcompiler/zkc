@@ -7,7 +7,9 @@
 #include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/SHA256.h"
 using namespace llvm;
 namespace zkc::language::entry_detail {
 namespace {
@@ -131,6 +133,10 @@ class Reader {
     Layout layout;
     layout.type = Type(type.isSignlessInteger(1) ? Type::Kind::Boolean
                                                  : Type::Kind::Index);
+    // A scalar has no nominal node, so its canonical key is its lookup key.
+    layout.identity.key = typeIdentity(layout.type);
+    layout.identity.digest =
+        toHex(SHA256::hash(arrayRefFromStringRef(layout.identity.key)), true);
     layout.permissions = {true, true};
     layout.constructible = true;
     layout.leaves = {type.isSignlessInteger(1) ? "bool" : "index"};

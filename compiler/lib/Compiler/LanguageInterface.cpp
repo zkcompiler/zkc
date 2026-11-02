@@ -337,6 +337,8 @@ Expected<ValuePlacement> detail::externalPlacement(const Layout &layout,
     return p;
   }
   const auto &product = std::get<ProductPlacement>(p.value);
+  // The internal instance is the snapshot lookup key; the external instance
+  // is the schema's published revision-bound identity.
   auto identity = typeIdentity(layout.type);
   if (identity.size() + product.fields.size() + product.arguments.size() >
       remaining)
@@ -348,10 +350,7 @@ Expected<ValuePlacement> detail::externalPlacement(const Layout &layout,
           (layout.type.kind == Type::Kind::Array ? 1 : layout.fields.size()))
     return error("source.interface",
                  "source placement instance or fields differ");
-  ProductPlacement result{
-      toHex(SHA256::hash(arrayRefFromStringRef(identity)), true),
-      product.arguments,
-      {}};
+  ProductPlacement result{layout.identity.digest, product.arguments, {}};
   for (unsigned i = 0; i < product.fields.size(); ++i) {
     const auto &child = layout.type.kind == Type::Kind::Array
                             ? layout.element

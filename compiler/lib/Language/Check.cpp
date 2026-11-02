@@ -114,6 +114,7 @@ Error Checker::run() {
   };
   // The vector is the checked contract; this index only accelerates collection.
   // Repeated sites need one condition, with one representative origin chain.
+  // Keyed by lookup key; local to this one checking pass.
   std::map<unsigned, std::map<std::pair<Boundary, std::string>, unsigned>>
       admissionIndices;
   types.recordAdmission = [this,

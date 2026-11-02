@@ -272,6 +272,41 @@ case. Every revision is computed once, after all checking, and charged to
 checked work. Closed Entries read the checked project's revisions and never
 extend them.
 
+### Nominal authority
+
+A closed type has two keys. Its *lookup key* frames the kind, symbolic flag,
+path, sort, dimension and ordered arguments. It binds no revision, so it
+decides equality only inside one checked snapshot: instance keys and symbols,
+deployment identifiers, internal product placements, construction providers
+and memo tables use it, and a memo keyed by it lives no longer than that
+snapshot. Its *canonical key* frames exactly as the lookup key and adds one
+frame after the path of every record, logical record, variant and module node
+that names a declaration: that path's source authority, or an empty frame for
+a generated declaration. A symbolic module parameter names no declaration and
+adds no frame; an associated type is bound through its module argument. The
+*nominal identity* of a closed type is the lowercase SHA-256 hex of its
+canonical key.
+
+The nominal identity is the published schema identity and names the custody
+slot, `zkl_resource_` followed by the identity. The canonical key is the
+preimage of variant and packed-product nominal descriptors, and the full schema
+digest frames the nominal identity of the schema and of every product formula
+node. Equal paths from different source bytes therefore differ, a changed
+private dependency or a comment edit in the defining closure changes the
+identity, and an unrelated client declaration leaves a library's identities
+unchanged. Lookup keys, instance symbols and companion keys do not depend on
+any revision.
+
+Checking lays out some carriers before authorities are final. Those layouts
+take a provisional frame of 64 `-` bytes for each authored or installed node
+and an empty frame for each generated node, so every byte-limit decision during
+checking equals the final one; only a layout over the finished checked project
+publishes an identity, and no provisional frame reaches an output. Each
+authored or installed node adds 67 bytes to the canonical key and each
+generated node 2. A variant or packed-product preimage longer than 131,072
+bytes refuses with `source.limit` where it is first laid out; the native
+descriptor's own byte bounds still apply to its hex encoding.
+
 ## Definition checking and Entry closure
 
 Analysis first collects fixed declaration headers and body token ranges, resolves
@@ -398,9 +433,10 @@ enum Choice<T: Type> { Some(T), None() }
 
 Runtime types comprise `bool`, `index`, unit `()`, tuples, fixed arrays, installed
 fields/groups, native data containers, nominal records/variants and associated module types. `(T,)`
-is a singleton tuple; `(T)` is grouping. A record's identity includes its declaration
-and every static argument, including phantom arguments. Variant identity includes
-its declaration and static arguments, not only its payload layout. Aliases expand
+is a singleton tuple; `(T)` is grouping. A record's identity includes its declaration,
+the source authority of its defining unit, and every static argument, including
+phantom arguments ([nominal authority](#nominal-authority)). Variant identity includes
+its declaration, its authority and static arguments, not only its payload layout. Aliases expand
 without creating a nominal identity. Variant payloads are positional; a variant
 has one to 64 distinct alternatives. The source language lays out every runtime
 variant through its [portable descriptor](../ir/variants.md#portable-representation),
@@ -696,7 +732,8 @@ Its carrier is `sequence<Pack(T)>`. `Pack(T)` retains an existing single native
 carrier for scalars, containers and source variants. A source record, tuple,
 array, unit or concrete associated product uses a canonical single-alternative
 native variant. Its nominal identity is `["zkc.language.pack",
-encodeNominalIdentity(typeIdentity(T))]`, and its sole alternative has native
+encodeNominalIdentity(K)]`, where `K` is the
+[canonical key](#nominal-authority) of `T`, and its sole alternative has native
 label `case00000000` and the ordinary flattened leaves in declaration/index order.
 Empty products have an empty payload. Full source identity distinguishes nominal
 records and their static instantiations; normalized export aliases agree.

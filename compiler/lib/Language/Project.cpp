@@ -759,6 +759,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
       if (auto e = work.charge(1, op.span))
         return e;
       if (const auto *call = std::get_if<HostInvocation>(&op.action)) {
+        // Counted by lookup key; local to this one traversal.
         std::string key = std::to_string(unsigned(call->kind)) + ":" +
                           std::to_string(call->target.index);
         for (const auto &argument : call->arguments)

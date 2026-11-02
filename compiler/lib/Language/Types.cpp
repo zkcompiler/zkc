@@ -164,23 +164,50 @@ std::string spelling(const Type &type) {
   }
   return result;
 }
-std::string typeIdentity(const Type &type) {
-  std::string result;
+namespace {
+Error typeKey(const Type &type, const NominalAuthority *authority,
+              std::string &result) {
   raw_string_ostream out(result);
   auto frame = [&](StringRef value) { out << value.size() << ':' << value; };
   out << static_cast<unsigned>(type.kind) << ':';
   if (type.kind == Type::Kind::Natural) {
     frame(type.dimension.spelling());
-    return result;
+    return Error::success();
   }
   out << type.symbolic << ':';
   frame(type.domain);
+  if (authority && !type.symbolic &&
+      (type.kind == Type::Kind::Record ||
+       type.kind == Type::Kind::LogicalRecord ||
+       type.kind == Type::Kind::Variant || type.kind == Type::Kind::Module)) {
+    auto revision = (*authority)(type.domain);
+    if (!revision)
+      return revision.takeError();
+    frame(*revision ? StringRef(**revision) : StringRef());
+  }
   if (type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset)
     frame(type.sort);
   frame(type.dimension.spelling());
   out << type.arguments.size() << ':';
-  for (const auto &argument : type.arguments)
-    frame(typeIdentity(argument));
+  for (const auto &argument : type.arguments) {
+    std::string nested;
+    if (auto error = typeKey(argument, authority, nested))
+      return error;
+    frame(nested);
+  }
+  return Error::success();
+}
+} // namespace
+std::string typeIdentity(const Type &type) {
+  std::string result;
+  cantFail(typeKey(type, nullptr, result));
+  return result;
+}
+Expected<std::string> canonicalTypeKey(const Type &type,
+                                       NominalAuthority authority) {
+  std::string result;
+  if (auto error = typeKey(type, &authority, result))
+    return std::move(error);
   return result;
 }
 Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,

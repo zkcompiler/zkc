@@ -51,14 +51,16 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
   if (*complexity > remaining)
     return error("source.limit", "schema identity type budget exceeded");
   remaining -= *complexity;
-  auto key = typeIdentity(layout.type);
-  if (key.size() > remaining)
+  // The revision-bound identity, never the lookup key, enters the schema.
+  if (layout.identity.digest.empty())
+    return error("source.layout", "schema has no nominal identity");
+  if (layout.identity.key.size() > remaining)
     return error("source.limit", "schema type identity limit exceeded");
-  remaining -= key.size();
+  remaining -= layout.identity.key.size();
   FramedHash hash(remaining);
   hash.frame("zkc.language.schema/0");
   hash.frame(typeKindName(layout.type.kind));
-  hash.frame(toHex(SHA256::hash(arrayRefFromStringRef(key)), true));
+  hash.frame(layout.identity.digest);
   if (!layout.generatedIdentity.empty())
     hash.frame(layout.generatedIdentity);
   hash.frame(std::to_string(layout.custodyCount));
@@ -102,8 +104,11 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
       return error("source.formal", "relation schema contains a formal leaf");
     hash.frame(*leaf.data());
   }
-  std::function<Error(const ValuePlacement &, unsigned)> formula =
-      [&](const ValuePlacement &p, unsigned level) -> Error {
+  // A product formula node frames its schema's published identity, the same
+  // value an external placement carries, so readers hash what they read.
+  std::function<Error(const Layout &, const ValuePlacement &, unsigned)>
+      formula = [&](const Layout &schema, const ValuePlacement &p,
+                    unsigned level) -> Error {
     if (!remaining || level > Limits{}.typeDepth)
       return error("source.limit", "schema formula identity budget exceeded");
     --remaining;
@@ -124,15 +129,23 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
       if (product.instance.size() > remaining)
         return error("source.limit", "schema formula instance budget exceeded");
       remaining -= product.instance.size();
-      hash.frame(
-          toHex(SHA256::hash(arrayRefFromStringRef(product.instance)), true));
+      const bool array = schema.type.kind == Type::Kind::Array;
+      if (product.instance != typeIdentity(schema.type) ||
+          product.fields.size() != (array ? 1 : schema.fields.size()))
+        return error("source.layout", "schema formula instance differs");
+      hash.frame(schema.identity.digest);
       hash.frame(std::to_string(product.arguments.size()));
       for (unsigned role : product.arguments)
         hash.frame(std::to_string(role));
       hash.frame(std::to_string(product.fields.size()));
-      for (const auto &field : product.fields)
-        if (auto e = formula(field, level + 1))
+      for (unsigned i = 0; i < product.fields.size(); ++i) {
+        const auto *child =
+            array ? schema.element.get() : schema.fields[i].layout.get();
+        if (!child)
+          return error("source.layout", "schema formula lacks its child");
+        if (auto e = formula(*child, product.fields[i], level + 1))
           return e;
+      }
     }
     return Error::success();
   };
@@ -147,7 +160,7 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
       hash.frame(field.isPublic ? "1" : "0");
       hash.frame(field.placement ? "placement" : "");
       if (field.placement)
-        if (auto e = formula(*field.placement, 0))
+        if (auto e = formula(*field.layout, *field.placement, 0))
           return e;
       if (field.maximumRows) {
         hash.frame("maximum_rows");
@@ -179,20 +192,26 @@ struct Layouts::State {
   detail::Work work;
   const std::vector<Declaration> &declarations;
   ArrayRef<Asset> assets;
+  detail::AuthorityView authorities;
   std::optional<detail::Semantics> types;
   State(const std::vector<Declaration> &declarations, const Limits &limits,
-        ArrayRef<Asset> assets = {})
+        detail::AuthorityView authorities, ArrayRef<Asset> assets = {})
       : workLimits(limits), work{workLimits}, declarations(declarations),
-        assets(assets) {}
+        assets(assets), authorities(authorities) {}
 };
+// An observer of a checked project or closed Entry lays out with the
+// project's final authorities, computed once after all checking.
 Layouts::Layouts(const CheckedProject &project, const Limits &limits)
     : definitions(project.declarations()), limits(limits),
-      state(std::make_unique<State>(project.storage->declarations, this->limits,
-                                    project.assets())) {}
+      state(std::make_unique<State>(
+          project.storage->declarations, this->limits,
+          detail::AuthorityView{project.storage.get()}, project.assets())) {}
 Layouts::Layouts(const ClosedEntry &entry, const Limits &limits)
     : definitions(entry.declarations()), limits(limits),
-      state(std::make_unique<State>(entry.storage->declarations, this->limits,
-                                    entry.assets())) {}
+      state(std::make_unique<State>(
+          entry.storage->declarations, this->limits,
+          detail::AuthorityView{entry.project().storage.get()},
+          entry.assets())) {}
 Layouts::Layouts(const ClosedEntry &entry, const Limits &limits,
                  uint64_t &remaining)
     : Layouts(entry, limits) {
@@ -201,9 +220,9 @@ Layouts::Layouts(const ClosedEntry &entry, const Limits &limits,
 }
 Layouts::~Layouts() = default;
 Layouts::Layouts(const std::vector<Declaration> &declarations,
-                 const Limits &limits)
+                 const Limits &limits, detail::AuthorityView authorities)
     : definitions(declarations), limits(limits),
-      state(std::make_unique<State>(declarations, this->limits)) {}
+      state(std::make_unique<State>(declarations, this->limits, authorities)) {}
 Expected<ValuePlacement> Layouts::placement(const Type &type,
                                             const ValuePlacement &seed,
                                             unsigned participants) {
@@ -223,7 +242,7 @@ detail::Semantics::nativeLayout(const Type &type) {
     return builtinLayout(type);
   auto limits = work.limits;
   limits.work = work.remaining();
-  Layouts layouts(declarations, limits);
+  Layouts layouts(declarations, limits, authorities);
   auto result = layouts.packed(type);
   auto charged = work.charge(layouts.state->work.used);
   if (charged) {
@@ -242,7 +261,7 @@ detail::Semantics::nativePortLayout(const Port &port) {
     return e;
   auto limits = work.limits;
   limits.work = work.remaining();
-  Layouts layouts(declarations, limits);
+  Layouts layouts(declarations, limits, authorities);
   auto result = layouts.protocolPort(port);
   auto charged = work.charge(layouts.state->work.used);
   if (charged) {
@@ -309,7 +328,7 @@ Expected<PackedLayout> Layouts::pack(std::shared_ptr<const Layout> flat) {
       return carrier.takeError();
     return PackedLayout{std::move(flat), std::move(*carrier), false, {}};
   }
-  auto identity = typeIdentity(flat->type);
+  const auto &identity = flat->identity.key;
   if (identity.size() > protocol::VariantSpellingBytes / 2)
     return error("source.limit", "packed nominal encoding exceeds byte limit");
   if (auto e = charge(2 * identity.size() + flat->leaves.size()))
@@ -355,6 +374,7 @@ Error Layouts::initializeTypes() {
   if (auto e = detail::chargeSemanticIndex(state->declarations, state->work))
     return e;
   state->types.emplace(state->declarations, state->assets, state->work);
+  state->types->authorities = state->authorities;
   return Error::success();
 }
 Error Layouts::charge(uint64_t n) { return state->work.charge(n); }
@@ -860,6 +880,22 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     return error("source.layout", "associated type requires one module");
   auto result = std::make_shared<Layout>();
   result->type = type;
+  // The revision-bound identity is formed once, when custody or a nominal
+  // preimage first needs it, and otherwise after the layout is complete.
+  auto identify = [&]() -> Error {
+    if (!result->identity.digest.empty())
+      return Error::success();
+    auto canonical = canonicalTypeKey(type, [&](StringRef path) {
+      return state->types->nominalAuthority(path);
+    });
+    if (!canonical)
+      return canonical.takeError();
+    if (auto e = charge(canonical->size()))
+      return e;
+    result->identity.digest = detail::digest(*canonical);
+    result->identity.key = std::move(*canonical);
+    return Error::success();
+  };
   result->permissions = {true, true};
   result->constructible = true;
   auto *decl = state->types->typeDeclaration(type);
@@ -901,9 +937,14 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       bindings.emplace(owner->parameters[i].atom, (*args)[i]);
     result->custody = decl->resource.has_value();
     if (result->custody) {
-      auto slot = "zkl_resource_" + detail::digest(key);
-      auto [entry, inserted] = slots.emplace(slot, key);
-      if (!inserted && entry->second != key)
+      // The slot names the revision-bound identity: equal lookup keys from
+      // different source revisions never share custody.
+      if (auto e = identify())
+        return e;
+      const auto &canonical = result->identity.key;
+      auto slot = "zkl_resource_" + result->identity.digest;
+      auto [entry, inserted] = slots.emplace(slot, canonical);
+      if (!inserted && entry->second != canonical)
         return error("source.symbol",
                      "distinct source types have the same custody identity");
       if (slot.size() > limits.symbolBytes)
@@ -1089,13 +1130,16 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->fields.back().isPublic = false;
   } else if (type.kind == K::Variant && decl) {
     // The native carrier remains ASCII; its nominal preimage is exact UTF-8.
-    if (key.size() > protocol::VariantSpellingBytes / 2)
+    if (auto e = identify())
+      return e;
+    const auto &canonical = result->identity.key;
+    if (canonical.size() > protocol::VariantSpellingBytes / 2)
       return error("source.limit",
                    "variant nominal encoding exceeds byte limit");
-    if (auto e = charge(2 * key.size()))
+    if (auto e = charge(2 * canonical.size()))
       return e;
     protocol::VariantDescriptor descriptor{
-        json::Array{"zkc.language", encodeNominalIdentity(key)}, {}};
+        json::Array{"zkc.language", encodeNominalIdentity(canonical)}, {}};
     for (unsigned i = 0; i < decl->alternatives.size(); ++i) {
       const auto &alt = decl->alternatives[i];
       LayoutAlternative logical{alt.name, {}};
@@ -1177,6 +1221,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   // ingress.
   if (isLogicalValue(type))
     result->constructible = false;
+  if (auto e = identify())
+    return e;
   std::shared_ptr<const Layout> immutable = result;
   cache.emplace(std::move(key), immutable);
   return immutable;

@@ -12,9 +12,6 @@
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
-std::string digest(StringRef bytes) {
-  return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-}
 Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
                      StringRef original, StringRef toolchain,
                      const Limits &limits) {
@@ -114,12 +111,11 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
     }
     auto found = identities.find(&layout);
     if (found == identities.end()) {
-      auto key = typeIdentity(layout.type);
-      if (!charge(key.size())) {
+      if (!charge(layout.identity.key.size())) {
         out.value(nullptr);
         return;
       }
-      found = identities.emplace(&layout, digest(key)).first;
+      found = identities.emplace(&layout, layout.identity.digest).first;
     }
     out.object([&] {
       out.attribute("kind", typeKindName(layout.type.kind));

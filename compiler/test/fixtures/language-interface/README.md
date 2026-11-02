@@ -26,6 +26,9 @@ schema, the native printing or these constructions does.
 
 `schema-digests.json` records full root schema hashes for cross-reader checks;
 `custody-records.*` retains a two-role wrapper prefix and a nested ordinary prefix.
+Each retained declaration carrier lists one authority row per nominal path at a
+fixed fixture revision, and every schema identity and custody slot hashes that
+nominal's canonical key over those rows, as a checked source would.
 
 The authored `.zkc` fixture separately exercises checked source, a reordered
 callee roster and source/native correspondence. Its test is
@@ -86,8 +89,8 @@ These hashes cover the exact retained bytes from the generator above.
 
 | File | SHA-256 |
 |---|---|
-| `recursive-records.mlir` | `4c2780e9e5f46f74e3747c821aeeb46a5c026193e516324487bd4886389dce01` |
-| `recursive-records.json` | `48e026555553df1536459e67070e4824670d0e5a6976d4d25491640d401b15f0` |
-| `custody-records.mlir` | `ba92e5aaafcdca2cb352b9222ad0443a5d623747b4638973961a27e94555c881` |
-| `custody-records.json` | `a234ecad6f45348fc5960dfcf73e35735af0e9afdc6e8f32659e88bb4d5c1ee2` |
-| `schema-digests.json` | `2ff489fd74b2f3625b59511adf10c309de51fb03529f534f6615c92988ad6e16` |
+| `recursive-records.mlir` | `8738677e7602e5ed32684b4b35acfabca64e47cb1a5ea79eff0741c60543bd68` |
+| `recursive-records.json` | `d65c136d5ac6163f574a29dc24606aa3b1548b034b3225b9b1d5f70cb21ca388` |
+| `custody-records.mlir` | `cc6e2a54136ba37bd08c766bf5d9c543849a0606f55dcc991d363575b0572e60` |
+| `custody-records.json` | `8f5134ec2a30307cc8a565d9b315905a9af9f99d1d3b92c59bac03eefaf530d3` |
+| `schema-digests.json` | `e728c5bbc84eaf3ed9c60b430e42f53122520558d7554a3a1c35be00bb348633` |

@@ -992,6 +992,7 @@ class Requirements {
         return refuse(span,
                       "shared components lack congruent total derivations");
     if (first.loop) {
+      // Compared by lookup keys; local to this one requirement.
       std::string path;
       for (const auto &step : first.loop->path) {
         detail::frame(path, step.payload ? "payload" : "field");

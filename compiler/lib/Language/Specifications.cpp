@@ -40,6 +40,7 @@ bool Checker::pendingClaimRelations() {
           if (port.roles.size() != 1)
             return types.fail("component-claim-role",
                               "pending claims require one holder", port.span);
+          // Keyed by lookup key; local to this one declaration's check.
           auto [previous, added] = meanings.emplace(
               typeIdentity(port.type),
               Meaning{application->relation, application->arguments,

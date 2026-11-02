@@ -68,7 +68,7 @@ json::Value encodeEntrySchema(const Layout &layout) {
   }
   return json::Object{
       {"kind", typeKindName(layout.type.kind)},
-      {"identity", hash(typeIdentity(layout.type))},
+      {"identity", layout.identity.digest},
       {"type", spelling(layout.type)},
       {"generated", layout.generatedIdentity.empty()
                         ? json::Value(nullptr)

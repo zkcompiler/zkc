@@ -37,8 +37,8 @@ These hashes cover the exact retained bytes from the generator above.
 | `boolean.mlir` | `a6370d7c8fbca788da8a9e6f3ebf3744c88c431102ca7d490de064d7ada34e42` |
 | `boolean.json` | `7d400afc468d36aa98d21cea7c03ebe20b4d5d99145eb0628098fd7c05f49277` |
 | `custody-fields.zkc` | `7f860eafedb25f0ce4970c0381bac5dde69f306d439b6b5fe54f27609df13483` |
-| `custody-fields.mlir` | `8ef8adb9f7f7706852f0c6662f6103c6aae2c953b7ab36a981bb1d807973413e` |
-| `custody-fields.json` | `2fb1b346c3135b03d9febd6f46560799b2dc72bb398c05a0309b7348f38fd765` |
+| `custody-fields.mlir` | `78345bff6d36e18b6bc2832d43d3ffc5a33fdbf9e4858189b16b2c5c9ec57a0d` |
+| `custody-fields.json` | `ff20b4d08052a70414390db8ac4c56144f60a43179932256c392d9640bd68700` |
 
 The SDK interface suite consumes the emitted custody fixture directly and checks
 that the ordinary field maps to native input 2, after the two custody components.

@@ -24,6 +24,14 @@ public:
   Work &work;
   NaturalArithmetic naturals;
   std::optional<Diagnostic> diagnostic;
+  /// Nominal authorities of every layout this view observes, inherited by each
+  /// nested Layouts. Checking and closure views keep the provisional view:
+  /// their carriers classify only, and emission recomputes every published one.
+  /// A Layouts over a finalized checked project sets the final view.
+  AuthorityView authorities;
+  /// The authority frame of one declaration path under `authorities`.
+  llvm::Expected<std::optional<std::string>>
+  nominalAuthority(llvm::StringRef path) const;
   /// Source checking can collect unproved open preconditions. Closed readers
   /// and conformance checks have no inference scope. Permission queries never
   /// infer resource authority.
@@ -200,6 +208,8 @@ private:
   std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
+  /// Keyed by lookup key. Like every memo below, it is confined to this view,
+  /// which one checker or one Layouts owns over one immutable declaration set.
   std::set<std::string> checkedLogicalRecords;
   /// One generated Entry family's ordinary roster, walked once. Fields keep
   /// selection order; each role lists its own fields in that order. Roles are

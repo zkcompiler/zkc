@@ -112,8 +112,22 @@ bool isLogicalValue(const PlacedType &);
 llvm::StringRef oracleConstructor(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
-/// Injective internal key; source-facing spelling is deliberately separate.
+/// Injective lookup key within one checked snapshot; source-facing spelling is
+/// deliberately separate. It binds no source revision, so it never decides
+/// nominal equality across captures.
 std::string typeIdentity(const Type &);
+/// The defining authority of a nominal declaration path: 64 lowercase hex
+/// for an authored or installed declaration, none for a generated one.
+using NominalAuthority =
+    llvm::function_ref<llvm::Expected<std::optional<std::string>>(
+        llvm::StringRef path)>;
+/// Revision-bound nominal key. It frames exactly as typeIdentity and adds one
+/// frame after the domain of every Record, LogicalRecord, Variant and Module
+/// node that names a declaration: that path's defining authority, or an empty
+/// frame for a generated declaration. A symbolic module parameter names no
+/// declaration and adds no frame. Associated nodes are bound through their
+/// module argument.
+llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority);
 /// Bound traversal and expanded identity material before copying a term.
 llvm::Expected<uint64_t> typeComplexity(const Type &, uint64_t nodes,
                                         uint64_t depth);

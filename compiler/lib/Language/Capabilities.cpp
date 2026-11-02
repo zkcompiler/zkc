@@ -100,6 +100,7 @@ bool Semantics::entails(const Declaration *context, const CapabilityBound &goal,
     }
     return true;
   }
+  // Interned by lookup key; local to this one entailment query.
   std::map<std::string, unsigned> indices;
   std::vector<requirements::Term> terms;
   std::vector<requirements::Predicate> assumptions;

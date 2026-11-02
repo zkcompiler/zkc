@@ -989,6 +989,16 @@ The independent Lean structured reader refuses rosters above 16 roles
 declaration telescopes accept up to `record.roles` names, and their
 participant lists and placements up to `protocol.roles`; product arguments keep
 telescope order.
+Published schema identities, custody slots and nominal descriptor preimages
+bind each nominal's defining source authority
+([nominal authority](spec/language/definitions.md#nominal-authority)): equal
+paths from different library bytes, a changed private dependency and a comment
+edit in the defining closure change them, while an unrelated client declaration
+does not, and lookup keys, instance symbols and companion keys stay unchanged
+([transport controls](../compiler/test/language_record_source_transport.cpp)).
+Across every maintained package and compiler fixture the largest canonical key
+is 398 bytes, at most 202 bytes longer than its lookup key, against the
+131,072-byte preimage bound.
 Generated Entry families walk their roster once per phase and each port only at
 its placed roles, so a trivial 1,024-role Protocol closes and publishes its
 interface within the 32,000,000-unit phase work ceiling, with work growing

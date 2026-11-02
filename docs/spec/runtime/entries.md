@@ -328,7 +328,14 @@ The native SDK represents inaccessible ordinary subtrees as
 output reconstruction; public schema metadata cannot mint an owner. Whole-value
 input transport compares the complete admitted schema, including nominal
 identity, permissions, sealing, field visibility and zero-storage element
-metadata. Mismatch returns `entry-value-schema`. Hand-built transparent values
+metadata. Mismatch returns `entry-value-schema`. The encapsulation unit is the
+defining source authority that the
+[nominal identity](../language/definitions.md#nominal-authority) binds: an
+opaque value of a library type keeps passing between programs whose clients
+differ, while a homonymous or structurally equal type from other source bytes,
+a changed private dependency of the library, or a comment edit in its defining
+closure has a different identity and refuses. The SDK compares published
+identities and computes no revision; transport authorizes no construction. Hand-built transparent values
 retain external constructor checks. Native reports remove raw returned values
 after named reconstruction, including on failure, so they do not provide a
 second projection route.

@@ -19,6 +19,18 @@ Semantics::Semantics(const std::vector<Declaration> &declarations,
       indexParameter(decl.parameters[i], decl.id, i);
   }
 }
+Expected<std::optional<std::string>>
+Semantics::nominalAuthority(StringRef path) const {
+  if (authorities.final)
+    return definingAuthority(*authorities.final, path);
+  auto found = qualified.find(path.str());
+  if (found == qualified.end())
+    return failure("source.authority",
+                   "no checked declaration has path " + path);
+  if (declarations[found->second.index].generated)
+    return std::optional<std::string>{};
+  return std::optional<std::string>(std::string(64, '-'));
+}
 void Semantics::indexDeclaration(const Declaration &decl) {
   if (!decl.origin && !decl.anonymous)
     qualified.emplace(decl.qualifiedName, decl.id);

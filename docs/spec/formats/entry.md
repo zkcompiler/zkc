@@ -452,19 +452,27 @@ including the zero-length element template. Records have identifier fields; asso
 have exactly one `value` field. Only variants have alternatives. An empty product
 cannot hide data leaves. Custody belongs only to nominal kinds, including distributed records.
 
-`identity` is the lowercase SHA-256 digest of the closed canonical source type
-key used by nominal custody and variant descriptors. It includes static arguments,
-including phantom and zero-length array element types. The key encodes the type
-kind tag, symbolic flag, length-framed domain and normalized dimension, then the
+`identity` is the lowercase SHA-256 digest of the closed
+[canonical source type key](../language/definitions.md#nominal-authority) used by
+nominal custody and variant descriptors. It includes static arguments,
+including phantom and zero-length array element types, and the defining source
+authority of every nominal they name. The key encodes the type kind tag,
+symbolic flag, length-framed domain, then, for a record, logical record, variant
+or module node that names a declaration, the framed authority (64 lowercase
+hex, or empty for a generated declaration), then the normalized dimension, the
 argument count and recursively framed argument keys; a natural uses its kind tag
 and framed normalized dimension alone. Tags follow `Type::Kind`; framing is an
 unsigned decimal byte length followed by `:` and the exact bytes. The toolchain
-identity fixes this encoding. Native custody carries the exact digest; a variant
+identity fixes this encoding. Equal paths from different source revisions have
+different identities. Native custody carries the exact digest; a variant
 carries `["zkc.language", lowercase_hex(full_preimage)]`. The preimage is the
 complete original UTF-8 type key. Both C++ and Rust readers require even-length
 lowercase hex, check encoded expansion and decoded byte bounds before allocation,
 validate UTF-8 and hash the decoded bytes. A chosen label or a digest in place of
-the preimage refuses. The reader checks both anchors. Other source type identities
+the preimage refuses. The reader checks both anchors. Over a retained
+declaration carrier, the C++ reader recomputes each retained nominal's identity
+from its term and the carrier's authority rows, and requires a null authority
+exactly for a schema with a non-null `generated`. Other source type identities
 remain source assertions until checked against the retained project. `type` is display text, never equality authority.
 An empty array's element meaning is bound by its identity and source agreement;
 no selectable element field is invented for it. Copy, Drop and

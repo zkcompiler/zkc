@@ -268,6 +268,7 @@ Semantics::entryFamilyFields(const Declaration &generated,
                 member == "Witness";
   auto bindings = substitution(generated, arguments);
   // One family walk serves every member: the roster depends only on these.
+  // The memo belongs to this view, so lookup keys of the substitution suffice.
   std::string key;
   frame(key, std::to_string(target.index));
   frame(key, std::to_string(walked.index));

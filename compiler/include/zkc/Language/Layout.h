@@ -8,7 +8,17 @@
 namespace zkc::language {
 namespace detail {
 class Semantics;
-}
+struct CheckedStorage;
+/// The nominal authorities a semantic view lays out with. Checking builds
+/// carriers before authorities are final, so its view is provisional: each
+/// authored or installed frame is 64 '-' bytes and a generated frame is empty,
+/// so every byte-limit decision equals the final one. Only a view over a
+/// finalized checked project publishes identities.
+struct AuthorityView {
+  /// The finalized checked project; null for the provisional view.
+  const CheckedStorage *final = nullptr;
+};
+} // namespace detail
 struct PolynomialLayout {
   std::string field;
   uint64_t arity;
@@ -74,11 +84,21 @@ struct LayoutAlternative {
   std::string name;
   std::vector<LayoutField> fields;
 };
+/// Revision-bound nominal identity of one closed type.
+struct LayoutIdentity {
+  /// canonicalTypeKey over the owning view's authorities.
+  std::string key;
+  /// Lowercase SHA-256 hex of key: the published schema identity.
+  std::string digest;
+};
 /// A logical source value has one deterministic, bounded SSA layout.
 /// Products flatten in declaration order; variants retain their closed tag.
 /// Custody, when present, is a prefix and is never a user data field.
 struct Layout {
   Type type;
+  /// Set once when the layout is built. Custody slots, nominal preimages and
+  /// published schemas use it; in-snapshot lookups keep typeIdentity.
+  LayoutIdentity identity;
   /// Generated nominal identity binds exact source, family and installation.
   std::string generatedIdentity;
   Permissions permissions;
@@ -102,7 +122,9 @@ struct Layout {
   std::shared_ptr<const Layout> oracleData;
 };
 /// Full logical schemas, including nominal identity and member names, are
-/// significant across captures. Cache only within an immutable layout phase.
+/// significant across captures. Cache only within an immutable layout phase:
+/// the memo is keyed by layout address, so it never outlives the Layouts that
+/// owns those layouts.
 class LayoutIdentities {
   uint64_t &remaining;
   std::map<const Layout *, std::string> cache;
@@ -207,11 +229,16 @@ public:
 
 private:
   friend class detail::Semantics;
-  Layouts(const std::vector<Declaration> &, const Limits &);
+  /// A nested observer of a semantic view inherits that view's authorities.
+  Layouts(const std::vector<Declaration> &, const Limits &,
+          detail::AuthorityView);
   llvm::ArrayRef<Declaration> definitions;
   Limits limits;
   struct State;
   std::unique_ptr<State> state;
+  /// Both memos are confined to this observer, which borrows one immutable
+  /// checked project or closed Entry. `cache` is keyed by the lookup key;
+  /// `slots` maps each custody slot to the canonical key it digests.
   std::map<std::string, std::string> slots;
   std::map<std::string, std::shared_ptr<const Layout>> cache;
   llvm::Error charge(uint64_t);

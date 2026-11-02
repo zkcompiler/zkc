@@ -76,12 +76,10 @@ class Emitter {
         return nested.takeError();
       element = *nested;
     }
-    auto identity = toHex(
-        SHA256::hash(arrayRefFromStringRef(typeIdentity(source.type))), true);
     auto native = data::LayoutAttr::getChecked(
         location, context,
         builder.getStringAttr(typeKindName(source.type.kind)),
-        builder.getStringAttr(identity),
+        builder.getStringAttr(source.identity.digest),
         builder.getStringAttr(spelling(source.type)), source.custody,
         source.sealed, source.constructible, source.permissions.copy,
         source.permissions.drop, ArrayRef<data::LayoutFieldAttr>(*members),

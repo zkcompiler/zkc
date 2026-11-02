@@ -334,9 +334,10 @@ sourceCommonRequirements(const ClosedEntry &entry, const Declaration &decl,
     auto layout = layouts.get(r.type);
     if (!layout)
       return layout.takeError();
+    // Group by the published schema identity, the value the reader groups by.
     auto [identity, inserted] = identities.try_emplace(layout->get());
     if (inserted)
-      identity->second = typeIdentity((*layout)->type);
+      identity->second = (*layout)->identity.digest;
     if (!charge(remaining, identity->second.size() + 1))
       return capacity();
     edges.push_back({r.components, identity->second, observation(r)});
