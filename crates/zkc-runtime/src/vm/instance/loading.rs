@@ -107,13 +107,9 @@ impl<B: Backend> Instance<B> {
                 }
                 InitializationRoot::Local(_) => None,
             };
-            let live = shared
-                .as_ref()
-                .map(|ledger| ledger.reserve_live(value_budget.live_bytes))
-                .transpose()?;
-            Ok((operations, participant, live))
+            Ok((operations, participant))
         })();
-        let (operations, participant, live_reservation) = match start {
+        let (operations, participant) = match start {
             Ok(loaded) => loaded,
             Err(error) => {
                 return Err(LoadError {
@@ -131,8 +127,13 @@ impl<B: Backend> Instance<B> {
             backend: BackendOwner(Some(backend)),
             operations,
             calls,
+            pooled_fuel: shared.as_ref().is_some_and(ExecutionLedger::pools_fuel),
+            // The runner's live retention grows in the root as it retains
+            // values and shrinks as it releases them.
+            live_reservation: shared.as_ref().map(ExecutionLedger::hold),
             shared,
-            live_reservation,
+            deferred_release: 0,
+            deferring: 0,
             arguments: Vec::new(),
             usage: Usage::default(),
             ledger: Ledger::default(),
@@ -201,6 +202,10 @@ impl<B: Backend> Instance<B> {
             work_budget,
             shared,
         )?;
+        // A refused entry releases the inputs' live bytes in the root only
+        // after the consumed inputs, possibly their payloads' final owners,
+        // are dropped.
+        instance.defer_release();
         let start = (|| {
             let participant = instance
                 .participant
@@ -217,17 +222,21 @@ impl<B: Backend> Instance<B> {
             Ok::<_, RuntimeError>((frame, scope, participant.body.clone()))
         })();
         match start {
-            Ok((frame, scope, body)) => Ok(Loaded {
-                instance,
-                frame,
-                scope,
-                body,
-                inputs,
-            }),
+            Ok((frame, scope, body)) => {
+                instance.finish_deferred_release();
+                Ok(Loaded {
+                    instance,
+                    frame,
+                    scope,
+                    body,
+                    inputs,
+                })
+            }
             Err(error) => {
                 // The consumed inputs may be their payloads' final owners.
                 // Backend recovery releases the live allowance only afterward.
                 drop(inputs);
+                instance.finish_deferred_release();
                 Err(LoadError {
                     error,
                     usage: instance.usage(),
@@ -258,6 +267,7 @@ impl<B: Backend> Instance<B> {
             shared,
         )?;
         let code = admitted.function(function);
+        instance.defer_release();
         let start = (|| {
             let frame = instance.function_entry_frame(
                 Origin {
@@ -272,15 +282,19 @@ impl<B: Backend> Instance<B> {
             Ok((frame, scope))
         })();
         match start {
-            Ok((frame, scope)) => Ok(LoadedLocal {
-                instance,
-                frame,
-                scope,
-                code,
-                inputs,
-            }),
+            Ok((frame, scope)) => {
+                instance.finish_deferred_release();
+                Ok(LoadedLocal {
+                    instance,
+                    frame,
+                    scope,
+                    code,
+                    inputs,
+                })
+            }
             Err(error) => {
                 drop(inputs);
+                instance.finish_deferred_release();
                 Err(LoadError {
                     error,
                     usage: instance.usage(),

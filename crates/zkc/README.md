@@ -337,8 +337,9 @@ source `Accepted` or `Rejected` variant when verification completes, so a
 reuses the Runtime joint Host. Calls supply typed backend values in that ABI's
 order and the selected `RunLimits`. Their live, fresh and logical byte budgets
 bound the invocation root, which charges wire transport, received payload
-decoding and report storage, and each participant's own ledger beside it. Each
-executing backend is linked independently before frame entry.
+decoding, report storage and every participant's bytes as it executes; each
+participant keeps the selected instructions and iterations as its own fuel.
+Each executing backend is linked independently before frame entry.
 
 This small adapter supports data-only run packages. Setup assets, services and
 proof packages require their owning adapters and refuse here. Inaccessible source

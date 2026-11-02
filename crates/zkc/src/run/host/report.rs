@@ -15,8 +15,6 @@ pub struct HostReport {
     limits: Json,
     layout: Json,
     invocation: zkc_runtime::vm::ExecutionLedger,
-    /// The returned values' live allowance after the Host took custody.
-    outputs_live: Option<zkc_runtime::vm::LiveReservation>,
 }
 impl HostReport {
     pub(super) fn new(
@@ -37,30 +35,6 @@ impl HostReport {
             limits: host.limits.record(),
             layout: host.layout(),
             invocation,
-            outputs_live: None,
-        }
-    }
-    /// Take custody of the runners' returned values in the invocation root.
-    /// Standalone runners kept them under their own budgets, which end with
-    /// the runners; custody passes without a new allocation, so the root
-    /// reserves their live bytes without a fresh charge. Runners that shared
-    /// the root keep their own reservations with the values. When the root
-    /// cannot hold them, the report releases the values and records
-    /// `bundle-output-limit`. Cleanup observations precede this step.
-    pub(super) fn retain_outputs(&mut self) {
-        let Some(execution) = &mut self.execution else {
-            return;
-        };
-        match self
-            .invocation
-            .reserve_live(execution.unreserved_output_bytes())
-        {
-            Ok(live) => self.outputs_live = Some(live),
-            Err(_) => {
-                execution.release_outputs();
-                self.failure
-                    .get_or_insert_with(|| "bundle-output-limit".into());
-            }
         }
     }
     /// The ledger that charged this invocation's Host-side inspection; result

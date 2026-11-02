@@ -5,7 +5,7 @@ use super::{
 use crate::host::capacity::RootCharge;
 use serde_json::{Value as Json, json};
 use zkc_runtime::interpreter::LocalRunner;
-use zkc_runtime::vm::{ExecutionLedger, ExecutionLedgerUsage, Value as RuntimeValue, WorkBudget};
+use zkc_runtime::vm::{ExecutionLedger, ExecutionLedgerUsage, WorkBudget};
 
 #[derive(Clone, Debug)]
 pub struct CallReceipt {
@@ -423,28 +423,24 @@ impl Execution<'_> {
         self.usage.dispatches += 1;
         Ok(())
     }
-    /// A child's byte budgets are drawn from what the root has left: half of
-    /// its remaining live allowance, partitioned once per native invocation,
-    /// keeps transport/result space beside the runners' full live
-    /// reservations, and the remaining fresh and logical allowances bound its
-    /// runners, which charge the root too. Children run on what remains of
-    /// the pooled instruction and iteration meter.
-    fn child_capacity(&self, runners: usize) -> crate::execution::Capacity {
-        let record = self.host.options.limits.capacity;
+    /// A child's runners charge the root, which bounds every byte they
+    /// retain, so the record's byte selections reach them unchanged. They run
+    /// on what remains of the pooled instruction and iteration meter.
+    fn child_capacity(&self) -> crate::execution::Capacity {
+        let mut capacity = self.host.options.limits.capacity;
         let used = self.ledger.snapshot();
-        let mut capacity = record.drawn_from(&self.ledger);
-        capacity.values.live_bytes = capacity.values.live_bytes / 2 / runners.max(1);
-        capacity.work.instructions = record.work.instructions.saturating_sub(used.instructions);
-        capacity.work.iterations = record.work.iterations.saturating_sub(used.iterations);
+        capacity.work.instructions = capacity.work.instructions.saturating_sub(used.instructions);
+        capacity.work.iterations = capacity.work.iterations.saturating_sub(used.iterations);
         capacity
     }
-    /// The policy record a child receives: the partitioned capacity and what
-    /// remains of each invocation-wide allowance, divided equally across the
-    /// child's runners. Children never replenish a parent allowance.
+    /// The policy record a child receives: the capacity on what remains of
+    /// the pooled meter, and what remains of each invocation-wide allowance,
+    /// divided equally across the child's runners. Children never replenish
+    /// a parent allowance.
     fn child_limits(&self, runners: usize) -> crate::run::HostLimits {
         let divisor = runners.max(1) as u64;
         let mut limits = self.host.options.limits.clone();
-        limits.capacity = self.child_capacity(runners);
+        limits.capacity = self.child_capacity();
         limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
         limits.total_wire_bytes = limits
             .total_wire_bytes
@@ -481,14 +477,15 @@ impl Execution<'_> {
             .with_external_work_limit(remaining.external_work)
             .with_ring_work_limit(remaining.ring_work)
             .with_sequence_work_limit(remaining.sequence_work);
+        let (budget, fuel) = capacity.runner_budgets();
         let result = LocalRunner::new_with_ledger(
             &c.program,
             &c.function,
             "entry-host",
             backend,
             inputs,
-            capacity.values,
-            capacity.work,
+            budget,
+            fuel,
             Some(self.ledger.clone()),
         );
         let mut runner = match result {
@@ -506,25 +503,22 @@ impl Execution<'_> {
         let diagnostic = json!({"stop":runner.stop().map(crate::host::diagnostics::stop)});
         let failed = runner.stop().is_some();
         self.end(index, !failed, diagnostic);
-        let values = runner
-            .returned_values()
-            .ok_or_else(|| self.fail("entry-host-numeric-stopped"))?;
+        // The child's returned values leave it with their live hold in the
+        // root, so custody moves without a gap and without a second charge.
+        let (backend, returned) = runner.into_retained_outputs();
+        drop(backend);
+        let returned = returned.ok_or_else(|| self.fail("entry-host-numeric-stopped"))?;
+        // The result's new metadata is a fresh allocation the parent holds
+        // beside the moved values.
         let metadata = c.results.iter().map(data::metadata).sum::<usize>();
-        let bytes = values
-            .iter()
-            .map(RuntimeValue::retained_bytes)
-            .sum::<usize>()
-            .saturating_add(metadata);
-        // Charge the result's new metadata and reserve the parent's exact
-        // retained result, together, while the child still owns its full live
-        // allowance. No gap exposes unreserved native backings.
-        let live = std::sync::Arc::new(
-            RootCharge::FUNCTION
-                .charge_and_hold(&self.ledger, 0, metadata, bytes)
-                .map_err(|e| self.fail(e))?,
-        );
-        let outputs = values.to_vec();
-        drop(runner.into_backend());
+        let mut live = RootCharge::FUNCTION
+            .charge_and_hold(&self.ledger, 0, metadata, metadata)
+            .map_err(|e| self.fail(e))?;
+        let (outputs, held) = returned.into_parts();
+        if let Some(held) = held {
+            live.merge(held);
+        }
+        let live = std::sync::Arc::new(live);
         let mut outputs = outputs.into_iter();
         c.results
             .iter()

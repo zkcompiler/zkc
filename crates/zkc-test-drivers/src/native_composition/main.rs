@@ -543,18 +543,23 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
                 let expected: &[&str] = match kind {
                     // Instructions and iterations are each runner's own fuel.
                     "instructions" | "iterations" => &["execution:artifact-stopped:Limit"],
-                    // The record's byte fields bound the invocation root too,
-                    // and its Host holdings decide these boundaries: below
-                    // them a root charge refuses with its own bytes code,
-                    // never a generic limit. The live boundary is the loaded
-                    // pool or the binding root's retained encoding; the fresh
-                    // boundary is a proof transport buffer, which keeps the
-                    // transport's code.
+                    // The record's byte fields bound the invocation root,
+                    // which holds the Host's charges and the runner's
+                    // together: below a boundary a root charge refuses with
+                    // its item's bytes code, or the runner stops with its own
+                    // limit stop, never a generic limit. The live boundary is
+                    // the loaded pool or the binding root's retained
+                    // encoding; the fresh boundary is a proof transport
+                    // charge, which reports the transport item's code rather
+                    // than the proof format's.
                     "live" => &[
                         "admission:artifact-input-bytes-limit",
                         "admission:native-proof-binding-bytes-limit",
                     ],
-                    "total" => &["execution:proof-limit"],
+                    "total" => &[
+                        "execution:proof-transport-bytes-limit",
+                        "execution:artifact-stopped:Limit",
+                    ],
                     "wire" => &[
                         "admission:native-capacity-wire",
                         "execution:native-capacity-wire",

@@ -20,7 +20,11 @@ and acceptance selection, immutable prepared computation identity, attempts and
 publication. Drivers infer none of that authority from proof or candidate
 contents. Shared-ledger production transfers proof-buffer live guards with its
 result; callers retaining bytes must retain those guards. Cumulative work remains
-consumed after cancellation or guard release.
+consumed after cancellation or guard release. A transport buffer or received
+message that the invocation root cannot afford refuses with
+`proof-transport-work-limit` or `proof-transport-bytes-limit`
+([root refusals](capacity.md#root-refusals)); the proof format's own size limit
+keeps `proof-limit`.
 
 ## Operation admission
 

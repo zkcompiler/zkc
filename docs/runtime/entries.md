@@ -203,8 +203,8 @@ Direct proof commands use `--service=ROLE.NAME=COUNT`,
 `--transcript-budget=COUNT` and `--context=HEX` for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
 selects the [capacity record](../spec/runtime/capacity.md#application-capacity):
 its live, fresh and logical byte fields bound the invocation root, from request
-decoding through result publication, and each standalone participant runner;
-its other fields bound each operation and runner. `--material-limits=FILE`
+decoding through result publication, which every participant runner charges as
+it executes; its other fields bound each operation and runner. `--material-limits=FILE`
 selects the [material allowances](../spec/runtime/capacity.md#host-allowances)
 for the public statement, named references, setup material and retained
 imports. Setup material, including key files read with `--key`, defaults to
@@ -300,11 +300,11 @@ existing Kernel pipeline and VM. Protocol and proof calls use their native
 admission, setup, transcript and cleanup owners. The outer invocation shares
 cumulative work and value limits across reached calls. A fresh child does not
 reset these allowances. The live allowance includes retained parent data and
-native transport; children receive a conservative share of its remainder. A
-nested computation can therefore reach the limit before the same standalone
-runner. See the [execution contract](../spec/runtime/entries.md#function-execution)
-for the partition policy. Calls are ordered, and no retry or result caching is
-implicit. Only the successfully returned source root is published.
+native transport beside the children's runners, which charge it as they
+execute. A nested computation can therefore reach the limit before the same
+computation alone. See the
+[execution contract](../spec/runtime/entries.md#function-execution) for the
+policy. Calls are ordered, and no retry or result caching is implicit. Only the successfully returned source root is published.
 
 `--invocations=FILE` can set policies for exact static child deployment IDs shown
 by inspection. Ordinary data stays in arguments.json. Child configuration carries

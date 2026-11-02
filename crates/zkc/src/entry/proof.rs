@@ -34,8 +34,9 @@ pub enum BindingScope {
 pub struct ProofOptions {
     pub installation: zkc_cpu::CpuInstallation,
     /// Each call's invocation: its root's live, fresh and logical byte
-    /// allowances, from which the selected role's runner draws its byte
-    /// budgets, and the runner's fuel, cumulative across its attempts.
+    /// allowances, which bound the Host's charges and every byte the
+    /// selected role's runner charges, and the runner's own fuel, cumulative
+    /// across its attempts.
     pub capacity: Capacity,
     pub external_work: u64,
     pub ring_work: u64,
@@ -155,10 +156,9 @@ pub struct ProofReport {
 impl ProofReport {
     /// The invocation root of this call: request decoding and conversion,
     /// setup imports and cache hits, loading, the binding root, proof buffers,
-    /// result custody and reconstruction, and result encoding. A child of an
-    /// outer invocation uses the outer root; a standalone call's runners keep
-    /// their own ledgers beside it, with byte budgets drawn from what it has
-    /// left.
+    /// every runner's bytes, result reconstruction and result encoding. A
+    /// child of an outer invocation uses the outer root. Each runner keeps
+    /// its own fuel.
     pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
         &self.invocation
     }
@@ -1319,12 +1319,11 @@ mod publication_tests {
             .unwrap()
         };
         let result = prove(Capacity::default());
-        // The call's root holds its Host-side work: decoding, conversion,
-        // loading, the binding root, the proof buffer, result custody and
-        // reconstruction. The runner's work stays in its own ledger, which
-        // the same record bounds.
+        // The call's root holds its Host-side work, decoding, conversion,
+        // loading, the binding root, the proof buffer and reconstruction,
+        // and the runner's logical work too.
         let work = result.report.invocation_ledger().snapshot().logical_bytes;
-        assert!(result.report.native.usage.logical_bytes <= work + 511);
+        assert!(result.report.native.usage.logical_bytes <= work);
         assert!(result.encode_results().unwrap().is_some());
         // The record's logical-work selection bounds the root: the execution's
         // own work fits it; the first 512-byte result buffer does not, so

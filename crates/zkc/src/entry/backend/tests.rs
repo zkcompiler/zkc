@@ -259,24 +259,34 @@ fn independent_backend_executes_authenticated_source_application() {
         .unwrap();
     assert_eq!(report.outcome, joint::Outcome::Completed);
     assert_eq!(report.roles[0].outputs[0].value, 42);
-    // The run's invocation root holds the report's records; the runner kept
-    // its own fuel, so no instruction reached the root.
+    // The run's invocation root holds the report's records and the returned
+    // value's live bytes; the runner kept its own fuel, so no instruction
+    // reached the root.
     let root = report.invocation_ledger().unwrap().clone();
     let used = root.snapshot();
-    assert!(report.roles[0].usage.unwrap().instructions > 0);
+    let usage = report.roles[0].usage.unwrap();
+    assert!(usage.instructions > 0);
     assert_eq!(used.instructions, 0);
-    assert_eq!(used.live_reserved_bytes, report.report_bytes);
+    assert_eq!(used.live_reserved_bytes, report.report_bytes + 64);
     assert!(report.report_bytes > 0);
-    let runner_work = report.roles[0].usage.unwrap().logical_bytes;
+    // The root charged every byte the runner charged, beside the records.
+    assert_eq!(
+        used.total_value_bytes,
+        usage.total_value_bytes + report.report_bytes
+    );
+    assert!(used.logical_bytes >= usage.logical_bytes + report.report_bytes as u64);
+    let runner_work = usage.logical_bytes;
+    let report_bytes = report.report_bytes;
     let mut report = report;
     let (_, backend) = report.backends.pop().unwrap();
     drop(report);
     assert_eq!(root.snapshot().live_reserved_bytes, 0);
     assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
 
-    // The selected limits bound the root as well as the runner: under a
-    // logical-work selection that the runner's work fits but the report's
-    // records do not, the root refuses those records.
+    // The selected limits bound the root, which charges the runner's work
+    // and the report's records together: under a logical-work selection one
+    // unit short of their sum, the root refuses the last record with its
+    // own code, not the report allowance's.
     assert!(runner_work < used.logical_bytes - 1);
     let run = |backend: Arithmetic, limits: joint::RunLimits| {
         let values = [20, 22]
@@ -301,6 +311,17 @@ fn independent_backend_executes_authenticated_source_application() {
     let mut limited = run(backend, tight).unwrap();
     assert!(matches!(
         &limited.outcome,
+        joint::Outcome::DriverFailed(failure) if failure.detail.text == "joint-record-work-limit"
+    ));
+    let (_, backend) = limited.backends.pop().unwrap();
+    // The report allowance's own refusal keeps its code.
+    let tight = joint::RunLimits {
+        report_bytes: report_bytes - 1,
+        ..Default::default()
+    };
+    let mut limited = run(backend, tight).unwrap();
+    assert!(matches!(
+        &limited.outcome,
         joint::Outcome::DriverFailed(failure) if failure.detail.text == "joint-report-limit"
     ));
     let (_, backend) = limited.backends.pop().unwrap();
@@ -310,6 +331,75 @@ fn independent_backend_executes_authenticated_source_application() {
     let refused = run(backend, raised).err().unwrap();
     assert_eq!(refused.failure.detail.text, "joint-limits");
     assert_eq!(refused.inputs.len(), 1);
+}
+#[test]
+fn participants_that_each_fit_the_selection_alone_exceed_it_together() {
+    let (run, backend) = paired_run();
+    let execute = |limits: joint::RunLimits| {
+        let inputs = ["role00000000", "role00000001"]
+            .into_iter()
+            .map(|role| joint::RoleInput {
+                role: role.into(),
+                backend: Arithmetic {
+                    ty: backend.ty.clone(),
+                    id: backend.id,
+                    frames: 0,
+                    applications: 0,
+                },
+                values: [20, 22]
+                    .map(|value| Number {
+                        value,
+                        ty: backend.ty.clone(),
+                    })
+                    .to_vec(),
+            })
+            .collect();
+        run.execute("pooled", inputs, limits, &mut joint::NoHooks)
+            .unwrap()
+    };
+    let measured = execute(joint::RunLimits::default());
+    assert_eq!(measured.outcome, joint::Outcome::Completed);
+    let usage = [0, 1].map(|role| measured.roles[role].usage.unwrap());
+    let root = measured.invocation_ledger().unwrap().snapshot();
+    // One invocation root holds both participants' fresh bytes beside the
+    // report's records; each participant keeps its own fuel.
+    assert_eq!(
+        root.total_value_bytes,
+        usage[0].total_value_bytes + usage[1].total_value_bytes + measured.report_bytes
+    );
+    assert_eq!(root.instructions, 0);
+    // A fresh-byte selection that holds the records and either participant's
+    // charges, but not both participants' together.
+    let alone = usage[0].total_value_bytes.max(usage[1].total_value_bytes) + measured.report_bytes;
+    let mut limits = joint::RunLimits::default();
+    limits.values.total_bytes = (alone + root.total_value_bytes) / 2;
+    assert!(alone <= limits.values.total_bytes);
+    assert!(limits.values.total_bytes < root.total_value_bytes);
+    let report = execute(limits);
+    // A participant stops with its own limit stop: the root refused its
+    // charge, which the selection would have admitted for it alone.
+    let joint::Outcome::ParticipantStopped { role } = report.outcome else {
+        panic!("{:?}", report.outcome);
+    };
+    assert!(matches!(
+        &report.roles[role].before,
+        joint::State::Stopped(stop) if stop.cause == joint::StopCause::Limit
+    ));
+    // The report keeps both participants' usage and the root's. The root's
+    // fresh usage is at its selection: what remains cannot hold the rest of
+    // the stopped participant's charges, and the refusal left no residue.
+    let stopped = [0, 1].map(|role| report.roles[role].usage.unwrap());
+    let used = report.invocation_ledger().unwrap().snapshot();
+    assert_eq!(
+        used.total_value_bytes,
+        stopped[0].total_value_bytes + stopped[1].total_value_bytes + report.report_bytes
+    );
+    assert!(used.total_value_bytes <= limits.values.total_bytes);
+    assert!(stopped[role].total_value_bytes < usage[role].total_value_bytes);
+    assert!(
+        limits.values.total_bytes - used.total_value_bytes
+            < usage[role].total_value_bytes - stopped[role].total_value_bytes
+    );
 }
 #[test]
 fn typed_backend_values_do_not_grant_source_constructor_authority() {
@@ -828,8 +918,8 @@ fn pinned_entry_inspection_and_its_runner_share_one_participant_allowance() {
     let (returned, runner_work, backend) =
         execute(error.backend, WorkBudget::default()).ok().unwrap();
     assert!(returned && runner_work > 0);
-    // The runner's own budget would admit its work, but inspection already
-    // drew on the same participant allowance.
+    // The runner's work alone fits the selection, but inspection already
+    // charged the same invocation root.
     let (returned, _, backend) = execute(backend, logical(runner_work + inspection - 1))
         .ok()
         .unwrap();

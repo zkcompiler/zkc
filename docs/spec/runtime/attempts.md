@@ -40,7 +40,10 @@ state or external primitive-work charge. Remaining interpreter instruction/call/
 iteration, logical-work and total payload allowances are passed into each runner;
 initialization failure retains reached charges. Each attempt's runner charges its
 entry inputs again, even when their storage is shared with a previous attempt.
-Live payload and transcript-transition limits are per attempt. Transcript initialization reabsorbs the bounded invocation root
+Live payload and transcript-transition limits are per attempt. The policy's
+logical-work and payload limits are each runner's sublimits beside the call's
+[invocation root](capacity.md#invocation-ledgers), which every attempt's runner
+charges as it executes. Transcript initialization reabsorbs the bounded invocation root
 once per attempt, outside interpreter and external-work charges. The proof
 writer enforces the per-attempt byte cap before extending its buffer. Terminal
 execution and cleanup failures prevent retry and publication. Cleanup diagnostics
@@ -113,8 +116,8 @@ cryptographic retry probability.
 | Attempt count | Whole host invocation; default 1, maximum 1024. |
 | Proof bytes | Each tentative proof, including framing, enforced by the writer during production; default and maximum 16 MiB. |
 | Instructions and iterations | Runner fuel, cumulative across the attempts of one call, bounded by the selected capacity; by default one million instructions and 100,000 iterations, at most 2^32 of each. |
-| Retained payload charge | Live limit per runner and cumulative total charge across attempts; counts bindings, not process RSS. |
-| Host storage and work | The call's [invocation root](capacity.md#invocation-ledgers): every attempt's proof buffer and the completed proof's retained copy are charged there before they grow, and a discarded attempt keeps its cumulative charge. |
+| Retained payload charge | Live limit per runner and cumulative total charge across attempts, beside the call's root, which every attempt's runner charges; counts bindings, not process RSS. |
+| Host storage and work | The call's [invocation root](capacity.md#invocation-ledgers): every attempt's runner bytes and proof buffer, and the completed proof's retained copy, are charged there before they grow, and a discarded attempt keeps its cumulative charge. |
 | RNG and service draws | One persistent root budget; failed scalar consumes can increment generation/debit before refusal. |
 | Transcript transitions | Per freshly issued attempt transcript; observations remain in the attempt record. |
 | Transcript initialization | Reabsorbs the bounded invocation root once per attempt, outside interpreter and external-work charges; bounded by root size times attempt count. |

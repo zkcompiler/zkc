@@ -225,7 +225,16 @@ impl<B: Backend> Instance<B> {
         }
         Ok(())
     }
+    /// The charges of retaining `values`, if the runner's own budgets and
+    /// the root afford them now.
     pub(crate) fn can_retain(&self, values: &[B::Value], retention: Retention) -> Result<Charge> {
+        let (charge, work) = self.plan_retention(values, retention)?;
+        self.can_retain_size(values.len(), charge.live, charge.fresh, work)?;
+        Ok(charge)
+    }
+    /// The charges of retaining `values` and their logical work, checked
+    /// against the runner's own budgets only.
+    fn plan_retention(&self, values: &[B::Value], retention: Retention) -> Result<(Charge, u64)> {
         self.counts.event(Event::Plan);
         self.counts.add(Event::PlanValue, values.len() as u64);
         let charge = self
@@ -237,9 +246,11 @@ impl<B: Backend> Instance<B> {
         } else {
             0
         };
-        self.can_retain_size(values.len(), charge.live, charge.fresh, work)?;
-        Ok(charge)
+        self.within_own_budgets(values.len(), charge.live, charge.fresh, work)?;
+        Ok((charge, work))
     }
+    /// Check a charge against the runner's own budgets and the root, before
+    /// any effect. The root checks again when the charge commits.
     pub(super) fn can_retain_size(
         &self,
         count: usize,
@@ -247,6 +258,17 @@ impl<B: Backend> Instance<B> {
         fresh: usize,
         work: u64,
     ) -> Result<()> {
+        self.within_own_budgets(count, live, fresh, work)?;
+        if self
+            .shared
+            .as_ref()
+            .is_some_and(|root| !root.affords(work, fresh, live))
+        {
+            return Err(RuntimeError::Limit);
+        }
+        Ok(())
+    }
+    fn within_own_budgets(&self, count: usize, live: usize, fresh: usize, work: u64) -> Result<()> {
         if self
             .usage
             .live_values
@@ -272,29 +294,26 @@ impl<B: Backend> Instance<B> {
         }
         Ok(())
     }
+    /// Retain `values`, charging the root all or nothing: their logical work,
+    /// fresh bytes and live bytes commit together, settling any withheld
+    /// output allowance, or the retention refuses.
     fn retain(
         &mut self,
         values: &[B::Value],
         retention: Retention,
         reservation: Option<crate::vm::execution_ledger::AllocationReservation>,
     ) -> Result<()> {
-        let charge = self.can_retain(values, retention)?;
-        let work = if retention == Retention::Result {
-            charge.fresh as u64
-        } else {
-            0
-        };
-        if let Some(reservation) = reservation {
+        let (charge, work) = self.plan_retention(values, retention)?;
+        if let Some(root) = &self.shared {
+            let held = self.live_reservation.get_or_insert_with(|| root.hold());
+            match reservation {
+                Some(reservation) => {
+                    reservation.settle_held(held, charge.fresh, work, charge.live)?
+                }
+                None => root.retain(held, work, charge.fresh, charge.live)?,
+            }
+        } else if let Some(reservation) = reservation {
             reservation.settle(charge.fresh, work)?;
-        } else if let Some(shared) = &self.shared {
-            shared.charge(
-                WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: work,
-                },
-                charge.fresh,
-            )?;
         }
         self.counts.add(Event::Retain, values.len() as u64);
         self.ledger.retain(values);
@@ -357,7 +376,9 @@ impl<B: Backend> Instance<B> {
     }
     fn unpin_return(&mut self, values: &[B::Value]) {
         self.counts.add(Event::Unpin, values.len() as u64);
-        self.usage.live_value_bytes -= self.ledger.unpin(values);
+        let released = self.ledger.unpin(values);
+        self.usage.live_value_bytes -= released;
+        self.release_live(released);
     }
 
     pub(crate) fn release_return(&mut self, mut values: Transfer<B::Value>) -> Vec<B::Value> {
@@ -454,5 +475,6 @@ impl<B: Backend> Instance<B> {
         debug_assert_eq!(closed_values, scope.bindings);
         self.usage.live_values -= scope.bindings;
         self.usage.live_value_bytes -= released + scope.released_storage;
+        self.release_live(released + scope.released_storage);
     }
 }

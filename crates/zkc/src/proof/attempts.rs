@@ -334,6 +334,8 @@ impl Session<'_> {
                         .total_bytes
                         .saturating_sub(used.total_value_bytes),
                 };
+                // The policy's remaining allowances are this attempt's own
+                // sublimits; the call's root charges every byte it retains.
                 match Runner::new_for_role_with_ledger(
                     self.deployment.entry.admitted(),
                     self.deployment.entry.entry(),
@@ -343,7 +345,7 @@ impl Session<'_> {
                     invocation_inputs,
                     values,
                     work,
-                    self.deployment.shared_ledger.clone(),
+                    self.deployment.host_ledger().cloned(),
                 ) {
                     Err(failed) => {
                         record.usage = failed.usage;

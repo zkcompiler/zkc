@@ -306,10 +306,12 @@ impl<B: Backend> Runner<B> {
     fn discard_returned(&mut self) {
         if let Some(Action::Returned(values)) = self.pending.as_mut() {
             let values = std::mem::take(values);
-            self.instance.release_returned(&values);
-            // Drop payloads before take_backend or Instance::drop releases the
-            // shared live reservation. Keep the stable terminal marker.
-            drop(values);
+            // Drop payloads before the root sees their live bytes released.
+            // Keep the stable terminal marker.
+            self.with_live_reservation(|runner| {
+                runner.instance.release_returned(&values);
+                drop(values);
+            });
         }
     }
     /// Consume a terminal runner and move its live reservation with returned
@@ -322,10 +324,15 @@ impl<B: Backend> Runner<B> {
     fn take_retained_outputs(&mut self) -> Option<RetainedOutputs<B::Value>> {
         let outputs = match self.pending.take() {
             Some(Action::Returned(values)) => {
-                self.instance.release_returned(&values);
+                // The returned values' live bytes leave with them: the hold
+                // keeps them in the root until the guard drops.
+                let reservation = self.with_live_reservation(|runner| {
+                    runner.instance.release_returned(&values);
+                    runner.instance.take_live_reservation()
+                });
                 Some(RetainedOutputs {
                     values,
-                    reservation: self.instance.take_live_reservation(),
+                    reservation,
                 })
             }
             terminal => {
@@ -428,15 +435,13 @@ impl<B: Backend> Runner<B> {
             .last()
             .map_or_else(|| self.root.clone(), |f| f.frame.origin().clone())
     }
-    /// Keep the allowance through destruction of values owned by an action,
-    /// including those no longer represented by a retained scope or backing pin.
-    /// Successful executions retain it; stopped executions release it afterward.
+    /// Keep released live bytes in the root through destruction of values
+    /// owned by an action, including those no longer represented by a
+    /// retained scope or backing pin; the root sees them released afterward.
     fn with_live_reservation<T>(&mut self, action: impl FnOnce(&mut Self) -> T) -> T {
-        let reservation = self.instance.take_live_reservation();
+        self.instance.defer_release();
         let result = action(self);
-        if !matches!(self.pending, Some(Action::Stopped(_))) {
-            self.instance.restore_live_reservation(reservation);
-        }
+        self.instance.finish_deferred_release();
         result
     }
     fn halt(&mut self, kind: StopKind, site: Option<String>, origin: Option<Origin>) {

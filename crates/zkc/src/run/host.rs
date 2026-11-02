@@ -345,9 +345,9 @@ impl RunHost {
     /// The invocation accounting root: the outer invocation's ledger when one
     /// is attached, otherwise a new root that the selected capacity record
     /// bounds. It charges preparation, loading, setup imports, inspection,
-    /// transport, report storage, result reconstruction and encoding.
-    /// Participant runners of a standalone run keep their own ledgers beside
-    /// it, each bounded by the same record, so it meters no instruction.
+    /// transport, report storage, result reconstruction and encoding, and
+    /// every participant runner's bytes as it executes. Each runner keeps its
+    /// own instruction and iteration fuel, so a run's own root meters none.
     pub(crate) fn invocation_ledger(&self) -> zkc_runtime::vm::ExecutionLedger {
         self.shared_ledger
             .clone()
@@ -503,25 +503,11 @@ impl PreparedRun<'_> {
             });
         }
         drop(loaded);
-        let mut execution_limits = self.host.limits.execution();
-        let shared = self.host.shared_ledger.clone();
-        let _loading = if shared.is_some() {
-            // Runners that share the root reserve their whole live allowance
-            // there beside the loaded inputs, so each one's allowance excludes
-            // its share of the loading reservation.
-            let roles = inputs.len().max(1);
-            execution_limits.values.live_bytes = execution_limits
-                .values
-                .live_bytes
-                .saturating_sub(self.loading.bytes().div_ceil(roles));
-            Some(self.loading)
-        } else {
-            // Standalone runners take custody of their inputs under their own
-            // ledgers, which the same record bounds; the Host's reservation
-            // ends at that boundary.
-            drop(self.loading);
-            None
-        };
+        let execution_limits = self.host.limits.execution();
+        // Every runner charges the invocation root as it retains its inputs,
+        // so the Host's reservation of the loaded pool ends at the runners'
+        // boundary instead of counting it twice.
+        drop(self.loading);
         let invocation = self.invocation.clone();
         let mut report = HostReport::new(self.host, &self.session, self.invocation);
         if let Some(error) = failure {
@@ -530,13 +516,12 @@ impl PreparedRun<'_> {
             report.unstarted = inputs.into_iter().map(|i| (i.role, i.backend)).collect();
         } else {
             report.phase = "execution";
-            match run_with_ledgers(
+            match run_with_ledger(
                 &self.host.bundle,
                 &self.session,
                 inputs,
                 execution_limits,
                 &mut NoHooks,
-                shared,
                 Some(invocation),
             ) {
                 Ok(execution) => {
@@ -558,7 +543,6 @@ impl PreparedRun<'_> {
             }
         }
         report.finalize(&registry, &resources, &services);
-        report.retain_outputs();
         report
     }
 }

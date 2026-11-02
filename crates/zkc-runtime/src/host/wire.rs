@@ -101,6 +101,30 @@ pub(crate) fn decode_proof_value<B: ProofBackend>(
     }
 }
 
+/// A refusal of proof transport: the proof format's own refusal, or the
+/// invocation root's refusal of a transport buffer or a received message,
+/// which reports its own item code rather than the format's limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransportError {
+    Format(FormatError),
+    Root(RootRefusal),
+}
+impl From<FormatError> for TransportError {
+    fn from(error: FormatError) -> Self {
+        Self::Format(error)
+    }
+}
+impl fmt::Display for TransportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Format(error) => error.fmt(f),
+            Self::Root(RootRefusal::Work) => f.write_str("proof-transport-work-limit"),
+            Self::Root(RootRefusal::Bytes) => f.write_str("proof-transport-bytes-limit"),
+        }
+    }
+}
+impl std::error::Error for TransportError {}
+
 /// Expected context is supplied by the application, never by the candidate.
 pub struct ProofWriter {
     format: ProofFormat,
@@ -141,15 +165,18 @@ impl ProofWriter {
         expected_binding: &[u8; 32],
         limit: usize,
         ledger: Option<crate::vm::ExecutionLedger>,
-    ) -> Result<Self, FormatError> {
+    ) -> Result<Self, TransportError> {
         let header = proof::header_size(format);
-        let guard = reserve_allocation(ledger.as_ref(), header).map_err(|_| FormatError::Limit)?;
+        let guard = reserve_allocation(ledger.as_ref(), header).map_err(TransportError::Root)?;
         let mut writer = Self::with_limit(format, expected_binding, limit)?;
         writer.ledger = ledger;
         writer.retained.extend(guard);
         Ok(writer)
     }
-    pub fn message(&mut self, payload: &[u8]) -> Result<(), FormatError> {
+    /// Append one message. The format's own limits refuse first; a buffer
+    /// that the invocation root cannot afford refuses with the root's
+    /// allowance, and nothing is appended or charged.
+    pub fn message(&mut self, payload: &[u8]) -> Result<(), TransportError> {
         let additional = proof::message_preflight(
             self.format,
             self.bytes.len(),
@@ -158,7 +185,7 @@ impl ProofWriter {
             self.limit,
         )?;
         let guard =
-            reserve_allocation(self.ledger.as_ref(), additional).map_err(|_| FormatError::Limit)?;
+            reserve_allocation(self.ledger.as_ref(), additional).map_err(TransportError::Root)?;
         self.retained.extend(guard);
         self.bytes
             .try_reserve_exact(additional)
@@ -345,7 +372,7 @@ mod tests {
                 39,
                 Some(ledger.clone())
             ),
-            Err(FormatError::Limit)
+            Err(TransportError::Format(FormatError::Limit))
         ));
         // Header work precedes lowered-limit validation, but the failed writer
         // releases its live reservation without refunding cumulative charges.
@@ -371,13 +398,29 @@ mod tests {
         )
         .unwrap();
         let before = ledger.snapshot();
-        assert_eq!(writer.message(&[0; 2]), Err(FormatError::Limit));
+        assert_eq!(writer.message(&[0; 2]), Err(FormatError::Limit.into()));
         assert_eq!(ledger.snapshot(), before);
         assert_eq!((writer.messages(), writer.bytes_written()), (0, 40));
         // Size fits, but live capacity refuses the message's buffer: its work
         // and fresh bytes are refused with it, so nothing is appended or
-        // charged.
-        assert_eq!(writer.message(&[0]), Err(FormatError::Limit));
+        // charged. The refusal names the root's allowance, not the format's
+        // size limit.
+        assert_eq!(
+            writer.message(&[0]),
+            Err(TransportError::Root(RootRefusal::Bytes))
+        );
+        assert_eq!(
+            TransportError::Root(RootRefusal::Bytes).to_string(),
+            "proof-transport-bytes-limit"
+        );
+        assert_eq!(
+            TransportError::Root(RootRefusal::Work).to_string(),
+            "proof-transport-work-limit"
+        );
+        assert_eq!(
+            TransportError::from(FormatError::Limit).to_string(),
+            "proof-limit"
+        );
         assert_eq!(ledger.snapshot(), before);
         assert_eq!((writer.messages(), writer.bytes_written()), (0, 40));
         drop(writer);
@@ -432,7 +475,7 @@ mod tests {
             let mut writer =
                 ProofWriter::with_limit(ProofFormat::RawBytes, &[1; 32], payload.len()).unwrap();
             writer.message(payload).unwrap();
-            assert_eq!(writer.message(&[]), Err(FormatError::Trailing));
+            assert_eq!(writer.message(&[]), Err(FormatError::Trailing.into()));
             assert_eq!(writer.messages(), 1);
             assert_eq!(writer.finish().unwrap(), payload);
             let mut reader = ProofReader::new(ProofFormat::RawBytes, payload, &[2; 32]).unwrap();
@@ -447,7 +490,7 @@ mod tests {
             Err(FormatError::Truncated)
         );
         let mut writer = ProofWriter::with_limit(ProofFormat::RawBytes, &[0; 32], 2).unwrap();
-        assert_eq!(writer.message(&[1, 2, 3]), Err(FormatError::Limit));
+        assert_eq!(writer.message(&[1, 2, 3]), Err(FormatError::Limit.into()));
         assert_eq!(writer.messages(), 0);
         assert_eq!(writer.bytes_written(), 0);
     }
@@ -464,7 +507,7 @@ mod tests {
         ));
         let mut writer = ProofWriter::with_limit(ProofFormat::Native, &[0; 32], 49).unwrap();
         writer.message(&[1]).unwrap();
-        assert_eq!(writer.message(&[]), Err(FormatError::Limit));
+        assert_eq!(writer.message(&[]), Err(FormatError::Limit.into()));
         assert_eq!(writer.bytes_written(), 49);
         assert_eq!(writer.messages(), 1);
     }

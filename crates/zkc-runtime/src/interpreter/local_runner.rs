@@ -126,8 +126,12 @@ impl<B: Backend> LocalRunner<B> {
                     Err(error)
                 }
             };
-            self.runner.instance.close_scope(scope, inputs.iter());
-            drop(inputs);
+            // The inputs may be their payloads' final owners: drop them
+            // before the root sees their live bytes released.
+            self.runner.with_live_reservation(|runner| {
+                runner.instance.close_scope(scope, inputs.iter());
+                drop(inputs);
+            });
             match result {
                 Ok(values) => {
                     let values = self.runner.instance.release_return(values);

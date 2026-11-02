@@ -105,6 +105,91 @@ fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
     }
 }
 #[test]
+fn proof_transport_root_refusals_name_their_item_while_the_format_limit_keeps_its_code() {
+    use zkc_runtime::vm::{ExecutionLedger, Program};
+    let program = Program::decode(
+        json!([
+            "zkc.program/0",
+            [],
+            [],
+            [[
+                "participant",
+                "p",
+                "root",
+                "P",
+                [["payload", "bytes@native.bytes/0"]],
+                [],
+                [
+                    ["send", "message", "message", "V", "payload"],
+                    ["return", []]
+                ],
+                []
+            ]],
+            [["entry", "main", [["P", "p"]]]]
+        ])
+        .to_string()
+        .as_bytes(),
+        zkc_cpu::cpu_contracts(),
+    )
+    .unwrap();
+    // The producer keeps its own ledger, so the root charges proof transport
+    // alone: the header, the message's encoding allowance and its buffer.
+    let produce = |root: ExecutionLedger, limit: usize| {
+        let backend = CpuBackend::new(
+            Policy::default(),
+            EntryPolicy::new(Domain::new("P", "session", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let mut runner = Runner::new(
+            &program,
+            "main",
+            "P",
+            "session",
+            backend,
+            vec![Value::Bytes((&b"payload"[..]).into())],
+        )
+        .unwrap_or_else(|error| panic!("{}", error.error));
+        driver::produce(
+            &mut runner,
+            &[7; 32],
+            driver::Transport::Messages(ProofFormat::Native),
+            limit,
+            Some(root),
+        )
+        .outcome
+        .map(|produced| produced.into_parts().0)
+        .map_err(|error| driver_failure(&error))
+    };
+    let default = Capacity::default();
+    let measured = default.root();
+    let proof = produce(measured.clone(), MAX_PROOF_BYTES).unwrap();
+    let used = measured.snapshot();
+    // A root one unit short refuses the message buffer, the last transport
+    // charge, with the item's code for the allowance that refused.
+    assert_eq!(
+        produce(
+            root_of(used.total_value_bytes - 1, default.work.logical_bytes),
+            MAX_PROOF_BYTES
+        )
+        .unwrap_err(),
+        "proof-transport-bytes-limit"
+    );
+    assert_eq!(
+        produce(
+            root_of(default.values.total_bytes, used.logical_bytes - 1),
+            MAX_PROOF_BYTES
+        )
+        .unwrap_err(),
+        "proof-transport-work-limit"
+    );
+    // A proof beyond the format's own size limit keeps the format's code.
+    assert_eq!(
+        produce(default.root(), proof.len() - 1).unwrap_err(),
+        "proof-limit"
+    );
+}
+#[test]
 fn nested_wire_permission_is_exact() {
     for spelling in [
         "matrix:bls12-381.fr",
@@ -533,7 +618,8 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert!(report.attempts.iter().all(|a| a.decision == Ok(false)));
 
             // Every attempt charges the call's one invocation root for its
-            // proof buffer, while each attempt's runner keeps its own fuel.
+            // runner's bytes and its proof buffer, while each attempt's
+            // runner keeps its own fuel.
             let rooted = |root: &zkc_runtime::vm::ExecutionLedger, attempts| {
                 let policy = AttemptPolicy {
                     limits: zkc_runtime::attempt::Limits {
@@ -558,12 +644,12 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert!(counted.usage.instructions > 0);
             assert_eq!(three.instructions, 0);
             // Discarded attempts keep their charges: each retry adds the same
-            // buffer charge to the cumulative fresh bytes.
+            // runner and proof buffer charges to the cumulative fresh bytes.
             let attempt = (three.total_value_bytes - one.total_value_bytes) / 2;
             assert!(attempt > 0);
             assert_eq!(three.total_value_bytes, one.total_value_bytes + 2 * attempt);
-            // A root that affords only two attempts' buffers refuses the third
-            // attempt; the runners' own budgets are untouched.
+            // A root that affords only two attempts' charges refuses the third
+            // attempt, within the attempt policy's own allowances.
             let tight = root_of(
                 one.total_value_bytes + attempt + attempt / 2,
                 Capacity::default().work.logical_bytes,

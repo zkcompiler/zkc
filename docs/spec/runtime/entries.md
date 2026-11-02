@@ -248,11 +248,11 @@ Each preparation creates the run's [invocation root](capacity.md#invocation-ledg
 which the admitted capacity record's byte selections bound
 (`HostLimits::capacity`). Request conversion, setup imports, loading and
 `InputBoundRunEntry::prepare`'s common-input inspection and canonical encoding
-of every role charge it before execution; wire transport and report storage
-charge it during execution. Participants keep their own ledgers, which the
-same record bounds.
-When they finish, the root reserves the returned values the report retains, and
-reconstruction holds the named results' live bytes; `RunReport::encode_results`
+of every role charge it before execution; wire transport, report storage and
+every participant's bytes charge it during execution, while each participant
+keeps its own instruction and iteration fuel.
+When they finish, the returned values the report retains keep their live hold
+in the root, and reconstruction holds the named results' live bytes; `RunReport::encode_results`
 charges each `zkc.entry-outputs/0` buffer, which keeps its live allowance until
 it is dropped. `HostLimits` selects the run's external, Ring and sequence work
 and the loading work of each input loading; `with_ring_work_limit` sets the
@@ -334,7 +334,8 @@ of `ProofOptions::capacity` bound, created at its preflight or at `prove`,
 output-setup imports, conversion, loading, the binding root, every attempt's
 proof buffer, the returned values the call retains, reconstruction, every
 result encoding and every rendering of the report's diagnostics. The selected
-role's runner keeps its own ledger beside it, which the same record bounds.
+role's runner, and each attempt's runner, charge their bytes to it and keep
+their own fuel.
 
 `preflight_document_call` owns common request assembly: requested output codecs
 are checked before loading documents, public data precedes the witness, and
@@ -468,12 +469,15 @@ Only small inline scalar parameters key records; public collections can feed
 ordinary computations without being retained as keys.
 
 Reuse requires the exact admitted executable, identical backend policy and
-remaining runtime/backend capacities that dominate the original initial
-allowances. Native checkpoints also require the same immutable catalog and
-execution-authorization view, including exact timing grants. An authorization
-change prevents replay even when numerical policy and capacities are unchanged.
-Reuse replays cumulative work and allocation charges, advances frame
-IDs, and installs returned backing through the ordinary live-storage ledger.
+remaining runtime/backend capacities, including the invocation root's byte
+allowances, that dominate the original initial allowances. Native checkpoints
+also require the same immutable catalog and execution-authorization view,
+including exact timing grants. An authorization change prevents replay even when
+numerical policy and capacities are unchanged. Reuse replays cumulative work and
+allocation charges into the runner and, as the original evaluation charged
+them, into the invocation root, advances frame IDs, and installs returned
+backing through the ordinary live-storage ledger. A runner whose root pools
+fuel, as a Function's children do, reuses nothing.
 Otherwise execution follows the original body, including failure location,
 partial usage and cleanup. Failed evaluations are never retained. Reaching a
 store ceiling merely prevents another record. A successful fallback replaces
@@ -834,19 +838,16 @@ charges the invocation root; a reached child's loading is a second real
 allocation and charges the root again.
 
 The record's live, fresh and logical selections (`FunctionOptions::limits.capacity`)
-cover the whole Entry invocation, children included. Before starting one native
-child, the Host subtracts live parent reservations from the live selection and
-assigns half of the remainder to child runners, divided equally across a joint
-roster. The other half remains available for bounded native transport and
-result transfer. Each child runner's fresh and logical budgets are what the
-root has left, and its charges reach the root too.
-Each runner reserves its entire assigned allowance until its results and native
-report are released. Numerical results acquire a parent reservation before the
-child releases its own. This conservative policy can refuse a nested computation
-that fits a standalone runner under the same capacity record; element ceilings
-are not completion guarantees. A smaller result does not increase the child's
-working allowance. [Shared execution policy](capacity.md#shared-invocation-execution-policy)
-defines ownership and cumulative charges. Dynamic repartitioning is not performed.
+cover the whole Entry invocation, children included. Every child runner charges
+its bytes to the Function's root as it executes, beside the parent's
+reservations, native transport and the other runners of a joint roster, so a
+nested computation can reach the limit that the same computation alone would
+not. Numerical results move to the parent with the live hold of their bytes,
+and the parent charges their new metadata; a proof or run child's results stay
+reserved until the parent holds its own checked typed result. Element ceilings
+are not completion guarantees.
+[Shared execution policy](capacity.md#shared-invocation-execution-policy)
+defines ownership and cumulative charges.
 
 `FunctionOptions::service_draws` bounds the sum of child service allowances
 reserved before issuance. Its default is 64,000,000 (64 native default

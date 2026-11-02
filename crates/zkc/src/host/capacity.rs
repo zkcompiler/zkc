@@ -404,16 +404,16 @@ impl RootCharge {
 /// Setup and provider-specific ceilings keep their existing owners.
 ///
 /// Each field selects one allowance. Element, group, wire and value bytes
-/// bound one operation. Instructions and iterations are the fuel of each
-/// standalone runner, cumulative across the attempts of one proof call; in a
+/// bound one operation. Instructions and iterations are each runner's own
+/// fuel, cumulative across the attempts of one proof call; in a
 /// Function invocation they are the meter that its interpreter and reached
 /// children pool in the invocation root, each child running on what remains
 /// ([`Allowances::FUNCTION_INSTRUCTIONS`]). Logical work and the live and
 /// cumulative fresh bytes are the invocation's: they bound the invocation
-/// accounting root ([`Capacity::root`]), and each runner's byte budgets are
-/// sublimits drawn from what the root has left ([`Capacity::drawn_from`]),
-/// never a second selection. [`Capacity::HARD_MAX`] is the most a record may
-/// select.
+/// accounting root ([`Capacity::root`]), which every participant runner
+/// charges as it executes, so no runner keeps a byte budget of its own
+/// ([`Capacity::runner_budgets`]). [`Capacity::HARD_MAX`] is the most a
+/// record may select.
 #[derive(Clone, Copy, Debug)]
 pub struct Capacity {
     /// Maximum elements in one numeric collection or complete nested message.
@@ -489,51 +489,31 @@ impl Capacity {
     /// The invocation accounting root this record selects. Its live, fresh
     /// and logical byte allowances are the record's, so they bound every
     /// allocation the invocation charges there: request conversion, context,
-    /// loading, diagnostics, result products and every runner that shares the
-    /// root. A root that no runner shares meters no instruction or iteration;
-    /// those fields are each standalone runner's own fuel.
+    /// loading, diagnostics, result products and every participant runner,
+    /// as it executes. The root pools no fuel: instructions and iterations
+    /// are each runner's own.
     pub(crate) fn root(&self) -> ExecutionLedger {
-        ExecutionLedger::new(
-            self.values,
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: self.work.logical_bytes,
-            },
-        )
+        ExecutionLedger::bytes_only(self.values, self.work.logical_bytes)
     }
     /// The root of a Function invocation: its interpreter and every reached
     /// child share it and pool the record's instruction and iteration meter
-    /// there.
+    /// there, beside its byte allowances.
     pub(crate) fn pooled_root(&self) -> ExecutionLedger {
         ExecutionLedger::new(self.values, self.work)
     }
-    /// The budgets that a runner sharing `root`, the root this record
-    /// selects, draws from it: the record's per-operation ceilings and fuel,
-    /// with live, fresh and logical byte budgets of what the root has left.
-    /// The runner's charges reach the root too, so the root bounds the
-    /// invocation's aggregate.
-    pub(crate) fn drawn_from(&self, root: &ExecutionLedger) -> Self {
-        let used = root.snapshot();
-        let mut drawn = *self;
-        drawn.values.live_bytes = self
-            .values
-            .live_bytes
-            .saturating_sub(used.live_reserved_bytes);
-        drawn.values.total_bytes = self.values.total_bytes.saturating_sub(
-            used.total_value_bytes
-                .saturating_add(used.pending_value_bytes),
-        );
-        drawn.work.logical_bytes = self.work.logical_bytes.saturating_sub(
-            used.logical_bytes
-                .saturating_add(used.pending_logical_bytes),
-        );
-        drawn
+    /// The budgets of a runner that charges the root: the record's
+    /// instruction and iteration fuel, and no byte budget of its own, since
+    /// the root bounds every byte the runner charges.
+    pub(crate) fn runner_budgets(&self) -> (ValueBudget, WorkBudget) {
+        (
+            ValueBudget::UNBOUNDED,
+            WorkBudget::fuel(self.work.instructions, self.work.iterations),
+        )
     }
     /// The per-bind loading sublimits under the selected loading work
-    /// allowance ([`Allowances::LOADING_WORK`]). The loaded pool passes to the
-    /// runners, so its bytes stay within one runner's live and fresh
-    /// allowances; the loading work is its own allowance, in its own unit.
+    /// allowance ([`Allowances::LOADING_WORK`]). The loaded pool and every
+    /// entry occurrence stay within the record's live and fresh byte
+    /// selections; the loading work is its own allowance, in its own unit.
     pub(crate) fn loading(&self, work: u64) -> LoadLimits {
         LoadLimits {
             bytes: self.values.live_bytes.min(self.values.total_bytes),
@@ -898,7 +878,7 @@ mod tests {
         }
     }
     #[test]
-    fn the_record_bounds_the_invocation_root_and_runners_draw_from_it() {
+    fn the_record_bounds_the_invocation_root_and_runners_keep_only_fuel() {
         let work = |logical_bytes| WorkBudget {
             instructions: 0,
             iterations: 0,
@@ -921,8 +901,10 @@ mod tests {
         let held = root.reserve_live(100).unwrap();
         assert!(root.reserve_live(1).is_err());
         drop(held);
-        // A root that no runner shares meters no instruction or iteration; a
-        // Function's root pools the record's meter.
+        // The record's root pools no fuel: instructions and iterations are
+        // each runner's own. A Function's root pools the record's meter.
+        assert!(!record.root().pools_fuel());
+        assert!(record.pooled_root().pools_fuel());
         for fuel in [
             WorkBudget {
                 instructions: 1,
@@ -936,25 +918,15 @@ mod tests {
             assert!(record.root().charge(fuel, 0).is_err());
             record.pooled_root().charge(fuel, 0).unwrap();
         }
-        // A runner that shares the root draws its byte budgets from what the
-        // root has left, and keeps the record's fuel and per-operation
-        // ceilings.
-        let root = record.pooled_root();
-        root.charge(work(30), 50).unwrap();
-        let held = root.reserve_live(40).unwrap();
-        let drawn = record.drawn_from(&root);
+        // A runner that charges the root keeps the record's fuel and no byte
+        // budget of its own: the root bounds its bytes.
+        let (values, fuel) = record.runner_budgets();
+        assert_eq!(values, ValueBudget::UNBOUNDED);
         assert_eq!(
-            (
-                drawn.values.live_bytes,
-                drawn.values.total_bytes,
-                drawn.work.logical_bytes
-            ),
-            (60, 150, 270)
+            (fuel.instructions, fuel.iterations),
+            (record.work.instructions, record.work.iterations)
         );
-        assert_eq!(drawn.work.instructions, record.work.instructions);
-        assert_eq!(drawn.value_bytes, record.value_bytes);
-        drop(held);
-        assert_eq!(record.drawn_from(&root).values.live_bytes, 100);
+        assert_eq!(fuel.logical_bytes, Limits::LOGICAL_BYTES);
         // The hard maximum is the most a record selects.
         for selection in [
             ValueBudget {

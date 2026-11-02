@@ -11,8 +11,8 @@ use zkc_runtime::{
     host::{joint, wire::WireBackend},
     interpreter::Runner,
     vm::{
-        BackendError, Contracts, ExecutionLedger, LoadError, RuntimeError, Usage, ValueBudget,
-        WorkBudget,
+        BackendError, Contracts, ExecutionLedger, Limits, LoadError, RuntimeError, Usage,
+        ValueBudget, WorkBudget,
     },
 };
 
@@ -150,10 +150,10 @@ impl BackendRun {
     ///
     /// The selected `limits` bound the invocation: their live, fresh and
     /// logical byte budgets are the invocation root's allowances. The root
-    /// charges wire transport, received payload decoding and report storage,
-    /// and the report keeps it ([`joint::Report::invocation_ledger`]). Each
-    /// runner keeps its own ledger beside the root, which the same `limits`
-    /// bound.
+    /// charges wire transport, received payload decoding, report storage and
+    /// every runner's bytes as it executes, and the report keeps it
+    /// ([`joint::Report::invocation_ledger`]). Each runner keeps its own
+    /// instruction and iteration fuel from `limits`.
     pub fn execute<B: WireBackend, H: joint::Hooks<B>>(
         &self,
         session: &str,
@@ -161,23 +161,8 @@ impl BackendRun {
         limits: joint::RunLimits,
         hooks: &mut H,
     ) -> Result<joint::Report<B>, joint::StartError<B>> {
-        let root = ExecutionLedger::new(
-            limits.values,
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: limits.work.logical_bytes,
-            },
-        );
-        joint::run_with_ledgers(
-            &self.bundle,
-            session,
-            inputs,
-            limits,
-            hooks,
-            None,
-            Some(root),
-        )
+        let root = ExecutionLedger::bytes_only(limits.values, limits.work.logical_bytes);
+        joint::run_with_ledger(&self.bundle, session, inputs, limits, hooks, Some(root))
     }
 }
 
@@ -202,11 +187,11 @@ impl InputBoundBackendRun {
     /// independently checks installations, capabilities, inputs and budgets.
     ///
     /// Each started participant is its own invocation, as in an independent
-    /// process, whose only runner shares its root: the selected budgets are
-    /// that one invocation's allowance. Common input inspection and encoding
-    /// charge the root before the Runner exists, and the Runner charges it
-    /// after; the Runner's own ledger counts its part of the same selection,
-    /// so it never binds before the root.
+    /// process, whose only runner shares its root: the selected byte budgets
+    /// are that one invocation's allowance, and the selected instructions
+    /// and iterations are the Runner's own fuel. Common input inspection and
+    /// encoding charge the root before the Runner exists, and the Runner
+    /// charges its bytes there after.
     pub fn start_role<B: WireBackend>(
         &self,
         session: &str,
@@ -214,7 +199,16 @@ impl InputBoundBackendRun {
         value_budget: ValueBudget,
         work_budget: WorkBudget,
     ) -> Result<Runner<B>, LoadError<B>> {
-        let ledger = ExecutionLedger::new(value_budget, work_budget);
+        // The selected logical work is the root's allowance. Above the
+        // interpreter's hard ceiling it refuses, as a runner's own would.
+        if work_budget.logical_bytes > Limits::LOGICAL_BYTES {
+            return Err(LoadError {
+                error: RuntimeError::Limit,
+                backend: input.backend,
+                usage: Usage::default(),
+            });
+        }
+        let ledger = ExecutionLedger::bytes_only(value_budget, work_budget.logical_bytes);
         if let Err(error) =
             self.bindings
                 .check_role(&input.role, &input.backend, &input.values, &ledger)
@@ -240,8 +234,8 @@ impl InputBoundBackendRun {
             session,
             input.backend,
             input.values,
-            value_budget,
-            work_budget,
+            ValueBudget::UNBOUNDED,
+            WorkBudget::fuel(work_budget.instructions, work_budget.iterations),
             Some(ledger),
         )
     }

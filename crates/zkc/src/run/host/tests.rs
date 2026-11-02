@@ -889,29 +889,41 @@ fn standalone_runs_keep_one_record_bounded_root_beside_separate_runner_fuel() {
             .all(|role| role.usage.unwrap().instructions > 0)
     );
     assert_eq!(used.instructions, 0);
-    // The root holds the report's records and the returned values the Host
-    // took custody of; custody adds live bytes without a fresh charge.
-    let returned = execution.unreserved_output_bytes();
-    assert!(returned > 0);
-    assert_eq!(used.live_reserved_bytes, execution.report_bytes + returned);
+    // The root charged every participant's bytes beside the loading and the
+    // report's records, and it holds the records and the returned values,
+    // which kept the live hold their runners charged.
+    let runners: usize = execution
+        .roles
+        .iter()
+        .map(|role| role.usage.unwrap().total_value_bytes)
+        .sum();
+    assert!(runners > 0);
     assert_eq!(
         used.total_value_bytes,
-        loaded.total_value_bytes + execution.report_bytes
+        loaded.total_value_bytes + execution.report_bytes + runners
     );
+    assert_eq!(execution.unreserved_output_bytes(), 0);
+    assert!(used.live_reserved_bytes > execution.report_bytes);
     drop(report);
     assert_eq!(root.snapshot().live_reserved_bytes, 0);
     assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
-    // A root that holds the records but not the returned values refuses
-    // custody: the report releases them instead of retaining them unreserved.
-    // The record's live selection bounds that root, not only each runner.
+    // The record's fresh selection bounds the participants' charges in the
+    // root too: one byte short of the run's total, the last charge, a
+    // participant's, refuses, and that participant stops with its own limit
+    // stop. The report keeps its usage and the root's.
     let mut limits = HostLimits::default();
-    limits.capacity.values.live_bytes = used.live_reserved_bytes - 1;
+    limits.capacity.values.total_bytes = used.total_value_bytes - 1;
     let report = run(limits);
-    assert_eq!(report.failure.as_deref(), Some("bundle-output-limit"));
     let execution = report.execution.as_ref().unwrap();
-    assert_eq!(execution.outcome, Outcome::Completed);
-    assert!(execution.roles.iter().all(|role| role.outputs.is_empty()));
-    assert_eq!(execution.unreserved_output_bytes(), 0);
+    let Outcome::ParticipantStopped { role } = execution.outcome else {
+        panic!("{:?}", execution.outcome);
+    };
+    assert!(matches!(
+        &execution.roles[role].before,
+        State::Stopped(stop) if stop.cause == StopCause::Limit
+    ));
+    assert!(execution.roles[role].usage.is_some());
+    assert!(report.invocation_ledger().snapshot().total_value_bytes < used.total_value_bytes);
     // Rendering repeats each record's path, so it charges the root first; a
     // root that cannot afford it renders the bounded summary instead.
     let report = run(HostLimits::default());

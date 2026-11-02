@@ -58,9 +58,9 @@ pub struct NativeDeployment {
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-    /// Charges the invocation's Host-side work when no shared ledger exists;
-    /// standalone runners keep their own ledgers, which the same record
-    /// bounds.
+    /// The invocation's own root when no outer invocation's ledger is
+    /// attached: it charges the Host's work and storage and every runner's
+    /// bytes, while each runner keeps its own fuel.
     invocation_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     retained_inputs: bool,
     operation: Option<bool>,
@@ -70,7 +70,7 @@ pub struct NativeDeployment {
     external_work_limit: u64,
     /// The selected record: per-operation ceilings, each runner's fuel, and
     /// the byte allowances of the root this deployment creates for an
-    /// invocation.
+    /// invocation, which every runner of the call charges.
     capacity: Capacity,
     loading_work: u64,
     setups: SetupAuthority,
@@ -613,8 +613,8 @@ impl NativeDeployment {
         self.capacity.loading(self.loading_work)
     }
     /// A new invocation root that the selected capacity record bounds. The
-    /// selected role's runner keeps its own ledger beside it, which the same
-    /// record bounds.
+    /// selected role's runner, and each attempt's runner, charge their bytes
+    /// to it and keep their own fuel.
     pub(crate) fn invocation_root(&self) -> zkc_runtime::vm::ExecutionLedger {
         self.capacity.root()
     }
@@ -697,8 +697,8 @@ impl NativeDeployment {
         self.shared_ledger = Some(ledger);
         self
     }
-    /// Charge one standalone invocation's Host-side work to its invocation
-    /// root `ledger`, while runners keep their own budgets.
+    /// Charge one standalone invocation's Host-side work and its runners'
+    /// bytes to its invocation root `ledger`; runners keep their own fuel.
     pub(crate) fn with_invocation_ledger(
         mut self,
         ledger: zkc_runtime::vm::ExecutionLedger,
@@ -970,6 +970,10 @@ impl NativeDeployment {
                 );
             }
             Ok(values) => {
+                // The runner charges the root as it retains its inputs, so
+                // the Host's reservation of them ends at its boundary.
+                drop(loading.take());
+                let (budget, fuel) = self.capacity.runner_budgets();
                 let started = Runner::new_for_role_with_ledger(
                     self.entry.admitted(),
                     self.entry.entry(),
@@ -977,21 +981,10 @@ impl NativeDeployment {
                     "native-proof",
                     backend,
                     values,
-                    zkc_runtime::vm::ValueBudget {
-                        // A runner sharing the root reserves its whole live
-                        // allowance there beside the loaded inputs.
-                        live_bytes: self.capacity.values.live_bytes.saturating_sub(
-                            loading
-                                .as_ref()
-                                .filter(|_| self.shared_ledger.is_some())
-                                .map_or(0, |v| v.bytes()),
-                        ),
-                        ..self.capacity.values
-                    },
-                    self.capacity.work,
-                    self.shared_ledger.clone(),
+                    budget,
+                    fuel,
+                    self.host_ledger().cloned(),
                 );
-                self.standalone_boundary(&mut loading);
                 match started {
                     Err(failed) => {
                         report.outcome = Err(failed.error.to_string());
@@ -1066,7 +1059,6 @@ impl NativeDeployment {
                 }
             }
         }
-        report.retain_outputs(self.host_ledger());
         report.instructions = report.usage.instructions;
         report.external_work = backend.external_work_spent();
         report.ring_work = backend.ring_work_spent();
@@ -1085,14 +1077,6 @@ impl NativeDeployment {
     ) -> Result<Option<zkc_runtime::vm::LiveReservation>> {
         crate::host::capacity::RootCharge::RECEIVED_PROOF
             .reserve_bytes(self.host_ledger(), proof.len().saturating_add(512))
-    }
-    /// A runner that does not share the root takes custody of its loaded
-    /// inputs under its own budget once it exists; the Host's reservation of
-    /// them in the root ends at that boundary.
-    fn standalone_boundary(&self, loading: &mut Option<zkc_runtime::vm::LiveReservation>) {
-        if self.shared_ledger.is_none() {
-            loading.take();
-        }
     }
     /// Native admission has checked the output map against the role signature.
     /// Private successors belong to cleanup, not immutable application results.
@@ -1223,34 +1207,11 @@ fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
         "cleanup_errors":s.cleanup_errors.iter().map(ToString::to_string).collect::<Vec<_>>()})
 }
 impl NativeProofReport {
-    /// Take custody of the runner's returned values in the invocation root.
-    /// A standalone runner kept them under its own budget, which ends with
-    /// the runner; custody passes without a new allocation, so the root
-    /// reserves their live bytes without a fresh charge. A runner that shared
-    /// the root keeps its own reservation with the values. When the root
-    /// cannot hold them, the values are released and the call fails with
-    /// `native-output-limit`.
-    fn retain_outputs(&mut self, ledger: Option<&zkc_runtime::vm::ExecutionLedger>) {
-        let Some(ledger) = ledger else {
-            return;
-        };
-        let bytes = self
-            .retained_outputs
-            .iter()
-            .filter(|outputs| outputs.reservation_bytes() == 0)
-            .flat_map(|outputs| outputs.iter())
-            .map(zkc_runtime::vm::Value::retained_bytes)
-            .fold(0, usize::saturating_add);
-        match ledger.reserve_live(bytes) {
-            Ok(live) => self.retained.push(live),
-            Err(_) => {
-                self.retained_outputs.clear();
-                self.outputs = None;
-                if self.outcome.is_ok() {
-                    self.outcome = Err("native-output-limit".into());
-                }
-            }
-        }
+    /// The invocation root that charged this call: the Host's work and
+    /// storage and every runner's bytes. Beside the runner's own `usage`, it
+    /// shows which bound a limit stop met.
+    pub fn invocation_ledger(&self) -> Option<&zkc_runtime::vm::ExecutionLedger> {
+        self.invocation.as_ref()
     }
     /// A completed verification may reject normally. Never infer that case from
     /// diagnostic strings, and never turn an operational failure into rejection.
@@ -1407,6 +1368,9 @@ fn driver_failure(error: &ArtifactFailure) -> String {
     match error {
         ArtifactFailure::StartedRunner => "artifact-runner-started".into(),
         ArtifactFailure::Format(e) => e.to_string(),
+        ArtifactFailure::Root(refusal) => {
+            zkc_runtime::host::wire::TransportError::Root(*refusal).to_string()
+        }
         ArtifactFailure::Backend(e) => e.code.clone(),
         ArtifactFailure::Wire(e) => zkc_cpu::NativeWireError::from(e.clone()).to_string(),
         ArtifactFailure::Runtime(e) => e.to_string(),

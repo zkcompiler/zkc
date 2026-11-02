@@ -256,14 +256,15 @@ impl<B: Backend> Report<B> {
     pub fn invocation_ledger(&self) -> Option<&crate::vm::ExecutionLedger> {
         self.invocation.as_ref()
     }
-    /// Retained bytes of returned values whose runner kept no reservation in a
-    /// shared ledger. A Host that keeps this report reserves them in its own
-    /// invocation root: custody passes to it without a new allocation.
+    /// Retained bytes of returned values whose runner shared no ledger. A
+    /// Host that keeps this report reserves them in its own invocation root:
+    /// custody passes to it without a new allocation. A runner that shared a
+    /// ledger moved its values' reservation there with them.
     pub fn unreserved_output_bytes(&self) -> usize {
         use crate::vm::Value as _;
         self.retained
             .iter()
-            .filter(|outputs| outputs.reservation_bytes() == 0)
+            .filter(|outputs| !outputs.is_reserved())
             .flat_map(|outputs| outputs.iter())
             .map(|value| value.retained_bytes())
             .fold(0, usize::saturating_add)

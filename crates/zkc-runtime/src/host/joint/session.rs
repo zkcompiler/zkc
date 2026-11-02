@@ -1,5 +1,6 @@
 use super::{Bundle, Step, bundle::Segment, report::*};
 use super::{WireBackend, WireError};
+use crate::host::wire::RootRefusal;
 use crate::interpreter::Runner;
 use crate::vm::{
     Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
@@ -79,8 +80,10 @@ impl Default for RunLimits {
 impl RunLimits {
     /// Installed joint execution ceilings. Steps count dispatched occurrences,
     /// wire_bytes bounds one message, total_wire_bytes counts all messages and
-    /// report_bytes the report's retained storage. Work and retained payload
-    /// limits apply separately to each runner.
+    /// report_bytes the report's retained storage. Instructions and iterations
+    /// are each runner's own fuel. With a runner ledger, that ledger bounds
+    /// every runner's retained payload and logical work together; without
+    /// one, those limits apply separately to each runner.
     pub const HARD_MAX: Self = Self {
         steps: 32768,
         wire_bytes: 4096,
@@ -223,11 +226,35 @@ type Attempt = Result<StepResult, Failure>;
 fn contract(detail: &str) -> Failure {
     Failure::new(FailureKind::Contract, detail)
 }
+/// A driver allowance of [`RunLimits`] refused: dispatch, message or
+/// cumulative wire bytes.
 fn limit() -> Failure {
     Failure::new(FailureKind::Limit, "joint-limit")
 }
+/// The report storage allowance, `RunLimits::report_bytes`, refused.
 fn report_limit() -> Failure {
     Failure::new(FailureKind::Limit, "joint-report-limit")
+}
+/// The invocation root refused wire transport: an encoded or replacement
+/// message buffer, or the work or decoded storage of a received payload.
+fn transport_refusal(refusal: RootRefusal) -> Failure {
+    Failure::new(
+        FailureKind::Limit,
+        match refusal {
+            RootRefusal::Work => "joint-transport-work-limit",
+            RootRefusal::Bytes => "joint-transport-bytes-limit",
+        },
+    )
+}
+/// The invocation root refused a report record or its region's shared path.
+fn record_refusal(refusal: RootRefusal) -> Failure {
+    Failure::new(
+        FailureKind::Limit,
+        match refusal {
+            RootRefusal::Work => "joint-record-work-limit",
+            RootRefusal::Bytes => "joint-record-bytes-limit",
+        },
+    )
 }
 fn codec(error: WireError) -> Failure {
     match error {
@@ -248,9 +275,9 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
 ) -> Result<Report<B>, StartError<B>> {
     run_with_ledgers(bundle, session, inputs, limits, hooks, None, None)
 }
-/// Joint runners share cumulative charging before any owner begins execution.
-/// The same ledger is also the invocation root of the Host's wire transport,
-/// decoding and report storage.
+/// Joint runners charge every byte to one ledger before any owner begins
+/// execution. The same ledger is also the invocation root of the Host's wire
+/// transport, decoding and report storage.
 pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     bundle: &Bundle,
     session: &str,
@@ -270,10 +297,12 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     )
 }
 /// Run with separate runner and Host accounting. `runners`, when present, is
-/// shared by every runner, which then reserves its live allowance there.
-/// `host` is the invocation root: it charges wire transport, received payload
-/// decoding and report storage, and the report keeps its live allowances.
-/// Runners without a shared ledger keep their separate per-runner budgets.
+/// shared by every runner, which charges every byte it retains there as it
+/// executes and keeps only the selected instructions and iterations as its
+/// own fuel. `host` is the invocation root: it charges wire transport,
+/// received payload decoding and report storage, and the report keeps its
+/// live allowances. Runners without a shared ledger keep their separate
+/// per-runner budgets.
 pub fn run_with_ledgers<B: WireBackend, H: Hooks<B>>(
     bundle: &Bundle,
     session: &str,
@@ -410,23 +439,30 @@ impl<B: WireBackend> Execution<B> {
     /// Charge one report record, with its region's shared path when this is the
     /// region's first record, to the invocation root before storing it, and
     /// keep the live allowance with the report: the root then holds exactly
-    /// `report_bytes` for the report's storage.
-    fn retain_record(&mut self, charge: usize) -> bool {
+    /// `report_bytes` for the report's storage. The report allowance refuses
+    /// with `joint-report-limit`; the root with its own record codes.
+    fn retain_record(&mut self, charge: usize) -> Result<(), Failure> {
         if self.report.reached.len() >= self.records
             || self.report.reached.try_reserve(1).is_err()
             || self.report.storage_live.try_reserve(1).is_err()
         {
-            return false;
+            return Err(report_limit());
         }
-        match crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), charge) {
-            Ok(live) => {
-                self.report.storage_live.extend(live);
-                true
-            }
-            Err(_) => false,
-        }
+        let live = crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), charge)
+            .map_err(record_refusal)?;
+        self.report.storage_live.extend(live);
+        Ok(())
     }
     fn initialize(&mut self, bundle: &Bundle, session: &str) -> Option<Outcome> {
+        // Runners that share a ledger charge every byte to it and keep only
+        // their own fuel; without one, each keeps the selected budgets.
+        let (values, work) = match self.runner_ledger {
+            Some(_) => (
+                ValueBudget::UNBOUNDED,
+                WorkBudget::fuel(self.limits.work.instructions, self.limits.work.iterations),
+            ),
+            None => (self.limits.values, self.limits.work),
+        };
         for (index, slot) in self.slots.iter_mut().enumerate() {
             let backend = slot.backend.take().expect("unstarted backend");
             match Runner::new_for_role_with_ledger(
@@ -436,8 +472,8 @@ impl<B: WireBackend> Execution<B> {
                 session,
                 backend,
                 std::mem::take(&mut slot.inputs),
-                self.limits.values,
-                self.limits.work,
+                values,
+                work,
                 self.runner_ledger.clone(),
             ) {
                 Ok(runner) => {
@@ -709,8 +745,8 @@ impl<B: WireBackend> Execution<B> {
         else {
             return Some(Outcome::DriverFailed(report_limit()));
         };
-        if !self.retain_record(charge) {
-            return Some(Outcome::DriverFailed(report_limit()));
+        if let Err(failure) = self.retain_record(charge) {
+            return Some(Outcome::DriverFailed(failure));
         }
         self.report.report_bytes = bytes;
         region.retained.set(true);
@@ -813,7 +849,7 @@ impl<B: WireBackend> Execution<B> {
                     self.host_ledger.as_ref(),
                     bytes.capacity(),
                 )
-                .map_err(|_| limit())?;
+                .map_err(transport_refusal)?;
                 self.report.wire.replacement_bytes = total;
                 self.report.reached.last_mut().unwrap().replacement_bytes = Some(bytes.len());
                 pending.bytes = bytes;
@@ -980,7 +1016,7 @@ impl<B: WireBackend> Execution<B> {
                 }
                 let wire_live =
                     crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), bound)
-                        .map_err(|_| limit())?;
+                        .map_err(transport_refusal)?;
                 let bytes = runner.backend().encode_wire(&value).map_err(codec)?;
                 if bytes.len() > bound {
                     return Err(limit());
@@ -1038,6 +1074,8 @@ impl<B: WireBackend> Execution<B> {
                     .pending
                     .as_ref()
                     .ok_or_else(|| contract("empty-handoff"))?;
+                // Reading the received payload is work the root charges
+                // first; its decoded storage is a second charge.
                 if let Some(ledger) = &self.host_ledger {
                     ledger
                         .charge(
@@ -1048,13 +1086,13 @@ impl<B: WireBackend> Execution<B> {
                             },
                             0,
                         )
-                        .map_err(|_| limit())?;
+                        .map_err(|_| transport_refusal(RootRefusal::Work))?;
                 }
                 let (_decoded_live, invalid) =
                     match runner.backend().decoding_bound(ty, &pending.bytes) {
                         Ok(bound) => (
                             crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), bound)
-                                .map_err(|_| limit())?,
+                                .map_err(transport_refusal)?,
                             None,
                         ),
                         Err(WireError::Invalid(reason)) => (None, Some(reason)),

@@ -311,8 +311,8 @@ The driver allowances in `RunLimits` are:
 | `wire_bytes` | Bytes of one wire payload or hook replacement | 4,096 | 4,096 | Operation (one message) |
 | `total_wire_bytes` | Accumulated original plus replacement bytes | 16 MiB | 16 MiB | Invocation |
 | `report_bytes` | Retained report storage | 64 MiB | 64 MiB | Invocation |
-| `values` | Live and cumulative fresh payload bytes | 64 MiB, 256 MiB | 64 MiB, 256 MiB | Runner |
-| `work` | Instructions, iterations and logical-work bytes | 1,000,000, 100,000, 4 GiB | 2^32, 2^32, 4 GiB | Runner |
+| `values` | Live and cumulative fresh payload bytes | 64 MiB, 256 MiB | 64 MiB, 256 MiB | Invocation with a runner ledger; each runner without one |
+| `work` | Instructions and iterations; logical-work bytes | 1,000,000, 100,000; 4 GiB | 2^32, 2^32; 4 GiB | Runner; logical work as `values` |
 
 Hosts may lower the allowances whose default is their maximum. The report
 allowance charges every reached step's fixed record and, when the first step of
@@ -321,6 +321,8 @@ and alternative strings, its iteration numbers and both allocation headers.
 `Report.report_bytes` records the charge. A step that would exceed the
 allowance fails as `DriverFailed(Limit)` with detail `joint-report-limit`
 before it is exposed; a region no step reaches retains and charges nothing.
+The dispatch, message and cumulative wire allowances fail with detail
+`joint-limit`.
 Requests above any installed driver maximum refuse before entry and preserve
 caller-owned inputs. `Report.limits` records the requested policy without
 silent clamping. The lower-level `Runner` refuses instruction, iteration and
@@ -330,19 +332,28 @@ independent of those aggregate budgets. The driver reserves result-port
 capacity before any entry.
 
 `run_with_ledgers` takes two optional ledgers. A runner ledger, when present,
-is shared by every runner, which reserves its whole live allowance there. A
-Host ledger is the [invocation root](capacity.md#invocation-ledgers): it
-charges wire transport, the logical work and decoding reservation of every
-received payload, and report storage. Each record, with its region's shared
-path when it is the region's first, is charged to the root before it is
-stored, so the report holds exactly `Report.report_bytes` live in the root; a
-record the root cannot afford fails as `joint-report-limit` before its step is
-exposed.
+is shared by every runner, which charges every byte to it as it executes:
+logical work, fresh allocation, live retention and withheld output capacity.
+Each runner then keeps only the selected instructions and iterations as its
+own fuel, charging the ledger's meter too when the ledger pools fuel; `values`
+and the logical-work budget bound no runner on its own. A runner the ledger
+cannot afford stops with its own limit stop. A Host ledger is the
+[invocation root](capacity.md#invocation-ledgers): it charges wire transport,
+the logical work and decoding reservation of every received payload, and
+report storage. A transport charge the root cannot afford fails as
+`joint-transport-work-limit` or `joint-transport-bytes-limit`. Each record,
+with its region's shared path when it is the region's first, is charged to the
+root before it is stored, so the report holds exactly `Report.report_bytes`
+live in the root; a record the root cannot afford fails as
+`joint-record-work-limit` or `joint-record-bytes-limit` before its step is
+exposed ([root refusals](capacity.md#root-refusals)).
 `Report::invocation_ledger` exposes the root, and the report keeps those live
 allowances until it is dropped. A runner
-without a shared ledger keeps its separate budget. `Report::unreserved_output_bytes`
-names the returned values whose runner kept no shared reservation, which a Host
-retaining the report reserves in its root; `Report::release_outputs` drops
+without a shared ledger keeps its separate budgets from `values` and `work`.
+`Report::unreserved_output_bytes` names the returned values whose runner shared
+no ledger, which a Host retaining the report reserves in its root; a runner
+that shared one moved its values' live hold there with them.
+`Report::release_outputs` drops
 returned values a Host does not keep. `run_with_ledger` passes one ledger as
 both.
 Cancellation includes the bounded host reason and can occur between send and

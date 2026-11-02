@@ -140,6 +140,10 @@ pub(crate) struct Evaluation<B: Backend> {
     pub available: Available,
     pub work: WorkBudget,
     pub allocated: usize,
+    /// The logical work and fresh bytes the computation charged to the
+    /// invocation root, which a replay charges again; conservative
+    /// temporaries can make them exceed the runner's own deltas.
+    pub charged: (u64, usize),
     pub pinned: usize,
     pub frames: u64,
     pub before: B::Checkpoint,
