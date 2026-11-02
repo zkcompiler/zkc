@@ -173,9 +173,10 @@ fn malformed_descriptors_fail_closed() {
             "explicit nominal identity required",
         ),
         (json!([["ok", vec!["bool"; 129]]]), "variant:payload-limit"),
+        // One alternative beyond the descriptor's 64-alternative ceiling.
         (
             json!(
-                (0..33)
+                (0..65)
                     .map(|i| json!([format!("a{i}"), []]))
                     .collect::<Vec<_>>()
             ),
