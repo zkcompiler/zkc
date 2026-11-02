@@ -4,7 +4,7 @@ mod installation;
 #[path = "instances.rs"]
 mod instances;
 
-use super::{Result, boolean, list, number, string};
+use super::{Result, boolean, list, number, object, string};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -728,6 +728,191 @@ fn laws(v: &Value) -> Result<()> {
 
 /// Check the declaration document and the native installation document
 /// together; the second references the first one way.
+/// A source type as a comparable key: a static parameter (with its associated
+/// member) or a parameterless constructor, after checking its references.
+type SourceTerm<'a> = (Option<usize>, &'a str, &'a str);
+type SourceShape<'a> = (
+    &'a str,
+    Vec<Kind<'a>>,
+    Vec<SourceTerm<'a>>,
+    Option<SourceTerm<'a>>,
+);
+fn source_term<'a>(
+    catalog: &Catalog<'a>,
+    statics: &[Kind<'a>],
+    t: &'a Value,
+) -> Result<SourceTerm<'a>> {
+    if let Some(head) = t.get("constructor") {
+        let head = string(head)?;
+        require(
+            catalog
+                .types
+                .get(head)
+                .is_some_and(|ty| list(&ty["parameters"]).is_ok_and(|p| p.is_empty())),
+            "unknown source constructor",
+        )?;
+        return Ok((None, "", head));
+    }
+    let index = number(&t["static"])?;
+    let parameter = *statics
+        .get(index)
+        .ok_or("source static index out of range")?;
+    let member = match t.get("member") {
+        Some(m) => string(m)?,
+        None => "",
+    };
+    require(
+        member.is_empty() || catalog.members.contains_key(&(parameter, member)),
+        "unknown source static member",
+    )?;
+    Ok((Some(index), member, ""))
+}
+fn source_shape<'a>(
+    catalog: &Catalog<'a>,
+    kind_name: &'a str,
+    statics: Vec<Kind<'a>>,
+    inputs: &[&'a Value],
+    output: &'a Value,
+) -> Result<SourceShape<'a>> {
+    require(
+        matches!(kind_name, "Math" | "Local" | "Interface"),
+        "unknown source declaration kind",
+    )?;
+    for k in &statics {
+        catalog.check_kind(*k)?;
+    }
+    let inputs = inputs
+        .iter()
+        .map(|t| source_term(catalog, &statics, t))
+        .collect::<Result<Vec<_>>>()?;
+    let output = if output.is_null() {
+        None
+    } else {
+        Some(source_term(catalog, &statics, output)?)
+    };
+    require(
+        (kind_name == "Interface") == output.is_none()
+            && (kind_name != "Interface" || inputs.is_empty()),
+        "source declaration kind and signature disagree",
+    )?;
+    Ok((kind_name, statics, inputs, output))
+}
+/// Installed source declarations, rules and notations. Rule shapes and every
+/// declaration reference are data; no rule or declaration name is fixed here.
+fn frontend<'a>(
+    v: &'a Value,
+    catalog: &Catalog<'a>,
+    exports: &mut BTreeSet<(&'a str, &'a str)>,
+) -> Result<()> {
+    let mut rules = BTreeMap::new();
+    for r in list(&v["frontendRules"])? {
+        object(r, &["name", "kind", "statics", "inputs", "output"], &[])?;
+        let name = string(&r["name"])?;
+        let inputs = list(&r["inputs"])?.iter().collect::<Vec<_>>();
+        let shape = source_shape(
+            catalog,
+            string(&r["kind"])?,
+            kinds(&r["statics"])?,
+            &inputs,
+            &r["output"],
+        )?;
+        require(
+            identifier(name) && rules.insert(name, shape).is_none(),
+            "invalid or duplicate frontend rule",
+        )?;
+    }
+    let intrinsics = names(&v["mathematicalIntrinsics"])?;
+    let mut identities = BTreeSet::new();
+    let mut implicit_names = BTreeSet::new();
+    let mut declared = BTreeSet::new();
+    for r in list(&v["frontendDeclarations"])? {
+        let identity = string(&r["identity"])?;
+        require(
+            !identity.is_empty() && identities.insert(identity),
+            "duplicate frontend identity",
+        )?;
+        let module = string(&r["owner"])?;
+        let name = string(&r["name"])?;
+        require(
+            module.starts_with("zkc::") && path(module, "::") && identifier(name),
+            "invalid frontend owner",
+        )?;
+        require(
+            exports.insert((module, name)),
+            "duplicate frontend ownership",
+        )?;
+        declared.insert((module, name));
+        let mut parameters = BTreeSet::new();
+        let mut statics = Vec::new();
+        for s in list(&r["statics"])? {
+            let static_name = string(&s["name"])?;
+            require(
+                identifier(static_name) && parameters.insert(static_name),
+                "invalid or duplicate source parameter name",
+            )?;
+            statics.push(kind(&s["parameter"])?);
+        }
+        let mut inputs = Vec::new();
+        for s in list(&r["inputs"])? {
+            let input_name = string(&s["name"])?;
+            require(
+                identifier(input_name) && parameters.insert(input_name),
+                "invalid or duplicate source parameter name",
+            )?;
+            inputs.push(&s["type"]);
+        }
+        let kind_name = string(&r["kind"])?;
+        let shape = source_shape(catalog, kind_name, statics, &inputs, &r["output"])?;
+        let target = string(&r["association"]["target"])?;
+        match string(&r["association"]["kind"])? {
+            "rule" => require(
+                rules.get(target) == Some(&shape),
+                "frontend rule signature mismatch",
+            )?,
+            "primitive" => require(
+                match kind_name {
+                    "Math" => intrinsics.contains_key(target),
+                    "Local" => catalog.operations.contains_key(target),
+                    _ => false,
+                },
+                "frontend primitive kind mismatch",
+            )?,
+            _ => return Err("unknown frontend association".into()),
+        }
+        require(
+            !boolean(&r["implicit"])? || implicit_names.insert(name),
+            "duplicate implicit frontend name",
+        )?;
+    }
+    let mut notations = BTreeSet::new();
+    for r in list(&v["frontendNotations"])? {
+        let module = string(&r["owner"])?;
+        let symbol = string(&r["symbol"])?;
+        let target = string(&r["target"])?;
+        require(
+            declared.iter().any(|(owner, _)| *owner == module),
+            "frontend notation owner is not installed",
+        )?;
+        require(
+            declared.contains(&(module, target)),
+            "frontend notation target is not declared",
+        )?;
+        require(
+            !symbol.is_empty() && !symbol.chars().any(char::is_whitespace),
+            "invalid frontend notation symbol",
+        )?;
+        let fixity = &r["fixity"];
+        require(
+            fixity.is_null() || (1..=99).contains(&number(&fixity["precedence"])?),
+            "invalid frontend notation fixity",
+        )?;
+        require(
+            notations.insert((module, symbol, target)),
+            "duplicate frontend notation",
+        )?;
+    }
+    Ok(())
+}
 pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
     let sorts = list(&v["sorts"])?
         .iter()
@@ -873,37 +1058,7 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
             )?;
         }
     }
-    let mut frontend_ids = BTreeSet::new();
-    let mut implicit_names = BTreeSet::new();
-    for r in list(&v["frontendAssociations"])? {
-        let id = string(&r["identity"])?;
-        let expected = match id {
-            "record.unpack" => "RecordUnpack",
-            "record.inspect" => "RecordInspect",
-            "record.repack" => "RecordRepack",
-            "service.random" => "RandomConstructor",
-            _ => return Err("unknown frontend identity".into()),
-        };
-        require(
-            expected == string(&r["signature"])?,
-            "frontend signature identity mismatch",
-        )?;
-        require(frontend_ids.insert(id), "duplicate frontend identity")?;
-        let module = string(&r["module"])?;
-        let name = string(&r["name"])?;
-        require(
-            module.starts_with("zkc::") && path(module, "::") && identifier(name),
-            "invalid frontend owner",
-        )?;
-        require(
-            exports.insert((module, name)),
-            "duplicate frontend ownership",
-        )?;
-        require(
-            !boolean(&r["implicit"])? || implicit_names.insert(name),
-            "duplicate implicit frontend name",
-        )?;
-    }
+    frontend(v, &catalog, &mut exports)?;
     let mut homes = BTreeSet::new();
     for r in list(&v["frontendHomes"])? {
         let head = string(&r["constructor"])?;
@@ -924,6 +1079,23 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
             )?;
         }
     }
+    let mut signatures = BTreeMap::new();
+    for r in list(&v["serviceSignatures"])? {
+        object(r, &["name", "capability"], &[])?;
+        let name = string(&r["name"])?;
+        let capability = string(&r["capability"])?;
+        require(
+            identifier(name) && signatures.insert(name, capability).is_none(),
+            "invalid or duplicate service signature",
+        )?;
+        if !capability.is_empty() {
+            require(
+                kinds(&lookup(&catalog.capabilities, &r["capability"])?["parameters"])?
+                    == [("Domain", "Field")],
+                "unknown service capability",
+            )?;
+        }
+    }
     let mut methods = BTreeSet::new();
     for r in list(&v["serviceMethods"])? {
         let name = string(&r["name"])?;
@@ -931,23 +1103,10 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
             identifier(name) && methods.insert(name),
             "invalid or duplicate service method",
         )?;
-        let expected = match string(&r["signature"])? {
-            "RandomDraw" => "",
-            "RandomIndex" => "IndexRandomness",
-            "RandomIndices" => "IndexBlockRandomness",
-            _ => return Err("unknown service signature".into()),
-        };
         require(
-            expected == string(&r["capability"])?,
+            signatures.get(string(&r["signature"])?) == Some(&string(&r["capability"])?),
             "service method capability mismatch",
         )?;
-        if !expected.is_empty() {
-            require(
-                kinds(&lookup(&catalog.capabilities, &r["capability"])?["parameters"])?
-                    == [("Domain", "Field")],
-                "unknown service capability",
-            )?;
-        }
     }
     for m in catalog.meanings.values() {
         let name = string(&m["name"])?;

@@ -17,7 +17,7 @@ bool Checker::classifyServices() {
       auto port = std::move(inputs[slot.index]);
       if (!types.charge(1, port.span))
         return false;
-      const protocol::FrontendAssociation *service = nullptr;
+      const protocol::FrontendDeclaration *service = nullptr;
       if (port.type.kind == SyntaxType::Kind::Name) {
         // A static binder shadows an implicit installed source constructor.
         bool bound = false;
@@ -38,8 +38,8 @@ bool Checker::classifyServices() {
           if (target) {
             const auto &constructor = output.declarations[target->index];
             service = output.declarationIndex->association(*target);
-            if (service && service->signature !=
-                               protocol::FrontendSignature::RandomConstructor)
+            if (service &&
+                service->rule != protocol::FrontendSignature::RandomConstructor)
               service = nullptr;
             if (service) {
               port.serviceConstructor = constructor.qualifiedName;

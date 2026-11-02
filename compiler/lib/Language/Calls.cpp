@@ -43,8 +43,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   auto &callee = checker.output.declarations[target.declaration.index];
   if (const auto *association =
           checker.output.declarationIndex->association(target.declaration);
-      association && isRecordIntrinsic(association->signature))
-    return recordCall(expr, target, association->signature, depth);
+      isRecordIntrinsic(association))
+    return recordCall(expr, target, *association->rule, depth);
   if (callee.generated && !callee.generated->constructible &&
       (callee.kind == Declaration::Kind::Record ||
        callee.kind == Declaration::Kind::Variant)) {

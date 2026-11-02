@@ -28,8 +28,9 @@ does not install a runtime implementation by adding a declaration.
 
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
-`mathematicalIntrinsics`, `consumerProfiles`, `frontendAssociations`,
-`frontendHomes`, `serviceMethods`, and the [installed-instance](#installed-instances)
+`mathematicalIntrinsics`, `consumerProfiles`, `frontendDeclarations`,
+`frontendRules`, `frontendNotations`, `frontendHomes`, `serviceSignatures`,
+`serviceMethods`, and the [installed-instance](#installed-instances)
 tables `domains`, `logicalTypes`, `frameTags`, `codecs`, `aggregateFrames`,
 `randomServices`, `limits`, `finiteDefinitions` and `domainConstructors`. The
 format tag is `zkc.contract-declarations/0`. Every list follows the contribution dependency
@@ -708,21 +709,68 @@ The [native block format](native-index-block.md) owns the exact bytes.
 
 ## Frontend declaration associations
 
-The exact version-0 envelope also contains `frontendAssociations`,
-`frontendHomes` and `serviceMethods`. These source-facing rows grant typed
-elaboration rules, never executable implementations or formal interpretations.
-All objects reject unknown fields. Duplicate identities, namespace ownership,
-implicit names, constructor homes and service member names refuse.
+The exact version-0 envelope also contains `frontendDeclarations`,
+`frontendRules`, `frontendNotations`, `frontendHomes`, `serviceSignatures` and
+`serviceMethods`. These source-facing rows grant source resolution and typed
+elaboration facts, never executable implementations, physical installation or
+formal interpretations; backend choices stay in the
+[native installation](native-installation.md). All objects reject unknown
+fields. The rows describe the current installation, not permanent limits of
+the language: later descriptor, role-family and staged-construction interfaces
+extend their owning typed contracts.
 
-A frontend association has exactly `identity`, `module`, `name`, `signature`
-and Boolean `implicit`. The closed pairs are `record.unpack` / `RecordUnpack`,
-`record.inspect` / `RecordInspect`, `record.repack` / `RecordRepack` and
-`service.random` / `RandomConstructor`. The module is a `zkc::` path; the name
-is an identifier. Installation-origin source must supply the corresponding
-checked declaration. Captured source with the same spelling cannot install an
-association. Source marker signatures are alpha-normalized and checked against
-the selected rule. An implicit association is considered only after ordinary
-lexical/import lookup fails; a failed declared call never retries an intrinsic.
+### Installed source declarations
+
+`frontendDeclarations` lists every installed source declaration in declaration
+order. A row has exactly:
+
+| Field | Meaning |
+|---|---|
+| `identity` | Unique installation identity, such as `record.unpack`. |
+| `owner` | The installed module path that declares it, a `zkc::` path. |
+| `name` | Its identifier in that module. |
+| `kind` | `Math`, `Local` or `Interface`. |
+| `statics` | Ordered static parameters, each `{name, parameter}` with a `{kind, sort}` of `Domain`, `Type` or `Nat`. |
+| `inputs` | Ordered data inputs, each `{name, type}`. |
+| `output` | The result type, or null for an interface. |
+| `association` | Exactly one `{kind, target}`: a `primitive` or a `rule`. |
+| `implicit` | Whether lookup may find it after ordinary lookup fails. |
+
+A type is `{static}`, the index of a static parameter, optionally with an
+associated `member` of that parameter's sort from `members`, or
+`{constructor}`, a parameterless installed type constructor. A `primitive`
+association names a mathematical intrinsic for a `Math` declaration and an
+executable operation for a `Local` one; an interface has no primitive. A `rule`
+association names a `frontendRules` row, and the declaration's kind, static
+kinds, inputs and output must equal that row's shape. Identities, the owner
+and name pair, static and input names within a row, and implicit names are
+unique; an installed declaration shares no owner and name with an export.
+
+A rule row has exactly `name`, `kind`, `statics` (parameter kinds), `inputs`
+(types) and `output`. Rule shapes are data: a validator checks a rule
+association against the declared shape, not against a fixed list of rules.
+The frontend implements the semantics of the rules it names and refuses others.
+
+The installed modules are the distinct owners. The frontend reads each module's
+rows as its checker input: the module keeps an empty installation buffer at
+`<installation>/catalog/<module>`, nothing is lexed or parsed, and a row the
+frontend cannot express refuses with `source.installation`. Captured source
+with the same spelling cannot install an association. An implicit declaration
+is considered only after ordinary lexical/import lookup fails; a failed
+declared call never retries an intrinsic. The installation identity frames
+every field of every declaration and notation row.
+
+### Installed notations
+
+`frontendNotations` owns installed notation only; authored source declares its
+own notations. A row has exactly `owner`, `symbol`, `fixity`, `target` and
+Boolean `public`. The target names a declaration of the same owner, so the
+notation resolves through that checked declaration and its visibility; it
+never installs an intrinsic by spelling. `fixity` is null, keeping the symbol's
+fixed syntax, or `{associativity, precedence}` with `left`, `right` or `none`
+and a precedence from 1 to 99. The frontend admits the symbol as an operator
+and keeps ASCII operator syntax fixed. The owner, symbol and target triple is
+unique.
 
 The record rules derive payload types in declared field order from the actual
 nominal schema, retaining phantom arguments. Inspect and repack require an
@@ -745,12 +793,15 @@ catalog identity, never a printed alias or type name. Nominal wrappers retain
 their own home; aliases retain their target. A home association supplies no new
 methods, capabilities, role inference or implementation.
 
-A service member contains exactly `name`, `signature` and `capability`.
-`RandomDraw` requires the empty capability; `RandomIndex` requires the installed
-unary Field predicate `IndexRandomness`; `RandomIndices` requires
-`IndexBlockRandomness`. These rules retain the existing ordered request
-signatures and independently selected provider roots. Member spelling is
-separate from rule identity. No unknown rule falls back to a textual signature.
+A service signature contains exactly `name` and `capability`: the empty
+capability or an installed unary Field predicate. A service member contains
+exactly `name`, `signature` and `capability`; its signature names a
+`serviceSignatures` row and its capability equals that row's. Today
+`RandomDraw` requires no capability, `RandomIndex` requires `IndexRandomness`
+and `RandomIndices` requires `IndexBlockRandomness`. These rules retain the
+existing ordered request signatures and independently selected provider roots.
+Member spelling is separate from rule identity. No unknown rule falls back to a
+textual signature.
 
 A home also carries an exact `members` list of canonical source declaration
 paths. It permits deliberate API forwarding, such as Vector's primitive

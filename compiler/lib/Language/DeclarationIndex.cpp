@@ -18,7 +18,9 @@ DeclarationIndex::DeclarationIndex(ArrayRef<Declaration> declarations,
     if (decl.span.source.index >= sources.size() ||
         sources[decl.span.source.index].origin != SourceOrigin::Installation)
       continue;
-    if (auto *row = protocol::frontendAssociation(decl.qualifiedName)) {
+    // Rule associations replace a body; primitive declarations keep theirs.
+    if (auto *row = protocol::frontendDeclaration(decl.qualifiedName);
+        row && row->rule) {
       associations.emplace(decl.id.index, row);
       if (row->implicit)
         implicitDeclarations.emplace(row->name, decl.id);
@@ -90,7 +92,7 @@ std::optional<DeclarationId> DeclarationIndex::lookup(DeclarationId context,
   }
   return selected;
 }
-const protocol::FrontendAssociation *
+const protocol::FrontendDeclaration *
 DeclarationIndex::association(DeclarationId id) const {
   auto at = associations.find(id.index);
   return at == associations.end() ? nullptr : at->second;

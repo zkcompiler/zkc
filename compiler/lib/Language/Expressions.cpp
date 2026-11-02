@@ -92,9 +92,9 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       }
       const auto *association =
           checker.output.declarationIndex->association(callee.id);
-      if (association && isRecordIntrinsic(association->signature)) {
+      if (isRecordIntrinsic(association)) {
         ordered |=
-            association->signature != protocol::FrontendSignature::RecordUnpack;
+            association->rule != protocol::FrontendSignature::RecordUnpack;
         if (!expr.children.empty()) {
           auto source = inferredType(expr.children.front());
           const auto *nominal =

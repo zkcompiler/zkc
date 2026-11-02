@@ -85,6 +85,19 @@ def kind(value):
     )
 
 
+source_kind = one_of("Math", "Local", "Interface")
+
+
+def source_term(value):
+    """A source declaration type: a static parameter, its associated member, or
+    a parameterless constructor."""
+    require(isinstance(value, dict), "expected declaration object")
+    if "constructor" in value:
+        record(value, {"constructor": text})
+    else:
+        record(value, {"static": count}, {"member": text})
+
+
 def application(value, extra=None):
     record(value, {"constructor": text, "arguments": sequence(count)} | (extra or {}))
 
@@ -417,16 +430,26 @@ def validate(catalog):
             "rules": sequence(rule),
             "capabilities": sequence(row({"name": text, "parameters": sequence(kind)})),
             "exports": sequence(export),
-            "frontendAssociations": sequence(row({
-                "identity": text, "module": text, "name": text,
-                "signature": one_of("RecordUnpack", "RecordInspect", "RecordRepack", "RandomConstructor"),
+            "frontendDeclarations": sequence(row({
+                "identity": text, "owner": text, "name": text, "kind": source_kind,
+                "statics": sequence(row({"name": text, "parameter": kind})),
+                "inputs": sequence(row({"name": text, "type": source_term})),
+                "output": nullable(source_term),
+                "association": row({"kind": one_of("primitive", "rule"), "target": text}),
                 "implicit": flag,
             })),
-            "frontendHomes": sequence(row({"constructor": text, "module": text, "members": sequence(text)})),
-            "serviceMethods": sequence(row({
-                "name": text, "signature": one_of("RandomDraw", "RandomIndex", "RandomIndices"),
-                "capability": text,
+            "frontendRules": sequence(row({
+                "name": text, "kind": source_kind, "statics": sequence(kind),
+                "inputs": sequence(source_term), "output": nullable(source_term),
             })),
+            "frontendNotations": sequence(row({
+                "owner": text, "symbol": text,
+                "fixity": nullable(row({"associativity": one_of("left", "right", "none"), "precedence": count})),
+                "target": text, "public": flag,
+            })),
+            "frontendHomes": sequence(row({"constructor": text, "module": text, "members": sequence(text)})),
+            "serviceSignatures": sequence(row({"name": text, "capability": text})),
+            "serviceMethods": sequence(row({"name": text, "signature": text, "capability": text})),
             "families": sequence(
                 row(
                     {
@@ -552,42 +575,109 @@ def validate(catalog):
 
 
 def validate_frontend(catalog):
+    """Installed source declarations, their rules and notations.
+
+    Rule shapes, service-signature capabilities and declaration references are
+    data; nothing here names a particular rule, method or declaration.
+    """
     import re
 
     def path(value):
         return bool(re.fullmatch(r"zkc(?:::[A-Za-z_][A-Za-z_0-9]*)+", value))
 
-    identities = {"record.unpack": "RecordUnpack", "record.inspect": "RecordInspect",
-                  "record.repack": "RecordRepack", "service.random": "RandomConstructor"}
+    def identifier(value):
+        return bool(re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", value))
+
+    sorts = set(catalog["sorts"])
+    types = {t["name"]: t for t in catalog["types"]}
+    members = {(m["owner"]["kind"], m["owner"]["sort"], m["name"]) for m in catalog["members"]}
+
+    def parameter(value):
+        require(value["kind"] != "Domain" or value["sort"] in sorts, "unknown source static sort")
+
+    def resolve(term, statics):
+        """The term's kind as a comparable key, after checking its references."""
+        if "constructor" in term:
+            head = types.get(term["constructor"])
+            require(head is not None and not head["parameters"], "unknown source constructor")
+            return ("constructor", term["constructor"])
+        require(term["static"] < len(statics), "source static index out of range")
+        static = statics[term["static"]]
+        if "member" in term:
+            require((static["kind"], static["sort"], term["member"]) in members, "unknown source static member")
+        return ("static", term["static"], term.get("member"))
+
+    def shape(kind, statics, inputs, output):
+        for static in statics:
+            parameter(static)
+        inputs = [resolve(term, statics) for term in inputs]
+        output = None if output is None else resolve(output, statics)
+        require((kind == "Interface") == (output is None) and (kind != "Interface" or not inputs),
+                "source declaration kind and signature disagree")
+        return kind, [(s["kind"], s["sort"]) for s in statics], inputs, output
+
+    rules = {}
+    for row in catalog["frontendRules"]:
+        require(identifier(row["name"]) and row["name"] not in rules, "invalid or duplicate frontend rule")
+        rules[row["name"]] = shape(row["kind"], row["statics"], row["inputs"], row["output"])
+    intrinsics = {r["name"] for r in catalog["mathematicalIntrinsics"]}
+    operations = {r["name"] for r in catalog["operations"]}
     owners = {(r["module"], r["name"]) for r in catalog["exports"]}
-    seen = set()
+    identities = set()
     implicit = set()
-    for row in catalog["frontendAssociations"]:
-        require(identities.get(row["identity"]) == row["signature"], "frontend signature identity mismatch")
-        require(row["identity"] not in seen, "duplicate frontend identity")
-        seen.add(row["identity"])
-        require(path(row["module"]) and bool(re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", row["name"])), "invalid frontend owner")
-        owner = (row["module"], row["name"])
+    declared = set()
+    for row in catalog["frontendDeclarations"]:
+        require(row["identity"] and row["identity"] not in identities, "duplicate frontend identity")
+        identities.add(row["identity"])
+        require(path(row["owner"]) and identifier(row["name"]), "invalid frontend owner")
+        owner = (row["owner"], row["name"])
         require(owner not in owners, "duplicate frontend ownership")
         owners.add(owner)
+        declared.add(owner)
+        names = [static["name"] for static in row["statics"]] + [slot["name"] for slot in row["inputs"]]
+        require(all(identifier(name) for name in names) and len(set(names)) == len(names),
+                "invalid or duplicate source parameter name")
+        statics = [static["parameter"] for static in row["statics"]]
+        actual = shape(row["kind"], statics, [slot["type"] for slot in row["inputs"]], row["output"])
+        association, target = row["association"]["kind"], row["association"]["target"]
+        if association == "rule":
+            require(rules.get(target) == actual, "frontend rule signature mismatch")
+        else:
+            require(row["kind"] != "Interface"
+                    and target in (intrinsics if row["kind"] == "Math" else operations),
+                    "frontend primitive kind mismatch")
         if row["implicit"]:
             require(row["name"] not in implicit, "duplicate implicit frontend name")
             implicit.add(row["name"])
-    heads = {t["name"] for t in catalog["types"]} | {"oracle", "oracle_sequence"}
+    modules = {owner for owner, _ in declared}
+    notations = set()
+    for row in catalog["frontendNotations"]:
+        require(row["owner"] in modules, "frontend notation owner is not installed")
+        require((row["owner"], row["target"]) in declared, "frontend notation target is not declared")
+        require(bool(row["symbol"]) and not any(c.isspace() for c in row["symbol"]), "invalid frontend notation symbol")
+        fixity = row["fixity"]
+        require(fixity is None or 1 <= fixity["precedence"] <= 99, "invalid frontend notation fixity")
+        key = (row["owner"], row["symbol"], row["target"])
+        require(key not in notations, "duplicate frontend notation")
+        notations.add(key)
+    heads = set(types) | {"oracle", "oracle_sequence"}
     seen = set()
     for row in catalog["frontendHomes"]:
         require(row["constructor"] in heads and path(row["module"]), "invalid frontend home")
         require(row["constructor"] not in seen, "duplicate frontend home")
         seen.add(row["constructor"])
         require(len(row["members"]) == len(set(row["members"])) and all(path(member) for member in row["members"]), "invalid frontend home members")
+    signatures = {}
+    for row in catalog["serviceSignatures"]:
+        require(identifier(row["name"]) and row["name"] not in signatures, "invalid or duplicate service signature")
+        require(not row["capability"] or any(c["name"] == row["capability"] and c["parameters"] == [{"kind": "Domain", "sort": "Field"}] for c in catalog["capabilities"]), "unknown service capability")
+        signatures[row["name"]] = row["capability"]
     seen = set()
-    rules = {"RandomDraw": "", "RandomIndex": "IndexRandomness", "RandomIndices": "IndexBlockRandomness"}
     for row in catalog["serviceMethods"]:
-        require(bool(re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", row["name"])), "invalid service method")
+        require(identifier(row["name"]), "invalid service method")
         require(row["name"] not in seen, "duplicate service method")
         seen.add(row["name"])
-        require(rules.get(row["signature"]) == row["capability"], "service method capability mismatch")
-        require(not row["capability"] or any(c["name"] == row["capability"] and c["parameters"] == [{"kind": "Domain", "sort": "Field"}] for c in catalog["capabilities"]), "unknown service capability")
+        require(signatures.get(row["signature"]) == row["capability"], "service method capability mismatch")
 
 
 FRAME_LAYOUTS = (

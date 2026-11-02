@@ -77,17 +77,48 @@ llvm::ArrayRef<SourceAssociatedType> sourceAssociatedTypes();
 llvm::ArrayRef<SourceCapabilityExport> sourceCapabilityExports();
 llvm::ArrayRef<SourceTypeExport> sourceTypeExports();
 
-/// Closed source signature rules. Presence grants no executable authority.
+/// Source signature rules this frontend implements. The catalog's rule rows
+/// declare each rule's shape. Presence grants no executable authority.
 enum class FrontendSignature {
   RecordUnpack,
   RecordInspect,
   RecordRepack,
   RandomConstructor
 };
-struct FrontendAssociation {
+enum class SourceDeclarationKind { Math, Local, Interface };
+/// A static parameter, optionally its associated member, or a parameterless
+/// constructor.
+struct SourceTerm {
+  std::optional<unsigned> index;
+  std::string member, constructor;
+};
+struct SourceStatic {
+  std::string name, kind, sort;
+};
+struct SourceInput {
+  std::string name;
+  SourceTerm type;
+};
+/// One installed source declaration with exactly one association: a rule, or
+/// a primitive mathematical intrinsic (Math) or operation (Local). It grants
+/// source resolution and elaboration facts, never execution authority.
+struct FrontendDeclaration {
   std::string identity, module, name;
-  FrontendSignature signature;
+  SourceDeclarationKind kind;
+  std::vector<SourceStatic> statics;
+  std::vector<SourceInput> inputs;
+  std::optional<SourceTerm> output;
+  std::optional<FrontendSignature> rule;
+  std::string primitive;
   bool implicit;
+};
+/// An installed notation of a declaration of its module. An empty fixity keeps
+/// the symbol's fixed syntax.
+struct FrontendNotation {
+  std::string module, symbol, fixity;
+  unsigned precedence;
+  std::string target;
+  bool isPublic;
 };
 struct FrontendHome {
   std::string constructor, module;
@@ -99,10 +130,11 @@ struct ServiceMethodDeclaration {
   ServiceSignature signature;
   std::string capability;
 };
-llvm::ArrayRef<FrontendAssociation> frontendAssociations();
+llvm::ArrayRef<FrontendDeclaration> frontendDeclarations();
+llvm::ArrayRef<FrontendNotation> frontendNotations();
 llvm::ArrayRef<FrontendHome> frontendHomes();
 llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations();
-const FrontendAssociation *frontendAssociation(llvm::StringRef qualifiedName);
+const FrontendDeclaration *frontendDeclaration(llvm::StringRef qualifiedName);
 
 enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 struct TypePermissions {

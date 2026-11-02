@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_INTERNAL_H
 
 #include "State.h"
+#include "zkc/Contracts/Declarations.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/JSON.h"
 #include <map>
@@ -473,6 +474,23 @@ staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);
 llvm::StringRef operatorSymbol(const Expression &);
+
+/// An operator spelling the parser admits in an operator declaration.
+bool admittedOperatorSymbol(llvm::StringRef);
+/// The installed module's checker input, read from the catalog's declaration
+/// and notation rows of that owner. Nothing is lexed or parsed; spans are empty
+/// and reading charges the declaration count and work parsing charges. A row
+/// the frontend cannot express refuses with `source.installation`.
+llvm::Expected<SyntaxDeclaration> readInstalledModule(const SourceBuffer &,
+                                                      SourceId, Work &);
+/// The same reader over explicit rows, for checking rows before installation.
+llvm::Expected<SyntaxDeclaration>
+readInstalledModule(const SourceBuffer &, SourceId, Work &,
+                    llvm::ArrayRef<protocol::FrontendDeclaration>,
+                    llvm::ArrayRef<protocol::FrontendNotation>);
+/// Installed module paths: the distinct owners of installed declarations, in
+/// catalog order.
+std::vector<std::string> installedModules();
 
 llvm::Error lex(const SourceBuffer &, SourceId, Work &, std::vector<Token> &);
 llvm::Expected<SyntaxDeclaration> parse(const SourceBuffer &, SourceId,

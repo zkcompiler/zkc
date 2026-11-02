@@ -315,13 +315,7 @@ private:
   using Position = NotationDescriptor::Position;
   using Association = NotationDescriptor::Association;
   static bool operatorSymbol(StringRef symbol) {
-    if (llvm::any_of(syntax::defaultNotations(), [&](const auto &notation) {
-          return notation.symbol == symbol;
-        }))
-      return true;
-    auto scalar = decodeSourceScalar(symbol, 0);
-    return scalar && scalar->bytes == symbol.size() &&
-           isMathematicalSymbol(scalar->value);
+    return admittedOperatorSymbol(symbol);
   }
   static bool delimiter(StringRef symbol) {
     auto scalar = decodeSourceScalar(symbol, 0);
@@ -3312,6 +3306,15 @@ Expected<EntrySelector> parseEntrySelector(StringRef text, Work &work) {
                    "in Entry selector: " + diagnostic->message);
   }
   return result;
+}
+bool admittedOperatorSymbol(StringRef symbol) {
+  if (llvm::any_of(syntax::defaultNotations(), [&](const auto &notation) {
+        return notation.symbol == symbol;
+      }))
+    return true;
+  auto scalar = decodeSourceScalar(symbol, 0);
+  return scalar && scalar->bytes == symbol.size() &&
+         isMathematicalSymbol(scalar->value);
 }
 Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId sourceId,
                                   ArrayRef<Token> tokens, Work &work) {

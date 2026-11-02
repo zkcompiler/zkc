@@ -4,6 +4,8 @@
 #include "zkc/Language/DeclarationIndex.h"
 namespace zkc::language::detail {
 bool isRecordIntrinsic(protocol::FrontendSignature);
+/// A declaration associated with a record rule.
+bool isRecordIntrinsic(const protocol::FrontendDeclaration *);
 bool checkDeclarationAssociations(Semantics &, llvm::ArrayRef<Declaration>,
                                   const DeclarationIndex &);
 std::optional<Type> recordPayload(Semantics &, const Declaration &,

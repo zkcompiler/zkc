@@ -938,10 +938,33 @@ std::string installedCatalogIdentity() {
     row({"service-method", method.name,
          std::to_string(static_cast<unsigned>(method.signature)),
          method.capability});
-  for (const auto &service : protocol::frontendAssociations())
-    row({"frontend-association", service.module, service.name,
-         std::to_string(static_cast<unsigned>(service.signature)),
-         service.identity, service.implicit ? "implicit" : "explicit"});
+  // Every field of an installed declaration and notation is semantic: its
+  // owner, kind, ordered statics and inputs, output, association and scope.
+  auto term = [](const protocol::SourceTerm &value) {
+    return value.index
+               ? "static:" + std::to_string(*value.index) + ":" + value.member
+               : "constructor:" + value.constructor;
+  };
+  for (const auto &declaration : protocol::frontendDeclarations()) {
+    row({"frontend-declaration", declaration.identity, declaration.module,
+         declaration.name,
+         std::to_string(static_cast<unsigned>(declaration.kind)),
+         declaration.rule ? "rule:" + std::to_string(static_cast<unsigned>(
+                                          *declaration.rule))
+                          : "primitive:" + declaration.primitive,
+         declaration.output ? term(*declaration.output) : "none",
+         declaration.implicit ? "implicit" : "explicit"});
+    for (const auto &[position, value] : llvm::enumerate(declaration.statics))
+      row({"frontend-static", declaration.identity, std::to_string(position),
+           value.name, value.kind, value.sort});
+    for (const auto &[position, value] : llvm::enumerate(declaration.inputs))
+      row({"frontend-input", declaration.identity, std::to_string(position),
+           value.name, term(value.type)});
+  }
+  for (const auto &notation : protocol::frontendNotations())
+    row({"frontend-notation", notation.module, notation.symbol, notation.fixity,
+         std::to_string(notation.precedence), notation.target,
+         notation.isPublic ? "public" : "private"});
   const auto &catalog = protocol::installedDomains();
   for (const auto &domain : catalog.allDomains()) {
     row({"domain", domain.identity, domain.sort, domain.modulus,

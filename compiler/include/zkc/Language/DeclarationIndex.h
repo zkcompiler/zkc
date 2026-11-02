@@ -19,7 +19,7 @@ public:
                    std::vector<Namespace>);
   std::optional<DeclarationId> lookup(DeclarationId context,
                                       llvm::StringRef) const;
-  const protocol::FrontendAssociation *association(DeclarationId) const;
+  const protocol::FrontendDeclaration *association(DeclarationId) const;
   std::optional<DeclarationId> implicit(llvm::StringRef) const;
   std::optional<DeclarationId> home(const Type &) const;
   llvm::ArrayRef<DeclarationId> members(DeclarationId) const;
@@ -28,7 +28,7 @@ public:
 private:
   std::vector<Namespace> namespaces;
   std::vector<std::optional<DeclarationId>> parents;
-  std::map<uint32_t, const protocol::FrontendAssociation *> associations;
+  std::map<uint32_t, const protocol::FrontendDeclaration *> associations;
   std::map<std::string, DeclarationId> implicitDeclarations,
       canonicalDeclarations;
   std::map<std::string, DeclarationId> nominalHomes, constructorHomes;

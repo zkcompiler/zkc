@@ -102,9 +102,12 @@ remaining restatements with the tables. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source or belongs under `lean/`.
 
-`frontendAssociations`, `frontendHomes` and `serviceMethods` own source
-intrinsic/service signature rules and semantic constructor homes. Native and
-Rust generation independently reject forged rules, unknown fields, duplicate
-owners and capability drift. Installed source declarations are separately
-checked against their marker signatures; captured homonyms grant no authority.
+`frontendDeclarations`, `frontendRules`, `frontendNotations`,
+`frontendHomes`, `serviceSignatures` and `serviceMethods` own the installed
+source declarations and notations, the rule and service-signature shapes, and
+semantic constructor homes. The generator, zkc-tblgen and the Rust build each
+check their structure: rule associations against the declared rule shapes,
+primitive associations against the declaration kind, static, member and
+notation references, unknown fields, duplicate owners and capability drift.
+Captured homonyms grant no authority.
 See [frontend associations](../../docs/spec/formats/contract-declarations.md#frontend-declaration-associations).

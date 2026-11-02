@@ -36,7 +36,8 @@ fn operation<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
 fn complete_static_inventory() {
     let value = source();
     for (key, count) in [
-        ("frontendAssociations", CATALOG.frontend_associations.len()),
+        ("frontendDeclarations", CATALOG.frontend_declarations.len()),
+        ("frontendNotations", CATALOG.frontend_notations.len()),
         ("frontendHomes", CATALOG.frontend_homes.len()),
         ("serviceMethods", CATALOG.service_methods.len()),
         ("sorts", CATALOG.sorts.len()),
@@ -801,12 +802,17 @@ fn frontend_association_mutations_refuse() {
     assert!(check(&original).is_ok());
     for (section, field, value) in [
         (
-            "frontendAssociations",
-            "signature",
-            json!("RandomConstructor"),
+            "frontendDeclarations",
+            "association",
+            json!({"kind": "rule", "target": "RecordUnpack"}),
         ),
-        ("frontendAssociations", "identity", json!("record.unknown")),
-        ("frontendAssociations", "authority", json!("all-records")),
+        (
+            "frontendDeclarations",
+            "association",
+            json!({"kind": "rule", "target": "RecordUnknown"}),
+        ),
+        ("frontendDeclarations", "authority", json!("all-records")),
+        ("frontendNotations", "target", json!("unknown")),
         ("frontendHomes", "constructor", json!("Vector")),
         ("frontendHomes", "module", json!("foreign")),
         ("serviceMethods", "signature", json!("Unknown")),
@@ -816,14 +822,21 @@ fn frontend_association_mutations_refuse() {
         changed[section][0][field] = value;
         assert!(check(&changed).is_err(), "{section}.{field}");
     }
-    for section in ["frontendAssociations", "frontendHomes", "serviceMethods"] {
+    for section in [
+        "frontendDeclarations",
+        "frontendRules",
+        "frontendNotations",
+        "frontendHomes",
+        "serviceSignatures",
+        "serviceMethods",
+    ] {
         let mut changed = original.clone();
         let duplicate = changed[section][0].clone();
         changed[section].as_array_mut().unwrap().push(duplicate);
         assert!(check(&changed).is_err(), "duplicate {section}");
     }
     let mut renamed = original.clone();
-    renamed["frontendAssociations"][0]["name"] = json!("open_payload");
+    renamed["frontendDeclarations"][0]["name"] = json!("OpenService");
     assert!(check(&renamed).is_ok());
 }
 

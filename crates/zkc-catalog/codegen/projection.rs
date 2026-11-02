@@ -197,6 +197,23 @@ fn term(v: &Value) -> Result<String> {
         _ => return Err("unknown scope term".into()),
     })
 }
+/// A source declaration type: a static parameter, optionally its associated
+/// member, or a parameterless constructor.
+fn source_term(v: &Value) -> Result<String> {
+    if v.get("constructor").is_some() {
+        object(v, &["constructor"], &[])?;
+        return Ok(format!(
+            "SourceTerm::Constructor({})",
+            quoted(&v["constructor"])?
+        ));
+    }
+    object(v, &["static"], &["member"])?;
+    Ok(format!(
+        "SourceTerm::Static {{ index: {}, member: {} }}",
+        count(&v["static"])?,
+        optional(v.get("member"), quoted)?
+    ))
+}
 fn application(v: &Value, ty: &str) -> Result<String> {
     Ok(record(
         ty,
@@ -699,8 +716,11 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
             "mathematicalIdentities",
             "mathematicalIntrinsics",
             "consumerProfiles",
-            "frontendAssociations",
+            "frontendDeclarations",
+            "frontendRules",
+            "frontendNotations",
             "frontendHomes",
+            "serviceSignatures",
             "serviceMethods",
             "domains",
             "logicalTypes",
@@ -717,33 +737,107 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
     choice(&v["format"], &["zkc.contract-declarations/0"])?;
     let mut fields = vec![
         (
-            "frontend_associations",
-            array(&v["frontendAssociations"], |r| {
+            "frontend_declarations",
+            array(&v["frontendDeclarations"], |r| {
                 object(
                     r,
-                    &["identity", "module", "name", "signature", "implicit"],
+                    &[
+                        "identity",
+                        "owner",
+                        "name",
+                        "kind",
+                        "statics",
+                        "inputs",
+                        "output",
+                        "association",
+                        "implicit",
+                    ],
                     &[],
                 )?;
+                object(&r["association"], &["kind", "target"], &[])?;
+                let target = quoted(&r["association"]["target"])?;
+                let association = match choice(&r["association"]["kind"], &["primitive", "rule"])? {
+                    "primitive" => format!("FrontendAssociation::Primitive({target})"),
+                    _ => format!("FrontendAssociation::Rule({target})"),
+                };
                 Ok(record(
-                    "FrontendAssociation",
+                    "FrontendDeclaration",
                     &[
                         ("identity", quoted(&r["identity"])?),
-                        ("module", quoted(&r["module"])?),
+                        ("owner", quoted(&r["owner"])?),
                         ("name", quoted(&r["name"])?),
                         (
-                            "signature",
+                            "kind",
                             variant(
-                                &r["signature"],
-                                "FrontendSignature",
-                                &[
-                                    "RecordUnpack",
-                                    "RecordInspect",
-                                    "RecordRepack",
-                                    "RandomConstructor",
-                                ],
+                                &r["kind"],
+                                "SourceDeclarationKind",
+                                &["Math", "Local", "Interface"],
                             )?,
                         ),
+                        (
+                            "statics",
+                            array(&r["statics"], |s| {
+                                object(s, &["name", "parameter"], &[])?;
+                                Ok(record(
+                                    "SourceStatic",
+                                    &[
+                                        ("name", quoted(&s["name"])?),
+                                        ("kind", kind(&s["parameter"])?),
+                                    ],
+                                ))
+                            })?,
+                        ),
+                        (
+                            "inputs",
+                            array(&r["inputs"], |s| {
+                                object(s, &["name", "type"], &[])?;
+                                Ok(record(
+                                    "SourceInput",
+                                    &[
+                                        ("name", quoted(&s["name"])?),
+                                        ("term", source_term(&s["type"])?),
+                                    ],
+                                ))
+                            })?,
+                        ),
+                        ("output", optional(r.get("output"), source_term)?),
+                        ("association", association),
                         ("implicit", flag(&r["implicit"])?),
+                    ],
+                ))
+            })?,
+        ),
+        (
+            "frontend_notations",
+            array(&v["frontendNotations"], |r| {
+                object(r, &["owner", "symbol", "fixity", "target", "public"], &[])?;
+                let fixity = optional(r.get("fixity"), |f| {
+                    object(f, &["associativity", "precedence"], &[])?;
+                    let associativity =
+                        match choice(&f["associativity"], &["left", "right", "none"])? {
+                            "left" => "Left",
+                            "right" => "Right",
+                            _ => "None",
+                        };
+                    Ok(record(
+                        "NotationFixity",
+                        &[
+                            (
+                                "associativity",
+                                format!("NotationAssociativity::{associativity}"),
+                            ),
+                            ("precedence", count(&f["precedence"])?),
+                        ],
+                    ))
+                })?;
+                Ok(record(
+                    "FrontendNotation",
+                    &[
+                        ("owner", quoted(&r["owner"])?),
+                        ("symbol", quoted(&r["symbol"])?),
+                        ("fixity", fixity),
+                        ("target", quoted(&r["target"])?),
+                        ("public", flag(&r["public"])?),
                     ],
                 ))
             })?,

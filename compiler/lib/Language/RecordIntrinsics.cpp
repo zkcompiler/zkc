@@ -43,6 +43,9 @@ bool isRecordIntrinsic(protocol::FrontendSignature rule) {
   return rule == S::RecordUnpack || rule == S::RecordInspect ||
          rule == S::RecordRepack;
 }
+bool isRecordIntrinsic(const protocol::FrontendDeclaration *row) {
+  return row && row->rule && isRecordIntrinsic(*row->rule);
+}
 bool Checker::indexDeclarations() {
   std::vector<DeclarationIndex::Namespace> namespaces;
   for (const auto &decl : output.declarations)
@@ -59,7 +62,9 @@ bool Checker::indexDeclarations() {
   }
   output.declarationIndex = std::make_shared<const DeclarationIndex>(
       output.declarations, *output.sources, std::move(namespaces));
-  for (const auto &row : protocol::frontendAssociations()) {
+  for (const auto &row : protocol::frontendDeclarations()) {
+    if (!row.rule)
+      continue;
     auto id = output.declarationIndex->canonical(row.module + "::" + row.name);
     if (!id || output.declarationIndex->association(*id) != &row)
       return types.fail("source.installation",
@@ -90,7 +95,7 @@ bool checkDeclarationAssociations(Semantics &types,
         !decl.capabilityBounds.empty() || !decl.bounds.empty() ||
         !decl.dataPreconditions.empty())
       return refuse();
-    if (row->signature == protocol::FrontendSignature::RandomConstructor) {
+    if (row->rule == protocol::FrontendSignature::RandomConstructor) {
       if (decl.kind != Declaration::Kind::Interface ||
           decl.parameters.size() != 1 ||
           decl.parameters.front().sort != Parameter::Sort::Domain ||
@@ -101,7 +106,7 @@ bool checkDeclarationAssociations(Semantics &types,
       continue;
     }
     unsigned count =
-        row->signature == protocol::FrontendSignature::RecordRepack ? 2 : 1;
+        row->rule == protocol::FrontendSignature::RecordRepack ? 2 : 1;
     if (decl.kind != Declaration::Kind::Local ||
         decl.parameters.size() != count || decl.inputs.size() != count ||
         decl.outputs.size() != 1 || decl.inputOrder.size() != count ||
@@ -269,13 +274,12 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
   const auto &binding = *operation.binding;
   auto *row = index.association(binding.target.declaration);
   if (!row || !binding.installedSignature ||
-      row->signature != *binding.installedSignature ||
-      !isRecordIntrinsic(row->signature) || !binding.lexicalOwner ||
-      !binding.intrinsicSource ||
+      row->rule != *binding.installedSignature || !isRecordIntrinsic(row) ||
+      !binding.lexicalOwner || !binding.intrinsicSource ||
       binding.lexicalOwner->index >= declarations.size() ||
       binding.target.module ||
       (body.mode != Body::Mode::Local && body.mode != Body::Mode::Protocol) ||
-      (row->signature != protocol::FrontendSignature::RecordUnpack &&
+      (row->rule != protocol::FrontendSignature::RecordUnpack &&
        body.stage == Body::Stage::Host) ||
       operation.results.size() != 1 ||
       operation.results.front().index >= body.values.size() ||
@@ -284,7 +288,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       !binding.roles.empty() || !binding.services.empty() ||
       !binding.scopedArguments.empty() || !binding.domainArguments.empty())
     return refuse();
-  bool repack = row->signature == protocol::FrontendSignature::RecordRepack;
+  bool repack = row->rule == protocol::FrontendSignature::RecordRepack;
   unsigned count = repack ? 2 : 1;
   if (binding.operands.size() != count || binding.arguments.size() != count ||
       binding.argumentOrder.size() != count)
@@ -296,7 +300,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       return refuse();
   auto source = body.values[binding.operands.front().index].type;
   auto payload = recordPayload(types, declarations[binding.lexicalOwner->index],
-                               source, row->signature, operation.span);
+                               source, *row->rule, operation.span);
   if (!payload)
     return false;
   const auto *action = std::get_if<Construct>(&operation.action);
@@ -313,7 +317,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       return refuse();
     kind = Construct::Kind::Repack;
     result = source;
-  } else if (row->signature == protocol::FrontendSignature::RecordInspect) {
+  } else if (row->rule == protocol::FrontendSignature::RecordInspect) {
     kind = Construct::Kind::Inspect;
     result = Type(Type::Kind::Tuple);
     result.arguments = {source, *payload};
@@ -333,7 +337,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
           replacement.components != placementRoles(*payloadPlacement))
         return refuse();
       placed = *input.placement;
-    } else if (row->signature == protocol::FrontendSignature::RecordInspect)
+    } else if (row->rule == protocol::FrontendSignature::RecordInspect)
       placed = ProductPlacement{typeIdentity(result),
                                 input.components,
                                 {*input.placement, *payloadPlacement}};

@@ -682,10 +682,10 @@ class ExpressionInference {
     if (target) {
       const auto *association =
           checker.output.declarationIndex->association(target->declaration);
-      if (association && isRecordIntrinsic(association->signature)) {
-        const bool repack = association->signature ==
+      if (isRecordIntrinsic(association)) {
+        const bool repack = association->rule ==
                             protocol::FrontendSignature::RecordRepack,
-                   inspect = association->signature ==
+                   inspect = association->rule ==
                              protocol::FrontendSignature::RecordInspect;
         if (expr.children.size() != (repack ? 2u : 1u) ||
             !expr.callLabels.empty() || !expr.arguments.empty()) {

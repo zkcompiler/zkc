@@ -199,6 +199,51 @@
           }
         }
       ]
+    },
+    {
+      "name": "an installed notation of another declaration of its owner",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendNotations",
+          "op": "insert",
+          "value": {
+            "owner": "zkc::prelude",
+            "symbol": "⋅",
+            "fixity": null,
+            "target": "field_multiply",
+            "public": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "a further frontend rule shape declared as data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendRules",
+          "op": "insert",
+          "value": {
+            "name": "RecordProject",
+            "kind": "Local",
+            "statics": [
+              {
+                "kind": "Type",
+                "sort": ""
+              }
+            ],
+            "inputs": [
+              {
+                "static": 0
+              }
+            ],
+            "output": {
+              "static": 0
+            }
+          }
+        }
+      ]
     }
   ],
   "refused": [
@@ -3504,6 +3549,306 @@
         "generator": "duplicate physical argument row",
         "native": "duplicate physical argument row",
         "rust": "native installation: physicalArguments: field_array.at is listed twice"
+      }
+    },
+    {
+      "name": "a frontend primitive that names no operation",
+      "rule": "kind-compatible association",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.field_add"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "field.unknown"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "a mathematical declaration of an executable-only operation",
+      "rule": "kind-compatible association",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.index_add"
+          },
+          "path": [
+            "kind"
+          ],
+          "value": "Math"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "an interface with a primitive association",
+      "rule": "kind-compatible association",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "service.random"
+          },
+          "path": [
+            "association"
+          ],
+          "value": {
+            "kind": "primitive",
+            "target": "field.add"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "a rule association whose declared shape differs",
+      "rule": "rule shapes are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "record.repack"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "RecordUnpack"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "a rule association that names no declared rule",
+      "rule": "rule shapes are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "record.unpack"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "RecordUnknown"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "a source static index out of range",
+      "rule": "validated static references",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.field_add"
+          },
+          "path": [
+            "inputs",
+            0,
+            "type"
+          ],
+          "value": {
+            "static": 1
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "source static index out of range",
+        "native": "source static index out of range",
+        "rust": "source static index out of range"
+      }
+    },
+    {
+      "name": "an unknown associated member of a static",
+      "rule": "validated member references",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.group_scale"
+          },
+          "path": [
+            "inputs",
+            1,
+            "type"
+          ],
+          "value": {
+            "static": 0,
+            "member": "Unknown"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown source static member",
+        "native": "unknown source static member",
+        "rust": "unknown source static member"
+      }
+    },
+    {
+      "name": "two installed declarations with one owner and name",
+      "rule": "nominal identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "insert",
+          "value": {
+            "identity": "prelude.field_add.copy",
+            "owner": "zkc::prelude",
+            "name": "field_add",
+            "kind": "Math",
+            "statics": [
+              {
+                "name": "F",
+                "parameter": {
+                  "kind": "Domain",
+                  "sort": "Field"
+                }
+              }
+            ],
+            "inputs": [
+              {
+                "name": "a",
+                "type": {
+                  "static": 0
+                }
+              },
+              {
+                "name": "b",
+                "type": {
+                  "static": 0
+                }
+              }
+            ],
+            "output": {
+              "static": 0
+            },
+            "association": {
+              "kind": "primitive",
+              "target": "field.add"
+            },
+            "implicit": false
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend ownership",
+        "native": "duplicate source export ownership",
+        "rust": "duplicate frontend ownership"
+      }
+    },
+    {
+      "name": "a notation whose target is not a declaration of its owner",
+      "rule": "notations resolve within a checked owner",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendNotations",
+          "op": "set",
+          "where": {
+            "symbol": "+",
+            "target": "field_add"
+          },
+          "path": [
+            "target"
+          ],
+          "value": "field_sum"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend notation target is not declared",
+        "native": "frontend notation target is not declared",
+        "rust": "frontend notation target is not declared"
+      }
+    },
+    {
+      "name": "a notation of an owner that installs no declaration",
+      "rule": "notations resolve within a checked owner",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendNotations",
+          "op": "set",
+          "where": {
+            "symbol": "+",
+            "target": "index_add"
+          },
+          "path": [
+            "owner"
+          ],
+          "value": "zkc::elsewhere"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend notation owner is not installed",
+        "native": "frontend notation owner is not installed",
+        "rust": "frontend notation owner is not installed"
+      }
+    },
+    {
+      "name": "a service method capability that differs from its signature",
+      "rule": "service capabilities are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "name": "draw"
+          },
+          "path": [
+            "capability"
+          ],
+          "value": "IndexRandomness"
+        }
+      ],
+      "diagnostics": {
+        "generator": "service method capability mismatch",
+        "native": "service method capability mismatch",
+        "rust": "service method capability mismatch"
       }
     }
   ]

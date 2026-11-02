@@ -22,7 +22,8 @@ def main():
         assert catalog.keys() == {"format", "sorts", "types", "operations", "members", "rules",
                                   "capabilities", "exports", "families", "associatedTypes",
                                   "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles",
-                                  "frontendAssociations", "frontendHomes", "serviceMethods",
+                                  "frontendDeclarations", "frontendRules", "frontendNotations",
+                                  "frontendHomes", "serviceSignatures", "serviceMethods",
                                   "domains", "logicalTypes", "frameTags", "codecs", "aggregateFrames",
                                   "randomServices", "limits", "finiteDefinitions", "domainConstructors"}
         assert catalog["format"] == "zkc.contract-declarations/0"

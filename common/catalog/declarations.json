@@ -15666,34 +15666,706 @@
       ]
     }
   ],
-  "frontendAssociations": [
+  "frontendDeclarations": [
+    {
+      "identity": "service.random",
+      "owner": "zkc::prelude",
+      "name": "Random",
+      "kind": "Interface",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [],
+      "output": null,
+      "association": {
+        "kind": "rule",
+        "target": "RandomConstructor"
+      },
+      "implicit": true
+    },
+    {
+      "identity": "prelude.field_add",
+      "owner": "zkc::prelude",
+      "name": "field_add",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.add"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.field_subtract",
+      "owner": "zkc::prelude",
+      "name": "field_subtract",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.sub"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.field_multiply",
+      "owner": "zkc::prelude",
+      "name": "field_multiply",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.mul"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.field_equal",
+      "owner": "zkc::prelude",
+      "name": "field_equal",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.group_add",
+      "owner": "zkc::prelude",
+      "name": "group_add",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "curve.add"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.group_scale",
+      "owner": "zkc::prelude",
+      "name": "group_scale",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0,
+            "member": "Scalar"
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "curve.scale"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.group_equal",
+      "owner": "zkc::prelude",
+      "name": "group_equal",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "curve.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.boolean_equal",
+      "owner": "zkc::prelude",
+      "name": "boolean_equal",
+      "kind": "Math",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "bool"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "bool"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "bool.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_add",
+      "owner": "zkc::prelude",
+      "name": "index_add",
+      "kind": "Local",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "index"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.add"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_subtract",
+      "owner": "zkc::prelude",
+      "name": "index_subtract",
+      "kind": "Local",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "index"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.sub"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_multiply",
+      "owner": "zkc::prelude",
+      "name": "index_multiply",
+      "kind": "Local",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "index"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.mul"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_equal",
+      "owner": "zkc::prelude",
+      "name": "index_equal",
+      "kind": "Math",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.equal"
+      },
+      "implicit": false
+    },
     {
       "identity": "record.unpack",
-      "module": "zkc::records",
+      "owner": "zkc::records",
       "name": "unpack",
-      "signature": "RecordUnpack",
+      "kind": "Local",
+      "statics": [
+        {
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "rule",
+        "target": "RecordUnpack"
+      },
       "implicit": true
     },
     {
       "identity": "record.inspect",
-      "module": "zkc::records",
+      "owner": "zkc::records",
       "name": "inspect_record",
-      "signature": "RecordInspect",
+      "kind": "Local",
+      "statics": [
+        {
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "rule",
+        "target": "RecordInspect"
+      },
       "implicit": true
     },
     {
       "identity": "record.repack",
-      "module": "zkc::records",
+      "owner": "zkc::records",
       "name": "repack_record",
-      "signature": "RecordRepack",
+      "kind": "Local",
+      "statics": [
+        {
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        },
+        {
+          "name": "P",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "payload",
+          "type": {
+            "static": 1
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "rule",
+        "target": "RecordRepack"
+      },
       "implicit": true
+    }
+  ],
+  "frontendRules": [
+    {
+      "name": "RecordUnpack",
+      "kind": "Local",
+      "statics": [
+        {
+          "kind": "Type",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "static": 0
+        }
+      ],
+      "output": {
+        "static": 0
+      }
     },
     {
-      "identity": "service.random",
-      "module": "zkc::prelude",
-      "name": "Random",
-      "signature": "RandomConstructor",
-      "implicit": true
+      "name": "RecordInspect",
+      "kind": "Local",
+      "statics": [
+        {
+          "kind": "Type",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "static": 0
+        }
+      ],
+      "output": {
+        "static": 0
+      }
+    },
+    {
+      "name": "RecordRepack",
+      "kind": "Local",
+      "statics": [
+        {
+          "kind": "Type",
+          "sort": ""
+        },
+        {
+          "kind": "Type",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "static": 0
+        },
+        {
+          "static": 1
+        }
+      ],
+      "output": {
+        "static": 0
+      }
+    },
+    {
+      "name": "RandomConstructor",
+      "kind": "Interface",
+      "statics": [
+        {
+          "kind": "Domain",
+          "sort": "Field"
+        }
+      ],
+      "inputs": [],
+      "output": null
+    }
+  ],
+  "frontendNotations": [
+    {
+      "owner": "zkc::prelude",
+      "symbol": "+",
+      "fixity": null,
+      "target": "field_add",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "+",
+      "fixity": null,
+      "target": "group_add",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "+",
+      "fixity": null,
+      "target": "index_add",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "-",
+      "fixity": {
+        "associativity": "left",
+        "precedence": 65
+      },
+      "target": "field_subtract",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "-",
+      "fixity": {
+        "associativity": "left",
+        "precedence": 65
+      },
+      "target": "index_subtract",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "*",
+      "fixity": null,
+      "target": "field_multiply",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "*",
+      "fixity": null,
+      "target": "group_scale",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "*",
+      "fixity": null,
+      "target": "index_multiply",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "field_equal",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "group_equal",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "boolean_equal",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "index_equal",
+      "public": true
     }
   ],
   "frontendHomes": [
@@ -15736,6 +16408,20 @@
       "constructor": "oracle_sequence",
       "module": "zkc::oracles",
       "members": []
+    }
+  ],
+  "serviceSignatures": [
+    {
+      "name": "RandomDraw",
+      "capability": ""
+    },
+    {
+      "name": "RandomIndex",
+      "capability": "IndexRandomness"
+    },
+    {
+      "name": "RandomIndices",
+      "capability": "IndexBlockRandomness"
     }
   ],
   "serviceMethods": [

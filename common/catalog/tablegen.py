@@ -185,10 +185,31 @@ def project(catalog, installation):
             target = caps[e["predicate"]]
             cls = "ZKC_CapabilityExport"
         emit(f"{cls}<{q(e['module'])}, {q(e['name'])}, {target}>", [ordinal(i)])
-    for i, a in enumerate(catalog["frontendAssociations"]):
-        emit(f"ZKC_FrontendAssociation<{q(a['identity'])}, {q(a['module'])}, {q(a['name'])}, {q(a['signature'])}, {flag(a['implicit'])}>", [ordinal(i)])
+    def source_term(t):
+        if "constructor" in t:
+            return inst(f"ZKC_SourceTerm<-1, \"\", {q(t['constructor'])}>")
+        return inst(f"ZKC_SourceTerm<{t['static']}, {q(t.get('member', ''))}>")
+
+    def source_output(t):
+        return seq([] if t is None else [source_term(t)])
+
+    for i, r in enumerate(catalog["frontendRules"]):
+        emit(f"ZKC_FrontendRule<{q(r['name'])}, {q(r['kind'])}, {kinds(r['statics'])}, "
+             f"{seq(source_term(t) for t in r['inputs'])}, {source_output(r['output'])}>", [ordinal(i)])
+    for i, d in enumerate(catalog["frontendDeclarations"]):
+        statics = seq(inst(f"ZKC_SourceStatic<{q(s['name'])}, {kind(s['parameter'])}>") for s in d["statics"])
+        inputs = seq(inst(f"ZKC_SourceInput<{q(s['name'])}, {source_term(s['type'])}>") for s in d["inputs"])
+        emit(f"ZKC_FrontendDeclaration<{q(d['identity'])}, {q(d['owner'])}, {q(d['name'])}, {q(d['kind'])}, "
+             f"{statics}, {inputs}, {source_output(d['output'])}, {q(d['association']['kind'])}, "
+             f"{q(d['association']['target'])}, {flag(d['implicit'])}>", [ordinal(i)])
+    for i, n in enumerate(catalog["frontendNotations"]):
+        fixity = n["fixity"] or {"associativity": "", "precedence": 0}
+        emit(f"ZKC_FrontendNotation<{q(n['owner'])}, {q(n['symbol'])}, {q(fixity['associativity'])}, "
+             f"{fixity['precedence']}, {q(n['target'])}, {flag(n['public'])}>", [ordinal(i)])
     for i, h in enumerate(catalog["frontendHomes"]):
         emit(f"ZKC_FrontendHome<{q(h['constructor'])}, {q(h['module'])}, {seq(q(m) for m in h['members'])}>", [ordinal(i)])
+    for i, m in enumerate(catalog["serviceSignatures"]):
+        emit(f"ZKC_ServiceSignature<{q(m['name'])}, {q(m['capability'])}>", [ordinal(i)])
     for i, m in enumerate(catalog["serviceMethods"]):
         emit(f"ZKC_ServiceMethod<{q(m['name'])}, {q(m['signature'])}, {q(m['capability'])}>", [ordinal(i)])
     operations = {

@@ -348,21 +348,71 @@ pub struct Intrinsic {
     pub scalar: bool,
 }
 
-/// Source association rules; no backend or formal authority is installed here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FrontendSignature {
-    RecordUnpack,
-    RecordInspect,
-    RecordRepack,
-    RandomConstructor,
+pub enum SourceDeclarationKind {
+    Math,
+    Local,
+    Interface,
+}
+/// A source declaration type: a static parameter, optionally its associated
+/// member, or a parameterless constructor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceTerm {
+    Static {
+        index: usize,
+        member: Option<&'static str>,
+    },
+    Constructor(&'static str),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FrontendAssociation {
-    pub identity: &'static str,
-    pub module: &'static str,
+pub struct SourceStatic {
     pub name: &'static str,
-    pub signature: FrontendSignature,
+    pub kind: Kind,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceInput {
+    pub name: &'static str,
+    pub term: SourceTerm,
+}
+/// Exactly one association: a primitive mathematical intrinsic or operation,
+/// or a declared frontend rule. No backend or formal authority is installed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrontendAssociation {
+    Primitive(&'static str),
+    Rule(&'static str),
+}
+/// One installed source declaration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrontendDeclaration {
+    pub identity: &'static str,
+    pub owner: &'static str,
+    pub name: &'static str,
+    pub kind: SourceDeclarationKind,
+    pub statics: &'static [SourceStatic],
+    pub inputs: &'static [SourceInput],
+    pub output: Option<SourceTerm>,
+    pub association: FrontendAssociation,
     pub implicit: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotationAssociativity {
+    Left,
+    Right,
+    None,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NotationFixity {
+    pub associativity: NotationAssociativity,
+    pub precedence: usize,
+}
+/// An installed notation of a declaration of its owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrontendNotation {
+    pub owner: &'static str,
+    pub symbol: &'static str,
+    pub fixity: Option<NotationFixity>,
+    pub target: &'static str,
+    pub public: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FrontendHome {
@@ -385,7 +435,8 @@ pub struct ServiceMethodDeclaration {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Catalog {
-    pub frontend_associations: &'static [FrontendAssociation],
+    pub frontend_declarations: &'static [FrontendDeclaration],
+    pub frontend_notations: &'static [FrontendNotation],
     pub frontend_homes: &'static [FrontendHome],
     pub service_methods: &'static [ServiceMethodDeclaration],
     pub sorts: &'static [&'static str],

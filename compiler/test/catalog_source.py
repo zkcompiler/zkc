@@ -103,8 +103,10 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
             run_native(value, other, shared["diagnostics"]["native"])
 
     for section, field, replacement, diagnostic in [
-        ("frontendAssociations", "signature", "RandomConstructor", "frontend signature identity mismatch"),
-        ("frontendAssociations", "identity", "record.unknown", "frontend signature identity mismatch"),
+        ("frontendDeclarations", "association", {"kind": "rule", "target": "RecordUnpack"},
+         "frontend rule signature mismatch"),
+        ("frontendDeclarations", "association", {"kind": "rule", "target": "RecordUnknown"},
+         "frontend rule signature mismatch"),
         ("frontendHomes", "constructor", "Vector", "invalid frontend home"),
         ("frontendHomes", "module", "foreign", "invalid frontend home"),
         ("serviceMethods", "signature", "Unknown", "service method capability mismatch"),
@@ -120,8 +122,11 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
             else:
                 raise AssertionError("source accepted invalid frontend association")
             native(value, diagnostic, check_source=False)
-    for section, diagnostic in [("frontendAssociations", "duplicate source export ownership"),
+    for section, diagnostic in [("frontendDeclarations", "duplicate frontend identity"),
+                                ("frontendRules", "invalid or duplicate frontend rule"),
+                                ("frontendNotations", "duplicate frontend notation"),
                                 ("frontendHomes", "duplicate frontend home"),
+                                ("serviceSignatures", "invalid or duplicate service signature"),
                                 ("serviceMethods", "invalid or duplicate service method")]:
         with case("independent duplicate " + section):
             value = copy.deepcopy(source)
@@ -129,11 +134,11 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
             native(value, diagnostic, check_source=False)
     with case("source spelling is separate from installed identity"):
         value = copy.deepcopy(source)
-        value["frontendAssociations"][0]["name"] = "open_payload"
-        assert native(value)["frontendAssociations"] == value["frontendAssociations"]
+        value["frontendDeclarations"][0]["name"] = "OpenService"
+        assert native(value)["frontendDeclarations"] == value["frontendDeclarations"]
     with case("unknown frontend authority fields refuse"):
         value = copy.deepcopy(source)
-        value["frontendAssociations"][0]["authority"] = "all-records"
+        value["frontendDeclarations"][0]["authority"] = "all-records"
         try:
             validate(value)
         except ValueError as error:

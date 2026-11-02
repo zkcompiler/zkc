@@ -9,15 +9,6 @@ class ZKC_Contribution<string id, list<string> dependencies,
   list<string> requires = dependencies;
   list<ZKC_Declaration> declarations = records;
 }
-// Source associations grant elaboration rules, never execution authority.
-class ZKC_FrontendAssociation<string id, string owner, string value,
-                              string rule, bit fallback> : ZKC_Declaration {
-  string identity = id;
-  string module = owner;
-  string name = value;
-  string signature = rule;
-  bit implicit = fallback;
-}
 class ZKC_FrontendHome<string head, string owner, list<string> exports = []> : ZKC_Declaration {
   string name = head;
   string module = owner;
@@ -41,6 +32,71 @@ class ZKC_Parameter<ZKC_ParameterKind k, string s = ""> : ZKC_Declaration {
 class ZKC_Domain<ZKC_Sort s> : ZKC_Parameter<DomainKind, s.name>;
 def TypeParameter : ZKC_Parameter<TypeKind>;
 def NatParameter : ZKC_Parameter<NatKind>;
+// Installed source declarations, their elaboration rules and notations grant
+// source resolution and elaboration facts. They never grant execution
+// authority, physical installation or formal laws.
+// A source type: static parameter `index` or its associated `member`, or with
+// index -1 the parameterless `constructor`.
+class ZKC_SourceTerm<int position, string associated = "", string head = "">
+    : ZKC_Declaration {
+  int index = position;
+  string member = associated;
+  string constructor = head;
+}
+class ZKC_SourceStatic<string value, ZKC_Parameter p> : ZKC_Declaration {
+  string name = value;
+  ZKC_Parameter parameter = p;
+}
+class ZKC_SourceInput<string value, ZKC_SourceTerm t> : ZKC_Declaration {
+  string name = value;
+  ZKC_SourceTerm type = t;
+}
+// The declared shape a rule association requires. `output` has at most one
+// term; an interface has none.
+class ZKC_FrontendRule<string value, string declared, list<ZKC_Parameter> s,
+                       list<ZKC_SourceTerm> i, list<ZKC_SourceTerm> o>
+    : ZKC_Declaration {
+  string name = value;
+  string kind = declared;
+  list<ZKC_Parameter> statics = s;
+  list<ZKC_SourceTerm> inputs = i;
+  list<ZKC_SourceTerm> output = o;
+}
+// One installed declaration with exactly one association: a `primitive`
+// mathematical intrinsic or operation, or a `rule`.
+class ZKC_FrontendDeclaration<string id, string owner, string value,
+                              string declared, list<ZKC_SourceStatic> s,
+                              list<ZKC_SourceInput> i, list<ZKC_SourceTerm> o,
+                              string associationKind, string associated,
+                              bit fallback> : ZKC_Declaration {
+  string identity = id;
+  string module = owner;
+  string name = value;
+  string kind = declared;
+  list<ZKC_SourceStatic> statics = s;
+  list<ZKC_SourceInput> inputs = i;
+  list<ZKC_SourceTerm> output = o;
+  string association = associationKind;
+  string target = associated;
+  bit implicit = fallback;
+}
+// An installed notation names a declaration of its owner. An empty
+// associativity keeps the symbol's fixed syntax.
+class ZKC_FrontendNotation<string owner, string spelling, string associativity,
+                           int level, string value, bit visible>
+    : ZKC_Declaration {
+  string module = owner;
+  string symbol = spelling;
+  string fixity = associativity;
+  int precedence = level;
+  string target = value;
+  bit public = visible;
+}
+class ZKC_ServiceSignature<string value, string requirement>
+    : ZKC_Declaration {
+  string name = value;
+  string capability = requirement;
+}
 class ZKC_Member<string value, ZKC_Parameter from, ZKC_Parameter to> : ZKC_Declaration {
   string name = value;
   ZKC_Parameter owner = from;
