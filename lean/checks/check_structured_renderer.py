@@ -14,6 +14,7 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
+from bridges.common import catalogue as catalogue_rows  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("structured_snapshot", HERE / "bridges/structured/snapshot.py")
 renderer = importlib.util.module_from_spec(spec)
@@ -415,14 +416,14 @@ example : (RenderedPrimitives.snapshot.catalogue.nominals.map fun row =>
 '''
     modules.append(source)
     malformed_rows = [
-        (renderer.nominal, BLS_NOMINALS[0][:-1]),
-        (renderer.nominal, ["nominal", "x", "Ring", [], [], None]),
-        (renderer.nominal, ["nominal", "x", "Field", [], [], "012"]),
-        (renderer.nominal, ["nominal", "x", "Field", [], [], 5]),
-        (renderer.nominal, ["nominal", "x", "Field", [["BaseField"]], [], None]),
-        (renderer.service_row, ["service", "random.x/0", "x"]),
-        (renderer.service_row, ["draw", "random.x/0", "x", ["draw"]]),
-        (renderer.catalogue, [[]]),
+        (catalogue_rows.nominal, BLS_NOMINALS[0][:-1]),
+        (catalogue_rows.nominal, ["nominal", "x", "Ring", [], [], None]),
+        (catalogue_rows.nominal, ["nominal", "x", "Field", [], [], "012"]),
+        (catalogue_rows.nominal, ["nominal", "x", "Field", [], [], 5]),
+        (catalogue_rows.nominal, ["nominal", "x", "Field", [["BaseField"]], [], None]),
+        (catalogue_rows.service_row, ["service", "random.x/0", "x"]),
+        (catalogue_rows.service_row, ["draw", "random.x/0", "x", ["draw"]]),
+        (catalogue_rows.catalogue, [[]]),
     ]
     for render, invalid in malformed_rows:
         try:

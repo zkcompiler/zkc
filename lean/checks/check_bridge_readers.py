@@ -105,7 +105,7 @@ def original(inputs=(FIELD, FIELD, FIELD, FIELD, SERVICE), outputs=(BOOLEAN,)):
 
 def exported(policy):
     return ["zkc.constructed-participant/0", "sha256:" + "0" * 64, "sha256:" + "0" * 64, policy, "validator",
-            [], [], [], [], []]
+            [], [], [], [], [], [[], []]]
 
 
 class ExactReplacement(unittest.TestCase):

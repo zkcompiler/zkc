@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Check exact local-service exports and admission of the actual Schnorr producer.
 
+Both participants' exported catalogue rows, including the random-service rows
+of local draws, are admitted against Lean's catalogue.
+
 Uses existing native/Lean dependencies, never a Lake build. --lean-path selects
 an isolated compiled-module tree when the maintained package is built concurrently.
 All fresh exports, generated kernel controls, commands and results are retained.
@@ -153,6 +156,10 @@ example : select Source.snapshot artifacts "knowledge" = .ok selected := by deci
 example : Zkc.Construction.AuthoredPair.check imported selected artifacts = .ok () := by decide +kernel
 example : SourceOccurrences.check Source.snapshot context Producer.participant = .ok () := by decide +kernel
 example : checkProducer imported.program context Producer.participant = .ok () := by decide +kernel
+example : Producer.participant.checkCatalogue Producer.catalogue constructionCatalogue = .ok () := by
+  decide +kernel
+example : Validator.participant.checkCatalogue Validator.catalogue constructionCatalogue = .ok () := by
+  decide +kernel
 end {name}
 '''
     controls += '''
@@ -227,7 +234,8 @@ example : (SourceOccurrences.check Repeated.Source.snapshot Repeated.context
 #print axioms Zkc.Construction.AuthoredPair.admitted_servicePorts
 '''
     path = output / "LocalServices.lean"
-    path.write_text("module\n\npublic import Zkc.Construction.AuthoredPair\n\n@[expose] public section\n\n"
+    path.write_text("module\n\npublic import Zkc.Construction.AuthoredPair\npublic import Zkc.Construction.CatalogueAdmission\n\n"
+                    "@[expose] public section\n\n"
                     "set_option maxRecDepth 10000\nset_option maxHeartbeats 8000000\n\n"
                     + "\n".join(definitions) + controls)
     if not args.native_only:

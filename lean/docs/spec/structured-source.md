@@ -328,6 +328,17 @@ Every stored type, including dormant signatures and region results, must name
 an exported row of its sort and an installed instance. Installing a row does
 not prove its arithmetic, sampler or native implementation correct.
 
+Structured units name no transcript suite. The constructed-participant reader
+admits its rows against `constructionCatalogue`, which adds to
+`admittedCatalogue` the `transcriptCatalogue` rows of the two installed suites
+whose challenges constructed participants draw: `merlin3.bls12-381.fr64be/0`,
+whose `ChallengeField` is the BLS12-381 scalar field, and
+`merlin3.koala-bear.ext8-binomial3.rejection31le/0`, whose `ChallengeField` is
+the KoalaBear octic extension, with their capability facts in native order
+([constructed programs](fiat-shamir.md#constructed-programs)). A suite row is
+metadata; its sponge, encoding and decoder belong to the model that interprets
+it.
+
 Operations require facts of their rows. Field arithmetic, constants and
 equality require `Field`, and a constant is below the field's modulus. Group
 identity, addition and equality require `ScalarAction`, and scaling also

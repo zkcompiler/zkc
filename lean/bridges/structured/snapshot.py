@@ -12,6 +12,8 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import lean_render, schema  # noqa: E402
+from bridges.common.catalogue import (  # noqa: E402
+    catalogue, member_resolver, require_capabilities)
 from bridges.common.lean_render import optional, record  # noqa: E402
 
 # The structured source profile bounds strings at 512 bytes and references at 4096.
@@ -364,14 +366,7 @@ def primitive_binding(value, rows=None):
     op, terms = schema.resolve_signature(actual, project=member_resolver(rows), allowed=SOURCE_PRIMITIVES)
     if actual[2] != "":
         raise ValueError("selected implementation outside source profile")
-    nominals = {row[1]: row for row in rows[0]} if rows else {}
-    for requirement in op["requirements"]:
-        arguments = [terms[i] for i in requirement["arguments"]]
-        if len(arguments) != 1 or arguments[0][0] != "domain":
-            raise ValueError("unsupported source requirement")
-        domain = nominals.get(arguments[0][2])
-        if domain is None or requirement["capability"] not in domain[4]:
-            raise ValueError("missing binding capability")
+    require_capabilities(op, terms, rows)
     # The installed source primitives have Field roots, or one exact Slot root
     # for a custody transfer. The neutral tree and supplied ports were checked
     # above before this semantic projection.
@@ -379,24 +374,6 @@ def primitive_binding(value, rows=None):
     return (f"⟨{text(value[1])}, {text(actual[0])}, {seq(arguments, text)}, "
             f"{text(actual[2])}, some ⟨{seq(actual[1], binding_argument)}, "
             f"{seq(actual[3], ty)}, {seq(actual[4], ty)}⟩⟩")
-
-
-def member_resolver(rows):
-    def project(parent, member):
-        if rows is None or parent[0] != "domain":
-            raise ValueError("missing associated domain catalogue")
-        matches = [row for row in rows[0] if row[1] == parent[2] and row[2] == parent[1]]
-        if len(matches) != 1:
-            raise ValueError("unknown associated domain")
-        members = dict(matches[0][3])
-        if member not in members:
-            raise ValueError("missing associated domain member")
-        declarations = [row for row in schema.declarations()["members"]
-                        if row["name"] == member and row["owner"]["sort"] == parent[1]]
-        if len(declarations) != 1:
-            raise ValueError("unknown associated member declaration")
-        return ["domain", declarations[0]["result"]["sort"], members[member]]
-    return project
 
 
 def origin_string(value, limit=512):
@@ -526,41 +503,6 @@ def definition(value):
     origin_text = function_origin(kind, origin)
     return (f".function ⟨{text(name)}, .{kind}, .{visibility}Def, {seq(inputs, ty)}, "
             f"{seq(outputs, ty)}, {protocol_interface(interface)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
-
-
-SORTS = {"Field": ".field", "Group": ".group", "Commitment": ".commitment",
-         "Transcript": ".transcript"}
-
-
-def modulus(value):
-    if value is None:
-        return "none"
-    if not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{0,1023}", value):
-        raise ValueError("invalid catalogue modulus")
-    return f"(some {value})"
-
-
-def nominal(value):
-    tag, identity, sort, members, capabilities, characteristic = record(value, 6)
-    if tag != "nominal" or sort not in SORTS:
-        raise ValueError("invalid nominal catalogue row")
-    def member(pair):
-        name, target = record(pair, 2)
-        return f"({text(name)}, {text(target)})"
-    return (f"⟨{text(identity)}, {SORTS[sort]}, {seq(members, member)}, "
-            f"{seq(capabilities, text)}, {modulus(characteristic)}⟩")
-
-
-def service_row(value):
-    tag, contract, sampled, methods = record(value, 4)
-    if tag != "service":
-        raise ValueError("invalid service catalogue row")
-    return f"⟨{text(contract)}, {text(sampled)}, {seq(methods, text)}⟩"
-
-
-def catalogue(value):
-    nominals, services = record(value, 2)
-    return f"{{ nominals := {seq(nominals, nominal)}, services := {seq(services, service_row)} }}"
 
 
 def source_record(value):

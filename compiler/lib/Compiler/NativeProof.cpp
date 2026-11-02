@@ -11,6 +11,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/Operations.h"
@@ -2116,6 +2117,48 @@ std::string printedText(Operation *value) {
 std::string sha256Identity(StringRef text) {
   return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(text)), true);
 }
+// The catalogue identities an exported logical type or binding names: its
+// installed domain arguments at any depth and its random-service types, with
+// the fields those services sample. Resource slots are not catalogue rows.
+void collectIdentities(const json::Value &value, llvm::StringSet<> &domains,
+                       llvm::StringSet<> &services) {
+  const auto *array = value.getAsArray();
+  if (!array)
+    return;
+  if (array->size() == 3 && (*array)[0].getAsString() == StringRef("domain")) {
+    auto sort = (*array)[1].getAsString();
+    auto identity = (*array)[2].getAsString();
+    if (sort && identity &&
+        protocol::installedDomains().identitySort(*identity) == *sort)
+      domains.insert(*identity);
+    return;
+  }
+  if (array->size() == 2 && (*array)[0].getAsString() == StringRef("service")) {
+    if (auto contract = (*array)[1].getAsString()) {
+      services.insert(*contract);
+      domains.insert(protocol::randomServiceField(*contract));
+    }
+    return;
+  }
+  for (const auto &child : *array)
+    collectIdentities(child, domains, services);
+}
+// Identities of exported instruction rows: bindings, result types and loop
+// block arguments, nested bodies included. Attributes are not type positions.
+void collectInstructionIdentities(const json::Array &instructions,
+                                  llvm::StringSet<> &domains,
+                                  llvm::StringSet<> &services) {
+  for (const auto &value : instructions) {
+    const auto &row = *value.getAsArray();
+    collectIdentities(row[2], domains, services);
+    collectIdentities(row[4], domains, services);
+    for (const auto &region : *row[5].getAsArray()) {
+      const auto &parts = *region.getAsArray();
+      collectIdentities(parts[0], domains, services);
+      collectInstructionIdentities(*parts[1].getAsArray(), domains, services);
+    }
+  }
+}
 // Reads the supplied, independently checked candidate. It never reconstructs an
 // expected participant or substitutes a mathematical reference. References are
 // absolute positions in a scoped environment: inputs first, then every
@@ -2436,11 +2479,28 @@ public:
     auto outputs = exportLogicalTypesData(type.getResults());
     if (!outputs)
       return outputs.takeError();
+    // The rows of every catalogue identity the participant names: its types
+    // and bindings, the policy's transcript suite and its ports' services.
+    llvm::StringSet<> domains, contracts;
+    for (const auto &value : *inputs)
+      collectIdentities(value, domains, contracts);
+    for (const auto &value : *outputs)
+      collectIdentities(value, domains, contracts);
+    collectInstructionIdentities(instructions, domains, contracts);
+    if (!policy.suite.empty())
+      domains.insert(policy.suite);
+    for (const auto &port : services) {
+      StringRef contract = *(*port.getAsArray())[4].getAsString();
+      contracts.insert(contract);
+      domains.insert(protocol::randomServiceField(contract));
+    }
+    json::Value catalogue = protocol::exportCatalogueRows(domains, contracts);
     json::Value record(json::Array{
         "zkc.constructed-participant/0", sha256Identity(source),
         sha256Identity(candidate), encodeNativeProofPolicy(policy),
         participant.getSymName().str(), std::move(*inputs), std::move(*outputs),
-        std::move(instructions), std::move(results), std::move(services)});
+        std::move(instructions), std::move(results), std::move(services),
+        std::move(catalogue)});
     if (printJson(record).size() > 1024 * 1024)
       return error("constructed-participant-limit");
     return record;

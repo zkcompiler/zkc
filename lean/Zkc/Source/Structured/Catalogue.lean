@@ -315,6 +315,29 @@ def admittedCatalogue : Catalogue where
   services := blsCatalogue.services ++ koalaBearCatalogue.services ++ koalaBearQuarticCatalogue.services
   types := blsCatalogue.types ++ koalaBearCatalogue.types ++ koalaBearQuarticCatalogue.types
 
+/-- The installed transcript suites whose challenges constructed participants
+draw, with their challenge-field associations and capability facts in native
+order. These rows are metadata: the sponge, encoding and decoder of a suite
+belong to the model that interprets it. -/
+def transcriptCatalogue : Catalogue where
+  nominals := [
+    { identity := "merlin3.bls12-381.fr64be/0", sort := .transcript,
+      members := [("ChallengeField", blsScalar)], capabilities := ["FieldTranscript", "Transcript"],
+      modulus := none },
+    { identity := "merlin3.koala-bear.ext8-binomial3.rejection31le/0", sort := .transcript,
+      members := [("ChallengeField", "koala-bear.ext8-binomial3")],
+      capabilities := ["FieldTranscript", "IndexTranscript", "Transcript"], modulus := none }]
+  services := []
+
+/-- The installed rows understood by the constructed-participant reader: the
+structured importer's rows and admitted instances, and the transcript suites.
+Structured units name no transcript, so their importer keeps
+`admittedCatalogue`. -/
+def constructionCatalogue : Catalogue where
+  nominals := admittedCatalogue.nominals ++ transcriptCatalogue.nominals
+  services := admittedCatalogue.services
+  types := admittedCatalogue.types
+
 /-- The rows a unit over this environment exports when it lists every row:
 the environment's nominal and service rows, without its admitted instances. -/
 def blsRows : Catalogue where

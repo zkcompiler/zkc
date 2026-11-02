@@ -9,6 +9,13 @@ renderer's shape diagnostic. Loops whose block arguments capture outer values,
 including a nested loop capturing the enclosing induction index, render with
 direct references to the captured values; a captured transcript or a capture
 whose block argument has another sort refuses.
+
+Associated members come from the export's catalogue rows. Lean admits those
+rows against its own catalogue: a participant whose identities the Lean
+catalogue omits renders, and `Participant.checkCatalogue` refuses it with
+`structured-catalogue-unknown`; rows that disagree with the Lean catalogue or
+omit a named identity refuse there too, and a binding whose member the rows do
+not supply refuses in the renderer.
 """
 
 import argparse
@@ -32,6 +39,31 @@ INDEX = ["apply", "index", []]
 TRANSCRIPT = ["apply", "transcript", [["domain", "Transcript", "merlin3.bls12-381.fr64be/0"]]]
 FIELD = ["apply", "field", [["domain", "Field", "bls12-381.fr"]]]
 INDICES = ["apply", "indices", []]
+
+BLS_MODULUS = "52435875175126190479447740508185965837690552500527637822603658699938581184513"
+TWO_ADIC_PRIME = ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"]
+TWO_ADIC_EXTENSION = ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "ExtensionField",
+                      "IndexRandomness", "IndexBlockRandomness"]
+# The native rows of the identities the synthetic participants name, as the
+# exporter writes them: closed under associated members, in catalogue order.
+BLS_ROWS = [
+    ["nominal", "bls12-381.fr", "Field", [["PairingG1", "bls12-381.g1"], ["PairingG2", "bls12-381.g2"],
+                                          ["PairingGT", "bls12-381.gt"]],
+     ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], BLS_MODULUS],
+    ["nominal", "bls12-381.g2", "Group", [["Scalar", "bls12-381.fr"]], ["Group", "ScalarAction"], None],
+    ["nominal", "bls12-381.gt", "Group", [["Scalar", "bls12-381.fr"]], ["Group", "ScalarAction"], None],
+    ["nominal", "bls12-381.g1", "Group", [["Scalar", "bls12-381.fr"]], ["Group", "ScalarAction"], None],
+    ["nominal", "merlin3.bls12-381.fr64be/0", "Transcript", [["ChallengeField", "bls12-381.fr"]],
+     ["FieldTranscript", "Transcript"], None]]
+
+
+def rows(*extra):
+    return [BLS_ROWS + list(extra), []]
+
+
+def extension_rows(base_id, extension_id, characteristic):
+    return [["nominal", base_id, "Field", [], TWO_ADIC_PRIME, characteristic],
+            ["nominal", extension_id, "Field", [["BaseField", base_id]], TWO_ADIC_EXTENSION, characteristic]]
 
 
 def loop(site, carried, operands, results, arguments, body, yielded):
@@ -62,12 +94,75 @@ CAPTURING = [
 ]
 
 
-def export(inputs, instructions, returned):
+def export(inputs, instructions, returned, catalogue=None):
     policy = ["zkc.native-proof-policy/0", "entry", "role00000000", "role00000001", "0",
               "merlin3.bls12-381.fr64be/0", ["9"], [str(index) for index in range(len(inputs) - 1)], [["q", "d"]],
               "zkc.framed/0", "", []]
     return ["zkc.constructed-participant/0", "sha256:" + "0" * 64, "sha256:" + "1" * 64, policy, "_math_1",
-            inputs, [BOOLEAN, TRANSCRIPT], instructions, returned, []]
+            inputs, [BOOLEAN, TRANSCRIPT], instructions, returned, [], catalogue or rows()]
+
+
+def embedding_export(base_id, extension_id, catalogue):
+    base = ["apply", "field", [["domain", "Field", base_id]]]
+    extension = ["apply", "field", [["domain", "Field", extension_id]]]
+    attributes = [["binding", ["symbol", ["embed"]]], ["parameters", ["array", []]],
+                  ["site", ["string", "embedding"]]]
+    row = ["exec.apply", attributes, ["field.embed", [["domain", "Field", extension_id]], "", [base], [extension]],
+           [0], [extension], []]
+    return export([base, TRANSCRIPT], [row], [2, 1], catalogue)
+
+
+def strip(rendered):
+    """A rendering without its module header, to share one Lean file."""
+    return rendered.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "").replace(
+        "@[expose] public section\n", "")
+
+
+def catalogue_controls():
+    """Rendered participants with the catalogue admission each must receive.
+
+    The renderer projects members through any well-formed rows; Lean's
+    catalogue decides. Native rows of BabyBear and Goldilocks extensions are
+    installed but outside the Lean catalogue, and refuse as unknown.
+    """
+    from copy import deepcopy
+    quartic = rows(*extension_rows("koala-bear", "koala-bear.ext4-binomial3", "2130706433"))
+    cases = [("AdmittedBls", export([TRANSCRIPT], [], [0]), None),
+             ("AdmittedQuartic", embedding_export("koala-bear", "koala-bear.ext4-binomial3", quartic), None)]
+    for namespace, base_id, extension_id, characteristic in [
+            ("OutsideBabyBear", "baby-bear", "baby-bear.ext4-binomial11", "2013265921"),
+            ("OutsideGoldilocks", "goldilocks", "goldilocks.ext2-binomial7", "18446744069414584321")]:
+        outside = rows(*extension_rows(base_id, extension_id, characteristic))
+        cases.append((namespace, embedding_export(base_id, extension_id, outside), "structured-catalogue-unknown"))
+    # Consistent rows that differ from the Lean catalogue's: capability order.
+    reordered = deepcopy(quartic)
+    reordered[0][4][4] = ["Transcript", "FieldTranscript"]
+    cases.append(("ReorderedSuite", export([TRANSCRIPT], [], [0], reordered), "structured-catalogue-mismatch"))
+    # A named identity without its row: the suite of the transcript sort.
+    missing = [[row for row in BLS_ROWS if row[2] != "Transcript"], []]
+    cases.append(("MissingSuite", export([TRANSCRIPT], [], [0], missing), "structured-domain-unknown"))
+    return cases
+
+
+def renderer_member_refusals():
+    """A binding member or required capability the rows do not supply refuses before Lean."""
+    quartic = rows(*extension_rows("koala-bear", "koala-bear.ext4-binomial3", "2130706433"))[0]
+    without_member = [row[:3] + [[]] + row[4:] if row[1] == "koala-bear.ext4-binomial3" else row for row in quartic]
+    without_capability = [row[:4] + [[fact for fact in row[4] if fact != "ExtensionField"]] + row[5:]
+                          if row[1] == "koala-bear.ext4-binomial3" else row for row in quartic]
+    count = 0
+    for catalogue, diagnostic in [(rows(), "unknown associated domain"),
+                                  ([without_member, []], "missing associated domain member"),
+                                  ([without_capability, []], "missing binding capability")]:
+        try:
+            renderer.render(embedding_export("koala-bear", "koala-bear.ext4-binomial3", catalogue), "Rejected")
+        except ValueError as error:
+            if diagnostic not in str(error):
+                raise AssertionError(f"renderer refused a member for another reason: {error}")
+            count += 1
+            continue
+        raise AssertionError(f"renderer resolved a member the rows do not supply ({diagnostic})")
+    return count
 
 
 def check(output, lake):
@@ -146,7 +241,8 @@ example : RenderedConjunction.participant.instructions =
                        ["site", ["string", "embedding"]]]
     embedding = ["exec.apply", embedding_attrs,
                  ["field.embed", [["domain", "Field", "koala-bear.ext4-binomial3"]], "", [base], [extension]], [0], [extension], []]
-    embedded = renderer.render(export([base, TRANSCRIPT], [embedding], [2, 1]), "RenderedEmbedding")
+    quartic = rows(*extension_rows("koala-bear", "koala-bear.ext4-binomial3", "2130706433"))
+    embedded = renderer.render(export([base, TRANSCRIPT], [embedding], [2, 1], quartic), "RenderedEmbedding")
     embedded = embedded.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
     source += embedded.replace("@[expose] public section\n", "")
     source += '''
@@ -187,8 +283,17 @@ example : RenderedCaptures.participant.instructions =
         "@[expose] public section\n", "")
     source += '\nopen Zkc.Construction in\nexample : RenderedBoolean.participant.instructions =\n' \
               '    [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩] := by decide +kernel\n'
+    catalogue_cases = catalogue_controls()
+    for namespace, data, _ in catalogue_cases:
+        source += strip(renderer.render(data, namespace))
+    source += "\nopen Zkc.Construction Zkc.Source.Structured in\nexample : [" + ", ".join(
+        f"{namespace}.participant.checkCatalogue {namespace}.catalogue constructionCatalogue"
+        for namespace, _, _ in catalogue_cases) + \
+        "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
+        "] := by\n  decide +kernel\n"
     path = output / "Rendered.lean"
-    path.write_text("module\n\npublic import Zkc.Construction.Participant\n\n@[expose] public section\n" + source, encoding="utf-8")
+    path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
+                    "@[expose] public section\n" + source, encoding="utf-8")
     if lake is not None:
         run = subprocess.run([lake, "lean", path], cwd=HERE,
                              capture_output=True, encoding="utf-8", timeout=120)
@@ -247,7 +352,7 @@ example : RenderedCaptures.participant.instructions =
         embedding_refusals.append(row)
     for row in embedding_refusals:
         try:
-            renderer.render(export([base, TRANSCRIPT], [row], [0, 1]), "RejectedEmbedding")
+            renderer.render(export([base, TRANSCRIPT], [row], [0, 1], quartic), "RejectedEmbedding")
         except ValueError:
             continue
         raise AssertionError("renderer accepted a forged typed embedding")
@@ -256,8 +361,10 @@ example : RenderedCaptures.participant.instructions =
     if '.unsupported "exec.apply:field.equal"' not in renderer.render(
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
-    report = {"status": "pass", "kernel_cases": 6,
-              "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals), "unsupported_cases": 2,
+    member_refusals = renderer_member_refusals()
+    report = {"status": "pass", "kernel_cases": 6, "catalogue_cases": len(catalogue_cases),
+              "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
+              + member_refusals, "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}
     report["kernel_checked"] = lake is not None

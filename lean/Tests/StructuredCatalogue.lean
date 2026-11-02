@@ -98,6 +98,19 @@ private def transcriptRows : Catalogue where
       methods := ["draw", "index", "indices"] }]
 
 example : code transcriptRows.check = "" := by decide +kernel
+
+-- The constructed-participant environment: the structured rows and the two
+-- Merlin suites, whose challenge fields are rows of that environment.
+example : code constructionCatalogue.check = "" := by decide +kernel
+example : code (transcriptCatalogue.agrees constructionCatalogue) = "" := by decide +kernel
+example : code (blsRows.agrees constructionCatalogue) = "" := by decide +kernel
+-- Structured units name no suite: their importer's environment omits the rows.
+example : code (transcriptCatalogue.agrees admittedCatalogue) = "structured-catalogue-unknown" := by
+  decide +kernel
+-- A hash-chain suite is installed natively but outside the Lean catalogue.
+example : code (({ nominals := blsCatalogue.nominals ++ (transcriptRows.nominals.filter
+    (·.identity == "hash-chain.keccak256.bls12-381.fr64be/0")), services := [] } : Catalogue).agrees
+    constructionCatalogue) = "structured-catalogue-unknown" := by decide +kernel
 example : capabilitySort "IndexBlockRandomness" = some .field := rfl
 example : capabilitySort "IndexBlockTranscript" = some .transcript := rfl
 

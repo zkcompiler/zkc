@@ -12,6 +12,7 @@ from bridges.common import lean_render  # noqa: E402
 
 BOOLEAN = ["apply", "bool", []]
 TRANSCRIPT = ["apply", "transcript", [["domain", "Transcript", "suite"]]]
+NO_ROWS = [[], []]
 
 
 def fixture():
@@ -20,7 +21,7 @@ def fixture():
               ["1"], ["0"], [["q", "d"]], "zkc.framed/0", "", []]
     child = ["zkc.constructed-participant/0", digest, digest, policy, "producer",
              [BOOLEAN, TRANSCRIPT],
-             [TRANSCRIPT], [], [1], []]
+             [TRANSCRIPT], [], [1], [], [[], []]]
     validator = deepcopy(child)
     validator[4] = "validator"
     return [pair.FORMAT, child, validator]
@@ -59,12 +60,12 @@ class PairReader(unittest.TestCase):
         boolean = ("boolean", None)
         attrs = {"site": ("string", "stop"), "owner": ("string", "P")}
         self.assertEqual(pair.participant.operation(
-            "protocol.guard", attrs, [], [boolean], []), '.guard "stop"')
+            "protocol.guard", attrs, [], [boolean], [], NO_ROWS), '.guard "stop"')
         with self.assertRaisesRegex(ValueError, "guard owner"):
             pair.participant.operation("protocol.guard", {
-                **attrs, "owner": ("string", "")}, [], [boolean], [])
+                **attrs, "owner": ("string", "")}, [], [boolean], [], NO_ROWS)
         self.assertIn("unsupported", pair.participant.operation(
-            "local.guard", {"site": ("string", "stop")}, [], [boolean], []))
+            "local.guard", {"site": ("string", "stop")}, [], [boolean], [], NO_ROWS))
 
     def test_each_participant_requires_current_ungated_policy(self):
         for child in (1, 2):
@@ -117,15 +118,17 @@ class PairReader(unittest.TestCase):
                  ("arith.cmpi", {"predicate": ("integer", ["signless", "64", "1"])}, [b, b], [b], ".booleanNotEqual")]
         for name, attrs, operands, results, term in cases:
             with self.subTest(name=name, term=term):
-                self.assertIn(term, pair.participant.operation(name, attrs, [], operands, results))
+                self.assertIn(term, pair.participant.operation(name, attrs, [], operands, results, NO_ROWS))
                 with self.assertRaises(ValueError):
-                    pair.participant.operation(name, attrs, [], operands, [i] if results == [b] else [b])
+                    pair.participant.operation(name, attrs, [], operands, [i] if results == [b] else [b], NO_ROWS)
         with self.assertRaises(ValueError):
-            pair.participant.operation("arith.cmpi", {"predicate": ("integer", ["signless", "64", "2"])}, [], [b, b], [b])
+            pair.participant.operation("arith.cmpi", {"predicate": ("integer", ["signless", "64", "2"])}, [], [b, b], [b],
+                                       NO_ROWS)
 
     def test_local_services_are_separate_and_exact(self):
         data = fixture()
         data[1][9] = [["service_1", "P", "2", "1", "random.bls12-381.fr/0"]]
+        data[1][10] = [[], [["service", "random.bls12-381.fr/0", "bls12-381.fr", ["draw"]]]]
         origin = lean_render.encode_tree([
             "zkc.native-origin-template/0", "main", [], [],
             ["query", "main", "nonce", "input_2", "random.bls12-381.fr/0", "draw", "P"]]).hex()
@@ -145,7 +148,10 @@ class PairReader(unittest.TestCase):
                        lambda d: d[1][7][0][6][1].append(0),
                        lambda d: d[1][9][0].__setitem__(1, "unknown-owner"),
                        lambda d: d[1][9][0].__setitem__(3, "01"),
-                       lambda d: d[1][9][0].__setitem__(4, "random.other/0")]:
+                       lambda d: d[1][9][0].__setitem__(4, "random.other/0"),
+                       # The sampled field comes from the service row, not the contract's spelling.
+                       lambda d: d[1][10][1][0].__setitem__(2, "koala-bear"),
+                       lambda d: d[1][10].__setitem__(1, [])]:
             with self.subTest(change=change):
                 changed = deepcopy(data)
                 change(changed)

@@ -264,6 +264,7 @@ class Driver(Runner):
                     yield list(encode_tree(mutations.template_tree(item)))
 
         parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
+                 "import Zkc.Construction.CatalogueAdmission",
                  "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
                  "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm",
                  "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
@@ -276,6 +277,9 @@ class Driver(Runner):
         evaluations = []
         encoded = json.dumps(list(templates(exported[7])))
         proofs = [f"theorem original_retained : Fresh.Original.snapshot = {data}.snapshot := rfl",
+                  # The exported rows are producer data until Lean's catalogue admits them.
+                  "theorem actual_catalogue : Fresh.Actual.participant.checkCatalogue Fresh.Actual.catalogue "
+                  "constructionCatalogue = .ok () := by decide +kernel",
                   "theorem templates_encoded : (Zkc.Construction.Instruction.templatesList "
                   "Fresh.Actual.participant.instructions).map (fun template => "
                   f"(Zkc.Construction.templateTree template).encode) = {encoded} := by decide +kernel"]
@@ -368,6 +372,7 @@ class Driver(Runner):
         if rule == "compiled":
             record_accepted(record, "selection")
         record_accepted(record, "occurrence-encoding")
+        record_accepted(record, "catalogue-admission")
         record.setdefault("mutations", {}).update(outcomes)
 
     def native_refusals(self, subject, artifacts, record):

@@ -367,45 +367,7 @@ Error collectStaticDomains(const json::Value &term, UsedIdentities &used) {
   return Error::success();
 }
 json::Value catalogueSlot(const UsedIdentities &used) {
-  const auto &catalog = installedDomains();
-  llvm::StringSet<> closure;
-  SmallVector<std::string> pending;
-  for (const auto &identity : used.domains)
-    pending.push_back(identity.getKey().str());
-  while (!pending.empty()) {
-    std::string identity = pending.pop_back_val();
-    if (!closure.insert(identity).second)
-      continue;
-    if (const auto *domain = catalog.domain(identity))
-      for (const auto &member : domain->associated)
-        pending.push_back(member.identity);
-  }
-  json::Array nominals, services;
-  for (const auto &domain : catalog.allDomains()) {
-    if (!closure.contains(domain.identity))
-      continue;
-    json::Array members, capabilities;
-    for (const auto &member : domain.associated)
-      members.push_back(json::Array{member.member, member.identity});
-    for (const auto &capability : domain.capabilities)
-      capabilities.push_back(capability);
-    nominals.push_back(json::Array{"nominal", domain.identity, domain.sort,
-                                   std::move(members), std::move(capabilities),
-                                   domain.modulus.empty()
-                                       ? json::Value(nullptr)
-                                       : json::Value(domain.modulus)});
-  }
-  for (const auto &service : randomServices()) {
-    if (!used.services.contains(service.contract))
-      continue;
-    json::Array methods{"draw"};
-    for (StringRef method : {"index", "indices"})
-      if (serviceMethod(service.contract, method))
-        methods.push_back(method);
-    services.push_back(json::Array{"service", service.contract, service.field,
-                                   std::move(methods)});
-  }
-  return json::Array{std::move(nominals), std::move(services)};
+  return exportCatalogueRows(used.domains, used.services);
 }
 
 // Count lexical JSON arrays, rather than only native region nesting. A native
@@ -2088,6 +2050,49 @@ public:
   }
 };
 } // namespace
+
+json::Value exportCatalogueRows(const llvm::StringSet<> &domains,
+                                const llvm::StringSet<> &services) {
+  const auto &catalog = installedDomains();
+  llvm::StringSet<> closure;
+  SmallVector<std::string> pending;
+  for (const auto &identity : domains)
+    pending.push_back(identity.getKey().str());
+  while (!pending.empty()) {
+    std::string identity = pending.pop_back_val();
+    if (!closure.insert(identity).second)
+      continue;
+    if (const auto *domain = catalog.domain(identity))
+      for (const auto &member : domain->associated)
+        pending.push_back(member.identity);
+  }
+  json::Array nominals, serviceRows;
+  for (const auto &domain : catalog.allDomains()) {
+    if (!closure.contains(domain.identity))
+      continue;
+    json::Array members, capabilities;
+    for (const auto &member : domain.associated)
+      members.push_back(json::Array{member.member, member.identity});
+    for (const auto &capability : domain.capabilities)
+      capabilities.push_back(capability);
+    nominals.push_back(json::Array{"nominal", domain.identity, domain.sort,
+                                   std::move(members), std::move(capabilities),
+                                   domain.modulus.empty()
+                                       ? json::Value(nullptr)
+                                       : json::Value(domain.modulus)});
+  }
+  for (const auto &service : randomServices()) {
+    if (!services.contains(service.contract))
+      continue;
+    json::Array methods{"draw"};
+    for (StringRef method : {"index", "indices"})
+      if (serviceMethod(service.contract, method))
+        methods.push_back(method);
+    serviceRows.push_back(json::Array{"service", service.contract,
+                                      service.field, std::move(methods)});
+  }
+  return json::Array{std::move(nominals), std::move(serviceRows)};
+}
 
 Expected<SourceView> readSourceView(StringRef bytes, StringRef name,
                                     MLIRContext &context,

@@ -17,6 +17,7 @@ import Zkc.Construction.AuthoredPair
 import Zkc.Construction.AuthoredPairExecution
 import Zkc.Construction.AuthoredPairProducer
 import Zkc.Construction.Binding
+import Zkc.Construction.CatalogueAdmission
 import Zkc.Construction.Compiled
 import Zkc.Construction.ConnectionActionCoverage
 import Zkc.Construction.ConnectionActionSupport
