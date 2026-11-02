@@ -2282,7 +2282,7 @@ public:
     if (!retained)
       return retained.takeError();
     auto declarations = native->getAttr("source_declarations");
-    if (*retained == "[[],[]]") {
+    if (*retained == "[[],[],[]]") {
       if (declarations)
         return error("source.correspondence", "source declarations differ");
     } else {

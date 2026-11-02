@@ -593,6 +593,49 @@ class Exporter {
       result.push_back(cast<StringAttr>(value).getValue());
     return result;
   }
+  /// A retained port's placement ranges over its protocol function's roster,
+  /// and its participant summary lists the placed roles in roster order.
+  Error portRosters(const json::Array &protocols) {
+    for (const auto &value : protocols) {
+      const auto &owner = *value.getAsArray();
+      auto function =
+          symbols.lookup<protocol_ir::MathematicalOp>(*owner[0].getAsString());
+      if (!function)
+        return error("component-declaration-role");
+      std::map<std::string, unsigned> roster;
+      for (auto [index, role] : llvm::enumerate(function.getRoles()))
+        roster.emplace(cast<StringAttr>(role).getValue().str(), index);
+      std::function<bool(const json::Value &)> inside =
+          [&](const json::Value &placement) {
+            const auto &node = *placement.getAsArray();
+            auto known = [&](const json::Value &role) {
+              return roster.count(role.getAsString()->str()) != 0;
+            };
+            auto all = [&](const json::Value &roles) {
+              return llvm::all_of(*roles.getAsArray(), known);
+            };
+            if (node[0] == json::Value("data"))
+              return all(node[1]);
+            if (node[0] == json::Value("oracle"))
+              return known(node[1]) && all(node[2]);
+            return all(node[1]) && llvm::all_of(*node[2].getAsArray(), inside);
+          };
+      for (unsigned side : {1u, 2u})
+        for (const auto &port : *owner[side].getAsArray()) {
+          const auto &row = *port.getAsArray();
+          if (!inside(row[5]))
+            return error("component-declaration-role");
+          std::optional<unsigned> previous;
+          for (const auto &role : *row[2].getAsArray()) {
+            auto at = roster.at(role.getAsString()->str());
+            if (previous && at <= *previous)
+              return error("component-declaration-role");
+            previous = at;
+          }
+        }
+    }
+    return Error::success();
+  }
 
   Expected<json::Array> interface(protocol_ir::MathematicalOp function) {
     roles = function.getRoles();
@@ -2014,7 +2057,8 @@ public:
       if (protocol.getRoles().size() > 1)
         if (auto e = scalarMath(protocol))
           return std::move(e);
-    json::Value declarations = json::Array{json::Array{}, json::Array{}};
+    json::Value declarations =
+        json::Array{json::Array{}, json::Array{}, json::Array{}};
     if (auto attr = unit->getAttr("source_declarations")) {
       auto parsed = exportDeclarationData(attr);
       if (!parsed) {
@@ -2022,14 +2066,16 @@ public:
         return error("component-declaration");
       }
       auto rows = parsed->getAsArray();
-      if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
-          !(*rows)[1].getAsArray())
+      if (!rows || rows->size() != 3 || !(*rows)[0].getAsArray() ||
+          !(*rows)[1].getAsArray() || !(*rows)[2].getAsArray())
         return error("component-declaration");
       if (auto e = language::checkComponentDeclarations(*parsed))
         return std::move(e);
+      if (auto e = portRosters(*(*rows)[1].getAsArray()))
+        return std::move(e);
       // These rows are emitted from the module's checked declaration context,
       // not reconstructed from an executable function or a printed symbol.
-      for (unsigned table : {0, 1})
+      for (unsigned table : {0, 1, 2})
         for (unsigned i = 0; i < (*rows)[table].getAsArray()->size(); ++i)
           if (auto e = associate({10, table, i}, *unit))
             return std::move(e);

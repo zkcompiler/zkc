@@ -30,6 +30,51 @@ using F = InterfaceComponentFacet;
 std::string digest(StringRef value) {
   return toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
 }
+/// A placement tree with the telescope's role names instead of ordinals.
+json::Value placementNames(const ValuePlacement &value,
+                           ArrayRef<std::string> names) {
+  auto list = [&](ArrayRef<unsigned> roles) {
+    json::Array result;
+    for (auto role : roles)
+      result.push_back(names[role]);
+    return result;
+  };
+  if (const auto *data = std::get_if<DataPlacement>(&value.value))
+    return json::Array{"data", list(data->roles)};
+  if (const auto *oracle = std::get_if<OraclePlacement>(&value.value))
+    return json::Array{"oracle", names[oracle->holder],
+                       list(oracle->receivers)};
+  const auto &product = std::get<ProductPlacement>(value.value);
+  json::Array fields;
+  for (const auto &field : product.fields)
+    fields.push_back(placementNames(field, names));
+  return json::Array{"product", list(product.arguments), std::move(fields)};
+}
+/// A retained row of the declaration carrier. A schema with a role telescope
+/// supplies the row's telescope and its members' formulas; a resource row
+/// names its custody slot.
+json::Value retainedRow(const Type &type, StringRef resource, bool sealed,
+                        json::Array members,
+                        const InterfaceSchema *placed = nullptr) {
+  json::Array roles;
+  for (unsigned i = 0; i < members.size(); ++i)
+    members[i].getAsArray()->push_back(
+        placed && !placed->roles.empty()
+            ? placementNames(*placed->fields[i].placement, placed->roles)
+            : json::Value(nullptr));
+  if (placed)
+    for (const auto &role : placed->roles)
+      roles.push_back(role);
+  return json::Array{
+      take(encodeStaticTerm(type)),
+      resource,
+      sealed,
+      std::move(members),
+      std::move(roles),
+      resource == "ordinary"
+          ? json::Value(nullptr)
+          : json::Value("zkl_resource_" + digest(typeIdentity(type)))};
+}
 std::shared_ptr<InterfaceSchema> schema(Type type,
                                         std::vector<std::string> leaves = {}) {
   auto result = std::make_shared<InterfaceSchema>();
@@ -168,14 +213,16 @@ Fixture fixture() {
   auto term = [](const Type &type) { return take(encodeStaticTerm(type)); };
   json::Value declarations = json::Array{
       json::Array{
-          json::Array{term(innerType), "ordinary", false,
+          retainedRow(innerType, "ordinary", false,
                       json::Array{json::Array{"left", term(handleType)},
-                                  json::Array{"right", term(handleType)}}},
-          json::Array{term(outerType), "ordinary", false,
+                                  json::Array{"right", term(handleType)}},
+                      inner.get()),
+          retainedRow(outerType, "ordinary", false,
                       json::Array{json::Array{"sources", term(innerType)},
                                   json::Array{"flag", term(Type(K::Boolean))},
-                                  json::Array{"empty", term(arrayType)}}}},
-      json::Array{}};
+                                  json::Array{"empty", term(arrayType)}},
+                      outer.get())},
+      json::Array{}, json::Array{}};
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -246,13 +293,13 @@ Fixture custodyFixture() {
   auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
   require(bool(module), "custody fixture does not parse");
   json::Value declarations = json::Array{
-      json::Array{json::Array{take(encodeStaticTerm(wrapperType)), "affine",
-                              false,
-                              json::Array{json::Array{
-                                  "token", take(encodeStaticTerm(tokenType))}}},
-                  json::Array{take(encodeStaticTerm(tokenType)), "affine",
-                              false, json::Array{}}},
-      json::Array{}};
+      json::Array{
+          retainedRow(wrapperType, "affine", false,
+                      json::Array{json::Array{
+                          "token", take(encodeStaticTerm(tokenType))}},
+                      wrapper.get()),
+          retainedRow(tokenType, "affine", false, json::Array{}, token.get())},
+      json::Array{}, json::Array{}};
   module->getBody()->front().setAttr(
       "source_declarations",
       take(importDeclarationData(&context, declarations)));
@@ -509,12 +556,13 @@ module {"protocol.module"() ({
   Type handleType(K::Oracle);
   handleType.arguments = {kind};
   json::Value declarations = json::Array{
-      json::Array{json::Array{
-          take(encodeStaticTerm(stateType)), "ordinary", false,
+      json::Array{retainedRow(
+          stateType, "ordinary", false,
           json::Array{
               json::Array{"handle", take(encodeStaticTerm(handleType))},
-              json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}}}},
-      json::Array{}};
+              json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}},
+          state.get())},
+      json::Array{}, json::Array{}};
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -594,11 +642,17 @@ void declarationCategories() {
                                     "sample::Logical", json::Array{}};
   json::Value ordinary =
       json::Array{"nominal", "record", "sample::Ordinary", json::Array{}};
+  auto slot = [](StringRef path) { return "zkl_resource_" + digest(path); };
   json::Value value = json::Array{
-      json::Array{json::Array{logical, "linear", false,
-                              json::Array{json::Array{"child", ordinary}}},
-                  json::Array{ordinary, "affine", false, json::Array{}}},
-      json::Array{}};
+      json::Array{
+          json::Array{logical, "linear", false,
+                      json::Array{json::Array{"child", ordinary, nullptr}},
+                      json::Array{}, slot("sample::Logical")},
+          json::Array{ordinary, "affine", false, json::Array{}, json::Array{},
+                      slot("sample::Ordinary")}},
+      json::Array{},
+      json::Array{json::Array{"sample::Logical", nullptr},
+                  json::Array{"sample::Ordinary", nullptr}}};
   if (auto e = checkComponentDeclarations(value))
     throw std::runtime_error(toString(std::move(e)));
   auto missing = value;
@@ -617,7 +671,7 @@ void declarationCategories() {
       (*(*outer[3].getAsArray())[0].getAsArray())[1] = row[0];
     } else
       row[3] = json::Array{
-          json::Array{"hidden", json::Array{"array", logical, "0"}}};
+          json::Array{"hidden", json::Array{"array", logical, "0"}, nullptr}};
     refusal = checkComponentDeclarations(bad);
     require(bool(refusal), "ordinary carrier erased logical category");
     require(namesIdentifier(toString(std::move(refusal)),
@@ -758,13 +812,14 @@ module {"protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->()}
 )mlir";
   json::Value declarations = json::Array{
-      json::Array{json::Array{
-          take(encodeStaticTerm(stateType)), "ordinary", false,
+      json::Array{retainedRow(
+          stateType, "ordinary", false,
           json::Array{
               json::Array{"verifier", take(encodeStaticTerm(verifierType))},
               json::Array{"prover", take(encodeStaticTerm(proverType))},
-              json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}}}},
-      json::Array{}};
+              json::Array{"flag", take(encodeStaticTerm(Type(K::Boolean)))}},
+          state.get())},
+      json::Array{}, json::Array{}};
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -1139,6 +1194,69 @@ struct State roles(P,V):
     (*f.document.getAsObject())["original"] = digest(f.native);
     refuses(readInterface(f.native, printJson(f.document)), "source.interface");
   });
+  // The reader joins each retained row to its schema: the row's telescope,
+  // member formulas and custody slot must agree with the schema it names.
+  auto rereadCarrier = [](Fixture f, function_ref<void(json::Array &)> edit) {
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto module = mlir::parseSourceString<mlir::ModuleOp>(f.native, &context);
+    require(bool(module), "fixture original no longer parses");
+    auto &unit = module->getBody()->front();
+    auto declarations =
+        take(exportDeclarationData(unit.getAttr("source_declarations")));
+    edit(*(*declarations.getAsArray())[0].getAsArray());
+    unit.setAttr("source_declarations",
+                 take(importDeclarationData(&context, declarations)));
+    f.native.clear();
+    raw_string_ostream out(f.native);
+    module->print(out);
+    out.flush();
+    (*f.document.getAsObject())["original"] = digest(f.native);
+    auto read = readInterface(f.native, printJson(f.document));
+    require(!read, "an edited declaration carrier was admitted");
+    return toString(read.takeError());
+  };
+  auto row = [](json::Array &records, unsigned index) -> json::Array & {
+    return *records[index].getAsArray();
+  };
+  cases.run(
+      "retained telescopes, formulas and slots agree with the schema", [&] {
+        auto edited = [](const std::string &message, StringRef reason) {
+          require(StringRef(message).contains(reason),
+                  "unexpected refusal: " + message);
+        };
+        edited(rereadCarrier(custodyFixture(),
+                             [&](json::Array &records) {
+                               row(records, 0)[4] = json::Array{"V", "P"};
+                             }),
+               "retained role telescope differs from schema");
+        edited(rereadCarrier(
+                   custodyFixture(),
+                   [&](json::Array &records) {
+                     auto &token =
+                         *(*row(records, 0)[3].getAsArray())[0].getAsArray();
+                     token[2] = json::Array{"data", json::Array{"V"}};
+                   }),
+               "retained member placement differs from schema");
+        edited(rereadCarrier(custodyFixture(),
+                             [&](json::Array &records) {
+                               row(records, 1)[5] =
+                                   "zkl_resource_" + std::string(64, '0');
+                             }),
+               "retained custody slot differs from schema");
+        // Envelope applies Sources roles(Y,Z,X); sorting that
+        // substitution changes the formula the schema places.
+        edited(rereadCarrier(
+                   fixture(),
+                   [&](json::Array &records) {
+                     auto &sources =
+                         *(*row(records, 1)[3].getAsArray())[0].getAsArray();
+                     (*sources[2].getAsArray())[1] = json::Array{"X", "Y", "Z"};
+                   }),
+               "retained member placement differs from schema");
+      });
   cases.run("affine wrappers cannot grant Drop to a linear child", [] {
     auto f = custodyFixture();
     for (bool output : {false, true}) {

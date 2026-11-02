@@ -2117,7 +2117,7 @@ public:
     auto sourceDeclarations = inspectComponentDeclarations(project, limits);
     if (!sourceDeclarations)
       return sourceDeclarations.takeError();
-    if (*sourceDeclarations != "[[],[]]") {
+    if (*sourceDeclarations != "[[],[],[]]") {
       // The neutral frontend stays MLIR-independent. Convert its checked
       // inspection document once at this boundary; retain structured native
       // inherent data for all subsequent passes and comparisons.

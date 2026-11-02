@@ -101,7 +101,7 @@ protocol Run roles(P,V)(state:State@P->V,other:O@P->V,key:VK@V)
     accept(checkComponentDeclarations(retained));
     auto &state = row(retained, "m::State");
     require((*state[0].getAsArray())[1] == J("logical_record") &&
-                state[1] == J("ordinary") && state.size() == 4 &&
+                state[1] == J("ordinary") && state.size() == 6 &&
                 state[3].getAsArray()->size() == 6,
             "logical declaration kind or private/empty fields disappeared");
     require(row(retained, "m::Empty")[3].getAsArray()->size() == 1 &&
@@ -316,27 +316,31 @@ protocol Run roles(P,V)(a:O@P->V,b:O@P->V)->(out:O@P->V){
     });
   for (StringRef name : {"m::State", "m::Choice", "m::Empty"})
     for (StringRef resource : {"affine", "linear"})
-      cases.run("retained declaration grammar supports " + resource + " " +
-                    name,
-                [&] {
-                  auto retained = declarations(close(relay));
-                  row(retained, name)[1] = resource;
-                  accept(checkComponentDeclarations(retained));
-                  row(retained, name)[1] = "unknown";
-                  refuse(checkComponentDeclarations(retained),
-                         "component-declaration");
-                });
+      cases.run(
+          "retained declaration grammar supports " + resource + " " + name,
+          [&] {
+            auto retained = declarations(close(relay));
+            row(retained, name)[1] = resource;
+            // A resource row names its custody slot.
+            row(retained, name)[5] = "zkl_resource_" + std::string(64, 'a');
+            accept(checkComponentDeclarations(retained));
+            row(retained, name)[1] = "unknown";
+            refuse(checkComponentDeclarations(retained),
+                   "component-declaration");
+          });
   cases.run(
       "ordinary source record declarations retain existing semantics", [] {
         auto entry = close(R"(
 struct Plain{pub value:index,pub empty:()}
 protocol Run roles(P)(value:Plain@P)->(out:Plain@P){return(out=value);}
 )");
-        require(take(inspectComponentDeclarations(entry)) == "[[],[]]",
+        require(take(inspectComponentDeclarations(entry)) == "[[],[],[]]",
                 "ordinary records alone enabled the retained carrier");
         auto ordinary = take(json::parse(R"([
       [[["nominal","record","m::Pending",[]],"linear",true,
-        [["value",["bool"]]]]],[]])"));
+        [["value",["bool"],null]],[],
+        "zkl_resource_0000000000000000000000000000000000000000000000000000000000000000"]],
+      [],[["m::Pending",null]]])"));
         accept(checkComponentDeclarations(ordinary));
         (*(*(*ordinary.getAsArray())[0].getAsArray())[0].getAsArray())[2] =
             false;

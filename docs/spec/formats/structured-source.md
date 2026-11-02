@@ -132,15 +132,58 @@ unlisted operations require a separately specified extension.
 
 ## Retained source declarations
 
-The last slot is `[records, protocols]`, or `[[], []]` when no retained source
-resource or distributed record requires declaration context. The frontend retains closed typed source
-terms and field order before flattening:
+The last slot is `[records, protocols, authorities]`, or `[[], [], []]` when no
+retained source resource or distributed record requires declaration context.
+The frontend retains closed typed source terms, field order, role telescopes,
+placements and custody slots before flattening:
 
 ```text
-record := [closed-record-or-logical-record-type, "ordinary" | "affine" | "linear", sealed, [[field-name, closed-type]...]]
-protocol := [native-symbol, input-ports, output-ports]
-port := [source-name, closed-type, [participant...], native-offset, native-count]
+record    := [closed-record-or-logical-record-type, "ordinary" | "affine" | "linear",
+              sealed, [member...], [role...], slot | null]
+member    := [field-name, closed-type, placement | null]       # record fields
+           | [alternative, [member...]]                        # variant payloads
+protocol  := [native-symbol, input-ports, output-ports]
+port      := [source-name, closed-type, [participant...], native-offset, native-count, placement]
+authority := [nominal-path, revision | null]
+placement := ["data", [role...]] | ["oracle", holder, [receiver...]]
+           | ["product", [argument...], [placement...]]
 ```
+
+- A record's roles are its role telescope in declaration order, at most
+  `record.roles` names. Only a logical record has one.
+- A slot is the `zkl_resource_<digest>` identity of an affine or linear row's
+  resource units, exactly as its layout's custody prefix names them. An
+  ordinary row has none.
+- A member placement is the field's formula specialized over its row's
+  telescope. It is present exactly for the members of a logical record with a
+  telescope; ordinary rows, telescope-free logical records and variant payloads
+  carry none.
+- A port placement is the port's full placement tree over its protocol's native
+  role names. Product arguments are the role substitution in telescope order
+  and are never sorted; set roles follow roster order; a logical array has one
+  element template. Placements name roles, not ordinals, as participant lists
+  do.
+- The participant list is a derived summary: it lists exactly the top-level
+  roles of the port's placement, in roster order.
+- Authorities have one row per distinct record, logical-record, variant and
+  module path in any term of the carrier, including nested and phantom
+  arguments and the module argument of associated terms, sorted by path. A
+  revision is that path's [source authority](../language/definitions.md#source-authority)
+  as 64 lowercase hexadecimal digits; null marks a generated declaration. The
+  carrier's node budget bounds this table.
+
+The shared shape check refuses wrong arities; a slot missing from a resource
+row or present on an ordinary row; repeated or over-limit telescope names; a
+member placement absent or present against the rule above; a formula role
+outside its telescope; non-injective product arguments; a participant list that
+differs from its placement; and authorities that are unsorted, repeated,
+missing, extra or not a revision. The structured exporter also requires every
+port placement role to be in its protocol function's roster. The interface
+reader joins each row to its schema: the telescope equals the schema's roles,
+member placements equal the schema's field placements with names translated to
+ordinals, and the slot names the schema's custody units. Only frontend
+correspondence, which recomputes the whole carrier from the checked source,
+checks revision values against source bytes.
 
 Resource restriction and sealing are independent: a linear or affine record
 may expose public observations while retaining its custody and home-only
@@ -151,7 +194,8 @@ does not yet read this distinction; the
 [formal reader status](../contracts.md#formal-reader-status) records the gap.
 
 The terms use the existing typed origin grammar, including closed static
-arguments. Participant lists are derived summaries, not per-field authority.
+arguments. Placements carry the per-field participant authority; participant
+lists only summarize them.
 Every referenced nominal record or variant is retained, including zero-array and
 phantom children. Distributed records may contain nested distributed or ordinary
 resource records; ordinary carriers cannot erase logical category. Sealing and
@@ -1179,7 +1223,8 @@ positions are obtained from that actual row rather than a second semantic graph.
 Associations also cover relation, binding and domain declarations, domain
 constructors and results, contracts, nested regions and block terminators.
 Retained source-declaration rows use `[10,table,index]`, where table zero is
-records and table one is protocol ports. Their producer is the `protocol.module`
+records, table one is protocol ports and table two is authorities. Their
+producer is the `protocol.module`
 carrying the checked `source_declarations` attribute; this does not invent an
 executable declaration operation or assert an exact authored-node match.
 Catalogue rows are installed meaning, not emitted source operations.

@@ -981,8 +981,8 @@ public:
         return error("structured-reference-unsupported", "source declarations");
       }
       auto rows = parsed->getAsArray();
-      if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
-          !(*rows)[1].getAsArray())
+      if (!rows || rows->size() != 3 || !(*rows)[0].getAsArray() ||
+          !(*rows)[1].getAsArray() || !(*rows)[2].getAsArray())
         return error("structured-reference-unsupported", "source declarations");
     }
     llvm::StringSet<> names;

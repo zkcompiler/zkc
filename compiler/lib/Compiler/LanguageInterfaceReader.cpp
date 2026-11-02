@@ -2082,34 +2082,91 @@ class Reader {
       return fail("logical record declaration carrier is absent");
     }
     auto *tables = declarations->getAsArray();
-    if (!tables || tables->size() != 2 || !(*tables)[0].getAsArray())
+    if (!tables || tables->size() != 3 || !(*tables)[0].getAsArray())
       return fail("logical declaration tables differ");
     std::map<std::string, const json::Array *> records;
-    // Nominal rows retain [type, resource, sealed, members]. Product members
-    // are [name, type]; variant members are [alternative, product members].
-    // Native payload widths cannot authenticate omitted zero-leaf members.
+    // Nominal rows retain [type, resource, sealed, members, roles, slot].
+    // Product members are [name, type, placement]; variant members are
+    // [alternative, product members]. Native payload widths cannot
+    // authenticate omitted zero-leaf members.
     for (const auto &value : *(*tables)[0].getAsArray()) {
       auto *record = value.getAsArray();
-      if (!record || record->size() != 4 || !(*record)[1].getAsString() ||
-          !(*record)[2].getAsBoolean() || !(*record)[3].getAsArray())
+      if (!record || record->size() != 6 || !(*record)[1].getAsString() ||
+          !(*record)[2].getAsBoolean() || !(*record)[3].getAsArray() ||
+          !(*record)[4].getAsArray())
         return fail("retained record shape differs");
       auto identity = retainedIdentity((*record)[0]);
       if (!identity || !records.emplace(*identity, record).second)
         return fail("retained record identity differs or repeats");
     }
     std::set<const InterfaceSchema *> checked;
+    // A retained formula names roles of its row's telescope; the schema field
+    // places the same tree by ordinal. Product instances are schema digests
+    // there and absent here; the tree shape and role order must agree.
+    std::function<bool(const json::Value &, const ValuePlacement &,
+                       ArrayRef<std::string>, unsigned)>
+        samePlacement = [&](const json::Value &value,
+                            const ValuePlacement &expected,
+                            ArrayRef<std::string> telescope, unsigned depth) {
+          auto *node = value.getAsArray();
+          if (depth > limits.typeDepth || !charge(1) || !node || node->empty())
+            return false;
+          auto ordinal =
+              [&](const json::Value &role) -> std::optional<unsigned> {
+            auto name = role.getAsString();
+            auto found = name ? llvm::find(telescope, *name) : telescope.end();
+            if (found == telescope.end())
+              return std::nullopt;
+            return unsigned(found - telescope.begin());
+          };
+          auto ordinals = [&](const json::Value &roles,
+                              ArrayRef<unsigned> actual) {
+            auto *list = roles.getAsArray();
+            if (!list || list->size() != actual.size())
+              return false;
+            for (unsigned i = 0; i < actual.size(); ++i)
+              if (ordinal((*list)[i]) != actual[i])
+                return false;
+            return true;
+          };
+          if (const auto *data = std::get_if<DataPlacement>(&expected.value))
+            return node->size() == 2 && (*node)[0] == json::Value("data") &&
+                   ordinals((*node)[1], data->roles);
+          if (const auto *oracle =
+                  std::get_if<OraclePlacement>(&expected.value))
+            return node->size() == 3 && (*node)[0] == json::Value("oracle") &&
+                   ordinal((*node)[1]) == oracle->holder &&
+                   ordinals((*node)[2], oracle->receivers);
+          const auto &product = std::get<ProductPlacement>(expected.value);
+          auto *fields = node->size() == 3 ? (*node)[2].getAsArray() : nullptr;
+          if ((*node)[0] != json::Value("product") ||
+              !ordinals((*node)[1], product.arguments) || !fields ||
+              fields->size() != product.fields.size())
+            return false;
+          for (unsigned i = 0; i < fields->size(); ++i)
+            if (!samePlacement((*fields)[i], product.fields[i], telescope,
+                               depth + 1))
+              return false;
+          return true;
+        };
     auto matchFields = [&](const json::Array &fields,
-                           ArrayRef<InterfaceField> expected) {
+                           ArrayRef<InterfaceField> expected,
+                           ArrayRef<std::string> telescope) {
       if (!charge(1 + fields.size()) || fields.size() != expected.size())
         return fail("nominal schema omits private or zero-leaf fields");
       for (unsigned i = 0; i < fields.size(); ++i) {
         auto *field = fields[i].getAsArray();
-        if (!field || field->size() != 2 ||
+        if (!field || field->size() != 3 ||
             (*field)[0].getAsString() != expected[i].name)
           return fail("retained nominal field name or order differs");
         auto type = retainedType((*field)[1]);
         if (!type || !retainedSchemaType(*type, *expected[i].schema))
           return fail("retained nominal field type differs");
+        const auto &placement = (*field)[2];
+        if ((placement.kind() == json::Value::Null) != !expected[i].placement ||
+            (expected[i].placement &&
+             !samePlacement(placement, *expected[i].placement, telescope, 0)))
+          return fail("retained member placement differs from schema");
       }
       return true;
     };
@@ -2130,6 +2187,22 @@ class Reader {
               return fail("retained nominal source identity differs");
             if (record[2].getAsBoolean() != schema.sealed)
               return fail("retained sealing policy differs from schema");
+            // The row's telescope is the schema's role telescope, and its
+            // custody slot names the schema's resource units.
+            std::vector<std::string> telescope;
+            for (const auto &role : *record[4].getAsArray()) {
+              auto name = role.getAsString();
+              if (!name || !charge(name->size() + 1))
+                return fail("retained role telescope differs from schema");
+              telescope.push_back(name->str());
+            }
+            if (telescope != schema.roles)
+              return fail("retained role telescope differs from schema");
+            auto slot = record[5].getAsString();
+            if (schema.custody
+                    ? !slot || *slot != "zkl_resource_" + schema.identity
+                    : record[5].kind() != json::Value::Null)
+              return fail("retained custody slot differs from schema");
             auto resource = record[1].getAsString();
             if (!resource ||
                 (resource != "ordinary" && resource != "linear" &&
@@ -2155,10 +2228,10 @@ class Reader {
                     (*arm)[0].getAsString() != schema.alternatives[i].name ||
                     !(*arm)[1].getAsArray() ||
                     !matchFields(*(*arm)[1].getAsArray(),
-                                 schema.alternatives[i].fields))
+                                 schema.alternatives[i].fields, telescope))
                   return fail("retained variant fields or order differ");
               }
-            } else if (!matchFields(members, schema.fields))
+            } else if (!matchFields(members, schema.fields, telescope))
               return false;
           }
           if (schema.element && !bind(*schema.element))

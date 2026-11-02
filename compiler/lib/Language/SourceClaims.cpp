@@ -207,6 +207,61 @@ json::Object sourceNode(const CheckedProject &project, Span span) {
                       {"begin", span.begin},
                       {"end", span.end}};
 }
+/// A placement tree with role names instead of ordinals. Product arguments
+/// keep telescope order; set roles keep roster order.
+Expected<json::Value> placementData(const ValuePlacement &value,
+                                    ArrayRef<std::string> names,
+                                    detail::Work &work, unsigned depth = 0) {
+  if (depth > 128)
+    return detail::failure("source.limit", "component placement depth");
+  if (auto e = work.charge(1))
+    return std::move(e);
+  auto name = [&](unsigned role) -> Expected<json::Value> {
+    if (role >= names.size())
+      return detail::failure("component-declaration",
+                             "placement role is outside its telescope");
+    return json::Value(names[role]);
+  };
+  auto list = [&](ArrayRef<unsigned> roles) -> Expected<json::Array> {
+    json::Array result;
+    for (auto role : roles) {
+      auto value = name(role);
+      if (!value)
+        return value.takeError();
+      result.push_back(std::move(*value));
+    }
+    return result;
+  };
+  if (const auto *data = std::get_if<DataPlacement>(&value.value)) {
+    auto roles = list(data->roles);
+    if (!roles)
+      return roles.takeError();
+    return json::Array{"data", std::move(*roles)};
+  }
+  if (const auto *oracle = std::get_if<OraclePlacement>(&value.value)) {
+    auto holder = name(oracle->holder);
+    auto receivers = list(oracle->receivers);
+    if (!holder || !receivers) {
+      consumeError(holder.takeError());
+      consumeError(receivers.takeError());
+      return detail::failure("component-declaration",
+                             "placement role is outside its telescope");
+    }
+    return json::Array{"oracle", std::move(*holder), std::move(*receivers)};
+  }
+  const auto &product = std::get<ProductPlacement>(value.value);
+  auto arguments = list(product.arguments);
+  if (!arguments)
+    return arguments.takeError();
+  json::Array fields;
+  for (const auto &field : product.fields) {
+    auto encoded = placementData(field, names, work, depth + 1);
+    if (!encoded)
+      return encoded.takeError();
+    fields.push_back(std::move(*encoded));
+  }
+  return json::Array{"product", std::move(*arguments), std::move(fields)};
+}
 } // namespace
 
 Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
@@ -218,6 +273,24 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
   json::Array records, protocols;
   bool required = false;
   std::set<std::string> seen;
+  // Every record, logical-record, variant and module path in any carrier term,
+  // including nested, phantom and associated-module arguments.
+  std::set<std::string> nominals;
+  std::function<Error(const Type &, unsigned)> nominalPaths =
+      [&](const Type &type, unsigned depth) -> Error {
+    if (depth > limits.typeDepth)
+      return detail::failure("source.limit", "component declaration depth");
+    if (auto e = work.charge(1))
+      return e;
+    using K = Type::Kind;
+    if (type.kind == K::Record || type.kind == K::LogicalRecord ||
+        type.kind == K::Variant || type.kind == K::Module)
+      nominals.insert(type.domain);
+    for (const auto &argument : type.arguments)
+      if (auto e = nominalPaths(argument, depth + 1))
+        return e;
+    return Error::success();
+  };
   std::map<std::string, const Declaration *> declarations;
   for (const auto &declaration : entry.declarations()) {
     if (auto e = work.charge(1, declaration.span))
@@ -278,7 +351,19 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
     auto term = encodeStaticTerm(type);
     if (!term)
       return term.takeError();
-    auto fields = [&](ArrayRef<LayoutField> source) -> Expected<json::Array> {
+    if (auto e = nominalPaths(type, 0))
+      return e;
+    // The telescope names the row's own roles in declaration order. Only a
+    // logical record has one; its members' formulas range over it. A
+    // telescope-free logical record has no member formulas.
+    std::vector<std::string> telescope;
+    if (type.kind == K::LogicalRecord)
+      telescope = (*layout)->roleParameters;
+    const bool placed = !telescope.empty();
+    if (auto e = work.charge(telescope.size() + 1))
+      return e;
+    auto fields = [&](ArrayRef<LayoutField> source,
+                      bool placed) -> Expected<json::Array> {
       json::Array result;
       for (const auto &field : source) {
         if (auto e = work.charge(field.name.size() + 1))
@@ -286,27 +371,57 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
         auto term = encodeStaticTerm(field.layout->type);
         if (!term)
           return term.takeError();
-        result.push_back(json::Array{field.name, std::move(*term)});
+        if (auto e = nominalPaths(field.layout->type, 0))
+          return std::move(e);
+        json::Value placement = nullptr;
+        if (placed) {
+          if (!field.placement)
+            return detail::failure("component-declaration",
+                                   "logical member has no placement");
+          auto encoded = placementData(*field.placement, telescope, work);
+          if (!encoded)
+            return encoded.takeError();
+          placement = std::move(*encoded);
+        }
+        result.push_back(
+            json::Array{field.name, std::move(*term), std::move(placement)});
       }
       return result;
     };
-    auto members = fields((*layout)->fields);
+    auto members = fields((*layout)->fields, placed);
     if (!members)
       return members.takeError();
     for (const auto &alternative : (*layout)->alternatives) {
       if (auto e = work.charge(alternative.name.size() + 1))
         return e;
-      auto payload = fields(alternative.fields);
+      auto payload = fields(alternative.fields, false);
       if (!payload)
         return payload.takeError();
       members->push_back(json::Array{alternative.name, std::move(*payload)});
+    }
+    json::Array roles;
+    for (const auto &role : telescope)
+      roles.push_back(role);
+    // The custody slot names the row's resource units, exactly as its layout
+    // prefixes them.
+    json::Value slot = nullptr;
+    if (declaration.resource) {
+      constexpr StringLiteral unit = "resource_unit:";
+      const auto *leaf = (*layout)->custody && !(*layout)->leaves.empty()
+                             ? (*layout)->leaves.front().data()
+                             : nullptr;
+      if (!leaf || !StringRef(*leaf).starts_with(unit))
+        return detail::failure("component-declaration",
+                               "resource row has no custody slot");
+      slot = StringRef(*leaf).drop_front(unit.size());
     }
     records.push_back(json::Array{std::move(*term),
                                   !declaration.resource ? "ordinary"
                                   : *declaration.resource == Resource::Linear
                                       ? "linear"
                                       : "affine",
-                                  declaration.sealed, std::move(*members)});
+                                  declaration.sealed, std::move(*members),
+                                  std::move(roles), std::move(slot)});
     return Error::success();
   };
   std::function<Error(const Body &, unsigned)> retainBody =
@@ -358,11 +473,25 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
         auto term = encodeStaticTerm(port.type);
         if (!term)
           return term.takeError();
+        if (auto e = nominalPaths(port.type, 0))
+          return std::move(e);
+        // The participant list is a summary of the placement tree, which
+        // ranges over the protocol's native role names.
+        if (!layout->placement)
+          return detail::failure("component-declaration",
+                                 "protocol port has no placement");
+        std::vector<std::string> roster;
+        for (unsigned role = 0; role < declaration.roles.size(); ++role)
+          roster.push_back(nativeRoleName(role));
+        auto placement = placementData(*layout->placement, roster, work);
+        if (!placement)
+          return placement.takeError();
         json::Array roles;
-        for (auto role : port.roles)
+        for (auto role : placementRoles(*layout->placement))
           roles.push_back(nativeRoleName(role));
         ports.push_back(json::Array{port.name, std::move(*term),
-                                    std::move(roles), offset, layout->size()});
+                                    std::move(roles), offset, layout->size(),
+                                    std::move(*placement)});
         if (offset > std::numeric_limits<unsigned>::max() - layout->size())
           return detail::failure("source.limit", "component port leaves");
         offset += layout->size();
@@ -372,11 +501,22 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
     protocols.push_back(json::Array{declaration.symbol, std::move(sides[0]),
                                     std::move(sides[1])});
   }
+  json::Array authorities;
   if (!required) {
     records.clear();
     protocols.clear();
-  }
-  json::Value value = json::Array{std::move(records), std::move(protocols)};
+  } else
+    for (const auto &path : nominals) {
+      if (auto e = work.charge(path.size() + 1))
+        return std::move(e);
+      auto authority = sourceAuthority(entry.project(), path);
+      if (!authority)
+        return authority.takeError();
+      authorities.push_back(json::Array{
+          path, *authority ? json::Value(**authority) : json::Value(nullptr)});
+    }
+  json::Value value = json::Array{std::move(records), std::move(protocols),
+                                  std::move(authorities)};
   if (!jsonWithinByteLimit(value, limits.interfaceBytes))
     return detail::failure("source.limit", "component declaration bytes");
   ownJsonStrings(value);

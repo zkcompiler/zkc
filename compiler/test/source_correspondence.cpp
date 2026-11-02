@@ -147,7 +147,7 @@ int main() {
         *claims.getAsObject()));
     const auto &declarations = *(*root.getArray("snapshot"))[10].getAsArray();
     std::set<std::string> expected, actual;
-    for (unsigned table : {0, 1})
+    for (unsigned table : {0, 1, 2})
       for (unsigned i = 0; i < declarations[table].getAsArray()->size(); ++i)
         expected.insert(zkc::printJson(json::Array{10, table, i}));
     for (const auto &item : *root.getArray("rows")) {

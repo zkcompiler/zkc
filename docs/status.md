@@ -972,7 +972,9 @@ Both readers keep a nominal record's role arguments in telescope order. The
 Rust supply reconstruction decides role membership by schema category, through
 one sorted index of each telescope substitution, so a permuted telescope of any
 length supplies each field at its substituted role. The structured-source
-export and component-declaration participant lists accept 1 to 16 roles.
+export accepts 1 to 16 roles. Retained declaration telescopes accept up to
+`record.roles` names, and their participant lists and placements up to
+`protocol.roles`; product arguments keep telescope order.
 Generated Entry families walk their roster once per phase and each port only at
 its placed roles, so a trivial 1,024-role Protocol closes and publishes its
 interface within the 32,000,000-unit phase work ceiling, with work growing

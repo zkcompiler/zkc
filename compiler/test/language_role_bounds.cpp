@@ -146,7 +146,8 @@ int main() {
         // Admission limits and output-size limits are separate: the
         // same 1,024-role subject is checked and closed under a
         // publication ceiling one byte below its interface, and only
-        // publication refuses.
+        // publication refuses. The retained declaration carrier, which
+        // names every telescope role, shares that ceiling.
         auto source = wide(1024, inOrder(1024));
         auto bytes = publish(source).interfaceJson().size();
         outs() << "1,024-role telescope interface: " << bytes << " bytes\n";
@@ -157,10 +158,12 @@ int main() {
         auto published = prepareOriginal(closed, limits);
         require(!published, "an interface above its ceiling published");
         auto message = refusal(published.takeError());
-        require(StringRef(message).contains("source.limit") &&
-                    StringRef(message).contains(
-                        "interface traversal or byte limit exceeded"),
-                "unexpected publication refusal: " + message);
+        require(
+            StringRef(message).contains("source.limit") &&
+                (StringRef(message).contains(
+                     "interface traversal or byte limit exceeded") ||
+                 StringRef(message).contains("component declaration bytes")),
+            "unexpected publication refusal: " + message);
       });
   return cases.result();
 }
