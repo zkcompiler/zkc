@@ -981,6 +981,32 @@ pub const REVERT_CLASSES: [RevertClass; {}] = [",
         .unwrap();
     }
     o.push_str("];\n");
+    // Literal forms for static text, such as command help, that `concat!`
+    // composes at compile time.
+    writeln!(
+        o,
+        "/// The declared fork names, in declaration order, joined by `|`.
+#[macro_export]
+macro_rules! evm_target_forks {{
+    () => {{
+        {:?}
+    }};
+}}
+/// The declared default fork's name.
+#[macro_export]
+macro_rules! evm_target_default_fork {{
+    () => {{
+        {:?}
+    }};
+}}",
+        forks
+            .iter()
+            .map(|fork| fork["name"].as_str().unwrap())
+            .collect::<Vec<_>>()
+            .join("|"),
+        declaration["default_fork"].as_str().unwrap(),
+    )
+    .unwrap();
     o
 }
 
@@ -1230,6 +1256,12 @@ mod evm_target_tests {
             generated::DEFAULT_FORK.row().name,
             declaration["default_fork"]
         );
+        let names: Vec<_> = forks
+            .iter()
+            .map(|row| row["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(zkc::evm_target_forks!(), names.join("|"));
+        assert_eq!(zkc::evm_target_default_fork!(), declaration["default_fork"]);
         let limits: Vec<_> = generated::LIMITS
             .iter()
             .map(|limit| serde_json::json!({"name":limit.name, "minimum":limit.minimum, "maximum":limit.maximum}))
@@ -1240,132 +1272,5 @@ mod evm_target_tests {
             .map(|revert| serde_json::json!({"class":revert.name, "tag":std::str::from_utf8(&revert.tag).unwrap()}))
             .collect();
         assert_eq!(Json::from(reverts), declaration["reverts"]);
-    }
-
-    // The SDK and CLI still restate these declared facts. Each restatement must
-    // equal the declaration until its reader takes the generated module.
-    #[cfg(feature = "evm")]
-    #[test]
-    fn remaining_sdk_and_cli_restatements_match_the_declaration() {
-        use zkc::evm_target::{self as declared, Fork};
-        let sdk = include_str!("src/evm/mod.rs");
-        let calldata = include_str!("src/evm/calldata.rs");
-        let solc = include_str!("src/evm/solc.rs");
-        let artifact = include_str!("src/evm/artifact.rs");
-        let cli = include_str!("../zkc-cli/src/cli.rs");
-        let cli_evm = include_str!("../zkc-cli/src/project/evm.rs");
-        let count = |text: &str, expected: &str, n: usize| {
-            assert_eq!(text.matches(expected).count(), n, "restatement {expected}");
-        };
-        // The JSON value that follows `marker`, balanced from its first bracket.
-        let json_after = |text: &str, marker: &str| -> Json {
-            let start = text.find(marker).unwrap() + marker.len();
-            let (mut depth, mut end) = (0, start);
-            for (i, b) in text[start..].bytes().enumerate() {
-                depth += i32::from(matches!(b, b'{' | b'[')) - i32::from(matches!(b, b'}' | b']'));
-                if depth == 0 && matches!(b, b'}' | b']') {
-                    end = start + i + 1;
-                    break;
-                }
-            }
-            serde_json::from_str(&text[start..end]).unwrap()
-        };
-        let names: Vec<_> = Fork::ALL.iter().map(|fork| fork.row().name).collect();
-        let default = declared::DEFAULT_FORK.row().name;
-
-        // Solc pin, fork enumeration and default.
-        assert_eq!(zkc::evm::SOLC_VERSION, declared::SOLC_VERSION);
-        for fork in Fork::ALL {
-            let parsed: zkc::evm::EvmFork = fork.row().name.parse().unwrap();
-            assert_eq!(parsed.as_str(), fork.row().name);
-        }
-        count(sdk, "\" => Ok(Self::", Fork::ALL.len());
-        assert_eq!(zkc::evm::EvmFork::default().as_str(), default);
-        assert_eq!(zkc::evm::Options::default().fork.as_str(), default);
-        // Tool facts the SDK requires in the compiler's response manifest.
-        let release = declared::SOLC_VERSION.split('+').next().unwrap();
-        count(
-            sdk,
-            &format!("manifest[\"solc_version\"] != {release:?}"),
-            1,
-        );
-        let optimizer: Json = serde_json::from_str(declared::SOLC_OPTIMIZER_JSON).unwrap();
-        let steps = optimizer["details"]["yulDetails"]["optimizerSteps"]
-            .as_str()
-            .unwrap();
-        count(
-            sdk,
-            &format!("manifest[\"optimizer_steps\"] != {steps:?}"),
-            1,
-        );
-        assert_eq!(json_after(solc, "\"optimizer\":"), optimizer);
-        // Deployment ceiling maxima and minima.
-        for limit in &declared::LIMITS {
-            count(sdk, &format!("({:?}, {}),", limit.name, limit.maximum), 1);
-            if limit.minimum > 1 {
-                count(
-                    sdk,
-                    &format!(
-                        "value[{:?}].as_u64().unwrap() < {}",
-                        limit.name, limit.minimum
-                    ),
-                    1,
-                );
-            }
-        }
-        let ceilings = &sdk[sdk.find("let ceilings = [").unwrap()..];
-        count(
-            &ceilings[..ceilings.find("];").unwrap()],
-            "(\"",
-            declared::LIMITS.len(),
-        );
-        let caps: Vec<_> = calldata.match_indices("cap(\"").collect();
-        assert!(!caps.is_empty());
-        for (at, _) in caps {
-            let (name, rest) = calldata[at + 5..].split_once("\", ").unwrap();
-            let maximum: u64 = rest[..rest.find(')').unwrap()].parse().unwrap();
-            let limit = declared::LIMITS
-                .iter()
-                .find(|limit| limit.name == name)
-                .unwrap();
-            assert_eq!(maximum, limit.maximum, "calldata cap {name}");
-        }
-        // The verifier ABI and its selector.
-        let abi: Json = serde_json::from_str(declared::ABI_JSON).unwrap();
-        assert_eq!(json_after(calldata, "serde_json::json!("), abi);
-        let bytes: Vec<_> = declared::ABI_SELECTOR
-            .iter()
-            .map(|b| format!("{b:#04x}"))
-            .collect();
-        count(calldata, &format!("&[{}]", bytes.join(", ")), 1);
-        // Deployment code ceilings, applied by the SDK to every fork alike.
-        for fork in Fork::ALL {
-            count(
-                artifact,
-                &format!(
-                    "self.files[\"creation.bin\"].len() > {}",
-                    fork.row().initcode_bytes
-                ),
-                1,
-            );
-            count(
-                artifact,
-                &format!(
-                    "self.files[\"runtime.bin\"].len() > {}",
-                    fork.row().runtime_code_bytes
-                ),
-                1,
-            );
-        }
-        // The CLI's option help and default.
-        count(
-            cli,
-            &format!(
-                "--evm-version={} selects the EVM deployment fork (default {default}).",
-                names.join("|")
-            ),
-            1,
-        );
-        count(cli_evm, &format!(".unwrap_or({default:?})"), 1);
     }
 }

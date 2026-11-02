@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import target
 from abi import MAX_CALLDATA, encode_verify
 from oracle import check_trace
 from native_fixtures import rebind
@@ -23,27 +24,31 @@ def capacities(runner, artifact, fixture, maximum_context=None, *,
     expected = reconstruct(fixture)
     if expected["stop"] is not None or expected["decision"] is not True:
         raise ValueError("expected an honest completed native fixture")
-    if len(context) > 4096 or len(proof) > 65536:
+    context_cap, proof_cap = target.LIMITS["context_bytes"], target.LIMITS["proof_bytes"]
+    frame_cap, elements = target.LIMITS["frame_bytes"], target.LIMITS["public_elements"]
+    rounds_cap = target.LIMITS["rounds"]
+    if len(context) > context_cap or len(proof) > proof_cap:
         raise ValueError("fixture already exceeds first-profile capacity")
     cases = {}
 
     def rejected(name, calldata, kind, code, trace, deployed=artifact):
-        result = execute(runner, deployed, calldata, 20_000_000)
+        result = execute(runner, deployed, calldata)
         try:
             check_revert(result, kind, code, trace)
         except AssertionError as error:
             raise AssertionError(f"{name}: {error}") from error
         cases[name] = result
 
-    rejected("context-one-over", encode_verify(public, bytes(4097), proof), "resource", 5, [])
-    rejected("proof-one-over", encode_verify(public, context, proof + bytes(65537 - len(proof))), "resource", 5, [])
+    rejected("context-one-over", encode_verify(public, bytes(context_cap + 1), proof), "resource", 5, [])
+    rejected("proof-one-over", encode_verify(public, context, proof + bytes(proof_cap + 1 - len(proof))),
+             "resource", 5, [])
     # At the byte ceiling, admission succeeds and trailing proof bytes are
     # rejected only after the complete protocol trace, including the final hash.
-    rejected("proof-at-cap-trailing", encode_verify(public, context, proof + bytes(65536 - len(proof))),
+    rejected("proof-at-cap-trailing", encode_verify(public, context, proof + bytes(proof_cap - len(proof))),
              "decode", 13, expected["trace"])
-    vector = b"ZKCV\x00\x42" + (1025).to_bytes(4, "little") + bytes(32 * 1025)
+    vector = b"ZKCV\x00\x42" + (elements + 1).to_bytes(4, "little") + bytes(32 * (elements + 1))
     rejected("elements-one-over", encode_verify([vector, *public[1:]], context, proof), "resource", 2, [])
-    rounds = b"ZKCV\x00\x1f" + (11).to_bytes(8, "little")
+    rounds = b"ZKCV\x00\x1f" + (rounds_cap + 1).to_bytes(8, "little")
     # Round admission is a reached loop operation after invocation binding.
     # Rebind this negative-control header so a header mismatch cannot mask it.
     changed = copy.deepcopy(fixture)
@@ -54,7 +59,7 @@ def capacities(runner, artifact, fixture, maximum_context=None, *,
     round_prefix = reconstruct(changed)
     rejected("authored-rounds-one-over", encode_verify([*public[:2], rounds], context,
                                                       bytes.fromhex(changed["proof"])), "source", 6, round_prefix["trace"])
-    rejected("public-frame-one-over", encode_verify([bytes(65537), *public[1:]], context, proof),
+    rejected("public-frame-one-over", encode_verify([bytes(frame_cap + 1), *public[1:]], context, proof),
              "resource", 5, [])
     if (aggregate_artifact is None) != (aggregate_limit is None):
         raise ValueError("aggregate deployment and its immutable public-byte limit are required together")
@@ -62,18 +67,20 @@ def capacities(runner, artifact, fixture, maximum_context=None, *,
         lengths = list(map(len, public))
         # Earlier frames must be well typed and individually bounded. Only the
         # last frame takes the sum one byte over this deployment's lower cap.
-        if (len(lengths) < 2 or max(lengths) > 65536 or sum(lengths) != aggregate_limit + 1
+        if (len(lengths) < 2 or max(lengths) > frame_cap or sum(lengths) != aggregate_limit + 1
                 or sum(lengths[:-1]) > aggregate_limit):
             raise ValueError("aggregate case must cross its cap with multiple bounded frames")
         rejected("public-bytes-one-over", encode_verify(public, context, proof),
                  "resource", 11, [], aggregate_artifact)
     calldata = encode_verify(public, context, proof)
     rejected("calldata-one-over", calldata + bytes(MAX_CALLDATA + 1 - len(calldata)), "resource", 10, [])
-    # Cancun can stop in dispatcher setup. Prague first requires the EIP-7623
-    # calldata floor, which can leave enough execution gas to reach primitives.
-    # A gas halt may retain only an exact prefix of the completed reference.
+    # Without the EIP-7623 calldata floor the call can stop in dispatcher
+    # setup. A fork with the floor first requires it, which can leave enough
+    # execution gas to reach primitives. A gas halt may retain only an exact
+    # prefix of the completed reference.
     intrinsic = 21000 + sum(4 if byte == 0 else 16 for byte in calldata)
-    if artifact.get("request", {}).get("settings", {}).get("evmVersion") == "prague":
+    selected = target.solc_fork(artifact.get("request", {}).get("settings", {}).get("evmVersion"))
+    if "EIP-7623" in selected["rules"]:
         intrinsic = max(intrinsic, 21000 + sum(10 if byte == 0 else 40 for byte in calldata))
     exhausted = execute(runner, artifact, calldata, intrinsic + 8)
     if exhausted["phase"] != "runtime" or exhausted["status"] != "halt" or "OutOfGas" not in exhausted["reason"]:
@@ -86,12 +93,12 @@ def capacities(runner, artifact, fixture, maximum_context=None, *,
     cases["evm-out-of-gas"] = exhausted
     if maximum_context is not None:
         context = bytes.fromhex(maximum_context["context"])
-        if len(context) != 4096:
-            raise ValueError("positive context-bound fixture must have exactly 4096 context bytes")
+        if len(context) != context_cap:
+            raise ValueError(f"positive context-bound fixture must have exactly {context_cap} context bytes")
         reference = reconstruct(maximum_context)
         result = execute(runner, artifact, encode_verify(
             [bytes.fromhex(v) for v in maximum_context["public"]], context,
-            bytes.fromhex(maximum_context["proof"])), 20_000_000)
+            bytes.fromhex(maximum_context["proof"])))
         if (reference["decision"] is not True or maximum_context["decision"] is not True
                 or result["phase"] != "runtime" or result["status"] != "return"
                 or result["output"] != (1).to_bytes(32, "big").hex()):
@@ -120,7 +127,7 @@ def main():
     parser.add_argument("--aggregate-runtime", type=Path)
     parser.add_argument("--aggregate-public-bytes", type=int)
     parser.add_argument("--bytecode-format", choices=["binary", "hex"], default="binary")
-    parser.add_argument("--evm-version", choices=("cancun", "prague"), default="cancun")
+    parser.add_argument("--evm-version", choices=target.FORK_NAMES, default=target.DEFAULT_FORK)
     args = parser.parse_args()
     aggregate_args = (args.aggregate_creation, args.aggregate_runtime, args.aggregate_public_bytes)
     if any(value is not None for value in aggregate_args) and not all(value is not None for value in aggregate_args):

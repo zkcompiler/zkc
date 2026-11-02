@@ -7,31 +7,40 @@ import subprocess
 import unittest
 from pathlib import Path
 
+import target
 from abi import encode_verify, keccak256
 from oracle import check_trace
 from probe import PROFILES, check_solc, compile_yul, execute
 from validate import check_sdk_artifact, removed_final_hash_control
 
+# The declared default fork's solc setting, and a declared fork without and
+# one with the EIP-7623 calldata floor.
+DEFAULT_SOLC = target.fork(target.DEFAULT_FORK)["solc"]
+FLOORLESS = next(name for name, row in target.FORKS.items() if "EIP-7623" not in row["rules"])
+FLOORED = next(name for name, row in target.FORKS.items() if "EIP-7623" in row["rules"])
+
 
 class ArtifactMetadataTests(unittest.TestCase):
     def test_sdk_fixture_binds_the_selected_execution_fork(self):
         digest = hashlib.sha256(b"\x00").hexdigest()
-        for fork in ("cancun", "prague"):
+        for fork in target.FORK_NAMES:
             fixture = {"public": [], "context": "", "proof": "", "evm": {
                 "calldata": encode_verify([], b"", b"").hex(),
                 "creation": "00", "runtime": "00",
                 "creation_sha256": digest, "runtime_sha256": digest,
                 "manifest": {"evm_version": fork,
                              "files": {"creation.bin": digest, "runtime.bin": digest}}}}
+            solc = target.fork(fork)["solc"]
             artifact = {"creation": "00", "runtime": "00",
-                        "request": {"settings": {"evmVersion": fork}}}
+                        "request": {"settings": {"evmVersion": solc}}}
             check_sdk_artifact(fixture, artifact)
-            for selected in (None, "prague" if fork == "cancun" else "cancun", "latest"):
+            others = [target.fork(other)["solc"] for other in target.FORK_NAMES if other != fork]
+            for selected in (None, *others, "latest"):
                 with self.subTest(captured=fork, selected=selected):
                     artifact["request"]["settings"]["evmVersion"] = selected
                     with self.assertRaisesRegex(AssertionError, "execution fork differs"):
                         check_sdk_artifact(fixture, artifact)
-            artifact["request"]["settings"]["evmVersion"] = fork
+            artifact["request"]["settings"]["evmVersion"] = solc
             artifact["runtime"] = "01"
             with self.assertRaisesRegex(AssertionError, "deployment differs"):
                 check_sdk_artifact(fixture, artifact)
@@ -44,9 +53,12 @@ def creation_for(runtime):
 
 
 def invoke(runtime, calldata=b"abc", gas=1_000_000, **overrides):
+    fork = overrides.get("fork", target.DEFAULT_FORK)
     request = {"creation_bytecode": creation_for(runtime).hex(),
                "expected_runtime_bytecode": runtime.hex(), "calldata": calldata.hex(),
-               "gas_limit": gas, "deployment_gas_limit": 5_000_000, "fork": "cancun"}
+               "gas_limit": gas, "fork": fork,
+               "deployment_gas_limit": target.transaction_gas(fork)
+               if isinstance(fork, str) and fork in target.FORKS else 1}
     request.update(overrides)
     process = subprocess.run([os.environ["ZKC_EVM_RUNNER"]], input=json.dumps(request),
                              text=True, capture_output=True, timeout=30)
@@ -59,10 +71,10 @@ class EngineTests(unittest.TestCase):
     def test_pinned_solc_fork_survives_actual_deployment(self):
         solc = Path(os.environ["ZKC_SOLC"])
         check_solc(solc)
-        for fork in ("cancun", "prague"):
+        for fork in target.FORK_NAMES:
             with self.subTest(fork=fork):
                 artifact = compile_yul(solc, "mstore(0, 1) return(0, 32)", PROFILES["colon"], fork=fork)
-                self.assertEqual(artifact["request"]["settings"]["evmVersion"], fork)
+                self.assertEqual(artifact["request"]["settings"]["evmVersion"], target.fork(fork)["solc"])
                 result = execute(os.environ["ZKC_EVM_RUNNER"], artifact, b"\xff" * 1024)
                 self.assertEqual(result["fork"], fork)
                 self.assertEqual(result["status"], "return")
@@ -70,11 +82,11 @@ class EngineTests(unittest.TestCase):
                 self.assertEqual(result["runtime_bytecode"], artifact["runtime"])
 
     def test_selected_fork_changes_real_transaction_gas(self):
-        # EIP-7623 raises Prague's floor for this calldata-heavy transaction.
-        # This exercises real spec selection, even with identical deployed code.
+        # EIP-7623 raises the floor for this calldata-heavy transaction. This
+        # exercises real spec selection, even with identical deployed code.
         runtime = bytes.fromhex("60015f5260205ff3")
         executions = {}
-        for fork in ("cancun", "prague"):
+        for fork in (FLOORLESS, FLOORED):
             code, result = invoke(runtime, calldata=b"\xff" * 1024, fork=fork)
             self.assertEqual(code, 0, result)
             self.assertEqual(result["fork"], fork)
@@ -82,11 +94,13 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(result["status"], "return")
             self.assertEqual(int(result["output"], 16), 1)
             executions[fork] = result
-        self.assertGreater(executions["prague"]["runtime_gas"],
-                           executions["cancun"]["runtime_gas"])
+        self.assertGreater(executions[FLOORED]["runtime_gas"],
+                           executions[FLOORLESS]["runtime_gas"])
 
     def test_malformed_fork_refuses_before_deployment(self):
-        for fork in ("Cancun", "Prague", "london", "", None, 1, {"prague": None}, ["cancun"]):
+        hardforks = [row["hardfork"] for row in target.FORKS.values()]
+        for fork in (*hardforks, "london", "latest", "", None, 1, {target.DEFAULT_FORK: None},
+                     [target.DEFAULT_FORK]):
             with self.subTest(fork=fork):
                 code, result = invoke(b"\x00", fork=fork)
                 self.assertNotEqual(code, 0)
@@ -160,6 +174,24 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(oog["status"], "halt")
         self.assertIn("OutOfGas", oog["reason"])
 
+    def test_runtime_at_the_code_size_ceiling_deploys_within_the_budget(self):
+        # Code deposit alone costs 200 gas per byte. Deployment requests the
+        # fork's transaction budget, so a runtime at the declared ceiling
+        # deploys; the earlier fixed 5,000,000 refused it.
+        for fork, row in target.FORKS.items():
+            runtime = bytes([0x00]) * row["runtime_code_bytes"]
+            with self.subTest(fork=fork):
+                code, result = invoke(runtime, b"", fork=fork)
+                self.assertEqual(code, 0, result)
+                self.assertEqual(result["phase"], "runtime", result)
+                self.assertEqual(result["code_size"], row["runtime_code_bytes"])
+                self.assertLessEqual(result["deployment_gas"], target.transaction_gas(fork))
+                self.assertGreater(result["deployment_gas"], 5_000_000)
+                code, oversized = invoke(runtime + b"\x00", b"", fork=fork,
+                                         expected_runtime_bytecode=None)
+                self.assertEqual(code, 0, oversized)
+                self.assertEqual(oversized["phase"], "deployment", oversized)
+
     def test_runtime_pin(self):
         code, result = invoke(bytes.fromhex("00"), expected_runtime_bytecode="01")
         self.assertNotEqual(code, 0)
@@ -210,7 +242,7 @@ class EngineTests(unittest.TestCase):
         code, original = invoke(runtime)
         self.assertEqual(code, 0, original)
         artifact = {"creation": creation_for(runtime).hex(), "runtime": runtime.hex(),
-                    "request": {"settings": {"evmVersion": "cancun"}}}
+                    "request": {"settings": {"evmVersion": DEFAULT_SOLC}}}
         control = removed_final_hash_control(os.environ["ZKC_EVM_RUNNER"], artifact,
                                              b"abc", original, original["trace"], 1_000_000)
         self.assertEqual(control["execution"]["status"], "return")

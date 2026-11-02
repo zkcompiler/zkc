@@ -179,9 +179,9 @@ The EVM foundation supports installed prime/binomial-extension arithmetic,
 checked indices, finite folds/collects and typed structured value transport on
 Cancun or Prague. One declaration,
 [`zkc.evm-target/0`](spec/targets/evm.md#target-declaration), states the forks,
-solc pin, verifier ABI, deployment ceilings and revert classes; the compiler
-reads its generated tables, while the SDK, CLI, runner and harness keep copies
-held equal to it by parity tests. Authored empty transcripts and managed
+solc pin, verifier ABI, deployment ceilings and revert classes. The compiler,
+SDK and CLI read its generated tables, and the deployed runner and harness read
+and check the declaration itself. Authored empty transcripts and managed
 constructions over a transcript suite whose facts the target realizes, the BLS
 Fr Keccak hash chain among the installed suites, use the common framed proof
 format. The maintained

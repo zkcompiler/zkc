@@ -1,8 +1,8 @@
 //! Test-only deployment of exact compiler output with passive primitive tracing.
 use revm::{
     Context, InspectCommitEvm, Inspector, MainBuilder, MainContext,
-    context::TxEnv,
-    context_interface::{ContextTr, result::ExecutionResult},
+    context::{CfgEnv, TxEnv},
+    context_interface::{Cfg, ContextTr, result::ExecutionResult},
     database::CacheDB,
     database_interface::{Database, EmptyDB},
     interpreter::{
@@ -14,7 +14,11 @@ use revm::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::io::{self, Read};
+use std::{
+    io::{self, Read},
+    str::FromStr,
+    sync::LazyLock,
+};
 
 const MAX_JSON: u64 = 4 * 1024 * 1024;
 const MAX_TRACE_BYTES: usize = 32 * 1024 * 1024;
@@ -22,27 +26,117 @@ const MAX_EVENTS: usize = 16384;
 const MAX_GAS: u64 = 100_000_000;
 const MAX_REPEAT: u64 = 8;
 
-#[derive(Clone, Copy, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum EvmFork {
-    Cancun,
-    Prague,
+/// The installed EVM target declaration, `zkc.evm-target/0`. The runner reads
+/// its forks and checks each fork's consensus facts against the pinned engine.
+const DECLARATION: &str = include_str!("../../../targets/evm.json");
+const DECLARATION_FORMAT: &str = "zkc.evm-target/0";
+
+// Every declared field is required, so a missing or unknown one refuses; the
+// runner reads only the fork facts.
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Declaration {
+    format: String,
+    abi: Value,
+    solc: Value,
+    default_fork: String,
+    forks: Vec<ForkRow>,
+    limits: Value,
+    reverts: Value,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForkRow {
+    name: String,
+    solc: String,
+    hardfork: String,
+    transaction_gas_cap: Option<u64>,
+    runtime_code_bytes: u64,
+    initcode_bytes: u64,
+    rules: Vec<String>,
+}
+
+/// One declared fork and the engine specification its hardfork names.
+struct Fork {
+    name: String,
+    spec: SpecId,
+}
+
+/// Parses the declaration and checks the facts the runner uses: unique
+/// lowercase fork names, a declared default, and for each fork an engine
+/// hardfork whose transaction gas cap and code size limits equal the declared
+/// ones.
+fn check_declaration(text: &str) -> Result<Vec<Fork>, String> {
+    let declaration: Declaration =
+        serde_json::from_str(text).map_err(|e| format!("target-declaration: {e}"))?;
+    if declaration.format != DECLARATION_FORMAT {
+        return Err("target-declaration: format".into());
+    }
+    let mut forks: Vec<Fork> = Vec::new();
+    for row in declaration.forks {
+        if row.name.is_empty()
+            || !row.name.bytes().all(|b| b.is_ascii_lowercase())
+            || forks.iter().any(|fork| fork.name == row.name)
+        {
+            return Err(format!("target-declaration: fork name {}", row.name));
+        }
+        let spec = SpecId::from_str(&row.hardfork)
+            .map_err(|_| format!("target-declaration: hardfork {}", row.hardfork))?;
+        let engine = CfgEnv::new_with_spec(spec);
+        if engine.tx_gas_limit_cap() != row.transaction_gas_cap.unwrap_or(u64::MAX)
+            || u64::try_from(engine.max_code_size()) != Ok(row.runtime_code_bytes)
+            || u64::try_from(engine.max_initcode_size()) != Ok(row.initcode_bytes)
+        {
+            return Err(format!(
+                "target-declaration: fork {} differs from the engine's {}",
+                row.name, row.hardfork
+            ));
+        }
+        forks.push(Fork {
+            name: row.name,
+            spec,
+        });
+    }
+    if !forks
+        .iter()
+        .any(|fork| fork.name == declaration.default_fork)
+    {
+        return Err("target-declaration: default fork".into());
+    }
+    Ok(forks)
+}
+
+static FORKS: LazyLock<Result<Vec<Fork>, String>> =
+    LazyLock::new(|| check_declaration(DECLARATION));
+
+/// A request's fork: an index into the declared forks, spelled by its name.
+#[derive(Clone, Copy)]
+struct EvmFork(usize);
+impl EvmFork {
+    fn declared(self) -> &'static Fork {
+        &FORKS.as_ref().expect("checked declaration")[self.0]
+    }
+    fn spec(self) -> SpecId {
+        self.declared().spec
+    }
+}
+impl Serialize for EvmFork {
+    fn serialize<S: serde::Serializer>(&self, encoder: S) -> Result<S::Ok, S::Error> {
+        encoder.serialize_str(&self.declared().name)
+    }
 }
 impl<'de> Deserialize<'de> for EvmFork {
     fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
-        match String::deserialize(decoder)?.as_str() {
-            "cancun" => Ok(Self::Cancun),
-            "prague" => Ok(Self::Prague),
-            _ => Err(serde::de::Error::custom("unsupported-fork")),
-        }
-    }
-}
-impl EvmFork {
-    fn spec(self) -> SpecId {
-        match self {
-            Self::Cancun => SpecId::CANCUN,
-            Self::Prague => SpecId::PRAGUE,
-        }
+        let name = String::deserialize(decoder)?;
+        let forks = FORKS.as_ref().map_err(serde::de::Error::custom)?;
+        forks
+            .iter()
+            .position(|fork| fork.name == name)
+            .map(Self)
+            .ok_or_else(|| serde::de::Error::custom("unsupported-fork"))
     }
 }
 
@@ -364,6 +458,8 @@ fn run(request: Request) -> Result<Value, String> {
 
 fn main() {
     let result = (|| {
+        // A declaration the engine contradicts refuses every request.
+        FORKS.as_ref().map_err(Clone::clone)?;
         let mut bytes = Vec::new();
         io::stdin()
             .take(MAX_JSON + 1)
@@ -380,5 +476,56 @@ fn main() {
             println!("{}", json!({"error":error}));
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn declared_forks_match_the_engine() {
+        let forks = check_declaration(DECLARATION).unwrap();
+        let declaration: Value = serde_json::from_str(DECLARATION).unwrap();
+        let rows = declaration["forks"].as_array().unwrap();
+        assert_eq!(forks.len(), rows.len());
+        for (fork, row) in forks.iter().zip(rows) {
+            assert_eq!(fork.name, row["name"]);
+            assert_eq!(fork.spec.to_string(), row["hardfork"]);
+        }
+    }
+
+    #[test]
+    fn engine_disagreements_and_unknown_fields_refuse() {
+        let declaration: Value = serde_json::from_str(DECLARATION).unwrap();
+        let edits: [(&str, Value); 8] = [
+            ("/forks/0/runtime_code_bytes", json!(24577)),
+            ("/forks/0/initcode_bytes", json!(49153)),
+            ("/forks/0/transaction_gas_cap", json!(16777216)),
+            ("/forks/0/hardfork", json!("Latest")),
+            ("/forks/0/name", json!("Cancun")),
+            ("/default_fork", json!("shanghai")),
+            ("/format", json!("zkc.evm-target/1")),
+            ("/forks/0/extra", json!(true)),
+        ];
+        for (path, value) in edits {
+            let mut changed = declaration.clone();
+            match changed.pointer_mut(path) {
+                Some(slot) => *slot = value,
+                None => {
+                    let (parent, key) = path.rsplit_once('/').unwrap();
+                    changed.pointer_mut(parent).unwrap()[key] = value;
+                }
+            }
+            let refused = check_declaration(&changed.to_string()).err();
+            assert!(
+                refused.is_some_and(|e| e.starts_with("target-declaration")),
+                "{path}"
+            );
+        }
+        let mut repeated = declaration;
+        let first = repeated["forks"][0].clone();
+        repeated["forks"].as_array_mut().unwrap().push(first);
+        assert!(check_declaration(&repeated.to_string()).is_err());
     }
 }

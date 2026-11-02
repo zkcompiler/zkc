@@ -105,7 +105,7 @@ class TraceTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             check_revert(result("source", 6, []), "source", 6, [event])
         capacity = result("resource", 2, [])
-        for wrong in (result("resource", 999, []), capacity | {"output": b"ZKCR".hex()},
+        for wrong in (result("resource", 999, []), capacity | {"output": REVERT_CLASSES["resource"].hex()},
                       capacity | {"output": capacity["output"] + "00"},
                       capacity | {"phase": "deployment"}):
             with self.assertRaises(AssertionError):

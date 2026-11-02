@@ -17,13 +17,17 @@ pub struct Build<'a> {
     pub compiler_sha256: &'a str,
     pub reuse: Option<&'a Artifact>,
 }
+/// The declared standard-JSON optimizer settings.
+pub(super) fn optimizer() -> Value {
+    serde_json::from_str(crate::evm_target::SOLC_OPTIMIZER_JSON).expect("generated optimizer JSON")
+}
 pub(super) fn input(source: &Source) -> Value {
     serde_json::json!({
         "language":"Yul",
         "sources":{"verifier.yul":{"content":source.yul()}},
         "settings":{
-            "evmVersion":source.fork(),
-            "optimizer":{"enabled":true,"details":{"yul":true,"yulDetails":{"optimizerSteps":":"}}},
+            "evmVersion":source.fork().row().solc,
+            "optimizer":optimizer(),
             "outputSelection":{"*":{"*":["evm.bytecode.object","evm.deployedBytecode.object"]}}
         }
     })

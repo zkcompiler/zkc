@@ -446,9 +446,10 @@ fn compile_verifier(
 }
 ```
 
-`Options::default()` selects Cancun and the common compiler defaults. Set
-`fork: evm::EvmFork::Prague` explicitly for Prague; `compile` carries shared
-mathematical/oracle settings. The source response, solc request and authenticated
+`Options::default()` selects the declared default fork and the common compiler
+defaults. `fork` takes any `evm::EvmFork`, the forks of the
+[target declaration](../../docs/spec/targets/evm.md#target-declaration) that
+`zkc::evm_target` projects; `compile` carries shared mathematical/oracle settings. The source response, solc request and authenticated
 artifact retain those effective selections.
 
 On Linux, EVM compilation executes sealed snapshots of the compiler and solc;

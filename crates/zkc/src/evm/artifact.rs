@@ -70,10 +70,12 @@ impl Artifact {
         if input != solc::input(&source) {
             return Err("evm-artifact-settings".into());
         }
+        // The selected fork's declared initcode and runtime code ceilings.
+        let fork = m.evm_version.row();
         if self.files["creation.bin"].is_empty()
-            || self.files["creation.bin"].len() > 49152
+            || self.files["creation.bin"].len() as u64 > fork.initcode_bytes
             || self.files["runtime.bin"].is_empty()
-            || self.files["runtime.bin"].len() > 24576
+            || self.files["runtime.bin"].len() as u64 > fork.runtime_code_bytes
         {
             return Err("evm-code-size".into());
         }

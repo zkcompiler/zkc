@@ -13,17 +13,24 @@ use std::{fmt, path::Path};
 
 use crate::io::document;
 
-pub const SOLC_VERSION: &str = "0.8.38+commit.1835d247";
+/// The pinned solc release and commit, from the installed target declaration.
+pub const SOLC_VERSION: &str = crate::evm_target::SOLC_VERSION;
 pub const FORMAT: &str = "zkc.evm-artifact/0";
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 
-/// Exact deployment fork. Only these typed values can reach solc settings.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum EvmFork {
-    #[default]
-    Cancun,
-    Prague,
+/// Exact deployment fork: a fork of the installed target declaration
+/// (`zkc::evm_target`). Only these typed values can reach solc settings. It is
+/// spelled by its declared lowercase name and defaults to the declared default.
+pub use crate::evm_target::Fork as EvmFork;
+impl Default for EvmFork {
+    fn default() -> Self {
+        crate::evm_target::DEFAULT_FORK
+    }
+}
+impl serde::Serialize for EvmFork {
+    fn serialize<S: serde::Serializer>(&self, encoder: S) -> std::result::Result<S::Ok, S::Error> {
+        encoder.serialize_str(self.as_str())
+    }
 }
 impl<'de> serde::Deserialize<'de> for EvmFork {
     fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self, D::Error> {
@@ -33,20 +40,13 @@ impl<'de> serde::Deserialize<'de> for EvmFork {
 }
 impl EvmFork {
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Cancun => "cancun",
-            Self::Prague => "prague",
-        }
+        self.row().name
     }
 }
 impl std::str::FromStr for EvmFork {
     type Err = Error;
     fn from_str(value: &str) -> Result<Self> {
-        match value {
-            "cancun" => Ok(Self::Cancun),
-            "prague" => Ok(Self::Prague),
-            _ => Err("evm-fork".into()),
-        }
+        Self::from_name(value).ok_or_else(|| "evm-fork".into())
     }
 }
 
@@ -113,27 +113,16 @@ fn exact_object(value: &Value, fields: &[&str], code: &'static str) -> Result<()
 }
 
 fn source_limits(value: &Value) -> Result<()> {
-    // Keep these ceilings aligned with EvmLimits and validateLimits in the
-    // compiler. Lower positive ceilings are part of the current contract.
-    let ceilings = [
-        ("rounds", 10),
-        ("public_elements", 1024),
-        ("frame_bytes", 65536),
-        ("public_bytes", 131072),
-        ("context_bytes", 4096),
-        ("proof_bytes", 65536),
-        ("calldata_bytes", 262144),
-        ("root_bytes", 262144),
-        ("memory_bytes", 2097152),
-        ("transcript_transitions", 64),
-        ("practical_gas", 20000000),
-    ];
-    exact_object(value, &ceilings.map(|(key, _)| key), "evm-source-limits")?;
-    if ceilings
-        .iter()
-        .any(|(key, ceiling)| value[key].as_u64().is_none_or(|n| n == 0 || n > *ceiling))
-        || value["memory_bytes"].as_u64().unwrap() < 4096
-    {
+    // Every declared ceiling, each within its declared range. A compilation may
+    // lower a ceiling, never raise it.
+    let limits = &crate::evm_target::LIMITS;
+    let names: Vec<_> = limits.iter().map(|limit| limit.name).collect();
+    exact_object(value, &names, "evm-source-limits")?;
+    if limits.iter().any(|limit| {
+        value[limit.name]
+            .as_u64()
+            .is_none_or(|n| n < limit.minimum || n > limit.maximum)
+    }) {
         return Err("evm-source-limits".into());
     }
     Ok(())
@@ -412,8 +401,9 @@ impl Source {
             || record["abi"] != calldata::abi()
             || manifest["format"] != "zkc.evm-source-manifest/0"
             || manifest["source_format"] != "zkc.original-mlir/0"
-            || manifest["solc_version"] != "0.8.38"
-            || manifest["optimizer_steps"] != ":"
+            || manifest["solc_version"] != SOLC_VERSION.split('+').next().unwrap()
+            || manifest["optimizer_steps"]
+                != solc::optimizer()["details"]["yulDetails"]["optimizerSteps"]
             || manifest["release_validation"] != "pending-deployment-and-dynamic-trace"
         {
             return Err("evm-source-format".into());

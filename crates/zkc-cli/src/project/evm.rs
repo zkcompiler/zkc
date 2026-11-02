@@ -10,12 +10,14 @@ fn options(args: &Arguments<'_>, compile: zkc::entry::CompileOptions) -> Result<
             return Err("evm-option-unsupported".into());
         }
     }
+    // Without --evm-version, the declared default fork.
     let options = zkc::evm::Options {
         fork: args
             .value("--evm-version")
-            .unwrap_or("cancun")
-            .parse()
-            .map_err(|e: zkc::evm::Error| e.to_string())?,
+            .map(str::parse)
+            .transpose()
+            .map_err(|e: zkc::evm::Error| e.to_string())?
+            .unwrap_or_default(),
         compile,
     };
     if options.compile.release_storage {
@@ -135,10 +137,15 @@ calculation-batching = false
     #[test]
     fn evm_fork_and_unsupported_options_have_stable_diagnostics() {
         let defaults = super::super::ResolvedSettings::default().options();
-        for fork in ["Cancun", "Prague", "shanghai", ""] {
+        let mut refused: Vec<_> = zkc::evm_target::Fork::ALL
+            .iter()
+            .map(|fork| fork.row().hardfork.to_owned())
+            .collect();
+        refused.extend(["shanghai".to_owned(), "latest".to_owned(), String::new()]);
+        for fork in &refused {
             let args = Arguments {
                 positional: vec![],
-                options: vec![("--evm-version", Some(fork))],
+                options: vec![("--evm-version", Some(fork.as_str()))],
             };
             assert_eq!(options(&args, defaults.clone()).unwrap_err(), "evm-fork");
         }
@@ -158,7 +165,7 @@ calculation-batching = false
         };
         assert_eq!(
             options(&args, defaults.clone()).unwrap().fork,
-            zkc::evm::EvmFork::Cancun
+            zkc::evm_target::DEFAULT_FORK
         );
         let mut released = defaults;
         released.release_storage = true;

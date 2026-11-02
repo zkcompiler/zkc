@@ -96,16 +96,22 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"),
         ],
-        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nExplicit modules and assets require --source-format; a manifest states its own.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
+        description: concat!(
+            "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nExplicit modules and assets require --source-format; a manifest states its own.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
 --target=cpu is the default. --target=evm requires --solc and --solc-sha256;
 it publishes a fresh verifier directory, defaulting to build/zkc/<entry-stem>.evm.
---evm-version=cancun|prague selects the EVM deployment fork (default cancun).
+--evm-version=",
+            zkc::evm_target_forks!(),
+            " selects a declared EVM deployment fork (default ",
+            zkc::evm_target_default_fork!(),
+            ").
 The report supplies the manifest SHA-256 for independent artifact authentication.
 --reuse and --reuse-sha256 reuse an authenticated EVM artifact only on an exact build match.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 CPU project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
 Named Entry stems replace :: with dots; generic runs append a full selector digest.
-Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
+Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat."
+        ),
     },
     Command {
         name: "new",
@@ -475,10 +481,15 @@ mod tests {
 
     #[test]
     fn evm_version_is_unique_documented_and_requires_the_evm_target() {
+        use zkc::evm_target::{DEFAULT_FORK, Fork};
         let spec = command("compile").unwrap();
-        assert!(spec.help().contains("--evm-version=cancun|prague"));
-        assert!(spec.help().contains("default cancun"));
-        for fork in ["cancun", "prague"] {
+        let forks: Vec<_> = Fork::ALL.iter().map(|fork| fork.row().name).collect();
+        assert!(spec.help().contains(&format!(
+            "--evm-version={} selects a declared EVM deployment fork (default {}).",
+            forks.join("|"),
+            DEFAULT_FORK.row().name
+        )));
+        for fork in forks.iter().copied() {
             let values = args(&["--target=evm", &format!("--evm-version={fork}")]);
             assert_eq!(
                 spec.parse(&values).unwrap().value("--evm-version"),
@@ -492,13 +503,13 @@ mod tests {
         assert!(
             spec.parse(&args(&[
                 "--target=evm",
-                "--evm-version=cancun",
-                "--evm-version=prague"
+                &format!("--evm-version={}", forks[0]),
+                &format!("--evm-version={}", forks[forks.len() - 1])
             ]))
             .is_err()
         );
         assert_eq!(
-            run("check", &args(&["--evm-version=prague"]))["code"],
+            run("check", &args(&[&format!("--evm-version={}", forks[0])]))["code"],
             "cli-option"
         );
     }

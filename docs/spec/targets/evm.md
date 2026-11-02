@@ -115,10 +115,14 @@ The compiler's configure step validates the declaration with
 `common/targets/generate.py` and generates its fork, limit and revert tables,
 so a declaration change changes the compiler's build identity. The Rust SDK
 build validates the same file independently and generates the typed
-`zkc::evm_target` module. Shared refusal cases in
+`zkc::evm_target` module, which the SDK and CLI read for forks, solc settings,
+the ABI and selector, and ceilings. Shared refusal cases in
 `common/targets/evm-validation-cases.json` name the rule each validator must
-report. Every reader validates the facts it uses; an artifact's self-stated
-numbers are not authority. The `zkc.evm-source/0` response names the
+report. The deployed-validation runner reads the declaration's forks and refuses
+to run when a fork's engine hardfork has a different transaction gas cap or
+code size limits; the validation harness checks the declaration with
+`generate.py` and reads every target fact from it. Every reader validates the
+facts it uses; an artifact's self-stated numbers are not authority. The `zkc.evm-source/0` response names the
 declaration by its identity in `declaration`, beside the selected `fork`, so a
 reader with a different declaration refuses it.
 
@@ -199,8 +203,11 @@ lower supported ceilings, never raise them. Finite local ranges retain the
 native bound of 1,048,576; local collects apply the collection ceiling to
 selected output elements after their callbacks. Coordinate sequences have at
 most 64 elements and origin templates fit a 4,096-byte workspace. Callers cannot supply per-call
-budgets through the verifier ABI. The practical validation gas ceiling is
-20 million; it does not override the selected fork's gas rules.
+budgets through the verifier ABI. Validation runs request one transaction budget
+per fork for deployment and calls alike: the fork's consensus
+`transaction_gas_cap`, or the `practical_gas` maximum for a fork without one. The
+budget never overrides the selected fork's gas rules, and a runtime at the
+fork's code size ceiling deploys within it.
 
 ## Artifact and tool ownership
 

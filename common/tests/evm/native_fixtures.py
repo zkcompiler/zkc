@@ -7,6 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 
+import target
 from reference import PRIME, invocation_root, reconstruct, scalar, scalar_wire
 
 
@@ -71,9 +72,13 @@ def generate(driver, compiler, project, output, *, evm_artifact=None, evm_sha256
                          "native_stop": fixture["native"]["stop"]}
         return fixture, reference
 
+    # The declared round ceiling is the largest honest fixture; one over it is
+    # the round-bound stop.
+    rounds = target.LIMITS["rounds"]
     honest, _ = run("honest-16", 4, decision=True)
-    run("honest-1024", 10, decision=True)
-    run("honest-context-max", 10, context=bytes(4096).hex(), decision=True)
+    run(f"honest-{1 << rounds}", rounds, decision=True)
+    run("honest-context-max", rounds, context=bytes(target.LIMITS["context_bytes"]).hex(),
+        decision=True)
     zero, _ = run("honest-zero", 0, decision=True)
     proof = bytes.fromhex(honest["proof"])
     spans = frames(proof)
@@ -114,8 +119,8 @@ def generate(driver, compiler, project, output, *, evm_artifact=None, evm_sha256
     values_path = output / "sixteen-values.json"
     values_path.write_text(json.dumps(list(range(1, 17))) + "\n")
     public = list(honest["public"])
-    public[2] = (b"ZKCV\x00\x1f" + (11).to_bytes(8, "little")).hex()
-    run("round-bound-stop", 11, proof=rebind(honest, public),
+    public[2] = (b"ZKCV\x00\x1f" + (rounds + 1).to_bytes(8, "little")).hex()
+    run("round-bound-stop", rounds + 1, proof=rebind(honest, public),
         extra=("--values", str(values_path)), stopped=True)
 
     manifest = {"format": "zkc.evm-native-cases/0", "command": command, "cases": results,

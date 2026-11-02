@@ -54,8 +54,10 @@ profile supports Fr scalar/vector arithmetic and the managed Keccak construction
 reachable unsupported operations refuse. Native optimization flags and profiles
 are not EVM target options.
 
-The compiler emits Yul, then the SDK invokes independently pinned solc 0.8.38
-with fixed Cancun settings. The command reports `manifest_sha256`; retain it
+The compiler emits Yul, then the SDK invokes independently pinned solc with the
+solc release, optimizer settings and selected fork of the
+[target declaration](../spec/targets/evm.md#target-declaration);
+`--evm-version` selects a declared fork. The command reports `manifest_sha256`; retain it
 independently for artifact import or `--reuse=DIR --reuse-sha256=PIN`. Reuse also
 checks the exact source, compiler, tool and settings. It never imports a candidate
 using its own unauthenticated checksum. Existing output directories refuse.

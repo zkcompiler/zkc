@@ -4,10 +4,14 @@ use std::fs;
 
 pub(crate) fn source_record(entry: &str, body: &str) -> Value {
     let identity = "00".repeat(32);
-    let limits = json!({"rounds":10,"public_elements":1024,"frame_bytes":65536,
-        "public_bytes":131072,"context_bytes":4096,"proof_bytes":65536,
-        "calldata_bytes":262144,"root_bytes":262144,"memory_bytes":2097152,
-        "transcript_transitions":64,"practical_gas":20000000});
+    // A compilation at every declared maximum, on the declared default fork.
+    let limits: serde_json::Map<_, _> = crate::evm_target::LIMITS
+        .iter()
+        .map(|limit| (limit.name.to_owned(), json!(limit.maximum)))
+        .collect();
+    let fork = EvmFork::default();
+    let release = SOLC_VERSION.split('+').next().unwrap();
+    let steps = solc::optimizer()["details"]["yulDetails"]["optimizerSteps"].clone();
     let policy = json!([
         "zkc.native-proof-policy/0",
         "main",
@@ -57,13 +61,13 @@ pub(crate) fn source_record(entry: &str, body: &str) -> Value {
     ]);
     let mut options = serde_json::to_value(Options::default().compile).unwrap();
     options["numerical_expressions"] = json!("prefer-native");
-    let manifest = json!({"format":"zkc.evm-source-manifest/0", "target":"evm", "fork":"cancun", "options":options,
+    let manifest = json!({"format":"zkc.evm-source-manifest/0", "target":"evm", "fork":fork, "options":options,
         "entry":entry, "capture":identity, "installation":identity,
         "original":identity, "source_sha256":identity, "source_format":"zkc.original-mlir/0",
         "producer":"P", "validator":"V", "compiler":identity,
-        "yul_sha256":hash(body.as_bytes()), "limits":limits, "solc_version":"0.8.38",
-        "optimizer_steps":":", "release_validation":"pending-deployment-and-dynamic-trace"});
-    json!({"format":"zkc.evm-source/0", "target":"evm", "fork":"cancun",
+        "yul_sha256":hash(body.as_bytes()), "limits":limits, "solc_version":release,
+        "optimizer_steps":steps, "release_validation":"pending-deployment-and-dynamic-trace"});
+    json!({"format":"zkc.evm-source/0", "target":"evm", "fork":fork,
         "declaration":crate::evm_target::IDENTITY,
         "yul":body, "abi":super::calldata::abi(),"entry":entry,
         "capture":identity,"installation":identity,"original":identity,"source_sha256":identity,
@@ -145,34 +149,44 @@ fn source_transport_is_explicit_and_bounded() {
 
 #[test]
 fn forks_are_exact_typed_and_repeated() {
+    use crate::evm_target::{DEFAULT_FORK, Fork};
     let valid = source_record("Main::Proof", "fork control");
-    for fork in [EvmFork::Cancun, EvmFork::Prague] {
+    assert_eq!(EvmFork::default(), DEFAULT_FORK);
+    assert_eq!(super::Options::default().fork, DEFAULT_FORK);
+    for fork in Fork::ALL {
+        // Every declared fork is spelled by its declared lowercase name.
+        assert_eq!(json!(fork), json!(fork.row().name));
+        assert_eq!(fork.row().name.parse::<EvmFork>().unwrap(), fork);
         let mut record = valid.clone();
         record["fork"] = json!(fork);
         record["manifest"]["fork"] = json!(fork);
         let source = Source::capture(&encode(&record).unwrap()).unwrap();
         assert_eq!(source.fork(), fork);
-        assert_eq!(solc::input(&source)["settings"]["evmVersion"], json!(fork));
-        record["manifest"]["fork"] = json!(if fork == EvmFork::Cancun {
-            EvmFork::Prague
-        } else {
-            EvmFork::Cancun
-        });
+        assert_eq!(
+            solc::input(&source)["settings"]["evmVersion"],
+            json!(fork.row().solc)
+        );
+        let other = Fork::ALL.into_iter().find(|other| *other != fork).unwrap();
+        record["manifest"]["fork"] = json!(other);
         assert_eq!(
             Source::capture(&encode(&record).unwrap()).unwrap_err().0,
             "evm-source-identity"
         );
     }
-    for wrong in [
+    let mut refused: Vec<_> = Fork::ALL
+        .iter()
+        .map(|fork| json!(fork.row().hardfork))
+        .collect();
+    refused.extend([
         json!(""),
-        json!("Cancun"),
-        json!("Prague"),
         json!("shanghai"),
+        json!("latest"),
         json!(0),
         Value::Null,
-        json!({"prague": null}),
-        json!(["cancun"]),
-    ] {
+        json!({DEFAULT_FORK.row().name: null}),
+        json!([DEFAULT_FORK.row().name]),
+    ]);
+    for wrong in refused {
         assert!(serde_json::from_value::<EvmFork>(wrong.clone()).is_err());
         let mut record = valid.clone();
         record["fork"] = wrong.clone();
@@ -182,7 +196,6 @@ fn forks_are_exact_typed_and_repeated() {
             "evm-fork"
         );
     }
-    assert_eq!("Cancun".parse::<EvmFork>().unwrap_err().0, "evm-fork");
 }
 
 #[test]
@@ -612,19 +625,28 @@ fn source_limits_are_positive_bounded_integers_with_the_complete_current_shape()
             }
         }
     }
+    // Every ceiling may be lowered to its declared minimum, never below it.
     let mut lowered = valid;
     for path in ["/limits", "/manifest/limits"] {
-        for (key, value) in lowered.pointer_mut(path).unwrap().as_object_mut().unwrap() {
-            *value = json!(if key == "memory_bytes" { 4096 } else { 1 });
+        for limit in &crate::evm_target::LIMITS {
+            lowered.pointer_mut(path).unwrap()[limit.name] = json!(limit.minimum);
         }
     }
     Source::capture(&encode(&lowered).unwrap()).unwrap();
-    lowered["limits"]["memory_bytes"] = json!(4095);
-    lowered["manifest"]["limits"] = lowered["limits"].clone();
-    assert_eq!(
-        Source::capture(&encode(&lowered).unwrap()).unwrap_err().0,
-        "evm-source-limits"
-    );
+    for limit in crate::evm_target::LIMITS
+        .iter()
+        .filter(|limit| limit.minimum > 1)
+    {
+        let mut below = lowered.clone();
+        below["limits"][limit.name] = json!(limit.minimum - 1);
+        below["manifest"]["limits"] = below["limits"].clone();
+        assert_eq!(
+            Source::capture(&encode(&below).unwrap()).unwrap_err().0,
+            "evm-source-limits",
+            "{}",
+            limit.name
+        );
+    }
 }
 
 #[test]
@@ -978,7 +1000,9 @@ fn calldata_has_the_exact_context_before_proof_order_and_padding() {
             proof: b"proof",
         })
         .unwrap();
-    assert_eq!(&calldata[..4], &[0xa4, 0x88, 0xe1, 0xe4]);
+    // The declared selector, which the SDK build checked against the
+    // Keccak-256 of the declared signature.
+    assert_eq!(calldata[..4], crate::evm_target::ABI_SELECTOR);
     let number =
         |at: usize| u64::from_be_bytes(calldata[at + 24..at + 32].try_into().unwrap()) as usize;
     assert_eq!(number(4), 96);
@@ -991,11 +1015,16 @@ fn calldata_has_the_exact_context_before_proof_order_and_padding() {
     assert_eq!(&calldata[420..425], b"proof");
     assert_eq!(calldata.len(), 452);
     assert!(calldata[425..].iter().all(|b| *b == 0));
+    let context_ceiling = crate::evm_target::LIMITS
+        .iter()
+        .find(|limit| limit.name == "context_bytes")
+        .unwrap()
+        .maximum as usize;
     assert!(
         artifact
             .calldata(Invocation {
                 public_inputs: &[],
-                context: &vec![0; 4097],
+                context: &vec![0; context_ceiling + 1],
                 proof: &[]
             })
             .is_err()
