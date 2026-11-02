@@ -1,5 +1,7 @@
 #include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include <set>
 
 namespace zkc::protocol {
 #define ZKC_INSTALLED_INSTANCE_TABLES
@@ -52,6 +54,40 @@ const FieldForm *fieldForm(llvm::StringRef field) {
   return nullptr;
 }
 } // namespace installation
+
+bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity) {
+  static const std::set<std::pair<std::string, std::string>> atoms = [] {
+    std::set<std::pair<std::string, std::string>> result;
+    for (const auto &codec : instances::codecs()) {
+      const auto *type = typeDeclaration(codec.kind);
+      if (type && type->message && codec.frame)
+        result.emplace(codec.kind, codec.domain);
+    }
+    return result;
+  }();
+  return atoms.count({kind.str(), identity.str()});
+}
+bool nativeFieldArrayFrame(llvm::StringRef field) {
+  return llvm::any_of(instances::aggregateFrames(), [&](const auto &row) {
+    return row.constructor == "field_array" && row.domain == field;
+  });
+}
+bool nativeFieldArrayRepresentation(llvm::StringRef field, uint64_t size,
+                                    llvm::StringRef representation) {
+  using Kind = installation::ArgumentPattern::Kind;
+  return llvm::any_of(
+      installation::appliedRepresentations(), [&](const auto &row) {
+        return row.constructor == "field_array" &&
+               row.identity == representation &&
+               row.frame == installation::ValueFrame::Canonical &&
+               row.arguments.size() == 2 &&
+               row.arguments[0].kind == Kind::Domain &&
+               row.arguments[0].identity == field &&
+               row.arguments[1].kind == Kind::NatRange &&
+               row.arguments[1].minimum <= size &&
+               size <= row.arguments[1].maximum;
+      });
+}
 
 llvm::ArrayRef<RandomService> randomServices() {
   static const std::vector<RandomService> services = [] {

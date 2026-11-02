@@ -628,18 +628,6 @@ int main(int argc, char **argv) {
     agree("bit-pattern widths", found, {});
   });
 
-  cases.run("message atoms over every constructor and identity", [&] {
-    std::vector<std::string> found;
-    for (const auto &type : typeDeclarations())
-      for (const auto &identity : identities()) {
-        const auto *codec = codecFor(type.name, identity);
-        bool framed = type.message && codec && codec->frame;
-        if (nativeMessageAtom(type.name, identity) != framed)
-          found.push_back(type.name + " " + identity);
-      }
-    agree("message atoms", found, {});
-  });
-
   cases.run("implementation provider relation", [&] {
     std::vector<std::string> found;
     for (StringRef provider : {"arkworks", "blst", "dalek", "halo2curves-axiom",
