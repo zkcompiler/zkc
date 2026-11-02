@@ -1,8 +1,10 @@
 //! The runtime's presentation names against the generated installed-instance
-//! and installation tables. Identities, constructor heads, representations
-//! and random services are Rust names bound to catalog rows; their facts are
-//! read from the rows. These checks keep each binding a bijection, and keep
-//! program admission's origin codecs equal to the declared codecs.
+//! and installation tables. Constructor heads, representations and random
+//! services are Rust names bound to catalog rows; their facts are read from the
+//! rows. These checks keep each binding a bijection, and keep program
+//! admission's origin codecs equal to the declared codecs. Domain identities
+//! need no check here: the runtime's exhaustive conversion from the generated
+//! identities binds each one at compile time.
 use serde_json::json;
 use std::collections::BTreeSet;
 use zkc_catalog::{CATALOG, DomainIdentity, INSTALLATION};
@@ -10,97 +12,6 @@ use zkc_runtime::vm::{
     Contracts, ExecutionPolicy, Identity, LogicalType, PhysicalType, Program, Representation,
     ServiceContract, Type,
 };
-
-/// Every runtime identity; the match makes a new variant a compile error here.
-fn runtime_identities() -> Vec<Identity> {
-    use Identity::*;
-    let all = vec![
-        Bn254Fr,
-        Bn254G1,
-        Bn254G2,
-        Bn254Gt,
-        Bls12381Fr,
-        Bls12381G1,
-        MultilinearKzgBls12381,
-        MerkleKoalaBear,
-        MerkleKoalaBearExt8,
-        MerkleKoalaBearExt4,
-        MerklePoseidon2KoalaBear,
-        MerklePoseidon2KoalaBearExt4,
-        MerklePoseidon2BabyBear,
-        MerklePoseidon2BabyBearExt4,
-        MerklePoseidon2Goldilocks,
-        MerklePoseidon2GoldilocksExt2,
-        Merlin3KoalaBearExt8,
-        Merlin3Fr64Be,
-        Spongefish080KeccakFr64Be,
-        Ristretto255Scalar,
-        KoalaBear,
-        KoalaBearExt8,
-        KoalaBearExt4,
-        BabyBear,
-        BabyBearExt4,
-        Goldilocks,
-        GoldilocksExt2,
-        Merlin3BabyBearExt4,
-        Merlin3GoldilocksExt2,
-        Ristretto255Group,
-        Edwards25519Prime,
-        Merlin3Ristretto64Le,
-        Bls12381G2,
-        Bls12381Gt,
-        HashChainKeccak256Fr64Be,
-        HashChainKeccak256KoalaBearExt8,
-        HashChainKeccak256KoalaBearExt4,
-        Binary64,
-        Binary64Ext3,
-    ];
-    for identity in &all {
-        match identity {
-            None
-            | Bn254Fr
-            | Bn254G1
-            | Bn254G2
-            | Bn254Gt
-            | Bls12381Fr
-            | Bls12381G1
-            | MultilinearKzgBls12381
-            | MerkleKoalaBear
-            | MerkleKoalaBearExt8
-            | MerkleKoalaBearExt4
-            | MerklePoseidon2KoalaBear
-            | MerklePoseidon2KoalaBearExt4
-            | MerklePoseidon2BabyBear
-            | MerklePoseidon2BabyBearExt4
-            | MerklePoseidon2Goldilocks
-            | MerklePoseidon2GoldilocksExt2
-            | Merlin3KoalaBearExt8
-            | Merlin3Fr64Be
-            | Spongefish080KeccakFr64Be
-            | Ristretto255Scalar
-            | KoalaBear
-            | KoalaBearExt8
-            | KoalaBearExt4
-            | BabyBear
-            | BabyBearExt4
-            | Goldilocks
-            | GoldilocksExt2
-            | Merlin3BabyBearExt4
-            | Merlin3GoldilocksExt2
-            | Ristretto255Group
-            | Edwards25519Prime
-            | Merlin3Ristretto64Le
-            | Bls12381G2
-            | Bls12381Gt
-            | HashChainKeccak256Fr64Be
-            | HashChainKeccak256KoalaBearExt8
-            | HashChainKeccak256KoalaBearExt4
-            | Binary64
-            | Binary64Ext3 => {}
-        }
-    }
-    all
-}
 
 /// Every runtime constructor head; the match makes a new one a compile error.
 fn runtime_types() -> Vec<Type> {
@@ -171,27 +82,6 @@ fn agree(comparison: &str, found: BTreeSet<String>, expected: &[(&str, &str)]) {
 fn runtime(identity: DomainIdentity) -> Identity {
     Identity::parse(identity.name()).unwrap_or_else(|_| panic!("{}", identity.name()))
 }
-#[test]
-fn identities_are_the_installed_domains() {
-    let generated = DomainIdentity::ALL
-        .iter()
-        .map(|identity| identity.name().to_owned())
-        .collect::<BTreeSet<_>>();
-    let hand = runtime_identities()
-        .into_iter()
-        .map(|identity| identity.name().to_owned())
-        .collect::<BTreeSet<_>>();
-    assert_eq!(generated.len(), DomainIdentity::ALL.len());
-    agree(
-        "identities",
-        generated.symmetric_difference(&hand).cloned().collect(),
-        &[],
-    );
-    for identity in DomainIdentity::ALL {
-        assert_eq!(runtime(*identity).name(), identity.name());
-    }
-}
-
 #[test]
 fn every_logical_type_has_its_default_representation() {
     let mut found = BTreeSet::new();
