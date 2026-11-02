@@ -1,6 +1,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/TypeRepresentations.h"
@@ -22,12 +23,18 @@ bool name(StringRef value) {
 Expected<BoundType> formPhysicalType(const BoundType &, StringRef,
                                      std::vector<BoundType>);
 Expected<StringRef> defaultRepresentationIdentity(const BoundType &logical) {
-  if (logical.kind == "sequence")
-    return "logical.sequence/0";
-  if (logical.kind == "variant")
-    return "logical.variant/0";
-  if (logical.kind == "resource_unit")
-    return "logical.resource_unit/0";
+  // Structural constructors select the installation's constructor-wide
+  // default, which holds for every argument.
+  if (logical.kind == "sequence" || logical.kind == "variant" ||
+      logical.kind == "resource_unit") {
+    for (const auto &row : installation::appliedRepresentations())
+      if (row.constructor == logical.kind && row.isDefault && !row.child &&
+          all_of(row.arguments, [](const auto &pattern) {
+            return pattern.kind == installation::ArgumentPattern::Kind::Any;
+          }))
+        return StringRef(row.identity);
+    return error("binding-representation");
+  }
   if (!logical.arguments.empty()) {
     auto entry = appliedTypeRepresentation(logical);
     if (!entry)

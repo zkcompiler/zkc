@@ -93,8 +93,12 @@ compiler's `catalog-source` test against the generator and `zkc-tblgen`, and
 outputs. The normal compiler configure step runs this projection; the
 `ZkcContractDeclarationsGen` target then regenerates native
 `Declarations.cpp.inc` and `Instances.inc` using `zkc-tblgen`. The compiler's
-own owners do not read the installed-instance tables yet; the
-`installed-instances` test compares them with those owners. Cargo
+`installedDomains()`, `plonky3Fields()` and applied representations are built
+from the installed-instance and installation tables through the validating
+`DomainCatalog` constructor. The `installed-instances` test retains an ordered
+dump of these owners and of the facts their consumers derive, in
+`compiler/test/fixtures/contracts/installed-instances.json`, and compares the
+remaining restatements with the tables. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source or belongs under `lean/`.
 

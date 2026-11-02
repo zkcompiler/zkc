@@ -14,8 +14,8 @@ namespace zkc::protocol {
 /// Generated installed-instance tables of the declaration catalog, in declared
 /// order, checked by zkc-tblgen at build time. They declare which nominal
 /// domains, logical type instances, codecs and frames exist; they grant no
-/// execution, transport or implementation authority. The compiler's owners do
-/// not read these tables: tests compare them with those owners.
+/// execution, transport or implementation authority. `installedDomains()` and
+/// its co-owner tables are built from them.
 namespace instances {
 struct DomainMember {
   std::string member, identity;

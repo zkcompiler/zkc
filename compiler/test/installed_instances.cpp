@@ -1,7 +1,13 @@
-// Differential evidence: the generated installed-instance and native
-// installation tables equal the hand-written owners they describe, in declared
-// order. Every intended difference is listed below with its reason; any other
-// difference, or a listed one that no longer occurs, fails.
+// The installed owners are built from the generated installed-instance and
+// native installation tables. The retained ordered dump records those owners
+// and the facts their consumers derive, in declared order; its fixture makes
+// every change visible. Regenerate it only deliberately, with
+// `zkc-installed_instances-test --dump`.
+//
+// Differential evidence: consumers that still restate installed facts, and
+// independent readers of them, agree with the generated tables. Every intended
+// difference is listed below with its reason; any other difference, or a
+// listed one that no longer occurs, fails.
 #include "../lib/Language/DataRequirements.h"
 #include "mlir/IR/Verifier.h"
 #include "support/ResourceSources.h"
@@ -27,6 +33,8 @@
 #include "zkc/Target/CpuTarget.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -123,18 +131,6 @@ std::vector<std::string> identities() {
     result.push_back(codec.identity);
   return result;
 }
-BoundType treeType(const physical::TypeTree &tree) {
-  std::vector<std::string> arguments;
-  for (const auto &argument : tree.arguments)
-    arguments.push_back(argument.kind ==
-                                physical::TypeTreeArgument::Kind::Domain
-                            ? argument.identity
-                        : argument.kind == physical::TypeTreeArgument::Kind::Nat
-                            ? argument.natural
-                            : treeType(*argument.type).spelling());
-  return take(applyBoundType(tree.constructor, arguments));
-}
-
 // The CPU target's storage owner of one physical type, measured through its
 // public descriptor: provider-free storage passes with no unit selected.
 std::string storageUnit(const BoundType &type) {
@@ -358,104 +354,241 @@ language::DomainBinding::Kind bindingKind(generated::DomainConstructorKind k) {
   }
   llvm_unreachable("domain constructor kind");
 }
+// The retained ordered dump: every installed owner row and the facts that
+// the services, type properties, implementations and operation shapes derive
+// from them, in declared order.
+using Table = std::pair<std::string, json::Array>;
+std::vector<Table> dump() {
+  const auto &catalog = installedDomains();
+  json::Array domains, types, codecs, representations;
+  for (const auto &domain : catalog.allDomains()) {
+    json::Array members, capabilities;
+    for (const auto &member : domain.associated)
+      members.push_back(json::Array{member.member, member.identity});
+    for (const auto &capability : domain.capabilities)
+      capabilities.push_back(capability);
+    domains.push_back(
+        json::Object{{"identity", domain.identity},
+                     {"sort", domain.sort},
+                     {"members", std::move(members)},
+                     {"capabilities", std::move(capabilities)},
+                     {"modulus", domain.modulus},
+                     {"provider", catalog.defaultProvider(domain.identity)}});
+  }
+  for (const auto &type : catalog.allLogicalTypes())
+    types.push_back(json::Array{type.kind, type.domain});
+  for (const auto &codec : catalog.allCodecs())
+    codecs.push_back(json::Array{codec.identity, codec.kind, codec.domain});
+  for (const auto &row : catalog.allRepresentations())
+    representations.push_back(json::Array{row.identity, row.kind, row.domain,
+                                          row.isDefault, row.layout});
+  json::Array fields;
+  for (const auto &field : plonky3Fields())
+    fields.push_back(json::Object{{"identity", field.identity},
+                                  {"base", field.base},
+                                  {"modulus", field.modulus},
+                                  {"degree", field.degree},
+                                  {"nonresidue", field.nonresidue},
+                                  {"coordinateBytes", field.coordinateBytes},
+                                  {"montgomery32", field.montgomery32}});
+  json::Array services;
+  for (const auto &service : randomServices)
+    services.push_back(json::Array{service.contract, service.field});
+  json::Array applied;
+  for (const auto &entry : appliedTypeRepresentations()) {
+    json::Array arguments;
+    for (const auto &pattern : entry.arguments)
+      if (pattern.argument.kind == TypeArgument::Kind::Nat)
+        arguments.push_back(json::Array{pattern.minimum, pattern.maximum});
+      else
+        arguments.push_back(pattern.argument.spelling());
+    applied.push_back(json::Object{{"constructor", entry.constructor},
+                                   {"arguments", std::move(arguments)},
+                                   {"representation", entry.representation},
+                                   {"default", entry.isDefault},
+                                   {"child", entry.childType.spelling()}});
+  }
+  // Constructor defaults, and the frames of array samples over every field.
+  json::Array defaults, arrays;
+  auto variant =
+      *encodeVariant({"Choice", {{"left", {}}, {"right", {"bool"}}}});
+  std::vector<std::string> samples = {"fixed_vector<field:koala-bear,0>",
+                                      "fixed_vector<field:koala-bear,1048576>",
+                                      "fixed_vector<field:bls12-381.fr,4>",
+                                      "sequence<bool>",
+                                      "sequence<field:koala-bear>",
+                                      variant,
+                                      "resource_unit:Slot.A"};
+  for (const auto &domain : catalog.allDomains())
+    if (domain.sort == "Field")
+      for (StringRef size : {"0", "4", "1048576"})
+        samples.push_back(
+            ("field_array<" + domain.identity + "," + size + ">").str());
+  for (const auto &spelling : samples) {
+    auto logical = parseBoundType(spelling, false);
+    if (!logical) {
+      consumeError(logical.takeError());
+      continue;
+    }
+    std::string selected = "<none>";
+    if (auto physical = defaultRepresentation(*logical)) {
+      selected = physical->spelling();
+      arrays.push_back(json::Array{selected, nativeMessageData(*physical)});
+    } else
+      consumeError(physical.takeError());
+    defaults.push_back(json::Array{spelling, selected});
+    arrays.push_back(json::Array{spelling, nativeMessageData(*logical),
+                                 nativeFieldArrayWire(*logical)});
+    for (const auto &entry : appliedTypeRepresentations()) {
+      if (entry.constructor != logical->kind || entry.isDefault)
+        continue;
+      auto physical = physicalType(*logical, entry.representation, {});
+      if (!physical) {
+        consumeError(physical.takeError());
+        continue;
+      }
+      arrays.push_back(
+          json::Array{physical->spelling(), nativeMessageData(*physical)});
+    }
+  }
+  json::Array cosets, widths, atoms, setups, challenges, residents;
+  for (const auto &identity : identities()) {
+    if (const auto *convention = cosetConvention(identity))
+      cosets.push_back(json::Array{
+          identity, convention->identity, convention->rootField,
+          convention->maximalRoot, convention->order, convention->maxLogSize});
+    if (unsigned width = fieldBitPatternWidth(identity))
+      widths.push_back(json::Array{identity, width});
+    for (const auto &type : typeDeclarations())
+      if (nativeMessageAtom(type.name, identity))
+        atoms.push_back(json::Array{type.name, identity});
+    if (auto field = nativeChallengeField(identity); !field.empty())
+      challenges.push_back(json::Array{identity, field});
+  }
+  for (const auto &type : catalog.allLogicalTypes())
+    if (nativeSetupType({type.kind, type.domain, ""}))
+      setups.push_back(json::Array{type.kind, type.domain});
+  for (const auto &row : catalog.allRepresentations()) {
+    auto logical = applyBoundType(
+        row.kind, row.domain.empty() ? std::vector<std::string>{}
+                                     : std::vector<std::string>{row.domain});
+    if (!logical) {
+      consumeError(logical.takeError());
+      continue;
+    }
+    auto represented = physicalType(*logical, row.identity, {});
+    if (!represented) {
+      consumeError(represented.takeError());
+      continue;
+    }
+    residents.push_back(json::Array{row.identity, row.kind, row.domain,
+                                    nativeMessageData(*represented)});
+  }
+  json::Array relation;
+  for (StringRef provider : {"arkworks", "blst", "dalek", "halo2curves-axiom",
+                             "plonky3", "spongefish", "native"})
+    for (const auto &identity : identities())
+      if (implementationProviderSupports(provider, identity))
+        relation.push_back(json::Array{provider, identity});
+  json::Array implementations;
+  for (const auto &entry : installedImplementations().all()) {
+    json::Array ports;
+    for (const auto &port : entry.representations)
+      ports.push_back(json::Array{port.kind, port.domain, port.identity,
+                                  port.port ? json::Value(int64_t(*port.port))
+                                            : json::Value(nullptr),
+                                  port.output});
+    json::Value dense = nullptr;
+    if (entry.denseLayout)
+      dense =
+          json::Array{entry.denseLayout->container, entry.denseLayout->vector};
+    json::Array domainList;
+    for (const auto &domain : entry.domains)
+      domainList.push_back(domain);
+    implementations.push_back(json::Array{
+        entry.contract, entry.identity, entry.provider,
+        int64_t(entry.compatibility), std::move(domainList), std::move(ports),
+        int64_t(entry.providerTerm), int64_t(entry.family),
+        entry.requiresExplicitSelection, std::move(dense)});
+  }
+  std::vector<Table> tables;
+  tables.emplace_back("domains", std::move(domains));
+  tables.emplace_back("logicalTypes", std::move(types));
+  tables.emplace_back("codecs", std::move(codecs));
+  tables.emplace_back("representations", std::move(representations));
+  tables.emplace_back("plonky3Fields", std::move(fields));
+  tables.emplace_back("randomServices", std::move(services));
+  tables.emplace_back("appliedRepresentations", std::move(applied));
+  tables.emplace_back("constructorDefaults", std::move(defaults));
+  tables.emplace_back("arrayFrames", std::move(arrays));
+  tables.emplace_back("cosetConventions", std::move(cosets));
+  tables.emplace_back("bitPatternWidths", std::move(widths));
+  tables.emplace_back("messageAtoms", std::move(atoms));
+  tables.emplace_back("setupTypes", std::move(setups));
+  tables.emplace_back("challengeFields", std::move(challenges));
+  tables.emplace_back("residentFrames", std::move(residents));
+  tables.emplace_back("providerRelation", std::move(relation));
+  tables.emplace_back("implementations", std::move(implementations));
+  return tables;
+}
+// One row per line, so a fixture change reads as a row diff.
+void print(raw_ostream &os, ArrayRef<Table> tables) {
+  os << "{\n";
+  for (auto [index, table] : enumerate(tables)) {
+    os << json::Value(table.first) << ": [\n";
+    for (auto [row, value] : enumerate(table.second))
+      os << "  " << value << (row + 1 < table.second.size() ? ",\n" : "\n");
+    os << "]" << (index + 1 < tables.size() ? ",\n" : "\n");
+  }
+  os << "}\n";
+}
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc == 2 && StringRef(argv[1]) == "--dump") {
+    print(outs(), dump());
+    return 0;
+  }
   Cases cases;
-  const auto &catalog = installedDomains();
 
-  cases.run("domains in declared order", [&] {
+  cases.run("retained ordered dump equals its fixture", [&] {
+    auto buffer = MemoryBuffer::getFile(ZKC_INSTALLED_INSTANCES_FIXTURE);
+    require(bool(buffer), "missing installed-instance fixture");
+    auto fixture = take(json::parse((*buffer)->getBuffer()));
+    const auto *expected = fixture.getAsObject();
+    require(expected, "malformed installed-instance fixture");
+    auto tables = dump();
     std::vector<std::string> found;
-    auto handWritten = catalog.allDomains();
-    auto rows = generated::domains();
-    require(handWritten.size() == rows.size(), "domain count differs");
-    for (auto [hand, row] : zip(handWritten, rows)) {
-      bool same = hand.identity == row.identity && hand.sort == row.sort &&
-                  hand.associated.size() == row.members.size() &&
-                  hand.capabilities == row.capabilities &&
-                  hand.modulus ==
-                      (row.field ? row.field->characteristic : std::string());
-      for (auto [a, m] : zip(hand.associated, row.members))
-        same &= a.member == m.member && a.identity == m.identity;
-      if (!same)
-        found.push_back(row.identity);
-    }
-    agree("domains", found, {});
-  });
-
-  cases.run("logical types, codecs and representations in declared order", [&] {
-    std::vector<std::string> found;
-    auto types = catalog.allLogicalTypes();
-    auto rows = generated::logicalTypes();
-    require(types.size() == rows.size(), "logical type count");
-    for (auto [hand, row] : zip(types, rows))
-      if (hand.kind != row.kind || hand.domain != row.domain)
-        found.push_back("type " + row.kind + " " + row.domain);
-    auto codecs = catalog.allCodecs();
-    require(codecs.size() == generated::codecs().size(), "codec count");
-    for (auto [hand, row] : zip(codecs, generated::codecs()))
-      if (hand.identity != row.identity || hand.kind != row.kind ||
-          hand.domain != row.domain)
-        found.push_back("codec " + row.identity);
-    auto representations = catalog.allRepresentations();
-    require(representations.size() == physical::representations().size(),
-            "representation count");
-    for (auto [hand, row] : zip(representations, physical::representations()))
-      if (hand.identity != row.identity || hand.kind != row.kind ||
-          hand.domain != row.domain || hand.isDefault != row.isDefault ||
-          hand.layout != row.layout)
-        found.push_back("representation " + row.identity);
-    agree("logical types, codecs and representations", found, {});
-  });
-
-  cases.run("default providers", [&] {
-    std::vector<std::string> found;
-    require(physical::providers().size() == catalog.allDomains().size(),
-            "provider rows do not cover the domains");
-    for (const auto &row : physical::providers())
-      if (catalog.defaultProvider(row.domain) != row.defaultProvider)
-        found.push_back(row.domain);
-    agree("default providers", found, {});
-  });
-
-  cases.run("Plonky3 fields from structures, codecs and field forms", [&] {
-    std::vector<std::string> found, residue;
-    for (const auto &form : physical::fieldForms())
-      if (form.arithmetic)
-        residue.push_back(form.field);
-    std::vector<std::string> handWritten;
-    for (const auto &field : plonky3Fields()) {
-      handWritten.push_back(field.identity.str());
-      const auto &domain = row(field.identity);
-      const auto &facts = *domain.field;
-      const auto *form = physical::fieldForm(field.identity);
-      const auto *codec = codecFor("field", field.identity);
-      const unsigned degree = facts.extension ? facts.extension->degree : 1;
-      const auto &prime = *baseChain(field.identity).back();
-      std::string nonresidue = "0";
-      if (facts.extension) {
-        const auto &terms = facts.extension->reduction;
-        nonresidue = terms.size() == 1 && terms[0].exponent == 0
-                         ? terms[0].coefficient
-                         : "<not binomial>";
+    for (const auto &[name, rows] : tables) {
+      const auto *recorded = expected->getArray(name);
+      if (!recorded) {
+        found.push_back(name + ": not recorded");
+        continue;
       }
-      bool same =
-          field.base == prime.identity &&
-          field.modulus == facts.characteristic && field.degree == degree &&
-          std::to_string(field.nonresidue) == nonresidue && codec &&
-          codec->frame && codec->frame->elementBytes &&
-          *codec->frame->elementBytes == field.coordinateBytes * degree &&
-          form &&
-          field.montgomery32 ==
-              (form->montgomery && form->montgomery->radixBits == 32);
-      if (facts.extension)
-        same &= *member(domain, "BaseField") == field.base;
-      if (!same)
-        found.push_back(field.identity.str());
+      for (size_t i = 0; i < std::max(rows.size(), recorded->size()); ++i)
+        if (i >= rows.size() || i >= recorded->size() ||
+            rows[i] != (*recorded)[i]) {
+          std::string row;
+          raw_string_ostream os(row);
+          os << name << " row " << i << ": ";
+          if (i < rows.size())
+            os << rows[i];
+          else
+            os << "<absent>";
+          os << " recorded ";
+          if (i < recorded->size())
+            os << (*recorded)[i];
+          else
+            os << "<absent>";
+          found.push_back(row);
+          break;
+        }
     }
-    if (handWritten != residue)
-      found.push_back("residue field set");
-    agree("Plonky3 fields", found, {});
+    if (expected->size() != tables.size())
+      found.push_back("recorded tables differ");
+    if (!found.empty())
+      throw std::runtime_error("installed dump differs from its fixture: " +
+                               join(found, "; "));
   });
 
   cases.run("random services", [&] {
@@ -466,76 +599,6 @@ int main() {
       if (hand.contract != row.contract || hand.field != row.field)
         found.push_back(row.contract);
     agree("random services", found, {});
-  });
-
-  cases.run("applied and constructor default representations", [&] {
-    std::vector<std::string> found;
-    std::vector<const physical::AppliedRepresentation *> dense;
-    for (const auto &row : physical::appliedRepresentations())
-      if (row.constructor == "field_array" || row.constructor == "fixed_vector")
-        dense.push_back(&row);
-    auto handWritten = appliedTypeRepresentations();
-    require(handWritten.size() == dense.size(), "applied representation count");
-    for (auto [hand, row] : zip(handWritten, dense)) {
-      bool same =
-          hand.constructor == row->constructor &&
-          hand.representation == row->identity &&
-          hand.isDefault == row->isDefault && row->child &&
-          hand.childType == BoundType{row->child->kind, row->child->domain,
-                                      row->child->representation} &&
-          hand.arguments.size() == row->arguments.size();
-      for (auto [pattern, generatedPattern] :
-           zip(hand.arguments, row->arguments)) {
-        using P = physical::ArgumentPattern::Kind;
-        switch (generatedPattern.kind) {
-        case P::Domain:
-          same &= pattern.argument ==
-                  TypeArgument::domainArgument(generatedPattern.identity);
-          break;
-        case P::Type:
-          same &= pattern.argument ==
-                  TypeArgument::typeArgument(treeType(*generatedPattern.type));
-          break;
-        case P::NatRange:
-          same &= pattern.argument.kind == TypeArgument::Kind::Nat &&
-                  pattern.minimum == generatedPattern.minimum &&
-                  pattern.maximum == generatedPattern.maximum;
-          break;
-        case P::Any:
-          same = false;
-          break;
-        }
-      }
-      if (!same)
-        found.push_back(row->identity);
-    }
-    // Constructor defaults of the remaining applied rows, on sample types.
-    auto variant =
-        *encodeVariant({"Choice", {{"left", {}}, {"right", {"bool"}}}});
-    const std::map<std::string, std::vector<std::string>> samples = {
-        {"field_array",
-         {"field_array<bls12-381.fr,0>", "field_array<bls12-381.fr,1048576>"}},
-        {"fixed_vector",
-         {"fixed_vector<field:koala-bear,0>",
-          "fixed_vector<field:koala-bear,1048576>"}},
-        {"sequence", {"sequence<bool>", "sequence<field:koala-bear>"}},
-        {"variant", {variant}},
-        {"resource_unit", {"resource_unit:Slot.A"}}};
-    for (const auto &row : physical::appliedRepresentations()) {
-      auto sample = samples.find(row.constructor);
-      if (sample == samples.end()) {
-        found.push_back("unsampled " + row.constructor);
-        continue;
-      }
-      for (const auto &spelling : sample->second) {
-        if (!row.isDefault)
-          continue;
-        auto logical = take(parseBoundType(spelling, false));
-        if (take(defaultRepresentation(logical)).representation != row.identity)
-          found.push_back("default " + spelling);
-      }
-    }
-    agree("applied representations", found, {});
   });
 
   cases.run("coset conventions for every domain", [&] {
@@ -892,8 +955,11 @@ int main() {
         found.push_back("sourceData " + type.name);
       if (!type.sourceData || !formed)
         continue;
-      // Collection rank against the source axis view.
-      unsigned rank = type.collection ? type.collection->rank : 0;
+      // Collection rank against the source axis view. A byte element gives an
+      // extent without source traversal.
+      bool traversed = type.collection &&
+                       type.collection->element != CollectionElement::Byte;
+      unsigned rank = traversed ? type.collection->rank : 0;
       for (unsigned axis = 0; axis < 3; ++axis)
         if (language::detail::collectionAxis(*formed, axis) != (axis < rank))
           found.push_back("collection " + type.name + " axis " +
@@ -910,38 +976,26 @@ int main() {
       using E = language::detail::CollectionElementKind;
       auto element = language::detail::collectionElementKind(
           *formed, formed->arguments.size());
-      auto expected = !type.collection ? E::None
+      auto expected = !traversed ? E::None
                       : type.collection->element == CollectionElement::Index
                           ? E::Index
-                      : type.collection->element == CollectionElement::Parameter
-                          ? E::Parameter
-                          : E::None;
-      if (element != expected ||
-          (type.collection &&
-           type.collection->element == CollectionElement::Byte))
+                          : E::Parameter;
+      if (element != expected)
         found.push_back("element " + type.name);
     }
-    // Setup keys against the native setup-type rule, over every instance.
+    // Setup dependence over every instance: the setup-key constructors, and
+    // every value over a commitment whose scheme requires an authorized setup.
     for (const auto &instance : generated::logicalTypes()) {
       const auto *declared = typeDeclaration(instance.kind);
+      const auto *domain = generated::domain(instance.domain);
+      bool authorized = domain && domain->commitment &&
+                        domain->commitment->scheme ==
+                            generated::CommitmentScheme::MultilinearKzg;
       BoundType type{instance.kind, instance.domain, ""};
-      if (nativeSetupType(type) != declared->setup.has_value())
+      if (nativeSetupType(type) != (declared->setup.has_value() || authorized))
         found.push_back("setup " + instance.kind + " " + instance.domain);
     }
-    std::vector<Difference> expected = {
-        {"collection bytes axis 0",
-         "the source checker has no element traversal over bytes; its rank "
-         "is an extent only"},
-        {"element bytes", "bytes elements are bytes, which source collections "
-                          "do not traverse"}};
-    for (const auto &instance : generated::logicalTypes())
-      if (instance.domain == "multilinear.kzg.bls12-381/0" &&
-          !typeDeclaration(instance.kind)->setup)
-        expected.push_back(
-            {"setup " + instance.kind + " " + instance.domain,
-             "nativeSetupType marks every value over the authorized-setup "
-             "commitment, while the column marks only the key constructors"});
-    agree("type columns", found, expected);
+    agree("type columns", found, {});
   });
 
   cases.run("finite definitions against the source decoder", [&] {

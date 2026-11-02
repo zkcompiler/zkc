@@ -80,7 +80,8 @@ native data. `collection` is null or `{rank, element}`: `rank` is 1 or 2 and
 `element` is `parameter` (the element is the value type of the first
 parameter: `field` over a Field domain, `group` over a Group domain, or the
 Type argument itself; a constructor whose first parameter is none of these
-has no `parameter` element), `index` or `byte`. `setup` is null, `prover` or
+has no `parameter` element), `index` or `byte`. A `byte` collection has an
+extent, but source declarations do not traverse its elements. `setup` is null, `prover` or
 `verifier` and marks the setup-key constructors. These columns grant no
 codec, transport or execution authority.
 

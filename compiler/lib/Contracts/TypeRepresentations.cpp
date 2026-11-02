@@ -1,5 +1,6 @@
 #include "zkc/Contracts/TypeRepresentations.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -100,47 +101,64 @@ llvm::Error validateAppliedTypeRepresentations(
 }
 
 llvm::ArrayRef<AppliedTypeRepresentation> appliedTypeRepresentations() {
-  static const BoundType koalaBear{"field", "koala-bear", {}};
-  static const BoundType blsScalar{"field", "bls12-381.fr", {}};
-  static const TypeArgumentPattern koalaBearVector[] = {
-      {TypeArgument::typeArgument(koalaBear)},
-      {TypeArgument::naturalArgument(0), 1048576}};
-  static const TypeArgumentPattern fieldArray[] = {
-      {TypeArgument::domainArgument("bls12-381.fr")},
-      {TypeArgument::naturalArgument(0), 1048576}};
-  static const TypeArgumentPattern blsVector[] = {
-      {TypeArgument::typeArgument(blsScalar)},
-      {TypeArgument::naturalArgument(0), 1048576}};
-  static const AppliedTypeRepresentation values[] = {
-      {"field_array",
-       fieldArray,
-       "arkworks.field-array/0",
-       true,
-       {"field", "bls12-381.fr", "arkworks.fr/0"}},
-      {"field_array",
-       fieldArray,
-       "blst/field-array",
-       false,
-       {"field", "bls12-381.fr", "blst/fr"}},
-      {"fixed_vector",
-       blsVector,
-       "blst/fixed-vector",
-       false,
-       {"field", "bls12-381.fr", "blst/fr"}},
-      {"fixed_vector",
-       koalaBearVector,
-       "plonky3.fixed-vector/0",
-       true,
-       {"field", "koala-bear", "plonky3.koala-bear/0"}}};
-  static const bool validated = [] {
-    if (auto e = validateAppliedTypeRepresentations(values))
+  // The applied rows of the native installation that own a single dense
+  // child, in declared order. Constructor-wide rows without a child (sequence,
+  // variant, resource_unit) select their constructor's default directly.
+  namespace physical = installation;
+  struct Installed {
+    std::vector<std::vector<TypeArgumentPattern>> patterns;
+    std::vector<AppliedTypeRepresentation> values;
+  };
+  static const Installed installed = [] {
+    Installed result;
+    std::vector<const physical::AppliedRepresentation *> dense;
+    for (const auto &row : physical::appliedRepresentations())
+      if (row.child)
+        dense.push_back(&row);
+    for (const auto *row : dense) {
+      std::vector<TypeArgumentPattern> patterns;
+      for (const auto &pattern : row->arguments) {
+        using Kind = physical::ArgumentPattern::Kind;
+        switch (pattern.kind) {
+        case Kind::Domain:
+          patterns.push_back(
+              {TypeArgument::domainArgument(pattern.identity), 0, 0});
+          break;
+        case Kind::Type: {
+          // An exact admitted logical type instance.
+          const auto &tree = *pattern.type;
+          std::string identity =
+              tree.arguments.empty() ? "" : tree.arguments.front().identity;
+          patterns.push_back({TypeArgument::typeArgument(
+                                  BoundType{tree.constructor, identity, {}}),
+                              0, 0});
+          break;
+        }
+        case Kind::NatRange:
+          patterns.push_back({TypeArgument::naturalArgument(0), pattern.maximum,
+                              pattern.minimum});
+          break;
+        case Kind::Any:
+          llvm::report_fatal_error(llvm::Twine("dense representation ") +
+                                       row->identity +
+                                       " needs exact argument patterns",
+                                   false);
+        }
+      }
+      result.patterns.push_back(std::move(patterns));
+    }
+    for (auto [row, patterns] : llvm::zip(dense, result.patterns))
+      result.values.push_back({row->constructor, patterns, row->identity,
+                               row->isDefault,
+                               BoundType{row->child->kind, row->child->domain,
+                                         row->child->representation}});
+    if (auto e = validateAppliedTypeRepresentations(result.values))
       llvm::report_fatal_error(
           llvm::Twine("invalid applied representations: ") +
           llvm::toString(std::move(e)));
-    return true;
+    return result;
   }();
-  (void)validated;
-  return values;
+  return installed.values;
 }
 
 const AppliedTypeRepresentation *

@@ -967,7 +967,7 @@ void bn254Domains() {
     refuse(DomainCatalog::create(bad, {}, {}, {}),
            "invalid pairing target association");
   }
-  for (unsigned mutation = 0; mutation < 4; ++mutation) {
+  for (unsigned mutation = 0; mutation < 5; ++mutation) {
     auto bad = records;
     if (mutation == 0)
       bad[0].associated[1].identity = "g1";
@@ -975,8 +975,11 @@ void bn254Domains() {
       bad[0].associated.pop_back();
     else if (mutation == 2)
       bad[2].associated[0].identity = "other";
-    else
+    else if (mutation == 3)
       bad[2].capabilities.clear();
+    else
+      // Pairing groups occur only on PairingField rows.
+      bad[0].capabilities.clear();
     refuse(DomainCatalog::create(bad, {}, {}, {}),
            "invalid pairing group association");
   }

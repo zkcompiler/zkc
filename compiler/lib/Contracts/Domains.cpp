@@ -1,7 +1,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
-#include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/Instances.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <set>
@@ -131,10 +131,17 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
       return invalid("unadmitted codec payload type");
   }
   // A shared scalar field does not identify a pairing's ordered source groups.
-  // Validate the complete association before exposing a PairingField fact.
+  // Validate the complete association before exposing a PairingField fact;
+  // pairing groups occur only on PairingField rows.
   for (const auto &d : catalog.domains) {
-    if (!is_contained(d.capabilities, "PairingField"))
+    if (!is_contained(d.capabilities, "PairingField")) {
+      if (any_of(d.associated, [](const auto &a) {
+            return a.member == "PairingG1" || a.member == "PairingG2" ||
+                   a.member == "PairingGT";
+          }))
+        return invalid("invalid pairing group association");
       continue;
+    }
     StringRef g1 = catalog.associatedIdentity(d.identity, "PairingG1");
     StringRef g2 = catalog.associatedIdentity(d.identity, "PairingG2");
     if (g1.empty() || g2.empty() || g1 == g2 ||
@@ -283,19 +290,69 @@ DomainCatalog::representationForLayout(StringRef kind, StringRef identity,
   return nullptr;
 }
 
+namespace {
+namespace generated = instances;
+namespace physical = installation;
+
+[[noreturn]] void invalidInstallation(const Twine &reason) {
+  report_fatal_error(Twine("invalid installed domain catalog: ") + reason,
+                     false);
+}
+StringRef memberOf(const generated::Domain &row, StringRef name) {
+  for (const auto &member : row.members)
+    if (member.member == name)
+      return member.identity;
+  return {};
+}
+// A field row's facts; the generated tables are checked, so a named row exists.
+const generated::Domain &fieldRow(StringRef identity) {
+  const auto *row = generated::domain(identity);
+  if (!row || !row->field)
+    invalidInstallation(identity + " is not a Field domain");
+  return *row;
+}
+} // namespace
+
 ArrayRef<Plonky3Field> plonky3Fields() {
-  // Plonky3 0.8.0: koala-bear/src/koala_bear.rs,
-  // baby-bear/src/baby_bear.rs and goldilocks/src/{goldilocks,extension}.rs.
-  // The separate OpenVM installation does not participate in this inventory.
-  static constexpr Plonky3Field fields[] = {
-      {"koala-bear", "koala-bear", "2130706433", 1, 0, 4, true},
-      {"koala-bear.ext8-binomial3", "koala-bear", "2130706433", 8, 3, 4, true},
-      {"koala-bear.ext4-binomial3", "koala-bear", "2130706433", 4, 3, 4, true},
-      {"baby-bear", "baby-bear", "2013265921", 1, 0, 4, true},
-      {"baby-bear.ext4-binomial11", "baby-bear", "2013265921", 4, 11, 4, true},
-      {"goldilocks", "goldilocks", "18446744069414584321", 1, 0, 8, false},
-      {"goldilocks.ext2-binomial7", "goldilocks", "18446744069414584321", 2, 7,
-       8, false}};
+  // The residue fields are the field forms with residue arithmetic, in their
+  // declared order: a prime field, or a binomial extension
+  // `B[X]/(X^degree - nonresidue)` over its prime BaseField. Coordinates take
+  // the prime base's codec width.
+  static const std::vector<Plonky3Field> fields = [] {
+    std::vector<Plonky3Field> result;
+    for (const auto &form : physical::fieldForms()) {
+      if (!form.arithmetic)
+        continue;
+      const auto &row = fieldRow(form.field);
+      const auto &facts = *row.field;
+      StringRef base = row.identity;
+      unsigned degree = 1, nonresidue = 0;
+      if (facts.extension) {
+        const auto &extension = *facts.extension;
+        base = memberOf(row, "BaseField");
+        if (extension.over != generated::ExtensionBase::BaseField ||
+            fieldRow(base).field->extension ||
+            extension.reduction.size() != 1 ||
+            extension.reduction.front().exponent != 0 ||
+            StringRef(extension.reduction.front().coefficient)
+                .getAsInteger(10, nonresidue))
+          invalidInstallation(row.identity +
+                              " has residue arithmetic without a binomial "
+                              "extension over a prime field");
+        degree = extension.degree;
+      }
+      const generated::Codec *codec = nullptr;
+      for (const auto &candidate : generated::codecs())
+        if (candidate.kind == "field" && candidate.domain == base)
+          codec = &candidate;
+      if (!codec || !codec->frame || !codec->frame->elementBytes)
+        invalidInstallation(base + " has no framed field codec");
+      result.push_back({row.identity, base, facts.characteristic, degree,
+                        nonresidue, *codec->frame->elementBytes,
+                        form.montgomery && form.montgomery->radixBits == 32});
+    }
+    return result;
+  }();
   return fields;
 }
 const Plonky3Field *plonky3Field(StringRef identity) {
@@ -306,573 +363,38 @@ const Plonky3Field *plonky3Field(StringRef identity) {
 }
 
 const DomainCatalog &installedDomains() {
+  // Built from the generated installed-instance and installation tables in
+  // declared order, through the validating constructor.
   static const DomainCatalog catalog = [] {
-    const std::string field = "bls12-381.fr";
-    const std::string group = "bls12-381.g1";
-    const std::string blsg2 = "bls12-381.g2";
-    const std::string blsgt = "bls12-381.gt";
-    const std::string bn254 = "bn254.fr";
-    const std::string bn254g1 = "bn254.g1";
-    const std::string bn254g2 = "bn254.g2";
-    const std::string bn254gt = "bn254.gt";
-    const std::string pcs = "multilinear.kzg.bls12-381/0";
-    const std::string transcript = "merlin3.bls12-381.fr64be/0";
-    const std::string scalar = "ristretto255.scalar";
-    const std::string ristretto = "ristretto255.group";
-    const std::string edwards = "edwards25519.prime";
-    const std::string merlin = "merlin3.ristretto255.scalar64le/0";
-    const std::string spongefish = "spongefish0.8.0.keccak.bls12-381.fr64be/0";
-    const std::string koala = "koala-bear";
-    const std::string extension = "koala-bear.ext8-binomial3";
-    const std::string quartic = "koala-bear.ext4-binomial3";
-    // GF(2)[x]/(x^64 + x^4 + x^3 + x + 1) and its cubic extension by
-    // y^3 + y + 1. Characteristic two: no PrimeField, TwoAdicField or
-    // CharacteristicNotTwo, and the modulus member records only the
-    // characteristic bound for natural casts.
-    const std::string binary = "gf2-64.pentanomial-4-3-1";
-    const std::string binaryCubic = "gf2-64.pentanomial-4-3-1.ext3-trinomial1";
-    const std::string extensionTranscript =
-        "merlin3.koala-bear.ext8-binomial3.rejection31le/0";
-    // Hash-chain suites: one instance per byte hash and challenge field, with
-    // the same challenge decoders as the Merlin suites over that field.
-    const std::string chainTranscript =
-        "hash-chain.keccak256.bls12-381.fr64be/0";
-    const std::string chainExtensionTranscript =
-        "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0";
-    const std::string chainQuarticTranscript =
-        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0";
-    const std::string rowQuartic =
-        "rows.merkle-keccak256.koala-bear.ext4-binomial3/0";
-    const std::string rowBase = "rows.merkle-keccak256.koala-bear/0";
-    const std::string rowExtension =
-        "rows.merkle-keccak256.koala-bear.ext8-binomial3/0";
-    // Digest-generic Merkle schemes: one instance per leaf hash, compression
-    // and value field, sharing carriers, codecs and operations.
-    const std::string poseidonRows = "rows.merkle-poseidon2-16.koala-bear/0";
-    const std::string poseidonQuarticRows =
-        "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0";
-    auto create = [](std::vector<NominalDomain> domains,
-                     std::vector<LogicalTypeInstance> logicalTypes,
-                     std::vector<CodecIdentity> codecs,
-                     std::vector<DomainRepresentation> representations,
-                     std::vector<DefaultProvider> providers) {
-      for (const auto &field : plonky3Fields()) {
-        std::vector<AssociatedIdentity> associated;
-        std::vector<std::string> capabilities{
-            "TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo"};
-        if (field.degree == 1)
-          capabilities.push_back("PrimeField");
-        else {
-          capabilities.push_back("ExtensionField");
-          associated.push_back({"BaseField", field.base.str()});
-        }
-        // These sampling profiles explicitly support UniformIndex. Neither
-        // field arithmetic nor a draw-only random service implies this fact.
-        if (field.identity == "koala-bear.ext8-binomial3" ||
-            field.identity == "koala-bear.ext4-binomial3" ||
-            field.identity == "baby-bear.ext4-binomial11" ||
-            field.identity == "goldilocks.ext2-binomial7") {
-          capabilities.push_back("IndexRandomness");
-          capabilities.push_back("IndexBlockRandomness");
-        }
-        if (!randomServiceContract(field.identity).empty()) {
-          logicalTypes.push_back({"rng", field.identity.str()});
-          representations.push_back(
-              {"host.resource/0", "rng", field.identity.str(), true, ""});
-        }
-        domains.push_back({field.identity.str(), "Field", std::move(associated),
-                           std::move(capabilities), field.modulus.str()});
-        const std::pair<StringRef, StringRef> kinds[] = {
-            {"field", ""},
-            {"vector", "-vector"},
-            {"polynomial", "-polynomial"},
-            {"round", "-quadratic"},
-            {"matrix", "-sparse-coo"}};
-        for (auto [kind, suffix] : kinds) {
-          logicalTypes.push_back({kind.str(), field.identity.str()});
-          codecs.push_back(
-              {("zkcv." + kind + "." + field.identity + "/0").str(), kind.str(),
-               field.identity.str()});
-          representations.push_back(
-              {("plonky3." + field.identity + suffix + "/0").str(), kind.str(),
-               field.identity.str(), true, ""});
-        }
-        providers.push_back({field.identity.str(), "plonky3"});
-      }
-      // Byte-suite identities chosen by the native sampling installation.
-      // These do not imply Poseidon parameters or row commitment instances.
-      const std::pair<StringRef, StringRef> transcripts[] = {
-          {"merlin3.baby-bear.ext4-binomial11.rejection31le/0",
-           "baby-bear.ext4-binomial11"},
-          {"merlin3.goldilocks.ext2-binomial7.rejection64le/0",
-           "goldilocks.ext2-binomial7"}};
-      for (auto [suite, field] : transcripts) {
-        domains.push_back(
-            {suite.str(),
-             "Transcript",
-             {{"ChallengeField", field.str()}},
-             {"FieldTranscript", "IndexTranscript", "Transcript"}});
-        logicalTypes.push_back({"transcript", suite.str()});
-        representations.push_back(
-            {"host.resource/0", "transcript", suite.str(), true, ""});
-        providers.push_back({suite.str(), "plonky3"});
-      }
-      // Explicit row-commitment instances. Field registration alone grants no
-      // hash parameters, digest encoding or commitment capability.
-      const std::pair<StringRef, StringRef> merkleInstances[] = {
-          {"rows.merkle-poseidon2-16.baby-bear/0", "baby-bear"},
-          {"rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
-           "baby-bear.ext4-binomial11"},
-          {"rows.merkle-poseidon2-8.goldilocks/0", "goldilocks"},
-          {"rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
-           "goldilocks.ext2-binomial7"}};
-      for (auto [scheme, field] : merkleInstances) {
-        domains.push_back({scheme.str(),
-                           "Commitment",
-                           {{"ValueField", field.str()}},
-                           {"VectorCommitment", "MultiOpening"}});
-        const std::pair<StringRef, StringRef> carriers[] = {
-            {"commitment", "merkle-digest"},
-            {"proof", "merkle-proof"},
-            {"opening_state", "merkle-tree"},
-            {"commitments", "merkle-digests"},
-            {"opening_states", "merkle-trees"}};
-        // Codec spelling separates the construction name from its value field.
-        const auto separator = scheme.find('.');
-        std::string codecSuffix =
-            (scheme.take_front(separator) + "-" +
-             scheme.drop_front(separator + 1).drop_back(2))
-                .str();
-        for (auto [kind, carrier] : carriers) {
-          logicalTypes.push_back({kind.str(), scheme.str()});
-          representations.push_back({("plonky3." + carrier + "/0").str(),
-                                     kind.str(), scheme.str(), true, ""});
-          if (kind == "commitment" || kind == "proof" || kind == "commitments")
-            codecs.push_back({("zkcv." + kind + "." + codecSuffix + "/0").str(),
-                              kind.str(), scheme.str()});
-        }
-        providers.push_back({scheme.str(), "plonky3"});
-      }
-      return DomainCatalog::create(
-          std::move(domains), std::move(logicalTypes), std::move(codecs),
-          std::move(representations), std::move(providers));
-    };
-    auto result = create(
-        {{extensionTranscript,
-          "Transcript",
-          {{"ChallengeField", extension}},
-          {"FieldTranscript", "IndexTranscript", "Transcript"}},
-         {chainExtensionTranscript,
-          "Transcript",
-          {{"ChallengeField", extension}},
-          {"FieldTranscript", "IndexTranscript", "IndexBlockTranscript",
-           "Transcript"}},
-         {chainQuarticTranscript,
-          "Transcript",
-          {{"ChallengeField", quartic}},
-          {"FieldTranscript", "IndexTranscript", "IndexBlockTranscript",
-           "Transcript"}},
-         {chainTranscript,
-          "Transcript",
-          {{"ChallengeField", field}},
-          {"FieldTranscript", "Transcript"}},
-         {rowBase,
-          "Commitment",
-          {{"ValueField", koala}},
-          {"VectorCommitment", "MultiOpening"}},
-         {rowExtension,
-          "Commitment",
-          {{"ValueField", extension}},
-          {"VectorCommitment", "MultiOpening"}},
-         {rowQuartic,
-          "Commitment",
-          {{"ValueField", quartic}},
-          {"VectorCommitment", "MultiOpening"}},
-         {poseidonRows,
-          "Commitment",
-          {{"ValueField", koala}},
-          {"VectorCommitment", "MultiOpening"}},
-         {poseidonQuarticRows,
-          "Commitment",
-          {{"ValueField", quartic}},
-          {"VectorCommitment", "MultiOpening"}},
-         {binary, "Field", {}, {"Field", "CommRing"}, "2"},
-         {binaryCubic,
-          "Field",
-          {{"BaseField", binary}},
-          {"ExtensionField", "Field", "CommRing"},
-          "2"},
-         {bn254,
-          "Field",
-          {{"PairingG1", bn254g1},
-           {"PairingG2", bn254g2},
-           {"PairingGT", bn254gt}},
-          {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo",
-           "TwoAdicField", "PairingField"},
-          "21888242871839275222246405745257275088548364400416034343698204186575"
-          "808495617"},
-         {bn254g1, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
-         {bn254g2, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
-         {bn254gt, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
-         {field,
-          "Field",
-          {{"PairingG1", group}, {"PairingG2", blsg2}, {"PairingGT", blsgt}},
-          {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo",
-           "PairingField"},
-          "52435875175126190479447740508185965837690552500527637822603658699938"
-          "581184513"},
-         {blsg2, "Group", {{"Scalar", field}}, {"Group", "ScalarAction"}},
-         {blsgt, "Group", {{"Scalar", field}}, {"Group", "ScalarAction"}},
-         {scalar,
-          "Field",
-          {},
-          {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo"},
-          "72370055773322622139731865630429942408571163593799076060019509382854"
-          "54250989"},
-         {ristretto, "Group", {{"Scalar", scalar}}, {"Group", "ScalarAction"}},
-         {edwards, "Group", {{"Scalar", scalar}}, {"Group", "ScalarAction"}},
-         {merlin,
-          "Transcript",
-          {{"ChallengeField", scalar}},
-          {"FieldTranscript", "Transcript"}},
-         {group, "Group", {{"Scalar", field}}, {"Group", "ScalarAction"}},
-         {pcs,
-          "Commitment",
-          {{"ValueField", field},
-           {"PointField", field},
-           {"EvaluationField", field}},
-          {"MultilinearOpening"}},
-         {spongefish,
-          "Transcript",
-          {{"ChallengeField", field}},
-          {"FieldTranscript", "Transcript"}},
-         {transcript,
-          "Transcript",
-          {{"ChallengeField", field}},
-          {"FieldTranscript", "Transcript"}}},
-        // Formation is an exact inventory, not inferred from the available
-        // representations below or from the nominal domains' sorts.
-        {{"bool", ""},
-         {"index", ""},
-         {"indices", ""},
-         {"bytes", ""},
-         {"shake128_state", ""},
-         {"quotient_matrix", ""},
-         {"field", field},
-         {"vector", field},
-         {"polynomial", field},
-         {"round", field},
-         {"matrix", field},
-         {"table", field},
-         {"point", field},
-         {"rng", field},
-         {"nonce", field},
-         {"field", scalar},
-         {"vector", scalar},
-         {"polynomial", scalar},
-         {"round", scalar},
-         {"matrix", scalar},
-         {"rng", scalar},
-         {"nonce", scalar},
-         {"field", bn254},
-         {"vector", bn254},
-         {"polynomial", bn254},
-         {"round", bn254},
-         {"matrix", bn254},
-         {"rng", bn254},
-         {"field", binary},
-         {"vector", binary},
-         {"polynomial", binary},
-         {"round", binary},
-         {"matrix", binary},
-         {"field", binaryCubic},
-         {"vector", binaryCubic},
-         {"polynomial", binaryCubic},
-         {"round", binaryCubic},
-         {"matrix", binaryCubic},
-         {"group", group},
-         {"groups", group},
-         {"group", blsg2},
-         {"groups", blsg2},
-         {"group", blsgt},
-         {"group", ristretto},
-         {"groups", ristretto},
-         {"group", edwards},
-         {"groups", edwards},
-         {"group", bn254g1},
-         {"groups", bn254g1},
-         {"group", bn254g2},
-         {"group", bn254gt},
-         {"groups", bn254g2},
-         {"transcript", transcript},
-         {"transcript", spongefish},
-         {"transcript", merlin},
-         {"transcript", extensionTranscript},
-         {"transcript", chainTranscript},
-         {"transcript", chainExtensionTranscript},
-         {"transcript", chainQuarticTranscript},
-         {"commitment", pcs},
-         {"proof", pcs},
-         {"prover_key", pcs},
-         {"verifier_key", pcs},
-         {"opening_state", pcs},
-         {"commitment", rowBase},
-         {"proof", rowBase},
-         {"opening_state", rowBase},
-         {"commitments", rowBase},
-         {"opening_states", rowBase},
-         {"commitment", rowExtension},
-         {"commitment", rowQuartic},
-         {"proof", rowExtension},
-         {"proof", rowQuartic},
-         {"opening_state", rowExtension},
-         {"opening_state", rowQuartic},
-         {"commitments", rowExtension},
-         {"commitments", rowQuartic},
-         {"opening_states", rowExtension},
-         {"opening_states", rowQuartic},
-         {"commitment", poseidonRows},
-         {"proof", poseidonRows},
-         {"opening_state", poseidonRows},
-         {"commitments", poseidonRows},
-         {"opening_states", poseidonRows},
-         {"commitment", poseidonQuarticRows},
-         {"proof", poseidonQuarticRows},
-         {"opening_state", poseidonQuarticRows},
-         {"commitments", poseidonQuarticRows},
-         {"opening_states", poseidonQuarticRows}},
-        {{"zkcv.commitment.rows-merkle-keccak256.koala-bear/0", "commitment",
-          rowBase},
-         {"zkcv.proof.rows-merkle-keccak256.koala-bear/0", "proof", rowBase},
-         {"zkcv.commitments.rows-merkle-keccak256.koala-bear/0", "commitments",
-          rowBase},
-         {"zkcv.commitment.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
-          "commitment", rowExtension},
-         {"zkcv.commitment.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
-          "commitment", rowQuartic},
-         {"zkcv.proof.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
-          "proof", rowExtension},
-         {"zkcv.proof.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
-          "proof", rowQuartic},
-         {"zkcv.commitments.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
-          "commitments", rowExtension},
-         {"zkcv.commitments.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
-          "commitments", rowQuartic},
-         {"zkcv.commitment.rows-merkle-poseidon2-16.koala-bear/0", "commitment",
-          poseidonRows},
-         {"zkcv.proof.rows-merkle-poseidon2-16.koala-bear/0", "proof",
-          poseidonRows},
-         {"zkcv.commitments.rows-merkle-poseidon2-16.koala-bear/0",
-          "commitments", poseidonRows},
-         {"zkcv.commitment.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/"
-          "0",
-          "commitment", poseidonQuarticRows},
-         {"zkcv.proof.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
-          "proof", poseidonQuarticRows},
-         {"zkcv.commitments.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/"
-          "0",
-          "commitments", poseidonQuarticRows},
-         {"zkcv.field.gf2-64.pentanomial-4-3-1/0", "field", binary},
-         {"zkcv.vector.gf2-64.pentanomial-4-3-1/0", "vector", binary},
-         {"zkcv.polynomial.gf2-64.pentanomial-4-3-1/0", "polynomial", binary},
-         {"zkcv.round.gf2-64.pentanomial-4-3-1/0", "round", binary},
-         {"zkcv.matrix.gf2-64.pentanomial-4-3-1/0", "matrix", binary},
-         {"zkcv.field.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0", "field",
-          binaryCubic},
-         {"zkcv.vector.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0", "vector",
-          binaryCubic},
-         {"zkcv.polynomial.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
-          "polynomial", binaryCubic},
-         {"zkcv.round.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0", "round",
-          binaryCubic},
-         {"zkcv.matrix.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0", "matrix",
-          binaryCubic},
-         {"zkcv.field.bn254.fr/0", "field", bn254},
-         {"zkcv.vector.bn254.fr/0", "vector", bn254},
-         {"zkcv.polynomial.bn254.fr/0", "polynomial", bn254},
-         {"zkcv.round.bn254.fr/0", "round", bn254},
-         {"zkcv.matrix.bn254.fr/0", "matrix", bn254},
-         {"zkcv.group.bn254.g1/0", "group", bn254g1},
-         {"zkcv.groups.bn254.g1/0", "groups", bn254g1},
-         {"zkcv.group.bn254.g2/0", "group", bn254g2},
-         {"zkcv.group.bn254.gt/0", "group", bn254gt},
-         {"zkcv.groups.bn254.g2/0", "groups", bn254g2},
-         {"zkcv.matrix.bls12-381.fr/0", "matrix", field},
-         {"zkcv.matrix.ristretto255.scalar/0", "matrix", scalar},
-         {"zkcv.vector.bls12-381.fr/0", "vector", field},
-         {"zkcv.polynomial.bls12-381.fr/0", "polynomial", field},
-         {"zkcv.field.ristretto255.scalar/0", "field", scalar},
-         {"zkcv.vector.ristretto255.scalar/0", "vector", scalar},
-         {"zkcv.polynomial.ristretto255.scalar/0", "polynomial", scalar},
-         {"zkcv.round.ristretto255.scalar/0", "round", scalar},
-         {"zkcv.group.edwards25519.prime/0", "group", edwards},
-         {"zkcv.groups.edwards25519.prime/0", "groups", edwards},
-         {"zkcv.group.ristretto255.group/0", "group", ristretto},
-         {"zkcv.groups.ristretto255.group/0", "groups", ristretto},
-         {"zkcv.bool/0", "bool", ""},
-         {"zkcv.index/0", "index", ""},
-         {"zkcv.indices/0", "indices", ""},
-         {"zkcv.bytes/0", "bytes", ""},
-         {"zkcv.field.bls12-381.fr/0", "field", field},
-         {"zkcv.table.bls12-381.fr/0", "table", field},
-         {"zkcv.point.bls12-381.fr/0", "point", field},
-         {"zkcv.round.bls12-381.fr/0", "round", field},
-         {"zkcv.group.bls12-381.g1/0", "group", group},
-         {"zkcv.groups.bls12-381.g1/0", "groups", group},
-         {"zkcv.group.bls12-381.g2/0", "group", blsg2},
-         {"zkcv.groups.bls12-381.g2/0", "groups", blsg2},
-         {"zkcv.group.bls12-381.gt/0", "group", blsgt},
-         {"zkcv.commitment.multilinear-kzg.bls12-381/0", "commitment", pcs},
-         {"zkcv.proof.multilinear-kzg.bls12-381/0", "proof", pcs}},
-        {{"halo2curves-axiom/bn254.fr", "field", bn254, false, ""},
-         {"halo2curves-axiom/bn254.fr", "vector", bn254, false, ""},
-         {"halo2curves-axiom/bn254.g1", "group", bn254g1, false, ""},
-         {"halo2curves-axiom/bn254.g1", "groups", bn254g1, false, ""},
-         {"halo2curves-axiom/bn254.g2", "group", bn254g2, false, ""},
-         {"halo2curves-axiom/bn254.g2", "groups", bn254g2, false, ""},
-         {"blst/fr", "field", field, false, ""},
-         {"blst/fr", "vector", field, false, ""},
-         {"blst/g1", "group", group, false, ""},
-         {"blst/g1", "groups", group, false, ""},
-         {"blst/g2", "group", blsg2, false, ""},
-         {"blst/g2", "groups", blsg2, false, ""},
-         {"plonky3.merkle-root/0", "commitment", rowBase, true, ""},
-         {"plonky3.merkle-path/0", "proof", rowBase, true, ""},
-         {"plonky3.merkle-state/0", "opening_state", rowBase, true, ""},
-         {"plonky3.merkle-roots/0", "commitments", rowBase, true, ""},
-         {"plonky3.merkle-states/0", "opening_states", rowBase, true, ""},
-         {"plonky3.merkle-root/0", "commitment", rowExtension, true, ""},
-         {"plonky3.merkle-root/0", "commitment", rowQuartic, true, ""},
-         {"plonky3.merkle-path/0", "proof", rowExtension, true, ""},
-         {"plonky3.merkle-path/0", "proof", rowQuartic, true, ""},
-         {"plonky3.merkle-state/0", "opening_state", rowExtension, true, ""},
-         {"plonky3.merkle-state/0", "opening_state", rowQuartic, true, ""},
-         {"plonky3.merkle-roots/0", "commitments", rowExtension, true, ""},
-         {"plonky3.merkle-roots/0", "commitments", rowQuartic, true, ""},
-         {"plonky3.merkle-states/0", "opening_states", rowExtension, true, ""},
-         {"plonky3.merkle-states/0", "opening_states", rowQuartic, true, ""},
-         {"plonky3.merkle-digest/0", "commitment", poseidonRows, true, ""},
-         {"plonky3.merkle-proof/0", "proof", poseidonRows, true, ""},
-         {"plonky3.merkle-tree/0", "opening_state", poseidonRows, true, ""},
-         {"plonky3.merkle-digests/0", "commitments", poseidonRows, true, ""},
-         {"plonky3.merkle-trees/0", "opening_states", poseidonRows, true, ""},
-         {"plonky3.merkle-digest/0", "commitment", poseidonQuarticRows, true,
-          ""},
-         {"plonky3.merkle-proof/0", "proof", poseidonQuarticRows, true, ""},
-         {"plonky3.merkle-tree/0", "opening_state", poseidonQuarticRows, true,
-          ""},
-         {"plonky3.merkle-digests/0", "commitments", poseidonQuarticRows, true,
-          ""},
-         {"plonky3.merkle-trees/0", "opening_states", poseidonQuarticRows, true,
-          ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1/0", "field", binary, true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1-vector/0", "vector", binary, true,
-          ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1-polynomial/0", "polynomial", binary,
-          true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1-quadratic/0", "round", binary, true,
-          ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1-sparse-coo/0", "matrix", binary,
-          true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0", "field",
-          binaryCubic, true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-vector/0", "vector",
-          binaryCubic, true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-polynomial/0",
-          "polynomial", binaryCubic, true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-quadratic/0",
-          "round", binaryCubic, true, ""},
-         {"plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-sparse-coo/0",
-          "matrix", binaryCubic, true, ""},
-         {"arkworks.bn254-fr/0", "field", bn254, true, ""},
-         {"arkworks.bn254-fr-vector/0", "vector", bn254, true, ""},
-         {"arkworks.bn254-fr-polynomial/0", "polynomial", bn254, true, ""},
-         {"arkworks.bn254-fr-round/0", "round", bn254, true, ""},
-         {"arkworks.bn254-fr-sparse-coo/0", "matrix", bn254, true, ""},
-         {"arkworks.bn254-g1/0", "group", bn254g1, true, ""},
-         {"arkworks.bn254-g1-vector/0", "groups", bn254g1, true, ""},
-         {"arkworks.bn254-g2/0", "group", bn254g2, true, ""},
-         {"arkworks.bn254-gt/0", "group", bn254gt, true, ""},
-         {"arkworks.bn254-g2-vector/0", "groups", bn254g2, true, ""},
-         {"host.resource/0", "rng", bn254, true, ""},
-         {"arkworks.fr-sparse-coo/0", "matrix", field, true, ""},
-         {"dalek.scalar-sparse-coo/0", "matrix", scalar, true, ""},
-         {"arkworks.fr-vector/0", "vector", field, true, ""},
-         {"arkworks.polynomial/0", "polynomial", field, true, ""},
-         {"dalek.scalar/0", "field", scalar, true, ""},
-         {"dalek.scalar-vector/0", "vector", scalar, true, ""},
-         {"dalek.polynomial/0", "polynomial", scalar, true, ""},
-         {"dalek.quadratic/0", "round", scalar, true, ""},
-         {"dalek.edwards-prime/0", "group", edwards, true, ""},
-         {"dalek.edwards-prime-vector/0", "groups", edwards, true, ""},
-         {"dalek.ristretto/0", "group", ristretto, true, ""},
-         {"dalek.ristretto-vector/0", "groups", ristretto, true, ""},
-         {"host.resource/0", "rng", scalar, true, ""},
-         {"host.resource/0", "nonce", scalar, true, ""},
-         {"host.resource/0", "transcript", merlin, true, ""},
-         {"host.resource/0", "transcript", extensionTranscript, true, ""},
-         {"arkworks.fr-diagonal/0", "vector", field, false, "diagonal"},
-         {"dalek.ristretto-diagonal/0", "groups", ristretto, false, "diagonal"},
-         {"native.bool/0", "bool", "", true, ""},
-         {"native.index/0", "index", "", true, ""},
-         {"native.indices/0", "indices", "", true, ""},
-         {"native.bytes/0", "bytes", "", true, ""},
-         {"native.shake128/0", "shake128_state", "", true, ""},
-         {"native.quotient_matrix/0", "quotient_matrix", "", true, ""},
-         {"arkworks.fr/0", "field", field, true, ""},
-         {"arkworks.mle-lsb/0", "table", field, true, "lsb"},
-         {"arkworks.mle-msb/0", "table", field, false, "msb"},
-         {"arkworks.point/0", "point", field, true, ""},
-         {"arkworks.quadratic/0", "round", field, true, ""},
-         {"arkworks.g1/0", "group", group, true, ""},
-         {"arkworks.g1-vector/0", "groups", group, true, ""},
-         {"arkworks.bls12-381-g2/0", "group", blsg2, true, ""},
-         {"arkworks.bls12-381-g2-vector/0", "groups", blsg2, true, ""},
-         {"arkworks.bls12-381-gt/0", "group", blsgt, true, ""},
-         {"host.resource/0", "rng", field, true, ""},
-         {"host.resource/0", "nonce", field, true, ""},
-         {"host.resource/0", "transcript", transcript, true, ""},
-         {"host.resource/0", "transcript", spongefish, true, ""},
-         {"host.resource/0", "transcript", chainTranscript, true, ""},
-         {"host.resource/0", "transcript", chainExtensionTranscript, true, ""},
-         {"host.resource/0", "transcript", chainQuarticTranscript, true, ""},
-         {"arkworks.multilinear-pcs/0", "commitment", pcs, true, ""},
-         {"arkworks.multilinear-pcs/0", "proof", pcs, true, ""},
-         {"arkworks.multilinear-pcs/0", "prover_key", pcs, true, ""},
-         {"arkworks.multilinear-pcs/0", "verifier_key", pcs, true, ""},
-         {"arkworks.multilinear-pcs/0", "opening_state", pcs, true, ""}},
-        // Nominal provider policy does not follow representation spelling or
-        // associated fields. Implementation legality is checked separately.
-        {{field, "arkworks"},
-         {group, "arkworks"},
-         {blsg2, "arkworks"},
-         {blsgt, "arkworks"},
-         {bn254, "arkworks"},
-         {bn254g1, "arkworks"},
-         {bn254g2, "arkworks"},
-         {bn254gt, "arkworks"},
-         {pcs, "arkworks"},
-         {transcript, "arkworks"},
-         {scalar, "dalek"},
-         {ristretto, "dalek"},
-         {edwards, "dalek"},
-         {merlin, "dalek"},
-         {spongefish, "spongefish"},
-         {binary, "plonky3"},
-         {binaryCubic, "plonky3"},
-         {extensionTranscript, "plonky3"},
-         {chainTranscript, "arkworks"},
-         {chainExtensionTranscript, "plonky3"},
-         {chainQuarticTranscript, "plonky3"},
-         {rowBase, "plonky3"},
-         {rowExtension, "plonky3"},
-         {rowQuartic, "plonky3"},
-         {poseidonRows, "plonky3"},
-         {poseidonQuarticRows, "plonky3"}});
+    std::vector<NominalDomain> domains;
+    for (const auto &row : generated::domains()) {
+      std::vector<AssociatedIdentity> associated;
+      for (const auto &member : row.members)
+        associated.push_back({member.member, member.identity});
+      domains.push_back({row.identity, row.sort, std::move(associated),
+                         row.capabilities,
+                         row.field ? row.field->characteristic : ""});
+    }
+    std::vector<LogicalTypeInstance> logicalTypes;
+    for (const auto &row : generated::logicalTypes())
+      logicalTypes.push_back({row.kind, row.domain});
+    std::vector<CodecIdentity> codecs;
+    for (const auto &row : generated::codecs())
+      codecs.push_back({row.identity, row.kind, row.domain});
+    std::vector<DomainRepresentation> representations;
+    for (const auto &row : physical::representations())
+      representations.push_back(
+          {row.identity, row.kind, row.domain, row.isDefault, row.layout});
+    // Nominal provider policy does not follow representation spelling or
+    // associated fields. Implementation legality is checked separately.
+    std::vector<DefaultProvider> providers;
+    for (const auto &row : physical::providers())
+      providers.push_back({row.domain, row.defaultProvider});
+    auto result = DomainCatalog::create(
+        std::move(domains), std::move(logicalTypes), std::move(codecs),
+        std::move(representations), std::move(providers));
     if (!result)
-      report_fatal_error(Twine("invalid installed domain catalog: ") +
-                             toString(result.takeError()),
-                         false);
+      invalidInstallation(toString(result.takeError()));
     return std::move(*result);
   }();
   return catalog;
