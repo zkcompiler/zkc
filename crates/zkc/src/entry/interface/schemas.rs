@@ -347,28 +347,7 @@ impl<'a> Schemas<'a> {
                         Kind::Index => kind == "index",
                         Kind::Field => kind == "field",
                         Kind::Group => kind == "group",
-                        Kind::Builtin => matches!(
-                            kind,
-                            "vector"
-                                | "matrix"
-                                | "groups"
-                                | "indices"
-                                | "bytes"
-                                | "shake128_state"
-                                | "polynomial"
-                                | "table"
-                                | "point"
-                                | "round"
-                                | "sequence"
-                                | "field_array"
-                                | "commitment"
-                                | "commitments"
-                                | "proof"
-                                | "prover_key"
-                                | "verifier_key"
-                                | "opening_state"
-                                | "opening_states"
-                        ),
+                        Kind::Builtin => ordinary_builtin_data(kind),
                         _ => false,
                     }
                 }
@@ -376,6 +355,14 @@ impl<'a> Schemas<'a> {
         };
         require(valid, E::Schema)
     }
+}
+/// The leaf of a `builtin` schema: a catalog source-data type without its own
+/// source kind (`bool`, `index`, `field` and `group` have theirs) whose
+/// permissions are Copy and Drop. Affine managed state never crosses.
+pub(super) fn ordinary_builtin_data(constructor: &str) -> bool {
+    !matches!(constructor, "bool" | "index" | "field" | "group")
+        && zkc_catalog::constructor(constructor)
+            .is_some_and(|row| row.source_data && row.copy && row.drop)
 }
 fn same_fields(a: &[Field], b: &[Field]) -> bool {
     a.len() == b.len()

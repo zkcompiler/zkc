@@ -27,6 +27,8 @@ pub struct TypeConstructor {
     pub participants: bool,
     pub constructible: bool,
     pub message: bool,
+    /// Source programs hold values of this type as data.
+    pub source_data: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

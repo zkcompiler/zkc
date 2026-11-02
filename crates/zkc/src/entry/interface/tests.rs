@@ -887,6 +887,91 @@ fn pcs_schemas_preserve_independent_boundaries() {
 }
 
 #[test]
+fn builtin_leaves_are_ordinary_catalog_source_data() {
+    let check = |leaf: &str, permissions: Value| {
+        let mut value = schema("builtin", leaf, json!([leaf]));
+        value["constructible"] = json!(false);
+        value["permissions"] = permissions;
+        let parsed = serde_json::from_value(value).unwrap();
+        schemas::Schemas::new().check(&parsed, 0)
+    };
+    // Copy and Drop source data without its own source kind is a leaf.
+    for leaf in [
+        "quotient_matrix",
+        "shake128_state",
+        "bytes",
+        "vector:koala-bear",
+    ] {
+        check(leaf, json!(["Copy", "Drop"])).unwrap();
+    }
+    // Affine managed state, a physical-only aggregate and the four types with
+    // their own source kinds are not builtin leaves.
+    for leaf in [
+        "transcript:merlin3.bls12-381.fr64be/0",
+        "fixed_vector<field:koala-bear,4>",
+        "bool",
+        "index",
+        "field:koala-bear",
+        "group:bls12-381.g1",
+    ] {
+        assert_eq!(
+            check(leaf, json!([])),
+            Err(InterfaceError::Schema),
+            "{leaf}"
+        );
+    }
+    // The compiler's interface reader applies the same rule to the same
+    // catalog rows: source data, no own source kind, Copy and Drop.
+    let catalog: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../common/catalog/declarations.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut ordinary = std::collections::BTreeSet::new();
+    for row in catalog["types"].as_array().unwrap() {
+        let name = row["name"].as_str().unwrap();
+        let expected = row["sourceData"] == true
+            && !["bool", "index", "field", "group"].contains(&name)
+            && row["copy"] == true
+            && row["drop"] == true;
+        assert_eq!(schemas::ordinary_builtin_data(name), expected, "{name}");
+        if expected {
+            ordinary.insert(name);
+        }
+    }
+    assert_eq!(
+        ordinary,
+        [
+            "bytes",
+            "commitment",
+            "commitments",
+            "field_array",
+            "groups",
+            "indices",
+            "matrix",
+            "opening_state",
+            "opening_states",
+            "point",
+            "polynomial",
+            "proof",
+            "prover_key",
+            "quotient_matrix",
+            "round",
+            "sequence",
+            "shake128_state",
+            "table",
+            "vector",
+            "verifier_key",
+        ]
+        .into_iter()
+        .collect()
+    );
+}
+
+#[test]
 #[cfg(feature = "cpu")]
 fn input_description_uses_the_execution_admission_check() {
     for (leaf, kind, admitted) in [

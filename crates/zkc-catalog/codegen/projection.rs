@@ -513,13 +513,13 @@ fn constructor(v: &Value) -> Result<String> {
             ("participants", flag(&v["participants"])?),
             ("constructible", flag(&v["constructible"])?),
             ("message", flag(&v["message"])?),
+            ("source_data", flag(&v["sourceData"])?),
         ],
     ))
 }
-// The source-vocabulary columns are checked but not projected; they grant no
-// codec, transport or execution authority.
+// The other source-vocabulary columns are checked but not projected. None of
+// them grants codec, transport or execution authority.
 fn source_vocabulary(v: &Value) -> Result<()> {
-    boolean(&v["sourceData"])?;
     let collection = &v["collection"];
     if !collection.is_null() {
         object(collection, &["rank", "element"], &[])?;
