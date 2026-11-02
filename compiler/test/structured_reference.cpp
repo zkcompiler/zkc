@@ -10,6 +10,7 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -1073,7 +1074,9 @@ public:
                 op, {"sym_name", "sym_visibility", "function_type", "roles",
                      "input_roles", "output_roles", "contracts", "origin"}))
           return failure;
-        if (protocol.getRoles().empty() || protocol.getRoles().size() > 16)
+        if (protocol.getRoles().empty() ||
+            protocol.getRoles().size() >
+                zkc::protocol::instances::protocolRoleLimit)
           return error("structured-reference-unsupported", "role count");
       } else if (isa<func::FuncOp>(op)) {
         if (auto failure =

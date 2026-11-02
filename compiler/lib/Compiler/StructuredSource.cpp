@@ -11,6 +11,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Admission.h"
@@ -640,7 +641,7 @@ class Exporter {
   Expected<json::Array> interface(protocol_ir::MathematicalOp function) {
     roles = function.getRoles();
     // Native verification owns uniqueness, nonempty scopes and port shape.
-    if (roles.empty() || roles.size() > 16)
+    if (roles.empty() || roles.size() > instances::protocolRoleLimit)
       return error("structured-source-role");
     json::Array inputs, outputs;
     for (Attribute scope : function.getInputRoles())
@@ -2205,7 +2206,7 @@ Expected<SourceView> readSourceView(
     return error("structured-source-limit");
   // Own framing and its byte budget together: callers emit these exact bytes.
   if (!jsonWithinByteLimit(*exported, 1024 * 1024 - 1))
-    return error("structured-source-limit");
+    return error("structured-source-limit", "publication exceeds 1 MiB");
   result.publication = std::move(*exported);
   result.native = std::move(original);
   return result;

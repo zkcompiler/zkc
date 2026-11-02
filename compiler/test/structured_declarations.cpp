@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -190,7 +191,7 @@ protocol Run roles(V)(value:bool@V)->(accepted:bool@V) {
             "port arguments were sorted or the summary differs");
     accept(checkComponentDeclarations(carrier));
   });
-  cases.run("a permuted 17-role telescope keeps telescope order", [&] {
+  auto wideFan = [&] {
     std::vector<std::string> telescope, roster, applied;
     for (unsigned i = 0; i < 17; ++i) {
       telescope.push_back("A" + std::to_string(i));
@@ -202,8 +203,10 @@ protocol Run roles(V)(value:bool@V)->(accepted:bool@V) {
                   "pub protocol Fan roles(" +
                   join(roster, ", ") + ")(w: Wide roles(" +
                   join(applied, ", ") + ")) -> bool @R1:\n    return true\n";
-    auto entry =
-        take(closeSubject(checked("m", source, "zkc-layout"), "m::Fan"));
+    return take(closeSubject(checked("m", source, "zkc-layout"), "m::Fan"));
+  };
+  cases.run("a permuted 17-role telescope keeps telescope order", [&] {
+    auto entry = wideFan();
     auto carrier = take(json::parse(take(inspectComponentDeclarations(entry))));
     A arguments;
     for (unsigned i = 0; i < 17; ++i)
@@ -214,6 +217,44 @@ protocol Run roles(V)(value:bool@V)->(accepted:bool@V) {
             "the telescope was truncated");
     accept(checkComponentDeclarations(carrier));
   });
+  cases.run("a 17-role protocol exports its roster and participant lists", [&] {
+    auto entry = wideFan();
+    auto symbol = entry.protocol().symbol;
+    auto exported = take(json::parse(
+        take(zkc::protocol::exportStructuredSource(
+                 take(emitOriginal(entry, context)), symbol, context))
+            .bytes));
+    A roster;
+    for (unsigned i = 0; i < 17; ++i)
+      roster.push_back(role(i));
+    bool found = false;
+    for (const auto &definition : rows(exported, 7)) {
+      const auto &row = *definition.getAsArray();
+      if (row[1] != J(symbol))
+        continue;
+      found = true;
+      require((*row[6].getAsArray())[1] == J(A(roster)),
+              "the exported roster differs from the protocol's");
+    }
+    require(found, "the selected protocol was not exported");
+    // The product port is placed at every role, so its participant list is
+    // the whole roster in roster order.
+    require(port((*exported.getAsArray())[10])[2] == J(std::move(roster)),
+            "the exported participant list differs from the roster");
+  });
+  for (unsigned count : {1024u, 1025u})
+    cases.run("a participant list of " + std::to_string(count) + " roles", [&] {
+      auto carrier = expected;
+      A names;
+      for (unsigned i = 0; i < count; ++i)
+        names.push_back(role(i));
+      port(carrier)[2] = A(names);
+      port(carrier)[5] = A{"data", std::move(names)};
+      if (count <= 1024)
+        accept(checkComponentDeclarations(carrier));
+      else
+        refusesCarrier(carrier, "component-declaration-limit");
+    });
   cases.run("authorities cover nested, phantom and module paths", [&] {
     auto project = checked("carrier", R"(module carrier;
 struct Tag {}

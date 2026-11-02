@@ -194,13 +194,15 @@ with case('draw-reply-matches-every-action-field-and-leaves-suffix-unconsumed'):
         ['3', '3', None], trace(script), 2)
 
 with case('role-count-boundary-is-per-protocol'):
-    roster = ['P', 'V'] + [f'Observer{i}' for i in range(14)]
-    source = components.replace('roles=["P","V"]', 'roles=' + json.dumps(roster))
-    assert definitions(export(source))['main'][6][1] == roster
-    assert run(source, ['11', '22'], 'Observer13') == returned([None, None, None, None])
+    # Export and the reference both follow the `protocol.roles` limit of formation.
+    for count in [17, 1024]:
+        roster = ['P', 'V'] + [f'Observer{i}' for i in range(count - 2)]
+        source = components.replace('roles=["P","V"]', 'roles=' + json.dumps(roster))
+        assert definitions(export(source))['main'][6][1] == roster
+        assert run(source, ['11', '22'], roster[-1]) == returned([None, None, None, None])
     excessive = source.replace(json.dumps(roster), json.dumps(roster + ['Extra']))
-    export(excessive, refusal='structured-source-role')
-    run(excessive, [], refusal='structured-reference-unsupported')
+    export(excessive, refusal='structured-source-original')
+    run(excessive, [], refusal='structured-reference-source')
 
 with case('replay-record-capacity-is-independent-of-request-byte-capacity'):
     sites = [('site' + str(i)).ljust(401, 'x') for i in range(1800)]

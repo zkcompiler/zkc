@@ -5,8 +5,9 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 A ceiling that implementations in more than one language enforce for the same
 contract is a row of the catalog's [limits](../formats/contract-declarations.md#limits)
 table; each compiler reader of the protocol role roster, including the source
-checker, the IR verifier, the language-interface reader and the joint bundle
-producer, uses that row's generated constant. A record role telescope is a
+checker, the IR verifier, the language-interface reader, the structured-source
+exporter, the retained-declaration checker and the joint bundle producer, uses
+that row's generated constant. A record role telescope is a
 separate contract with its own row; the source checker and both interface
 readers use it.
 

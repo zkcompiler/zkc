@@ -67,6 +67,27 @@ def simple(declarations='', body='', result='%flag'):
 }) {profile=#protocol.profile<protocol>} : ()->() }'''
 
 
+# The publication's own refusal: the complete file exceeds its byte ceiling.
+publication_ceiling = 'structured-source-limit: publication exceeds 1 MiB'
+
+
+def roster(count):
+    """Native role names as the frontend emits them."""
+    return [f'role{ordinal:08x}' for ordinal in range(count)]
+
+
+def rostered(roles, scopes=1):
+    """A protocol over `roles` with `scopes` Boolean inputs, each held by every role."""
+    names = json.dumps(roles, separators=(',', ':'))
+    inputs = ','.join(f'%x{i}:i1' for i in range(scopes))
+    types = ','.join(['i1'] * scopes)
+    return ('module { "protocol.module"() ({\n"protocol.func"() ({ ^entry(' + inputs + '):\n'
+            '"protocol.return"(%x0) : (i1)->()\n}) {sym_name="main",origin=["main",[]],'
+            f'function_type=({types})->i1,roles={names},input_roles=[{",".join([names] * scopes)}],'
+            f'output_roles=[[{json.dumps(roles[0])}]]}} : ()->()\n'
+            '}) {profile=#protocol.profile<protocol>} : ()->() }')
+
+
 with case('original-total-state-and-exact-ssa-order'):
     data = export(total)
     assert len(data) == 11
@@ -245,7 +266,6 @@ for name, source, code in [
 
     ('unsupported-type', simple('func.func private @dead(%x:!data.bytes) -> !data.bytes { return %x : !data.bytes }'), 'structured-source-type'),
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
-    ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
     ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
     # Complete source definition admission rejects these before export begins.
     ('empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }'), 'structured-source-original'),
@@ -258,6 +278,25 @@ for name, source, code in [
     with case(name):
         symbol = 'absent' if name == 'unknown-symbol' else 'x' * 513 if name == 'long-name' else 'main'
         export(source, code, symbol)
+
+with case('roster-follows-the-protocol-role-limit'):
+    for count in [16, 17, 1024]:
+        assert table(export(rostered(roster(count))))['main'][6][1] == roster(count)
+    # Formation owns the `protocol.roles` limit, so 1,025 roles never reach export.
+    excessive = rostered(roster(1025))
+    export(excessive, 'structured-source-original')
+    commands.verified(excessive, 'role roster must contain 1 to 1024 roles')
+
+with case('full-roster-scopes-reach-only-the-publication-ceiling'):
+    roles = roster(1024)
+    one, two = (len(commands.source('protocol-structured', rostered(roles, scopes),
+                                    '--symbol=main').encode()) for scopes in (1, 2))
+    # Each further input adds one Boolean signature entry and one full-roster scope.
+    fitting = 1 + (1024 * 1024 - one) // (two - one)
+    largest = commands.source('protocol-structured', rostered(roles, fitting), '--symbol=main')
+    assert len(largest.encode()) == one + (fitting - 1) * (two - one) <= 1024 * 1024
+    assert json.loads(largest)[7][0][6][2] == [roles] * fitting
+    export(rostered(roles, fitting + 1), publication_ceiling)
 
 with case('stored-unused-domain-constructor-is-retained'):
     source = mutate(total, '%d = "data.domain_indices"',
@@ -443,7 +482,7 @@ with case('snapshot-byte-limit'):
     results = ','.join(['i1'] * 512)
     values = ','.join(f'%a{i}' for i in range(512))
     helpers = '\n'.join(f'func.func private @h{i}({args}) -> ({results}) {{ return {values} : {results} }}' for i in range(110))
-    export(simple(helpers), 'structured-source-limit')
+    export(simple(helpers), publication_ceiling)
 
 with case('exact-file-byte-limit-includes-final-newline'):
     args = ','.join(f'%a{i}:i1' for i in range(512))
@@ -478,7 +517,7 @@ with case('exact-file-byte-limit-includes-final-newline'):
     assert exact.endswith('\n') and len(exact.encode()) == 1024 * 1024
     names[-1] += 'y'
     assert len(names[-1]) <= 512
-    export(sized_source(), 'structured-source-limit')
+    export(sized_source(), publication_ceiling)
 
 with case('all-native-stop-reasons-preserved'):
     for reason in ['abort', 'reject', 'exhausted', 'incomplete', 'refused']:

@@ -276,11 +276,15 @@ Admission of the complete sequence precedes the first callback. Matrix domains
 and other collection types remain outside this export profile.
 
 Function `kind` is `protocol`, `math` or `local`; visibility is `public` or
-`private`. Each protocol has 1 to 16 unique nonempty native role strings. Every
+`private`. Each protocol has 1 to `protocol.roles` (1,024) unique nonempty
+native role strings, the [roster limit](../ir/limits.md) that formation
+enforces; the export imposes no smaller bound. Every
 port has a nonempty scope drawn from that protocol's own roster; scope counts
 match the signature. Owner references are local to that roster, including in
 unused protocols. The writer retains native names without reconstructing
 authored names or imposing the selected root's roster on other definitions.
+A full roster publishes only within the 1 MiB file ceiling below: each
+port scope that lists all 1,024 native role names adds about 15 KB.
 
 Relations are non-callable metadata, retained even when unused. The declaration's
 `kind`, `key` and `revision` are exact strings. `static-arguments` is a required
@@ -1126,7 +1130,8 @@ The observer's finite vector bound makes the logical unrepresentable-length
 exhaustion branch unreachable; it does not replace it with source refusal.
 
 The writer bounds source bytes to 16 MiB, the complete exported file (including
-its final newline) to 1 MiB, strings
+its final newline) to 1 MiB, refused as `structured-source-limit` "publication
+exceeds 1 MiB", strings
 to 512 UTF-8 bytes (protocol template paths to 2048 bytes, binding names to 256 ASCII bytes), domains, relations,
 bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. Operand references index the lexical

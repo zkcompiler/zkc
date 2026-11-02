@@ -972,9 +972,20 @@ Both readers keep a nominal record's role arguments in telescope order. The
 Rust supply reconstruction decides role membership by schema category, through
 one sorted index of each telescope substitution, so a permuted telescope of any
 length supplies each field at its substituted role. The structured-source
-export accepts 1 to 16 roles. Retained declaration telescopes accept up to
-`record.roles` names, and their participant lists and placements up to
-`protocol.roles`; product arguments keep telescope order.
+export accepts the full `protocol.roles` roster within its 1 MiB file ceiling:
+each port scope listing all 1,024 roles adds 15,382 bytes, so a 1,024-role
+Protocol with one Boolean input per such scope publishes 67 of them and refuses
+at 68 with `structured-source-limit` "publication exceeds 1 MiB"
+([structured-source controls](../compiler/test/structured_source.py)).
+Application maps, oracle obligations, source correspondence and source claims
+read the exporter's source view, so they accept the same rosters and refuse a
+subject that exceeds only that ceiling
+([contract register](spec/contracts.md#current-producers-and-consumers)).
+The independent Lean structured reader refuses rosters above 16 roles
+([formal reader status](spec/contracts.md#formal-reader-status)). Retained
+declaration telescopes accept up to `record.roles` names, and their
+participant lists and placements up to `protocol.roles`; product arguments keep
+telescope order.
 Generated Entry families walk their roster once per phase and each port only at
 its placed roles, so a trivial 1,024-role Protocol closes and publishes its
 interface within the 32,000,000-unit phase work ceiling, with work growing

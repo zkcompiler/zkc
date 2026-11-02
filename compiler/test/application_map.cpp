@@ -11,6 +11,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include <functional>
@@ -50,6 +51,30 @@ protocol_ir::MathematicalOp function(ModuleOp module, StringRef name) {
 }
 std::string digest(StringRef bytes) {
   return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
+}
+/// A protocol over `roles` native role names with `scopes` Boolean inputs,
+/// each held by the whole roster.
+std::string rostered(unsigned roles, unsigned scopes) {
+  std::string names, inputs, types, held;
+  raw_string_ostream out(names);
+  out << '[';
+  for (unsigned ordinal = 0; ordinal < roles; ++ordinal)
+    out << (ordinal ? "," : "") << "\"role" << format_hex_no_prefix(ordinal, 8)
+        << '"';
+  out << ']';
+  for (unsigned input = 0; input < scopes; ++input) {
+    inputs += (input ? ",%x" : "%x") + std::to_string(input) + ":i1";
+    types += input ? ",i1" : "i1";
+    held += (input ? "," : "") + names;
+  }
+  return R"(module { "protocol.module"() ({
+      "protocol.func"() ({ ^entry()" +
+         inputs + R"():
+        "protocol.return"(%x0) : (i1)->()
+      }) {sym_name="main",origin=["main",[]],function_type=()" +
+         types + ")->i1,roles=" + names + ",input_roles=[" + held +
+         R"(],output_roles=[["role00000000"]]} : ()->()
+    }) {profile=#protocol.profile<protocol>} : ()->() })";
 }
 struct Fixture {
   MLIRContext &context;
@@ -529,6 +554,21 @@ int main() {
     require(shared.rows()[0].getAsObject()->get("application")->kind() ==
                 json::Value::Null,
             "shared helper body falsely owns one invocation");
+  });
+  for (unsigned roles : {17u, 1024u})
+    cases.run("a roster of " + std::to_string(roles) + " roles maps and checks",
+              [&] {
+                Fixture wide(context, rostered(roles, 1));
+                require(wide.apps().size() == 1,
+                        "the root application row is missing");
+              });
+  cases.run("the source view inherits the structured publication ceiling", [&] {
+    // 80 full-roster scopes exceed only the 1 MiB publication.
+    auto bytes = rostered(1024, 80);
+    refuses(exportStructuredSource(bytes, "main", context),
+            "structured-source-limit: publication exceeds 1 MiB");
+    refuses(produceApplicationMap(bytes, bytes, "main", context),
+            "structured-source-limit: publication exceeds 1 MiB");
   });
   cases.run("folded arithmetic needs an owning correspondence rule", [&] {
     std::string bytes = R"(module { "protocol.module"() ({
