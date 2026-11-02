@@ -57,6 +57,7 @@ struct EvmCompilation::Storage {
   NativeProofPolicy policy;
   EvmLimits limits;
   std::unique_ptr<CheckedEndpoint> endpoint;
+  std::unique_ptr<evm::EvmEndpoint> exported;
   std::shared_ptr<const mathematical::RealizedProtocol> realization;
   explicit Storage(const DialectRegistry &registry) : context(registry) {
     DialectRegistry builtins;
@@ -82,6 +83,9 @@ const EvmLimits &EvmCompilation::limits() const { return storage->limits; }
 EvmFork EvmCompilation::fork() const { return storage->fork; }
 const json::Value &EvmCompilation::options() const { return storage->options; }
 StringRef EvmCompilation::sourceSha256() const { return storage->digest; }
+const evm::EvmEndpoint &EvmCompilation::endpoint() const {
+  return *storage->exported;
+}
 StringRef EvmCompilation::sourceBytes() const { return storage->source; }
 OwningOpRef<ModuleOp> EvmCompilation::targetSnapshot() const {
   return cast<ModuleOp>(storage->module->getOperation()->clone());
@@ -187,14 +191,19 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   auto endpoint = closeEndpoint(*constructed->module, policy.validator);
   if (!endpoint)
     return endpoint.takeError();
+  // The exported schemas come from checked rows while the complete source
+  // and the candidate are available.
+  auto described = evm::describeEndpoint(*endpoint, constructed->descriptor,
+                                         policy, digest(bytes));
+  if (!described)
+    return described.takeError();
   EvmOptions selected = options;
   selected.policy = policy;
   auto module = evm::lowerEndpoint(*endpoint, selected);
   if (!module)
     return joinErrors(module.takeError(),
                       error("evm.diagnostics", diagnostics));
-  auto yul = evm::exportYul(**module, bytes, constructed->descriptor, policy,
-                            options.limits);
+  auto yul = evm::exportYul(**module, *described, policy, options.limits);
   if (!yul)
     return yul.takeError();
   result->source = bytes.str();
@@ -210,6 +219,7 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
     publishedOptions[name] = std::move(value);
   result->options = std::move(publishedOptions);
   result->endpoint = std::make_unique<CheckedEndpoint>(std::move(*endpoint));
+  result->exported = std::make_unique<evm::EvmEndpoint>(std::move(*described));
   result->realization = std::move(constructed->realization);
   return EvmCompilation(std::move(result));
 }

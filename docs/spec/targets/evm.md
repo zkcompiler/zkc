@@ -141,6 +141,16 @@ the existing [canonical value codecs](../realization/codecs.md). Context is an
 opaque byte string. Proof uses the unchanged [native framed transport](../formats/proof.md).
 The last two arguments have the same ABI type; their order remains significant.
 
+The invocation boundary is emitted from one typed endpoint, built while the
+complete constructed source and the selected candidate are available: the
+selected participant's logical signature, the validator's original input and
+output ports from the checked projection record, and the construction's checked
+descriptor rows. Each public row must name the validator, the projected port
+and the endpoint input's nominal type; its codec is the construction's. A
+public row the target cannot lay out refuses with `evm.layout`. Yul emission
+borrows this endpoint and neither reparses the original source nor derives a
+codec again.
+
 Wire sites require the complete native message type and an exact supported
 installed codec. Supported leaves are Boolean, index, indices, bytes, the
 installed BLS Fr, BN254 Fr, Ristretto scalar and Plonky3 field/vector codecs,

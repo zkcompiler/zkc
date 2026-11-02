@@ -92,7 +92,7 @@ module { "protocol.module"() ({
 constexpr StringLiteral zeroEndpoint = R"mlir(
 module {
   func.func private @verify_endpoint() -> i1 attributes {
-    evm.entry, evm.logical_type=()->i1, evm.output_ports=[0:i64]} {
+    evm.entry, test.logical_type=()->i1, test.output_ports=[0:i64]} {
     %ok = arith.constant true
     func.return %ok : i1
   }
@@ -101,8 +101,8 @@ constexpr StringLiteral managedEndpoint = R"mlir(
 module {
   func.func private @verify_endpoint(%generation:i64) -> (i1,i64) attributes {
     evm.entry,
-    evm.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
-    evm.output_ports=[0:i64]} {
+    test.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
+    test.output_ports=[0:i64]} {
     %ok = arith.constant true
     func.return %ok, %generation : i1,i64
   }
@@ -500,9 +500,24 @@ int main(int argc, char **argv) {
   boundaryOptions.policy = boundaryPolicy(false);
   auto compiledBoundary = take(compileEvmProof(boundarySource, "boundary.mlir",
                                                boundaryOptions, registry));
+  // The exporter borrows a checked endpoint. These targets state its logical
+  // signature and output ports as test annotations; the boundary source has
+  // no public rows.
   auto boundary = [&](ModuleOp target, const NativeProofPolicy &policy,
-                      json::Value descriptor) {
-    return evm::exportYul(target, boundarySource, descriptor, policy, {});
+                      json::Value descriptor) -> Expected<std::string> {
+    auto function = *target.getOps<func::FuncOp>().begin();
+    auto logical = cast<FunctionType>(
+        function->getAttrOfType<TypeAttr>("test.logical_type").getValue());
+    SmallVector<uint64_t> outputs;
+    for (Attribute port :
+         function->getAttrOfType<ArrayAttr>("test.output_ports"))
+      outputs.push_back(cast<IntegerAttr>(port).getUInt());
+    auto endpoint =
+        evm::describeEndpoint(logical, {}, outputs, descriptor, policy,
+                              compiledBoundary.sourceSha256());
+    if (!endpoint)
+      return endpoint.takeError();
+    return evm::exportYul(target, *endpoint, policy, {});
   };
   auto canonicalDescriptor = [&](const NativeProofPolicy &policy) {
     auto descriptor = compiledBoundary.descriptor();
@@ -534,13 +549,13 @@ int main(int argc, char **argv) {
     auto target = parseSourceString<ModuleOp>(zeroEndpoint, &context);
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    refuses(exportBoundary(*target, boundaryPolicy(true)), "evm.yul");
+    refuses(exportBoundary(*target, boundaryPolicy(true)), "evm.endpoint");
   });
   cases.run("empty policy refuses endpoint with capability ports", [&] {
     auto target = parseSourceString<ModuleOp>(managedEndpoint, &context);
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    refuses(exportBoundary(*target, boundaryPolicy(false)), "evm.yul");
+    refuses(exportBoundary(*target, boundaryPolicy(false)), "evm.endpoint");
   });
   for (bool input : {true, false}) {
     for (StringRef mismatch : {"missing", "scope", "wrong-suite", "extra"}) {
@@ -550,7 +565,7 @@ int main(int argc, char **argv) {
                 parseSourceString<ModuleOp>(managedEndpoint, &context);
             auto endpoint = *target->getOps<func::FuncOp>().begin();
             auto logical = cast<FunctionType>(
-                endpoint->getAttrOfType<TypeAttr>("evm.logical_type")
+                endpoint->getAttrOfType<TypeAttr>("test.logical_type")
                     .getValue());
             SmallVector<Type> inputs(logical.getInputs());
             SmallVector<Type> outputs(logical.getResults());
@@ -567,11 +582,12 @@ int main(int argc, char **argv) {
                   "hash-chain.keccak256.koala-bear.ext4-binomial3."
                   "rejection31le/0");
             endpoint->setAttr(
-                "evm.logical_type",
+                "test.logical_type",
                 TypeAttr::get(FunctionType::get(&context, inputs, outputs)));
             ScopedDiagnosticHandler handler(
                 &context, [](Diagnostic &) { return success(); });
-            refuses(exportBoundary(*target, boundaryPolicy(true)), "evm.yul");
+            refuses(exportBoundary(*target, boundaryPolicy(true)),
+                    "evm.endpoint");
           });
     }
   }
@@ -582,11 +598,11 @@ int main(int argc, char **argv) {
                                         [](Diagnostic &) { return success(); });
         refuses(boundary(*target, boundaryPolicy(true),
                          canonicalDescriptor(boundaryPolicy(false))),
-                "evm.yul");
+                "evm.endpoint");
         auto descriptor = canonicalDescriptor(boundaryPolicy(true));
         (*descriptor.getAsArray())[0] = "zkc.native-proof/0";
         refuses(boundary(*target, boundaryPolicy(true), std::move(descriptor)),
-                "evm.yul");
+                "evm.endpoint");
       });
   for (StringRef invalid :
        {"suite", "construction", "format", "services", "draws", "gates"}) {
@@ -608,7 +624,10 @@ int main(int argc, char **argv) {
         policy.gates = {{"block", 0}};
       ScopedDiagnosticHandler handler(&context,
                                       [](Diagnostic &) { return success(); });
-      refuses(exportBoundary(*target, policy), "evm.yul");
+      // A suite needs transcript lanes the endpoint does not have; the other
+      // policies are refused by the exporter.
+      refuses(exportBoundary(*target, policy),
+              invalid == "suite" ? "evm.endpoint" : "evm.yul");
     });
   }
   cases.run("reused structural definitions retain all ordered calls", [&] {
@@ -697,22 +716,41 @@ module { "protocol.module"() ({
     options.policy.publicInputs = {0};
     auto compiled =
         take(compileEvmProof(source, "wire-test.mlir", options, registry));
+    // The compiled endpoint was built from the checked rows and the
+    // projection; the exporter needs no original bytes.
+    const auto &endpoint = compiled.endpoint();
+    require(endpoint.publicInputs.size() == 1 &&
+                ArrayRef<uint64_t>(endpoint.outputs) == ArrayRef<uint64_t>({0}),
+            "endpoint lost its checked public row or output port");
     auto target = compiled.targetSnapshot();
-    take(evm::exportYul(*target, source, compiled.descriptor(),
-                        compiled.policy(), compiled.limits()));
-    ScopedDiagnosticHandler handler(target->getContext(),
-                                    [](Diagnostic &) { return success(); });
-    for (unsigned slot = 0; slot < 4; ++slot) {
+    require(take(evm::exportYul(*target, endpoint, compiled.policy(),
+                                compiled.limits())) == compiled.yul(),
+            "the exporter differs on the compiled endpoint");
+    auto field = algebra::FieldType::get(target->getContext(), "bls12-381.fr");
+    auto logical =
+        FunctionType::get(target->getContext(), {field},
+                          {IntegerType::get(target->getContext(), 1)});
+    auto describe = [&](const json::Value &descriptor, Type input) {
+      return evm::describeEndpoint(
+          FunctionType::get(target->getContext(), {input},
+                            logical.getResults()),
+          {0}, {0}, descriptor, compiled.policy(), compiled.sourceSha256());
+    };
+    take(describe(compiled.descriptor(), field));
+    // Each row names the validator, the projected port and the endpoint
+    // input's nominal type. The codec column is the checked construction's.
+    for (unsigned slot = 0; slot < 3; ++slot) {
       auto changed = compiled.descriptor();
       auto &row = *(*(*changed.getAsArray())[4].getAsArray())[0].getAsArray();
-      row[slot] = slot == 0   ? "P"
-                  : slot == 1 ? "1"
-                  : slot == 2 ? "index"
-                              : "zkcv.index/0";
-      refuses(evm::exportYul(*target, source, changed, compiled.policy(),
-                             compiled.limits()),
-              "evm.yul");
+      row[slot] = slot == 0 ? "P" : slot == 1 ? "1" : "index";
+      refuses(describe(changed, field), "evm.endpoint");
     }
+    // An input the target cannot lay out refuses as a layout, not as a
+    // difference from a reparsed original.
+    refuses(
+        describe(compiled.descriptor(),
+                 algebra::GroupType::get(target->getContext(), "bls12-381.g1")),
+        "evm.layout");
   });
   return cases.result();
 }

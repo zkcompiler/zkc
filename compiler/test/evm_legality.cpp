@@ -565,13 +565,16 @@ proof Proof=Work {
         auto result = compileSource(proofSource(
             "", "hidden:Fr@P,extra:Fr@V,other:bool@V,accepted:bool@V",
             "return(hidden=delivered,extra=a+b,other=true,accepted=a*b==c);"));
+        // The checked endpoint keeps the validator's original output ports;
+        // the exported function expands them to lanes.
+        const auto &endpoint = result.endpoint();
         auto target = result.targetSnapshot();
         for (auto function : target->getOps<func::FuncOp>()) {
           if (!function->hasAttr("evm.entry"))
             continue;
-          auto ports = function->getAttrOfType<ArrayAttr>("evm.output_ports");
-          require(ports && ports.size() == 3 &&
-                      cast<IntegerAttr>(ports[2]).getUInt() == 3 &&
+          require(ArrayRef<uint64_t>(endpoint.outputs) ==
+                          ArrayRef<uint64_t>({1, 2, 3}) &&
+                      endpoint.acceptance == 2 &&
                       function.getNumResults() == 4 &&
                       function.getResultTypes()[0].isInteger(256),
                   "acceptance mapping lost source output ownership or Fr lane");
@@ -1300,72 +1303,17 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
   constexpr StringLiteral boundaryText = R"mlir(
       module {
         func.func private @verify_endpoint(%generation:i64) -> (i1,i64) attributes {evm.entry,
-          evm.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
-          evm.output_ports=[0:i64]} {
+          test.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
+          test.output_ports=[0:i64]} {
           %accepted = arith.constant true
           func.return %accepted,%generation : i1,i64
         }
       })mlir";
-  // Exporter tests use a formed original interface. Its private producer
-  // inputs exercise output-type projection without supplying public rows.
-  auto boundaryOriginal = [&](ModuleOp module) {
-    func::FuncOp endpoint;
-    for (auto function : module.getOps<func::FuncOp>())
-      if (function->hasAttr("evm.entry"))
-        endpoint = function;
-    auto logical = cast<FunctionType>(
-        endpoint->getAttrOfType<TypeAttr>("evm.logical_type").getValue());
-    auto ports = endpoint->getAttrOfType<ArrayAttr>("evm.output_ports");
-    unsigned count =
-        ports.empty()
-            ? 0
-            : cast<IntegerAttr>(ports[ports.size() - 1]).getUInt() + 1;
-    SmallVector<Type> results(count, IntegerType::get(&context, 1));
-    for (auto [i, port] : enumerate(ports))
-      results[cast<IntegerAttr>(port).getUInt()] = logical.getResult(i);
-    SmallVector<Type> inputs;
-    SmallVector<std::string> returned;
-    for (Type type : results) {
-      if (type.isInteger(1))
-        returned.push_back("%ok");
-      else {
-        returned.push_back("%input" + std::to_string(inputs.size()));
-        inputs.push_back(type);
-      }
-    }
-    std::string source;
-    raw_string_ostream out(source);
-    out << "module { \"protocol.module\"() ({ \"protocol.func\"() ({ ^entry(";
-    for (auto [i, type] : enumerate(inputs)) {
-      if (i)
-        out << ",";
-      out << "%input" << i << ":" << type;
-    }
-    out << "): %ok = arith.constant true \"protocol.return\"(";
-    interleaveComma(returned, out);
-    out << ") : (";
-    interleaveComma(results, out);
-    out << ")->() }) {sym_name=\"independent\",function_type=(";
-    interleaveComma(inputs, out);
-    out << ")->(";
-    interleaveComma(results, out);
-    out << "),roles=[\"P\",\"V\"],input_roles=[";
-    for (unsigned i = 0; i < inputs.size(); ++i) {
-      if (i)
-        out << ",";
-      out << "[\"P\"]";
-    }
-    out << "],output_roles=[";
-    for (unsigned i = 0; i < results.size(); ++i) {
-      if (i)
-        out << ",";
-      out << "[\"P\"]";
-    }
-    out << "]} : ()->() }) {profile=#protocol.profile<protocol>} : ()->() }\n";
-    return source;
-  };
+  // The exporter borrows a checked endpoint. These fixtures state its logical
+  // signature and output ports as test annotations; they have no public rows.
+  constexpr StringLiteral boundaryOriginal = "boundary test original";
   auto boundary = [&](StringRef text, unsigned selected = 0,
-                      bool managed = true) {
+                      bool managed = true) -> Expected<std::string> {
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "invalid boundary test target");
     NativeProofPolicy policy;
@@ -1384,8 +1332,22 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
                                          json::Array{},
                                          json::Array{},
                                          json::Array{}};
-    return evm::exportYul(*module, boundaryOriginal(*module), descriptor,
-                          policy, {});
+    func::FuncOp function;
+    for (auto candidate : module->getOps<func::FuncOp>())
+      if (candidate->hasAttr("evm.entry"))
+        function = candidate;
+    auto logical = cast<FunctionType>(
+        function->getAttrOfType<TypeAttr>("test.logical_type").getValue());
+    SmallVector<uint64_t> outputs;
+    for (Attribute port :
+         function->getAttrOfType<ArrayAttr>("test.output_ports"))
+      outputs.push_back(cast<IntegerAttr>(port).getUInt());
+    auto endpoint = evm::describeEndpoint(
+        logical, {}, outputs, descriptor, policy,
+        toHex(SHA256::hash(arrayRefFromStringRef(boundaryOriginal)), true));
+    if (!endpoint)
+      return endpoint.takeError();
+    return evm::exportYul(*module, *endpoint, policy, {});
   };
   cases.run("expanded copyable results precede selected acceptance", [&] {
     auto text = replaceFixture(boundaryText.str(), "-> (i1,i64)",
@@ -1393,8 +1355,8 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
     text = replaceFixture(
         std::move(text), "->(i1,!runtime.capability",
         "->(!data.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
-    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
-                          "evm.output_ports=[0:i64,2:i64]");
+    text = replaceFixture(std::move(text), "test.output_ports=[0:i64]",
+                          "test.output_ports=[0:i64,2:i64]");
     text = replaceFixture(
         std::move(text), "func.return %accepted,%generation : i1,i64",
         "func.return %generation,%generation,%accepted,%generation : "
@@ -1405,28 +1367,28 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
     auto text = replaceFixture(
         boundaryText.str(), "->(i1,!runtime.capability",
         "->(!data.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
-    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
-                          "evm.output_ports=[0:i64,1:i64]");
+    text = replaceFixture(std::move(text), "test.output_ports=[0:i64]",
+                          "test.output_ports=[0:i64,1:i64]");
     refuses(boundary(text, 1), "evm.yul");
   });
-  cases.run("invocation refuses unconsumed affine results", [&] {
+  cases.run("endpoint refuses unconsumed affine results", [&] {
     auto text =
         replaceFixture(boundaryText.str(), "-> (i1,i64)", "-> (i64,i1,i64)");
     text = replaceFixture(std::move(text), "->(i1,!runtime.capability",
                           "->(!runtime.scope,i1,!runtime.capability");
-    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
-                          "evm.output_ports=[0:i64,1:i64]");
+    text = replaceFixture(std::move(text), "test.output_ports=[0:i64]",
+                          "test.output_ports=[0:i64,1:i64]");
     text = replaceFixture(
         std::move(text), "func.return %accepted,%generation : i1,i64",
         "func.return %generation,%accepted,%generation : i64,i1,i64");
-    refuses(boundary(text, 1), "evm.yul");
+    refuses(boundary(text, 1), "evm.endpoint");
   });
-  cases.run("invocation refuses absent selected acceptance",
-            [&] { refuses(boundary(boundaryText, 1), "evm.yul"); });
+  cases.run("endpoint refuses absent selected acceptance",
+            [&] { refuses(boundary(boundaryText, 1), "evm.endpoint"); });
   cases.run("zero transcript signature needs no invented generation lane", [&] {
     take(boundary(R"mlir(module {
       func.func private @verify_endpoint() -> i1 attributes {
-        evm.entry,evm.logical_type=()->i1,evm.output_ports=[0:i64]} {
+        evm.entry,test.logical_type=()->i1,test.output_ports=[0:i64]} {
         %ok = arith.constant true
         func.return %ok : i1
       }
@@ -1451,12 +1413,10 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
             "datacopy(root, dataoffset(\"bytes_0\"), datasize(\"bytes_0\"))") &&
             !text.contains("evm_static") && !text.contains("Compressed"),
         "static byte copying retained compression machinery");
-    auto source = parseSourceString<ModuleOp>(boundaryText, &context);
-    auto originalBytes = boundaryOriginal(*source);
     auto digest =
-        toHex(SHA256::hash(arrayRefFromStringRef(originalBytes)), true);
+        toHex(SHA256::hash(arrayRefFromStringRef(boundaryOriginal)), true);
     require(text.contains(toHex(digest, true)) &&
-                !text.contains(toHex(originalBytes, true)),
+                !text.contains(toHex(boundaryOriginal, true)),
             "binding source is not the exact original SHA256 identity");
     require(text.contains("verbatim_1i_0o(hex\"50\", boundState)"),
             "invocation observation lost its final POP sink");

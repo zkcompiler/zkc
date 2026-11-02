@@ -9,6 +9,9 @@
 #include <memory>
 
 namespace zkc {
+namespace evm {
+struct EvmEndpoint;
+} // namespace evm
 /// Exact external deployment setting; no arbitrary solc version string. The
 /// forks are the rows of the installed zkc.evm-target/0 declaration.
 enum class EvmFork {
@@ -59,6 +62,8 @@ public:
   const EvmLimits &limits() const;
   /// The SHA-256 of the exact original bytes: the original's identity.
   llvm::StringRef sourceSha256() const;
+  /// The checked endpoint the Yul was exported from.
+  const evm::EvmEndpoint &endpoint() const;
   llvm::StringRef sourceBytes() const;
   mlir::OwningOpRef<mlir::ModuleOp> targetSnapshot() const;
 

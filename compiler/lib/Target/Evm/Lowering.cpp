@@ -103,15 +103,14 @@ private:
 
 class Lowering {
 public:
-  Lowering(ModuleOp source, ModuleOp complete, ModuleOp target,
-           const EvmOptions &options)
-      : source(source), complete(complete), target(target), options(options),
+  Lowering(ModuleOp source, ModuleOp target, const EvmOptions &options)
+      : source(source), target(target), options(options),
         layouts(*source.getContext()), types(layouts, source.getContext()),
         builder(source.getContext()) {}
   LogicalResult run();
 
 private:
-  ModuleOp source, complete, target;
+  ModuleOp source, target;
   const EvmOptions &options;
   NativeLayouts layouts;
   EvmTypes types;
@@ -241,26 +240,8 @@ LogicalResult Lowering::run() {
         entry ? "verify_endpoint" : "helper_" + std::to_string(serial++),
         builder.getFunctionType(*inputs, *outputs));
     function.setPrivate();
-    if (entry) {
+    if (entry)
       function->setAttr("evm.entry", builder.getUnitAttr());
-      function->setAttr("evm.logical_type", attribute);
-      // The complete source retains the checked original-to-endpoint ports;
-      // executable closure selection deliberately prunes that record.
-      complete.walk([&](Operation *record) {
-        if (record->getName().getStringRef() != "protocol.projection")
-          return;
-        for (Attribute item : record->getAttrOfType<ArrayAttr>("interfaces")) {
-          auto interface = cast<DictionaryAttr>(item);
-          if (interface.get("source") != owner->getAttr("instance"))
-            continue;
-          for (Attribute port : interface.getAs<ArrayAttr>("participants")) {
-            auto participant = cast<DictionaryAttr>(port);
-            if (participant.get("role") == owner->getAttr("role"))
-              function->setAttr("evm.output_ports", participant.get("outputs"));
-          }
-        }
-      });
-    }
     functions[owner] = function;
   }
   if (entries != 1)
@@ -1474,7 +1455,7 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   context->getOrLoadDialect<cf::ControlFlowDialect>();
   context->getOrLoadDialect<func::FuncDialect>();
   OwningOpRef<ModuleOp> target(ModuleOp::create(candidate->getLoc()));
-  Lowering lowering(*candidate, *source, *target, options);
+  Lowering lowering(*candidate, *target, options);
   if (failed(lowering.run()) || failed(verify(*target)))
     return zkc::error("evm.lowering", "EVM operation realization failed");
   InactiveIntegerLanes policy;
