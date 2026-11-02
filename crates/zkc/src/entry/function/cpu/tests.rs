@@ -753,6 +753,61 @@ fn repeated_children_exhaust_one_cumulative_meter_and_suppress_return() {
     assert!(r.usage.execution.instructions > 1);
 }
 #[test]
+fn a_child_has_one_fuel_limit_the_pooled_meter() {
+    let run = |instructions| {
+        let mut options = FunctionOptions::default();
+        options.limits.capacity.work.instructions = instructions;
+        let entry =
+            FunctionEntry::admit(capture(&numeric_document()), options, BTreeMap::new()).unwrap();
+        entry
+            .prepare(request(vec![
+                (
+                    "a",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(7u64)).into(),
+                ),
+                (
+                    "b",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(9u64)).into(),
+                ),
+            ]))
+            .unwrap()
+            .execute()
+    };
+    let complete = run(1_000_000);
+    assert!(complete.is_success(), "{}", complete.diagnostics());
+    // The receipt keeps the child's own usage and the root's when it ended,
+    // and no fuel figure of the child's own: its limit is the pooled meter.
+    let receipt = &complete.calls[0].native;
+    assert_eq!(
+        receipt.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["invocation", "stop", "usage"]
+    );
+    assert_eq!(receipt["stop"], Json::Null);
+    let child = receipt["usage"]["instructions"].as_u64().unwrap();
+    let total = complete.usage.execution.instructions;
+    assert_eq!(receipt["invocation"]["instructions"], json!(total));
+    assert_eq!(
+        complete.diagnostics()["invocation"]["instructions"],
+        json!(total)
+    );
+    // The Function's own charges precede the child, which is its last work.
+    let before = total - child;
+    assert!(child > 1 && before > 0);
+    // A selection that is exactly the invocation's work completes it: the
+    // child runs to the end of the pooled meter, with no figure of its own.
+    assert!(run(total).is_success());
+    // One instruction less stops the child with its own limit stop exactly
+    // when the pooled meter is exhausted, with both usages kept.
+    let stopped = run(total - 1);
+    assert_eq!(stopped.failure.unwrap().code, "entry-host-numeric-stopped");
+    let receipt = &stopped.calls[0].native;
+    assert_eq!(receipt["stop"]["kind"], "Limit");
+    assert_eq!(receipt["usage"]["instructions"], json!(child - 1));
+    assert_eq!(receipt["invocation"]["instructions"], json!(total - 1));
+    assert_eq!(stopped.usage.execution.instructions, total - 1);
+    assert!(!stopped.calls[0].completed);
+}
+#[test]
 fn the_interpreters_own_charges_name_the_exhausted_meter() {
     let c = calculation();
     let f = c["results"][0].clone();

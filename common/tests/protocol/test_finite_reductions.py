@@ -287,7 +287,7 @@ def test_fusion_preserves_values_and_guards_with_different_resource_charges(
         report = run_report(entry, f'{name}-usage', inputs)
         assert report['status'] == 'executed'
         usage[name] = joint_execution(report)['roles'][0]['usage']
-        outer_allocations[name] = report['execution']['usage']['fresh_bytes']
+        outer_allocations[name] = report['execution']['invocation']['total_value_bytes']
         assert entry.run(f'{name}-value', inputs)['result'] == decimal_values(6*n*repetitions)
         for case, changed in [('ignored', {'unused': decimal_values([7])}),
                                ('used', {'b': decimal_values([])})]:

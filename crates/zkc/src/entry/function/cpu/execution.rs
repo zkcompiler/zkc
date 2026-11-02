@@ -67,11 +67,10 @@ impl FunctionReport {
         json!({"format":"zkc.entry-function-result/0","completed":self.is_success(),
             "failure":self.failure.as_ref().map(|f|json!({"code":f.code,"path":f.path,"native":f.native,
                 "phase":f.entry.as_ref().map(|e|format!("{:?}",e.phase)),"input_path":f.entry.as_ref().and_then(|e|e.path())})),
-            "usage":{"instructions":self.usage.execution.instructions,"iterations":self.usage.execution.iterations,
-                "logical_bytes":self.usage.execution.logical_bytes,"fresh_bytes":self.usage.execution.total_value_bytes,
-                "live_reserved_bytes":self.usage.execution.live_reserved_bytes,"dispatches":self.usage.dispatches,
+            "usage":{"dispatches":self.usage.dispatches,
                 "wire_bytes":self.usage.wire_bytes,"proof_bytes":self.usage.proof_bytes,"external_work":self.usage.external_work,
                 "ring_work":self.usage.ring_work,"sequence_work":self.usage.sequence_work,"service_draws":self.usage.service_draws,"service_allowances":self.usage.service_allowances},
+            "invocation":crate::host::diagnostics::invocation(&self.invocation, &self.usage.execution),
             "calls":self.calls.iter().map(|c|json!({"target":c.target,"operation":c.operation,"path":c.path,"completed":c.completed,"native":c.native})).collect::<Vec<_>>(),
             "journal_truncated":self.journal_truncated})
     }
@@ -423,24 +422,15 @@ impl Execution<'_> {
         self.usage.dispatches += 1;
         Ok(())
     }
-    /// A child's runners charge the root, which bounds every byte they
-    /// retain, so the record's byte selections reach them unchanged. They run
-    /// on what remains of the pooled instruction and iteration meter.
-    fn child_capacity(&self) -> crate::execution::Capacity {
-        let mut capacity = self.host.options.limits.capacity;
-        let used = self.ledger.snapshot();
-        capacity.work.instructions = capacity.work.instructions.saturating_sub(used.instructions);
-        capacity.work.iterations = capacity.work.iterations.saturating_sub(used.iterations);
-        capacity
-    }
-    /// The policy record a child receives: the capacity on what remains of
-    /// the pooled meter, and what remains of each invocation-wide allowance,
-    /// divided equally across the child's runners. Children never replenish
-    /// a parent allowance.
+    /// The policy record a child receives: the record's capacity for runners
+    /// whose root pools their fuel, so the child's runners keep no fuel of
+    /// their own beside the pooled meter, and what remains of each
+    /// invocation-wide allowance, divided equally across the child's runners.
+    /// Children never replenish a parent allowance.
     fn child_limits(&self, runners: usize) -> crate::run::HostLimits {
         let divisor = runners.max(1) as u64;
         let mut limits = self.host.options.limits.clone();
-        limits.capacity = self.child_capacity();
+        limits.capacity = limits.capacity.pooled_runners();
         limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
         limits.total_wire_bytes = limits
             .total_wire_bytes
@@ -500,7 +490,11 @@ impl Execution<'_> {
         self.usage.external_work += runner.backend().external_work_spent();
         self.usage.ring_work += runner.backend().ring_work_spent();
         self.usage.sequence_work += runner.backend().sequence_work_spent();
-        let diagnostic = json!({"stop":runner.stop().map(crate::host::diagnostics::stop)});
+        // The receipt keeps the child's own usage and the root's when the
+        // child ended.
+        let diagnostic = json!({"stop":runner.stop().map(crate::host::diagnostics::stop),
+            "usage":crate::host::diagnostics::usage(&runner.usage()),
+            "invocation":crate::host::diagnostics::invocation(&self.ledger, &self.ledger.snapshot())});
         let failed = runner.stop().is_some();
         self.end(index, !failed, diagnostic);
         // The child's returned values leave it with their live hold in the
@@ -702,9 +696,11 @@ impl Execution<'_> {
 // Retain bounded control diagnostics; large native reports/backends are dropped.
 fn bounded_native(mut value: Json) -> Json {
     // These summaries are already bounded by their native owners. Keep the
-    // primary failure even when observational prefixes exhaust the trim budget.
+    // primary failure, the child's usage and the root's even when
+    // observational prefixes exhaust the trim budget.
     let object = value.as_object_mut().expect("native diagnostic object");
-    let primary = ["failure_role", "stop"].map(|key| (key, object.remove(key)));
+    let primary =
+        ["failure_role", "stop", "usage", "invocation"].map(|key| (key, object.remove(key)));
     let mut summary = crate::host::diagnostics::trim(&value, &mut 256, &mut 4096, 0);
     for (key, value) in primary {
         if let Some(value) = value {

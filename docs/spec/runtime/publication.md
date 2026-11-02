@@ -6,8 +6,10 @@ explains commands; [Entry calls](entries.md) own their logical inputs.
 ## Reports and returned values
 
 `--json` selects a structured status report on standard output. It retains resource usage,
-attempt decisions, stops, cleanup and publication state. It omits returned values
-and proof payloads. Exit status is zero only after complete execution, cleanup
+attempt decisions, stops, cleanup and publication state. Every execution report
+of `run`, `prove`, `verify` and `bundle` renders its invocation root's usage as
+`invocation`, in [one shape](capacity.md#reported-usage) beside each runner's
+own usage. It omits returned values and proof payloads. Exit status is zero only after complete execution, cleanup
 and requested publication. Human summaries are the default; refusals use standard
 error. Entry proof commands report `proof_sha256` for the proof produced or read;
 publication status distinguishes produced bytes from a successfully written file.

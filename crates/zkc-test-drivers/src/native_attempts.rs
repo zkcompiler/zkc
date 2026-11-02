@@ -8,10 +8,7 @@ use std::{collections::BTreeMap, path::Path};
 use zkc::execution::{Capacity, InputValue};
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
-use zkc_runtime::{
-    attempt::Limits,
-    vm::{ValueBudget, WorkBudget},
-};
+use zkc_runtime::attempt::Limits;
 use zkc_test_support::hex;
 
 fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
@@ -86,8 +83,8 @@ fn policy(fold: bool) -> AttemptPolicy {
             attempts: 4,
             proof_bytes: 16 * 1024 * 1024,
         },
-        work: WorkBudget::default(),
-        values: ValueBudget::default(),
+        instructions: zkc_runtime::vm::Limits::INSTRUCTIONS,
+        iterations: zkc_runtime::vm::Limits::ITERATIONS,
     }
 }
 fn draws(report: &NativeProofReport, fold: bool) -> u64 {
@@ -339,12 +336,12 @@ fn run(directory: &Path, case: &Json) {
     assert!(exhausted.outputs.is_none());
     if fold {
         let mut limited = p.clone();
-        limited.work.iterations = result.attempts[0].usage.iterations;
+        limited.iterations = result.attempts[0].usage.iterations;
         let stopped = execute(&producer, &limited, &[0, 3]);
         assert!(stopped.outcome.is_err());
         assert!(stopped.outputs.is_none());
         assert_eq!(stopped.attempts.len(), 2);
-        assert_eq!(stopped.usage.iterations, limited.work.iterations);
+        assert_eq!(stopped.usage.iterations, limited.iterations);
         assert_eq!(draws(&stopped, fold), 2);
     }
     let mut changed_context = validator.clone();
@@ -387,21 +384,60 @@ fn run(directory: &Path, case: &Json) {
     assert_eq!(exhausted.outcome.unwrap_err(), "native-attempt-limit");
     assert_eq!(exhausted.attempts.len(), 1);
     let mut limited = p.clone();
-    limited.work.instructions = result.attempts[0].usage.instructions + 1;
+    limited.instructions = result.attempts[0].usage.instructions + 1;
     let stopped = execute(&producer, &limited, &[0, 3]);
     assert!(stopped.outcome.is_err());
     assert!(stopped.outputs.is_none());
-    assert_eq!(stopped.instructions, limited.work.instructions);
+    assert_eq!(stopped.instructions, limited.instructions);
     assert_eq!(stopped.attempts.len(), 2);
     assert!(stopped.attempts[1].decision.is_err());
-    let mut limited = p.clone();
-    limited.values.total_bytes = result.attempts[0].usage.total_value_bytes;
-    let stopped = execute(&producer, &limited, &[0, 3]);
+    // The call's root bounds every attempt's bytes; the policy selects none.
+    // The root's usage once a first, retried attempt has ended: what the
+    // Host holds and the attempt's cumulative charges.
+    let mut once = p.clone();
+    once.limits.attempts = 1;
+    let one = execute(&producer, &once, &[0, 3]);
+    assert_eq!(one.outcome.as_ref().unwrap_err(), "native-attempt-limit");
+    let ended = one.invocation_usage().unwrap();
+    let rooted = |capacity: Capacity| {
+        zkc_test_drivers::execute_test(
+            &deployment.clone().with_capacity(capacity).unwrap(),
+            &producer,
+            zkc::proof::Invocation::Attempts(&p),
+            tapes(&[0, 3]),
+        )
+        .unwrap()
+    };
+    // Fresh bytes and logical work are cumulative across attempts. A root
+    // that affords exactly the first attempt's fresh bytes refuses the
+    // second at its entry, before it draws; the refused entry commits
+    // nothing.
+    let mut fresh = deployment.capacity();
+    fresh.values.total_bytes = ended.total_value_bytes;
+    let stopped = rooted(fresh);
     assert!(stopped.outcome.is_err());
     assert!(stopped.outputs.is_none());
-    assert_eq!(stopped.usage.total_value_bytes, limited.values.total_bytes);
     assert_eq!(stopped.attempts.len(), 2);
+    assert!(stopped.attempts[1].decision.is_err());
+    assert_eq!(stopped.attempts[1].usage, Default::default());
+    let used = stopped.invocation_usage().unwrap();
+    assert_eq!(used.logical_bytes, ended.logical_bytes);
+    assert_eq!(used.total_value_bytes, ended.total_value_bytes);
     assert_eq!(draws(&stopped, fold), 1);
+    // A root that affords exactly the first attempt's logical work stops
+    // the second at its first read, with no logical work committed.
+    let mut logical = deployment.capacity();
+    logical.work.logical_bytes = ended.logical_bytes;
+    let stopped = rooted(logical);
+    assert!(stopped.outcome.is_err());
+    assert!(stopped.outputs.is_none());
+    assert_eq!(stopped.attempts.len(), 2);
+    assert!(stopped.attempts[1].decision.is_err());
+    assert_eq!(stopped.attempts[1].usage.logical_bytes, 0);
+    assert_eq!(
+        stopped.invocation_usage().unwrap().logical_bytes,
+        ended.logical_bytes
+    );
     let mut limited = p.clone();
     limited.limits.proof_bytes = 40;
     let stopped = execute(&producer, &limited, &[0, 3]);
@@ -415,13 +451,6 @@ fn run(directory: &Path, case: &Json) {
     assert_eq!(stopped.attempts.len(), 1);
     assert_eq!(stopped.attempts[0].bytes, 0);
     assert!(stopped.cancelled);
-    assert_eq!(draws(&stopped, fold), 0);
-    let mut limited = p.clone();
-    limited.values.live_bytes = 0;
-    let stopped = execute(&producer, &limited, &[0, 3]);
-    assert_eq!(stopped.outcome.as_ref().unwrap_err(), "Limit");
-    assert_eq!(stopped.attempts.len(), 1);
-    assert_eq!(stopped.usage.live_value_bytes, 0);
     assert_eq!(draws(&stopped, fold), 0);
     let mut exhausted_input = producer.clone();
     if fold {
@@ -725,7 +754,7 @@ fn empty_attempts(directory: &Path) {
     let mut policy = policy(false);
     policy.completion = 2; // The selected output is after another producer Boolean.
     policy.limits.proof_bytes = 40;
-    policy.work.iterations = 0;
+    policy.iterations = 0;
     let complete = zkc_test_drivers::execute(
         &deployment,
         &input(true),
@@ -939,7 +968,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
         "native-attempt-limits"
     );
     let mut within = policy(true);
-    within.work.iterations = capacity.work.iterations;
+    within.iterations = capacity.work.iterations;
     let exhausted = zkc_test_drivers::execute_test(
         &bounded,
         &p,

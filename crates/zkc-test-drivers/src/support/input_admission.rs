@@ -80,12 +80,10 @@ pub fn private_input_admission_boundary(
     let execute = |bytes| {
         let deployment = bounded(bytes);
         if let Some(policy) = attempts {
-            let mut policy = policy.clone();
-            policy.values.live_bytes = bytes;
             zkc_test_drivers::execute_test(
                 &deployment,
                 input,
-                zkc::proof::Invocation::Attempts(&policy),
+                zkc::proof::Invocation::Attempts(policy),
                 BTreeMap::new(),
             )
         } else {

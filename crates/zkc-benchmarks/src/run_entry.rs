@@ -367,7 +367,7 @@ mod tests {
                 assert_eq!(report.boundary, "admitted_function_call");
                 assert_eq!(report.diagnostics["completed"], true);
                 assert!(
-                    report.diagnostics["usage"]["instructions"]
+                    report.diagnostics["invocation"]["instructions"]
                         .as_u64()
                         .unwrap()
                         > 0

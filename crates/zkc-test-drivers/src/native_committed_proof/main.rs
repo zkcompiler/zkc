@@ -202,8 +202,8 @@ fn key_attempts(directory: &Path, keys: &Keys) {
                 attempts: 1,
                 proof_bytes: expected.len(),
             },
-            work: Default::default(),
-            values: Default::default(),
+            instructions: zkc_runtime::vm::Limits::INSTRUCTIONS,
+            iterations: zkc_runtime::vm::Limits::ITERATIONS,
         };
         typed::policy_before_file(&deployment, &producer, &policy);
         let first = zkc_test_drivers::execute(
@@ -235,7 +235,7 @@ fn key_attempts(directory: &Path, keys: &Keys) {
             accepted(&deployment, &validator, Some(&proof));
             reference::verify(&envelope, &validator, &proof, "authored", 1);
         } else {
-            assert_eq!(first.outcome.unwrap_err(), "native-attempt-limit");
+            assert_eq!(first.outcome.as_ref().unwrap_err(), "native-attempt-limit");
             policy.limits.attempts = 2;
             let repeated = zkc_test_drivers::execute(
                 &deployment,
@@ -255,11 +255,13 @@ fn key_attempts(directory: &Path, keys: &Keys) {
             assert!(repeated.cleanup_errors.is_empty());
 
             // PK material is loaded once, but every entry is charged for its
-            // input bindings. No remaining payload allowance means reentry
-            // fails before the second body, even though the backing is shared.
-            policy.values.total_bytes = first.usage.total_value_bytes;
+            // input bindings. A root that affords exactly the first attempt
+            // has no fresh allowance left, so reentry fails before the second
+            // body, even though the backing is shared.
+            let mut capacity = deployment.capacity();
+            capacity.values.total_bytes = first.invocation_usage().unwrap().total_value_bytes;
             let exhausted = zkc_test_drivers::execute(
-                &deployment,
+                &deployment.clone().with_capacity(capacity).unwrap(),
                 &producer,
                 zkc::proof::Invocation::Attempts(&policy),
             )

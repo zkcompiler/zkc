@@ -86,9 +86,13 @@ impl<B: Backend> Runner<B> {
             p.public.extend(outputs.iter().cloned());
         }
     }
-    pub(super) fn reuse_computation(&mut self, key: &Key) -> Option<Transfer<B::Value>> {
+    pub(super) fn reuse_computation(
+        &mut self,
+        key: &Key,
+        transfer: &mut Option<crate::vm::execution_ledger::AllocationReservation>,
+    ) -> Option<Transfer<B::Value>> {
         self.instance
-            .reuse_computation(&self.preparation.as_ref()?.cache, key)
+            .reuse_computation(&self.preparation.as_ref()?.cache, key, transfer)
     }
     pub(super) fn begin_computation(&self, key: Key) -> Option<Recording<B>> {
         self.instance

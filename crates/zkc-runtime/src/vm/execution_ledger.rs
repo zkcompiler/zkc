@@ -199,6 +199,20 @@ impl ExecutionLedger {
     pub(crate) fn affords(&self, logical: u64, fresh: usize, live: usize) -> bool {
         self.state().affords(logical, fresh, live)
     }
+    /// Whether the pooled meter affords `instructions` and `iterations` more
+    /// now. A root that pools no fuel affords none. This commits nothing; a
+    /// later charge checks again.
+    pub(crate) fn affords_fuel(&self, instructions: u64, iterations: u64) -> bool {
+        let state = self.state();
+        let used = &state.used;
+        used.instructions
+            .checked_add(instructions)
+            .is_some_and(|n| n <= state.work.instructions)
+            && used
+                .iterations
+                .checked_add(iterations)
+                .is_some_and(|n| n <= state.work.iterations)
+    }
     /// Charge a runner's retention, all or nothing: `logical` work, `fresh`
     /// bytes, and `live` bytes added to its live hold `held` in this root.
     pub(crate) fn retain(

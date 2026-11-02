@@ -325,8 +325,16 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn counts(&self) -> &Counts {
         &self.counts
     }
+    /// Whether one more instruction fits: the runner's own fuel, and the
+    /// root's meter when the root pools this runner's fuel, which is then the
+    /// only fuel limit a Host selects for it.
     pub(crate) fn has_instruction_capacity(&self) -> bool {
         self.usage.instructions < self.work_budget.instructions
+            && self
+                .shared
+                .as_ref()
+                .filter(|_| self.pooled_fuel)
+                .is_none_or(|root| root.affords_fuel(1, 0))
     }
     pub(crate) fn query(
         &mut self,

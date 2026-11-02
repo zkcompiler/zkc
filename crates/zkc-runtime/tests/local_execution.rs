@@ -1028,7 +1028,10 @@ fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal
         json!([["entry", "main", [["P", "sender"], ["V", "receiver"]]]]),
     ));
     for native_receive in [false, true] {
-        let ledger = ExecutionLedger::new(values(128, 4096), work(0, 100, 4096));
+        let ledger = ExecutionLedger::new(
+            values(128, 4096),
+            work(u64::from(native_receive), 100, 4096),
+        );
         let observations = Arc::new(Mutex::new(Vec::new()));
         let mut runner = Runner::new_for_role_with_ledger(
             &program,
@@ -1052,7 +1055,12 @@ fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal
             observations: observations.clone(),
         }));
         if native_receive {
+            // The pooled meter affords the exposed receive; another runner of
+            // the root then takes its last instruction before completion.
             let cut = runner.poll_ref().cut().unwrap();
+            ledger
+                .charge(work(1, 0, 0), 0)
+                .expect("the last pooled instruction");
             assert_eq!(
                 runner.complete_receive(&cut, Ok(input)).unwrap(),
                 ReceiveCompletion::Stopped
@@ -1079,6 +1087,80 @@ fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal
         assert_eq!(*observations.lock().unwrap(), [0], "{native_receive}");
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
     }
+}
+
+#[test]
+fn a_runner_of_a_pooled_root_has_one_fuel_limit_the_pooled_meter() {
+    // The receiver's first instruction exposes a receive; it has ample fuel
+    // of its own, so only the root's pooled meter can refuse it.
+    let program = decode(module(
+        json!([]),
+        json!([
+            [
+                "participant",
+                "receiver",
+                "root",
+                "V",
+                [],
+                [FIELD],
+                [
+                    ["receive", "message", "scalar", "P", "x", FIELD],
+                    ["return", ["x"]]
+                ],
+                []
+            ],
+            [
+                "participant",
+                "sender",
+                "root",
+                "P",
+                [],
+                [],
+                [["return", []]],
+                []
+            ]
+        ]),
+        json!([["entry", "main", [["P", "sender"], ["V", "receiver"]]]]),
+    ));
+    let start = |ledger: &ExecutionLedger| {
+        Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "V",
+            "session",
+            Arithmetic::default(),
+            vec![],
+            ValueBudget::UNBOUNDED,
+            WorkBudget::fuel(Limits::MAX_INSTRUCTIONS, Limits::MAX_ITERATIONS),
+            Some(ledger.clone()),
+        )
+        .ok()
+        .unwrap()
+    };
+    // Another runner of the root has taken every pooled instruction: the
+    // receiver stops with its own limit stop before exposing the receive.
+    let exhausted = ExecutionLedger::new(values(128, 4096), work(2, 100, 4096));
+    exhausted.charge(work(2, 0, 0), 0).unwrap();
+    let mut runner = start(&exhausted);
+    let Action::Stopped(stop) = runner.poll_ref() else {
+        panic!("the pooled meter refuses before an action is exposed");
+    };
+    assert_eq!(stop.kind, StopKind::Limit);
+    assert_eq!(runner.usage().instructions, 0);
+    assert_eq!(exhausted.snapshot().instructions, 2);
+    // One pooled instruction left: the receive is exposed and completes on
+    // it, and the receiver stops exactly when the meter is exhausted.
+    let remaining = ExecutionLedger::new(values(128, 4096), work(2, 100, 4096));
+    remaining.charge(work(1, 0, 0), 0).unwrap();
+    let mut runner = start(&remaining);
+    let cut = runner.poll_ref().cut().unwrap();
+    assert_eq!(
+        runner.complete_receive(&cut, Ok(Number::Field(7))).unwrap(),
+        ReceiveCompletion::Delivered
+    );
+    assert!(matches!(runner.poll_ref(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
+    assert_eq!(runner.usage().instructions, 1);
+    assert_eq!(remaining.snapshot().instructions, 2);
 }
 
 #[test]

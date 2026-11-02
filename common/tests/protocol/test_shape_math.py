@@ -31,7 +31,7 @@ def test_total_shape_source_success_and_target_exhaustion(toolchain, journal, di
     output = directory / 'success.json'
     normal = journal.json([*command, f'--results={output}'], keep='target-success.json')
     assert normal['execution']['completed']
-    instructions = normal['execution']['usage']['instructions']
+    instructions = normal['execution']['invocation']['instructions']
     assert instructions > 4
     assert json.loads(output.read_text())['value'] == {
         'P': {'power': True, 'length': '2', 'less': False, 'shape': True}}
@@ -47,7 +47,7 @@ def test_total_shape_source_success_and_target_exhaustion(toolchain, journal, di
     assert refused['status'] == 'refused'
     assert refused['code'] == 'entry-host-run-failed'
     assert not refused['execution']['completed'] and not unpublished.exists()
-    assert refused['execution']['usage']['instructions'] <= budget
+    assert refused['execution']['invocation']['instructions'] <= budget
     assert refused['execution']['failure']['path']
     call, = refused['execution']['calls']
     assert call['operation'] == 'run' and not call['completed']

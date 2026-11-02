@@ -22,16 +22,32 @@ fn refusal(host: &RunHost, request: &RunInputs) -> String {
         Ok(_) => panic!("unexpected preparation success"),
     }
 }
+/// Rendered diagnostics whose root usage counts the logical work and fresh
+/// bytes beyond `prepared`, the root's usage once the request was prepared:
+/// what execution itself charged. Ingress paths of equal values charge their
+/// own conversion, loading and imports but execute alike, so this rendering
+/// is equal across them; the live bytes the root holds at the end stay whole.
+fn execution_charges(mut rendered: Json, prepared: zkc_runtime::vm::ExecutionLedgerUsage) -> Json {
+    assert!(prepared.logical_bytes > 0 && prepared.total_value_bytes > 0);
+    let root = &mut rendered["invocation"];
+    for (field, before) in [
+        ("logical_bytes", prepared.logical_bytes),
+        ("total_value_bytes", prepared.total_value_bytes as u64),
+    ] {
+        root[field] = json!(root[field].as_u64().unwrap() - before);
+    }
+    rendered
+}
+fn executed(plan: PreparedRun<'_>) -> Json {
+    let prepared = plan.invocation_ledger().snapshot();
+    execution_charges(plan.execute().diagnostics(), prepared)
+}
 
 #[test]
 fn native_values_match_wire_execution_without_decoding_or_request_borrow() {
     let (raw, input) = fixture("bool");
     let host = host(&raw, HostLimits::default());
-    let expected = host
-        .prepare(input.to_string().as_bytes())
-        .unwrap()
-        .execute()
-        .diagnostics();
+    let expected = executed(host.prepare(input.to_string().as_bytes()).unwrap());
     crate::host::admission::DECODE_COUNT.set(0);
     let plan = {
         let mut inputs = request(|| InputValue::from(Value::Bool(false)));
@@ -41,12 +57,9 @@ fn native_values_match_wire_execution_without_decoding_or_request_borrow() {
         plan
     };
     assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
-    assert_eq!(plan.execute().diagnostics(), expected);
+    assert_eq!(executed(plan), expected);
     let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0].into()));
-    assert_eq!(
-        host.prepare_typed(&wire).unwrap().execute().diagnostics(),
-        expected
-    );
+    assert_eq!(executed(host.prepare_typed(&wire).unwrap()), expected);
 }
 
 #[test]
@@ -654,6 +667,7 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
     crate::host::admission::DECODE_COUNT.set(0);
     let plan = host.prepare_typed(&request).unwrap();
     assert_eq!(crate::host::admission::DECODE_COUNT.get(), 2);
+    let prepared = plan.invocation_ledger().snapshot();
     let report = plan.execute();
     assert_eq!(
         report.execution.as_ref().unwrap().outcome,
@@ -664,24 +678,16 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
     let expected = backend
         .encode_native_value(&execution.roles[0].outputs[0])
         .unwrap();
+    let rendered = execution_charges(report.diagnostics(), prepared);
     let wire = self::request(|| InputValue::Wire(expected.clone().into()));
-    assert_eq!(
-        host.prepare_typed(&wire).unwrap().execute().diagnostics(),
-        report.diagnostics()
-    );
+    assert_eq!(executed(host.prepare_typed(&wire).unwrap()), rendered);
     let data = execution.roles[0].outputs[0].clone();
     let native = self::request(|| InputValue::from(data.clone()));
-    assert_eq!(
-        host.prepare_typed(&native).unwrap().execute().diagnostics(),
-        report.diagnostics()
-    );
+    assert_eq!(executed(host.prepare_typed(&native).unwrap()), rendered);
     let prepared = crate::execution::PreparedData::from_value(data, Capacity::default()).unwrap();
     crate::host::admission::DECODE_COUNT.set(0);
     let reused = self::request(|| prepared.clone().into());
-    assert_eq!(
-        host.prepare_typed(&reused).unwrap().execute().diagnostics(),
-        report.diagnostics()
-    );
+    assert_eq!(executed(host.prepare_typed(&reused).unwrap()), rendered);
     let leaf =
         crate::execution::PreparedData::from_value(Value::Bool(true), Capacity::default()).unwrap();
     let nested = self::request(|| InputValue::Variant {
@@ -694,10 +700,7 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
             Value::Index(9).into(),
         ],
     });
-    assert_eq!(
-        host.prepare_typed(&nested).unwrap().execute().diagnostics(),
-        report.diagnostics()
-    );
+    assert_eq!(executed(host.prepare_typed(&nested).unwrap()), rendered);
     assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
 }
 
@@ -811,7 +814,9 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
         keys.verifier_key().to_bytes(&bounds).unwrap(),
     );
     crate::host::admission::IMPORT_COUNT.set(0);
-    let first = host.prepare_typed(&inputs).unwrap().execute();
+    let plan = host.prepare_typed(&inputs).unwrap();
+    let prepared = plan.invocation_ledger().snapshot();
+    let first = plan.execute();
     assert_eq!(
         first.execution.as_ref().unwrap().outcome,
         Outcome::Completed
@@ -832,8 +837,15 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
         fingerprint: material.fingerprint(),
     });
     raw_inputs.setups = inputs.setups.clone();
-    let raw = host.prepare_typed(&raw_inputs).unwrap().execute();
-    assert_eq!(raw.diagnostics(), first.diagnostics());
+    // Importing the raw key charges its decoding to the root, which reusing
+    // the material avoids; the execution's own charges are equal.
+    let raw = host.prepare_typed(&raw_inputs).unwrap();
+    let raw_prepared = raw.invocation_ledger().snapshot();
+    assert!(raw_prepared.logical_bytes > prepared.logical_bytes);
+    assert_eq!(
+        executed(raw),
+        execution_charges(first.diagnostics(), prepared)
+    );
     assert_eq!(crate::host::admission::IMPORT_COUNT.get(), 1);
     raw_inputs.roles[0].inputs[0] = InputValue::ProverKeyInput {
         file: crate::execution::InputSource::from_bytes(vec![0].into()),

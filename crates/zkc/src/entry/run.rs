@@ -466,6 +466,8 @@ fn public_report(mut report: RunReport) -> RunReport {
             role.outputs.clear();
         }
     }
+    // The run's execution ends with the reconstruction of its results.
+    report.native.record_invocation_usage();
     report
 }
 

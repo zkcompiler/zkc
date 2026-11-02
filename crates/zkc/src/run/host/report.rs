@@ -15,6 +15,9 @@ pub struct HostReport {
     limits: Json,
     layout: Json,
     invocation: zkc_runtime::vm::ExecutionLedger,
+    /// The root's usage when this invocation's execution ended, which every
+    /// rendering reports; renderings and encodings charge the root beyond it.
+    invocation_usage: zkc_runtime::vm::ExecutionLedgerUsage,
 }
 impl HostReport {
     pub(super) fn new(
@@ -35,12 +38,23 @@ impl HostReport {
             limits: host.limits.record(),
             layout: host.layout(),
             invocation,
+            invocation_usage: Default::default(),
         }
     }
     /// The ledger that charged this invocation's Host-side inspection; result
     /// encoding charges it too.
     pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
         &self.invocation
+    }
+    /// The root's usage when this invocation's execution ended: the Host's
+    /// work and storage and every runner's bytes, and, for an Entry, its
+    /// result reconstruction. Every rendering reports this figure.
+    pub fn invocation_usage(&self) -> zkc_runtime::vm::ExecutionLedgerUsage {
+        self.invocation_usage
+    }
+    /// Record the root's usage as the end of this invocation's execution.
+    pub(crate) fn record_invocation_usage(&mut self) {
+        self.invocation_usage = self.invocation.snapshot();
     }
     pub(super) fn finalize(
         &mut self,
@@ -104,6 +118,7 @@ impl HostReport {
                     .push(json!({"role":role,"code":"bundle-incomplete-cleanup"}));
             }
         }
+        self.record_invocation_usage();
     }
     /// Bounded, payload-free child receipt without materializing the whole trace.
     pub fn diagnostics_summary(&self) -> Json {
@@ -119,6 +134,7 @@ impl HostReport {
                 .map(|r| json!({"role":text(&r.role),"after":state_summary(&r.after)}))
         });
         json!({"phase":self.phase,"session":self.session,"failure":self.failure.as_deref().map(text),
+            "invocation":crate::host::diagnostics::invocation(&self.invocation, &self.invocation_usage),
             "cleanup_errors":values(self.cleanup_errors.iter()),
             "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),
             "resources":values(self.resources.iter()),
@@ -132,8 +148,7 @@ impl HostReport {
             "roles":execution.map(|e|e.roles.iter().take(16).map(|r| {
                 let backend=&e.backends.iter().find(|(name,_)|name==&r.role).expect("role custody").1;
                 json!({"role":text(&r.role),"before":state_summary(&r.before),"after":state_summary(&r.after),"cancelled":r.cancelled,
-                    "usage":r.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
-                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,"logical_bytes":u.logical_bytes})),
+                    "usage":r.usage.as_ref().map(crate::host::diagnostics::usage),
                     "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),
                     "sequence_work":backend.sequence_work_spent(),"active_frames":backend.active_frames(),
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&r.outputs)})
@@ -247,6 +262,7 @@ impl HostReport {
         rows.saturating_add(records)
             .saturating_add(json(&self.layout))
             .saturating_add(json(&self.limits))
+            .saturating_add(crate::host::diagnostics::INVOCATION_BOUND)
             .saturating_add(RECORD)
     }
     /// Resource and control observations, without a command envelope or values.
@@ -274,6 +290,7 @@ impl HostReport {
         let diagnostics = self.cleanup_errors.clone();
         let mut result = json!({"phase":self.phase,
             "bundle_sha256":self.identity,"session":self.session,"limits":self.limits,"layout":self.layout,
+            "invocation":crate::host::diagnostics::invocation(&self.invocation, &self.invocation_usage),
             "failure":self.failure,"resources":self.resources,"roles":[],"outcome":null});
         if let Some(execution) = &self.execution {
             result["outcome"] = outcome(&execution.outcome);
@@ -290,9 +307,7 @@ impl HostReport {
             result["roles"] = json!(execution.roles.iter().map(|role| {
                 let backend = &execution.backends.iter().find(|(name,_)|name==&role.role).expect("role custody").1;
                 json!({"role":role.role,"before":state(&role.before),"after":state(&role.after),"cancelled":role.cancelled,
-                    "usage":role.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
-                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,
-                        "logical_bytes":u.logical_bytes})),
+                    "usage":role.usage.as_ref().map(crate::host::diagnostics::usage),
                     "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),"active_frames":backend.active_frames(),
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&role.outputs),"outputs":null,
                     "return_at":role.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s}))})

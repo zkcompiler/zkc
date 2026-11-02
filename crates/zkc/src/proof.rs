@@ -950,6 +950,7 @@ impl NativeDeployment {
             external_work_limit: self.external_work_limit,
             cleanup_errors: Vec::new(),
             invocation: self.host_ledger().cloned(),
+            invocation_usage: Default::default(),
         };
         match setup {
             Err(error) => report.outcome = Err(error),
@@ -1064,6 +1065,7 @@ impl NativeDeployment {
         report.ring_work = backend.ring_work_spent();
         report.sequence_work = backend.sequence_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
+        report.record_invocation_usage();
         Ok(report)
     }
     /// Charge a received proof that the record codec decodes to the
@@ -1199,6 +1201,9 @@ pub struct NativeProofReport {
     /// The invocation root that charged this call, which also charges each
     /// rendering of its diagnostics.
     invocation: Option<zkc_runtime::vm::ExecutionLedger>,
+    /// The root's usage when the call's execution ended, which every
+    /// rendering reports; renderings and encodings charge the root beyond it.
+    invocation_usage: zkc_runtime::vm::ExecutionLedgerUsage,
 }
 fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
     json!({"origin":s.origin.json(),"role":s.role,"site":s.site,
@@ -1212,6 +1217,23 @@ impl NativeProofReport {
     /// shows which bound a limit stop met.
     pub fn invocation_ledger(&self) -> Option<&zkc_runtime::vm::ExecutionLedger> {
         self.invocation.as_ref()
+    }
+    /// The root's usage when the call's execution ended: the Host's work and
+    /// storage, every runner's bytes and, for an Entry call, its result
+    /// reconstruction. Every rendering reports this figure.
+    pub fn invocation_usage(&self) -> Option<zkc_runtime::vm::ExecutionLedgerUsage> {
+        self.invocation.as_ref().map(|_| self.invocation_usage)
+    }
+    /// Record the root's usage as the end of the call's execution.
+    pub(crate) fn record_invocation_usage(&mut self) {
+        if let Some(root) = &self.invocation {
+            self.invocation_usage = root.snapshot();
+        }
+    }
+    fn rendered_invocation(&self) -> Json {
+        let used = &self.invocation_usage;
+        let root = self.invocation.as_ref();
+        json!(root.map(|root| crate::host::diagnostics::invocation(root, used)))
     }
     /// A completed verification may reject normally. Never infer that case from
     /// diagnostic strings, and never turn an operational failure into rejection.
@@ -1228,6 +1250,7 @@ impl NativeProofReport {
         use crate::host::diagnostics::{message, stop, values};
         json!({"verification_decision":self.verification.map(|d|match d {VerificationDecision::Accepted=>"accepted",VerificationDecision::Rejected=>"rejected"}),
             "usage":{"instructions":self.usage.instructions,"iterations":self.usage.iterations,"total_value_bytes":self.usage.total_value_bytes,"logical_bytes":self.usage.logical_bytes},
+            "invocation":self.rendered_invocation(),
             "binding_sha256":self.binding,"messages":self.messages,"bytes":self.bytes,"cancelled":self.cancelled,
             "stop":self.stop.as_ref().map(stop),"cleanup_errors":self.cleanup_errors.iter().take(16).map(|e|message(e)).collect::<Vec<_>>(),
             "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),"resources":values(self.resources.iter()),
@@ -1266,6 +1289,7 @@ impl NativeProofReport {
             .map(|error| RECORD.saturating_add(text_bound(error)))
             .fold(0usize, usize::saturating_add);
         RECORD
+            .saturating_add(crate::host::diagnostics::INVOCATION_BOUND)
             .saturating_add(text_bound(&self.binding))
             .saturating_add(self.attempt_policy.as_deref().map_or(0, text_bound))
             .saturating_add(self.return_at.as_ref().map_or(0, |(origin, site)| {
@@ -1326,6 +1350,7 @@ impl NativeProofReport {
         report["iterations"] = json!(self.usage.iterations);
         report["total_value_bytes"] = json!(self.usage.total_value_bytes);
         report["logical_bytes"] = json!(self.usage.logical_bytes);
+        report["invocation"] = self.rendered_invocation();
         report["attempts"] = json!(self.attempts.iter().map(|r| json!({
             "attempt":r.attempt, "decision":match &r.decision {
                 Ok(true)=>"complete", Ok(false)=>"retry", Err(_)=>"stopped"},

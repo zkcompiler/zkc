@@ -560,8 +560,8 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     attempts: 1,
                     proof_bytes: MAX_PROOF_BYTES,
                 },
-                work: deployment.capacity.work,
-                values: deployment.capacity.values,
+                instructions: deployment.capacity.work.instructions,
+                iterations: deployment.capacity.work.iterations,
             };
             let attempt = |root: zkc_runtime::vm::ExecutionLedger| {
                 let report = execute(
@@ -609,8 +609,8 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     attempts: 3,
                     proof_bytes: MAX_PROOF_BYTES,
                 },
-                work: repeated.capacity.work,
-                values: repeated.capacity.values,
+                instructions: repeated.capacity.work.instructions,
+                iterations: repeated.capacity.work.iterations,
             };
             let report = execute(&repeated, &inputs, Invocation::Attempts(&policy)).unwrap();
             assert!(report.outcome.is_err());
@@ -649,7 +649,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert!(attempt > 0);
             assert_eq!(three.total_value_bytes, one.total_value_bytes + 2 * attempt);
             // A root that affords only two attempts' charges refuses the third
-            // attempt, within the attempt policy's own allowances.
+            // attempt: the root bounds every attempt's bytes.
             let tight = root_of(
                 one.total_value_bytes + attempt + attempt / 2,
                 Capacity::default().work.logical_bytes,
@@ -672,6 +672,14 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             let rendered = counted.diagnostics();
             assert_eq!(rendered["attempts"].as_array().unwrap().len(), 3);
             assert!(rendered.get("diagnostics").is_none());
+            // The rendering reports the root's usage when execution ended,
+            // beside the runner's own, and a proof's root pools no fuel.
+            let usage = json!({"instructions":null,"iterations":null,
+                "logical_bytes":executed.logical_bytes,"total_value_bytes":executed.total_value_bytes,
+                "live_value_bytes":executed.live_reserved_bytes});
+            assert_eq!(counted.invocation_usage(), Some(executed));
+            assert_eq!(rendered["invocation"], usage);
+            assert!(executed.total_value_bytes > counted.usage.total_value_bytes);
             let charged = root.snapshot();
             let rendering = charged.total_value_bytes - executed.total_value_bytes;
             assert!(rendering >= rendered.to_string().len());
@@ -680,8 +688,8 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 rendering as u64
             );
             assert_eq!(charged.live_reserved_bytes, executed.live_reserved_bytes);
-            // Each rendering charges again.
-            let _ = counted.diagnostics();
+            // Each rendering charges again, and reports the same usage.
+            assert_eq!(counted.diagnostics()["invocation"], usage);
             assert_eq!(
                 root.snapshot().total_value_bytes,
                 charged.total_value_bytes + rendering
@@ -697,6 +705,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             let summary = counted.diagnostics();
             assert_eq!(summary["diagnostics"], "omitted");
             assert_eq!(summary["attempt_count"], 3);
+            assert_eq!(summary["invocation"], usage);
             assert_eq!(tight.snapshot(), executed);
             if let Some(counts) = report.execution_counts.json() {
                 assert_eq!(counts["events"]["created_frames"], 6);
@@ -746,6 +755,7 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         cleanup_errors: vec![],
         invocation: None,
+        invocation_usage: Default::default(),
     }
 }
 #[test]

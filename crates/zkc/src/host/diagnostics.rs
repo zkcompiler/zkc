@@ -1,9 +1,32 @@
 //! Bounded observations for the parent Host journal. These are not semantic
 //! origins or wire encodings; omitted coordinates and text are explicit.
 use serde_json::{Value as Json, json};
-use zkc_runtime::vm::{Origin, PathElement, Stop, StopKind};
+use zkc_runtime::vm::{
+    ExecutionLedger, ExecutionLedgerUsage, Origin, PathElement, Stop, StopKind, Usage,
+};
 
 pub(crate) const SCRATCH_BYTES: usize = 256 * 1024;
+/// The usage `used` of an invocation root, in the one shape every report
+/// renders it in, under the key `invocation`: the logical work, cumulative
+/// fresh bytes and held live bytes that the capacity record's
+/// `logical_bytes`, `total_bytes` and `live_bytes` bound, named as a runner's
+/// usage names them, and the instructions and iterations of the meter the
+/// root pools, `null` for a root that pools no fuel.
+pub(crate) fn invocation(root: &ExecutionLedger, used: &ExecutionLedgerUsage) -> Json {
+    let fuel = |count: u64| root.pools_fuel().then_some(count);
+    json!({"instructions":fuel(used.instructions),"iterations":fuel(used.iterations),
+        "logical_bytes":used.logical_bytes,"total_value_bytes":used.total_value_bytes,
+        "live_value_bytes":used.live_reserved_bytes})
+}
+/// A bound of one rendered [`invocation`]: six members, each with its key
+/// and a decimal count.
+pub(crate) const INVOCATION_BOUND: usize = 6 * NODE;
+/// One runner's own usage.
+pub(crate) fn usage(used: &Usage) -> Json {
+    json!({"instructions":used.instructions,"iterations":used.iterations,
+        "live_values":used.live_values,"live_value_bytes":used.live_value_bytes,
+        "total_value_bytes":used.total_value_bytes,"logical_bytes":used.logical_bytes})
+}
 pub(crate) fn text(value: &str) -> &str {
     let mut end = value.len().min(128);
     while !value.is_char_boundary(end) {

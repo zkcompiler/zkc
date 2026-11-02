@@ -210,7 +210,7 @@ entry fn Main(x:bool,count:index)->bool{
     for _ in range(8):
         expected = (expected * expected + 1) % 2130706433
     assert value == (str(expected) if numeric else True)
-    low, high = (r['execution']['usage']['instructions'] for r in (once, repeated))
+    low, high = (r['execution']['invocation']['instructions'] for r in (once, repeated))
     assert low < high
     ceiling = (low + high) // 2
     capacity = journal.write('cumulative.capacity.json', [
@@ -228,7 +228,7 @@ entry fn Main(x:bool,count:index)->bool{
     if numeric:
         expected.add('entry-host-numeric-stopped')
     assert refused['code'] in expected
-    usage = refused['execution']['usage']
+    usage = refused['execution']['invocation']
     assert usage['instructions'] <= ceiling
     calls = refused['execution']['calls']
     assert any(call['completed'] for call in calls)

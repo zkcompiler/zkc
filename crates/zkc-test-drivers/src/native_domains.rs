@@ -214,7 +214,6 @@ fn main() {
             }
             if case["retries"] == true && size == 7 {
                 use zkc::proof::AttemptPolicy;
-                use zkc_runtime::vm::{ValueBudget, WorkBudget};
                 let report = zkc_test_drivers::execute(
                     &deployment,
                     &producer,
@@ -225,8 +224,8 @@ fn main() {
                             attempts: 3,
                             proof_bytes: 1048576,
                         },
-                        work: WorkBudget::default(),
-                        values: ValueBudget::default(),
+                        instructions: zkc_runtime::vm::Limits::INSTRUCTIONS,
+                        iterations: zkc_runtime::vm::Limits::ITERATIONS,
                     }),
                 )
                 .unwrap();

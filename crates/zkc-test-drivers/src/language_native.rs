@@ -126,6 +126,22 @@ fn returned(runner: &mut Participant) -> Vec<Value> {
 fn expect_field(value: &Value, n: u64) {
     assert!(matches!(value, Value::Field(actual) if *actual == Scalar::from(n)));
 }
+/// Execute a prepared run and render its diagnostics, with the root's logical
+/// work and fresh bytes less what preparing the request charged: the
+/// execution's own charges, which do not depend on how equal inputs arrived.
+fn executed(plan: zkc::run::PreparedRun<'_>) -> (zkc::run::HostReport, serde_json::Value) {
+    let prepared = plan.invocation_ledger().snapshot();
+    let report = plan.execute();
+    let mut rendered = report.diagnostics();
+    let root = &mut rendered["invocation"];
+    for (field, before) in [
+        ("logical_bytes", prepared.logical_bytes),
+        ("total_value_bytes", prepared.total_value_bytes as u64),
+    ] {
+        root[field] = json!(root[field].as_u64().unwrap() - before);
+    }
+    (report, rendered)
+}
 fn joint(bundle: &serde_json::Value, verifier_c: u64) {
     let bytes = bundle.to_string().into_bytes();
     let host = RunHost::admit(
@@ -157,11 +173,7 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         ],
         []
     ]);
-    let report = host
-        .prepare(inputs.to_string().as_bytes())
-        .unwrap()
-        .execute();
-    let result = report.diagnostics();
+    let (report, result) = executed(host.prepare(inputs.to_string().as_bytes()).unwrap());
     assert_eq!(result["outcome"], json!(["completed"]));
     assert!(report.cleanup_errors.is_empty());
     let verifier = &report.execution.as_ref().unwrap().roles[1];
@@ -186,10 +198,7 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         ],
         setups: Default::default(),
     };
-    assert_eq!(
-        host.prepare_typed(&typed).unwrap().execute().diagnostics(),
-        result
-    );
+    assert_eq!(executed(host.prepare_typed(&typed).unwrap()).1, result);
 }
 fn service_backend(
     bundle: &serde_json::Value,

@@ -204,7 +204,10 @@ Direct proof commands use `--service=ROLE.NAME=COUNT`,
 selects the [capacity record](../spec/runtime/capacity.md#application-capacity):
 its live, fresh and logical byte fields bound the invocation root, from request
 decoding through result publication, which every participant runner charges as
-it executes; its other fields bound each operation and runner. `--material-limits=FILE`
+it executes; its other fields bound each operation and runner. The `--json`
+report renders the root's usage as `invocation`, beside each runner's own
+([reported usage](../spec/runtime/capacity.md#reported-usage)), so a record can
+state its ceilings from the totals a run reported. `--material-limits=FILE`
 selects the [material allowances](../spec/runtime/capacity.md#host-allowances)
 for the public statement, named references, setup material and retained
 imports. Setup material, including key files read with `--key`, defaults to

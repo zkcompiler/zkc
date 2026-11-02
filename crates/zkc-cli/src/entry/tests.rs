@@ -960,9 +960,24 @@ fn function_results_are_encoded_under_the_invocation_ledger() {
     };
     let report = run("run", &options, &invocation(None));
     assert_eq!(report["status"], "executed", "{report}");
-    let used = report["execution"]["usage"]["logical_bytes"]
-        .as_u64()
-        .unwrap();
+    // A Function's root pools the instruction and iteration meter, which its
+    // rendered usage reports beside the bytes, in the one shape of every
+    // report; the Function's own counters stay under `usage`.
+    let root = &report["execution"]["invocation"];
+    assert_eq!(
+        root.as_object().unwrap().keys().collect::<Vec<_>>(),
+        [
+            "instructions",
+            "iterations",
+            "live_value_bytes",
+            "logical_bytes",
+            "total_value_bytes"
+        ]
+    );
+    assert!(root["instructions"].as_u64().unwrap() > 0);
+    assert_eq!(root["iterations"], 0);
+    assert!(report["execution"]["usage"].get("instructions").is_none());
+    let used = root["logical_bytes"].as_u64().unwrap();
     std::fs::remove_file(&results).unwrap();
     // Execution fits, but the first 512-byte result buffer does not: the
     // encoder draws on the invocation root, which the record's logical work

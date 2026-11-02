@@ -501,6 +501,22 @@ impl Capacity {
     pub(crate) fn pooled_root(&self) -> ExecutionLedger {
         ExecutionLedger::new(self.values, self.work)
     }
+    /// The record that the runners of a root which pools their fuel take, as
+    /// a Function's children do: the same selections, and no instruction or
+    /// iteration fuel of a runner's own. The pooled meter is their only fuel
+    /// limit, so their own budget is the interpreter's hard ceiling, which no
+    /// pooled selection exceeds, and no figure derived from what the meter
+    /// has left reaches them.
+    pub(crate) fn pooled_runners(&self) -> Self {
+        Self {
+            work: WorkBudget {
+                instructions: Self::HARD_MAX.work.instructions,
+                iterations: Self::HARD_MAX.work.iterations,
+                ..self.work
+            },
+            ..*self
+        }
+    }
     /// The budgets of a runner that charges the root: the record's
     /// instruction and iteration fuel, and no byte budget of its own, since
     /// the root bounds every byte the runner charges.

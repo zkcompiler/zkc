@@ -502,7 +502,7 @@ def test_numerical_source_value_and_execution_failure(toolchain, journal, direct
     report = journal.json([toolchain.runtime, '--json', 'run', 'Twice', *target,
                            f'--input={inputs}', f'--results={output}'])
     assert json.loads(output.read_text())['value'] == '9'
-    assert report['execution']['usage']['instructions'] > 0
+    assert report['execution']['invocation']['instructions'] > 0
     sentinel = output.read_bytes()
     write(inputs, {'value': '7', 'valid': False})
     failed = journal.json([toolchain.runtime, '--json', 'run', 'Checked', *target,

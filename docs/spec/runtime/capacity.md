@@ -54,7 +54,8 @@ Instructions and iterations are the fuel of each runner. The root of a Run or
 Proof invocation pools no fuel: it meters no instruction or iteration. In a
 Function invocation the interpreter and every reached child share the root, so
 the two fields instead select the meter they pool there, at invocation scope,
-and each reached child runs on what remains of it
+and that meter is the only fuel limit of every reached child's runners, which
+keep no fuel of their own
 ([Function instructions and iterations](#host-allowances)). A Function differs
 because its aggregate work must be bounded across its children; a standalone
 roster never pools its runners' fuel.
@@ -216,11 +217,14 @@ Function's root, `ExecutionLedger::new(ValueBudget, WorkBudget)`, also pools
 the instruction and iteration meter of its interpreter and children. Every
 participant of a run, every proof runner and attempt, and every Function child,
 joint participant or numerical child, receives a clone of the same handle from
-the Host. Each runner keeps its own instruction and iteration fuel, charging
-the root's meter as well when the root pools it, and its own usage counters and
-backend-local retention/validation ledger, but no byte allowance of its own;
-an attempt's runner alone keeps byte sublimits, its
-[attempt policy](attempts.md)'s. Creating a child never replenishes shared
+the Host. Each runner keeps its own usage counters and backend-local
+retention/validation ledger, but no byte allowance of its own, an attempt's
+runner included. A runner of a root that pools no fuel keeps its own
+instruction and iteration fuel. A runner of a root that pools fuel, as a
+Function's children are, charges the root's meter and keeps no fuel of its
+own: its own budget is the interpreter's hard ceiling, which no pooled
+selection exceeds, and before each instruction it checks the root's meter, so
+the meter is its only fuel limit. Creating a child never replenishes shared
 capacity. Native sequence, external and Ring work are
 [Host allowances](#host-allowances); wire/proof transport, loading and scratch
 also charge the root while keeping their own allowances. Hosts apply
@@ -302,17 +306,19 @@ logical work, fresh allocation, live retention and withheld output capacity.
 | Entry kind | Root | Runners |
 |---|---|---|
 | Run | Created at preparation from `HostLimits::capacity`; a run started by an outer invocation uses the outer root | Each participant charges its bytes to the root and keeps the record's instructions and iterations as its own fuel |
-| Proof | Created from `ProofOptions::capacity` (`NativeDeployment::with_capacity`) at the call's preflight (`preflight_call`, `preflight_document_call`) or at `prove`, `verify` or `prove_attempts`, and kept by `ProofCall`, `ProofReport` and `ProofResult`; a proof started by an outer invocation uses the outer root | The selected role's runner, and each attempt's runner, charge their bytes to the root and keep their own fuel; an attempt's runner also keeps its attempt policy's byte sublimits |
-| Function | Created at preparation from `FunctionOptions::limits.capacity`, with the pooled instruction and iteration meter, and shared with every reached child | Child runners charge their bytes to the root and run on what remains of the pooled meter |
+| Proof | Created from `ProofOptions::capacity` (`NativeDeployment::with_capacity`) at the call's preflight (`preflight_call`, `preflight_document_call`) or at `prove`, `verify` or `prove_attempts`, and kept by `ProofCall`, `ProofReport` and `ProofResult`; a proof started by an outer invocation uses the outer root | The selected role's runner, and each attempt's runner, charge their bytes to the root and keep their own fuel, cumulative across the attempts |
+| Function | Created at preparation from `FunctionOptions::limits.capacity`, with the pooled instruction and iteration meter, and shared with every reached child | Child runners charge their bytes and their instructions and iterations to the root; the pooled meter is their only fuel limit |
 | Backend run | `BackendRun::execute` creates it from the byte budgets of the selected `RunLimits`; the report keeps it | Each participant charges its bytes to the root and keeps the selected instructions and iterations as its own fuel |
 | Backend participant | `InputBoundBackendRun::start_role` creates one for each started participant from the selected byte budgets, an invocation of its own as in an independent process | The started runner charges its bytes there and keeps the selected instructions and iterations as its own fuel |
 
-Every participant runner charges the root as it executes and keeps its own
-instruction and iteration fuel, so a standalone roster never pools fuel while
-the root bounds the bytes of the Host and of every runner together: runners
-that each fit the record alone can together exceed it. When the root cannot
-afford a runner's charge, the runner stops with its own limit stop, and the
-report keeps both the runner's usage and the root's. The Host and the runner
+Every participant runner charges the root as it executes, and a runner of a
+Run or Proof invocation keeps its own instruction and iteration fuel, so a
+standalone roster never pools fuel while the root bounds the bytes of the Host
+and of every runner together: runners that each fit the record alone can
+together exceed it. When the root cannot afford a runner's charge, its byte
+charge or a Function child's charge of the pooled meter, the runner stops with
+its own limit stop, and the report keeps both the runner's usage and the
+root's ([reported usage](#reported-usage)). The Host and the runner
 exchange custody at the runner's boundaries. Loaded inputs pass to the runner
 when it starts: the Host's reservation of them ends there, and the runner
 charges them as it retains them. Returned values pass back when it finishes
@@ -348,6 +354,37 @@ for a Function's proof child is the Function's root; when the root cannot
 afford it, the rendering is the bounded summary with
 `"diagnostics": "omitted"`. Each rendering charges again. Diagnostics that a Host never renders charge nothing
 beyond their retained storage.
+
+### Reported usage
+
+Every report of an invocation renders its root's usage in one shape, under the
+key `invocation`: the run report (`HostReport`, the CLI `zkc.bundle-result/0`),
+the proof report (`NativeProofReport`, under `execution` in the `zkc prove` and
+`zkc verify` reports and at the top level of the `zkc bundle prove` and
+`zkc bundle verify` reports), the Function report (`FunctionReport`, under
+`execution` in the `zkc run` report), the bounded summaries a Function's call
+receipts keep of its run and proof children, and each numerical child's
+receipt:
+
+```text
+{"instructions": N | null, "iterations": N | null, "logical_bytes": N,
+ "total_value_bytes": N, "live_value_bytes": N}
+```
+
+`logical_bytes`, `total_value_bytes` and `live_value_bytes` are the root's
+committed logical work, its cumulative fresh bytes and the live bytes it holds,
+which the record's `logical_bytes`, `total_bytes` and `live_bytes` bound; they
+take the names of a runner's own usage, which reports render beside the root's.
+`instructions` and `iterations` are the pooled meter's, in a Function's root,
+and `null` in a root that pools no fuel. The figure is the root's usage when
+the invocation's execution ended: after every runner, cleanup and, for an
+Entry, its result reconstruction. A receipt's figure is the root's usage when
+that child ended. Renderings of diagnostics, result encodings and copies charge
+the root beyond it, each again, so every rendering of a report reports the same
+figure. A refused or stopped invocation reports the usage its committed charges
+reached, beside each runner's own, so the bound that was met is observable. A
+record that selects exactly the reported logical work or fresh bytes leaves no
+room for the renderings and encodings that follow.
 
 ### Root refusals
 
@@ -513,15 +550,16 @@ The Function instruction and iteration allowances are the meter that a
 Function invocation's interpreter and every reached child pool in the root,
 selected by the capacity record's `instructions` and `iterations`. A Function
 differs from standalone runs because its aggregate work must be bounded across
-its children: each child's runner shares the root and runs on what remains of
-the meter, while a standalone runner keeps its own fuel and a standalone
-roster never pools it.
+its children: each child's runner shares the root and charges the meter, its
+only fuel limit, keeping no fuel of its own, while a standalone runner keeps
+its own fuel and a standalone roster never pools it. A child the meter stops
+stops with its own limit stop.
 
 A Function takes the same record in `FunctionOptions::limits`. Each reached
-child receives what remains of each Host allowance after earlier children,
-divided equally across a joint roster, and its runners charge the record's
-byte allowances in the shared root; a child never replenishes the parent's
-allowance.
+child receives what remains of its dispatch, wire, external, Ring and sequence
+allowances after earlier children, divided equally across a joint roster, and
+its runners charge the record's byte allowances and the pooled meter in the
+shared root; a child never replenishes the parent's allowance.
 
 [Numerical calls](numerical.md#managed-construction) additionally bound managed
 scratch, result-construction overlap and numerical work in their migrated native

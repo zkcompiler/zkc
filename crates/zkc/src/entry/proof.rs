@@ -700,8 +700,10 @@ impl ProofEntry {
                         attempts: options.count,
                         proof_bytes: options.proof_bytes,
                     },
-                    work: capacity.work,
-                    values: capacity.values,
+                    // The runner's fuel across attempts; the call's root
+                    // bounds every attempt's bytes.
+                    instructions: capacity.work.instructions,
+                    iterations: capacity.work.iterations,
                 })
             } else {
                 None
@@ -794,6 +796,7 @@ impl ProofEntry {
         if report.native.outcome.is_err() || !report.native.cleanup_errors.is_empty() {
             return report;
         }
+        // The call's execution ends with the reconstruction of its results.
         if let Some(outputs) = &native_outputs {
             let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
             let result = (|| -> Result<(NamedValues, zkc_runtime::vm::LiveReservation)> {
@@ -832,6 +835,7 @@ impl ProofEntry {
                 Err(code) => report.output_error = Some(code),
             }
         }
+        report.native.record_invocation_usage();
         report
     }
 }

@@ -143,11 +143,18 @@ def test_committed_state_is_retained_once_across_64_openings(toolchain, journal,
     assert last['total_value_bytes'] < 64 * state
 
 
-def exhausted(report):
-    """A refusal by a runner budget or by a kernel's allowance preflight."""
-    stop = report['execution']['stop']
+def exhausted(report, code):
+    """A prover stopped at a stated bound: by its own limit stop
+    (`artifact-stopped:Limit`) or by a kernel's output allowance preflight
+    (`exhausted:output-bytes`). A root left without room for a rendering keeps
+    the bounded summary, so the stop is read from either rendering."""
     assert report['status'] == 'refused'
-    assert stop['kind'] == 'Limit' or 'exhausted:output-bytes' in stop['kind'], stop
+    assert report['code'] == code, report['code']
+    stop = report['execution']['stop']
+    if code == 'artifact-stopped:Limit':
+        assert stop['kind'] == 'Limit', stop
+    else:
+        assert code in json.dumps(stop), stop
     return stop
 
 
@@ -155,27 +162,40 @@ def test_stated_budgets_bind_shared_storage_and_repeated_reads(toolchain, journa
     field = 'koala-bear.ext8-binomial3'
     case = Case(toolchain, journal, directory, field, 1, DEFAULT)
     produced, _ = case.prove(64)
-    usage = produced['execution']
-    # Sharing does not make reads free: one byte less logical work stops the
-    # prover in its final opening, before it publishes a proof.
-    limited = json.loads(json.dumps(DEFAULT))
-    limited[5][2] = str(usage['logical_bytes'] - 1)
-    refused, proof = case.prove(64, limited, refuses=True)
-    stop = exhausted(refused)
+    runner = produced['execution']
+    # The invocation root bounds the prover's bytes together with the Host's
+    # own, so its totals are the stated boundary. It pools no fuel.
+    root = runner['invocation']
+    assert root['instructions'] is None and root['iterations'] is None
+    assert root['logical_bytes'] > runner['logical_bytes']
+    assert root['total_value_bytes'] > runner['total_value_bytes']
+
+    def stated(index, value):
+        limited = json.loads(json.dumps(DEFAULT))
+        limited[index[0]][index[1]] = str(value)
+        return limited
+
+    # Sharing does not make reads free: one byte less logical work than the
+    # root's total stops the prover in its final opening, before it publishes
+    # a proof. The failing kernel commits the allowance it withheld, so the
+    # root reaches the bound exactly.
+    refused, proof = case.prove(64, stated((5, 2), root['logical_bytes'] - 1), refuses=True)
+    stop = exhausted(refused, 'exhausted:output-bytes')
     assert stop['origin'][4][-1][2] == '63' and not proof.exists()
-    assert refused['execution']['logical_bytes'] < usage['logical_bytes']
-    # The fresh-allocation ceiling binds at the measured total and not before.
-    limited = json.loads(json.dumps(DEFAULT))
-    limited[6][1] = str(usage['total_value_bytes'])
-    assert case.prove(64, limited)[0]['status'] == 'produced'
-    limited[6][1] = str(usage['total_value_bytes'] - 1)
-    exhausted(case.prove(64, limited, refuses=True)[0])
+    assert refused['execution']['invocation']['logical_bytes'] == root['logical_bytes'] - 1
+    # The stated total itself completes.
+    completed, proof = case.prove(64, stated((5, 2), root['logical_bytes']))
+    assert completed['status'] == 'produced' and proof.exists()
+    # The fresh-allocation ceiling binds at the root's total and not before.
+    completed, proof = case.prove(64, stated((6, 1), root['total_value_bytes']))
+    assert completed['status'] == 'produced' and proof.exists()
+    refused, proof = case.prove(64, stated((6, 1), root['total_value_bytes'] - 1), refuses=True)
+    exhausted(refused, 'artifact-stopped:Limit')
+    assert not proof.exists()
+    assert refused['execution']['invocation']['total_value_bytes'] < root['total_value_bytes']
     # Live storage must hold the vector and the committed state together.
-    limited = json.loads(json.dumps(DEFAULT))
-    limited[6][0] = str(state_bytes(field, 1))
-    stop = exhausted(case.prove(64, limited, refuses=True)[0])
+    stop = exhausted(case.prove(64, stated((6, 0), state_bytes(field, 1)), refuses=True)[0],
+                     'exhausted:output-bytes')
     assert stop['origin'][4] == []
     # The work ceiling cannot be raised above its installed maximum.
-    limited = json.loads(json.dumps(DEFAULT))
-    limited[5][2] = str(4294967297)
-    case.prove(1, limited, refuses='native-capacity-limit')
+    case.prove(1, stated((5, 2), 4294967297), refuses='native-capacity-limit')

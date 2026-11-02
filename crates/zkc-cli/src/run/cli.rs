@@ -155,6 +155,26 @@ mod tests {
             assert_eq!(report["cpu"]["workers"], threads.unwrap_or(1));
             assert_eq!(report["outcome"], json!(["completed"]));
             assert_eq!(report["roles"][0]["outputs"][0][2], "5a4b4356000500");
+            // The invocation root's usage beside each runner's own: a run's
+            // root pools no fuel, and it charged every byte the runner did.
+            let root = &report["invocation"];
+            assert_eq!(
+                root.as_object().unwrap().keys().collect::<Vec<_>>(),
+                [
+                    "instructions",
+                    "iterations",
+                    "live_value_bytes",
+                    "logical_bytes",
+                    "total_value_bytes"
+                ]
+            );
+            assert_eq!(root["instructions"], Json::Null);
+            assert_eq!(root["iterations"], Json::Null);
+            let usage = &report["roles"][0]["usage"];
+            assert_eq!(usage["instructions"], 1);
+            for field in ["logical_bytes", "total_value_bytes"] {
+                assert!(root[field].as_u64().unwrap() >= usage[field].as_u64().unwrap());
+            }
         }
     }
 }

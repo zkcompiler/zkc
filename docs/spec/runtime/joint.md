@@ -335,9 +335,12 @@ capacity before any entry.
 is shared by every runner, which charges every byte to it as it executes:
 logical work, fresh allocation, live retention and withheld output capacity.
 Each runner then keeps only the selected instructions and iterations as its
-own fuel, charging the ledger's meter too when the ledger pools fuel; `values`
-and the logical-work budget bound no runner on its own. A runner the ledger
-cannot afford stops with its own limit stop. A Host ledger is the
+own fuel, charging the ledger's meter too when the ledger pools fuel and
+checking that meter before each instruction; `values` and the logical-work
+budget bound no runner on its own. A Host whose ledger pools fuel, as a
+Function does for its children, selects the interpreter's hard ceilings, so
+the meter is the runners' only fuel limit. A runner the ledger cannot afford
+stops with its own limit stop. A Host ledger is the
 [invocation root](capacity.md#invocation-ledgers): it charges wire transport,
 the logical work and decoding reservation of every received payload, and
 report storage. A transport charge the root cannot afford fails as
@@ -530,7 +533,9 @@ budgets are separate from structural schedule size and runtime dispatch
 occurrences.
 
 `zkc.bundle-result/0` retains the primary outcome, reached schedule, pending-wire
-metadata, role states before/after cancellation, outputs, usage and backend work.
+metadata, role states before/after cancellation, outputs, each role's usage,
+the invocation root's usage as `invocation`
+([reported usage](capacity.md#reported-usage)) and backend work.
 After issuance begins, ordinary failures return a report and retire every issued
 capability and managed service, including partial initialization. Retirement or
 output encoding errors are separate diagnostics; they do not erase the primary

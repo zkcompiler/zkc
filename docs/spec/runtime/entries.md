@@ -411,8 +411,9 @@ otherwise it refuses with `entry-attempt-completion`. The adapter resolves that
 logical selector to its checked original native output and delegates to the
 existing attempt controller. `AttemptOptions` supplies count (default one) and
 per-attempt proof-byte ceiling (default the native proof limit). The admitted
-`ProofOptions::capacity` supplies cumulative interpreter work and payload limits;
-external, Ring and sequence work keep their [Host allowances](capacity.md#host-allowances).
+`ProofOptions::capacity` supplies the runner's instruction and iteration fuel,
+cumulative across the attempts, and its invocation root bounds every attempt's
+bytes; external, Ring and sequence work keep their [Host allowances](capacity.md#host-allowances).
 Native policy admission checks all limits before loading resources. No raw native
 port policy is needed in the source API; direct IR callers retain the native API.
 A producing proof child of a Function takes the same explicit authorization from
@@ -809,13 +810,15 @@ loop iterations to one cumulative meter in that root, an invocation-scope
 [allowance](capacity.md#host-allowances) that the capacity record's
 `instructions` and `iterations` select: by default 1,000,000 instructions and
 100,000 iterations, at most 2^32 of each. The interpreter charges one
-instruction per call and operation and one iteration per loop step; each
-reached child runs on what remains. A Function invocation's aggregate work must
-be bounded across its children, so its runners pool their fuel there. A
-standalone run or proof instead gives each runner its own fuel from the same
-record fields, and its root meters no instruction. When the interpreter's own
-charge finds a meter exhausted, the failure names it:
-`entry-host-instruction-limit` or `entry-host-iteration-limit`. The
+instruction per call and operation and one iteration per loop step. A Function
+invocation's aggregate work must be bounded across its children, so its
+runners pool their fuel there: a reached child's runners charge the meter and
+keep no fuel of their own, so the meter is their only fuel limit, and a child
+it stops stops with its own limit stop. A standalone run or proof instead gives
+each runner its own fuel from the same record fields, and its root meters no
+instruction. When the interpreter's own charge finds a meter exhausted, the
+failure names it: `entry-host-instruction-limit` or
+`entry-host-iteration-limit`. The
 Function's own storage and work in the root refuse with
 `entry-host-bytes-limit` or `entry-host-work-limit`
 ([root refusals](capacity.md#root-refusals)).
@@ -823,7 +826,7 @@ Function's own storage and work in the root refuse with
 `FunctionOptions::limits` is the same Host policy record a standalone run
 admits. Each reached child receives what remains of its dispatch, wire, external,
 Ring and sequence allowances after earlier children, divided equally across a
-joint roster, and of the pooled instruction and iteration meter. A producing proof child applies the explicit attempt authorization
+joint roster; its fuel is the pooled meter. A producing proof child applies the explicit attempt authorization
 that `FunctionOptions::attempts` names for its deployment, exactly as
 `ProofEntry::prove_attempts` does; admission refuses an authorization for an
 unknown deployment (`entry-host-attempts`), a verifying deployment
@@ -857,8 +860,12 @@ is not refunded; `service_allowances` and actual `service_draws` are separate
 reported quantities.
 
 A terminal report separates its successful typed source value from failure,
-cumulative usage and a bounded payload-free call journal. A child failure
-retains the reached call path and native stop/cleanup evidence. Successful
+cumulative usage and a bounded payload-free call journal. Its rendering reports
+the root's usage as `invocation` ([reported usage](capacity.md#reported-usage)),
+including the pooled meter, and the Function's own dispatch, wire, proof,
+external, Ring, sequence and service counters as `usage`. Each call receipt
+keeps its child's own usage and the root's usage when the child ended. A child
+failure retains the reached call path and native stop/cleanup evidence. Successful
 intermediate values are not publication roots. No implicit retries, parallel
 calls or caching change source order. Semantic verification rejection returns
 Rejected without verifier outputs; framing, stop, input and cleanup failures

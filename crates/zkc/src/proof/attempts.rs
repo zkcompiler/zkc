@@ -10,6 +10,8 @@ use zkc_runtime::{
 
 /// Application policy, independent of the candidate and its proof. Ports refer
 /// to the original common-program signature, as in native invocation inputs.
+/// The call's invocation root bounds every byte of every attempt, so the
+/// policy selects no byte allowance.
 #[derive(Clone, Debug)]
 pub struct AttemptPolicy {
     /// Producer Boolean output: true completes; false requests another attempt.
@@ -17,10 +19,10 @@ pub struct AttemptPolicy {
     /// Every RNG input and its returned successor output, exactly once.
     pub rng: Vec<(usize, usize)>,
     pub limits: AttemptLimits,
-    /// Cumulative interpreter and logical work across all attempts.
-    pub work: WorkBudget,
-    /// Live payload limit per attempt; cumulative fresh allocation per session.
-    pub values: ValueBudget,
+    /// The producer runner's instructions, cumulative across all attempts.
+    pub instructions: u64,
+    /// The producer runner's loop iterations, cumulative across all attempts.
+    pub iterations: u64,
 }
 
 #[derive(Debug)]
@@ -54,13 +56,12 @@ impl AttemptPolicy {
     /// Bounded array/string invocation format; parsing grants no deployment authority.
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = super::parse(bytes, 64 * 1024)?;
-        let row = array(&value, 6)?;
+        let row = array(&value, 5)?;
         if text(&row[0])? != "zkc.native-attempt-policy/0" {
             return Err("native-attempt-policy".into());
         }
         let limits = array(&row[3], 2)?;
-        let work = array(&row[4], 3)?;
-        let values = array(&row[5], 2)?;
+        let fuel = array(&row[4], 2)?;
         let size = |v: &Json| {
             usize::try_from(natural(v)?).map_err(|_| String::from("native-attempt-limits"))
         };
@@ -81,15 +82,8 @@ impl AttemptPolicy {
                 attempts: natural(&limits[0])?,
                 proof_bytes: size(&limits[1])?,
             },
-            work: WorkBudget {
-                instructions: natural(&work[0])?,
-                iterations: natural(&work[1])?,
-                logical_bytes: natural(&work[2])?,
-            },
-            values: ValueBudget {
-                live_bytes: size(&values[0])?,
-                total_bytes: size(&values[1])?,
-            },
+            instructions: natural(&fuel[0])?,
+            iterations: natural(&fuel[1])?,
         })
     }
     pub(super) fn identity(&self) -> String {
@@ -106,15 +100,7 @@ impl AttemptPolicy {
                 self.limits.attempts.to_string(),
                 self.limits.proof_bytes.to_string()
             ],
-            [
-                self.work.instructions.to_string(),
-                self.work.iterations.to_string(),
-                self.work.logical_bytes.to_string()
-            ],
-            [
-                self.values.live_bytes.to_string(),
-                self.values.total_bytes.to_string()
-            ]
+            [self.instructions.to_string(), self.iterations.to_string()]
         ]);
         hash(&serde_json::to_vec(&record).expect("array/string policy encodes"))
     }
@@ -122,11 +108,8 @@ impl AttemptPolicy {
         if self.limits.attempts == 0
             || self.limits.attempts > Self::MAX_ATTEMPTS
             || self.limits.proof_bytes > super::MAX_PROOF_BYTES
-            || self.work.instructions > deployment.capacity.work.instructions
-            || self.work.iterations > deployment.capacity.work.iterations
-            || self.work.logical_bytes > deployment.capacity.work.logical_bytes
-            || self.values.live_bytes > deployment.capacity.values.live_bytes
-            || self.values.total_bytes > deployment.capacity.values.total_bytes
+            || self.instructions > deployment.capacity.work.instructions
+            || self.iterations > deployment.capacity.work.iterations
         {
             return Err("native-attempt-limits".into());
         }
@@ -305,37 +288,16 @@ impl Session<'_> {
         let mut result = match issued {
             Err(error) => Err(error),
             Ok(()) => {
-                let work = WorkBudget {
-                    instructions: self
-                        .plan
+                // What remains of the policy's fuel is this attempt's own;
+                // the call's root bounds every byte it charges, as for a
+                // one-shot runner.
+                let fuel = WorkBudget::fuel(
+                    self.plan
                         .policy
-                        .work
                         .instructions
                         .saturating_sub(used.instructions),
-                    iterations: self
-                        .plan
-                        .policy
-                        .work
-                        .iterations
-                        .saturating_sub(used.iterations),
-                    logical_bytes: self
-                        .plan
-                        .policy
-                        .work
-                        .logical_bytes
-                        .saturating_sub(used.logical_bytes),
-                };
-                let values = ValueBudget {
-                    live_bytes: self.plan.policy.values.live_bytes,
-                    total_bytes: self
-                        .plan
-                        .policy
-                        .values
-                        .total_bytes
-                        .saturating_sub(used.total_value_bytes),
-                };
-                // The policy's remaining allowances are this attempt's own
-                // sublimits; the call's root charges every byte it retains.
+                    self.plan.policy.iterations.saturating_sub(used.iterations),
+                );
                 match Runner::new_for_role_with_ledger(
                     self.deployment.entry.admitted(),
                     self.deployment.entry.entry(),
@@ -343,8 +305,8 @@ impl Session<'_> {
                     "native-proof",
                     backend,
                     invocation_inputs,
-                    values,
-                    work,
+                    ValueBudget::UNBOUNDED,
+                    fuel,
                     self.deployment.host_ledger().cloned(),
                 ) {
                     Err(failed) => {
@@ -599,7 +561,7 @@ mod tests {
     use super::*;
     #[test]
     fn attempt_policy_ingress_is_bounded_and_canonical() {
-        let valid = br#"["zkc.native-attempt-policy/0","1",[["2","2"]],["4","1024"],["100","10","65536"],["4096","8192"]]"#;
+        let valid = br#"["zkc.native-attempt-policy/0","1",[["2","2"]],["4","1024"],["100","10"]]"#;
         let p = AttemptPolicy::parse(valid).unwrap();
         assert_eq!(p.rng, [(2, 2)]);
         assert_eq!(p.identity(), hash(valid));
@@ -623,12 +585,23 @@ mod tests {
             AttemptPolicy::parse(unknown_format.as_bytes()).unwrap_err(),
             "native-attempt-policy"
         );
-        for work in ["[\"100\",\"10\"]", "[\"100\",\"0\",\"10\",\"65536\"]"] {
+        // The policy selects fuel only; the invocation root bounds bytes, so a
+        // logical-work or byte field refuses as an unknown field would.
+        for fuel in [
+            "[\"100\"]",
+            "[\"100\",\"10\",\"65536\"]",
+            "[\"100\",\"0\",\"10\",\"65536\"]",
+        ] {
             let changed = String::from_utf8(valid.to_vec())
                 .unwrap()
-                .replace("[\"100\",\"10\",\"65536\"]", work);
+                .replace("[\"100\",\"10\"]", fuel);
             assert!(AttemptPolicy::parse(changed.as_bytes()).is_err());
         }
+        let with_bytes = String::from_utf8(valid.to_vec()).unwrap().replace(
+            "[\"100\",\"10\"]]",
+            "[\"100\",\"10\",\"65536\"],[\"4096\",\"8192\"]]",
+        );
+        assert!(AttemptPolicy::parse(with_bytes.as_bytes()).is_err());
         let mut changed = p.clone();
         changed.completion = 2;
         assert_ne!(p.identity(), changed.identity());
