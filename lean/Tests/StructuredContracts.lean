@@ -126,6 +126,17 @@ private def runWire : IO Unit := do
     ("eleven", (Format.snapshot (arr wire)).isOk),
     ("ten-refused", refusal (Format.snapshot (arr (wire.take 10))) "structured-envelope"),
     ("twelve-refused", refusal (Format.snapshot (arr (wire ++ [Lean.Json.null]))) "structured-envelope"),
+    -- The three-table declarations carrier is named as unsupported; any other
+    -- shape that is not the two-table carrier is malformed.
+    ("declarations-three-tables-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr [], arr [], arr []]))))
+        "structured-declarations-unsupported"),
+    ("declarations-one-table-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr []])))) "component-declaration"),
+    ("declarations-four-tables-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr [], arr [], arr [], arr []])))) "component-declaration"),
+    ("declarations-three-slots-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr [], arr [], .null])))) "component-declaration"),
     ("formula-field", (Format.relation (arr relationWire)).isOk),
     ("relation-missing", refusal (Format.relation (arr (relationWire.take 9))) "structured-relation"),
     ("relation-extra", refusal (Format.relation (arr (relationWire ++ [Lean.Json.null]))) "structured-relation"),

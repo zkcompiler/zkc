@@ -530,6 +530,11 @@ def source_protocol(value):
 
 
 def source_declarations(value):
+    """Render the two-table carrier `[records, protocols]`. The three-table
+    carrier `[records, protocols, authorities]` is refused by name, so an
+    unsupported carrier stays distinct from a malformed one."""
+    if isinstance(value, list) and len(value) == 3 and all(isinstance(table, list) for table in value):
+        raise lean_render.Refused("structured-declarations-unsupported")
     records, protocols = record(value, 2)
     return (f"{{ records := {seq(records, source_record)}, "
             f"protocols := {seq(protocols, source_protocol)} }}")

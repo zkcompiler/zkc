@@ -15,6 +15,7 @@ sys.path.insert(0, str(HERE))
 import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 from bridges.common import catalogue as catalogue_rows  # noqa: E402
+from bridges.common.lean_render import Refused  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("structured_snapshot", HERE / "bridges/structured/snapshot.py")
 renderer = importlib.util.module_from_spec(spec)
@@ -365,6 +366,24 @@ example : (RenderedAnchor.snapshot.contracts[0]?.bind fun owner =>
         except ValueError:
             continue
         raise AssertionError("renderer accepted malformed contract metadata")
+    # The three-table declarations carrier is refused by name, also through a
+    # whole snapshot; other carriers that are not two tables keep the shape refusal.
+    three_tables = copy.deepcopy(data)
+    three_tables[10] = [[], [], []]
+    for render, invalid, expected in [
+            (renderer.source_declarations, [[], [], []], "structured-declarations-unsupported"),
+            (lambda value: renderer.render(value, "RenderedThreeTables"), three_tables,
+             "structured-declarations-unsupported"),
+            (renderer.source_declarations, [[]], "expected array of size 2"),
+            (renderer.source_declarations, [[], [], None], "expected array of size 2"),
+            (renderer.source_declarations, [[], [], [], []], "expected array of size 2")]:
+        try:
+            render(invalid)
+        except Refused as error:
+            if str(error) != expected:
+                raise AssertionError(f"declarations carrier refused with {error!r}, expected {expected!r}")
+            continue
+        raise AssertionError("renderer accepted an unsupported declarations carrier")
     # Parse the full u64 endpoint through Lean's own string/constructor syntax.
     # Admission, rather than the renderer, checks the primitive contract.
     maximum = "18446744073709551615"

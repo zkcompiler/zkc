@@ -506,13 +506,19 @@ def sourcePort (json : Json) : Except String SourcePort := do
   return ⟨← string name, ← OriginFormat.term Limits.nesting type,
     ← strings roles 16, ← natural offset, ← natural count 512⟩
 
+/-- This reader decodes the two-table carrier `[records, protocols]`. The
+three-table carrier `[records, protocols, authorities]` is refused by name, so an
+unsupported carrier stays distinct from a malformed one. -/
 def sourceDeclarations (json : Json) : Except String SourceDeclarations := do
-  let [records, protocols] ← array json | throw "component-declaration"
-  let protocols ← (← array protocols Limits.tableEntries).mapM fun protocol => do
-    let [name, inputs, outputs] ← array protocol | throw "component-declaration"
-    return SourceProtocol.mk (← string name) (← (← array inputs).mapM sourcePort)
-      (← (← array outputs).mapM sourcePort)
-  return ⟨← (← array records Limits.tableEntries).mapM sourceRecord, protocols⟩
+  match ← array json with
+  | [records, protocols] =>
+    let protocols ← (← array protocols Limits.tableEntries).mapM fun protocol => do
+      let [name, inputs, outputs] ← array protocol | throw "component-declaration"
+      return SourceProtocol.mk (← string name) (← (← array inputs).mapM sourcePort)
+        (← (← array outputs).mapM sourcePort)
+    return ⟨← (← array records Limits.tableEntries).mapM sourceRecord, protocols⟩
+  | [.arr _, .arr _, .arr _] => throw "structured-declarations-unsupported"
+  | _ => throw "component-declaration"
 
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with
