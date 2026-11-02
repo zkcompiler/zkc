@@ -207,17 +207,23 @@ struct ArgumentPattern {
   std::optional<TypeTree> type;
   uint64_t minimum, maximum;
 };
-struct RepresentationChild {
+/// The key of one representation row.
+struct RepresentationReference {
   std::string kind, domain, representation;
 };
+/// A dense container has a `child`, a `provider` and a `vectorPort`: the
+/// provider's dense operations use this container and exchange vectors in the
+/// port's representation, a calling convention of the installation.
 struct AppliedRepresentation {
   std::string constructor;
   std::vector<ArgumentPattern> arguments;
   std::string identity;
   bool isDefault;
-  std::optional<RepresentationChild> child;
+  std::optional<RepresentationReference> child;
   ValueFrame frame;
+  std::optional<std::string> provider;
   std::string unit;
+  std::optional<RepresentationReference> vectorPort;
 };
 struct Provider {
   std::string domain, defaultProvider;

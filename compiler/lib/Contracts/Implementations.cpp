@@ -21,10 +21,9 @@ using Family = ImplementationDescriptor::Family;
 
 // Dense family support: the installation's applied representations that own
 // a single dense child. Each row supplies descriptor facts and validates
-// provider/layout agreement; implementation identities stay opaque. Its
-// provider is the one the child's domain lists (as default or alternative)
-// whose installation unit owns the container, and its vector port is that
-// unit's layout-free vector representation of the child's domain.
+// provider/layout agreement; implementation identities stay opaque. The row
+// declares its calling convention: the provider whose dense operations use the
+// container, and the vector port representation those operations exchange.
 struct DenseLayoutRow {
   Family family;
   StringRef provider, domain, container, vector;
@@ -45,32 +44,11 @@ ArrayRef<DenseLayoutRow> denseLayouts() {
         family = Family::FixedVector;
       else
         invalidDenseLayout(row.identity + " has no dense family");
-      StringRef domain = row.child->domain;
-      const auto *preference = installation::provider(domain);
-      if (!preference)
-        invalidDenseLayout(domain + " has no provider row");
-      StringRef provider;
-      std::vector<StringRef> named{preference->defaultProvider};
-      named.insert(named.end(), preference->alternatives.begin(),
-                   preference->alternatives.end());
-      for (StringRef candidate : named)
-        if (installation::providerUnit(candidate) == row.unit) {
-          if (!provider.empty())
-            invalidDenseLayout(row.identity + " has two providers");
-          provider = candidate;
-        }
-      StringRef vector;
-      for (const auto &representation : installation::representations())
-        if (representation.kind == "vector" &&
-            representation.domain == domain &&
-            representation.unit == row.unit && representation.layout.empty()) {
-          if (!vector.empty())
-            invalidDenseLayout(row.identity + " has two vector layouts");
-          vector = representation.identity;
-        }
-      if (provider.empty() || vector.empty())
-        invalidDenseLayout(row.identity + " has no provider vector layout");
-      result.push_back({family, provider, domain, row.identity, vector});
+      // The generated tables are checked: a dense row declares both.
+      if (!row.provider || !row.vectorPort)
+        invalidDenseLayout(row.identity + " declares no calling convention");
+      result.push_back({family, *row.provider, row.child->domain, row.identity,
+                        row.vectorPort->representation});
     }
     return result;
   }();

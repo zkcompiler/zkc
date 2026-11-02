@@ -345,21 +345,27 @@ impl Identities {
                 )),
             }
         })?;
-        let child = &row["child"];
-        let child = if child.is_null() {
-            "None".into()
-        } else {
-            format!(
+        let representation_key = |value: &Value| -> Result<String> {
+            if value.is_null() {
+                return Ok("None".into());
+            }
+            Ok(format!(
                 "Some({})",
                 record(
-                    "RepresentationChild",
+                    "RepresentationReference",
                     &[
-                        ("kind", quoted(&child["kind"])?),
-                        ("domain", self.optional(&child["domain"])?),
-                        ("representation", quoted(&child["representation"])?),
+                        ("kind", quoted(&value["kind"])?),
+                        ("domain", self.optional(&value["domain"])?),
+                        ("representation", quoted(&value["representation"])?),
                     ],
                 )
-            )
+            ))
+        };
+        let provider = &row["provider"];
+        let provider = if provider.is_null() {
+            "None".into()
+        } else {
+            format!("Some({})", self::provider(provider)?)
         };
         Ok(record(
             "AppliedRepresentation",
@@ -368,9 +374,11 @@ impl Identities {
                 ("arguments", arguments),
                 ("identity", quoted(&row["identity"])?),
                 ("default", flag(&row["default"])?),
-                ("child", child),
+                ("child", representation_key(&row["child"])?),
                 ("frame", value_frame(&row["frame"])?),
+                ("provider", provider),
                 ("unit", unit(&row["unit"])?),
+                ("vector_port", representation_key(&row["vectorPort"])?),
             ],
         ))
     }

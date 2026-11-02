@@ -1316,7 +1316,9 @@ def validate_installation(installation, catalog):
                         "default": flag,
                         "child": nullable(row({"kind": text, "domain": text, "representation": text})),
                         "frame": one_of("canonical", "local"),
+                        "provider": nullable(one_of(*PROVIDERS)),
                         "unit": one_of(*UNITS),
+                        "vectorPort": nullable(row({"kind": text, "domain": text, "representation": text})),
                     }
                 )
             ),
@@ -1362,13 +1364,13 @@ def validate_installation(installation, catalog):
     # Value bytes can be a codec frame only where the instance has one; the
     # input-only table codec is framed too.
     framed = {(c["kind"], c["domain"]) for c in catalog["codecs"] if c["frame"] is not None}
-    keys, defaults, layouts = set(), {}, set()
+    keys, defaults, layouts = {}, {}, set()
     for row_ in installation["representations"]:
         catalog_name(row_["identity"])
         instance = (row_["kind"], row_["domain"])
         require(instance in view.instances, "representation names an undeclared logical type instance")
         require((*instance, row_["identity"]) not in keys, "duplicate representation")
-        keys.add((*instance, row_["identity"]))
+        keys[(*instance, row_["identity"])] = row_
         require(
             row_["frame"] == "local" or instance in framed,
             "a canonical representation requires a framed codec for its instance",
@@ -1455,6 +1457,28 @@ def validate_installation(installation, catalog):
                 (child["kind"], child["domain"], child["representation"]) in keys,
                 "child names no representation row",
             )
+        # The dense calling convention: the provider whose dense operations
+        # use this container, and the vector representation they exchange.
+        provider, port = row_["provider"], row_["vectorPort"]
+        require(
+            (provider is None) == (child is None) and (port is None) == (child is None),
+            "a provider and a vector port are declared exactly for a dense child",
+        )
+        if child is not None:
+            require(
+                port["kind"] == "vector" and port["domain"] == child["domain"],
+                "vector port is not a vector over the child's domain",
+            )
+            port_row = keys.get((port["kind"], port["domain"], port["representation"]))
+            require(port_row is not None, "vector port names no representation row")
+            require(not port_row["layout"], "vector port names a layout selection")
+            require(port_row["unit"] == row_["unit"], "vector port storage belongs to another unit")
+            require(units[provider] == row_["unit"], "dense provider is installed by another unit")
+            preference = providers.get(child["domain"])
+            require(
+                preference is not None and provider in [preference["default"], *preference["alternatives"]],
+                "dense provider is not a provider of the child's domain",
+            )
         if row_["frame"] == "canonical":
             # field_array frames are granted per field: the row names it exactly.
             first = row_["arguments"][0] if row_["arguments"] else ["any"]
@@ -1479,6 +1503,13 @@ def validate_installation(installation, catalog):
             if all(overlaps(a, b) for a, b in zip(row_["arguments"], other["arguments"])):
                 require(row_["identity"] != other["identity"], "overlapping applied representations share an identity")
                 require(not (row_["default"] and other["default"]), "overlapping applied representations are both defaults")
+    # One calling convention per provider and dense constructor.
+    conventions = set()
+    for row_ in applied:
+        if row_["child"] is not None:
+            convention = (row_["constructor"], row_["provider"])
+            require(convention not in conventions, "second dense container of one provider")
+            conventions.add(convention)
 
     forms = unique_rows(installation["fieldForms"], lambda r: r["field"], "duplicate field form")
     for field, row_ in forms.items():

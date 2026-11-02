@@ -52,20 +52,26 @@ class ZKC_NativeRepresentation<string id, string k, string d, bit selected,
   string frame = f;
   string unit = u;
 }
-class ZKC_RepresentationChild<string k, string d, string r> {
+// The key of one representation row.
+class ZKC_RepresentationReference<string k, string d, string r> {
   string kind = k;
   string domain = d;
   string representation = r;
 }
+// A dense container sets `child`, `provider` and `vectorPort` together:
+// `provider`'s dense operations use this container and exchange vectors in
+// the `vectorPort` representation. These are calling-convention facts.
 class ZKC_AppliedRepresentation<string c, list<ZKC_ArgumentPattern> args,
                                 string id, bit selected, string f, string u> {
   string constructor = c;
   list<ZKC_ArgumentPattern> arguments = args;
   string identity = id;
   bit isDefault = selected;
-  ZKC_RepresentationChild child = ?;
+  ZKC_RepresentationReference child = ?;
   string frame = f;
+  string provider = ?;
   string unit = u;
+  ZKC_RepresentationReference vectorPort = ?;
 }
 class ZKC_ProviderPreference<string d, string p, list<string> others> {
   string domain = d;

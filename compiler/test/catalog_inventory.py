@@ -48,7 +48,13 @@ def main():
         for row in installation["representations"]:
             assert row.keys() == {"identity", "kind", "domain", "default", "layout", "frame", "unit"}
         for row in installation["appliedRepresentations"]:
-            assert row.keys() == {"constructor", "arguments", "identity", "default", "child", "frame", "unit"}
+            assert row.keys() == {"constructor", "arguments", "identity", "default", "child", "frame",
+                                  "provider", "unit", "vectorPort"}
+    with case("every dense container declares its calling convention"):
+        dense = [row for row in installation["appliedRepresentations"] if row["child"] is not None]
+        assert dense and all(row["provider"] and row["vectorPort"] for row in dense)
+        assert all(row["provider"] is None and row["vectorPort"] is None
+                   for row in installation["appliedRepresentations"] if row["child"] is None)
     with case("the native installation names only declared instances"):
         instances = {(row["kind"], row["domain"]) for row in catalog["logicalTypes"]}
         assert {(row["kind"], row["domain"]) for row in installation["representations"]} == instances

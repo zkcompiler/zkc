@@ -294,11 +294,13 @@ INSTALLATION_MUTATIONS = [
     ("canonical field array over a field without a frame",
      lambda c, i: find(i["appliedRepresentations"], identity="arkworks.field-array/0").update(
          arguments=[["domain", "Field", "koala-bear"], ["natRange", "0", "1048576"]],
-         child={"kind": "field", "domain": "koala-bear", "representation": "plonky3.koala-bear/0"}),
+         child={"kind": "field", "domain": "koala-bear", "representation": "plonky3.koala-bear/0"},
+         provider="plonky3", unit="plonky3",
+         vectorPort={"kind": "vector", "domain": "koala-bear", "representation": "plonky3.koala-bear-vector/0"}),
      "requires its aggregate frame"),
     ("canonical field array over any field",
      lambda c, i: find(i["appliedRepresentations"], identity="blst/field-array").update(
-         arguments=[["any"], ["natRange", "0", "1048576"]], child=None),
+         arguments=[["any"], ["natRange", "0", "1048576"]], child=None, provider=None, vectorPort=None),
      "requires its aggregate frame"),
     ("default storage unit", lambda c, i: find(i["representations"], identity="arkworks.fr/0").update(unit="blst"),
      "default storage unit"),

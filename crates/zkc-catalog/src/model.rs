@@ -709,21 +709,27 @@ pub enum ArgumentPattern {
         maximum: u64,
     },
 }
+/// The key of one representation row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RepresentationChild {
+pub struct RepresentationReference {
     pub kind: &'static str,
     pub domain: Option<crate::DomainIdentity>,
     pub representation: &'static str,
 }
+/// A dense container has a `child`, a `provider` and a `vector_port`: the
+/// provider's dense operations use this container and exchange vectors in the
+/// port's representation, a calling convention of the installation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AppliedRepresentation {
     pub constructor: &'static str,
     pub arguments: &'static [ArgumentPattern],
     pub identity: &'static str,
     pub default: bool,
-    pub child: Option<RepresentationChild>,
+    pub child: Option<RepresentationReference>,
     pub frame: ValueFrame,
+    pub provider: Option<Provider>,
     pub unit: InstallationUnit,
+    pub vector_port: Option<RepresentationReference>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProviderPreference {

@@ -152,7 +152,13 @@
               "representation": "plonky3.koala-bear/0"
             },
             "frame": "canonical",
-            "unit": "plonky3"
+            "provider": "plonky3",
+            "unit": "plonky3",
+            "vectorPort": {
+              "kind": "vector",
+              "domain": "koala-bear",
+              "representation": "plonky3.koala-bear-vector/0"
+            }
           }
         }
       ]
@@ -2599,7 +2605,9 @@
             "default": false,
             "child": null,
             "frame": "local",
-            "unit": "independent"
+            "provider": null,
+            "unit": "independent",
+            "vectorPort": null
           }
         }
       ],
@@ -2873,6 +2881,46 @@
             "domain": "koala-bear",
             "representation": "plonky3.koala-bear/0"
           }
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "plonky3"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "plonky3"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": {
+            "kind": "vector",
+            "domain": "koala-bear",
+            "representation": "plonky3.koala-bear-vector/0"
+          }
         }
       ],
       "diagnostics": {
@@ -2921,6 +2969,340 @@
         "generator": "overlapping applied representations share an identity",
         "native": "overlapping applied representations share an identity",
         "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: overlapping patterns share an identity or a default"
+      }
+    },
+    {
+      "name": "dense container without a provider",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "dense container without a vector port",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "vector port on a row without a child",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "logical.sequence/0"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": {
+            "kind": "vector",
+            "domain": "bls12-381.fr",
+            "representation": "arkworks.fr-vector/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: logical.sequence/0 for sequence: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "provider on a row without a child",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "logical.variant/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "arkworks"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: logical.variant/0 for variant: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "vector port over another domain",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "domain"
+          ],
+          "value": "bn254.fr"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port is not a vector over the child's domain",
+        "native": "vector port is not a vector over the child's domain",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port is not a vector over the child's domain"
+      }
+    },
+    {
+      "name": "vector port of another kind",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": {
+            "kind": "field",
+            "domain": "bls12-381.fr",
+            "representation": "arkworks.fr/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port is not a vector over the child's domain",
+        "native": "vector port is not a vector over the child's domain",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port is not a vector over the child's domain"
+      }
+    },
+    {
+      "name": "vector port naming no representation row",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "representation"
+          ],
+          "value": "missing.fr-vector/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port names no representation row",
+        "native": "vector port names no representation row",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port names no representation row"
+      }
+    },
+    {
+      "name": "vector port naming a layout selection",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "representation"
+          ],
+          "value": "arkworks.fr-diagonal/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port names a layout selection",
+        "native": "vector port names a layout selection",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port names a layout selection"
+      }
+    },
+    {
+      "name": "vector port stored by another unit",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "representation"
+          ],
+          "value": "blst/fr"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port storage belongs to another unit",
+        "native": "vector port storage belongs to another unit",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port storage belongs to another unit"
+      }
+    },
+    {
+      "name": "dense provider installed by another unit",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "dalek"
+        }
+      ],
+      "diagnostics": {
+        "generator": "dense provider is installed by another unit",
+        "native": "dense provider is installed by another unit",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: dense provider is installed by another unit"
+      }
+    },
+    {
+      "name": "dense provider outside the child's providers",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "spongefish"
+        }
+      ],
+      "diagnostics": {
+        "generator": "dense provider is not a provider of the child's domain",
+        "native": "dense provider is not a provider of the child's domain",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: dense provider is not a provider of the child's domain"
+      }
+    },
+    {
+      "name": "unknown dense provider",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "risc0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative risc0",
+        "native": "dense provider is installed by another unit",
+        "rust": "native installation: appliedRepresentations: unknown declaration alternative risc0"
+      }
+    },
+    {
+      "name": "second dense container of one provider",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "insert",
+          "value": {
+            "constructor": "field_array",
+            "arguments": [
+              [
+                "domain",
+                "Field",
+                "bls12-381.fr"
+              ],
+              [
+                "natRange",
+                "0",
+                "4"
+              ]
+            ],
+            "identity": "arkworks.small-field-array/0",
+            "default": false,
+            "child": {
+              "kind": "field",
+              "domain": "bls12-381.fr",
+              "representation": "arkworks.fr/0"
+            },
+            "frame": "local",
+            "provider": "arkworks",
+            "unit": "arkworks",
+            "vectorPort": {
+              "kind": "vector",
+              "domain": "bls12-381.fr",
+              "representation": "arkworks.fr-vector/0"
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "second dense container of one provider",
+        "native": "second dense container of one provider",
+        "rust": "native installation: appliedRepresentations: arkworks.small-field-array/0 for field_array: second dense container of one provider"
       }
     },
     {

@@ -550,12 +550,15 @@ def project_installation(installation, q, seq, flag):
         )
     for i, r in enumerate(installation["appliedRepresentations"]):
         fields = [ordinal(i)]
-        if r["child"] is not None:
-            child = r["child"]
-            fields.append(
-                f"let child = ZKC_RepresentationChild<{q(child['kind'])}, "
-                f"{q(child['domain'])}, {q(child['representation'])}>;"
-            )
+        for column in ("child", "vectorPort"):
+            if r[column] is not None:
+                reference = r[column]
+                fields.append(
+                    f"let {column} = ZKC_RepresentationReference<{q(reference['kind'])}, "
+                    f"{q(reference['domain'])}, {q(reference['representation'])}>;"
+                )
+        if r["provider"] is not None:
+            fields.append(f"let provider = {q(r['provider'])};")
         emit(
             f"ZKC_AppliedRepresentation<{q(r['constructor'])}, "
             f"{seq(pattern(p) for p in r['arguments'])}, {q(r['identity'])}, "

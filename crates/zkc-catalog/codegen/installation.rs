@@ -33,7 +33,7 @@ const FRAMES: &[&str] = &["canonical", "local"];
 const EXTENT: u64 = 1_048_576;
 
 struct Representations<'a> {
-    rows: BTreeSet<(&'a str, &'a str, &'a str)>,
+    rows: BTreeMap<(&'a str, &'a str, &'a str), &'a Value>,
     defaults: BTreeMap<Instance<'a>, &'a str>,
 }
 
@@ -68,7 +68,7 @@ pub(super) fn validate<'a>(
     let providers = providers(v, instances).map_err(|error| format!("providers: {error}"))?;
     let representations = representations(v, instances, &providers, &units)
         .map_err(|error| format!("representations: {error}"))?;
-    applied(v, catalog, instances, &representations)
+    applied(v, catalog, instances, &representations, &providers, &units)
         .map_err(|error| format!("appliedRepresentations: {error}"))?;
     field_forms(v, instances, &representations).map_err(|error| format!("fieldForms: {error}"))?;
     physical_arguments(v, catalog).map_err(|error| format!("physicalArguments: {error}"))
@@ -105,9 +105,12 @@ fn provider_units(v: &Value) -> Result<BTreeMap<&str, &str>> {
     Ok(units)
 }
 
-/// Each declared domain's default provider.
-fn providers<'a>(v: &'a Value, instances: &Instances<'a>) -> Result<BTreeMap<&'a str, &'a str>> {
-    let mut defaults = BTreeMap::new();
+/// Each declared domain's providers: its default, then its alternatives.
+fn providers<'a>(
+    v: &'a Value,
+    instances: &Instances<'a>,
+) -> Result<BTreeMap<&'a str, Vec<&'a str>>> {
+    let mut preferences = BTreeMap::new();
     for row in list(&v["providers"])? {
         object(row, &["domain", "default", "alternatives"], &[])?;
         let domain = string(&row["domain"])?;
@@ -126,28 +129,28 @@ fn providers<'a>(v: &'a Value, instances: &Instances<'a>) -> Result<BTreeMap<&'a
             named.push(alternative);
         }
         require(
-            defaults.insert(domain, default).is_none(),
+            preferences.insert(domain, named).is_none(),
             &format!("{domain} has more than one provider row"),
         )?;
     }
     for domain in instances.domains.keys() {
         require(
-            defaults.contains_key(domain),
+            preferences.contains_key(domain),
             &format!("{domain} has no provider row"),
         )?;
     }
-    Ok(defaults)
+    Ok(preferences)
 }
 
 fn representations<'a>(
     v: &'a Value,
     instances: &Instances<'a>,
-    providers: &BTreeMap<&'a str, &'a str>,
+    providers: &BTreeMap<&'a str, Vec<&'a str>>,
     units: &BTreeMap<&'a str, &'a str>,
 ) -> Result<Representations<'a>> {
     let rows = list(&v["representations"])?;
     let mut result = Representations {
-        rows: BTreeSet::new(),
+        rows: BTreeMap::new(),
         defaults: BTreeMap::new(),
     };
     let mut layouts = BTreeSet::new();
@@ -169,7 +172,7 @@ fn representations<'a>(
             &format!("{at}: undeclared logical type instance"),
         )?;
         require(
-            result.rows.insert((kind, domain, name)),
+            result.rows.insert((kind, domain, name), row).is_none(),
             &format!("{at}: duplicate representation"),
         )?;
         let layout = string(&row["layout"])?;
@@ -218,6 +221,7 @@ fn representations<'a>(
         } else {
             let unit = providers
                 .get(domain)
+                .and_then(|named| named.first())
                 .and_then(|provider| units.get(provider));
             require(
                 unit.is_some_and(|unit| row["unit"] == *unit),
@@ -235,8 +239,11 @@ fn applied<'a>(
     catalog: &Catalog<'a>,
     instances: &Instances<'a>,
     representations: &Representations<'a>,
+    providers: &BTreeMap<&'a str, Vec<&'a str>>,
+    units: &BTreeMap<&'a str, &'a str>,
 ) -> Result<()> {
     let mut previous: Vec<(&str, Vec<Pattern<'a>>, &str, bool)> = Vec::new();
+    let mut conventions = BTreeSet::new();
     for row in list(&v["appliedRepresentations"])? {
         object(
             row,
@@ -247,7 +254,9 @@ fn applied<'a>(
                 "default",
                 "child",
                 "frame",
+                "provider",
                 "unit",
+                "vectorPort",
             ],
             &[],
         )?;
@@ -277,21 +286,67 @@ fn applied<'a>(
             .map_err(|error| format!("{at}: {error}"))?;
         let default = boolean(&row["default"])?;
         let frame = choice(&row["frame"], FRAMES)?;
-        choice(&row["unit"], UNITS)?;
+        let unit = choice(&row["unit"], UNITS)?;
         let child = &row["child"];
         if !child.is_null() {
             object(child, &["kind", "domain", "representation"], &[])?;
             let (kind, domain) = (string(&child["kind"])?, string(&child["domain"])?);
             require(
-                representations
-                    .rows
-                    .contains(&(kind, domain, string(&child["representation"])?)),
+                representations.rows.contains_key(&(
+                    kind,
+                    domain,
+                    string(&child["representation"])?,
+                )),
                 &format!("{at}: child names no representation row"),
             )?;
             require(
                 logical_child(declared, &patterns, instances) == Some((kind, domain)),
                 &format!("{at}: child is not the logical child of the applied type"),
             )?;
+        }
+        // The dense calling convention: the provider whose dense operations
+        // use this container, and the vector representation they exchange.
+        let (provider, port) = (&row["provider"], &row["vectorPort"]);
+        let mut convention = None;
+        require(
+            provider.is_null() == child.is_null() && port.is_null() == child.is_null(),
+            &format!("{at}: a provider and a vector port are declared exactly for a dense child"),
+        )?;
+        if !child.is_null() {
+            object(port, &["kind", "domain", "representation"], &[])?;
+            let key = (
+                string(&port["kind"])?,
+                string(&port["domain"])?,
+                string(&port["representation"])?,
+            );
+            require(
+                key.0 == "vector" && child["domain"] == key.1,
+                &format!("{at}: vector port is not a vector over the child's domain"),
+            )?;
+            let port_row = representations
+                .rows
+                .get(&key)
+                .ok_or_else(|| format!("{at}: vector port names no representation row"))?;
+            require(
+                port_row["layout"] == "",
+                &format!("{at}: vector port names a layout selection"),
+            )?;
+            require(
+                port_row["unit"] == unit,
+                &format!("{at}: vector port storage belongs to another unit"),
+            )?;
+            let provider = choice(provider, PROVIDERS)?;
+            require(
+                units.get(provider) == Some(&unit),
+                &format!("{at}: dense provider is installed by another unit"),
+            )?;
+            require(
+                providers
+                    .get(key.1)
+                    .is_some_and(|named| named.contains(&provider)),
+                &format!("{at}: dense provider is not a provider of the child's domain"),
+            )?;
+            convention = Some((constructor, provider));
         }
         if frame == "canonical" {
             // A field_array frame belongs to its exact field.
@@ -314,6 +369,13 @@ fn applied<'a>(
                     &format!("{at}: overlapping patterns share an identity or a default"),
                 )?;
             }
+        }
+        // One calling convention per provider and dense constructor.
+        if let Some(convention) = convention {
+            require(
+                conventions.insert(convention),
+                &format!("{at}: second dense container of one provider"),
+            )?;
         }
         previous.push((constructor, patterns, name, default));
     }

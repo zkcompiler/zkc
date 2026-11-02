@@ -803,7 +803,8 @@ public:
       physicalArguments;
 
 private:
-  std::set<std::tuple<std::string, std::string, std::string>> keys;
+  std::map<std::tuple<std::string, std::string, std::string>, const Record *>
+      keys;
   std::map<std::pair<std::string, std::string>, const Record *> defaults;
   std::map<std::string, const Record *> providerRows;
   std::map<std::string, std::string> units;
@@ -904,8 +905,11 @@ void Physical::checkRepresentations() {
     require(catalogName(identity), row, "invalid representation identity");
     require(logical.instances.count({kind.str(), domain.str()}), row,
             "representation names an undeclared logical type instance");
-    require(keys.emplace(kind.str(), domain.str(), identity.str()).second, row,
-            "duplicate representation");
+    require(
+        keys.emplace(std::make_tuple(kind.str(), domain.str(), identity.str()),
+                     row)
+            .second,
+        row, "duplicate representation");
     if (row->getValueAsBit("isDefault"))
       require(defaults.emplace(std::make_pair(kind.str(), domain.str()), row)
                   .second,
@@ -1001,7 +1005,7 @@ bool overlaps(const Record *left, const Record *right) {
 void Physical::checkApplied() {
   for (const auto *row : applied) {
     exactFields(row, {"constructor", "arguments", "identity", "isDefault",
-                      "child", "frame", "unit"});
+                      "child", "frame", "provider", "unit", "vectorPort"});
     auto constructor = text(row, "constructor");
     require(catalogName(text(row, "identity")), row,
             "invalid representation identity");
@@ -1079,6 +1083,40 @@ void Physical::checkApplied() {
                       text(child, "representation").str()}),
           row, "child names no representation row");
     }
+    // The dense calling convention: the provider whose dense operations use
+    // this container, and the vector representation they exchange.
+    const auto *child = nullableDef(row, "child");
+    const auto *port = nullableDef(row, "vectorPort");
+    require(row->isValueUnset("provider") == !child && !port == !child, row,
+            "a provider and a vector port are declared exactly for a dense "
+            "child");
+    if (child) {
+      exactFields(port, {"kind", "domain", "representation"});
+      require(text(port, "kind") == "vector" &&
+                  text(port, "domain") == text(child, "domain"),
+              row, "vector port is not a vector over the child's domain");
+      auto found =
+          keys.find({text(port, "kind").str(), text(port, "domain").str(),
+                     text(port, "representation").str()});
+      require(found != keys.end(), row,
+              "vector port names no representation row");
+      require(text(found->second, "layout").empty(), row,
+              "vector port names a layout selection");
+      require(text(found->second, "unit") == text(row, "unit"), row,
+              "vector port storage belongs to another unit");
+      auto provider = text(row, "provider");
+      auto unit = units.find(provider.str());
+      require(is_contained(providerNames, provider) && unit != units.end() &&
+                  unit->second == text(row, "unit"),
+              row, "dense provider is installed by another unit");
+      auto preference = providerRows.find(text(child, "domain").str());
+      require(preference != providerRows.end() &&
+                  (text(preference->second, "provider") == provider ||
+                   is_contained(preference->second->getValueAsListOfStrings(
+                                    "alternatives"),
+                                provider)),
+              row, "dense provider is not a provider of the child's domain");
+    }
     require(text(row, "frame") == "canonical" || text(row, "frame") == "local",
             row, "unknown representation frame");
     require(is_contained(unitNames, text(row, "unit")), row,
@@ -1113,6 +1151,15 @@ void Physical::checkApplied() {
                 other->getValueAsBit("isDefault")),
               row, "overlapping applied representations are both defaults");
     }
+  // One calling convention per provider and dense constructor.
+  std::set<std::pair<std::string, std::string>> conventions;
+  for (const auto *row : applied)
+    if (nullableDef(row, "child"))
+      require(conventions
+                  .emplace(text(row, "constructor").str(),
+                           text(row, "provider").str())
+                  .second,
+              row, "second dense container of one provider");
 }
 
 void Physical::checkFieldForms() {
@@ -1382,15 +1429,24 @@ void emitPhysicalTables(raw_ostream &os, const Physical &m) {
            << text(pattern, "minimum") << "u, " << text(pattern, "maximum")
            << "u}, ";
     }
+    auto reference = [&](StringRef field) {
+      if (const auto *value = nullableDef(row, field))
+        os << "RepresentationReference{" << quote(text(value, "kind")) << ", "
+           << quote(text(value, "domain")) << ", "
+           << quote(text(value, "representation")) << "}";
+      else
+        os << "std::nullopt";
+    };
     os << "}, " << quote(text(row, "identity")) << ", "
        << (row->getValueAsBit("isDefault") ? "true" : "false") << ", ";
-    if (const auto *child = nullableDef(row, "child"))
-      os << "RepresentationChild{" << quote(text(child, "kind")) << ", "
-         << quote(text(child, "domain")) << ", "
-         << quote(text(child, "representation")) << "}";
-    else
-      os << "std::nullopt";
-    os << ", " << frame(row) << ", " << quote(text(row, "unit")) << "},\n";
+    reference("child");
+    os << ", " << frame(row) << ", "
+       << (row->isValueUnset("provider")
+               ? std::string("std::nullopt")
+               : "std::string(" + quote(text(row, "provider")) + ")")
+       << ", " << quote(text(row, "unit")) << ", ";
+    reference("vectorPort");
+    os << "},\n";
   }
   os << "}; return rows; }\n";
   os << "llvm::ArrayRef<Provider> providers() {\n"
@@ -1544,18 +1600,25 @@ json::Object installationJSON(const Physical &m) {
     json::Array patterns;
     for (const auto *pattern : row->getValueAsListOfDefs("arguments"))
       patterns.push_back(patternJSON(pattern));
-    json::Value child = nullptr;
-    if (const auto *c = nullableDef(row, "child"))
-      child = json::Object{{"kind", text(c, "kind")},
-                           {"domain", text(c, "domain")},
-                           {"representation", text(c, "representation")}};
+    auto reference = [&](StringRef field) -> json::Value {
+      if (const auto *c = nullableDef(row, field))
+        return json::Object{{"kind", text(c, "kind")},
+                            {"domain", text(c, "domain")},
+                            {"representation", text(c, "representation")}};
+      return nullptr;
+    };
+    json::Value provider = nullptr;
+    if (!row->isValueUnset("provider"))
+      provider = text(row, "provider");
     applied.push_back(json::Object{{"constructor", text(row, "constructor")},
                                    {"arguments", std::move(patterns)},
                                    {"identity", text(row, "identity")},
                                    {"default", row->getValueAsBit("isDefault")},
-                                   {"child", std::move(child)},
+                                   {"child", reference("child")},
                                    {"frame", text(row, "frame")},
-                                   {"unit", text(row, "unit")}});
+                                   {"provider", std::move(provider)},
+                                   {"unit", text(row, "unit")},
+                                   {"vectorPort", reference("vectorPort")}});
   }
   for (const auto *row : m.providers)
     providers.push_back(json::Object{

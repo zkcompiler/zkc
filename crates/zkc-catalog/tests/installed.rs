@@ -172,7 +172,8 @@ fn installation_json() -> Value {
             "arguments": r.arguments.iter().map(pattern_json).collect::<Vec<_>>(),
             "identity": r.identity, "default": r.default,
             "child": r.child.map(|c| json!({"kind": c.kind, "domain": domain(c.domain), "representation": c.representation})),
-            "frame": frame(r.frame), "unit": r.unit.name(),
+            "frame": frame(r.frame), "provider": r.provider.map(|p| p.name()), "unit": r.unit.name(),
+            "vectorPort": r.vector_port.map(|c| json!({"kind": c.kind, "domain": domain(c.domain), "representation": c.representation})),
         })).collect::<Vec<_>>(),
         "providers": i.providers.iter().map(|p| json!({
             "domain": p.domain.name(), "default": p.default.name(),

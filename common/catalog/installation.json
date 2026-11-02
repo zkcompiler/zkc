@@ -1510,7 +1510,13 @@
       "default": true,
       "frame": "canonical",
       "identity": "arkworks.field-array/0",
-      "unit": "arkworks"
+      "provider": "arkworks",
+      "unit": "arkworks",
+      "vectorPort": {
+        "domain": "bls12-381.fr",
+        "kind": "vector",
+        "representation": "arkworks.fr-vector/0"
+      }
     },
     {
       "arguments": [
@@ -1534,7 +1540,13 @@
       "default": false,
       "frame": "canonical",
       "identity": "blst/field-array",
-      "unit": "blst"
+      "provider": "blst",
+      "unit": "blst",
+      "vectorPort": {
+        "domain": "bls12-381.fr",
+        "kind": "vector",
+        "representation": "blst/fr"
+      }
     },
     {
       "arguments": [
@@ -1567,7 +1579,13 @@
       "default": false,
       "frame": "local",
       "identity": "blst/fixed-vector",
-      "unit": "blst"
+      "provider": "blst",
+      "unit": "blst",
+      "vectorPort": {
+        "domain": "bls12-381.fr",
+        "kind": "vector",
+        "representation": "blst/fr"
+      }
     },
     {
       "arguments": [
@@ -1600,7 +1618,13 @@
       "default": true,
       "frame": "local",
       "identity": "plonky3.fixed-vector/0",
-      "unit": "plonky3"
+      "provider": "plonky3",
+      "unit": "plonky3",
+      "vectorPort": {
+        "domain": "koala-bear",
+        "kind": "vector",
+        "representation": "plonky3.koala-bear-vector/0"
+      }
     },
     {
       "arguments": [
@@ -1613,7 +1637,9 @@
       "default": true,
       "frame": "canonical",
       "identity": "logical.sequence/0",
-      "unit": "independent"
+      "provider": null,
+      "unit": "independent",
+      "vectorPort": null
     },
     {
       "arguments": [],
@@ -1622,7 +1648,9 @@
       "default": true,
       "frame": "canonical",
       "identity": "logical.variant/0",
-      "unit": "independent"
+      "provider": null,
+      "unit": "independent",
+      "vectorPort": null
     },
     {
       "arguments": [
@@ -1635,7 +1663,9 @@
       "default": true,
       "frame": "local",
       "identity": "logical.resource_unit/0",
-      "unit": "independent"
+      "provider": null,
+      "unit": "independent",
+      "vectorPort": null
     }
   ],
   "providers": [

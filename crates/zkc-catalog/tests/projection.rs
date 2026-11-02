@@ -1681,6 +1681,11 @@ fn native_installation_mutations_refuse_for_the_stated_rule() {
                 applied["child"] = json!(
                     {"kind": "field", "domain": "koala-bear", "representation": "plonky3.koala-bear/0"}
                 );
+                applied["provider"] = json!("plonky3");
+                applied["unit"] = json!("plonky3");
+                applied["vectorPort"] = json!(
+                    {"kind": "vector", "domain": "koala-bear", "representation": "plonky3.koala-bear-vector/0"}
+                );
             },
         ),
         ("goldilocks has no provider row", |v| {

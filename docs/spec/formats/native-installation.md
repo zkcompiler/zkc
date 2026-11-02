@@ -42,10 +42,10 @@ the catalog name rule, and counts are JSON integers from 0 to 1,048,576.
 ```text
 Representation        = {identity, kind, domain, default, layout, frame, unit}
 AppliedRepresentation = {constructor, arguments, identity, default, child,
-                         frame, unit}
+                         frame, provider, unit, vectorPort}
 Pattern               = ["domain", sort, identity] | ["type", Type]
                       | ["natRange", minimum, maximum] | ["any"]
-Child                 = null | {kind, domain, representation}
+Reference             = {kind, domain, representation}
 Provider              = {domain, default, alternatives}
 ProviderUnit          = {provider, unit}
 FieldForm             = {field, arithmetic, montgomery, byteEncoding}
@@ -83,8 +83,11 @@ naming a declared domain of the parameter's sort, an exact Type argument
 `["apply", constructor, arguments]` naming an admitted logical type instance
 (never a variant, oracle or service tree), a closed natural range `["natRange", minimum, maximum]` of canonical
 decimals with minimum at most maximum at most 1,048,576, or `["any"]`. `child`
-is null or names the representation row of the single dense child, which must
-be the logical child of the applied type. A `canonical` applied row requires
+is null or a `Reference` to the representation row of the single dense child,
+which must be the logical child of the applied type. A row with a child is a
+dense container, and `provider` and `vectorPort` state its
+[calling convention](#calling-conventions); both are null exactly when `child`
+is null. A `canonical` applied row requires
 an aggregate frame for its constructor (and for `field_array`, for its exact
 field). Overlapping patterns of one constructor may not share an identity or
 both be defaults.
@@ -125,6 +128,16 @@ internal word.
 
 ## Calling conventions
 
+A dense container's `provider` names the provider whose dense operations use
+the container, and its `vectorPort` is a `Reference` to the representation row
+of the `vector` instance over the child's domain that those operations
+exchange: the vector port of their signatures. The port row has an empty
+`layout` and the container's `unit`. The provider is the default or an
+alternative of the child domain's provider row, and its unit is the
+container's `unit`. A provider has at most one dense container per
+constructor. Consumers read the provider and the port from these columns; the
+installation states no rule that selects them from units, layouts or names.
+
 A `physicalArguments` row names a declared operation whose native binding
 carries physical static type arguments, the represented types of its
 type-parameter ports, in addition to its logical static arguments. Bindings
@@ -138,5 +151,6 @@ declaration.
 Each validator checks every rule above, including exact shapes, unique keys,
 the closed vocabularies, every reference into the declaration document and
 the facts it relies on: instance existence, codec kind and domain, Field
-sort, the default and canonical-frame rules, and child agreement. The two
+sort, the default and canonical-frame rules, child agreement, and the dense
+calling convention's port row, units and provider. The two
 documents are checked together, and each dump prints only its own tables.
