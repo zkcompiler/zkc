@@ -124,6 +124,7 @@ execute directly. Helper invocations are separate `call` operations. -/
 inductive Calculation where
   | indexConstant (value : Nat)
   | indexEqual
+  | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
@@ -146,6 +147,10 @@ namespace Calculation
 def op : Calculation → Structured.Op
   | .indexConstant value => .indexConstant value
   | .indexEqual => .indexEqual
+  | .indexWrappingAdd => .indexWrappingAdd
+  | .indexWrappingSubtract => .indexWrappingSubtract
+  | .indexBitAnd => .indexBitAnd
+  | .indexLogicalShiftRight => .indexLogicalShiftRight
   | .fieldConstant domain value => .fieldConstant domain value
   | .fieldAdd domain => .fieldAdd domain
   | .fieldSubtract domain => .fieldSubtract domain
@@ -169,6 +174,10 @@ def op : Calculation → Structured.Op
 def ofOp? : Structured.Op → Option Calculation
   | .indexConstant value => some (.indexConstant value)
   | .indexEqual => some .indexEqual
+  | .indexWrappingAdd => some .indexWrappingAdd
+  | .indexWrappingSubtract => some .indexWrappingSubtract
+  | .indexBitAnd => some .indexBitAnd
+  | .indexLogicalShiftRight => some .indexLogicalShiftRight
   | .fieldConstant domain value => some (.fieldConstant domain value)
   | .fieldAdd domain => some (.fieldAdd domain)
   | .fieldSubtract domain => some (.fieldSubtract domain)

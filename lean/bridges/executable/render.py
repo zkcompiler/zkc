@@ -22,12 +22,21 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render  # noqa: E402
+from bridges.common import lean_render, policy as native_policy  # noqa: E402
 from bridges.common.lean_render import Refused, origin, record, require, seq, text  # noqa: E402
 
 PROGRAM = "zkc.program/0"
 DEPLOYMENT = "zkc.native-proof/0"
+# The program carrier's ceilings (docs/spec/formats/program.md, "Carrier size"):
+# an entry of an operation's parameter array, and every other decoded string.
+PARAMETER_BYTES = 16384
+STRING_BYTES = 4096
 TRANSCRIPT_CONTRACTS = {"transcript.native.indexed.observe.data", "transcript.native.indexed.challenge"}
+
+
+def string(value):
+    """The Lean literal of a carrier string other than an operation parameter."""
+    return text(value, STRING_BYTES)
 
 
 def physical(value):
@@ -41,23 +50,23 @@ def physical(value):
         sort = ".data .index"
     elif re.fullmatch(r"(field|group|vector):[A-Za-z0-9_.-]+", logical):
         kind, domain = logical.split(":")
-        sort = f".data (.{kind} {text(domain)})"
+        sort = f".data (.{kind} {string(domain)})"
     elif re.fullmatch(r"transcript:[A-Za-z0-9_.:/-]+", logical):
-        sort = f".transcript {text(logical.split(':', 1)[1])}"
+        sort = f".transcript {string(logical.split(':', 1)[1])}"
     else:
         raise Refused(f"unsupported physical type {value!r}")
-    term = f"⟨{sort}, {text(representation)}⟩"
+    term = f"⟨{sort}, {string(representation)}⟩"
     require(f"{logical}@{representation}" == value, "noncanonical physical type")
     return term
 
 
 def names(values):
     require(isinstance(values, list) and all(isinstance(v, str) and v for v in values), "expected value names")
-    return seq(values, text)
+    return seq(values, string)
 
 
 def ports(values):
-    return seq(values, lambda port: (lambda pair: f"({text(pair[0])}, {physical(pair[1])})")(record(port, 2)))
+    return seq(values, lambda port: (lambda pair: f"({string(pair[0])}, {physical(pair[1])})")(record(port, 2)))
 
 
 def parameter(contract, value, count):
@@ -65,12 +74,12 @@ def parameter(contract, value, count):
         require(count == 1, "a transcript operation carries exactly one occurrence")
         return f".template {origin(value)}"
     require(isinstance(value, str), "parameters are strings")
-    return f".text {text(value)}"
+    return f".text {text(value, PARAMETER_BYTES)}"
 
 
 def pairs(values):
     """Carried values: `[name, initial]` pairs."""
-    return seq(values, lambda pair: (lambda p: f"({text(p[0])}, {text(p[1])})")(record(pair, 2)))
+    return seq(values, lambda pair: (lambda p: f"({string(p[0])}, {string(p[1])})")(record(pair, 2)))
 
 
 def region(items, bindings):
@@ -86,39 +95,39 @@ def step(item, bindings):
         contract = bindings[binding][1]
         require(isinstance(parameters, list), "parameters")
         rendered = seq(parameters, lambda value: parameter(contract, value, len(parameters)))
-        return f".operation {text(site)} {text(binding)} {rendered} {names(inputs)} {names(outputs)}"
+        return f".operation {string(site)} {string(binding)} {rendered} {names(inputs)} {names(outputs)}"
     if item[0] == "bool_constant":
         _, site, output, value = record(item, 4)
         require(isinstance(value, bool), "Boolean literal")
-        return f".constant {text(site)} {text(output)} {'true' if value else 'false'}"
+        return f".constant {string(site)} {string(output)} {'true' if value else 'false'}"
     if item[0] == "if":
         _, site, condition, captures, yes, no, outputs = record(item, 7)
-        return (f".cond {text(site)} {text(condition)} {names(captures)} {region(yes, bindings)} "
+        return (f".cond {string(site)} {string(condition)} {names(captures)} {region(yes, bindings)} "
                 f"{region(no, bindings)} {names(outputs)}")
     if item[0] == "for":
         _, site, induction, lower, upper, carried, captures, body, outputs = record(item, 9)
-        return (f".iterate {text(site)} {text(induction)} {text(lower)} {text(upper)} {pairs(carried)} "
+        return (f".iterate {string(site)} {string(induction)} {string(lower)} {string(upper)} {pairs(carried)} "
                 f"{names(captures)} {region(body, bindings)} {names(outputs)}")
     if item[0] == "stop":
         _, site, reason = record(item, 3)
-        return f".stop {text(site)} {text(reason)}"
+        return f".stop {string(site)} {string(reason)}"
     if item[0] == "yield":
         _, values = record(item, 2)
         return f".yield {names(values)}"
     if item[0] == "return":
         _, values = record(item, 2)
         return f".ret {names(values)}"
-    return f".unsupported {text(item[0])}"
+    return f".unsupported {string(item[0])}"
 
 
 def action(item):
     require(isinstance(item, list) and item and isinstance(item[0], str), "participant instruction")
     if item[0] == "receive":
         _, site, schema, peer, output, ty = record(item, 6)
-        return f".receive {text(site)} {text(schema)} {text(peer)} {text(output)} {physical(ty)}"
+        return f".receive {string(site)} {string(schema)} {string(peer)} {string(output)} {physical(ty)}"
     if item[0] == "local":
         _, site, function, inputs, outputs = record(item, 5)
-        return f".call {text(site)} {text(function)} {names(inputs)} {names(outputs)}"
+        return f".call {string(site)} {string(function)} {names(inputs)} {names(outputs)}"
     if item[0] == "loop":
         _, site, count, carried, captures, body, outputs = record(item, 7)
         kind, value, maximum, induction = record(count, 4)
@@ -126,7 +135,7 @@ def action(item):
         require(isinstance(maximum, str) and re.fullmatch(r"0|[1-9][0-9]*", maximum) is not None
                 and int(maximum) <= 1048576, "loop maximum")
         require(isinstance(body, list), "loop body")
-        return (f".loop {text(site)} {text(value)} {int(maximum)} {text(induction)} {pairs(carried)} "
+        return (f".loop {string(site)} {string(value)} {int(maximum)} {string(induction)} {pairs(carried)} "
                 f"{names(captures)} [" + ", ".join(action(inner) for inner in body) + f"] {names(outputs)}")
     if item[0] == "yield":
         _, values = record(item, 2)
@@ -134,7 +143,7 @@ def action(item):
     if item[0] == "return":
         _, values = record(item, 2)
         return f".ret {names(values)}"
-    return f".unsupported {text(item[0])}"
+    return f".unsupported {string(item[0])}"
 
 
 def called(body):
@@ -173,8 +182,10 @@ def select(deployment):
     require(isinstance(candidate, str), "candidate program")
     digest = lean_render.digest(candidate.encode())
     require(deployment[5] == digest, "candidate digest differs from the program bytes")
-    policy = deployment[2][1]
-    entry, validator_role = policy[1], policy[3]
+    policy = native_policy.decode(deployment[2][1])
+    require(not policy.gates, "unsupported policy gates")
+    require(policy.profile in (native_policy.AUTHORED, native_policy.NATIVE), "unsupported construction profile")
+    entry, validator_role = policy.entry, policy.validator
     program = json.loads(candidate)
     tag, bindings, functions, participants, entries = record(program, 5)
     require(tag == PROGRAM, "expected zkc.program/0")
@@ -215,9 +226,9 @@ def render(deployment, namespace):
             continue
         rendered_steps = [step(item, declared) for item in steps]
         used |= used_bindings(steps)
-        selected_functions.append((name, f"⟨{text(name)}, {ports(arguments)}, {seq(outputs, physical)}, [\n"
+        selected_functions.append((name, f"⟨{string(name)}, {ports(arguments)}, {seq(outputs, physical)}, [\n"
                                   + ",\n".join(f"    {s}" for s in rendered_steps) + "]⟩"))
-    rendered_bindings = [f"⟨{text(name)}, {text(contract)}, {seq(arguments, text)}, {text(implementation)}, "
+    rendered_bindings = [f"⟨{string(name)}, {string(contract)}, {seq(arguments, string)}, {string(implementation)}, "
                          f"{seq(physical_arguments, physical)}⟩"
                          for name, contract, arguments, implementation, physical_arguments in declared.values()
                          if name in used]
@@ -242,12 +253,12 @@ namespace {namespace}
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := {text("sha256:" + digest)}
+def program : String := {string("sha256:" + digest)}
 
 {function_definitions}def validator : Validator where
-  entry := {text(entry)}
-  role := {text(role)}
-  symbol := {text(symbol)}
+  entry := {string(entry)}
+  role := {string(role)}
+  symbol := {string(symbol)}
   inputs := {ports(inputs)}
   results := {seq(results, physical)}
   body := [

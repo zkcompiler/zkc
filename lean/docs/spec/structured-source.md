@@ -561,6 +561,20 @@ At the logical carrier level pure equality is total on `Nat`; relating arbitrary
 inputs to native u64 values additionally requires their representation bounds.
 Exec equality checks those bounds itself and can refuse.
 
+The pure descriptors `["index.wrapping_add"]`, `["index.wrapping_sub"]`,
+`["index.bit_and"]` and `["index.logical_shift_right"]` take two indices and
+return one. They require Math/Protocol ownership and an empty site, and carry
+no parameters or regions; an extra descriptor slot or a Local spelling refuses.
+`IndexWords` gives their total meanings on `Nat` with each operand read modulo
+`2^64`, as the [index contract](../../../docs/spec/domains/values.md#indices-and-total-word-mathematics)
+fixes them: addition and subtraction modulo `2^64`, bitwise conjunction, and
+`floor(a / 2^b)` for a shift count `b < 64` and zero otherwise. The shift count
+is not reduced modulo 64, and every result is below `2^64`. They are distinct
+from the checked index primitives above: those refuse an overflow, an
+underflow and an operand outside the index range, while the word operations
+reduce modulo `2^64` and never refuse. The executable vocabulary installs the
+native rows of the same four contracts with these meanings.
+
 Vectors denote logical lists. Empty returns `[]`; sum folds field addition from
 zero; append returns the entire original list followed by one scalar; equality
 returns false for unequal lengths. Split requires positive even length and
@@ -1169,10 +1183,18 @@ It does not infer linearity from a Boolean/field carrier or invent missing
 source/static declarations. `Import.checkUnitHeaders` runs this check before
 body admission. Old ten-slot snapshots have no compatibility reader.
 
+Resource restriction and sealing are independent facts, as in the native
+format. A record's resource tag is exactly `ordinary`, `affine` or `linear`;
+its `sealed` Boolean records explicit source access restriction and is neither
+inferred from nor required by the resource tag. A linear or affine record may
+be sealed or unsealed. The reader grants no authority from either value: an
+unsealed linear record stays linear, with a single holder, and every port keeps
+its exact role scope.
+
 The selected protocol may be a library root with linear inputs or residual
 outputs. Selection alone supplies no final acceptance evidence. The same exact
-layout, single holder, sealed linear declaration and successful-exit ownership
-checks apply to selected and nested protocols. Clause-free wrappers assert no
+layout, single holder and successful-exit ownership checks apply to selected
+and nested protocols. Clause-free wrappers assert no
 relation. Protocols with any retained clauses still require unique relation
 coverage of every linear port, consistently across each closed source type.
 `EntryContractBinding` separately requires the actual selected root, its unique

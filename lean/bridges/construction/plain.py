@@ -13,6 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
 sys.path.insert(0, str(ROOT / "common/tests"))
+from bridges.common import interface as language_interface  # noqa: E402
 from bridges.common.lean_render import Runner, digest  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
@@ -85,7 +86,7 @@ def main():
             source_path.write_text(source)
             interface_text = run("language-interface", *flags)
             (directory / "interface.json").write_text(interface_text)
-            interface = json.loads(interface_text)
+            interface = language_interface.loads(interface_text)
             runner.check(name + ":source-identity", interface["original"] == digest(source.encode()))
             original = run("protocol-structured", source_path, "--symbol=" + interface["protocol"])
             (directory / "original.json").write_text(original)

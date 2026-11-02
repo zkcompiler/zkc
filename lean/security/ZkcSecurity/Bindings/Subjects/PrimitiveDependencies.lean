@@ -16,6 +16,7 @@ open Zkc.Claims Zkc.Source.Structured
 
 def defaultRelationOperation : Op → Bool
   | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. |
     .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |

@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from check import FIELD, ROOT, definition, fixture, write_json
+from bridges.common.replacement import replace_exactly_once
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
 
 
@@ -32,13 +33,14 @@ def applications(suite):
     source = subject[0].read_text(encoding="utf-8")
     leaf = next(row for row in subject[2][7] if row[0] == "function" and
                 any(instruction[0][0] == "field.multiply" for instruction in row[9][1]))
-    if not (source.count(leaf[1]) == 2):
-        raise AssertionError('bridges/structured/applications.py:35: source.count(leaf[1]) == 2')
-    if not (source.count('"algebra.field_multiply"') == 1):
-        raise AssertionError('bridges/structured/applications.py:36: source.count(\'"algebra.field_multiply"\') == 1')
+    # Rename the leaf at its definition and its only application.
+    renamed = replace_exactly_once(source, f'sym_name = "{leaf[1]}"', 'sym_name = "renamed_leaf"')
+    renamed = replace_exactly_once(renamed, f"callee = @{leaf[1]},", "callee = @renamed_leaf,")
+    if leaf[1] in renamed:
+        raise AssertionError(f"the leaf {leaf[1]} has another reference")
     for name, changed, value in [
-        ("application-renamed", source.replace(leaf[1], "renamed_leaf"), "6"),
-        ("application-mutant", source.replace('"algebra.field_multiply"', '"algebra.field_add"'), "5"),
+        ("application-renamed", renamed, "6"),
+        ("application-mutant", replace_exactly_once(source, '"algebra.field_multiply"', '"algebra.field_add"'), "5"),
     ]:
         variant = suite.export(name, changed, subject[2][3])
         if not (variant[2][2] != subject[2][2]):
@@ -194,12 +196,14 @@ module { "protocol.module"() ({
     ]:
         suite.case(label, lambda n=label, r=role, i=inputs, e=expected:
                    suite.compare_open(subject, n, r, i, [], e))
-    stopping = source.replace('%done = "exec.returned"(%x) : (!F)->!exec.outcome<(!F)>',
+    stopping = replace_exactly_once(source, '%done = "exec.returned"(%x) : (!F)->!exec.outcome<(!F)>',
         '%stop = "exec.reject"(%scope) {reason="abort",site="helper_stop"} : (!runtime.scope)->!exec.stop\n'
         'cf.br ^failed(%stop : !exec.stop)\n^failed(%cause:!exec.stop):\n'
         '%done = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<(!F)>')
     for site in ("A", "B"):
-        variant = suite.export("local-stop-" + site, stopping.replace('site="A"', f'site="{site}"'))
+        # The application site is A; B renames it.
+        text = stopping if site == "A" else replace_exactly_once(stopping, 'site="A"', f'site="{site}"')
+        variant = suite.export("local-stop-" + site, text)
         label = "local-raw-helper-stop-" + site
         suite.case(label, lambda n=label, s=variant:
                    suite.compare_open(s, n, "P", ["7", "8"], [], stopped("abort", "helper_stop")))
@@ -218,14 +222,14 @@ module { "protocol.module"() ({
     func.return %done : !exec.outcome<>
   }
   "protocol.func"() ({
-    %one = "algebra.constant"() {value="1"} : ()->!F
+    %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
     %v = func.call @identity(%one) : (!F)->!F
     "protocol.local_call"() {callee=@stop,role="A",site="stop"} : ()->()
     "protocol.return"() : ()->()
   }) {sym_name="child",origin=["child",[]],function_type=()->(),roles=["A"],input_roles=[],output_roles=[]} : ()->()
   "protocol.func"() ({
     "protocol.apply"() {callee=@child,roles=["P"],site="A"} : ()->()
-    %answer = "algebra.constant"() {value="7"} : ()->!F
+    %answer = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F
     "protocol.return"(%answer) : (!F)->()
   }) {sym_name="main",origin=["main",[]],function_type=()->!F,roles=["P","Q"],input_roles=[],output_roles=[["Q"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
@@ -239,7 +243,7 @@ module { "protocol.module"() ({
 
 def partial_math_cases(suite):
     source = (ROOT / "compiler/test/fixtures/finite/total-state.mlir").read_text(encoding="utf-8")
-    fold = ('"algebra.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} '
+    fold = ('"data.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} '
             ': (!V,!F,!F)->(!F,!F)')
     wrapper = '''"protocol.func"() ({
       ^entry(%xs:!V,%a:!F,%b:!F,%outside:!F):
@@ -252,14 +256,18 @@ def partial_math_cases(suite):
     for indirect in (False, True):
         variant = source
         if indirect:
-            variant = variant.replace(fold, 'func.call @fold_helper(%xs,%a,%b) : (!V,!F,!F)->(!F,!F)')
+            variant = replace_exactly_once(variant, fold,
+                                           'func.call @fold_helper(%xs,%a,%b) : (!V,!F,!F)->(!F,!F)')
             helper = f'''func.func private @fold_helper(%xs:!V,%a:!F,%b:!F)->(!F,!F) {{
               %r:2 = {fold}
               func.return %r#0,%r#1 : !F,!F
             }}'''
-            variant = variant.replace(' "protocol.func"() ({', helper + '\n "protocol.func"() ({', 1)
-        variant = variant.replace('sym_name="main"', 'sym_name="child"').replace('["P"]', '["A"]')
-        variant = variant.replace('}) {profile=', wrapper + '\n}) {profile=', 1)
+            variant = replace_exactly_once(variant, ' "protocol.func"() ({', helper + '\n "protocol.func"() ({')
+        variant = replace_exactly_once(variant, 'sym_name="main"', 'sym_name="child"')
+        variant = replace_exactly_once(
+            variant, 'roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"]]',
+            'roles=["A"],input_roles=[["A"],["A"],["A"]],output_roles=[["A"],["A"]]')
+        variant = replace_exactly_once(variant, '}) {profile=', wrapper + '\n}) {profile=')
         label = "partial-math-" + ("helper" if indirect else "direct")
         subject = suite.export(label, variant)
         # Independent fold rule: each element replaces (a,b) with (b,element).

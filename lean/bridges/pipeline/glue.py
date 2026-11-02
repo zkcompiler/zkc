@@ -19,7 +19,8 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common.schema import interpreted_type
+from bridges.common import interface as language_interface, policy as native_policy  # noqa: E402
+from bridges.common.schema import interpreted_type  # noqa: E402
 from bridges.common.lean_render import NAMESPACE, Refused, require, text  # noqa: E402
 
 # Lean identifiers a published input must not shadow in the generated module.
@@ -95,31 +96,36 @@ class Entry:
     `original` is the structured export of the Entry's original, `exported`
     the constructed participant export and `interface` the language
     interface. Nothing here is trusted: each value becomes a statement the
-    kernel checks.
+    kernel checks. The glue reads the native Fiat-Shamir construction without
+    gates; any other policy profile refuses.
     """
 
     def __init__(self, original, exported, interface):
         self.original, self.exported = original, exported
-        policy = exported[3]
-        self.policy = policy
-        root = next(item for item in original[7] if item[0] == "function" and item[1] == original[3])
-        _, _, _, _, self.input_types, self.output_types, header, _, _, _ = root
+        policy = native_policy.decode(exported[3])
+        require(policy.profile == native_policy.NATIVE and not policy.gates,
+                "the generated glue reads a native Fiat-Shamir construction without gates")
+        roots = [item for item in original[7] if item[0] == "function" and item[1] == original[3]]
+        require(len(roots) == 1, "the Entry root is not one exported function")
+        _, _, _, _, self.input_types, self.output_types, header, _, _, _ = roots[0]
         self.input_types = [interpreted_type(value) for value in self.input_types]
         self.output_types = [interpreted_type(value) for value in self.output_types]
         require(header and header[0] == "protocol", "the Entry root is not a protocol")
         _, self.roles, input_scopes, output_scopes = header
-        self.validator = self.roles.index(policy[3])
-        self.producer = self.roles.index(policy[2])
-        self.acceptance_output = int(policy[4])
-        self.public = [int(index) for index in policy[7]]
-        self.services = [int(index) for index in policy[6]]
-        self.service = self.services[0]
-        validator_outputs = [index for index, scope in enumerate(output_scopes) if policy[3] in scope]
+        require(policy.validator in self.roles and policy.producer in self.roles,
+                "the policy roles are not in the Entry roster")
+        self.validator = self.roles.index(policy.validator)
+        self.producer = self.roles.index(policy.producer)
+        self.acceptance_output = policy.acceptance
+        self.public = list(policy.public)
+        self.services = list(policy.services)
+        (self.service,) = self.services
+        require(self.service < len(self.input_types) and all(index < len(self.input_types) for index in self.public),
+                "a policy input index is outside the Entry signature")
+        validator_outputs = [index for index, scope in enumerate(output_scopes) if policy.validator in scope]
         require(self.acceptance_output in validator_outputs, "the acceptance output is not the validator's")
         self.position = validator_outputs.index(self.acceptance_output)
-        protocol = next(item for item in interface["protocols"] if item["symbol"] == interface["protocol"])
-        names = {item["index"]: item["name"] for item in protocol["inputs"]}
-        self.source_names = [names[index] for index in self.public]
+        self.source_names = published_names(language_interface.decode(interface), self.roles, policy)
         self.names = [binder(name) for name in self.source_names]
         require(len(set(self.names)) == len(self.names), "published input names collide")
         self.types = [self.input_types[index] for index in self.public]
@@ -130,7 +136,7 @@ class Entry:
                          if item[0] == "exec.apply" and len(item[2]) == 5
                          and item[2][0] == "transcript.native.indexed.challenge"})
         self.request = f"some (.draw {text(fields[0])})" if len(fields) == 1 else "none"
-        self.draws = [(pair[0], pair[1]) for pair in policy[8]]
+        self.draws = list(policy.draws)
 
     def slots(self):
         """The validator's input slots, as `inputSlots` computes them."""
@@ -143,6 +149,53 @@ class Entry:
             else:
                 result.append(("absent", None))
         return result
+
+
+def published_names(interface, native_roles, policy):
+    """The source name of each published input, in the policy's native order.
+
+    Each public selection `{port, path, role}` of the proof job selects the
+    verifier's ordinary data components of one logical input port below one
+    field path; their `native` coordinates are absolute original inputs. A
+    published input is named by its port and field path, with its leaf ordinal
+    when the selected field has several leaves. The selections must publish
+    exactly the policy's public inputs. Roles correspond by roster ordinal.
+    """
+    job = interface["job"]
+    require(job["kind"] == "proof", "the interface does not describe a proof Entry")
+    protocol = language_interface.selected_protocol(interface)
+    roles = protocol["roles"]
+    require(len(roles) == len(native_roles) and len(set(roles)) == len(roles),
+            "the interface roster differs from the Entry roster")
+    require(job["verifier"] in roles and job["prover"] in roles, "the proof roles are not in the roster")
+    verifier = roles.index(job["verifier"])
+    require(native_roles[verifier] == policy.validator and native_roles[roles.index(job["prover"])] == policy.producer,
+            "the interface proof roles differ from the policy roles")
+    names = {}
+    for selection in job["public"]:
+        require(selection["role"] == job["verifier"], "a public selection is not the verifier's")
+        require(selection["port"] < len(protocol["inputs"]), "a public selection names no input port")
+        port = protocol["inputs"][selection["port"]]
+        path = selection["path"]
+        for component in port["components"]:
+            if component["facet"] != "data" or component["role"] != verifier or component["path"][:len(path)] != path:
+                continue
+            require(component["native"] not in names, "two public selections publish one input")
+            names[component["native"]] = component_name(port, component)
+    require(sorted(names) == list(policy.public), "the policy's public inputs differ from the public selections")
+    return [names[index] for index in policy.public]
+
+
+def component_name(port, component):
+    """The port name and field names along a component's path."""
+    parts, schema = [port["name"]], port["schema"]
+    for ordinal in component["path"]:
+        require(ordinal < len(schema["fields"]), "a component path names no field")
+        parts.append(schema["fields"][ordinal]["name"])
+        schema = schema["fields"][ordinal]["schema"]
+    if len(schema["leaves"]) > 1:
+        parts.append(str(component["leaf"]))
+    return ".".join(parts)
 
 
 def walk(instructions):

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from harness import load
+from harness import PROOF_POLICY, language_interface, load
 
 
 @pytest.fixture
@@ -15,8 +15,7 @@ def claims():
 
 def fixture(claims, stage="compiled-ideal"):
     source=b"original protocol"
-    interface=json.dumps({"format":"zkc.language-interface/0", "entry":"test::Proof",
-                          "protocol":"protocol", "original":claims.digest(source).split(":")[1]})
+    interface=json.dumps(language_interface("test::Proof", "protocol", claims.digest(source).split(":")[1]))
     original=json.dumps(["zkc.structured-source/0", "original", claims.digest(source), "protocol", []])
     export={"format":"zkc.source-claims/0", "entry":"test::Proof", "registry_resolution":"deferred-to-lean",
             "admission":{"format":"zkc.structured-source/0", "original_sha256":claims.digest(source),
@@ -156,7 +155,9 @@ def site_fixture():
     entry = ["function", "entry", "protocol", "public", [], [], None, [], [],
              ["block", [call], ["return", []]]]
     original = ["zkc.structured-source/0", "original", "source", "entry", [], [], [], [entry, child]]
-    policy = [None] * 8 + [[["apply_7_wrapper_leaf", "delivery"]][0:1]]
+    # A native construction: one transcript service and its challenge draw.
+    policy = deepcopy(PROOF_POLICY)
+    policy[5:9] = ["merlin3.bls12-381.fr64be/0", ["0"], [], [["apply_7_wrapper_leaf", "delivery"]]]
     binding = {"site": "wrapper.challenge", "native_path": ["wrapper", "leaf"],
                "source": {"module": "test", "begin": 0, "end": 1}}
     return original, policy, binding
@@ -191,9 +192,8 @@ def test_site_attribution_never_falls_back_to_a_first_leaf(claims, mutation):
 def test_subject_export_preserves_raw_interface_and_rejects_reserialization(claims):
     bridge = load("explicit_native_subject", "lean/bridges/common/native_entry.py")
     export, arguments = fixture(claims, "interactive")
-    interface = {"format": "zkc.language-interface/0", "entry": "test::Proof",
-                 "protocol": "protocol", "job": {"kind": "run"},
-                 "original": claims.digest(arguments["source"]).split(":")[1]}
+    interface = language_interface("test::Proof", "protocol",
+                                   claims.digest(arguments["source"]).split(":")[1])
     raw = json.dumps(interface, indent=3) + "\n"
     export["admission"]["interface_sha256"] = claims.digest(raw.removesuffix("\n").encode())
     emitted = {"language-emit": arguments["source"].decode(), "language-interface": raw}

@@ -53,9 +53,9 @@ def run (path : System.FilePath) : IO Unit := do
     test s!"{name}: wrong selected residual endpoint refuses"
       (refuses (ComponentExport.check snapshot changed) "component-seam-association")
     let changed : SourceDeclarations := { source with records := source.records.map fun record =>
-      if record.resource == "linear" then { record with sealed := false } else record }
-    test s!"{name}: unsealed linear declaration refuses"
-      (refuses (changed.check snapshot headers) "component-declaration-record")
+      if record.resource == "linear" then { record with sealed := !record.sealed } else record }
+    test s!"{name}: sealing is independent of the linear resource tag"
+      (changed.check snapshot headers).isOk
     let changed : SourceDeclarations := { source with protocols := source.protocols ++ [root] }
     test s!"{name}: duplicate source owner refuses"
       (refuses (changed.check snapshot headers) "component-declaration-owner")

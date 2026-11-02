@@ -134,6 +134,8 @@ def opText : Op → String
   | .exec primitive => app ".exec" [primitiveText primitive]
   | .indexConstant n => app ".indexConstant" [toString n] | .indexEqual => ".indexEqual"
   | .indexLess => ".indexLess" | .indexPowerOfTwo => ".indexPowerOfTwo"
+  | .indexWrappingAdd => ".indexWrappingAdd" | .indexWrappingSubtract => ".indexWrappingSubtract"
+  | .indexBitAnd => ".indexBitAnd" | .indexLogicalShiftRight => ".indexLogicalShiftRight"
   | .vectorLength d => app ".vectorLength" [quoted d]
   | .multilinearRestrictPrefix d => app ".multilinearRestrictPrefix" [quoted d]
   | .fieldConstant d n => app ".fieldConstant" [quoted d, toString n]

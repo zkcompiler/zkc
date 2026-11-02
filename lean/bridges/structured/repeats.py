@@ -13,6 +13,7 @@ import sys
 import tomllib
 
 from check import FIELD, MODULUS, ROOT, definition, digest, fixture_source, fixture_stems, fixture_table, write_json
+from bridges.common.replacement import replace_exactly_once
 from evidence import owned_sources
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
 
@@ -197,10 +198,12 @@ def repeat_cases(suite, subject):
     failure_prefixes(suite, subject, "repeat-P", p, ["2", "10", None, None, None], receives, (1,))
     # Preserve all declarations and names. Reachable arithmetic must be read.
     source = subject[0].read_text(encoding="utf-8")
-    if not (source.count('"algebra.field_add"') == 2):
-        raise AssertionError('lean/bridges/structured/repeats.py: source.count(\'"algebra.field_add"\') == 2')
-    changed = suite.export("repeat-same-name-arithmetic", source.replace('"algebra.field_add"',
-                           '"algebra.field_multiply"'), subject[2][3])
+    text = source
+    for operands in ("(%arg0, %2)", "(%arg1, %0)"):
+        text = replace_exactly_once(text, '"algebra.field_add"' + operands, '"algebra.field_multiply"' + operands)
+    if '"algebra.field_add"' in text:
+        raise AssertionError("the repeat subject has another reachable addition")
+    changed = suite.export("repeat-same-name-arithmetic", text, subject[2][3])
     if not (changed[2][2] != subject[2][2]):
         raise AssertionError('lean/bridges/structured/repeats.py: changed[2][2] != subject[2][2]')
     observe(suite, changed, "repeat-same-name-arithmetic-P", p, ["2", "10", None, None, None], receives,
@@ -228,9 +231,7 @@ def nested_cases(suite, subject):
     original = ROOT / source
     changed = suite.directory / "changed-repeat-nested.zkc"
     text = original.read_text(encoding="utf-8")
-    if "result = result + x" not in text:
-        raise AssertionError('lean/bridges/structured/repeats.py: "result = result + x" in text')
-    changed.write_text(text.replace("result = result + x", "result = result * x"), encoding="utf-8")
+    changed.write_text(replace_exactly_once(text, "result = result + x", "result = result * x"), encoding="utf-8")
     variant = suite.authored("nested-same-name-source", selected_subject, {"sample": changed})
     if not (variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]):
         raise AssertionError('lean/bridges/structured/repeats.py: variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]')
@@ -434,13 +435,15 @@ def handwritten_cases(suite):
     replacement = suite.export("capture-replacement", module(protocol("main", repeat(yielded="%capture"))))
     observe(suite, replacement, "capture-replacement-result", "P", ["2", "7", "19"], [], returned(["19"]))
     observe(suite, replacement, "capture-replacement-absent", "P", ["1", "7", None], [], returned([None]))
-    empty_source = module(protocol("main", repeat().replace("%n,%x,%c", "%n,%x")
-        .replace(",%capture:!F", "").replace("(ui64,!F,!F)->!F", "(ui64,!F)->!F")))
+    empty_repeat = repeat()
+    for old, new in [("%n,%x,%c", "%n,%x"), (",%capture:!F", ""), ("(ui64,!F,!F)->!F", "(ui64,!F)->!F")]:
+        empty_repeat = replace_exactly_once(empty_repeat, old, new)
+    empty_source = module(protocol("main", empty_repeat))
     empty = suite.export("empty-captures", empty_source)
     observe(suite, empty, "empty-captures-positive", "P", ["2", "7", None], [], returned(["7"]))
     ports = (("n", "ui64", ("P", "Q")), ("x", "!F", ("P", "Q")), ("c", "!F", ("P", "Q")))
-    masked = suite.export("carried-state-masking", module(protocol("main", repeat().replace(
-        'roles=["P"],carried', 'roles=["P","Q"],carried'), inputs=ports)))
+    masked = suite.export("carried-state-masking", module(protocol("main", replace_exactly_once(
+        repeat(), 'roles=["P"],carried', 'roles=["P","Q"],carried'), inputs=ports)))
     for n in (0, 2):
         observe(suite, masked, f"masked-Q-{n}", "Q", [str(n), "41", "43"], [], returned([None]))
         observe(suite, masked, f"masked-P-{n}", "P", [str(n), "7", None], [], returned(["7"]))
@@ -461,10 +464,10 @@ def handwritten_cases(suite):
     observe(suite, effect, "zero-state-positive-effects", "P", ["2", "11"], responses, returned([], responses))
     observe(suite, effect, "zero-state-outside", "Q", [None, None], responses, returned([]))
     failure_prefixes(suite, effect, "zero-state-effect", "P", ["2", "11"], responses, (1,))
-    zero = suite.export("maximum-zero-effect", module(child, middle, main.replace("maximum=2", "maximum=0")))
+    zero = suite.export("maximum-zero-effect", module(child, middle, replace_exactly_once(main, "maximum=2", "maximum=0")))
     observe(suite, zero, "maximum-zero-dormant-effect", "P", ["0", None], responses, returned([]))
     observe(suite, zero, "maximum-zero-positive-refused", "P", ["1", None], responses, stopped("refused", "loop"))
-    dormant = suite.export("dormant-repeat", module(child, middle, main.replace('sym_name="main"', 'sym_name="dormant"'),
+    dormant = suite.export("dormant-repeat", module(child, middle, replace_exactly_once(main, 'sym_name="main"', 'sym_name="dormant"'),
                             protocol("main", inputs=(), outputs=(), returns=())))
     observe(suite, dormant, "dormant-whole-original", "P", [], [], returned([]))
 
@@ -494,7 +497,7 @@ def handwritten_cases(suite):
 def nested_service_cases(suite):
     nested_body = '''%r = "protocol.repeat"(%n,%x,%first,%second) ({
       ^outer(%i:ui64,%state:!F,%a:!S,%b:!S):
-      %one = "data.index"() {value="1"} : ()->ui64
+      %one = "data.index"() {value=1 : ui64} : ()->ui64
       %y = "protocol.repeat"(%one,%state,%b,%a) ({
         ^inner(%j:ui64,%s:!F,%right:!S,%left:!S):
         %q = "protocol.query"(%left) {owner="P",method="draw",site="q"} : (!S)->!F
@@ -513,7 +516,7 @@ def nested_service_cases(suite):
                                             ("q", "11", "5"), ("v", "17", "7")]]
     observe(suite, subject, "nested-service-origins-result", "P", ["2", "0", "11", "17"], responses,
             returned(["12"], responses))
-    variant = suite.export("nested-service-capture-swap", source.replace("%state,%b,%a", "%state,%a,%b"))
+    variant = suite.export("nested-service-capture-swap", replace_exactly_once(source, "%state,%b,%a", "%state,%a,%b"))
     action = ["draw", "q", "P", SERVICE, "17", FIELD]
     observe(suite, variant, "nested-service-capture-swap-result", "P", ["2", "0", "11", "17"], responses,
             stopped("refused", "q", pending=action))
@@ -555,7 +558,7 @@ def profile_cases(suite):
     suffix = original[original.rindex('}) {profile='):]
     repeated = '''%r:2 = "protocol.repeat"(%n,%a,%b,%xs) ({
       ^body(%i:ui64,%x:!F,%y:!F,%captured:!V):
-      %v:2 = "algebra.finite_fold"(%captured,%x,%y) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)
+      %v:2 = "data.finite_fold"(%captured,%x,%y) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)
       "protocol.yield"(%v#0,%v#1) : (!F,!F)->()
     }) {site="loop",carried=2:i64,maximum=2:i64,roles=["P"],carried_roles=[["P"],["P"]]} : (ui64,!F,!F,!V)->(!F,!F)'''
     ports = (("n", "ui64", ("P",)), ("xs", "!V", ("P",)),
@@ -570,8 +573,9 @@ def profile_cases(suite):
                 [str(count), encoded(values), "1", "2"], [], returned(expected))
     for maximum in (2, 0):
         # Native refusal and reader refusal are separate boundaries.
-        native = source.replace('roles=["P"],\n', 'roles=["P","Q"],\n')
-        native = native.replace('maximum=2', f'maximum={maximum}')
+        native = replace_exactly_once(source, 'roles=["P"],\n', 'roles=["P","Q"],\n')
+        if maximum != 2:
+            native = replace_exactly_once(native, 'maximum=2', f'maximum={maximum}')
         label = f"repeat-native-multirole-math-max{maximum}"
         suite.case(label, lambda n=label, text=native:
                    suite.refuse_native(n, text, "structured-source-multirole-math"))
@@ -589,9 +593,7 @@ def closed_boundary(suite, subject):
     # Native closed execution requires a single-role entry. Keep the complete
     # handwritten original and change only that interface roster.
     source = subject[0].read_text(encoding="utf-8")
-    if 'roles=["P", "Q"]' not in source:
-        raise AssertionError('lean/bridges/structured/repeats.py: \'roles=["P", "Q"]\' in source')
-    subject = suite.export("closed-repeat-profile", source.replace('roles=["P", "Q"]', 'roles=["P"]'))
+    subject = suite.export("closed-repeat-profile", replace_exactly_once(source, 'roles=["P", "Q"]', 'roles=["P"]'))
 
     def check():
         original, snapshot, _ = subject

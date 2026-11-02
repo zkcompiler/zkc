@@ -19,6 +19,7 @@ import shutil
 from native_entry import native_subject
 from structured import render, entry
 from bridges.common.schema import interpreted_type
+from bridges.common.replacement import replace_exactly_once
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
 
@@ -106,7 +107,7 @@ return %s, %d : !F,!F
             values.append((name,first[1],first[2] & second[2] & condition[2]))
         elif choice == 12:
             number = rng.randrange(1000000)
-            body.append(f'%{name} = "algebra.constant"() {{value="{number}"}} : ()->!F')
+            body.append(f'%{name} = "algebra.constant"() {{value=#algebra.literal<!F, {number} : ui255>}} : ()->!F')
             values.append((name,'f',{0,1,2}))
         elif choice == 13:
             if i % 2:
@@ -318,10 +319,16 @@ class Suite:
         source, exported, data = self.export(wrap([], [('a', 'f', [0,1,2])], ('a','f'), [0,1,2]))
         request = self.wire_request(data, ['scalar-control',0,[0],[]])
         path = self.directory / 'raw-request.json'
-        controls = [json.dumps(request).replace('4096', '-0'),
-                    json.dumps(request).replace('4096', '1e0'),
-                    json.dumps(request).replace('4096', '0.0'),
-                    '{"x":0,"x":1}', json.dumps(request + ['extra'])]
+        # Noncanonical step capacities are refused while each tool reads the
+        # request, not later during execution.
+        for spelling in ('-0', '1e0', '0.0'):
+            path.write_text(replace_exactly_once(json.dumps(request), '4096', spelling))
+            execute([self.args.reference, 'open', source, 'main', path], ok=False,
+                    diagnostic='structured-reference-input')
+            refusal = json.loads(execute([self.args.lean, 'open', exported, path], ok=False))
+            if refusal != {'code': 'expected-natural', 'status': 'refused'}:
+                raise AssertionError((spelling, refusal))
+        controls = ['{"x":0,"x":1}', json.dumps(request + ['extra'])]
         for inputs in ([True], ['-0'], ['1e0'], [str(MODULUS)], [], ['0', '0']):
             changed = copy.deepcopy(request)
             changed[2] = inputs

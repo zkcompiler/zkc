@@ -181,6 +181,10 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
   | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .indexWrappingAdd, .cons a (.cons b .nil), .nil => .done (.cons (wrappingAdd a b) .nil)
+  | .indexWrappingSubtract, .cons a (.cons b .nil), .nil => .done (.cons (wrappingSubtract a b) .nil)
+  | .indexBitAnd, .cons a (.cons b .nil), .nil => .done (.cons (bitAnd a b) .nil)
+  | .indexLogicalShiftRight, .cons a (.cons b .nil), .nil => .done (.cons (logicalShiftRight a b) .nil)
   | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
       .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)

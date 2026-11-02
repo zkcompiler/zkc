@@ -136,15 +136,23 @@ def oracle_descriptor(tag, args):
     raise ValueError("unknown oracle descriptor")
 
 
+# Index descriptors without arguments: comparisons and the total word operations.
+INDEX_OPERATIONS = {
+    "index.less": ".indexLess", "index.power_of_two": ".indexPowerOfTwo",
+    "index.wrapping_add": ".indexWrappingAdd", "index.wrapping_sub": ".indexWrappingSubtract",
+    "index.bit_and": ".indexBitAnd", "index.logical_shift_right": ".indexLogicalShiftRight",
+}
+
+
 def descriptor(value):
     if not isinstance(value, list) or not value:
         raise ValueError("invalid descriptor")
     tag, *args = value
     if tag.startswith("oracle_"):
         return oracle_descriptor(tag, args)
-    if tag in ("index.less", "index.power_of_two"):
+    if tag in INDEX_OPERATIONS:
         record(args, 0)
-        return ".indexLess" if tag == "index.less" else ".indexPowerOfTwo"
+        return INDEX_OPERATIONS[tag]
     if tag == "vector.length":
         record(args, 1)
         return f".vectorLength {text(args[0])}"

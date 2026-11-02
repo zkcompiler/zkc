@@ -76,6 +76,7 @@ def operationKind : Structured.Op → String
   | .indexEqual => "index-equal"
   | .indexLess => "index-less"
   | .indexPowerOfTwo => "index-power-of-two"
+  | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => "index-word"
   | .vectorLength _ => "vector-length"
   | .fieldConstant .. => "field-constant"
   | .fieldAdd _ | .fieldSubtract _ | .fieldMultiply _ | .fieldEmbed .. | .fieldEqual _ => "field"

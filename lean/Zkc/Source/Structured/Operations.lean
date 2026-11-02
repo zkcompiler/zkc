@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.Structured.Primitives
 public import Zkc.Source.Structured.NaturalPowerOfTwo
+public import Zkc.Source.Structured.IndexWords
 
 @[expose] public section
 
@@ -146,6 +147,8 @@ inductive Op where
   | indexEqual
   | indexLess
   | indexPowerOfTwo
+  /-- The total word operations of the index contract (`IndexWords`). -/
+  | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
   | fieldConstant (domain : String) (value : Nat)
@@ -178,6 +181,7 @@ def Op.arguments : Op → List Ty
   | .exec primitive => primitive.arguments
   | .indexConstant _ => []
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.index, .index]
+  | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => [.index, .index]
   | .multilinearRestrictPrefix d => [.vector d, .vector d]
   | .vectorLength d => [.vector d]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
@@ -202,6 +206,7 @@ def Op.results : Op → List Ty
   | .exec primitive => primitive.results
   | .indexConstant _ => [.index]
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.boolean]
+  | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => [.index]
   | .multilinearRestrictPrefix d => [.vector d]
   | .vectorLength _ => [.index]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
@@ -237,6 +242,7 @@ def Op.helpers : Op → List Helper
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .makeProduct .. | .getProduct .. |

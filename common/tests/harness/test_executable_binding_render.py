@@ -3,7 +3,7 @@
 import hashlib
 import json
 import pytest
-from harness import load
+from harness import PROOF_POLICY, load
 
 
 def renderer():
@@ -18,7 +18,7 @@ def deployment(arguments):
                    [['local', 'site', 'helper', [], []], ['return', []]], []]
     program = json.dumps(['zkc.program/0', [binding], [function], [participant],
                           [['entry', 'entry', [['V', 'validator']]]]])
-    return ['zkc.native-proof/0', '', ['', ['', 'entry', 'P', 'V']], '', program,
+    return ['zkc.native-proof/0', '', ['', PROOF_POLICY], '', program,
             hashlib.sha256(program.encode()).hexdigest(), None, None, None]
 
 

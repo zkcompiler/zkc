@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from harness import load
+from harness import PROOF_POLICY, language_interface, load
 
 
 @pytest.fixture
@@ -362,13 +362,13 @@ def test_pair_validator_matches_complete_independent_export(driver_module, tmp_p
     capture = driver_module.pipeline_compile
     source = "original source"
     identity = capture.digest(source.encode())
-    policy = ["policy", "entry"]
+    policy = PROOF_POLICY
     participant = ["participant", "sha256:" + identity, "candidate", policy, "V", ["body"]]
     paired = json.loads(json.dumps(participant))
     if changed_body:
         paired[-1] = ["different-body"]  # All digest fields still match.
     outputs = {"language-emit": source,
-               "language-interface": json.dumps({"original": identity}),
+               "language-interface": json.dumps(language_interface("test::Proof", "protocol", identity)),
                "language-bundle": json.dumps(["deployment", identity, ["policy", policy]]),
                "protocol-construct-proof": "candidate",
                "protocol-constructed-participant": json.dumps(participant),

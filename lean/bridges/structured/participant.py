@@ -20,6 +20,7 @@ import sys
 
 import check as structured
 from bridges.common.native_entry import native_subject
+from bridges.common.replacement import replace_exactly_once
 from bridges.common.schema import interpreted_type
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -417,8 +418,7 @@ class Suite(structured.Suite):
         self.negative_controls(schnorr,services)
 
     def negative_controls(self, subject, services):
-        changed=subject["original"].read_text(encoding="utf-8").replace('"algebra.field_multiply"','"algebra.field_add"',1)
-        require(changed != subject["original"].read_text(encoding="utf-8"),"source mutation target")
+        changed=replace_exactly_once(subject["original"].read_text(encoding="utf-8"),'"algebra.field_multiply"','"algebra.field_add"')
         path=subject["folder"] / "changed-source.mlir"; path.write_text(changed, encoding="utf-8")
         fresh=json.loads(self.command("mutated-source:export",[self.tools["compiler"],"protocol-structured",path,"--symbol="+subject["snapshot"][3]]))
         fresh[2]=subject["snapshot"][2]

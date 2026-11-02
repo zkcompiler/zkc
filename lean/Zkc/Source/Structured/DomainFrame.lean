@@ -79,7 +79,7 @@ theorem operationOn_table_congr (left right : HelperTable model.Value interface)
     cases arguments
     cases callbacks
     rfl
-  | indexEqual | indexLess | indexPowerOfTwo | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | boundedAt | groupAdd | groupScale | groupEqual =>
     funext arguments callbacks
     cases arguments with

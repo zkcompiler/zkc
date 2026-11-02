@@ -20,6 +20,7 @@ from bridges.common.lean_render import (  # noqa: E402
     ROOT, CheckFailed, Runner, axioms_allowed, printed_axioms, regenerate,
 )
 from bridges.common.native_entry import native_subject  # noqa: E402
+from bridges.common.replacement import replace_exactly_once  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
 
 LEAN = ROOT / "lean"
@@ -89,7 +90,7 @@ def refusal(runner, compiler, directory, name, source):
         runner.check(name, result.returncode != 0 and "source.roles:" in result.stderr)
         return
     _, data = export(runner, compiler, selected, source_path)
-    module = snapshot.render(data, "Mutant").replace(
+    module = replace_exactly_once(snapshot.render(data, "Mutant"),
         "public import Zkc.Source.Structured.Import\n", """public import Zkc.Source.Structured.Import
 public import Zkc.Source.Structured.UnitViews
 public import Tests.Generated.CompositeReuseBodies
@@ -144,13 +145,18 @@ def main():
         runner.check("all-owned-declarations", audited.returncode == 0 and
                      "COMPOSITE-REUSE-AUDIT-PASS" in audited.stdout, audited.stdout + audited.stderr)
         source = FIXTURE.read_text()
+        # Rename the callee at its declaration and its only use.
+        other = replace_exactly_once(source, "protocol Outer roles(P,V)", "protocol Other roles(P,V)")
+        other = replace_exactly_once(other, "= Outer roles(P,V)(", "= Other roles(P,V)(")
+        runner.check("mutation-renamed-every-reference", "Outer" not in other)
         for name, changed in (
-            ("wrong-operand", source.replace("(ignored, value, first, enabled)", "(value, ignored, first, enabled)", 1)),
-            ("wrong-role", source.replace("Shift roles(V,P)(ignored, value, first, enabled)",
-                                          "Shift roles(P,V)(ignored, value, first, enabled)", 1)),
-            ("wrong-callee", source.replace("Outer", "Other")),
-            ("wrong-capture", source.replace("(ignored, shifted, second, enabled)",
-                                             "(ignored, shifted, second, true)", 1)),
+            ("wrong-operand", replace_exactly_once(
+                source, "(ignored, value, first, enabled)", "(value, ignored, first, enabled)")),
+            ("wrong-role", replace_exactly_once(source, "Shift roles(V,P)(ignored, value, first, enabled)",
+                                                "Shift roles(P,V)(ignored, value, first, enabled)")),
+            ("wrong-callee", other),
+            ("wrong-capture", replace_exactly_once(source, "(ignored, shifted, second, enabled)",
+                                                   "(ignored, shifted, second, true)")),
         ):
             runner.check("mutation-changed:" + name, changed != source)
             refusal(runner, args.compiler.resolve(), directory / "refusals", name, changed)

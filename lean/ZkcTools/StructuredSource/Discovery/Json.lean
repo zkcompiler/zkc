@@ -63,6 +63,8 @@ def opJson (op : Op) : Json := Json.mkObj [
   ("constructor", toJson (match op with
     | .exec _ => "exec" | .indexConstant _ => "indexConstant" | .indexEqual => "indexEqual"
     | .indexLess => "indexLess" | .indexPowerOfTwo => "indexPowerOfTwo"
+    | .indexWrappingAdd => "indexWrappingAdd" | .indexWrappingSubtract => "indexWrappingSubtract"
+    | .indexBitAnd => "indexBitAnd" | .indexLogicalShiftRight => "indexLogicalShiftRight"
     | .vectorLength _ => "vectorLength"
     | .multilinearRestrictPrefix _ => "multilinearRestrictPrefix"
     | .fieldConstant .. => "fieldConstant" | .fieldAdd _ => "fieldAdd"

@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import generate_component_roots as driver
+from bridges.common.replacement import replace_exactly_once
 
 
 DESCRIPTOR = '''schema = "zkc.component-roots/0"
@@ -27,7 +28,7 @@ target = "knowledge"
 method = "sigma"
 '''
 
-DIRECT_DESCRIPTOR = DESCRIPTOR.replace('method = "sigma"', '''method = "direct"
+DIRECT_DESCRIPTOR = replace_exactly_once(DESCRIPTOR, 'method = "sigma"', '''method = "direct"
 proof_module = "Example.Proof"
 error_bound = "1"
 error_expression = ".natural 1"''')
@@ -49,12 +50,12 @@ class ComponentRootDescriptors(unittest.TestCase):
 
     def test_unknown_and_missing_keys(self):
         cases = [
-            (DESCRIPTOR.replace("[[root]]", 'unexpected = "x"\n[[root]]'), "unknown keys: unexpected"),
+            (replace_exactly_once(DESCRIPTOR, "[[root]]", 'unexpected = "x"\n[[root]]'), "unknown keys: unexpected"),
             (DESCRIPTOR + 'unexpected = "x"\n', "unknown keys: unexpected"),
             (DESCRIPTOR + 'error_expresion = ".natural 1"\n', "unknown keys: error_expresion"),
-            (DESCRIPTOR.replace('group_type = "Example.Group"\n', ""), "missing keys: group_type"),
-            (DESCRIPTOR.replace('registry = "Example.registry"\n', ""), "missing keys: registry"),
-            (DESCRIPTOR.replace('target = "knowledge"\n', ""), "missing keys: target"),
+            (replace_exactly_once(DESCRIPTOR, 'group_type = "Example.Group"\n', ""), "missing keys: group_type"),
+            (replace_exactly_once(DESCRIPTOR, 'registry = "Example.registry"\n', ""), "missing keys: registry"),
+            (replace_exactly_once(DESCRIPTOR, 'target = "knowledge"\n', ""), "missing keys: target"),
         ]
         for descriptor, diagnostic in cases:
             with self.subTest(diagnostic=diagnostic, descriptor=descriptor):
@@ -62,18 +63,18 @@ class ComponentRootDescriptors(unittest.TestCase):
 
     def test_value_shapes(self):
         cases = [
-            (DESCRIPTOR.replace('model = "Example.model"', "model = 1"), "model: expected"),
-            (DESCRIPTOR.replace('source = "example.zkc"', "source = false"), "source: expected"),
-            (DESCRIPTOR.replace('modules = { library = "library.zkc" }', "modules = []"), "modules: expected"),
-            (DESCRIPTOR.replace('library = "library.zkc"', "library = 1"), "modules.library: expected"),
-            (DESCRIPTOR.replace('[[root]]', 'receipt_normalization = true\n[[root]]'), "receipt_normalization: expected"),
-            (DESCRIPTOR.replace('[[root]]', 'theorem_normalization = ["law", 1]\n[[root]]'), "theorem_normalization: expected"),
+            (replace_exactly_once(DESCRIPTOR, 'model = "Example.model"', "model = 1"), "model: expected"),
+            (replace_exactly_once(DESCRIPTOR, 'source = "example.zkc"', "source = false"), "source: expected"),
+            (replace_exactly_once(DESCRIPTOR, 'modules = { library = "library.zkc" }', "modules = []"), "modules: expected"),
+            (replace_exactly_once(DESCRIPTOR, 'library = "library.zkc"', "library = 1"), "modules.library: expected"),
+            (replace_exactly_once(DESCRIPTOR, '[[root]]', 'receipt_normalization = true\n[[root]]'), "receipt_normalization: expected"),
+            (replace_exactly_once(DESCRIPTOR, '[[root]]', 'theorem_normalization = ["law", 1]\n[[root]]'), "theorem_normalization: expected"),
             (DESCRIPTOR.split("[[root]]")[0] + "root = []\n", "root: expected"),
             (DESCRIPTOR.split("[[root]]")[0] + "root = {}\n", "root: expected"),
-            (DIRECT_DESCRIPTOR.replace('error_expression = ".natural 1"', "error_expression = 1"),
+            (replace_exactly_once(DIRECT_DESCRIPTOR, 'error_expression = ".natural 1"', "error_expression = 1"),
              "error_expression: expected"),
-            (DIRECT_DESCRIPTOR.replace('error_bound = "1"', "error_bound = false"), "error_bound: expected"),
-            (DIRECT_DESCRIPTOR.replace('error_bound = "1"', 'error_bound = " "'), "error_bound: expected"),
+            (replace_exactly_once(DIRECT_DESCRIPTOR, 'error_bound = "1"', "error_bound = false"), "error_bound: expected"),
+            (replace_exactly_once(DIRECT_DESCRIPTOR, 'error_bound = "1"', 'error_bound = " "'), "error_bound: expected"),
         ]
         for descriptor, diagnostic in cases:
             with self.subTest(diagnostic=diagnostic, descriptor=descriptor):
@@ -82,9 +83,9 @@ class ComponentRootDescriptors(unittest.TestCase):
     def test_names_and_installed_methods(self):
         cases = [
             (DESCRIPTOR + "[[root]]" + DESCRIPTOR.split("[[root]]")[1], "duplicate root name"),
-            (DESCRIPTOR.replace('name = "Example"', 'name = "bad-name"'), "invalid root name"),
-            (DESCRIPTOR.replace('method = "sigma"', 'method = "unknown"'), "uninstalled proof method"),
-            (DESCRIPTOR.replace('method = "sigma"', 'method = "direct"'), "missing keys: .*proof_module"),
+            (replace_exactly_once(DESCRIPTOR, 'name = "Example"', 'name = "bad-name"'), "invalid root name"),
+            (replace_exactly_once(DESCRIPTOR, 'method = "sigma"', 'method = "unknown"'), "uninstalled proof method"),
+            (replace_exactly_once(DESCRIPTOR, 'method = "sigma"', 'method = "direct"'), "missing keys: .*proof_module"),
             (DESCRIPTOR + 'proof_module = "Example.Proof"\n', "unknown keys: proof_module"),
             (DESCRIPTOR + 'proof_name = "Example.proof"\n', "unknown keys: proof_name"),
         ]
@@ -107,7 +108,7 @@ class ComponentRootDescriptors(unittest.TestCase):
         driver.validate_config(valid)
 
     def test_selection_cannot_hide_malformed_roots(self):
-        invalid_root = DESCRIPTOR.split("[[root]]")[1].replace('"Example"', '"Other"')
+        invalid_root = replace_exactly_once(DESCRIPTOR.split("[[root]]")[1], '"Example"', '"Other"')
         self.assert_refused(DESCRIPTOR + "[[root]]" + invalid_root + 'error_expresion = "x"\n',
                             "unknown keys: error_expresion", ["--only", "Example"])
         self.assert_refused(DESCRIPTOR, "unknown or empty root selection", ["--only", "Other"])
@@ -117,7 +118,7 @@ class ComponentRootDescriptors(unittest.TestCase):
             ('error_bound = "1"\n', "missing keys: error_bound"),
             ('error_expression = ".natural 1"', "missing keys: error_expression"),
         ]:
-            self.assert_refused(DIRECT_DESCRIPTOR.replace(line, ""), diagnostic)
+            self.assert_refused(replace_exactly_once(DIRECT_DESCRIPTOR, line, ""), diagnostic)
         for key in ("error_bound", "error_expression"):
             self.assert_refused(DESCRIPTOR + f'{key} = "0"\n', "unknown keys: " + key)
 

@@ -9,6 +9,7 @@ import sys
 
 from check import MODULUS, ROOT, definition, fixture, returned as closed_returned
 from open_protocol import OpenSuite, returned, stopped
+from bridges.common.replacement import replace_exactly_once
 
 
 def authored(suite, label, stem):
@@ -136,14 +137,16 @@ def source_variants(suite, combination):
     source = combination[0].read_text(encoding="utf-8")
     declaration = next(item for item in combination[2][7] if item[0] == "realize")
     formula = declaration[4]
-    if not (source.count(formula) == 2):
-        raise AssertionError('bridges/structured/maps.py:134: source.count(formula) == 2')
+    # Rename the formula at its definition and its only call.
+    renamed = replace_exactly_once(source, f'sym_name = "{formula}"', 'sym_name = "renamed_formula"')
+    renamed = replace_exactly_once(renamed, f"callee = @{formula},", "callee = @renamed_formula,")
+    if formula in renamed:
+        raise AssertionError(f"the formula {formula} has another reference")
     literal = '#algebra.literal<<"bls12-381.fr">, 3 : ui255> : !algebra.field<"bls12-381.fr">'
-    if source.count(literal) != 1:
-        raise AssertionError("expected one typed Fr literal with value 3")
     variants = [
-        ("renamed-formula", source.replace(formula, "renamed_formula"), 3),
-        ("changed-formula", source.replace(literal, literal.replace('3 : ui255', '5 : ui255')), 5),
+        ("renamed-formula", renamed, 3),
+        ("changed-formula", replace_exactly_once(
+            source, literal, replace_exactly_once(literal, '3 : ui255', '5 : ui255')), 5),
     ]
     for label, changed, offset in variants:
         subject = suite.export(label, changed, combination[2][3])

@@ -40,8 +40,9 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import schema  # noqa: E402
+from bridges.common import policy as native_policy, schema  # noqa: E402
 from bridges.common.lean_render import record, require  # noqa: E402
+from bridges.common.replacement import ReplacementError, replace_exactly_once  # noqa: E402
 
 OBSERVE = "transcript.native.indexed.observe.data"
 CHALLENGE = "transcript.native.indexed.challenge"
@@ -231,7 +232,7 @@ def challenge_reads_host(exported):
 @kind("challenge-names-delivery", "construction", "a challenge is bound to its query site (domain separation)",
       "construction-challenge-site")
 def challenge_names_delivery(exported):
-    validator = exported[3][3]
+    validator = native_policy.decode(exported[3]).validator
 
     def edit(value):
         deliveries = [item for item in nested(value[7]) if bound(item, OBSERVE)
@@ -341,15 +342,20 @@ def native_domain_separator(candidate, exported):
     """The challenge template names the delivery site instead of the selected
     query site."""
     challenge = next((item for item in nested(exported[7]) if bound(item, CHALLENGE)), None)
-    if challenge is None or not exported[3][8]:
+    draws = native_policy.decode(exported[3]).draws
+    if challenge is None or not draws:
         return []
     tree = template_tree(challenge)
     actual = native_origin(tree)
-    tree[4][2] = exported[3][8][0][1]
+    tree[4][2] = draws[0][1]
     changed = native_origin(tree)
-    if actual == changed or candidate.count(actual) != 1:
+    if actual == changed:
         return []
-    return [candidate.replace(actual, changed)]
+    try:
+        return [replace_exactly_once(candidate, actual, changed)]
+    except ReplacementError:
+        # Inapplicable to this candidate: the framework reports the kind.
+        return []
 
 
 def native_origin(tree):
@@ -423,7 +429,7 @@ def native_challenge_reads_host(candidate, exported):
                                  for binding in challenge_bindings)
                              for text in lines[block[0]:block[1] + 1]):
                 challenge_helpers.append(match[1])
-    validator = exported[3][3]
+    validator = native_policy.decode(exported[3]).validator
     start = next((index for index, line in enumerate(lines)
                   if '"protocol.participant"()' in line and f'role = "{validator}"' in line), None)
     if start is None or not challenge_helpers:
@@ -463,7 +469,7 @@ NATIVE = {
 # The executable validator program
 
 def validator_of(program, deployment):
-    role = deployment[2][1][3]
+    role = native_policy.decode(deployment[2][1]).validator
     return next(item for item in program[3] if item[3] == role)
 
 

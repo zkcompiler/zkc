@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import snapshot as constructors
 from bridges.common.native_entry import native_subject
+from bridges.common.replacement import replace_exactly_once
 from bridges.common.schema import interpreted_type
 from evidence import archive_sources, atomic_json, check_sources, retain_tool
 from bridges.common.lean_render import file_digest as digest  # noqa: E402
@@ -450,38 +451,42 @@ def wire(ty, value):
 def provenance_cases(suite, fixtures):
     forwarded_text = (fixtures / "forwarded-bounds.mlir").read_text(encoding="utf-8")
     forwarded = suite.export("forwarded-bounds", forwarded_text)
-    mixed_text = forwarded_text.replace(
-        "func.func private @permute(%xs: !V, %ys: !V, %i: ui64) -> (!V, ui64, !V, !V)",
-        "func.func private @permute(%xs: !V, %ys: !V, %i: ui64) -> (!F, !V, ui64, !F, !V, !V)").replace(
-        "      func.return %ys, %i, %xs, %xs : !V, ui64, !V, !V",
-        '      %one = "algebra.constant"() {value="1"} : () -> !F\n'
-        '      %fresh = algebra.field_add %one, %one : (!F, !F) -> !F\n'
-        '      func.return %fresh, %ys, %i, %fresh, %xs, %xs : !F, !V, ui64, !F, !V, !V').replace(
-        "%p:4 = func.call @permute", "%p:6 = func.call @permute").replace(
-        "-> (!V, ui64, !V, !V)\n      func.return %p#3, %p#1",
-        "-> (!F, !V, ui64, !F, !V, !V)\n      func.return %p#5, %p#2")
+    mixed_text = forwarded_text
+    for old, new in [
+        ("func.func private @permute(%xs: !V, %ys: !V, %i: ui64) -> (!V, ui64, !V, !V)",
+         "func.func private @permute(%xs: !V, %ys: !V, %i: ui64) -> (!F, !V, ui64, !F, !V, !V)"),
+        ("      func.return %ys, %i, %xs, %xs : !V, ui64, !V, !V",
+         '      %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : () -> !F\n'
+         '      %fresh = algebra.field_add %one, %one : (!F, !F) -> !F\n'
+         '      func.return %fresh, %ys, %i, %fresh, %xs, %xs : !F, !V, ui64, !F, !V, !V'),
+        ("%p:4 = func.call @permute", "%p:6 = func.call @permute"),
+        ("-> (!V, ui64, !V, !V)\n      func.return %p#3, %p#1",
+         "-> (!F, !V, ui64, !F, !V, !V)\n      func.return %p#5, %p#2"),
+    ]:
+        mixed_text = replace_exactly_once(mixed_text, old, new)
     mixed = suite.export("mixed-result-identities", mixed_text)
-    direct_text = forwarded_text.replace(
+    direct_text = replace_exactly_once(forwarded_text,
         "func.call @read(%forward#0, %forward#1)",
         '"data.bounded_at"(%forward#0, %forward#1)')
     direct = suite.export("forwarded-read", direct_text)
     aliased_text = (fixtures / "aliased-indices.mlir").read_text(encoding="utf-8")
     aliased = suite.export("aliased-indices", aliased_text)
-    capture_text = aliased_text.replace(
-        "^entry(%xs: !V, %ys: !V):", "^entry(%xs: !V):").replace(
-        "function_type = (!V, !V) -> !data.domain<ui64>",
-        "function_type = (!V) -> !data.domain<ui64>").replace(
-        '"algebra.finite_fold"(%xs, %xs, %seed)',
-        '"algebra.finite_fold"(%xs, %seed, %xs)').replace(
-        ": (!V, !V, !F) -> !F\n      \"protocol.return\"",
-        ": (!V, !F, !V) -> !F\n      \"protocol.return\"")
+    capture_text = aliased_text
+    for old, new in [
+        ("^entry(%xs: !V, %ys: !V):", "^entry(%xs: !V):"),
+        ("function_type = (!V, !V) -> !data.domain<ui64>", "function_type = (!V) -> !data.domain<ui64>"),
+        ('"data.finite_fold"(%xs, %xs, %seed)', '"data.finite_fold"(%xs, %seed, %xs)'),
+        (": (!V, !V, !F) -> !F\n      \"protocol.return\"", ": (!V, !F, !V) -> !F\n      \"protocol.return\""),
+    ]:
+        capture_text = replace_exactly_once(capture_text, old, new)
     captured = suite.export("aliased-capture", capture_text)
-    returned_alias_text = aliased_text.replace("    func.func private @read(",
+    returned_alias_text = replace_exactly_once(aliased_text, "    func.func private @read(",
         "    func.func private @identity(%xs: !V) -> !V { func.return %xs : !V }\n"
-        "    func.func private @read(").replace(
-        '      %r = "algebra.finite_fold"(%xs, %xs, %seed)',
+        "    func.func private @read(")
+    returned_alias_text = replace_exactly_once(returned_alias_text,
+        '      %r = "data.finite_fold"(%xs, %xs, %seed)',
         '      %alias = func.call @identity(%xs) : (!V) -> !V\n'
-        '      %r = "algebra.finite_fold"(%xs, %alias, %seed)')
+        '      %r = "data.finite_fold"(%xs, %alias, %seed)')
     returned_alias = suite.export("aliased-helper-result", returned_alias_text)
     for label, subject in (("forwarded", forwarded), ("mixed", mixed), ("direct", direct),
                            ("aliased", aliased), ("captured", captured),
@@ -500,7 +505,7 @@ def provenance_cases(suite, fixtures):
         "forwarded-unrelated-result", bad, "structured-call-premise"))
     suite.case("native-refuse-forwarded-unrelated-result", lambda: suite.refuse_native(
         "native-forwarded-unrelated-result",
-        forwarded_text.replace("func.return %p#3, %p#1", "func.return %p#0, %p#1"),
+        replace_exactly_once(forwarded_text, "func.return %p#3, %p#1", "func.return %p#0, %p#1"),
         "finite-bound"))
     distinct = copy.deepcopy(aliased[2])
     definition(distinct, "main")[9][1][0][1][1] = 1
@@ -508,8 +513,8 @@ def provenance_cases(suite, fixtures):
         "distinct-domain-actual", distinct, "structured-fold-premise"))
     suite.case("native-refuse-distinct-domain-actual", lambda: suite.refuse_native(
         "native-distinct-domain-actual",
-        aliased_text.replace('"algebra.finite_fold"(%xs, %xs, %seed)',
-                             '"algebra.finite_fold"(%xs, %ys, %seed)'), "finite-bound"))
+        replace_exactly_once(aliased_text, '"data.finite_fold"(%xs, %xs, %seed)',
+                             '"data.finite_fold"(%xs, %ys, %seed)'), "finite-bound"))
 
 
 def boundary_cases(suite, unit_text):
@@ -534,9 +539,7 @@ def boundary_cases(suite, unit_text):
             body = '\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(count))
             helper = 'func.func private @padding(%flag:i1) -> i1 {\n' + body + '\nreturn %flag : i1\n}'
             marker = ' func.func private @step'
-            if marker not in unit_text:
-                raise AssertionError('missing scoped finite callback insertion point')
-            return unit_text.replace(marker, helper + '\n' + marker, 1)
+            return replace_exactly_once(unit_text, marker, helper + '\n' + marker)
         # The fixture contributes one domain constructor, one finite declaration
         # and two call sites. Terminators and scoped CFG mechanics do not count.
         subject = suite.export('maximum-finite-instructions', source(4092))
@@ -566,7 +569,9 @@ def boundary_cases(suite, unit_text):
         inputs = ','.join(f'%a{i}:i1' for i in range(512))
         outputs = ','.join(['i1'] * 512)
         values = ','.join(f'%a{i}' for i in range(512))
-        names = [f'h{i}' for i in range(93)]
+        # Each helper exports about 22 KiB; padding its name by up to 510
+        # bytes reaches exactly 1 MiB from the baseline.
+        names = [f'h{i}' for i in range(46)]
         def source():
             return simple('\n'.join(f'func.func private @{name}({inputs}) -> ({outputs}) '
                                     f'{{ return {values} : {outputs} }}' for name in names))
@@ -687,14 +692,14 @@ def run_cases(suite):
             if "runtime" in suite.tools:
                 suite.case(label + "-runner", lambda v=values, e=expected, n=label: suite.native(unit, n, v, e))
 
-    reversed_text = total_text.replace("func.return %b,%v", "func.return %v,%b")
-    if not (reversed_text != total_text):
-        raise AssertionError('bridges/structured/check.py:635: reversed_text != total_text')
+    reversed_text = replace_exactly_once(total_text, "func.return %b,%v", "func.return %v,%b")
     reversed_subject = suite.export("reversed-results", reversed_text)
     suite.case("same-typed-result-order-changes-meaning", lambda: suite.compare(
         reversed_subject, "reversed", [["2"], "7", "11"], returned("2", "11")))
     for stop in ("abort", "reject", "exhausted", "incomplete", "refused"):
-        changed = suite.export("stop-" + stop, unit_text.replace('reason="abort"', f'reason="{stop}"'))
+        # The fixture's own stop is abort; every other class is a mutation of it.
+        text = unit_text if stop == "abort" else replace_exactly_once(unit_text, 'reason="abort"', f'reason="{stop}"')
+        changed = suite.export("stop-" + stop, text)
         suite.case("stop-class-" + stop, lambda s=changed, reason=stop: suite.compare(
             s, "active", [["2"], True], ["stopped", reason]))
 
@@ -826,8 +831,19 @@ def run_cases(suite):
     malformed.append(("overlong-identity", bad))
     bad = copy.deepcopy(loops[2]); definition(bad, "control")[9][1][0][3][0][2][2][1][-3:-1] = [6, 5]
     malformed.append(("same-typed-capture-swap", bad))
+    # Each malformed snapshot is refused by the reader check it targets.
+    codes = {
+        "format": "structured-envelope", "stage": "structured-envelope", "wrong-role": "structured-role",
+        "duplicate-domain": "structured-duplicate-symbol", "missing-helper": "structured-unknown-helper",
+        "missing-index-premise": "structured-bounded-at-premise",
+        "same-typed-wrong-container-at-call": "structured-call-premise", "out-of-scope-index": "structured-operand",
+        "malformed-dormant-stop": "structured-terminator", "unknown-operation": "structured-operation-unsupported",
+        "extra-envelope-field": "structured-envelope", "wrong-bound-axis": "structured-number-limit",
+        "helper-cycle": "structured-formation", "math-stopping-body": "structured-math-stop",
+        "overlong-identity": "structured-string", "same-typed-capture-swap": "structured-capture-forwarding",
+    }
     for label, bad in malformed:
-        suite.case("refuse-" + label, lambda n=label, b=bad: suite.refuse_snapshot(n, b))
+        suite.case("refuse-" + label, lambda n=label, b=bad: suite.refuse_snapshot(n, b, codes[n]))
 
 
 def main():

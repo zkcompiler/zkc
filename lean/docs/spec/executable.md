@@ -70,16 +70,28 @@ instruction budget.
   crossed payload sort or additional physical argument does not resolve.
 - Numerical calls. A `numerical.map`, `numerical.sum` or `numerical.product`
   binding names its field and an operand mask, and its operation carries one
-  `zkc.ring/0` expression as text. `Numerical.decode` reads that text into a
-  `Zkc.Algebra.RingExpression.Expr` with natural literals and slot inputs,
-  refusing with a named reason exactly the payloads the runtime's program
-  admission refuses: a body over 4096 bytes, text other than the canonical
-  encoding of an arena, an input or constant outside the call's field, a literal
-  that is not a canonical decimal below the characteristic, an input node outside
-  the declared inputs, an operand that does not point backward, an embedding,
-  declared inputs other than the mask's positions, other than one output, and a
-  node the output does not reach. A mask has at most 1023 positions. A refused
-  payload or mask does not resolve. One vocabulary row serves every mask: the
+  [physical plan](../../../docs/spec/runtime/numerical-plans.md)
+  `["zkc.numerical-plan/0", expression, lanes, slots, locations]` as text, whose
+  expression is a nested `zkc.ring/0` arena. `Numerical.decode` reads that text
+  into the plan's expression, a `Zkc.Algebra.RingExpression.Expr` with natural
+  literals and slot inputs, refusing with a named reason exactly the payloads the
+  runtime's program admission refuses: a plan over 16384 bytes or an expression
+  over 4096, text other than the canonical encoding of a plan (a bare expression
+  included), an input or constant outside the call's field, a literal that is
+  not a canonical decimal below the characteristic, an input node outside the
+  declared inputs, an operand that does not point backward, an embedding,
+  declared inputs other than the mask's positions, other than one output, a node
+  the output does not reach, lanes outside 1 through 256, a slot count outside 1
+  through the node count, locations other than one slot below the count for
+  every node, an unused slot, and an invalid slot schedule. The schedule is the
+  plan contract's: an input varies exactly when its mask position is a vector, a
+  node varies when an operand does, invariant nodes run once before the varying
+  ones, and the output (when invariant) and every invariant operand of a varying
+  node persist. Every node must read its operands from slots that still hold
+  them, no write may replace a persistent value, and the output's slot must keep
+  the output. Lanes and locations are a storage proposal: a valid plan computes
+  its expression at every row, so its meaning is the expression's. A mask has at
+  most 1023 positions. A refused payload or mask does not resolve. One vocabulary row serves every mask: the
   mask is the binding's last static argument. The call reads the row count and
   then one scalar for each `0` and one vector of exactly that many values for
   each `1`; another operand count, kind, field or length is a refusal of the
@@ -524,8 +536,8 @@ native-correctness assumptions are replaced by the following.
   needs the whole-proof cap, not just those per-message bounds.
 - Installed kernels implement the meanings of `installed`, at the admitted
   representations and within the runtime's capacity limits. For a numerical
-  call this includes that the kernel evaluates the expression as
-  `Numerical.decode` reads its payload.
+  call this includes that the kernel evaluates the plan's expression as
+  `Numerical.decode` reads it.
 - The native codec is a function of a message's bytes and type. Soundness needs
   no other property of it.
 - The managed transcript absorbs the invocation's public values injectively.

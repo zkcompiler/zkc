@@ -54,6 +54,7 @@ sys.path.append(str(ROOT / "scripts"))
 from bridges.common.lean_render import (  # noqa: E402
     ALLOWED_AXIOMS, Refused, Runner, axioms_allowed, digest, encode_tree, file_digest, now, printed_axioms,
     regenerate, require, strip_header)
+from bridges.common import policy as native_policy  # noqa: E402
 from bridges.construction import pair, render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
@@ -588,16 +589,17 @@ class Driver(Runner):
     def role_selection(deployment):
         """The validator's role-map row, which the runtime uses for inputs and acceptance, and
         whether it takes the policy's public inputs in order and selects its acceptance output."""
-        policy = deployment[2][1]
-        rows = [row for row in deployment[6] if row[0] == policy[3]]
+        policy = native_policy.decode(deployment[2][1])
+        rows = [row for row in deployment[6] if row[0] == policy.validator]
         if len(rows) != 1:
             return None
         _, symbol, inputs, outputs, _, acceptance = rows[0]
         data_inputs = [port for port, _ in inputs]
         selects = (acceptance.isdigit() and int(acceptance) < len(outputs)
-                   and outputs[int(acceptance)][0] == policy[4])
+                   and outputs[int(acceptance)][0] == str(policy.acceptance))
         return dict(symbol=symbol, data_inputs=data_inputs, acceptance=acceptance,
-                    inputs_match=data_inputs == policy[7], acceptance_match=selects)
+                    inputs_match=data_inputs == [str(index) for index in policy.public],
+                    acceptance_match=selects)
 
     def role_map(self, subject, deployment):
         prefix = subject.name

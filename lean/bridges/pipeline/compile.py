@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common import interface as language_interface, policy as native_policy  # noqa: E402
 from bridges.common.lean_render import ROOT, digest  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
 from bridges.construction import pair  # noqa: E402
@@ -40,13 +41,14 @@ def proof_artifacts(runner, subject, compiler, directory, executable=False):
     (directory / "source.mlir").write_bytes(source)
     interface_text = run("language-interface", *common, name="interface")
     (directory / "interface.json").write_text(interface_text)
-    interface = json.loads(interface_text)
+    interface = language_interface.loads(interface_text)
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source))
     deployment_text = run("language-bundle", *common, name="bundle").rstrip("\n")
     (directory / "deployment.json").write_text(deployment_text)
     deployment = json.loads(deployment_text)
     runner.check(f"{prefix}:deployment-source", deployment[1] == digest(source))
     policy = deployment[2][1]
+    entry_symbol = native_policy.decode(policy).entry
     (directory / "policy.json").write_text(json.dumps(policy))
     artifacts = dict(source=source, interface=interface, interface_text=interface_text, deployment=deployment,
                      deployment_text=deployment_text, policy=policy)
@@ -76,7 +78,7 @@ def proof_artifacts(runner, subject, compiler, directory, executable=False):
         runner.check(f"{prefix}:pair-validator", validator == exported,
                      "pair validator differs from independently exported participant")
         artifacts.update(pair=pair_export, pair_text=pair_text)
-    original_text = run("protocol-structured", directory / "source.mlir", f"--symbol={policy[1]}",
+    original_text = run("protocol-structured", directory / "source.mlir", f"--symbol={entry_symbol}",
                         name="original")
     (directory / "original.json").write_text(original_text)
     runner.check(f"{prefix}:participant-source", exported[1] == "sha256:" + digest(source))

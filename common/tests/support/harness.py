@@ -1,10 +1,29 @@
 """Controlled scripts and executable fixtures for tests of the test harness."""
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
+INTERFACE_FIXTURE = ROOT / "compiler/test/fixtures/language-interface/custody-records.json"
+# A complete Entry-level native proof policy for bridge controls.
+PROOF_POLICY = ["zkc.native-proof-policy/0", "entry", "P", "V", "0", "", [], [], [],
+                "zkc.framed/0", "", []]
+
+
+def language_interface(entry, protocol, original):
+    """A complete interface document for bridge controls.
+
+    The retained custody-records interface with its entry, selected protocol
+    symbol and original digest replaced, so strict interface readers admit it.
+    """
+    value = json.loads(INTERFACE_FIXTURE.read_text())
+    for record in value["protocols"]:
+        if record["symbol"] == value["protocol"]:
+            record["symbol"] = protocol
+    value.update(entry=entry, protocol=protocol, original=original)
+    return value
 
 
 def load(name, path):

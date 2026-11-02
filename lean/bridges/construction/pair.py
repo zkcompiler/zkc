@@ -10,7 +10,7 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render, schema  # noqa: E402
+from bridges.common import lean_render, policy as native_policy, schema  # noqa: E402
 from bridges.construction import render as participant  # noqa: E402
 
 FORMAT = "zkc.constructed-pair/0"
@@ -28,10 +28,8 @@ def decode(data, *, expected=None):
                                 and re.fullmatch(r"sha256:[0-9a-f]{64}", identity), "invalid artifact identity")
         # Reuse exact policy, operation, binding, type, reference and region validation.
         participant.render_declaration(child, "CheckedPairChild")
-        policy = child[3]
-        lean_render.require(all(isinstance(policy[i], str) and policy[i] for i in (1, 2, 3)),
-                            "invalid pair roles")
-        lean_render.require(policy[2] != policy[3], "pair roles coincide")
+        policy = native_policy.decode(child[3])
+        lean_render.require(policy.producer != policy.validator, "pair roles coincide")
         lean_render.require(isinstance(child[4], str) and child[4], "missing participant symbol")
     lean_render.require(producer[1:4] == validator[1:4], "pair source, candidate or policy mismatch")
     lean_render.require(producer[4] != validator[4], "pair participants coincide")

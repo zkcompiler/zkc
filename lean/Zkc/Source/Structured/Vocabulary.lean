@@ -155,6 +155,7 @@ inductive Descriptor where
   | indexEqual
   | indexLess
   | indexPowerOfTwo
+  | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
   | fieldConstant (domain decimal : String)

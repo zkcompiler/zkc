@@ -13,6 +13,7 @@ import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
 from bridges.common.native_entry import native_subject
+from bridges.common.replacement import replace_exactly_once
 import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -65,10 +66,14 @@ def regenerate_subject(suite, stem, module, proof):
     candidate = retained_subject(suite, stem, proof, "Candidate", candidate_text, symbol)
     mutated = None
     if proof == "SchnorrResponse":
-        if candidate_text.count("algebra.field_add") != 2:
-            raise AssertionError("expected the original helper and the inlined addition")
+        # The prepared entry returns the inlined addition; the retained helper
+        # definition, which returns its own copy, stays untouched.
+        addition = ('algebra.field_add %arg0, %0 : (!algebra.field<"bls12-381.fr">, '
+                    '!algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">\n'
+                    '      "protocol.return"(%1)')
+        subtraction = replace_exactly_once(addition, "algebra.field_add", "algebra.field_subtract")
         mutated = retained_subject(suite, stem, proof, "Mutated",
-            candidate_text.replace("algebra.field_add", "algebra.field_subtract", 1), symbol)
+            replace_exactly_once(candidate_text, addition, subtraction), symbol)
     return original, candidate, mutated
 
 
@@ -92,8 +97,8 @@ def subject_cases(suite, stem, module, proof):
         for stage, subject in (("original", original), ("candidate", candidate)):
             suite.compare(subject, f"{stem}-{stage}-{index}", list(map(str, values)), expected)
     if proof == "SchnorrResponse":
-        # Change just the first addition, in the prepared entry. The helper
-        # definition stays untouched. Native formation and Lean admission pass.
+        # Change just the prepared entry's addition. The helper definition
+        # stays untouched. Native formation and Lean admission pass.
         suite.compare(mutated, "admitted-arithmetic-mutation", ["2", "3", "5"],
                       returned(str((2 - 3 * 5) % MODULUS)))
     # Refresh imported constructor objects before elaborating the proof source.

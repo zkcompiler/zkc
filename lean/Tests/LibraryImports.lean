@@ -454,6 +454,7 @@ import Zkc.Source.Structured.Frame
 import Zkc.Source.Structured.HelperCallbacks
 import Zkc.Source.Structured.HelperSources
 import Zkc.Source.Structured.Import
+import Zkc.Source.Structured.IndexWords
 import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.InputAdmission
 import Zkc.Source.Structured.InputVisibility
@@ -815,6 +816,7 @@ import Tests.StructuredFormation
 import Tests.StructuredFoundationFormat
 import Tests.StructuredFoundationPrimitives
 import Tests.StructuredHelperSources
+import Tests.StructuredIndexWords
 import Tests.StructuredInlining
 import Tests.StructuredInputAdmission
 import Tests.StructuredLinking

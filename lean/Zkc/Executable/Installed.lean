@@ -18,6 +18,9 @@ operations have the meanings of the structured primitives
 (`Zkc.Source.Structured.Primitive.evaluate`), element access is
 `Zkc.Construction.Calculation.boundedAt`, and the pointwise vector operations
 and the requirement have the meanings of `Zkc.Executable.Computation.apply`.
+The total word operations on indices (wrapping addition and subtraction,
+bitwise conjunction and logical right shift) have the meanings of their
+structured calculations (`Zkc.Source.Structured.IndexWords`).
 
 The arkworks numerical kernels (`numerical.map`, `numerical.sum` and
 `numerical.product` over the scalar field) are one row each, whatever their
@@ -76,6 +79,11 @@ def installed : Vocabulary where
     ⟨"index.mul", [], "native/index.mul", .compute (.primitive .indexMul), []⟩,
     ⟨"index.div", [], "native/index.div", .compute (.primitive .indexDiv), []⟩,
     ⟨"index.mod", [], "native/index.mod", .compute (.primitive .indexMod), []⟩,
+    ⟨"index.wrapping_add", [], "native/index.wrapping_add", .calculate .indexWrappingAdd, []⟩,
+    ⟨"index.wrapping_sub", [], "native/index.wrapping_sub", .calculate .indexWrappingSubtract, []⟩,
+    ⟨"index.bit_and", [], "native/index.bit_and", .calculate .indexBitAnd, []⟩,
+    ⟨"index.logical_shift_right", [], "native/index.logical_shift_right",
+      .calculate .indexLogicalShiftRight, []⟩,
     ⟨"vector.empty", [scalarField], "arkworks/vector.empty", .compute (.primitive (.vectorEmpty scalarField)), []⟩,
     ⟨"vector.append", [scalarField], "arkworks/vector.append",
       .compute (.primitive (.vectorAppend scalarField)), []⟩,

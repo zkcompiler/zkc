@@ -86,8 +86,8 @@ def check (source : SourceDeclarations) (snapshot : Snapshot)
   if keys.eraseDups.length != keys.length then throw "component-declaration-duplicate"
   for record in source.records do
     let .nominal .record _ _ := record.type | throw "component-declaration-record"
+    -- Sealing restricts source access; it is independent of the resource tag.
     unless ["ordinary", "affine", "linear"].contains record.resource do throw "component-declaration"
-    if record.resource == "linear" && !record.sealed then throw "component-declaration-record"
     let names := record.fields.map Prod.fst
     if names.eraseDups.length != names.length then throw "component-declaration-duplicate"
     let _ ← source.flatten Limits.nesting record.type

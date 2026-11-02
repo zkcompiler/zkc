@@ -20,7 +20,7 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render, schema  # noqa: E402
+from bridges.common import lean_render, policy as native_policy, schema  # noqa: E402
 from bridges.construction.types import data_type, render_type  # noqa: E402
 from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
@@ -247,21 +247,16 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
 
 
 def policy(value):
-    (version, entry, producer, validator, acceptance, suite, services, public, draws,
-     framing, construction, gates) = record(value, 12)
-    require(version == "zkc.native-proof-policy/0", "wrong policy version")
-    require(gates == [], "unsupported policy gates")
-    require(isinstance(services, list) and isinstance(public, list) and isinstance(draws, list),
-            "invalid policy lists")
-    require(producer != validator and construction == "", "unsupported construction profile")
-    if suite == "":
-        require(services == [] and draws == [], "plain policy has a challenge replacement")
-    else:
-        require(isinstance(suite, str) and len(services) == 1 and draws, "invalid Fiat-Shamir profile")
-    pairs = [record(pair, 2) for pair in draws]
-    return (f"⟨{text(entry)}, {text(producer)}, {text(validator)}, {decimal(acceptance)}, {text(suite)}, "
-            f"{seq(services, decimal)}, {seq(public, decimal)}, "
-            f"{seq(pairs, lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, {text(framing)}, {text(construction)}⟩")
+    """The participant policy literal. The construction rule reads the authored
+    and native profiles without gates; other profiles refuse."""
+    decoded = native_policy.decode(value)
+    require(not decoded.gates, "unsupported policy gates")
+    require(decoded.profile in (native_policy.AUTHORED, native_policy.NATIVE)
+            and decoded.producer != decoded.validator, "unsupported construction profile")
+    return (f"⟨{text(decoded.entry)}, {text(decoded.producer)}, {text(decoded.validator)}, {decoded.acceptance}, "
+            f"{text(decoded.suite)}, {seq(list(decoded.services))}, {seq(list(decoded.public))}, "
+            f"{seq(list(decoded.draws), lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, "
+            f"{text(decoded.format)}, {text(decoded.construction)}⟩")
 
 
 def service_port(value):
