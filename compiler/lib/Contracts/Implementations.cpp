@@ -471,16 +471,28 @@ Expected<ImplementationCatalog> ImplementationCatalog::create(
       return error("implementation-catalog-representation");
     }
     if (entry.family != ImplementationDescriptor::Family::Exact) {
-      StringRef prefix =
+      // A family that selects physical arguments applies only under the
+      // installation's calling convention: to an observation, or to an
+      // operation with a port of the family's container.
+      StringRef container =
           entry.family == ImplementationDescriptor::Family::Sequence
-              ? "sequence."
+              ? "sequence"
           : entry.family == ImplementationDescriptor::Family::FieldArray
-              ? "field_array."
-              : "fixed_vector.";
+              ? "field_array"
+              : "fixed_vector";
+      const auto *facets = operationContracts(entry.contract);
+      auto hasContainer = [&](const generic::Type &port) {
+        return port.constructor == container;
+      };
       bool applicable =
-          entry.family == ImplementationDescriptor::Family::Observation
-              ? entry.contract == "transcript.native.indexed.observe.data"
-              : StringRef(entry.contract).starts_with(prefix);
+          any_of(installation::physicalArguments(),
+                 [&](const auto &row) {
+                   return row.operation == entry.contract;
+                 }) &&
+          (entry.family == ImplementationDescriptor::Family::Observation
+               ? facets && facets->observation.has_value()
+               : any_of(logical->signature.inputs, hasContainer) ||
+                     any_of(logical->signature.outputs, hasContainer));
       if (!applicable || !entry.representations.empty())
         return error("implementation-catalog-entry");
     }

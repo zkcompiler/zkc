@@ -1475,5 +1475,10 @@
   ["fixed_vector.from_vector","blst/resident/fixed_vector.from_vector","blst",0,["bls12-381.fr"],[],0,3,false,["blst/fixed-vector","blst/fr"]],
   ["fixed_vector.to_vector","blst/resident/fixed_vector.to_vector","blst",0,["bls12-381.fr"],[],0,3,false,["blst/fixed-vector","blst/fr"]],
   ["fixed_vector.dot","blst/resident/fixed_vector.dot","blst",0,["bls12-381.fr"],[],0,3,false,["blst/fixed-vector","blst/fr"]]
+],
+"resourceUnitContracts": [
+  "resource_unit.create",
+  "resource_unit.pass",
+  "resource_unit.consume"
 ]
 }

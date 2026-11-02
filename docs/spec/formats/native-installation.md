@@ -142,9 +142,11 @@ A `physicalArguments` row names a declared operation whose native binding
 carries physical static type arguments, the represented types of its
 type-parameter ports, in addition to its logical static arguments. Bindings
 of other operations carry none, except `representation.convert`, whose
-physical arguments are its contract. This is a backend calling convention: it
-grants no mathematical meaning and is not part of the operation's logical
-declaration.
+physical arguments are its contract. Binding resolution refuses physical
+arguments on any other operation, and an implementation family that selects
+physical arguments applies only to a listed operation. This is a backend
+calling convention: it grants no mathematical meaning and is not part of the
+operation's logical declaration.
 
 ## Validation
 

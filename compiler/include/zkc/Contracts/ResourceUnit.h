@@ -14,10 +14,8 @@ inline bool resourceUnitDomain(llvm::StringRef domain) {
                   c == '.';
          });
 }
-inline bool resourceUnitContract(llvm::StringRef contract) {
-  return contract == "resource_unit.create" ||
-         contract == "resource_unit.pass" ||
-         contract == "resource_unit.consume";
-}
+// A declared operation whose scope introduces a Slot root: it creates, passes
+// or consumes nominal resource units of that Slot.
+bool resourceUnitContract(llvm::StringRef contract);
 } // namespace zkc::protocol
 #endif

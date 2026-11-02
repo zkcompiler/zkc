@@ -150,7 +150,11 @@ neither duplicated nor dropped. The facet establishes identity succession
 only: it grants no value equality, purity, reordering or speculation, and no
 operation acquires it from a matching signature shape. Validation refuses
 ports outside the signature, ports of another type, unequal resource types and
-any additional resource input or output.
+any additional resource input or output. The native exact-root analyses at the
+Protocol and Exec stages connect a successor to its received root only through
+this facet, never through an operation's name. The operations whose scope has
+a Slot root are the resource-unit operations, and their bound ports are the
+declared `resource_unit` ports over the selected Slot.
 
 ### Deterministic data
 

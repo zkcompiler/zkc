@@ -2,9 +2,11 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringSet.h"
 
 namespace zkc::protocol {
 namespace {
@@ -123,13 +125,26 @@ bool isConstructionDraw(llvm::StringRef key) {
   auto *c = samplingContract(key);
   return c && !c->derivedCounterpart.empty();
 }
+bool resourceUnitContract(llvm::StringRef contract) {
+  static const auto contracts = [] {
+    llvm::StringSet<> result;
+    for (const auto &operation : executableOperationContracts()) {
+      const auto &scope = operation.signature.scope;
+      for (auto [term, sort] : llvm::zip(scope.terms, scope.sorts))
+        if (!term.parent && !term.arguments && sort == "Slot")
+          result.insert(operation.name);
+    }
+    return result;
+  }();
+  return contracts.contains(contract);
+}
 bool hasUnclassifiedProviderEffect(llvm::StringRef key) {
   const auto *k = findOperationShape(key);
   if (!k)
     return true;
   if (k->contracts.sampling || k->contracts.observation)
     return false;
-  if (key.starts_with("resource_unit."))
+  if (resourceUnitContract(key))
     return true;
   const generic::Operation *declaration = nullptr;
   for (const auto &candidate : executableOperationContracts())

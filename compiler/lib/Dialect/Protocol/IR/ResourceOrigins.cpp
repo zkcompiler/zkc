@@ -120,8 +120,9 @@ LogicalResult ResourceOrigins::successors(Operation *op,
   auto facts = protocol::operationContracts(binding->declaration.getContract());
   if (!facts)
     return success();
-  // At most three installed facets. Unknown/conflicting equations for the same
-  // output stay unknown; no later facet can overwrite an earlier constraint.
+  // One equation per declared succession, history, sampling or observation
+  // facet. Unknown/conflicting equations for the same output stay unknown; no
+  // later facet can overwrite an earlier constraint.
   llvm::DenseMap<unsigned, std::optional<unsigned>> roots;
   auto pair = [&](unsigned input, unsigned output) -> LogicalResult {
     if (failed(charge(op, 1)))
@@ -139,8 +140,8 @@ LogicalResult ResourceOrigins::successors(Operation *op,
       entry->second.reset();
     return success();
   };
-  if ((binding->declaration.getContract() == "resource_unit.pass" &&
-       failed(pair(0, 0))) ||
+  if ((facts->succession && failed(pair(facts->succession->stateInput,
+                                        facts->succession->stateOutput))) ||
       (facts->history &&
        failed(pair(facts->history->stateInput, facts->history->stateOutput))) ||
       (facts->sampling && failed(pair(facts->sampling->stateInput,

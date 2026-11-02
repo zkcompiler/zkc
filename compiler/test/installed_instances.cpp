@@ -462,6 +462,10 @@ std::vector<Table> dump() {
     for (const auto &identity : identities())
       if (implementationProviderSupports(provider, identity))
         relation.push_back(json::Array{provider, identity});
+  json::Array resourceUnits;
+  for (const auto &operation : executableOperationContracts())
+    if (resourceUnitContract(operation.name))
+      resourceUnits.push_back(operation.name);
   json::Array implementations;
   for (const auto &entry : installedImplementations().all()) {
     json::Array ports;
@@ -503,6 +507,7 @@ std::vector<Table> dump() {
   tables.emplace_back("residentFrames", std::move(residents));
   tables.emplace_back("providerRelation", std::move(relation));
   tables.emplace_back("implementations", std::move(implementations));
+  tables.emplace_back("resourceUnitContracts", std::move(resourceUnits));
   return tables;
 }
 // One row per line, so a fixture change reads as a row diff.
@@ -687,7 +692,7 @@ int main(int argc, char **argv) {
     agree("EVM wire frames", found, {});
   });
 
-  cases.run("succession facets and the by-name successor rule", [&] {
+  cases.run("succession facets and the exact-root analysis", [&] {
     std::vector<std::string> found;
     for (const auto &shape : operationShapes())
       if (shape.contracts.succession)
@@ -735,10 +740,13 @@ int main(int argc, char **argv) {
   });
 
   cases.run("physical-argument calling convention", [&] {
+    // Binding resolution admits physical arguments for exactly the operations
+    // the installation lists.
     std::set<std::string> declared;
     for (const auto &row : physical::physicalArguments())
       declared.insert(row.operation);
-    std::vector<std::string> refused, admittedUndeclared, found;
+    std::vector<std::string> found;
+    unsigned refused = 0;
     for (const auto &operation : executableOperationContracts()) {
       BindingApplication probe{operation.name,
                                {},
@@ -746,40 +754,15 @@ int main(int argc, char **argv) {
                                {"bool@native.bool/0"}};
       auto refusal = refusalCode(resolveBinding(probe, true));
       bool admitted = refusal != "binding-representation";
-      if (!admitted)
-        refused.push_back(operation.name);
-      if (declared.count(operation.name) && !admitted)
-        found.push_back("declared but refused " + operation.name);
-      if (!declared.count(operation.name) && admitted)
-        admittedUndeclared.push_back(operation.name);
+      refused += !admitted;
+      if (admitted != bool(declared.count(operation.name)))
+        found.push_back(
+            (admitted ? "admitted undeclared " : "refused declared ") +
+            operation.name);
     }
-    for (const auto &name : refused)
-      if (!resourceUnitContract(name) && name != "table.relayout" &&
-          !StringRef(name).starts_with("numerical."))
-        found.push_back("refused " + name);
-    // The C++ rule only excludes resource units, table relayout and the
-    // numerical family; the declared rows are the convention's explicit list.
-    std::vector<std::string> undeclared;
-    for (const auto &operation : executableOperationContracts())
-      if (!declared.count(operation.name) &&
-          !resourceUnitContract(operation.name) &&
-          operation.name != "table.relayout" &&
-          !StringRef(operation.name).starts_with("numerical."))
-        undeclared.push_back(operation.name);
-    if (admittedUndeclared != undeclared)
-      found.push_back("admitted undeclared set");
-    else
-      found.push_back("exclusion rule admits " +
-                      std::to_string(undeclared.size()) +
-                      " operations without a physicalArguments row");
-    agree("physical arguments", found,
-          {{"exclusion rule admits " + std::to_string(undeclared.size()) +
-                " operations without a physicalArguments row",
-            "Bindings.cpp refuses physical arguments only for resource units, "
-            "table.relayout and the numerical family; the declared rows list "
-            "the operations whose bindings actually carry them"}});
+    agree("physical arguments", found, {});
     outs() << "physical-argument rows: " << declared.size()
-           << ", C++ rule refuses " << refused.size() << '\n';
+           << ", refused: " << refused << '\n';
   });
 
   cases.run("type columns against the source checker", [&] {

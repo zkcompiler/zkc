@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/ResourceUnit.h"
@@ -214,13 +215,25 @@ Error checkClosedRequirements(ArrayRef<requirements::Predicate> predicates,
 }
 
 namespace {
+// The installation's calling convention: physical static type arguments are
+// carried only by the operations it lists.
+bool acceptsPhysicalArguments(StringRef contract) {
+  return any_of(installation::physicalArguments(),
+                [&](const auto &row) { return row.operation == contract; });
+}
+const generic::Signature *declaredSignature(StringRef contract) {
+  for (const auto &op : executableOperationContracts())
+    if (op.name == contract)
+      return &op.signature;
+  return nullptr;
+}
+
 Expected<BoundOperation>
 resolveBindingSignature(const BindingApplication &binding, bool physical,
                         const ImplementationCatalog *catalog) {
+  // A conversion's physical arguments are its contract; it checks them itself.
   if (binding.contract != "representation.convert" &&
-      (!physical || resourceUnitContract(binding.contract) ||
-       binding.contract == "table.relayout" ||
-       numericalContract(binding.contract)) &&
+      (!physical || !acceptsPhysicalArguments(binding.contract)) &&
       !binding.physicalArguments.empty())
     return error("binding-representation");
   if (resourceUnitContract(binding.contract)) {
@@ -229,14 +242,34 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
       return error("binding-resource-unit-domain");
     if (physical && binding.implementation != "logical/" + binding.contract)
       return error("binding-implementation");
-    BoundType ty{"resource_unit", binding.arguments[0],
-                 physical ? "logical.resource_unit/0" : ""};
-    return BoundOperation{binding.contract == "resource_unit.create"
-                              ? std::vector<BoundType>{}
-                              : std::vector<BoundType>{ty},
-                          binding.contract == "resource_unit.consume"
-                              ? std::vector<BoundType>{}
-                              : std::vector<BoundType>{ty}};
+    // The declared signature's ports over the selected Slot. A physical port
+    // takes the installation's default representation.
+    const auto *signature = declaredSignature(binding.contract);
+    if (!signature)
+      return error("binding-contract");
+    BoundOperation result;
+    auto port = [&](const generic::Type &t) -> Expected<BoundType> {
+      std::vector<std::string> arguments;
+      for (unsigned argument : t.arguments) {
+        if (t.term || argument >= binding.arguments.size())
+          return error("binding-static-scope");
+        arguments.push_back(binding.arguments[argument]);
+      }
+      auto logical = applyBoundType(t.constructor, arguments);
+      if (!logical || !physical)
+        return logical;
+      return defaultRepresentation(*logical);
+    };
+    for (auto [ports, declared] :
+         {std::make_pair(&result.inputs, &signature->inputs),
+          std::make_pair(&result.outputs, &signature->outputs)})
+      for (const auto &t : *declared) {
+        auto selected = port(t);
+        if (!selected)
+          return selected.takeError();
+        ports->push_back(std::move(*selected));
+      }
+    return result;
   }
   // This is a physical adapter contract, not a generic logical primitive. Its
   // implementation must execute and account for the representation conversion.

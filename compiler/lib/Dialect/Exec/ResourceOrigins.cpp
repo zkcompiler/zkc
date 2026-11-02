@@ -113,9 +113,10 @@ struct ResourceOriginAnalysis::Impl {
         at->second.reset();
       return true;
     };
-    // A nominal unit's installed pass transfers that exact capability. Fresh
+    // A declared succession transfers that exact capability. Fresh
     // create/consume operations deliberately supply no successor equation.
-    if ((binding.getContract() == "resource_unit.pass" && !pair(0, 0)) ||
+    if ((facts->succession && !pair(facts->succession->stateInput,
+                                    facts->succession->stateOutput)) ||
         (facts->history &&
          !pair(facts->history->stateInput, facts->history->stateOutput)) ||
         (facts->sampling &&
