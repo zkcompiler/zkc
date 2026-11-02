@@ -911,6 +911,20 @@ int main(int argc, char **argv) {
                 roles->unit == generated::LimitUnit::Roles &&
                 roles->phase == generated::LimitPhase::Admission,
             "role limit row differs from its constant");
+    // The source checker admits a protocol roster of exactly the ceiling.
+    auto wide = [](uint64_t count) {
+      std::string roles;
+      for (uint64_t i = 0; i < count; ++i)
+        roles += (i ? ",R" : "R") + std::to_string(i);
+      return "protocol Wide roles(" + roles +
+             ")(x:bool@R0)->(y:bool@R0){return(y=x);}\n";
+    };
+    take(checkSource(wide(generated::protocolRoleLimit)));
+    auto refused = checkSource(wide(generated::protocolRoleLimit + 1));
+    require(!refused, "a roster above the ceiling was admitted");
+    auto message = toString(refused.takeError());
+    require(StringRef(message).contains("participant roster exceeds"),
+            "unexpected roster refusal: " + message);
   });
 
   return cases.result();

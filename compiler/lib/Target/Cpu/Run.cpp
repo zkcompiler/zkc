@@ -1,4 +1,5 @@
 #include "Run.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -12,7 +13,8 @@ namespace zkc::detail {
 namespace {
 // Outer JSON costs seven nodes per step, one per role, and eleven fixed nodes.
 // Keep emitted maxima within the run/0 decoder's 250000-node cap.
-static_assert(32768 * 7 + 1024 + 11 <= 250000);
+static_assert(32768 * 7 + zkc::protocol::instances::protocolRoleLimit + 11 <=
+              250000);
 using Coordinate = std::pair<std::string, std::string>;
 struct Role {
   const program::Participant *program;
@@ -271,7 +273,9 @@ public:
   Expected<json::Array> build(const program::Participants &candidate,
                               DictionaryAttr interface, ArrayAttr origins) {
     auto roster = interface.getAs<ArrayAttr>("participants");
-    if (roster.empty() || roster.size() > 1024)
+    // The bundle carries the selected Entry's protocol role roster.
+    if (roster.empty() ||
+        roster.size() > protocol::instances::protocolRoleLimit)
       return error("run-limit");
     auto entry = interface.getAs<FlatSymbolRefAttr>("entry").getValue();
     auto selected = llvm::find_if(

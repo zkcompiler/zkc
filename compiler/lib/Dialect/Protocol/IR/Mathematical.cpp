@@ -5,6 +5,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -684,8 +685,11 @@ public:
     auto ft = program.getFunctionType();
     auto &block = program.getBody().front();
     llvm::StringSet<> names;
-    if (!count || count > 1024)
-      return refuse(program, "role roster must contain 1 to 1024 roles");
+    if (!count || count > protocol::instances::protocolRoleLimit)
+      return refuse(program,
+                    "role roster must contain 1 to " +
+                        std::to_string(protocol::instances::protocolRoleLimit) +
+                        " roles");
     for (auto attr : program.getRoles()) {
       auto r = dyn_cast<StringAttr>(attr);
       if (!r || !name(r.getValue()) || !names.insert(r.getValue()).second)

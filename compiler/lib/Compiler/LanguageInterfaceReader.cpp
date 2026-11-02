@@ -3,6 +3,7 @@
 #include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
@@ -2382,7 +2383,7 @@ class Reader {
     current->symbol = symbol->str();
     roleIndices.clear();
     std::set<std::string> usedRoles;
-    if (rs->empty() || rs->size() > 1024)
+    if (rs->empty() || rs->size() > protocol::instances::protocolRoleLimit)
       return fail("invalid role roster size");
     for (const auto &item : *rs) {
       auto name = item.getAsString();

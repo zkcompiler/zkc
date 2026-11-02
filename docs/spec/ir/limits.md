@@ -2,10 +2,15 @@
 
 This native contract lists admission ceilings shared across operations.
 An exhausted checker refuses; it does not establish semantic inequivalence.
+A ceiling that implementations in more than one language enforce for the same
+contract is a row of the catalog's [limits](../formats/contract-declarations.md#limits)
+table; each compiler reader of the protocol role roster, including the source
+checker, the IR verifier, the language-interface reader and the joint bundle
+producer, uses that row's generated constant.
 
 | Boundary | Limit |
 |---|---|
-| Declared role roster | 1,024 roles |
+| Declared role roster | 1,024 roles, the catalog limit `protocol.roles` |
 | Helper depth and expanded helper analysis | 64 levels; 100,000 operations |
 | Helper dependency analysis and availability replay | 1,000,000 words/indices within their separate budgets |
 | Role expansion | 100,000 operation/port visits |

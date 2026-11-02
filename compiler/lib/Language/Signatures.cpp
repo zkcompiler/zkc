@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Builtins.h"
@@ -196,7 +197,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
   if (roster.size() != decl.roles.size())
     return types.fail("source.roles", "duplicate participant", decl.span);
-  if (decl.roles.size() > 1024)
+  // A protocol, participant or Entry roster has the protocol role roster
+  // ceiling; a record's role telescope keeps its own bound.
+  const uint64_t rosterLimit = decl.kind == Declaration::Kind::Record
+                                   ? 1024
+                                   : protocol::instances::protocolRoleLimit;
+  if (decl.roles.size() > rosterLimit)
     return types.fail("source.limit", "participant roster exceeds target limit",
                       decl.span);
   std::set<std::string> usedShapes;

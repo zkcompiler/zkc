@@ -391,6 +391,22 @@ unwrapped = (mixed.replace('"protocol.module"() ({', '', 1)
     .replace('}) {profile=#protocol.profile<protocol>} : () -> ()', ''))
 negative.append(("common function outside protocol unit", unwrapped, "parent"))
 
+# The protocol role roster ceiling: exactly 1,024 roles form, 1,025 refuse.
+def wide(count):
+    roles = '['+', '.join(f'"R{i}"' for i in range(count))+']'
+    return f'''module {{ "protocol.module"() ({{
+"protocol.func"() ({{
+^entry(%x: {F}):
+"protocol.return"(%x) : ({F}) -> ()
+}}) {{sym_name="main", function_type=({F}) -> {F}, roles={roles}, input_roles=[["R0"]], output_roles=[["R0"]]}} : () -> ()
+}}) {{profile=#protocol.profile<protocol>}} : () -> () }}'''
+
+
+with case("protocol role roster at its ceiling"):
+    commands.verified(wide(1024))
+with case("protocol role roster above its ceiling"):
+    commands.verified(wide(1025), "mathematical-formation")
+
 for label, source, code in negative:
     with case(label):
         commands.verified(source, code, "--canonicalize", "--cse", "--zkc-project-protocol", "--zkc-lower-math", "--zkc-realize-computations")
