@@ -1022,13 +1022,17 @@ impl PhysicalType {
     pub(crate) fn is_message_type(&self) -> bool {
         self.is_serializable() || self.has_native_array_frame() || self.has_native_data_frame()
     }
+    /// An encodable instance's codec reads its default representation and a
+    /// nondefault one whose value bytes are the codec's frame, never another
+    /// local layout. A contributed representation belongs to its provider,
+    /// which owns its transport.
     pub fn is_serializable(&self) -> bool {
         self.kind().is_serializable()
-            && !matches!(
-                self.representation,
-                Representation::FrDiagonal
-                    | Representation::RistrettoDiagonal
-                    | Representation::Extension(_)
+            && !matches!(self.representation, Representation::Extension(_))
+            && super::installed::codec_reads(
+                self.kind(),
+                self.logical.identity,
+                self.representation.name(),
             )
     }
 }

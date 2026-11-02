@@ -57,8 +57,10 @@ impl ProofSession {
         let installation = match options.providers {
             None => CpuInstallation::standard(),
             Some(providers) => {
+                // Each element names an installed provider; uniqueness alone
+                // bounds the selection by the installed set.
                 let unique: std::collections::BTreeSet<_> = providers.iter().copied().collect();
-                if providers.len() > 5 || unique.len() != providers.len() {
+                if unique.len() != providers.len() {
                     return Err("web-options".into());
                 }
                 providers
@@ -403,6 +405,38 @@ mod tests {
         assert_eq!(
             ProofSession::new(&[], &[0; 31], "{}", &[]).err().unwrap(),
             "entry-package-pin"
+        );
+    }
+    #[test]
+    fn provider_selections_range_over_the_installed_providers() {
+        let installed = serde_json::to_value(CpuInstallation::standard().unwrap().target())
+            .unwrap()["providers"]
+            .clone();
+        let installed: Vec<Provider> = serde_json::from_value(installed).unwrap();
+        assert!(!installed.is_empty());
+        let selections = installed
+            .iter()
+            .map(|provider| vec![*provider])
+            .chain([installed.clone(), installed.iter().rev().copied().collect()]);
+        for selection in selections {
+            let options = json!({ "providers": selection }).to_string();
+            // The selection is admitted; the unpinned package refuses next.
+            assert_eq!(
+                ProofSession::new(&[], &[0; 32], &options, &[])
+                    .err()
+                    .unwrap(),
+                "entry-package-identity",
+                "{options}"
+            );
+        }
+        let mut repeated = installed.clone();
+        repeated.push(installed[0]);
+        let options = json!({ "providers": repeated }).to_string();
+        assert_eq!(
+            ProofSession::new(&[], &[0; 32], &options, &[])
+                .err()
+                .unwrap(),
+            "web-options"
         );
     }
     #[test]
