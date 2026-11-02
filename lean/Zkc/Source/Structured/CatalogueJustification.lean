@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Catalogue
+public import Zkc.Source.Structured.CatalogueEnvironment
 public import Mathlib.NumberTheory.LucasPrimality
 public import Mathlib.Tactic.NormNum.Prime
 
@@ -80,8 +80,8 @@ theorem blsModulus_prime : blsModulus.Prime := by
   rintro factor (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl) <;> norm_num
 
 /-- The KoalaBear characteristic `2^31 - 2^24 + 1` is prime. -/
-theorem koalaBearModulus_prime : (2130706433 : ℕ).Prime := by
-  refine prime_of_certificate 2130706433 3 [(2, 24), (127, 1)]
+theorem koalaBearModulus_prime : Installed.Characteristics.«koala-bear».Prime := by
+  refine prime_of_certificate Installed.Characteristics.«koala-bear» 3 [(2, 24), (127, 1)]
     (by decide +kernel) (by decide +kernel) ?_ (by decide +kernel) (by decide +kernel)
   simp only [List.mem_cons, List.not_mem_nil, or_false]
   rintro factor (rfl | rfl) <;> norm_num
@@ -106,6 +106,6 @@ theorem blsCatalogue_justified : blsCatalogue.Justified := by
     · cases same
       exact blsModulus_prime
     · cases same
-  all_goals exact ⟨fun _ same => (by cases same), fun _ => (by simp)⟩
+  all_goals exact ⟨fun _ same => (by cases same), fun _ => (by decide)⟩
 
 end Zkc.Source.Structured

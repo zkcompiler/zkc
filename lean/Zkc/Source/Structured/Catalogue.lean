@@ -10,7 +10,10 @@ for a field, its modulus (the characteristic). Services mirror the native
 random-service registry: a contract, the field it samples and the query methods
 it offers. The environment catalogue also lists the admitted sort instances of
 the structured profile. Admission resolves every occurrence of an identity
-against these rows; it never compares a domain name with a fixed string.
+against these rows; it never compares a domain name with a fixed string. The
+installed rows are generated from the catalog's declarations
+(`InstalledCatalogue`), and the environment catalogues (`CatalogueEnvironment`)
+select the identities each reader admits.
 
 Consistency (`Catalogue.check`) is the native catalogue constructor's rules for
 nominal rows: valid and unique identities; a modulus only on field rows,
@@ -249,99 +252,5 @@ def requireDraw (catalogue : Catalogue) (contract field : String) : Except Strin
     throw "structured-service-contract"
 
 end Catalogue
-
-/-! The BLS12-381 environment: the native rows of the scalar field, its
-pairing groups and the random service, and the sort instances the structured
-profile admits. -/
-
-def blsScalar : String := "bls12-381.fr"
-def blsGroup : String := "bls12-381.g1"
-def blsGroupTwo : String := "bls12-381.g2"
-def blsTarget : String := "bls12-381.gt"
-def blsRandom : String := "random.bls12-381.fr/0"
-def blsModulus : Nat :=
-  52435875175126190479447740508185965837690552500527637822603658699938581184513
-
-def blsCatalogue : Catalogue where
-  nominals := [
-    { identity := blsScalar, sort := .field,
-      members := [("PairingG1", blsGroup), ("PairingG2", blsGroupTwo), ("PairingGT", blsTarget)],
-      capabilities := ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"],
-      modulus := some blsModulus },
-    { identity := blsGroup, sort := .group, members := [("Scalar", blsScalar)],
-      capabilities := ["Group", "ScalarAction"], modulus := none },
-    { identity := blsGroupTwo, sort := .group, members := [("Scalar", blsScalar)],
-      capabilities := ["Group", "ScalarAction"], modulus := none },
-    { identity := blsTarget, sort := .group, members := [("Scalar", blsScalar)],
-      capabilities := ["Group", "ScalarAction"], modulus := none }]
-  services := [{ contract := blsRandom, sampled := blsScalar, methods := ["draw"] }]
-  types := [("field", blsScalar), ("vector", blsScalar), ("group", blsGroup)]
-
-/-- Installed KoalaBear rows, with the characteristic shared by the prime field
-and its octic extension. Carrier cardinalities belong to the selected model. -/
-def koalaBearCatalogue : Catalogue where
-  nominals := [
-    { identity := "koala-bear", sort := .field, members := [],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"],
-      modulus := some 2130706433 },
-    { identity := "koala-bear.ext8-binomial3", sort := .field,
-      members := [("BaseField", "koala-bear")],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
-        "ExtensionField", "IndexRandomness", "IndexBlockRandomness"], modulus := some 2130706433 }]
-  services := [{ contract := "random.koala-bear.ext8-binomial3/0",
-                 sampled := "koala-bear.ext8-binomial3", methods := ["draw", "index", "indices"] }]
-  types := [("field", "koala-bear"), ("vector", "koala-bear"),
-    ("field", "koala-bear.ext8-binomial3"), ("vector", "koala-bear.ext8-binomial3")]
-
-/-- The installed KoalaBear quartic extension row, with its capabilities in
-native order and its base-field association. Admission recognizes this exact
-nominal identity; the field laws of its carrier, its extension presentation and
-any concrete realization remain explicit premises of the model that interprets
-it. It shares the characteristic of the octic extension but neither its
-cardinality nor its representation. -/
-def koalaBearQuarticCatalogue : Catalogue where
-  nominals := [
-    { identity := "koala-bear.ext4-binomial3", sort := .field,
-      members := [("BaseField", "koala-bear")],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
-        "ExtensionField", "IndexRandomness", "IndexBlockRandomness"], modulus := some 2130706433 }]
-  services := []
-  types := [("field", "koala-bear.ext4-binomial3"), ("vector", "koala-bear.ext4-binomial3")]
-
-/-- The installed rows understood by the structured importer. Admission of a
-row or type is separate from operation support and mathematical law evidence. -/
-def admittedCatalogue : Catalogue where
-  nominals := blsCatalogue.nominals ++ koalaBearCatalogue.nominals ++ koalaBearQuarticCatalogue.nominals
-  services := blsCatalogue.services ++ koalaBearCatalogue.services ++ koalaBearQuarticCatalogue.services
-  types := blsCatalogue.types ++ koalaBearCatalogue.types ++ koalaBearQuarticCatalogue.types
-
-/-- The installed transcript suites whose challenges constructed participants
-draw, with their challenge-field associations and capability facts in native
-order. These rows are metadata: the sponge, encoding and decoder of a suite
-belong to the model that interprets it. -/
-def transcriptCatalogue : Catalogue where
-  nominals := [
-    { identity := "merlin3.bls12-381.fr64be/0", sort := .transcript,
-      members := [("ChallengeField", blsScalar)], capabilities := ["FieldTranscript", "Transcript"],
-      modulus := none },
-    { identity := "merlin3.koala-bear.ext8-binomial3.rejection31le/0", sort := .transcript,
-      members := [("ChallengeField", "koala-bear.ext8-binomial3")],
-      capabilities := ["FieldTranscript", "IndexTranscript", "Transcript"], modulus := none }]
-  services := []
-
-/-- The installed rows understood by the constructed-participant reader: the
-structured importer's rows and admitted instances, and the transcript suites.
-Structured units name no transcript, so their importer keeps
-`admittedCatalogue`. -/
-def constructionCatalogue : Catalogue where
-  nominals := admittedCatalogue.nominals ++ transcriptCatalogue.nominals
-  services := admittedCatalogue.services
-  types := admittedCatalogue.types
-
-/-- The rows a unit over this environment exports when it lists every row:
-the environment's nominal and service rows, without its admitted instances. -/
-def blsRows : Catalogue where
-  nominals := blsCatalogue.nominals
-  services := blsCatalogue.services
 
 end Zkc.Source.Structured

@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Addresses
-public import Zkc.Source.Structured.Catalogue
+public import Zkc.Source.Structured.CatalogueEnvironment
 public import Zkc.Source.Structured.Origin
 
 @[expose] public section

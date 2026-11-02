@@ -313,7 +313,12 @@ characteristic-two prime field and an extension field without `PrimeField` are
 well-formed rows.
 
 `Catalogue.agrees` requires every exported row to equal the installed row for
-its identity. `admittedCatalogue` combines `blsCatalogue`, `koalaBearCatalogue`
+its identity. The installed rows are generated from the catalog's declarations
+into `InstalledCatalogue.lean`, one definition per domain row and random
+service, with each service's methods those its sampled field's capabilities
+install; `check_installed_catalogue.py` refuses a stale module. The environment
+catalogues in `CatalogueEnvironment.lean` select, by hand, the identities each
+reader admits. `admittedCatalogue` combines `blsCatalogue`, `koalaBearCatalogue`
 and `koalaBearQuarticCatalogue`: BLS12-381 scalar/group/service rows, KoalaBear,
 its `koala-bear.ext8-binomial3` extension and random service, and its
 `koala-bear.ext4-binomial3` extension row with its capabilities and `BaseField`

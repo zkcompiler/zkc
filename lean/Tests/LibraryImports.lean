@@ -402,6 +402,7 @@ import Zkc.Source.Structured.Bindings.Selection
 import Zkc.Source.Structured.Bindings.Template
 import Zkc.Source.Structured.BodyBindings
 import Zkc.Source.Structured.Catalogue
+import Zkc.Source.Structured.CatalogueEnvironment
 import Zkc.Source.Structured.CatalogueJustification
 import Zkc.Source.Structured.Checked
 import Zkc.Source.Structured.CheckedData
@@ -463,6 +464,7 @@ import Zkc.Source.Structured.IndexWords
 import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.InputAdmission
 import Zkc.Source.Structured.InputVisibility
+import Zkc.Source.Structured.InstalledCatalogue
 import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.IterationObservations
 import Zkc.Source.Structured.Labels

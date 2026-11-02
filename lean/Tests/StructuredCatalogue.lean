@@ -20,6 +20,9 @@ private def code {α : Type} : Except String α → String
 
 private def digest : String := "sha256:" ++ String.ofList (List.replicate 64 '0')
 
+-- Lean's consistency rules hold for every installed row and service.
+example : code Installed.catalogue.check = "" := by decide +kernel
+
 -- The environment is consistent, its exported rows agree with it, and it is
 -- justified: the BLS12-381 scalar modulus is prime.
 example : code blsCatalogue.check = "" := by decide +kernel
@@ -47,15 +50,11 @@ theorem binaryRows_justified : binaryRows.Justified := by
     exact ⟨fun modulus same _ => (by cases same; exact Nat.prime_two),
       fun absent => (by simp at absent)⟩
 
-/-- The native binary rows: GF(2^64) and its cubic extension. Neither is a
+/-- The installed binary rows: GF(2^64) and its cubic extension. Neither is a
 prime field; each row's modulus is the characteristic. -/
 private def nativeBinaryRows : Catalogue where
-  nominals := [
-    { identity := "gf2-64.pentanomial-4-3-1", sort := .field, members := [],
-      capabilities := ["Field", "CommRing"], modulus := some 2 },
-    { identity := "gf2-64.pentanomial-4-3-1.ext3-trinomial1", sort := .field,
-      members := [("BaseField", "gf2-64.pentanomial-4-3-1")],
-      capabilities := ["ExtensionField", "Field", "CommRing"], modulus := some 2 }]
+  nominals := [Installed.Domains.«gf2-64.pentanomial-4-3-1»,
+    Installed.Domains.«gf2-64.pentanomial-4-3-1.ext3-trinomial1»]
   services := []
 
 example : code nativeBinaryRows.check = "" := by decide +kernel
@@ -67,35 +66,24 @@ theorem nativeBinaryRows_justified : nativeBinaryRows.Justified := by
   simp only [nativeBinaryRows, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl <;>
     exact ⟨fun modulus same _ => (by cases same; exact Nat.prime_two),
-      fun absent => (by simp at absent)⟩
+      fun absent => absurd absent (by decide)⟩
 
-/-- Native transcript and commitment rows, which structured units never
+/-- Installed transcript and commitment rows, which structured units never
 export: hash-chain suites challenging in the BLS12-381 scalar field and in the
 KoalaBear octic extension, and a multilinear commitment. Their members name
 field rows. The octic random service lists `index` and `indices` because the
 field independently has `IndexRandomness` and `IndexBlockRandomness`. These
 rows are metadata, not interpretations of block sampling or gates. -/
 private def transcriptRows : Catalogue where
-  nominals := blsCatalogue.nominals ++ [
-    { identity := "koala-bear", sort := .field, members := [],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"],
-      modulus := some 2130706433 },
-    { identity := "koala-bear.ext8-binomial3", sort := .field, members := [("BaseField", "koala-bear")],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
-        "ExtensionField", "IndexRandomness", "IndexBlockRandomness"],
-      modulus := some 2130706433 },
-    { identity := "hash-chain.keccak256.bls12-381.fr64be/0", sort := .transcript,
-      members := [("ChallengeField", blsScalar)], capabilities := ["FieldTranscript", "Transcript"],
-      modulus := none },
-    { identity := "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
-      sort := .transcript, members := [("ChallengeField", "koala-bear.ext8-binomial3")],
-      capabilities := ["FieldTranscript", "IndexTranscript", "IndexBlockTranscript", "Transcript"], modulus := none },
-    { identity := "multilinear.kzg.bls12-381/0", sort := .commitment,
-      members := [("ValueField", blsScalar), ("PointField", blsScalar), ("EvaluationField", blsScalar)],
-      capabilities := ["MultilinearOpening"], modulus := none }]
-  services := [
-    { contract := "random.koala-bear.ext8-binomial3/0", sampled := "koala-bear.ext8-binomial3",
-      methods := ["draw", "index", "indices"] }]
+  nominals := blsCatalogue.nominals ++ [Installed.Domains.«koala-bear»,
+    Installed.Domains.«koala-bear.ext8-binomial3»,
+    Installed.Domains.«hash-chain.keccak256.bls12-381.fr64be/0»,
+    Installed.Domains.«hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0»,
+    Installed.Domains.«multilinear.kzg.bls12-381/0»]
+  services := [Installed.Services.«random.koala-bear.ext8-binomial3/0»]
+
+example : (Installed.Services.«random.koala-bear.ext8-binomial3/0»).methods =
+    ["draw", "index", "indices"] := by decide +kernel
 
 example : code transcriptRows.check = "" := by decide +kernel
 
@@ -114,7 +102,7 @@ example : code (({ nominals := blsCatalogue.nominals ++ (transcriptRows.nominals
 example : capabilitySort "IndexBlockRandomness" = some .field := rfl
 example : capabilitySort "IndexBlockTranscript" = some .transcript := rfl
 
--- Native octic metadata agrees exactly with the selected environment.
+-- Installed octic metadata agrees exactly with the selected environment.
 private def nativeOcticRows : Catalogue where
   nominals := transcriptRows.nominals.filter fun row =>
     ["koala-bear", "koala-bear.ext8-binomial3"].contains row.identity
@@ -249,10 +237,8 @@ private def constantUnit (text : String) : Snapshot :=
     .block [.instruction (.fieldConstant blsScalar text) [] [.field blsScalar] [] ""] (.ret [0])⟩],
     [⟨"main", []⟩], blsRows, {}⟩
 
-example : code (check (constantUnit
-    "52435875175126190479447740508185965837690552500527637822603658699938581184512")) = "" := by
+example : code (check (constantUnit (toString (blsModulus - 1)))) = "" := by
   decide +kernel
-example : code (check (constantUnit
-    "52435875175126190479447740508185965837690552500527637822603658699938581184513")) =
+example : code (check (constantUnit (toString blsModulus))) =
     "structured-field-canonical" := by decide +kernel
 end Tests.StructuredCatalogue
