@@ -221,8 +221,10 @@ void mapRefuses(Subject &subject, ModuleOp candidate, StringRef mutation) {
       subject.original, subject.candidate, "main", subject.context))));
   auto bytes = print(candidate);
   (*record.getAsObject()->getObject("candidate"))["digest"] = digest(bytes);
-  auto refusal = protocol::checkApplicationMap(
-      subject.original, bytes, "main", printJson(record), subject.context);
+  auto refusal =
+      protocol::checkApplicationMap(subject.original, bytes, "main",
+                                    printJson(record), subject.context)
+          .takeError();
   require(bool(refusal), "application map accepted " + mutation);
   auto message = toString(std::move(refusal));
   require(namesIdentifier(message, "application-map-correspondence"),
@@ -353,8 +355,10 @@ int main() {
       Subject subject(context, text);
       auto record = take(protocol::produceApplicationMap(
           subject.original, subject.candidate, "main", context));
-      if (auto error = protocol::checkApplicationMap(
-              subject.original, subject.candidate, "main", record, context))
+      if (auto error =
+              protocol::checkApplicationMap(subject.original, subject.candidate,
+                                            "main", record, context)
+                  .takeError())
         throw std::runtime_error(toString(std::move(error)));
     }
   });

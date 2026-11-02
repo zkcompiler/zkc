@@ -12,6 +12,7 @@ using namespace application_map;
 class Producer {
   const View &source, &candidate;
   Budget &budget;
+  const WrittenLinks *links;
   json::Array applications, instructions;
   size_t remainingBytes = byteLimit;
 
@@ -81,6 +82,13 @@ class Producer {
             json::Array{std::to_string(i), encodeValue(returned[index])});
       }
     }
+    json::Value written = nullptr;
+    if (links) {
+      auto link = links->link(definition, caller.name, call);
+      if (!link)
+        return link.takeError();
+      written = std::move(*link);
+    }
     if (auto e =
             append(applications,
                    json::Object{
@@ -93,7 +101,7 @@ class Producer {
                        {"roles", std::move(roles)},
                        {"arguments", std::move(inputs)},
                        {"results", std::move(outputs)},
-                       {"written", nullptr}}))
+                       {"written", std::move(written)}}))
       return std::move(e);
     return id;
   }
@@ -204,8 +212,9 @@ class Producer {
   }
 
 public:
-  Producer(const View &source, const View &candidate, Budget &budget)
-      : source(source), candidate(candidate), budget(budget) {}
+  Producer(const View &source, const View &candidate, Budget &budget,
+           const WrittenLinks *links)
+      : source(source), candidate(candidate), budget(budget), links(links) {}
   Expected<json::Value> run() {
     json::Value record = json::Object{
         {"format", "zkc.application-map/0"},
@@ -214,6 +223,7 @@ public:
                                 {"entry", source.entry}}},
         {"candidate", json::Object{{"format", "zkc.structured-source/0"},
                                    {"digest", candidate.identity}}},
+        {"correspondence", links ? links->reference() : json::Value(nullptr)},
         {"applications", json::Array{}},
         {"instructions", json::Array{}}};
     size_t framing = printJson(record).size() + 1;
@@ -255,10 +265,10 @@ public:
 };
 } // namespace
 
-Expected<std::string> produceApplicationMap(StringRef originalBytes,
-                                            StringRef candidateBytes,
-                                            StringRef entry,
-                                            mlir::MLIRContext &context) {
+Expected<std::string>
+produceApplicationMap(StringRef originalBytes, StringRef candidateBytes,
+                      StringRef entry, mlir::MLIRContext &context,
+                      std::optional<CorrespondenceInput> correspondence) {
   application_map::Budget budget;
   auto source = application_map::readView(originalBytes, entry, context, budget,
                                           StructuredSourceProfile::Original);
@@ -271,13 +281,22 @@ Expected<std::string> produceApplicationMap(StringRef originalBytes,
     return candidate.takeError();
   if (auto e = application_map::compareInventory(*source, *candidate))
     return std::move(e);
-  auto record = Producer(*source, *candidate, budget).run();
+  std::optional<application_map::WrittenLinks> links;
+  if (correspondence) {
+    auto read = application_map::WrittenLinks::read(correspondence->bytes,
+                                                    *source, originalBytes);
+    if (!read)
+      return read.takeError();
+    links = std::move(*read);
+  }
+  auto record =
+      Producer(*source, *candidate, budget, links ? &*links : nullptr).run();
   if (!record)
     return record.takeError();
   if (auto e = application_map::chargeTree(*record, budget))
     return std::move(e);
-  if (auto e =
-          application_map::checkRecord(*source, *candidate, *record, budget))
+  if (auto e = application_map::checkRecord(*source, *candidate, *record,
+                                            budget, links ? &*links : nullptr))
     return std::move(e);
   auto bytes = printJson(*record) + '\n';
   // Check the published lexical limits too, before returning any proposal.

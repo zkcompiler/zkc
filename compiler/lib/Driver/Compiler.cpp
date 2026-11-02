@@ -21,7 +21,9 @@
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Protocol.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/MemoryBufferRef.h"
+#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <filesystem>
@@ -515,10 +517,22 @@ int zkc::runCompiler(int argc, char **argv,
   if (mode == "protocol-application-map" ||
       mode == "protocol-check-application-map") {
     bool check = mode == "protocol-check-application-map";
-    if (argc != (check ? 6 : 5))
+    const int positional = check ? 5 : 4;
+    if (argc < positional + 1 || argc > positional + 2)
       return fail(error("unsupported-option"));
-    StringRef symbol = argv[argc - 1];
-    if (!symbol.consume_front("--symbol=") || symbol.empty())
+    StringRef symbol, correspondencePath;
+    for (int i = positional; i < argc; ++i) {
+      StringRef option(argv[i]);
+      if (option.consume_front("--symbol=") && symbol.empty() &&
+          !option.empty())
+        symbol = option;
+      else if (option.consume_front("--source-correspondence=") &&
+               correspondencePath.empty() && !option.empty())
+        correspondencePath = option;
+      else
+        return fail(error("unsupported-option"));
+    }
+    if (symbol.empty())
       return fail(error("unsupported-option"));
     auto original = readInput(argv[2], 16 * 1024 * 1024);
     if (!original)
@@ -526,17 +540,37 @@ int zkc::runCompiler(int argc, char **argv,
     auto candidate = readInput(argv[3], 16 * 1024 * 1024);
     if (!candidate)
       return fail(candidate.takeError());
+    std::optional<std::string> correspondenceBytes;
+    std::optional<protocol::CorrespondenceInput> correspondence;
+    if (!correspondencePath.empty()) {
+      auto bytes = readInput(correspondencePath, 8 * 1024 * 1024);
+      if (!bytes)
+        return fail(bytes.takeError());
+      correspondenceBytes = std::move(*bytes);
+      correspondence = protocol::CorrespondenceInput{*correspondenceBytes};
+    }
     mlir::MLIRContext context(registry);
     if (check) {
       auto proposal = readInput(argv[4], 32 * 1024 * 1024);
       if (!proposal)
         return fail(proposal.takeError());
-      if (auto e = protocol::checkApplicationMap(*original, *candidate, symbol,
-                                                 *proposal, context))
-        return fail(std::move(e));
+      auto status = protocol::checkApplicationMap(
+          *original, *candidate, symbol, *proposal, context, correspondence);
+      if (!status)
+        return fail(status.takeError());
+      // The command holds only supplied bytes, so its links stay conditional
+      // on that document; it reports the digest the map binds.
+      if (*status == protocol::WrittenStatus::Conditional)
+        outs() << json::Value(json::Object{
+                      {"written", "conditional"},
+                      {"correspondence",
+                       "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(
+                                             *correspondenceBytes)),
+                                         true)}})
+               << '\n';
     } else {
-      auto result = protocol::produceApplicationMap(*original, *candidate,
-                                                    symbol, context);
+      auto result = protocol::produceApplicationMap(
+          *original, *candidate, symbol, context, correspondence);
       if (!result)
         return fail(result.takeError());
       outs() << *result;

@@ -85,10 +85,12 @@ int main() {
       auto map = take(zkc::protocol::produceApplicationMap(text, candidate,
                                                            "main", context));
       if (auto e = zkc::protocol::checkApplicationMap(text, candidate, "main",
-                                                      map, context))
+                                                      map, context)
+                       .takeError())
         throw std::runtime_error(toString(std::move(e)));
       auto changed =
-          zkc::protocol::checkApplicationMap(text, text, "main", map, context);
+          zkc::protocol::checkApplicationMap(text, text, "main", map, context)
+              .takeError();
       require(bool(changed), "reused a map for different candidate bytes");
       require(namesIdentifier(toString(std::move(changed)),
                               "application-map-identity"),
@@ -145,8 +147,10 @@ int main() {
     // correspondence reader must still inspect its changed native property.
     (*map.getAsObject()->getObject("candidate"))["digest"] =
         "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(candidate)), true);
-    auto failure = zkc::protocol::checkApplicationMap(
-        source.bytes(), candidate, symbol, zkc::printJson(map), context);
+    auto failure =
+        zkc::protocol::checkApplicationMap(source.bytes(), candidate, symbol,
+                                           zkc::printJson(map), context)
+            .takeError();
     require(bool(failure), "identity authorized a changed bytecode body");
     require(namesIdentifier(toString(std::move(failure)),
                             "application-map-correspondence"),

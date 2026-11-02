@@ -1004,6 +1004,12 @@ definition, with its purpose, part and origins, and one occurrence row per
 published site with its written nodes; the producer refuses a definition row
 outside the instance and generated inventory
 ([correspondence controls](../compiler/test/source_correspondence.cpp)).
+Application maps take that correspondence with `--source-correspondence`:
+each root and expansion gets the written link of its occurrence, null for an
+occurrence with zero or several nodes, and the check reports the links as
+conditional on the supplied bytes, or checked when the checked original's own
+export is those bytes
+([application-map controls](../compiler/test/application_map.cpp)).
 Generated Entry families walk their roster once per phase and each port only at
 its placed roles, so a trivial 1,024-role Protocol closes and publishes its
 interface within the 32,000,000-unit phase work ceiling, with work growing

@@ -150,8 +150,10 @@ int main() {
         prepared->print(stream);
         auto map = take(protocol::produceApplicationMap(
             original.bytes(), bytes, entry.protocol().symbol, context));
-        if (auto error = protocol::checkApplicationMap(
-                original.bytes(), bytes, entry.protocol().symbol, map, context))
+        if (auto error = protocol::checkApplicationMap(original.bytes(), bytes,
+                                                       entry.protocol().symbol,
+                                                       map, context)
+                             .takeError())
           throw std::runtime_error(toString(std::move(error)));
       });
   cases.run("application expansion renames placed selected results", [&] {
@@ -183,8 +185,10 @@ pub protocol Run roles(P,V)(flag: bool @(P,V), x: bool @(V), y: bool @(V)) -> bo
     prepared->print(stream);
     auto map = take(protocol::produceApplicationMap(
         original.bytes(), bytes, entry.protocol().symbol, context));
-    if (auto error = protocol::checkApplicationMap(
-            original.bytes(), bytes, entry.protocol().symbol, map, context))
+    if (auto error =
+            protocol::checkApplicationMap(original.bytes(), bytes,
+                                          entry.protocol().symbol, map, context)
+                .takeError())
       throw std::runtime_error(toString(std::move(error)));
   });
   cases.run("actual linear branch successors retain zero-trip loop roots", [&] {

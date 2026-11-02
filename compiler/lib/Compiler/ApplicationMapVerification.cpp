@@ -1,5 +1,6 @@
 #include "ApplicationMapData.h"
 #include "zkc/Compiler/ApplicationMap.h"
+#include "zkc/Compiler/SourceCorrespondence.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -32,6 +33,7 @@ class Checker {
   View &source, &candidate;
   const json::Array &applications, &instructions;
   Budget &budget;
+  const WrittenLinks *links;
   unsigned nextApplication = 0, nextInstruction = 0, nextTerm = 1;
 
   Error mismatch(StringRef detail) {
@@ -112,15 +114,25 @@ class Checker {
       return mismatch("missing materialized application");
     unsigned id = nextApplication++;
     const auto *row = applications[id].getAsObject();
+    // The written link is rederived from the supplied correspondence, never
+    // read from the proposal.
+    json::Value written = nullptr;
+    if (links) {
+      auto link = links->link(definition, caller.name, call);
+      if (!link)
+        return link.takeError();
+      written = std::move(*link);
+    }
+    if (row && row->get("written") && !treeField(*row, "written", written))
+      return error("application-map-written", "written link differs");
     if (!shape(row, {"id", "parent", "source_definition", "source_path",
                      "callee", "roles", "arguments", "results", "written"}) ||
         row->getString("id") != std::to_string(id) ||
         !treeField(*row, "parent", ordinal(parent)) ||
         row->getString("source_definition") != caller.name ||
         !treeField(*row, "source_path", encodePath(path)) ||
-        row->getString("callee") != definition.name ||
-        !treeField(*row, "written", nullptr))
-      return mismatch("application identity, parent, path or written link");
+        row->getString("callee") != definition.name)
+      return mismatch("application identity, parent or path");
     const auto *roles = row->getArray("roles");
     if (!roles || roles->size() != definition.roles.size())
       return mismatch("role roster");
@@ -382,9 +394,10 @@ class Checker {
 
 public:
   Checker(View &source, View &candidate, const json::Array &applications,
-          const json::Array &instructions, Budget &budget)
+          const json::Array &instructions, Budget &budget,
+          const WrittenLinks *links)
       : source(source), candidate(candidate), applications(applications),
-        instructions(instructions), budget(budget) {}
+        instructions(instructions), budget(budget), links(links) {}
   Error run() {
     // Enumerate the actual candidate inventory, including every domain
     // constructor and every terminal row. Inventory equality was checked first.
@@ -430,12 +443,17 @@ public:
 } // namespace
 
 Error checkRecord(View &source, View &candidate, const json::Value &record,
-                  Budget &budget) {
+                  Budget &budget, const WrittenLinks *links) {
   const auto *root = record.getAsObject();
-  if (!shape(root, {"format", "source", "candidate", "applications",
-                    "instructions"}) ||
+  if (!shape(root, {"format", "source", "candidate", "correspondence",
+                    "applications", "instructions"}) ||
       root->getString("format") != "zkc.application-map/0")
     return error("application-map-schema");
+  // A map binds exactly the supplied correspondence bytes, or none.
+  if (!same(root->get("correspondence"),
+            links ? links->reference() : json::Value(nullptr)))
+    return error("application-map-written",
+                 "map correspondence differs from the supplied document");
   const auto *sourceIdentity = root->getObject("source");
   const auto *candidateIdentity = root->getObject("candidate");
   if (!shape(sourceIdentity, {"format", "digest", "entry"}) ||
@@ -454,7 +472,8 @@ Error checkRecord(View &source, View &candidate, const json::Value &record,
     return error("application-map-limit");
   if (auto e = compareInventory(source, candidate))
     return e;
-  if (auto e = Checker(source, candidate, *applications, *instructions, budget)
+  if (auto e = Checker(source, candidate, *applications, *instructions, budget,
+                       links)
                    .run())
     return e;
   return compareNative(source, candidate);
@@ -462,9 +481,11 @@ Error checkRecord(View &source, View &candidate, const json::Value &record,
 } // namespace zkc::protocol::application_map
 
 namespace zkc::protocol {
-Error checkApplicationMap(StringRef originalBytes, StringRef candidateBytes,
-                          StringRef entry, StringRef mapBytes,
-                          mlir::MLIRContext &context) {
+Expected<WrittenStatus>
+checkApplicationMap(StringRef originalBytes, StringRef candidateBytes,
+                    StringRef entry, StringRef mapBytes,
+                    mlir::MLIRContext &context,
+                    std::optional<CorrespondenceInput> correspondence) {
   auto record = application_map::parseRecord(mapBytes);
   if (!record)
     return record.takeError();
@@ -481,6 +502,29 @@ Error checkApplicationMap(StringRef originalBytes, StringRef candidateBytes,
                                 StructuredSourceProfile::Prepared);
   if (!candidate)
     return candidate.takeError();
-  return application_map::checkRecord(*source, *candidate, *record, budget);
+  std::optional<application_map::WrittenLinks> links;
+  if (correspondence) {
+    auto read = application_map::WrittenLinks::read(correspondence->bytes,
+                                                    *source, originalBytes);
+    if (!read)
+      return read.takeError();
+    links = std::move(*read);
+  }
+  if (auto e = application_map::checkRecord(*source, *candidate, *record,
+                                            budget, links ? &*links : nullptr))
+    return std::move(e);
+  if (!correspondence)
+    return WrittenStatus::Absent;
+  if (!correspondence->checked)
+    return WrittenStatus::Conditional;
+  // Links become authoritative only when the checked source's own export is
+  // these bytes, over this original.
+  if (correspondence->checked->bytes() != originalBytes)
+    return error("application-map-written",
+                 "checked source belongs to another original");
+  if (auto e = language::checkSourceCorrespondenceExport(
+          *correspondence->checked, correspondence->bytes))
+    return error("application-map-written", toString(std::move(e)));
+  return WrittenStatus::Checked;
 }
 } // namespace zkc::protocol
