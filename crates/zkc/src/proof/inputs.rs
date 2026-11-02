@@ -2,7 +2,7 @@
 use super::*;
 use zkc_format::binding;
 
-const CONTEXT_LIMIT: usize = 4096;
+use super::MAX_CONTEXT_BYTES as CONTEXT_LIMIT;
 use crate::host::request::RESOURCE_BUDGET_LIMIT;
 
 /// Values follow the admitted public, role-input and service order. Public
@@ -240,7 +240,7 @@ pub(super) fn prepare(
         }
     }
     let _root_tree = zkc_runtime::host::wire::reserve_allocation(
-        host.shared_ledger.as_ref(),
+        host.host_ledger(),
         host.binding_metadata_bytes
             .saturating_add(request.context.len() * 2),
     )?;
@@ -467,7 +467,7 @@ pub(super) fn prepare(
     for (port, input) in host.public.iter().zip(&request.public) {
         if input.wire_bytes().is_none() {
             encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
-                host.shared_ledger.as_ref(),
+                host.host_ledger(),
                 zkc_cpu::native_encoding_bound(&loaded[public_ids[&port.original]]),
             )?);
         }
@@ -489,7 +489,7 @@ pub(super) fn prepare(
     for (original, id, input) in shared {
         let _live = if input.wire_bytes().is_none() {
             zkc_runtime::host::wire::reserve_allocation(
-                host.shared_ledger.as_ref(),
+                host.host_ledger(),
                 zkc_cpu::native_encoding_bound(&loaded[id]),
             )?
         } else {
@@ -533,10 +533,10 @@ pub(super) fn prepare(
         host.capacity.check_wire(encoding.size())?;
     }
     encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
-        host.shared_ledger.as_ref(),
+        host.host_ledger(),
         if retain_root { encoding.size() } else { 0 },
     )?);
-    if let Some(ledger) = &host.shared_ledger {
+    if let Some(ledger) = host.host_ledger() {
         ledger
             .charge(
                 zkc_runtime::vm::WorkBudget {

@@ -490,10 +490,25 @@ impl<'a> Admission<'a> {
                         #[cfg(test)]
                         IMPORT_COUNT.with(|n| n.set(n.get() + 1));
                         let key = if let Some(material) = &self.material {
-                            material
-                                .lock()
-                                .map_err(|_| "native-setup-material")?
-                                .import_prover(bytes, fingerprint, &verifier, policy.ark_bounds())?
+                            let mut material =
+                                material.lock().map_err(|_| "native-setup-material")?;
+                            // A named source records the setup pin it feeds.
+                            match &source {
+                                KeySource::File(file) if let Some(name) = file.name() => material
+                                    .import_named_prover(
+                                    name,
+                                    bytes,
+                                    fingerprint,
+                                    &verifier,
+                                    policy.ark_bounds(),
+                                )?,
+                                _ => material.import_prover(
+                                    bytes,
+                                    fingerprint,
+                                    &verifier,
+                                    policy.ark_bounds(),
+                                )?,
+                            }
                         } else {
                             zkc_cpu::material::import_prover(
                                 bytes,

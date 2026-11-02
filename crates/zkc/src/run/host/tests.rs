@@ -853,6 +853,9 @@ fn bound_bool_run(
         InputBindings, InputComponent, InputRequirement, Observation,
     };
     let (raw, request) = fixture("bool");
+    // The context comes from a default-policy producer; the host under test
+    // takes the selected limits.
+    let producer = host(&raw, HostLimits::default());
     let host = host(&raw, limits);
     let program = host.bundle().admitted();
     let ty = program.entry("main").unwrap()[0].inputs[0].1.clone();
@@ -867,19 +870,28 @@ fn bound_bool_run(
         ty: ty.clone(),
         observation: Observation::Value,
     }];
-    // Both roles receive the canonical false frame from the fixture request.
-    let context = zkc_format::logical::encode_tree(&json!([
-        "zkc.input-bindings/0",
-        hex(&Sha256::digest(program.bytes())),
-        "main",
-        [[
-            [["Alice", "0", []], ["Bob", "0", []]],
-            ty.spelling(),
-            "value",
-            ["active", "5a4b4356000500"]
-        ]]
-    ]))
-    .unwrap();
+    // Both roles receive the canonical false frame from the fixture request;
+    // the producer derives the context from the prepared request itself.
+    let bytes = serde_json::to_vec(&request).unwrap();
+    let context = producer
+        .prepare(&bytes)
+        .unwrap()
+        .common_input_context(&required)
+        .unwrap();
+    assert_eq!(
+        zkc_format::logical::decode_tree(&context).unwrap(),
+        json!([
+            "zkc.input-bindings/0",
+            hex(&Sha256::digest(program.bytes())),
+            "main",
+            [[
+                [["Alice", "0", []], ["Bob", "0", []]],
+                ty.spelling(),
+                "value",
+                ["active", "5a4b4356000500"]
+            ]]
+        ])
+    );
     let bindings = InputBindings::admit_pinned(
         program,
         "main",
@@ -888,7 +900,7 @@ fn bound_bool_run(
         &Sha256::digest(&context).into(),
     )
     .unwrap();
-    (host, serde_json::to_vec(&request).unwrap(), bindings)
+    (host, bytes, bindings)
 }
 
 #[test]

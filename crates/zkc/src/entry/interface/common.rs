@@ -19,7 +19,13 @@ pub(super) struct Component {
 pub(super) fn check(protocol: &Protocol, work: &mut Schemas<'_>) -> Result<Vec<Requirement>> {
     require(protocol.common_input_requirements.len() <= 1024, E::Limit)?;
     // Index once, including zero-width ports in work accounting. Repeated scans
-    // per requirement would make wide, mostly empty interfaces quadratic.
+    // per requirement would make wide, mostly empty interfaces quadratic, and
+    // a roster scan per component would make large rosters quadratic.
+    let mut indices = BTreeMap::new();
+    for (index, role) in protocol.roles.iter().enumerate() {
+        work.charge(1 + role.len())?;
+        indices.insert(role.as_str(), index as u32);
+    }
     let mut map = BTreeMap::new();
     for (input, port) in protocol.inputs.iter().enumerate() {
         work.charge(1 + port.components.len())?;
@@ -50,11 +56,7 @@ pub(super) fn check(protocol: &Protocol, work: &mut Schemas<'_>) -> Result<Vec<R
         for c in &requirement.components {
             require(c.path.len() <= 32, E::Limit)?;
             work.charge(1 + c.path.len() + c.role.len())?;
-            let role = protocol
-                .roles
-                .iter()
-                .position(|r| r == &c.role)
-                .ok_or(E::Selection)? as u32;
+            let role = *indices.get(c.role.as_str()).ok_or(E::Selection)?;
             let key = (c.input, c.path.clone(), role);
             require(keys.last().is_none_or(|prior| prior < &key), E::Selection)?;
             roles.insert(role);
@@ -189,10 +191,10 @@ impl super::BoundInterface {
         // Recheck its ABI before adapting the actual Program types.
         self.check_run_bundle(bundle, &self.artifact)?;
         let mut positions = BTreeMap::new();
-        for role in self.roles() {
-            // The same checked ordering used by native_input_position, computed
-            // once per role instead of rescanning all ports per component.
-            for (position, original) in self.role_native_inputs(role).into_iter().enumerate() {
+        // The same checked ordering used by native_input_position, computed in
+        // one pass instead of rescanning all ports per role or component.
+        for (role, natives) in self.roles().iter().zip(self.native_inputs_by_role()) {
+            for (position, original) in natives.into_iter().enumerate() {
                 positions.insert((role.name.as_str(), original), position);
             }
         }

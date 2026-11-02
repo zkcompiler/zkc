@@ -30,12 +30,19 @@ impl BoundInterface {
                 && bundle.roles().len() == p.roles.len(),
             E::NativeBinding,
         )?;
-        for (role_index, (role, actual)) in self.roles().iter().zip(bundle.roles()).enumerate() {
+        // Bucket every role's coordinates in one pass over the components.
+        let inputs = role_leaves(&p.inputs, p.roles.len())?;
+        let outputs = role_leaves(&p.outputs, p.roles.len())?;
+        for (((role, actual), inputs), outputs) in self
+            .roles()
+            .iter()
+            .zip(bundle.roles())
+            .zip(inputs)
+            .zip(outputs)
+        {
             let expected = &role.native_name;
             let entry = &actual.entry;
             require(&entry.role == expected, E::NativeBinding)?;
-            let inputs = leaves(p.inputs.iter(), Some(role_index as u32))?;
-            let outputs = leaves(p.outputs.iter(), Some(role_index as u32))?;
             require(
                 inputs.len() == entry.inputs.len() && outputs.len() == entry.outputs.len(),
                 E::NativeBinding,
@@ -198,6 +205,27 @@ impl BoundInterface {
         }
         Ok(())
     }
+}
+/// Each role's terminal leaves of these ports, in roster order, with the
+/// same per-coordinate agreement as `leaves`.
+fn role_leaves(ports: &[Port], roles: usize) -> Result<Vec<Vec<(usize, &str)>>> {
+    let mut result = vec![std::collections::BTreeMap::new(); roles];
+    for port in ports {
+        for component in &port.components {
+            let ty =
+                super::placement::component_type(port, component).map_err(|_| E::NativeBinding)?;
+            let leaves = result
+                .get_mut(component.role as usize)
+                .ok_or(E::NativeBinding)?;
+            if let Some(previous) = leaves.insert(component.native as usize, ty) {
+                require(previous == ty, E::NativeBinding)?;
+            }
+        }
+    }
+    Ok(result
+        .into_iter()
+        .map(|leaves| leaves.into_iter().collect())
+        .collect())
 }
 pub(super) fn leaves<'a>(
     ports: impl Iterator<Item = &'a Port>,

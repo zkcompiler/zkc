@@ -59,8 +59,7 @@ impl Resolver for Bindings<'_> {
     fn resolve(&mut self, name: &str) -> Result<InputSource, String> {
         self.0
             .get(name)
-            .cloned()
-            .map(InputSource::from_bytes)
+            .map(|bytes| InputSource::named(name, bytes.clone()))
             .ok_or("entry-input-reference".into())
     }
 }

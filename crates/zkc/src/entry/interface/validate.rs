@@ -10,7 +10,11 @@ pub(super) struct Checked {
     pub types: BTreeMap<String, Leaf>,
     pub setups: Vec<super::Setup>,
 }
-pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
+pub(super) fn check(
+    document: &Interface,
+    original: &str,
+    limits: super::InterfaceLimits,
+) -> Result<Checked> {
     require(document.format == "zkc.language-interface/0", E::Format)?;
     require(
         hash(&document.capture) && document.original == original,
@@ -23,7 +27,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
         module.len() <= 2048 && document.entry.split("::").all(identifier),
         E::Identity,
     )?;
-    let mut schemas = Schemas::new();
+    let mut schemas = Schemas::with_limits(limits);
     let mut relations = BTreeMap::new();
     for relation in &document.relations {
         schemas.charge(1 + relation.symbol.len())?;

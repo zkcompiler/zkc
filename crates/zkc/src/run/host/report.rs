@@ -194,7 +194,7 @@ impl HostReport {
             result["wire"] = json!({"sends":execution.wire.sends,"receives":execution.wire.receives,
                 "sent_bytes":execution.wire.sent_bytes,"replacement_bytes":execution.wire.replacement_bytes});
             result["reached"] = json!(execution.reached.iter().map(|r|json!({"role":r.step.role,"instruction":r.step.instruction,
-                "anchor":r.step.anchor,"iterations":r.iterations,"progress":format!("{:?}",r.progress),
+                "anchor":r.step.anchor,"iterations":&*r.iterations,"progress":format!("{:?}",r.progress),
                 "loop_count":r.loop_count,"loop_started":r.loop_started,
                 "branch_alternative":r.branch_alternative,"branch_started":r.branch_started,
                 "control_path":r.path.iter().map(path_element).collect::<Vec<_>>(),"sent_bytes":r.sent_bytes,

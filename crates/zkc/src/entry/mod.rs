@@ -17,11 +17,12 @@ pub(crate) use package::AuthenticatedArtifact;
 pub use package::{CompileOptions, Package, PackageError, PackagedAsset};
 
 mod errors;
-pub use errors::{EntryError, EntryPhase};
+pub use errors::{EntryCondition, EntryError, EntryPhase};
 mod interface;
 pub use interface::{
-    BoundInterface, BoundaryRequirement, ComponentFacet, Interface, InterfaceError, OrdinaryInput,
-    PortComponent, ProtocolPort, PublicInputSelection, SelectionPurpose, ValuePlacement,
+    BoundInterface, BoundaryRequirement, ComponentFacet, Interface, InterfaceError,
+    InterfaceLimits, OrdinaryInput, PortComponent, ProtocolPort, PublicInputSelection,
+    SelectionPurpose, ValuePlacement,
 };
 #[cfg(feature = "cpu")]
 mod assets;
@@ -55,6 +56,9 @@ pub use run::{
 /// Explicit budgets, including zero, override it; native hard limits still apply.
 #[cfg(feature = "cpu")]
 pub const DEFAULT_DRAW_BUDGET: u64 = crate::host::capacity::Allowances::SERVICE_DRAWS.default;
+/// The installed maximum of any one service or selected transcript budget.
+#[cfg(feature = "cpu")]
+pub const MAX_DRAW_BUDGET: u64 = crate::host::capacity::Allowances::SERVICE_DRAWS.maximum;
 #[cfg(feature = "cpu")]
 mod arguments;
 #[cfg(feature = "cpu")]
@@ -84,6 +88,6 @@ pub mod bindings;
 mod backend;
 #[cfg(feature = "cpu")]
 pub use backend::{
-    BackendRun, BindingError, InputBindings, InputBoundBackendRun, InputComponent,
+    BackendRun, BindingError, ContextProducer, InputBindings, InputBoundBackendRun, InputComponent,
     InputRequirement, Observation,
 };

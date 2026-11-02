@@ -171,15 +171,17 @@ pub enum Progress {
 #[derive(Clone, Debug)]
 pub struct Reached {
     pub step: Step,
-    /// Outer-to-inner iteration numbers for this static instruction coordinate.
-    pub iterations: Vec<u64>,
+    /// Outer-to-inner iteration numbers for this static instruction coordinate,
+    /// shared by every reached step of the same dynamic region.
+    pub iterations: std::sync::Arc<[u64]>,
     /// The validated local count; absent for other instructions or a bound stop.
     pub loop_count: Option<u64>,
     /// Exact reached participant branch arm; payload agreement is separate.
     pub branch_alternative: Option<usize>,
     pub branch_started: bool,
-    /// Complete dynamic control path, including selected branch arms.
-    pub path: Vec<crate::vm::PathElement>,
+    /// Complete dynamic control path, including selected branch arms. Each
+    /// distinct path is stored once and shared by the steps it contains.
+    pub path: std::sync::Arc<[crate::vm::PathElement]>,
     /// Count agreement and this participant's loop start completed. For zero
     /// trips this means its initial carried results were bound, with no body.
     pub loop_started: bool,
@@ -233,6 +235,8 @@ pub struct Report<B: Backend> {
     pub limits: super::RunLimits,
     pub outcome: Outcome,
     pub reached: Vec<Reached>,
+    /// Report storage charged against `limits.report_bytes`.
+    pub report_bytes: usize,
     pub wire: WireUsage,
     pub pending: Option<PendingMessage>,
     pub roles: Vec<RoleReport<B::Value>>,

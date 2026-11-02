@@ -42,9 +42,9 @@ pub enum InterfaceError {
 impl std::fmt::Display for InterfaceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Format => "entry-interface-format",
+            Self::Format => super::EntryCondition::InterfaceFormat.code(),
             Self::Limit => "entry-interface-limit",
-            Self::Identity => "entry-interface-identity",
+            Self::Identity => super::EntryCondition::InterfaceIdentity.code(),
             Self::Schema => "entry-interface-schema",
             Self::Selection => "entry-interface-selection",
             Self::NativeBinding => "entry-interface-native-binding",
@@ -52,6 +52,39 @@ impl std::fmt::Display for InterfaceError {
     }
 }
 impl std::error::Error for InterfaceError {}
+
+/// Host policy for interface admission. Schema validation and supply
+/// reconstruction each have their own cumulative work allowance; the schema
+/// summaries and each reconstructed input or output supply plan each charge
+/// their retained descriptors against the descriptor allowance. A Host may
+/// select lower allowances; a selection above `MAXIMUM` refuses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InterfaceLimits {
+    /// Work units of one admission algorithm.
+    pub work: usize,
+    /// Retained descriptor bytes of one summary or supply plan.
+    pub descriptor_bytes: usize,
+}
+impl InterfaceLimits {
+    pub const DEFAULT: Self = Self {
+        work: 1_000_000,
+        descriptor_bytes: 16 * 1024 * 1024,
+    };
+    pub const MAXIMUM: Self = Self::DEFAULT;
+    /// Refuse a selection above the installed maximum without clamping it.
+    pub fn validate(&self) -> Result<()> {
+        require(
+            self.work <= Self::MAXIMUM.work
+                && self.descriptor_bytes <= Self::MAXIMUM.descriptor_bytes,
+            InterfaceError::Limit,
+        )
+    }
+}
+impl Default for InterfaceLimits {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 
 /// Immutable source metadata. Execution must separately bind this view to the
 /// admitted native artifact from the same authenticated package.
@@ -83,8 +116,13 @@ impl std::ops::Deref for BoundInterface {
 }
 impl BoundInterface {
     pub fn read(package: &Package) -> Result<Self> {
+        Self::read_with(package, InterfaceLimits::DEFAULT)
+    }
+    /// Read under the Host's selected interface admission allowances.
+    pub fn read_with(package: &Package, limits: InterfaceLimits) -> Result<Self> {
+        limits.validate()?;
         let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
-        let view = Interface::decode(package.interface().as_bytes(), Some(&original))?;
+        let view = Interface::decode_with(package.interface().as_bytes(), Some(&original), limits)?;
         Ok(Self {
             view,
             #[cfg(feature = "cpu")]
@@ -127,6 +165,9 @@ impl Interface {
         Self::decode(bytes, None)
     }
     fn decode(bytes: &[u8], original: Option<&str>) -> Result<Self> {
+        Self::decode_with(bytes, original, InterfaceLimits::DEFAULT)
+    }
+    fn decode_with(bytes: &[u8], original: Option<&str>, limits: InterfaceLimits) -> Result<Self> {
         preflight::check(bytes)?;
         let mut decoder = serde_json::Deserializer::from_slice(bytes);
         decoder.disable_recursion_limit();
@@ -134,9 +175,14 @@ impl Interface {
             serde::Deserialize::deserialize(&mut decoder).map_err(|_| InterfaceError::Format)?;
         decoder.end().map_err(|_| InterfaceError::Format)?;
         require(hash(&document.original), InterfaceError::Identity)?;
-        let checked = validate::check(&document, original.unwrap_or(&document.original))?;
-        let ports =
-            ports::Ports::new(&document, checked.selected, &checked.types, &checked.setups)?;
+        let checked = validate::check(&document, original.unwrap_or(&document.original), limits)?;
+        let ports = ports::Ports::new(
+            &document,
+            checked.selected,
+            &checked.types,
+            &checked.setups,
+            limits,
+        )?;
         Ok(Self {
             ports,
             common: checked.common,

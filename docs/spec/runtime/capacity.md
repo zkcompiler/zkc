@@ -220,10 +220,18 @@ and charges the Host-side allocation and encoding it performs to that ledger:
 
 | Entry kind | Invocation ledger | Host-side charges |
 |---|---|---|
-| Run | Created at preparation; a run started by an outer invocation uses the outer ledger | Common-input inspection and canonical encoding for all roles; result encoding through `RunReport::encode_results` |
-| Proof | The publication allowance of each call, which first replays the call's native usage, retained material and proof bytes | Result encoding through `ProofResult::encode_results` |
+| Run | Created at preparation; a run started by an outer invocation uses the outer ledger | Request conversion; common-input inspection, context production and canonical encoding for all roles; result reconstruction; result encoding through `RunReport::encode_results` |
+| Proof | Created for each call; a proof started by an outer invocation uses the outer ledger | Request conversion; the binding root's canonical public rows and encoding; result reconstruction; result encoding through `ProofResult::encode_results`, which first replays the call's native usage, retained material and proof bytes into the same ledger |
 | Function | Created at preparation and shared with every reached child | Context, argument, journal, request, transport and result reservations; result encoding through `FunctionResultEncoder::encode_report` |
 | Backend participant | `InputBoundBackendRun::start_role` builds it from the selected value and work budgets and attaches it to the started Runner | Common-input inspection and canonical encoding |
+
+Request conversion charges the named values' description bytes as logical work
+and the converted operand list as fresh allocation, before native preparation;
+a refusal is `entry-request-limit` at `Preparation`. Result reconstruction
+charges every returned native value's retained bytes as logical work and 128
+fresh bytes per schema node of the named result before it allocates; a refusal
+is the report's `entry-output-limit`. A standalone proof's runner keeps its own
+budget beside the call's ledger, as a standalone run's participants do.
 
 Common-input inspection charges each inspected value's retained bytes as logical
 work before validating it. A value observation charges its canonical encoding
@@ -257,6 +265,8 @@ refuses without clamping:
 | Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
 | External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | `HostLimits::external_work`, `ProofOptions::external_work` |
 | Service draws | Draws of one managed service or transcript | 1,000,000 | 1,000,000 | Request service budgets and `transcript_budget` |
+| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 1,000,000 | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::work`) |
+| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::descriptor_bytes`) |
 
 A Function takes the same record in `FunctionOptions::limits`. Each reached child receives what remains of each
 allowance after earlier children, divided equally across a joint roster; a child
@@ -267,8 +277,8 @@ scratch, result-construction overlap and numerical work in their migrated native
 handlers. These per-call backend policy ceilings are separate from the CLI
 capacity record and the VM's retained-value ledgers.
 
-[Joint dispatch](joint.md#joint-dispatch-and-handoff) owns dispatch, message
-and cumulative wire limits. [Proof transport](../formats/proof.md) owns proof
+[Joint dispatch](joint.md#joint-dispatch-and-handoff) owns dispatch, message,
+cumulative wire and report storage limits. [Proof transport](../formats/proof.md) owns proof
 framing limits, and [attempts](attempts.md) own retry counts and cumulative
 budgets. Loading, setup and backend scratch retain their own limits. These
 units do not establish one global peak-memory or elapsed-time bound.

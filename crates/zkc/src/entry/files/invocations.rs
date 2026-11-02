@@ -132,7 +132,7 @@ impl Invocations {
                     .keys()
                     .any(|role| !groups.iter().any(|group| group.name() == role))
             {
-                return Err("entry-host-context-role".into());
+                return Err(String::from(crate::entry::EntryCondition::InputRoles).into());
             }
             for group in &groups {
                 let value = if operation == "run" {
@@ -176,7 +176,7 @@ impl Invocations {
                 }
             }
             if !supplied.is_empty() {
-                return Err("entry-host-context-role".into());
+                return Err(String::from(crate::entry::EntryCondition::InputRoles).into());
             }
         }
         if !self.inputs.is_empty() {
@@ -211,7 +211,7 @@ impl Invocations {
                             .roles()
                             .iter()
                             .find(|r| r.name == *name)
-                            .ok_or("entry-host-context-role")?;
+                            .ok_or(crate::entry::EntryCondition::InputRoles)?;
                         check(role, &values.services)?;
                     }
                 }
@@ -370,11 +370,11 @@ impl Invocations {
                 } => {
                     result.inputs.insert(id.clone(), inputs);
                     check_services(&services)?;
-                    if context.len() > 8192 {
+                    if context.len() > 2 * crate::proof::MAX_CONTEXT_BYTES {
                         return Err("native-proof-context-limit".into());
                     }
-                    if transcript_budget.is_some_and(|n| n > crate::entry::DEFAULT_DRAW_BUDGET) {
-                        return Err("native-proof-budget".into());
+                    if transcript_budget.is_some_and(|n| n > crate::entry::MAX_DRAW_BUDGET) {
+                        return Err(crate::entry::EntryCondition::ServiceBudget.into());
                     }
                     let context = crate::io::bytes::unhex(&json!(context))?;
                     (
@@ -466,10 +466,10 @@ impl Invocations {
 fn check_services(services: &BTreeMap<String, u64>) -> Result<()> {
     for (name, count) in services {
         if name.len() > 128 || !crate::source_names::is_source_identifier(name) {
-            return Err("entry-service-names".into());
+            return Err(crate::entry::EntryCondition::ServiceNames.into());
         }
-        if *count > crate::entry::DEFAULT_DRAW_BUDGET {
-            return Err("entry-service-budget".into());
+        if *count > crate::entry::MAX_DRAW_BUDGET {
+            return Err(crate::entry::EntryCondition::ServiceBudget.into());
         }
     }
     Ok(())
@@ -675,12 +675,12 @@ mod tests {
             ("/deployments/child/context", json!("zz"), "artifact-hex"),
             (
                 "/deployments/child/transcript_budget",
-                json!(crate::entry::DEFAULT_DRAW_BUDGET + 1),
-                "native-proof-budget",
+                json!(crate::entry::MAX_DRAW_BUDGET + 1),
+                "entry-service-budget",
             ),
             (
                 "/deployments/child/services/rng",
-                json!(crate::entry::DEFAULT_DRAW_BUDGET + 1),
+                json!(crate::entry::MAX_DRAW_BUDGET + 1),
                 "entry-service-budget",
             ),
             (

@@ -193,8 +193,14 @@ fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
 #[test]
 fn protocol_rosters_are_not_bounded_by_record_role_telescopes() {
     // A record has at most 16 role parameters; a protocol roster shares the
-    // joint runtime's 1,024-role ceiling. Admission work bounds what remains.
-    for (count, accepted) in [(17, true), (256, true), (1025, false)] {
+    // joint runtime's 1,024-role ceiling. Boundary reconstruction walks each
+    // port only at its placed roles, so admission work grows with ports times
+    // placed roles times schema size rather than with the square of the
+    // roster: ordinary ports supplied by every participant, in both
+    // directions, fit the default allowance at the full roster.
+    let boolean = schema("boolean", "bool", json!(["bool"]));
+    let mut reconstruction = BTreeMap::new();
+    for (count, accepted) in [(17, true), (256, true), (1024, true), (1025, false)] {
         let mut value = document();
         // Proof jobs separately require exactly a prover and a verifier.
         value["job"] = json!({"kind":"run"});
@@ -203,14 +209,51 @@ fn protocol_rosters_are_not_bounded_by_record_role_telescopes() {
             .chain((2..count).map(|i| format!("R{i}")))
             .collect();
         value["protocols"][0]["roles"] = json!(roles);
+        let everyone = json!((0..count.min(1024) as u32).collect::<Vec<_>>());
+        value["protocols"][0]["inputs"] = json!([
+            port(
+                "statement",
+                0,
+                json!([0]),
+                everyone.clone(),
+                boolean.clone()
+            ),
+            port("witness", 1, json!([1]), json!([0]), boolean.clone()),
+            port("shared", 2, json!([2]), everyone.clone(), boolean.clone()),
+        ]);
+        value["protocols"][0]["outputs"] =
+            json!([port("accepted", 0, json!([0]), everyone, boolean.clone())]);
         match read(&value) {
-            Ok(_) => assert!(accepted, "{count} roles"),
+            Ok(view) => {
+                assert!(accepted, "{count} roles");
+                let roles = view.roles();
+                assert_eq!(roles.len(), count);
+                assert!(roles.iter().all(|role| role.outputs.len() == 1));
+                assert_eq!(roles[0].inputs.len(), 3);
+                assert!(roles[1..].iter().all(|role| role.inputs.len() == 2));
+                let mut work = boundary::Work::new(InterfaceLimits::DEFAULT);
+                ports::Ports::with_work(
+                    &view.document,
+                    view.selected,
+                    &view.types,
+                    &view.setups,
+                    &mut work,
+                )
+                .unwrap();
+                reconstruction.insert(count, InterfaceLimits::DEFAULT.work - work.remaining);
+            }
             Err(error) => {
                 assert!(!accepted, "{count} roles: {error:?}");
                 assert_eq!(error, InterfaceError::Schema);
             }
         }
     }
+    // Four times the placed roles costs about four times the work.
+    assert!(
+        reconstruction[&1024] < 5 * reconstruction[&256],
+        "{reconstruction:?}"
+    );
+    assert!(reconstruction[&1024] < InterfaceLimits::DEFAULT.work / 4);
 }
 fn changed(path: &str, value: Value, error: InterfaceError) {
     let mut original = document();

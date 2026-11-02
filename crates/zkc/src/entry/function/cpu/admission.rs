@@ -13,9 +13,12 @@ pub(super) fn admit(
         .validate()
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
     require(options.journal_events <= 4096, "entry-host-journal-limit")?;
-    let interface = FunctionInterface::read(package)?;
-    let document: Document = decode(package.artifact().as_bytes(), 16 * 1024 * 1024)?;
-    let mut validator = structure(&document, &interface)?;
+    let interface = FunctionInterface::read_with(package, options.limits.interface)?;
+    let document: Document = decode(
+        package.artifact().as_bytes(),
+        crate::entry::package::ARTIFACT_BYTES,
+    )?;
+    let mut validator = structure(&document, &interface, options.limits.interface)?;
     let mut native_calculations = BTreeMap::new();
     let mut references = Vec::new();
     let backend = data::backend(
@@ -129,6 +132,7 @@ pub(super) fn admit(
                             external_work: options.limits.external_work,
                             ring_work: options.limits.ring_work,
                             sequence_work: options.limits.sequence_work,
+                            interface: options.limits.interface,
                             binding: options.binding,
                             installation: options.limits.installation.clone(),
                         },
@@ -228,7 +232,7 @@ pub(super) fn admit(
             // Bound the CPU's independently reconstructed cache as well.
             descriptor_bytes = descriptor_bytes
                 .checked_add(ty.descriptor_bytes())
-                .filter(|bytes| *bytes <= 16 * 1024 * 1024)
+                .filter(|bytes| *bytes <= options.limits.interface.descriptor_bytes)
                 .ok_or_else(|| EntryError::new(EntryPhase::Interface, "entry-interface-limit"))?;
             Ok((spelling, ty))
         })

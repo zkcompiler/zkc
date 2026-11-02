@@ -266,9 +266,8 @@ mod reusable_tests {
         let keys = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
         let fingerprint = keys.prover_key().material_fingerprint();
         let verifier = Arc::new(keys.verifier_key().clone());
-        let source = crate::execution::InputSource::from_bytes(Arc::new(
-            keys.prover_key().to_bytes(&bounds).unwrap(),
-        ));
+        let bytes = keys.prover_key().to_bytes(&bounds).unwrap();
+        let source = crate::execution::InputSource::named("pk", Arc::new(bytes.clone()));
         let backend = CpuBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "session", "main", None), None),
@@ -306,9 +305,20 @@ mod reusable_tests {
                 if let Some(previous) = previous.as_ref() {
                     assert_eq!(Arc::ptr_eq(previous, key), budget != 0);
                 }
-                // Adapter replacement cannot release the current invocation's
-                // resources or mutate its already checked immutable key.
-                material.lock().unwrap().invalidate_provers();
+                // Replacing another named input keeps this pin's import.
+                material.lock().unwrap().invalidate_source("other");
+                if budget != 0 {
+                    let kept = material
+                        .lock()
+                        .unwrap()
+                        .import_prover(&bytes, fingerprint, &verifier, bounds)
+                        .unwrap();
+                    assert!(Arc::ptr_eq(key, &kept));
+                }
+                // Adapter replacement of the named source that fed this pin
+                // cannot release the current invocation's resources or mutate
+                // its already checked immutable key.
+                material.lock().unwrap().invalidate_source("pk");
                 assert_eq!(key.material_fingerprint(), fingerprint);
                 assert_eq!(
                     ledger.snapshot().live_reserved_bytes,

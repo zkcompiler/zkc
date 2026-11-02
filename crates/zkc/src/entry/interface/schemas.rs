@@ -7,14 +7,22 @@ pub(super) use logical::{native_width, row_bound};
 pub(in crate::entry) struct Schemas<'a> {
     remaining: usize,
     retained: usize,
+    retained_limit: usize,
     leaves: BTreeMap<&'a str, Leaf>,
     schemas: BTreeMap<&'a str, &'a Schema>,
 }
 impl<'a> Schemas<'a> {
+    #[cfg(test)]
     pub(in crate::entry) fn new() -> Self {
+        Self::with_limits(super::InterfaceLimits::DEFAULT)
+    }
+    /// Validation work and the retained summary charge use the Host's
+    /// selected interface admission allowances.
+    pub(in crate::entry) fn with_limits(limits: super::InterfaceLimits) -> Self {
         Self {
-            remaining: 1_000_000,
+            remaining: limits.work,
             retained: 0,
+            retained_limit: limits.descriptor_bytes,
             leaves: BTreeMap::new(),
             schemas: BTreeMap::new(),
         }
@@ -54,7 +62,7 @@ impl<'a> Schemas<'a> {
                             .sum::<usize>(),
                 )
                 .ok_or(E::Limit)?;
-            require(self.retained <= 16 * 1024 * 1024, E::Limit)?;
+            require(self.retained <= self.retained_limit, E::Limit)?;
             self.leaves.insert(spelling, leaf);
         }
         Ok(&self.leaves[spelling])

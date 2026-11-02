@@ -28,19 +28,28 @@ Compiler publication and both readers bound interface bytes at 4 MiB, JSON
 nesting at 256 and lexical nodes
 at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
 string tokens have at most six times 256 KiB. Decoded strings retain their owning
-name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
-leaves, and validation has a cumulative work allowance of 1,000,000. Entry
-admission accepts protocol rosters of 1 to 1,024 distinct roles, the joint
-runtime ceiling, and role-bearing records with at most 16 role parameters.
-Native leaf parsing retains its own structural bounds. Portable schema summaries
-and the CPU's reconstructed native descriptor cache each have a 16 MiB total
-retained charge.
-Supply reconstruction and public selection indexing share a cumulative
-1,000,000-work allowance, independent of native storage width. Each reconstructed
-input/output supply plan also charges its retained descriptors and residual
-requirements against 16 MiB, including zero-storage schemas.
-Work bounds apply independently to each admission
-algorithm; a caller may also lower the compiler's phase limits. Unknown and
+name/type limits. Schema depth is at most 32 and each aggregate has at most 1,024
+leaves. Entry admission accepts protocol rosters of 1 to 1,024 distinct roles,
+the joint runtime ceiling, and role-bearing records with at most 16 role
+parameters. Native leaf parsing retains its own structural bounds.
+
+The Host policy record selects the interface admission allowances
+(`InterfaceLimits` in `HostLimits::interface` and `ProofOptions::interface`;
+[Host allowances](capacity.md#host-allowances)). Validation has a cumulative
+work allowance, by default 1,000,000. Supply reconstruction and public
+selection indexing share another, independent of native storage width. Portable
+schema summaries, the CPU's reconstructed native descriptor cache and each
+reconstructed input/output supply plan each charge their retained descriptors
+and residual requirements, including zero-storage schemas, against the
+descriptor allowance, by default 16 MiB. A Host may lower either allowance; a
+selection above the installed maximum refuses at `Admission` with
+`entry-interface-limit`, and an interface that exceeds a selected allowance
+refuses at `Interface` with the same code. Reconstruction computes each port's
+placed roles once and walks the port only at those roles; per-node facts are
+computed once per schema node, and roles are indexed by name. Its work therefore
+grows with ports times placed roles times schema size, so a full 1,024-role
+roster fits the default allowance. A caller may also lower the compiler's phase
+limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
 identities permit descriptor reuse without introducing cyclic schema references.
 
@@ -327,8 +336,11 @@ An admitted CPU proof Entry can retain immutable numerical imports across calls,
 bounded by the smaller admitted live/total value-byte ceiling. Reuse requires
 exact bytes, independent pins, fixed bounds and installation; prover imports also
 match the selected verifier snapshot and material fingerprint. Replacement
-invalidates affected imports before validation. Adapters replacing named input
-bytes call `invalidate_prover_inputs`; setup replacement uses `invalidate_setup`.
+invalidates affected imports before validation. A prover import from a named
+input records that source with the setup pin it feeds; an adapter replacing a
+named input's bytes calls `invalidate_input(name)`, which clears exactly the pins
+that input fed and keeps every other slot's import. Setup replacement uses
+`invalidate_setup`.
 Eviction or disabled retention never grants authority or changes a valid import's
 meaning. Every invocation retains its own charges and reservations.
 
@@ -477,13 +489,21 @@ performs native admission, key import, resource issuance or execution.
 Source compilation accepts `--no-simplify`, `--release-storage`,
 `--no-finite-bulk`, `--fuse-vector-reductions`, `--fuse-collect-fold` and
 `--no-calculation-batching` for
-`compile`, `run`, `prove`, `verify` and `bindings`, including dry runs.
+`compile`, `run`, `prove`, `verify`, `bindings` and `common-inputs`, including dry runs.
 The resulting package records all six choices. These
 options are refused by `check`, `inspect`, `prepare` and pinned-package
 invocations. Vector reduction fusion defaults to false and follows the
 [preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).
 Collect–fold fusion defaults to false and follows the
 [numerical realization contract](../ir/computation.md#collectfold-composition).
+
+`common-inputs` selects a Function Entry and one of its static Run deployments
+(`--deployment=ID`), decodes one named input document per role
+(`--input=ROLE=FILE`), prepares that Run without issuing resources and writes
+the [common-input context](../formats/input-bindings.md#production) those inputs
+determine to `--output`. Its report gives the context SHA-256; the application
+distributes that pin through its own trusted context. Disagreeing participants
+refuse with `input-binding-Value` and publish nothing.
 
 `zkc.entry-inspection/0` reports Entry/protocol/toolchain, role ports, services,
 setup names, proof selections and input group schemas. Input schemas are derived
@@ -712,6 +732,29 @@ example, an unknown input name fails at `Request`, a missing packaged arena
 fails at `Assets`, and an invalid native context or resource budget fails at
 `Preparation`. Native preparation can also reject malformed input values.
 Execution failures and cleanup remain in the report.
+
+Conditions that more than one Entry kind can meet have one code and one phase
+in run, proof and Function entries alike (`EntryCondition`):
+
+| Condition | Code | Phase |
+|---|---|---|
+| The interface document is malformed | `entry-interface-format` | `Interface` |
+| The interface does not identify the package original | `entry-interface-identity` | `Interface` |
+| An input or Function parameter type has custody or cannot be copied | `entry-input-custody` | `Interface` |
+| A request or invocation context names an unknown role | `entry-input-roles` | `Request` |
+| Named inputs, Function arguments or context inputs do not cover their ports exactly | `entry-input-names` | `Request` |
+| A prover-key port receives a value that is not a prover key | `entry-input-key` | `Request` |
+| A service allowance names an unknown service | `entry-service-names` | `Request` |
+| A service or selected transcript draw allowance exceeds the installed maximum | `entry-service-budget` | `Preparation` |
+
+Request-shape conditions are checked before draw allowances in every kind, so
+a request with both defects reports its shape. Function preparation checks
+every deployment's invocation context with the same conditions and phases as
+the child Entry would. A condition only one kind can meet keeps that kind's
+code, such as `entry-host-context` for a Function context that does not cover
+the static deployments. When a reached child refuses, the Function failure keeps
+the child's code and its `EntryError`, with phase and schema path, in
+`FunctionFailure::entry`.
 
 ## Function execution
 

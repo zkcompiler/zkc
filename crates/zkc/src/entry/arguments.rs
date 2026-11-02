@@ -1,6 +1,6 @@
 //! Exact named argument admission shared by run and independent proof jobs.
 use super::{
-    Interface, NamedValues, Value,
+    EntryCondition as C, EntryError, Interface, NamedValues, Value,
     interface::{
         InputPort, RolePorts,
         raw::{Schema, Service},
@@ -147,19 +147,19 @@ pub(super) fn values<'a>(
                 });
             }
             Some("prover_key") => {
-                let value = values.remove(&port.name).ok_or("entry-input-names")?;
+                let value = values.remove(&port.name).ok_or(C::InputNames)?;
                 let Value::Leaf(
                     value @ (InputValue::ProverKey(_)
                     | InputValue::ProverKeyFile { .. }
                     | InputValue::ProverKeyInput { .. }),
                 ) = value
                 else {
-                    return Err("entry-input-key".into());
+                    return Err(C::InputKey.into());
                 };
                 inputs.push(value);
             }
             _ => {
-                let value = values.remove(&port.name).ok_or("entry-input-names")?;
+                let value = values.remove(&port.name).ok_or(C::InputNames)?;
                 value::flatten(&port.schema, value, &mut inputs)?;
             }
         }
@@ -173,7 +173,7 @@ pub(super) fn values<'a>(
         }
     }
     if !values.is_empty() {
-        return Err("entry-input-names".into());
+        return Err(C::InputNames.into());
     }
     Ok(assigned.into_values().collect())
 }
@@ -190,9 +190,20 @@ pub(super) fn services<'a>(
         );
     }
     if !values.is_empty() {
-        return Err("entry-service-names".into());
+        return Err(C::ServiceNames.into());
     }
     Ok(budgets)
+}
+/// Refuse a service or selected transcript draw allowance above the installed
+/// maximum, with the same code and phase in every Entry kind.
+pub(super) fn check_draw_budgets(budgets: impl IntoIterator<Item = u64>) -> Result<(), EntryError> {
+    if budgets
+        .into_iter()
+        .any(|budget| budget > super::MAX_DRAW_BUDGET)
+    {
+        return Err(C::ServiceBudget.into());
+    }
+    Ok(())
 }
 
 /// Supply public statement data once at the source boundary. Only immutable data

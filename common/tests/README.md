@@ -65,11 +65,12 @@ The `harness`, `sdk` and `integration` selections are disjoint. `checks.project`
 
 ### Fresh compiler pairing
 
-Four ignored Cargo tests pair the SDK with a freshly built compiler. They
+Five ignored Cargo tests pair the SDK with a freshly built compiler. They
 compile real sources through `language-package`, then admit and execute the
-actual packages: published common-input inventories, collection extents, Entry
-component families and typed Host children. Hand-built SDK fixtures cannot
-satisfy them. Build the compiler first, then run them explicitly:
+actual packages: published common-input inventories and the contexts the SDK
+produces for them, collection extents, Entry component families, typed Host
+children and a Function's proof child completing on a later attempt.
+Hand-built SDK fixtures cannot satisfy them. Build the compiler first, then run them explicitly:
 
 ```sh
 ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc --features cpu,files --test common_inventory_compiler --test entry_components -- --ignored

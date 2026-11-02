@@ -1,0 +1,18 @@
+module m;
+domain E=field("koala-bear.ext8-binomial3");
+fn less(left:index,right:index)->bool = primitive("index.less");
+// The producer completes only when its uniform coin is 0, so an attempt
+// requests another with probability one half.
+protocol Coin roles(P,V)(coins:Random<E>@P)->(ready:bool@P,accepted:bool@V) {
+  let nonce=coins.draw();
+  let message=send P->V(nonce);
+  let coin=coins.index<2>();
+  let ready=less(coin,index<1>());
+  let ok=message==message;
+  return(ready=ready,accepted=ok);
+}
+proof Retried=Coin{
+  prover P;verifier V;public{};accept accepted;complete ready;
+  construction authored;
+}
+entry fn Produce(public: Retried::Public, witness: Retried::Witness) { return Retried::prove(public, witness); }

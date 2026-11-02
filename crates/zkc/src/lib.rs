@@ -23,6 +23,9 @@ pub mod execution {
     pub use crate::host::input_source::InputSource;
     pub use crate::host::material::ProverMaterial;
     pub use crate::host::request::InputValue;
+    /// Bytes of one invocation input document, and of one native wire value
+    /// under the default capacity record.
+    pub use crate::io::bytes::INPUT_LIMIT as MAX_INPUT_BYTES;
 }
 
 /// Bounded file ingress and atomic artifact publication.

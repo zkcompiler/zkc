@@ -22,8 +22,9 @@ pub use report::{EncodedOutput, HostReport, RoleOutputEncoding};
 
 /// Bundle structure, native value/operation capacity and joint dispatch are separate
 /// budgets. The latter counts dispatch occurrences, including repeated loop steps.
-/// External, Ring and sequence work are per-role allowances whose defaults and
-/// maxima are the installed [`Allowances`](crate::host::capacity::Allowances).
+/// External, Ring and sequence work are per-role allowances, and `interface`
+/// bounds source interface admission; their defaults and maxima are the
+/// installed [`Allowances`](crate::host::capacity::Allowances).
 #[derive(Clone, Debug)]
 pub struct HostLimits {
     pub installation: zkc_cpu::CpuInstallation,
@@ -32,9 +33,12 @@ pub struct HostLimits {
     pub steps: usize,
     pub message_bytes: usize,
     pub total_wire_bytes: usize,
+    /// Joint report storage, including each distinct dynamic path once.
+    pub report_bytes: usize,
     pub external_work: u64,
     pub ring_work: u64,
     pub sequence_work: u64,
+    pub interface: crate::entry::InterfaceLimits,
 }
 impl Default for HostLimits {
     fn default() -> Self {
@@ -46,9 +50,11 @@ impl Default for HostLimits {
             steps: run.steps,
             message_bytes: run.wire_bytes,
             total_wire_bytes: run.total_wire_bytes,
+            report_bytes: run.report_bytes,
             external_work: Allowances::EXTERNAL_WORK.default,
             ring_work: Allowances::RING_WORK.default,
             sequence_work: Allowances::SEQUENCE_WORK.default,
+            interface: crate::entry::InterfaceLimits::DEFAULT,
         }
     }
 }
@@ -80,6 +86,7 @@ impl HostLimits {
             steps: self.steps,
             wire_bytes: self.message_bytes,
             total_wire_bytes: self.total_wire_bytes,
+            report_bytes: self.report_bytes,
             values: self.capacity.values,
             work: self.capacity.work,
         }
@@ -101,15 +108,16 @@ impl HostLimits {
         if !Allowances::SEQUENCE_WORK.admits(self.sequence_work) {
             return Err("bundle-sequence-work-limit".into());
         }
-        Ok(())
+        self.interface.validate().map_err(|e| e.to_string())
     }
     pub fn record(&self) -> Json {
         json!({"admission":{"bytes":self.bundle.bytes,"candidate_bytes":self.bundle.candidate_bytes,
             "roles":self.bundle.roles,"steps":self.bundle.steps,"depth":self.bundle.depth,
             "nodes":self.bundle.nodes,"string_bytes":self.bundle.string_bytes},
             "capacity":self.capacity.record(),"execution":{"steps":self.steps,
-            "message_bytes":self.message_bytes,"total_wire_bytes":self.total_wire_bytes,"external_work_per_role":self.external_work,
-            "ring_work_per_role":self.ring_work,"sequence_work_per_role":self.sequence_work}})
+            "message_bytes":self.message_bytes,"total_wire_bytes":self.total_wire_bytes,"report_bytes":self.report_bytes,"external_work_per_role":self.external_work,
+            "ring_work_per_role":self.ring_work,"sequence_work_per_role":self.sequence_work},
+            "interface":{"work":self.interface.work,"descriptor_bytes":self.interface.descriptor_bytes}})
     }
 }
 /// Exact byte identity is supplied independently of invocation and bundle data.
@@ -300,14 +308,25 @@ impl RunHost {
         request: &RunInputs,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<PreparedRun<'_>> {
+        self.prepare_charged(request, imports, self.invocation_ledger())
+    }
+    /// Prepare under an invocation ledger that has already charged the
+    /// caller's Host-side work for this invocation, such as request conversion.
+    pub(crate) fn prepare_charged(
+        &self,
+        request: &RunInputs,
+        imports: &mut crate::host::setups::VerifierKeys,
+        invocation: zkc_runtime::vm::ExecutionLedger,
+    ) -> Result<PreparedRun<'_>> {
         imports.set_ledger(self.shared_ledger.clone());
-        self.cpu.enter(|| inputs::prepare(self, request, imports))
+        self.cpu
+            .enter(|| inputs::prepare(self, request, imports, invocation))
     }
     /// The ledger that charges this invocation's Host-side inspection and
     /// encoding: the outer invocation's ledger when one is attached, otherwise a
     /// new ledger with the selected capacity. Participant runners of a
     /// standalone run keep their separate per-runner budgets.
-    fn invocation_ledger(&self) -> zkc_runtime::vm::ExecutionLedger {
+    pub(crate) fn invocation_ledger(&self) -> zkc_runtime::vm::ExecutionLedger {
         self.shared_ledger.clone().unwrap_or_else(|| {
             zkc_runtime::vm::ExecutionLedger::new(
                 self.limits.capacity.values,
@@ -348,6 +367,32 @@ impl PreparedRun<'_> {
                 .map_err(|e| e.to_string())?;
         }
         Ok(())
+    }
+    /// Produce the canonical common-input context of these prepared inputs,
+    /// before any invocation resource is issued. Every role's inspection and
+    /// encoding charge the invocation ledger, as checking a context does.
+    pub(crate) fn common_input_context(
+        &self,
+        required: &[zkc_runtime::host::input_binding::InputRequirement],
+    ) -> Result<Vec<u8>> {
+        let bundle = &self.host.bundle;
+        let mut producer = zkc_runtime::host::input_binding::InputBindings::producer(
+            bundle.admitted(),
+            bundle.entry(),
+            required,
+        )
+        .map_err(|e| e.to_string())?;
+        for role in &self.roles {
+            producer
+                .observe_role(
+                    &role.entry.role,
+                    &role.backend,
+                    &entry_values(&role.values, &self.loaded),
+                    &self.invocation,
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        producer.encode(&self.invocation).map_err(|e| e.to_string())
     }
     pub(crate) fn host(&self) -> &RunHost {
         self.host

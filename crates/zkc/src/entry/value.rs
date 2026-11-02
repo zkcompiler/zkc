@@ -350,6 +350,71 @@ fn flatten_fields(
     Ok(())
 }
 
+/// Bytes one reconstructed schema node allocates in a named description.
+const NODE_BYTES: usize = 128;
+/// The description bytes a conversion reads from these named values.
+pub(super) fn request_bytes<'a>(values: impl IntoIterator<Item = &'a Value>) -> usize {
+    values
+        .into_iter()
+        .map(description_bytes)
+        .fold(0usize, usize::saturating_add)
+}
+/// Charge converting named values to native operands: the values' description
+/// bytes are read once as logical work, and the converted operand list is a
+/// fresh allocation.
+pub(super) fn charge_conversion(
+    ledger: &zkc_runtime::vm::ExecutionLedger,
+    read: usize,
+    operands: usize,
+) -> Result<()> {
+    ledger
+        .charge(
+            zkc_runtime::vm::WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: read as u64,
+            },
+            operands.saturating_mul(std::mem::size_of::<InputValue>()),
+        )
+        .map_err(|_| "entry-request-limit".into())
+}
+/// Charge reconstructing named results: every returned native value is read
+/// once as logical work, and each schema node of the description is a fresh
+/// allocation.
+pub(super) fn charge_reconstruction<'a>(
+    ledger: &zkc_runtime::vm::ExecutionLedger,
+    schemas: impl IntoIterator<Item = &'a Schema>,
+    leaves: impl IntoIterator<Item = &'a NativeValue>,
+) -> Result<()> {
+    fn nodes(schema: &Schema) -> usize {
+        1 + schema
+            .fields
+            .iter()
+            .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
+            .map(|f| nodes(&f.schema))
+            .sum::<usize>()
+    }
+    let read = leaves
+        .into_iter()
+        .map(|leaf| leaf.retained_bytes())
+        .fold(0usize, usize::saturating_add);
+    let fresh = schemas
+        .into_iter()
+        .map(nodes)
+        .fold(0usize, usize::saturating_add)
+        .saturating_mul(NODE_BYTES);
+    ledger
+        .charge(
+            zkc_runtime::vm::WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: read as u64,
+            },
+            fresh,
+        )
+        .map_err(|_| "entry-output-limit".into())
+}
+
 /// The bound native ABI has already checked output types and slices. Only
 /// complete successful returns are reconstructed through this function.
 pub(super) fn collect(

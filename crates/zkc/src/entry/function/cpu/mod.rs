@@ -7,7 +7,7 @@ mod execution;
 use super::{
     FunctionInterface, FunctionSignature, Result, Schema, SchemaKind, carrier, error, require,
 };
-use crate::entry::{EntryError, EntryPhase, NamedValues, Package, SetupAuthority};
+use crate::entry::{EntryCondition, EntryError, EntryPhase, NamedValues, Package, SetupAuthority};
 use crate::execution::CpuExecution;
 use crate::run::HostLimits;
 pub use data::TypedValue;

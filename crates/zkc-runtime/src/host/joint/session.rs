@@ -5,6 +5,7 @@ use crate::vm::{
     Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
     ValueBudget, WorkBudget,
 };
+use std::{cell::Cell, sync::Arc};
 
 /// Hooks are trusted host policy. They cannot access runners or select a peer.
 /// Observers must be read-only, bounded, and release resource locks before return.
@@ -57,6 +58,9 @@ pub struct RunLimits {
     pub steps: usize,
     pub wire_bytes: usize,
     pub total_wire_bytes: usize,
+    /// Report storage: every reached record, and each distinct dynamic path
+    /// once, with its loop iteration numbers.
+    pub report_bytes: usize,
     pub values: ValueBudget,
     pub work: WorkBudget,
 }
@@ -66,6 +70,7 @@ impl Default for RunLimits {
             steps: 32768,
             wire_bytes: 4096,
             total_wire_bytes: 16 * 1024 * 1024,
+            report_bytes: Self::HARD_MAX.report_bytes,
             values: ValueBudget::default(),
             work: WorkBudget::default(),
         }
@@ -73,12 +78,14 @@ impl Default for RunLimits {
 }
 impl RunLimits {
     /// Installed joint execution ceilings. Steps count dispatched occurrences,
-    /// wire_bytes bounds one message, and total_wire_bytes counts all messages.
-    /// Work and retained payload limits apply separately to each runner.
+    /// wire_bytes bounds one message, total_wire_bytes counts all messages and
+    /// report_bytes the report's retained storage. Work and retained payload
+    /// limits apply separately to each runner.
     pub const HARD_MAX: Self = Self {
         steps: 32768,
         wire_bytes: 4096,
         total_wire_bytes: 16 * 1024 * 1024,
+        report_bytes: 64 * 1024 * 1024,
         values: ValueBudget {
             live_bytes: Limits::VALUE_BYTES,
             total_bytes: Limits::TOTAL_VALUE_BYTES,
@@ -94,6 +101,7 @@ impl RunLimits {
         if self.steps > hard.steps
             || self.wire_bytes > hard.wire_bytes
             || self.total_wire_bytes > hard.total_wire_bytes
+            || self.report_bytes > hard.report_bytes
             || self.values.live_bytes > hard.values.live_bytes
             || self.values.total_bytes > hard.values.total_bytes
             || self.work.instructions > hard.work.instructions
@@ -136,6 +144,65 @@ impl<B: Backend> Slot<B> {
         }
     }
 }
+/// One dynamic control region: its complete outer-to-inner path and loop
+/// iteration numbers, stored once and shared by every reached step inside it.
+struct Region {
+    path: Arc<[PathElement]>,
+    iterations: Arc<[u64]>,
+    /// Report bytes of the shared storage, charged when the first reached
+    /// step references it. A region no step reaches retains nothing.
+    bytes: usize,
+    retained: Cell<bool>,
+}
+impl Region {
+    fn root() -> Self {
+        Self::new(Vec::new(), Vec::new())
+    }
+    fn new(path: Vec<PathElement>, iterations: Vec<u64>) -> Self {
+        let strings: usize = path
+            .iter()
+            .map(|element| match element {
+                PathElement::Branch { site, alternative }
+                | PathElement::Match { site, alternative } => {
+                    site.capacity() + alternative.capacity()
+                }
+                PathElement::Conditional { site, .. }
+                | PathElement::For { site, .. }
+                | PathElement::Loop { site, .. } => site.capacity(),
+            })
+            .sum();
+        // Two shared allocations, each with its reference-count header.
+        let bytes = 2 * 2 * std::mem::size_of::<usize>()
+            + path.len() * std::mem::size_of::<PathElement>()
+            + strings
+            + iterations.len() * std::mem::size_of::<u64>();
+        Self {
+            path: path.into(),
+            iterations: iterations.into(),
+            bytes,
+            retained: Cell::new(false),
+        }
+    }
+    /// The region one control element further in, without copying it into
+    /// any report row.
+    fn child(&self, element: PathElement) -> Option<Self> {
+        let iteration = match &element {
+            PathElement::Loop { iteration, .. } => Some(*iteration),
+            _ => None,
+        };
+        let mut path = Vec::new();
+        let mut iterations = Vec::new();
+        path.try_reserve_exact(self.path.len() + 1).ok()?;
+        iterations
+            .try_reserve_exact(self.iterations.len() + usize::from(iteration.is_some()))
+            .ok()?;
+        path.extend_from_slice(&self.path);
+        path.push(element);
+        iterations.extend_from_slice(&self.iterations);
+        iterations.extend(iteration);
+        Some(Self::new(path, iterations))
+    }
+}
 struct Execution<B: WireBackend> {
     wire_live: Option<crate::vm::LiveReservation>,
     slots: Vec<Slot<B>>,
@@ -153,6 +220,9 @@ fn contract(detail: &str) -> Failure {
 }
 fn limit() -> Failure {
     Failure::new(FailureKind::Limit, "joint-limit")
+}
+fn report_limit() -> Failure {
+    Failure::new(FailureKind::Limit, "joint-report-limit")
 }
 fn codec(error: WireError) -> Failure {
     match error {
@@ -234,10 +304,15 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     let mut rows = Vec::new();
     let mut reached = Vec::new();
     let mut backends = Vec::new();
+    // Each reached record charges at least its own size, so the report
+    // allowance bounds this reservation as well as the step count.
+    let records = limits
+        .steps
+        .min(limits.report_bytes / std::mem::size_of::<Reached>());
     if slots.try_reserve_exact(inputs.len()).is_err()
         || rows.try_reserve_exact(inputs.len()).is_err()
         || backends.try_reserve_exact(inputs.len()).is_err()
-        || reached.try_reserve_exact(limits.steps).is_err()
+        || reached.try_reserve_exact(records).is_err()
     {
         return refuse(FailureKind::Limit, "report-allocation", inputs);
     }
@@ -283,6 +358,7 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
             limits,
             outcome: Outcome::Completed,
             reached,
+            report_bytes: 0,
             wire: WireUsage::default(),
             pending: None,
             roles: rows,
@@ -331,7 +407,7 @@ impl<B: WireBackend> Execution<B> {
         None
     }
     fn execute<H: Hooks<B>>(&mut self, bundle: &Bundle, hooks: &mut H) -> Outcome {
-        if let Some(outcome) = self.segments(bundle, &bundle.segments, &[], hooks) {
+        if let Some(outcome) = self.segments(bundle, &bundle.segments, &Region::root(), hooks) {
             return outcome;
         }
         if self.report.pending.is_some() {
@@ -350,13 +426,13 @@ impl<B: WireBackend> Execution<B> {
         &mut self,
         bundle: &Bundle,
         segments: &[Segment],
-        path: &[PathElement],
+        region: &Region,
         hooks: &mut H,
     ) -> Option<Outcome> {
         for segment in segments {
             match segment {
                 Segment::Action(index) => {
-                    if let Some(outcome) = self.step(bundle, *index, path, hooks) {
+                    if let Some(outcome) = self.step(bundle, *index, region, hooks) {
                         return Some(outcome);
                     }
                 }
@@ -365,7 +441,7 @@ impl<B: WireBackend> Execution<B> {
                     for index in entries {
                         let step = &bundle.steps[*index];
                         let reached = self.report.reached.len();
-                        if let Some(outcome) = self.step(bundle, *index, path, hooks) {
+                        if let Some(outcome) = self.step(bundle, *index, region, hooks) {
                             return Some(outcome);
                         }
                         if !self.returned(step.role)
@@ -401,7 +477,7 @@ impl<B: WireBackend> Execution<B> {
                             .as_mut()
                             .expect("initialized role");
                         let mut origin = runner.root_origin().clone();
-                        origin.path.extend_from_slice(path);
+                        origin.path.extend_from_slice(&region.path);
                         let result = runner.enter_branch(&origin, site, alternative);
                         if runner.stop().is_some() {
                             self.report.reached[reached].progress = Progress::Stopped;
@@ -416,11 +492,12 @@ impl<B: WireBackend> Execution<B> {
                         }
                         self.report.reached[reached].branch_started = true;
                     }
-                    let mut child = path.to_vec();
-                    child.push(PathElement::Branch {
+                    let Some(child) = region.child(PathElement::Branch {
                         site: site.clone(),
                         alternative: arm.alternative.clone(),
-                    });
+                    }) else {
+                        return Some(Outcome::DriverFailed(limit()));
+                    };
                     if let Some(outcome) = self.segments(bundle, &arm.body, &child, hooks) {
                         return Some(outcome);
                     }
@@ -439,7 +516,7 @@ impl<B: WireBackend> Execution<B> {
                     for index in entries {
                         let step = &bundle.steps[*index];
                         let reached = self.report.reached.len();
-                        if let Some(outcome) = self.step(bundle, *index, path, hooks) {
+                        if let Some(outcome) = self.step(bundle, *index, region, hooks) {
                             return Some(outcome);
                         }
                         if !self.returned(step.role)
@@ -475,7 +552,7 @@ impl<B: WireBackend> Execution<B> {
                             .as_mut()
                             .expect("initialized role");
                         let mut origin = runner.root_origin().clone();
-                        origin.path.extend_from_slice(path);
+                        origin.path.extend_from_slice(&region.path);
                         let result = runner.enter_loop(&origin, site, count);
                         if runner.stop().is_some() {
                             self.report.reached[*reached].progress = Progress::Stopped;
@@ -497,11 +574,12 @@ impl<B: WireBackend> Execution<B> {
                         {
                             break;
                         }
-                        let mut child = path.to_vec();
-                        child.push(PathElement::Loop {
+                        let Some(child) = region.child(PathElement::Loop {
                             site: site.clone(),
                             iteration,
-                        });
+                        }) else {
+                            return Some(Outcome::DriverFailed(limit()));
+                        };
                         if let Some(outcome) = self.segments(bundle, body, &child, hooks) {
                             return Some(outcome);
                         }
@@ -526,7 +604,7 @@ impl<B: WireBackend> Execution<B> {
         &mut self,
         bundle: &Bundle,
         coordinate: usize,
-        path: &[PathElement],
+        region: &Region,
         hooks: &mut H,
     ) -> Option<Outcome> {
         let step = &bundle.steps[coordinate];
@@ -547,7 +625,7 @@ impl<B: WireBackend> Execution<B> {
             });
         }
         let index = self.report.reached.len();
-        if let Some(reason) = hooks.cancel_before(index, step, path) {
+        if let Some(reason) = hooks.cancel_before(index, step, &region.path) {
             return Some(Outcome::HostCancelled(Text::copy(&reason)));
         }
         let action = bundle.action(step).expect("admitted step");
@@ -562,33 +640,41 @@ impl<B: WireBackend> Execution<B> {
         {
             return Some(Outcome::DriverFailed(limit()));
         }
-        let mut iterations = Vec::new();
-        let mut retained = Vec::new();
-        if iterations.try_reserve_exact(path.len()).is_err()
-            || retained.try_reserve_exact(path.len()).is_err()
-        {
-            return Some(Outcome::DriverFailed(limit()));
+        // The record is charged at every step; the region's shared path and
+        // iterations only when the first step references them.
+        let charge = std::mem::size_of::<Reached>()
+            + if region.retained.get() {
+                0
+            } else {
+                region.bytes
+            };
+        let Some(bytes) = self
+            .report
+            .report_bytes
+            .checked_add(charge)
+            .filter(|n| *n <= self.limits.report_bytes)
+        else {
+            return Some(Outcome::DriverFailed(report_limit()));
+        };
+        if self.report.reached.len() == self.report.reached.capacity() {
+            return Some(Outcome::DriverFailed(report_limit()));
         }
-        retained.extend_from_slice(path);
-        for element in path {
-            if let PathElement::Loop { iteration, .. } = element {
-                iterations.push(*iteration);
-            }
-        }
+        self.report.report_bytes = bytes;
+        region.retained.set(true);
         self.report.reached.push(Reached {
             step: *step,
-            iterations,
+            iterations: region.iterations.clone(),
             loop_count: None,
             loop_started: false,
             branch_alternative: None,
             branch_started: false,
-            path: retained,
+            path: region.path.clone(),
             progress: Progress::Exposed,
             sent_bytes: None,
             replacement_bytes: None,
             receive_completion: None,
         });
-        let result = self.dispatch(bundle, index, step, action, path, hooks);
+        let result = self.dispatch(bundle, index, step, action, &region.path, hooks);
         let reached = self
             .report
             .reached

@@ -5,7 +5,7 @@ use super::{BoundInterface, Interface, Package};
 /// authenticated package. The generic utility retains an explicit application
 /// trust seam; neither path derives agreement from public/availability bits.
 pub use zkc_runtime::host::input_binding::{
-    BindingError, InputBindings, InputComponent, InputRequirement, Observation,
+    BindingError, ContextProducer, InputBindings, InputComponent, InputRequirement, Observation,
 };
 use zkc_runtime::{
     host::{joint, wire::WireBackend},
@@ -95,6 +95,32 @@ impl BackendRun {
         self.interface.common_input_requirements(&self.bundle)
     }
 
+    /// Produce the canonical context that these participants' actual inputs
+    /// determine. Each role's backend observes its own values; the selected
+    /// budgets form the production's ledger, charged for inspection and
+    /// encoding as `start_role` charges a check.
+    pub fn common_input_context<B: WireBackend>(
+        &self,
+        inputs: &[joint::RoleInput<B>],
+        value_budget: ValueBudget,
+        work_budget: WorkBudget,
+    ) -> Result<Vec<u8>, BindingError> {
+        let required = self
+            .common_input_requirements()
+            .map_err(|_| BindingError::Requirements)?;
+        let ledger = ExecutionLedger::new(value_budget, work_budget);
+        let mut producer =
+            InputBindings::producer(self.bundle.admitted(), self.bundle.entry(), &required)?;
+        for input in inputs {
+            producer.observe_role(
+                &input.role,
+                &input.backend,
+                &input.values.iter().map(Some).collect::<Vec<_>>(),
+                &ledger,
+            )?;
+        }
+        producer.encode(&ledger)
+    }
     /// Bind the package-derived inventory and an externally trusted context pin.
     /// The authenticated compiler owns source/native inventory completeness.
     /// Hashing received context bytes does not establish the pin's authority.

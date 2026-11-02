@@ -5,7 +5,6 @@ use crate::files::read_regular;
 use serde_json::{Value as Json, json};
 use zkc_format::proof::MAX_PROOF_BYTES;
 type Result<T> = std::result::Result<T, String>;
-const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 use crate::files::Outputs;
 pub(crate) fn run(
     produce: bool,
@@ -55,7 +54,7 @@ pub(crate) fn run(
         };
         let mut destinations = Outputs::new(&output_paths, &protected)?;
         report["phase"] = json!("admission");
-        let deployment_bytes = read_regular(deployment_path, INPUT_LIMIT)?;
+        let deployment_bytes = read_regular(deployment_path, zkc::execution::MAX_INPUT_BYTES)?;
         let deployment = NativeDeployment::admit_with_cpu(
             &deployment_bytes,
             &expected_digest,
@@ -75,7 +74,7 @@ pub(crate) fn run(
         report["phase"] = json!("inputs");
         let inputs = ProofInputs::decode_bytes(
             &deployment,
-            &read_regular(inputs_path, INPUT_LIMIT)?,
+            &read_regular(inputs_path, zkc::execution::MAX_INPUT_BYTES)?,
             if let Some(policy) = &attempts {
                 Invocation::Attempts(policy)
             } else if produce {

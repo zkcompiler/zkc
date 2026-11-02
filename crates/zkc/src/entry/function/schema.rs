@@ -39,19 +39,48 @@ impl FunctionInterface {
     ) -> super::Result<Vec<DeploymentInterface>> {
         super::admission::interfaces(package)
     }
+    /// The authenticated package of one static Run deployment, for producing
+    /// its common-input context. This imports no setup authority.
+    pub fn run_deployment_package(
+        package: &crate::entry::Package,
+        id: &str,
+    ) -> super::Result<crate::entry::Package> {
+        super::admission::run_deployment(package, id)
+    }
     pub fn read(package: &crate::entry::Package) -> super::Result<Self> {
+        Self::read_with(package, crate::entry::InterfaceLimits::DEFAULT)
+    }
+    /// Read under the Host's selected interface admission allowances.
+    pub fn read_with(
+        package: &crate::entry::Package,
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<Self> {
         use sha2::{Digest, Sha256};
+        limits
+            .validate()
+            .map_err(|e| super::EntryError::new(super::EntryPhase::Admission, e))?;
         let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
-        let view = Self::from_compiler(package.interface().as_bytes())?;
-        super::require(view.document.original == original, "entry-host-identity")?;
+        let view = Self::decode(package.interface().as_bytes(), limits)?;
+        if view.document.original != original {
+            return Err(crate::entry::EntryCondition::InterfaceIdentity.into());
+        }
         Ok(view)
     }
     pub(crate) fn from_compiler(bytes: &[u8]) -> super::Result<Self> {
+        Self::decode(bytes, crate::entry::InterfaceLimits::DEFAULT)
+    }
+    fn decode(bytes: &[u8], limits: crate::entry::InterfaceLimits) -> super::Result<Self> {
         crate::entry::interface::preflight::check(bytes)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
-        let document: super::carrier::Interface = super::admission::decode(bytes, 4 * 1024 * 1024)?;
+        use crate::entry::EntryCondition as C;
+        let document: super::carrier::Interface =
+            super::admission::decode(bytes, crate::entry::package::INTERFACE_BYTES)
+                .map_err(|_| C::InterfaceFormat)?;
+        if document.format != "zkc.language-interface/0" {
+            return Err(C::InterfaceFormat.into());
+        }
         super::require(
-            document.format == "zkc.language-interface/0" && document.selection.kind == "function",
+            document.selection.kind == "function",
             "entry-host-selection",
         )?;
         super::require(
@@ -60,14 +89,14 @@ impl FunctionInterface {
                 && document.setups.is_empty(),
             "entry-host-stage",
         )?;
-        super::require(
-            crate::io::bytes::digest(&document.capture).is_ok()
-                && !document.toolchain.is_empty()
-                && document.toolchain.len() <= 256 * 1024
-                && crate::source_names::canonical_name(&document.entry),
-            "entry-host-identity",
-        )?;
-        let mut schemas = crate::entry::interface::schemas::Schemas::new();
+        if crate::io::bytes::digest(&document.capture).is_err()
+            || document.toolchain.is_empty()
+            || document.toolchain.len() > 256 * 1024
+            || !crate::source_names::canonical_name(&document.entry)
+        {
+            return Err(C::InterfaceIdentity.into());
+        }
+        let mut schemas = crate::entry::interface::schemas::Schemas::with_limits(limits);
         let mut symbols = std::collections::BTreeSet::new();
         for f in &document.functions {
             super::require(
@@ -96,8 +125,7 @@ impl FunctionInterface {
             document.functions.len() <= 4096 && symbols.contains(&document.selection.function),
             "entry-host-selection",
         )?;
-        crate::io::bytes::digest(&document.original)
-            .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
+        crate::io::bytes::digest(&document.original).map_err(|_| C::InterfaceIdentity)?;
         let types = schemas.finish();
         Ok(Self { document, types })
     }

@@ -4,7 +4,6 @@ use crate::execution::Capacity;
 use crate::files::*;
 use serde_json::{Value as Json, json};
 type Result<T> = std::result::Result<T, String>;
-const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 pub(crate) fn run(args: &crate::cli::Arguments<'_>, cpu: &crate::execution::CpuExecution) -> Json {
     let mut report = json!({"format":"zkc.bundle-result/0","status":"refused","phase":"arguments","resources":[]});
     let result = (|| -> Result<()> {
@@ -35,7 +34,7 @@ pub(crate) fn run(args: &crate::cli::Arguments<'_>, cpu: &crate::execution::CpuE
         report["bundle_sha256"] = json!(host.identity());
         report["layout"] = host.layout();
         report["phase"] = json!("inputs");
-        let prepared = host.prepare(&read_regular(inputs, INPUT_LIMIT)?)?;
+        let prepared = host.prepare(&read_regular(inputs, zkc::execution::MAX_INPUT_BYTES)?)?;
         report = render(&prepared.execute());
         Ok(())
     })();

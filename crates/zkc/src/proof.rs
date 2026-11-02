@@ -30,6 +30,10 @@ use zkc_runtime::vm::{
     PreparationStats, PreparedComputations, Type,
 };
 
+/// Bytes of Host invocation context one proof call accepts. Native framing
+/// checks it in the header and managed transcripts bind it in their root.
+pub const MAX_CONTEXT_BYTES: usize = 4096;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Port {
     pub(crate) original: usize,
@@ -54,6 +58,9 @@ pub struct NativeDeployment {
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    /// Charges the invocation's Host-side binding-root encoding when no
+    /// shared ledger exists; standalone runners keep their own budgets.
+    invocation_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     retained_inputs: bool,
     operation: Option<bool>,
     proof_bytes_limit: usize,
@@ -512,6 +519,7 @@ impl NativeDeployment {
             ring_work_limit: crate::host::capacity::Allowances::RING_WORK.default,
             sequence_work_limit: crate::host::capacity::Allowances::SEQUENCE_WORK.default,
             shared_ledger: None,
+            invocation_ledger: None,
             retained_inputs,
             operation,
             proof_bytes_limit: MAX_PROOF_BYTES,
@@ -665,6 +673,22 @@ impl NativeDeployment {
     pub fn with_shared_ledger(mut self, ledger: zkc_runtime::vm::ExecutionLedger) -> Self {
         self.shared_ledger = Some(ledger);
         self
+    }
+    /// Charge one standalone invocation's Host-side work, such as its binding
+    /// root encoding, to `ledger` while runners keep their own budgets.
+    pub(crate) fn with_invocation_ledger(
+        mut self,
+        ledger: zkc_runtime::vm::ExecutionLedger,
+    ) -> Self {
+        self.invocation_ledger = Some(ledger);
+        self
+    }
+    /// The ledger that charges Host-side encoding: the shared ledger of an
+    /// outer invocation, otherwise this invocation's own ledger, if any.
+    pub(crate) fn host_ledger(&self) -> Option<&zkc_runtime::vm::ExecutionLedger> {
+        self.shared_ledger
+            .as_ref()
+            .or(self.invocation_ledger.as_ref())
     }
     pub(crate) fn with_invocation_limits(
         mut self,

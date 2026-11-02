@@ -222,6 +222,21 @@ fn joint_setup_package() -> Vec<u8> {
     root["artifact"] = json!(host.to_string());
     serde_json::to_vec(&root).unwrap()
 }
+/// The joint Run deployment with a value agreement on its shared port.
+fn common_input_package() -> Vec<u8> {
+    let mut root: Json = serde_json::from_slice(&joint_package()).unwrap();
+    let mut host: Json = serde_json::from_str(root["artifact"].as_str().unwrap()).unwrap();
+    let mut child: Json =
+        serde_json::from_str(host["deployments"][0]["package"].as_str().unwrap()).unwrap();
+    let mut view: Json = serde_json::from_str(child["interface"].as_str().unwrap()).unwrap();
+    view["protocols"][0]["common_input_requirements"] = json!([{"components":[
+        {"input":0,"role":"P","path":[]},{"input":0,"role":"V","path":[]}],
+        "observation":{"kind":"value"}}]);
+    child["interface"] = json!(view.to_string());
+    host["deployments"][0]["package"] = json!(child.to_string());
+    root["artifact"] = json!(host.to_string());
+    serde_json::to_vec(&root).unwrap()
+}
 fn pinned(directory: &Path, bytes: &[u8]) -> Vec<String> {
     let path = directory.join("entry.zkpkg");
     std::fs::write(&path, bytes).unwrap();
@@ -549,7 +564,7 @@ fn joint_children_use_native_defaults_and_exact_context_overrides() {
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     assert!(checked.get("execution").is_none());
     for (services, code) in [
-        (json!({"unknown":{}}), "entry-host-context-role"),
+        (json!({"unknown":{}}), "entry-input-roles"),
         (json!({"P":{"unknown":0}}), "entry-service-names"),
     ] {
         document["deployments"]["child.Pair"]["services"] = services;
@@ -643,7 +658,7 @@ fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() 
     );
     for (inputs, code) in [
         (json!({"P":{"value":true}}), "entry-input-names"),
-        (json!({"unknown":{}}), "entry-host-context-role"),
+        (json!({"unknown":{}}), "entry-input-roles"),
         (
             json!({"P":{"pk":{"file":"../prover.key","fingerprint":hex(&prover.material_fingerprint())}}}),
             "entry-input-reference",
@@ -862,4 +877,113 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     assert_eq!(suppressed["status"], "executed", "{suppressed}");
     assert!(suppressed.get("publication").is_none());
     assert!(suppressed.get("results").is_none());
+}
+
+#[test]
+fn common_inputs_command_writes_the_produced_context_and_reports_its_pin() {
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &common_input_package());
+    let role = |name: &str, value: bool| {
+        let path = dir.path().join(format!("{name}-{value}.json"));
+        std::fs::write(&path, json!({"value":value}).to_string()).unwrap();
+        format!("--input={name}={}", path.display())
+    };
+    let output = |name: &str| dir.path().join(name);
+    let produced = run(
+        "common-inputs",
+        &options,
+        &[
+            "--deployment=child.Pair".into(),
+            role("P", true),
+            role("V", true),
+            format!("--output={}", output("context").display()),
+        ],
+    );
+    assert_eq!(produced["status"], "produced", "{produced}");
+    let bytes = std::fs::read(output("context")).unwrap();
+    assert_eq!(
+        produced["context_sha256"],
+        json!(hex(&Sha256::digest(&bytes)))
+    );
+    let tree = zkc_format::logical::decode_tree(&bytes).unwrap();
+    assert_eq!(tree[0], "zkc.input-bindings/0");
+    assert_eq!(
+        tree[3],
+        json!([[
+            [["role00000000", "0", []], ["role00000001", "0", []]],
+            tree[3][0][1],
+            "value",
+            ["active", "5a4b4356000501"]
+        ]])
+    );
+    // Disagreeing participants produce no context, and nothing is published.
+    let refused = run(
+        "common-inputs",
+        &options,
+        &[
+            "--deployment=child.Pair".into(),
+            role("P", true),
+            role("V", false),
+            format!("--output={}", output("refused").display()),
+        ],
+    );
+    assert_eq!(refused["code"], "input-binding-Value", "{refused}");
+    assert!(!output("refused").exists());
+    // Only a static Run deployment of the package has a context.
+    let unknown = run(
+        "common-inputs",
+        &options,
+        &[
+            "--deployment=absent".into(),
+            role("P", true),
+            role("V", true),
+            format!("--output={}", output("unknown").display()),
+        ],
+    );
+    assert_eq!(unknown["code"], "entry-host-deployment", "{unknown}");
+}
+
+#[test]
+fn function_results_are_encoded_under_the_invocation_ledger() {
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &boolean_package(false));
+    let arguments = dir.path().join("arguments.json");
+    std::fs::write(&arguments, r#"{"flag":true}"#).unwrap();
+    let results = dir.path().join("result.json");
+    let invocation = |capacity: Option<&Path>| {
+        let mut invocation = vec![
+            format!("--input={}", arguments.display()),
+            format!("--results={}", results.display()),
+        ];
+        invocation.extend(capacity.map(|path| format!("--capacity={}", path.display())));
+        invocation
+    };
+    let report = run("run", &options, &invocation(None));
+    assert_eq!(report["status"], "executed", "{report}");
+    let used = report["execution"]["usage"]["logical_bytes"]
+        .as_u64()
+        .unwrap();
+    std::fs::remove_file(&results).unwrap();
+    // Execution fits, but the first 512-byte result buffer does not: the
+    // encoder draws on the invocation's logical-work allowance and publishes
+    // nothing.
+    let capacity = dir.path().join("capacity.json");
+    std::fs::write(
+        &capacity,
+        json!([
+            "zkc.native-capacity/0",
+            "65536",
+            "4096",
+            "16777216",
+            "67108864",
+            ["1000000", "100000", (used + 511).to_string()],
+            ["67108864", "268435456"]
+        ])
+        .to_string(),
+    )
+    .unwrap();
+    let report = run("run", &options, &invocation(Some(&capacity)));
+    assert_eq!(report["code"], "entry-output-limit", "{report}");
+    assert_eq!(report["phase"], "results");
+    assert!(!results.exists());
 }

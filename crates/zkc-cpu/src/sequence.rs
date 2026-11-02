@@ -16,7 +16,7 @@ pub(crate) struct Budget {
 impl Default for Budget {
     fn default() -> Self {
         Self {
-            limit: 16_777_216,
+            limit: Sequence::DEFAULT_WORK_LIMIT,
             spent: 0,
         }
     }
@@ -266,6 +266,10 @@ impl<'a> Iterator for Iter<'a> {
 }
 impl ExactSizeIterator for Iter<'_> {}
 impl Sequence {
+    /// Default cumulative traversal work of one backend: three units per
+    /// examined node and call. Host policy selects any value up to its
+    /// installed maximum through `CpuBackend::with_sequence_work_limit`.
+    pub const DEFAULT_WORK_LIMIT: u64 = 1 << 24;
     pub fn new(physical_type: PhysicalType, values: Vec<Value>, policy: &Policy) -> Result<Self> {
         policy.vector_width(add(values.len(), 1)?, VALUE_SLOT_BYTES)?;
         if physical_type.representation() != zkc_runtime::vm::Representation::Sequence {

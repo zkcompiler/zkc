@@ -3,7 +3,7 @@ use serde_json::Value as Json;
 #[cfg(all(feature = "files", any(feature = "cpu", feature = "project")))]
 use std::path::Path;
 pub(crate) type Result<T> = std::result::Result<T, String>;
-pub(crate) const INPUT_LIMIT: usize = 16 * 1024 * 1024;
+pub const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 
 #[cfg(all(feature = "files", any(feature = "cpu", feature = "project")))]
 pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {

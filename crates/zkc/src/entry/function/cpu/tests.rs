@@ -2637,3 +2637,300 @@ fn function_policy_owns_child_ring_sequence_and_attempt_settings() {
     assert_eq!(attempts("proof", false), "entry-attempt-operation");
     assert_eq!(attempts("proof", true), "entry-attempt-completion");
 }
+
+/// Edit one member of a captured package frame, keeping every other byte.
+fn edited_package(package: &Package, edit: impl FnOnce(&mut Json)) -> Package {
+    let mut frame: Json = serde_json::from_slice(package.bytes()).unwrap();
+    edit(&mut frame);
+    let bytes = frame.to_string();
+    Package::capture(
+        bytes.as_bytes(),
+        &Sha256::digest(bytes.as_bytes()).into(),
+        Package::MAX_BYTES,
+    )
+    .unwrap()
+}
+fn with_interface(package: &Package, edit: impl FnOnce(&mut Json)) -> Package {
+    edited_package(package, |frame| {
+        let mut interface: Json =
+            serde_json::from_str(frame["interface"].as_str().unwrap()).unwrap();
+        edit(&mut interface);
+        frame["interface"] = json!(interface.to_string());
+    })
+}
+#[test]
+fn shared_refusals_have_one_code_and_phase_in_every_entry_kind() {
+    use crate::entry::{
+        BindingPolicy, EntryCondition as C, MAX_DRAW_BUDGET, ProofEntry, ProofOptions,
+        ProofRequest, RoleInputs, RunEntry, RunRequest,
+    };
+    type Outcome = std::result::Result<(), (EntryPhase, String)>;
+    let outcome =
+        |result: Result<()>| -> Outcome { result.map_err(|e| (e.phase, e.code().to_owned())) };
+    // A Function with a run child whose role P owns a service, its standalone
+    // run package, and an authored proof package.
+    let function_doc = service_document();
+    let function_package = capture(&function_doc);
+    let run_package = Package::capture(
+        function_doc["deployments"][0]["package"]
+            .as_str()
+            .unwrap()
+            .as_bytes(),
+        &Sha256::digest(
+            function_doc["deployments"][0]["package"]
+                .as_str()
+                .unwrap()
+                .as_bytes(),
+        )
+        .into(),
+        Package::MAX_BYTES,
+    )
+    .unwrap();
+    let (proof_interface, proof_artifact) =
+        crate::entry::interface::tests::unicode::proof_fixture();
+    let proof_package = package(&proof_interface, &proof_artifact);
+    let proof_options = ProofOptions {
+        binding: BindingPolicy::AllowAuthored,
+        ..Default::default()
+    };
+    let joint = || BTreeMap::from([("joint".into(), SetupAuthority::default())]);
+
+    let run_request = |edit: &dyn Fn(&mut RunRequest)| {
+        let mut request = RunRequest {
+            session: "conditions".into(),
+            setups: BTreeMap::new(),
+            roles: [("P", true), ("V", false)]
+                .map(|(role, value)| {
+                    (
+                        role.to_owned(),
+                        RoleInputs {
+                            inputs: [("入力".into(), value.into())].into(),
+                            ..Default::default()
+                        },
+                    )
+                })
+                .into(),
+        };
+        edit(&mut request);
+        request
+    };
+    let run = |edit: &dyn Fn(&mut RunRequest)| -> Outcome {
+        let entry = RunEntry::admit(run_package.clone(), Default::default(), Default::default())
+            .map_err(|e| (e.phase, e.code().to_owned()))?;
+        outcome(entry.prepare(run_request(edit)).map(drop))
+    };
+    let proof = |edit: &dyn Fn(&mut ProofRequest)| -> Outcome {
+        let entry = ProofEntry::admit(
+            proof_package.clone(),
+            proof_options.clone(),
+            Default::default(),
+        )
+        .map_err(|e| (e.phase, e.code().to_owned()))?;
+        let mut request = ProofRequest {
+            public: [("公開".into(), true.into())].into(),
+            private: RoleInputs {
+                inputs: [("秘密".into(), false.into())].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        edit(&mut request);
+        outcome(entry.prove(request).map(drop))
+    };
+    let function = |edit: &dyn Fn(&mut FunctionRequest)| -> Outcome {
+        let entry = FunctionEntry::admit(function_package.clone(), Default::default(), joint())
+            .map_err(|e| (e.phase, e.code().to_owned()))?;
+        let mut request = joint_request();
+        edit(&mut request);
+        outcome(entry.prepare(request).map(drop))
+    };
+    let run_context = |request: &mut FunctionRequest, edit: &dyn Fn(&mut RunContext)| {
+        let Some(InvocationBinding::Run(context)) = request.context.deployments.get_mut("joint")
+        else {
+            panic!("run context")
+        };
+        edit(context);
+    };
+    let refused =
+        |condition: C| -> Outcome { Err((condition.phase(), condition.code().to_owned())) };
+    // Every kind accepts the unedited request.
+    assert_eq!(run(&|_| ()), Ok(()));
+    assert_eq!(proof(&|_| ()), Ok(()));
+    assert_eq!(function(&|_| ()), Ok(()));
+    for (condition, outcomes) in [
+        (
+            C::InputNames,
+            vec![
+                run(&|r| {
+                    r.roles
+                        .get_mut("P")
+                        .unwrap()
+                        .inputs
+                        .insert("unknown".into(), true.into());
+                }),
+                proof(&|r| {
+                    r.public.insert("unknown".into(), true.into());
+                }),
+                function(&|r| {
+                    r.arguments.insert("unknown".into(), true.into());
+                }),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles
+                            .entry("P".into())
+                            .or_default()
+                            .inputs
+                            .insert("unknown".into(), true.into());
+                    })
+                }),
+            ],
+        ),
+        (
+            C::InputRoles,
+            vec![
+                run(&|r| {
+                    r.roles.insert("unknown".into(), RoleInputs::default());
+                }),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles.insert("unknown".into(), RoleInputs::default());
+                    })
+                }),
+            ],
+        ),
+        (
+            C::ServiceNames,
+            vec![
+                run(&|r| {
+                    r.roles
+                        .get_mut("P")
+                        .unwrap()
+                        .services
+                        .insert("unknown".into(), 1);
+                }),
+                proof(&|r| {
+                    r.private.services.insert("unknown".into(), 1);
+                }),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles
+                            .entry("P".into())
+                            .or_default()
+                            .services
+                            .insert("unknown".into(), 1);
+                    })
+                }),
+            ],
+        ),
+        (
+            C::ServiceBudget,
+            vec![
+                run(&|r| {
+                    r.roles
+                        .get_mut("P")
+                        .unwrap()
+                        .services
+                        .insert("randomness".into(), MAX_DRAW_BUDGET + 1);
+                }),
+                proof(&|r| r.transcript_budget = Some(MAX_DRAW_BUDGET + 1)),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles
+                            .entry("P".into())
+                            .or_default()
+                            .services
+                            .insert("randomness".into(), MAX_DRAW_BUDGET + 1);
+                    })
+                }),
+            ],
+        ),
+    ] {
+        for (kind, actual) in outcomes.into_iter().enumerate() {
+            assert_eq!(actual, refused(condition), "{condition:?} #{kind}");
+        }
+    }
+    // Interface refusals at admission.
+    let admit = |run_package: Package, proof_package: Package, function_package: Package| {
+        [
+            outcome(RunEntry::admit(run_package, Default::default(), Default::default()).map(drop)),
+            outcome(
+                ProofEntry::admit(proof_package, proof_options.clone(), Default::default())
+                    .map(drop),
+            ),
+            outcome(FunctionEntry::admit(function_package, Default::default(), joint()).map(drop)),
+        ]
+    };
+    let unparsable =
+        |p: &Package| edited_package(p, |frame| frame["interface"] = json!("{\"format\":"));
+    let unknown_member = |p: &Package| with_interface(p, |i| i["unknown"] = json!(true));
+    for packages in [
+        [
+            unparsable(&run_package),
+            unparsable(&proof_package),
+            unparsable(&function_package),
+        ],
+        [
+            unknown_member(&run_package),
+            unknown_member(&proof_package),
+            unknown_member(&function_package),
+        ],
+    ] {
+        let [r, p, f] = packages;
+        for actual in admit(r, p, f) {
+            assert_eq!(actual, refused(C::InterfaceFormat));
+        }
+    }
+    let other_original =
+        |p: &Package| with_interface(p, |i| i["original"] = json!(digest("other")));
+    for actual in admit(
+        other_original(&run_package),
+        other_original(&proof_package),
+        other_original(&function_package),
+    ) {
+        assert_eq!(actual, refused(C::InterfaceIdentity));
+    }
+    // A Function parameter that cannot be copied is an input custody refusal.
+    let mut moved = boolean();
+    moved["permissions"] = json!(["Drop"]);
+    let doc = document(
+        vec![("flag", moved.clone())],
+        boolean(),
+        json!([]),
+        json!([]),
+    );
+    let mut doc = doc;
+    doc["functions"][0]["body"]["returns"] = json!([]);
+    doc["functions"][0]["signature"]["result"] = unit();
+    assert_eq!(
+        outcome(FunctionEntry::admit(capture(&doc), Default::default(), BTreeMap::new()).map(drop)),
+        refused(C::InputCustody)
+    );
+}
+#[test]
+fn child_refusals_keep_their_phase_and_schema_path() {
+    let bytes = produced_bytes();
+    let mut options = FunctionOptions {
+        binding: crate::entry::BindingPolicy::AllowAuthored,
+        ..FunctionOptions::default()
+    };
+    // The proof child may move fewer wire bytes than the proof it verifies.
+    options.limits.total_wire_bytes = bytes.len() - 1;
+    let entry = FunctionEntry::admit(
+        capture(&proof_document(false)),
+        options,
+        BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+    )
+    .unwrap();
+    let report = entry
+        .prepare(proof_request(false, true, bytes))
+        .unwrap()
+        .execute();
+    let failure = report.failure.as_ref().unwrap();
+    assert_eq!(failure.code, "native-proof-proof-limit");
+    let child = failure.entry.as_ref().unwrap();
+    assert_eq!(child.phase, EntryPhase::Preparation);
+    assert_eq!(child.code(), failure.code);
+    let diagnostics = report.diagnostics();
+    assert_eq!(diagnostics["failure"]["phase"], "Preparation");
+    assert_eq!(diagnostics["failure"]["code"], "native-proof-proof-limit");
+}

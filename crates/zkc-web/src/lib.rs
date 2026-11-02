@@ -146,7 +146,7 @@ impl ProofSession {
     /// grants no file access, material identity or setup authority.
     #[wasm_bindgen(js_name = setInput)]
     pub fn set_input(&mut self, name: &str, bytes: &[u8]) -> Result<()> {
-        self.active()?.invalidate_prover_inputs()?;
+        self.active()?.invalidate_input(name)?;
         self.inputs.remove(name);
         if name.is_empty() || name.len() > 4096 || self.inputs.len() >= 1024 {
             return Err("web-input-name".into());

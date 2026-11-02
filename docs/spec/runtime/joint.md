@@ -212,16 +212,18 @@ destination stores names, not another retained payload. Live service leases
 belong to the entry and survive inner frame return.
 
 Reports, transfer hooks and cancellation checks include the complete outer-to-inner
-iteration path. Reached headers record `loop_count` and whether `loop_started`;
+iteration path. A report stores each distinct dynamic path, with its loop
+iteration numbers, once: every reached step of one region references that
+shared storage instead of copying it. Reached headers record `loop_count` and whether `loop_started`;
 failed validation/agreement does not claim body entry. Ordinary runner polling at
 a loop header or yield stops with `program-control-cut`; only explicit program control
 methods may cross those boundaries after host agreement. Misapplied action or
 delivery methods return `WrongAction` without polling or advancing such a cut.
 `enter_loop` retains a local count-bound failure as a stopped outcome,
 just as `loop_count` does. Count disagreement is
-reported as `DriverFailed(Contract)` with detail `loop-count-disagreement`. Dynamic dispatches and
-reports obey the ordinary driver budget; compact code does not authorize
-unbounded runtime work. Stops/cancellation preserve completed messages and draws,
+reported as `DriverFailed(Contract)` with detail `loop-count-disagreement`. Dynamic dispatches
+obey the ordinary driver budget, and report storage obeys the report allowance;
+compact code does not authorize unbounded runtime work or storage. Stops/cancellation preserve completed messages and draws,
 then release all endpoint leases through normal finalization.
 
 ## Wire and receive contract
@@ -298,8 +300,14 @@ accepted `complete_receive`, including Decode or runtime Limit, clears it once;
 an API refusal preserves it. The report owns any payload still pending at exit.
 
 Default driver caps are 32768 dispatches, 4096 bytes per wire payload or hook
-replacement, and 16 MiB accumulated original plus replacement bytes. Hosts may
-lower these caps. `ValueBudget` separately controls runner retention; the joint
+replacement, 16 MiB accumulated original plus replacement bytes, and a 64 MiB
+report allowance (`RunLimits.report_bytes`). Hosts may lower these caps. The
+report allowance charges every reached step's fixed record and, when the first
+step of a region references it, that region's shared path: its elements, their
+site and alternative strings, its iteration numbers and both allocation headers.
+`Report.report_bytes` records the charge. A step that would exceed the allowance
+fails as `DriverFailed(Limit)` with detail `joint-report-limit` before it is
+exposed; a region no step reaches retains and charges nothing. `ValueBudget` separately controls runner retention; the joint
 driver requires its live and cumulative charges to fit 64 MiB and 256 MiB.
 `RunLimits.work` separately selects instruction, iteration and logical-work
 budgets: by default one million instructions, 100,000 iterations and 4 GiB, and
@@ -309,7 +317,8 @@ any installed driver ceiling refuse before entry and preserve caller-owned input
 `Runner` refuses instruction, iteration and logical-work allowances above those
 maxima but permits configurable live and cumulative retained-value budgets. Its 64 MiB
 individual-value ceiling remains independent of those aggregate budgets.
-The driver reserves reached-step and result-port capacity before any entry.
+The driver reserves reached-step and result-port capacity before any entry,
+for at most as many steps as the report allowance can record.
 Cancellation includes the bounded host reason and can occur between send and
 receive; the committed message remains in the resulting report. This policy has no asynchronous queue or readiness
 scheduler.

@@ -32,8 +32,8 @@ impl Allowances {
     /// Nested sequence traversal work per role: three units per examined node
     /// and call, a retained validated root counting as one node.
     pub const SEQUENCE_WORK: Allowance = Allowance {
-        default: 16_777_216,
-        maximum: 16_777_216,
+        default: zkc_cpu::Sequence::DEFAULT_WORK_LIMIT,
+        maximum: zkc_cpu::Sequence::DEFAULT_WORK_LIMIT,
     };
     /// External construction primitive work per role: one unit per hash call,
     /// hashed byte, permutation, observe or sample.
@@ -45,6 +45,18 @@ impl Allowances {
     pub const SERVICE_DRAWS: Allowance = Allowance {
         default: 1_000_000,
         maximum: 1_000_000,
+    };
+    /// Cumulative work of one interface admission algorithm: schema
+    /// validation, or supply reconstruction with public selection indexing.
+    pub const INTERFACE_WORK: Allowance = Allowance {
+        default: crate::entry::InterfaceLimits::DEFAULT.work as u64,
+        maximum: crate::entry::InterfaceLimits::MAXIMUM.work as u64,
+    };
+    /// Retained descriptor bytes of the interface schema summaries, of each
+    /// reconstructed supply plan and of a Function's native descriptor cache.
+    pub const INTERFACE_DESCRIPTORS: Allowance = Allowance {
+        default: crate::entry::InterfaceLimits::DEFAULT.descriptor_bytes as u64,
+        maximum: crate::entry::InterfaceLimits::MAXIMUM.descriptor_bytes as u64,
     };
 }
 

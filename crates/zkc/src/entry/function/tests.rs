@@ -66,7 +66,9 @@ fn source_inspection_keeps_identity_permissions_and_constructor_checks() {
     }
     let mut bad = document(schema("boolean", "bool"));
     bad["original"] = json!(digest(b"another source"));
-    assert_eq!(read(bad).unwrap_err().code(), "entry-host-identity");
+    let error = read(bad).unwrap_err();
+    assert_eq!(error.code(), "entry-interface-identity");
+    assert_eq!(error.phase, EntryPhase::Interface);
     let mut bad = document(schema("boolean", "bool"));
     bad["functions"][0]["parameters"][0]["schema"]["permissions"] = json!(["Copy"]);
     assert_eq!(read(bad).unwrap_err().code(), "entry-interface-schema");
@@ -122,14 +124,14 @@ fn host_schemas_require_sealing_and_generated_metadata_in_every_position() {
                 .remove(member);
             assert_eq!(
                 read(bad).unwrap_err().code(),
-                "entry-host-format",
+                "entry-interface-format",
                 "{path}/{member}"
             );
         }
         for malformed in [json!(null), json!(0), json!("false")] {
             let mut bad = original.clone();
             bad.pointer_mut(path).unwrap()["sealed"] = malformed;
-            assert_eq!(read(bad).unwrap_err().code(), "entry-host-format");
+            assert_eq!(read(bad).unwrap_err().code(), "entry-interface-format");
         }
         let mut bad = original.clone();
         bad.pointer_mut(path).unwrap()["sealed"] = json!(true);

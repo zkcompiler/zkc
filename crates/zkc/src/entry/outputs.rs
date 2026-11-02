@@ -663,23 +663,14 @@ pub struct FunctionResultEncoder {
     pub(crate) capacity: crate::execution::Capacity,
 }
 impl FunctionResultEncoder {
+    /// Encode a value outside any invocation. A Host publishing a report's
+    /// result uses `encode_report`, which charges that invocation's ledger.
     pub fn encode(&self, value: &crate::entry::Value) -> Result<Vec<u8>> {
-        self.encode_with_cpu(
-            value,
-            crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
-        )
-    }
-    /// Share the execution owner's context through result serialization.
-    pub fn encode_with_cpu(
-        &self,
-        value: &crate::entry::Value,
-        cpu: crate::execution::CpuExecution,
-    ) -> Result<Vec<u8>> {
         crate::entry::outputs::function_output_with_installation(
             value,
             self.capacity,
             self.setups.clone(),
-            cpu,
+            crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
             self.installation.clone(),
         )
     }

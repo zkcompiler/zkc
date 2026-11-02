@@ -118,14 +118,18 @@ pub(super) fn execute(
         if let Some(failure) = &result.failure {
             return Err(failure.code.clone());
         }
-        let value = result.value.ok_or("entry-function-incomplete")?;
+        if result.value.is_none() {
+            return Err("entry-function-incomplete".into());
+        }
         if invocation.results.is_some() {
             measured(args, report, "output_encoding_and_publication", |report| {
                 report["phase"] = json!("results");
-                let encoded = result_encoder.encode_with_cpu(&value.into_value(), cpu.clone())?;
+                // The invocation ledger that charged execution also charges
+                // the encoded buffer, which stays live through publication.
+                let encoded = result_encoder.encode_report(&result, cpu.clone())?;
                 report["phase"] = json!("publication");
                 crate::files::publication(
-                    destinations.publish(&[("results", &encoded)]),
+                    destinations.publish(&[("results", encoded.as_bytes())]),
                     report,
                     true,
                 )

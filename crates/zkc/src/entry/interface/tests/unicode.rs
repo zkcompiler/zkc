@@ -1478,3 +1478,118 @@ fn memory_bindings_share_digest_checks_and_document_budgets() {
         "entry-request-limit"
     );
 }
+#[test]
+fn full_roster_run_with_one_ordinary_port_is_admitted_and_runs() {
+    // Every participant supplies and receives the one ordinary port. Admission
+    // and binding grow with ports times placed roles, so the 1,024-role
+    // roster ceiling is reachable under the default Host policy.
+    let ty = schema("boolean", "bool", json!(["bool"]));
+    let names: Vec<_> = (0..1024).map(|i| format!("R{i}")).collect();
+    let native: Vec<_> = (0..1024)
+        .map(crate::source_names::native_role_name)
+        .collect();
+    let (doc, artifact) = run_fixture(
+        &ty,
+        &names.iter().map(String::as_str).collect::<Vec<_>>(),
+        &native.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let entry = RunEntry::admit(
+        package(&doc, &artifact),
+        HostLimits::default(),
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    assert_eq!(entry.interface().roles().len(), 1024);
+    let roles = names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            (
+                name.clone(),
+                RoleInputs {
+                    inputs: [("入力".into(), (i % 2 == 0).into())].into(),
+                    ..Default::default()
+                },
+            )
+        })
+        .collect();
+    let report = entry
+        .prepare(RunRequest {
+            session: "roster".into(),
+            roles,
+            setups: Default::default(),
+        })
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{:?}", report.output_error);
+    let outputs = report.outputs.unwrap();
+    assert_eq!(outputs.len(), 1024);
+    for (name, expected) in [("R2", true), ("R3", false)] {
+        assert!(matches!(
+            outputs[name]["結果"],
+            crate::entry::Value::Leaf(crate::execution::InputValue::Native(ref v))
+                if matches!(**v, zkc_cpu::Value::Bool(value) if value == expected)
+        ));
+    }
+}
+#[test]
+fn interface_admission_allowances_are_host_policy() {
+    let ty = schema("boolean", "bool", json!(["bool"]));
+    let (doc, artifact) = run_fixture(&ty, &["P"], &["role00000000"]);
+    let run = |interface| {
+        RunEntry::admit(
+            package(&doc, &artifact),
+            HostLimits {
+                interface,
+                ..HostLimits::default()
+            },
+            SetupAuthority::default(),
+        )
+        .map(drop)
+        .map_err(|e| (e.phase, e.code().to_owned()))
+    };
+    let (proof_doc, proof_artifact) = proof_fixture();
+    let proof = |interface| {
+        ProofEntry::admit(
+            package(&proof_doc, &proof_artifact),
+            ProofOptions {
+                interface,
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .map(drop)
+        .map_err(|e| (e.phase, e.code().to_owned()))
+    };
+    let limit = |phase| Err((phase, "entry-interface-limit".to_owned()));
+    for admit in [&run as &dyn Fn(InterfaceLimits) -> _, &proof] {
+        assert_eq!(admit(InterfaceLimits::DEFAULT), Ok(()));
+        // A lowered allowance refuses the same interface while reading it.
+        for lowered in [
+            InterfaceLimits {
+                work: 64,
+                ..InterfaceLimits::DEFAULT
+            },
+            InterfaceLimits {
+                descriptor_bytes: 64,
+                ..InterfaceLimits::DEFAULT
+            },
+        ] {
+            assert_eq!(admit(lowered), limit(EntryPhase::Interface));
+        }
+        // A selection above the installed maximum is refused as policy.
+        for raised in [
+            InterfaceLimits {
+                work: InterfaceLimits::MAXIMUM.work + 1,
+                ..InterfaceLimits::DEFAULT
+            },
+            InterfaceLimits {
+                descriptor_bytes: InterfaceLimits::MAXIMUM.descriptor_bytes + 1,
+                ..InterfaceLimits::DEFAULT
+            },
+        ] {
+            assert_eq!(admit(raised), limit(EntryPhase::Admission));
+        }
+    }
+}

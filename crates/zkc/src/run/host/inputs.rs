@@ -292,6 +292,7 @@ pub(super) fn prepare<'a>(
     host: &'a RunHost,
     request: &RunInputs,
     imports: &mut crate::host::setups::VerifierKeys,
+    invocation: zkc_runtime::vm::ExecutionLedger,
 ) -> Result<PreparedRun<'a>> {
     let session = &request.session;
     if !valid_identifier(session) {
@@ -479,6 +480,6 @@ pub(super) fn prepare<'a>(
         roles,
         loaded,
         loading,
-        invocation: host.invocation_ledger(),
+        invocation,
     })
 }

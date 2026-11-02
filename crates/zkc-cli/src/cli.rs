@@ -200,6 +200,22 @@ Pinned packages support only the Entry view.",
         description: ENTRY,
     },
     Command {
+        name: "common-inputs",
+        summary: "Produce the pinned common-input context of a Run deployment",
+        positional: "[ENTRY]",
+        options: entry_options!(
+            THREADS,
+            Opt::new("--deployment=ID"),
+            Opt::new("--input=ROLE=FILE").repeated(),
+            Opt::new("--key=SLOT=FILE").repeated(),
+            Opt::new("--output=FILE"),
+            SETUPS,
+            CAPACITY,
+            Opt::new("--limits=LIMITS"),
+        ),
+        description: "Prepare the selected Function Entry's static Run deployment ID with one named input\nFILE per role, and write the canonical zkc.input-bindings/0 context those inputs determine.\nEvery observed common component must agree. The report gives the context SHA-256;\nthe application distributes that pin through its own trusted context. Producing a\ncontext confers no trust, and nothing is issued or executed.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).",
+    },
+    Command {
         name: "bindings",
         summary: "Generate Rust data bindings pinned to an Entry",
         positional: "[ENTRY]",
@@ -343,7 +359,13 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
     let started = std::time::Instant::now();
     let cpu = if matches!(
         name,
-        "run" | "prove" | "verify" | "bundle run" | "bundle prove" | "bundle verify"
+        "run"
+            | "prove"
+            | "verify"
+            | "common-inputs"
+            | "bundle run"
+            | "bundle prove"
+            | "bundle verify"
     ) {
         let result = match args.value("--threads") {
             Some(count) => {
@@ -474,6 +496,7 @@ mod tests {
             "run",
             "prove",
             "verify",
+            "common-inputs",
             "bundle run",
             "bundle prove",
             "bundle verify",

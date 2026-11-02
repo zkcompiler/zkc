@@ -121,7 +121,12 @@ fn fresh_compiler_common_inventories_bind_actual_named_cpu_runs() {
         } else {
             json!({"state_prefix":false,"state_nested_unrelated":false,"state_nested_flag":false})
         };
-        let disagreeing = request(&run, p, mismatch);
+        let disagreeing = request(&run, p.clone(), mismatch.clone());
+        // The producer derives the canonical context from the matching
+        // request; its rows follow the published inventory exactly.
+        let bytes = run
+            .common_input_context(request(&run, p.clone(), v.clone()))
+            .unwrap();
         let rows: Vec<_> = required
             .iter()
             .map(|r| {
@@ -147,13 +152,25 @@ fn fresh_compiler_common_inventories_bind_actual_named_cpu_runs() {
                 json!([components, r.ty.spelling(), facet, ["active", expected]])
             })
             .collect();
-        let bytes = zkc_format::logical::encode_tree(&json!([
-            "zkc.input-bindings/0",
-            hex(&Sha256::digest(program.as_bytes())),
-            artifact["entry"],
-            rows
-        ]))
-        .unwrap();
+        assert_eq!(
+            zkc_format::logical::decode_tree(&bytes).unwrap(),
+            json!([
+                "zkc.input-bindings/0",
+                hex(&Sha256::digest(program.as_bytes())),
+                artifact["entry"],
+                rows
+            ]),
+            "{name}"
+        );
+        // Disagreeing observations produce no context.
+        assert_eq!(
+            run.common_input_context(request(&run, p.clone(), mismatch))
+                .err()
+                .unwrap()
+                .code(),
+            "input-binding-Value",
+            "{name}"
+        );
         let pin = Sha256::digest(&bytes).into();
         let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
         assert_eq!(
@@ -166,13 +183,10 @@ fn fresh_compiler_common_inventories_bind_actual_named_cpu_runs() {
             "{name}"
         );
         let run = RunEntry::admit(package, Default::default(), Default::default()).unwrap();
-        let omitted = zkc_format::logical::encode_tree(&json!([
-            "zkc.input-bindings/0",
-            hex(&Sha256::digest(program.as_bytes())),
-            artifact["entry"],
-            []
-        ]))
-        .unwrap();
+        // The produced context with its inventory rows omitted.
+        let mut omitted = zkc_format::logical::decode_tree(&bytes).unwrap();
+        omitted[3] = json!([]);
+        let omitted = zkc_format::logical::encode_tree(&omitted).unwrap();
         assert!(
             run.bind_common_inputs(&omitted, &Sha256::digest(&omitted).into())
                 .is_err()
@@ -205,15 +219,6 @@ fn fresh_compiler_extent_inventory_executes_zero_one_and_multiple_iterations() {
             ["extent", "0"],
             ["active", hex(count.to_string().as_bytes())]
         ]]);
-        let bytes = zkc_format::logical::encode_tree(&json!([
-            "zkc.input-bindings/0",
-            hex(&Sha256::digest(
-                artifact["candidate"].as_str().unwrap().as_bytes()
-            )),
-            artifact["entry"],
-            rows
-        ]))
-        .unwrap();
         let make = |len, number| {
             let vector =
                 zkc_cpu::Value::KoalaBearVector(vec![zkc_cpu::KoalaBear::new(number); len].into());
@@ -236,6 +241,23 @@ fn fresh_compiler_extent_inventory_executes_zero_one_and_multiple_iterations() {
             ]
             .into(),
         };
+        let produced = RunRequest {
+            session: "fresh-extent".into(),
+            setups: BTreeMap::new(),
+            roles: [("P".into(), make(count, 5)), ("V".into(), make(count, 7))].into(),
+        };
+        let bytes = run.common_input_context(produced).unwrap();
+        assert_eq!(
+            zkc_format::logical::decode_tree(&bytes).unwrap(),
+            json!([
+                "zkc.input-bindings/0",
+                hex(&Sha256::digest(
+                    artifact["candidate"].as_str().unwrap().as_bytes()
+                )),
+                artifact["entry"],
+                rows
+            ])
+        );
         let bound = run
             .bind_common_inputs(&bytes, &Sha256::digest(&bytes).into())
             .unwrap();

@@ -104,8 +104,8 @@ impl Options {
                     let count = count
                         .parse::<u64>()
                         .ok()
-                        .filter(|n| *n <= super::super::DEFAULT_DRAW_BUDGET)
-                        .ok_or("entry-service-budget")?;
+                        .filter(|n| *n <= super::super::MAX_DRAW_BUDGET)
+                        .ok_or(super::super::EntryCondition::ServiceBudget)?;
                     if options
                         .services
                         .entry(role.into())
@@ -117,7 +117,7 @@ impl Options {
                     }
                 }
                 "--context" => {
-                    if value.len() > 8192 {
+                    if value.len() > 2 * zkc::proof::MAX_CONTEXT_BYTES {
                         return Err("native-proof-context-limit".into());
                     }
                     options.context = crate::files::unhex(&json!(value))?;
@@ -128,8 +128,8 @@ impl Options {
                 }
                 "--transcript-budget" => {
                     let n = value.parse::<u64>().expect("admitted count");
-                    if n > super::super::DEFAULT_DRAW_BUDGET {
-                        return Err("native-proof-budget".into());
+                    if n > super::super::MAX_DRAW_BUDGET {
+                        return Err(super::super::EntryCondition::ServiceBudget.into());
                     }
                     options.transcript_budget = Some(n);
                 }

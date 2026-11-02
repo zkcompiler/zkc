@@ -27,8 +27,8 @@ pub enum BindingScope {
     /// Binding is entirely defined by the authored protocol; there is no Host header.
     Authored,
 }
-/// Proof policy. External, Ring and sequence work are the same per-role Host
-/// allowances a run admits, with defaults and maxima from
+/// Proof policy. External, Ring and sequence work and interface admission are
+/// the same Host allowances a run admits, with defaults and maxima from
 /// [`Allowances`](crate::host::capacity::Allowances).
 #[derive(Clone, Debug)]
 pub struct ProofOptions {
@@ -37,6 +37,7 @@ pub struct ProofOptions {
     pub external_work: u64,
     pub ring_work: u64,
     pub sequence_work: u64,
+    pub interface: super::InterfaceLimits,
     pub binding: BindingPolicy,
 }
 impl Default for ProofOptions {
@@ -46,6 +47,7 @@ impl Default for ProofOptions {
             external_work: Allowances::EXTERNAL_WORK.default,
             ring_work: Allowances::RING_WORK.default,
             sequence_work: Allowances::SEQUENCE_WORK.default,
+            interface: super::InterfaceLimits::DEFAULT,
             binding: BindingPolicy::default(),
             installation: Default::default(),
         }
@@ -69,7 +71,7 @@ impl ProofOptions {
         if !Allowances::SEQUENCE_WORK.admits(self.sequence_work) {
             return Err("native-proof-sequence-work-limit".into());
         }
-        Ok(())
+        self.interface.validate().map_err(|e| e.to_string())
     }
 }
 /// Explicit retry authorization. Count defaults to one; all cumulative work
@@ -130,8 +132,16 @@ pub struct ProofReport {
     pub outputs: Option<NamedValues>,
     pub output_error: Option<String>,
     pub binding_scope: BindingScope,
+    invocation: zkc_runtime::vm::ExecutionLedger,
 }
 impl ProofReport {
+    /// The ledger that charged this call's Host-side work: request conversion,
+    /// binding-root encoding and result reconstruction. A child of an outer
+    /// invocation uses the outer ledger; a standalone call's runners keep
+    /// their own budgets beside it.
+    pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
+        &self.invocation
+    }
     /// Distinguish normal semantic rejection from execution, cleanup, or output
     /// reconstruction failure. A successful producer has no verifier decision.
     pub fn verification_result(&self) -> Option<bool> {
@@ -252,8 +262,12 @@ impl ProofEntry {
         retained_inputs: bool,
         cpu: crate::execution::CpuExecution,
     ) -> EntryResult<Self> {
-        let interface =
-            crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
+        options
+            .interface
+            .validate()
+            .map_err(|e| E::new(P::Admission, e))?;
+        let interface = crate::entry::BoundInterface::read_with(&package, options.interface)
+            .map_err(|e| E::new(P::Interface, e))?;
         let proof = interface
             .proof()
             .ok_or_else(|| E::new(P::Admission, "entry-job-kind"))?;
@@ -400,15 +414,16 @@ impl ProofEntry {
             .invalidate(pin);
         Ok(())
     }
-    /// Invalidate persistent prover imports before an adapter replaces a named
-    /// input, including replacements rejected before document decoding. Sources
-    /// do not yet identify a setup pin, so all prover imports are cleared while
-    /// verifier imports and already checked calls retain their own custody.
-    pub fn invalidate_prover_inputs(&self) -> Result<()> {
+    /// Invalidate the persistent prover imports a named input fed before an
+    /// adapter replaces its bytes, including replacements rejected before
+    /// document decoding. Each import records the named source of its bytes
+    /// and the setup pin it serves, so exactly those pins are cleared; other
+    /// slots, verifier imports and already checked calls keep their custody.
+    pub fn invalidate_input(&self, name: &str) -> Result<()> {
         self.material
             .lock()
             .map_err(|_| "native-setup-material")?
-            .invalidate_provers();
+            .invalidate_source(name);
         Ok(())
     }
     pub(super) fn observe_setups(&self, setups: &BTreeMap<String, Vec<u8>>) {
@@ -486,12 +501,16 @@ impl ProofEntry {
     ) -> EntryResult<ProofReport> {
         self.observe_setups(&request.setups);
         let producer = proof.is_none();
-        let attempts = self.attempt_policy(producer, attempts, self.native.capacity())?;
-        let inputs = self
-            .inputs(request, producer, self.native.capacity())
-            .map_err(|e| E::new(P::Request, e))?;
+        let capacity = self.native.capacity();
+        let attempts = self.attempt_policy(producer, attempts, capacity)?;
+        let invocation = zkc_runtime::vm::ExecutionLedger::new(capacity.values, capacity.work);
+        let inputs = self.inputs(request, producer, capacity, &invocation)?;
+        let native = self
+            .native
+            .clone()
+            .with_invocation_ledger(invocation.clone());
         Ok(self.report(
-            self.native
+            native
                 .execute_prepared(
                     &inputs,
                     attempts.as_ref().map_or_else(
@@ -500,8 +519,9 @@ impl ProofEntry {
                     ),
                     imports,
                 )
-                .map_err(|e| E::new(P::Preparation, e))?,
+                .map_err(|e| E::at(P::Preparation, e))?,
             producer,
+            invocation,
         ))
     }
     /// Run as a child of an outer invocation. The child takes the same
@@ -529,10 +549,9 @@ impl ProofEntry {
         let key_bytes = setups::material_bytes(&self.interface, &request.setups, capacity)
             .map_err(|e| E::new(P::Request, e))?;
         let _keys_live = zkc_runtime::host::wire::reserve_allocation(Some(&ledger), key_bytes)
-            .map_err(|e| E::new(P::Preparation, e))?;
-        let inputs = self
-            .inputs(request, producer, capacity)
-            .map_err(|e| E::new(P::Request, e))?;
+            .map_err(|e| E::at(P::Preparation, e))?;
+        let inputs = self.inputs(request, producer, capacity, &ledger)?;
+        let invocation = ledger.clone();
         let native = self
             .native
             .clone()
@@ -559,8 +578,9 @@ impl ProofEntry {
                     ),
                     &mut imports,
                 )
-                .map_err(|e| E::new(P::Preparation, e))?,
+                .map_err(|e| E::at(P::Preparation, e))?,
             producer,
+            invocation,
         ))
     }
     /// Check that this Entry accepts an explicit retry authorization.
@@ -582,10 +602,10 @@ impl ProofEntry {
         if !producer && attempts.is_some() {
             return Err(E::new(P::Request, "entry-attempt-operation"));
         }
-        let attempts = self.attempt_policy(producer, attempts, self.native.capacity())?;
-        let inputs = self
-            .inputs(request, producer, self.native.capacity())
-            .map_err(|e| E::new(P::Request, e))?;
+        let capacity = self.native.capacity();
+        let attempts = self.attempt_policy(producer, attempts, capacity)?;
+        let ledger = zkc_runtime::vm::ExecutionLedger::new(capacity.values, capacity.work);
+        let inputs = self.inputs(request, producer, capacity, &ledger)?;
         let invocation = attempts.as_ref().map_or_else(
             || {
                 if producer {
@@ -598,7 +618,7 @@ impl ProofEntry {
         );
         self.native
             .check_inputs(&inputs, invocation)
-            .map_err(|e| E::new(P::Preparation, e))
+            .map_err(|e| E::at(P::Preparation, e))
     }
     fn attempt_policy(
         &self,
@@ -628,7 +648,36 @@ impl ProofEntry {
             },
         )
     }
+    /// Convert a named request at `Request`, then refuse draw allowances
+    /// above the installed maximum at `Preparation`, as every Entry kind does.
     fn inputs(
+        &self,
+        request: ProofRequest,
+        producer: bool,
+        capacity: Capacity,
+        invocation: &zkc_runtime::vm::ExecutionLedger,
+    ) -> EntryResult<ProofInputs> {
+        let read = value::request_bytes(
+            request
+                .public
+                .values()
+                .chain(request.private.inputs.values()),
+        );
+        let inputs = self
+            .convert(request, producer, capacity)
+            .map_err(|e| E::at(P::Request, e))?;
+        value::charge_conversion(invocation, read, inputs.public.len() + inputs.inputs.len())
+            .map_err(|e| E::new(P::Preparation, e))?;
+        arguments::check_draw_budgets(
+            inputs
+                .services
+                .iter()
+                .copied()
+                .chain([inputs.transcript_budget]),
+        )?;
+        Ok(inputs)
+    }
+    fn convert(
         &self,
         request: ProofRequest,
         producer: bool,
@@ -659,12 +708,18 @@ impl ProofEntry {
             }),
         })
     }
-    fn report(&self, native: NativeProofReport, producer: bool) -> ProofReport {
+    fn report(
+        &self,
+        native: NativeProofReport,
+        producer: bool,
+        invocation: zkc_runtime::vm::ExecutionLedger,
+    ) -> ProofReport {
         let mut report = ProofReport {
             native,
             outputs: None,
             output_error: None,
             binding_scope: self.scope,
+            invocation,
         };
         let native_outputs = report.native.outputs.take();
         if report.native.outcome.is_err() || !report.native.cleanup_errors.is_empty() {
@@ -673,6 +728,11 @@ impl ProofEntry {
         if let Some(outputs) = &native_outputs {
             let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
             let result = (|| -> Result<NamedValues> {
+                value::charge_reconstruction(
+                    &report.invocation,
+                    self.interface.output_ports(role).map(|port| &port.schema),
+                    outputs.values(),
+                )?;
                 let mut leaves = outputs.clone();
                 let mut values = NamedValues::new();
                 for port in self.interface.output_ports(role) {
@@ -774,7 +834,7 @@ impl ProofEntry {
                         self.installation(),
                     )
                 })
-                .map_err(|e| E::new(P::Preparation, e))?
+                .map_err(|e| E::at(P::Preparation, e))?
         } else {
             Default::default()
         };
@@ -907,8 +967,9 @@ impl ProofResult {
         let allowance = self
             .encoding
             .get_or_init(|| {
-                let ledger =
-                    zkc_runtime::vm::ExecutionLedger::new(self.capacity.values, self.capacity.work);
+                // The call's invocation ledger already holds its Host-side
+                // conversion, binding-root and reconstruction charges.
+                let ledger = self.report.invocation.clone();
                 // Replay already produced payloads into the publication allowance.
                 // Original report/import guards remain in place; this accounts for
                 // coexistence with one or several encoded buffers, without issuing
@@ -1045,6 +1106,66 @@ mod publication_tests {
         assert_eq!(ledger.snapshot().total_value_bytes, fresh);
     }
     #[test]
+    fn standalone_proofs_charge_conversion_binding_root_and_reconstruction() {
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
+        let prove = |logical_bytes: u64| {
+            let package = Package::capture(
+                frame.as_bytes(),
+                &Sha256::digest(frame.as_bytes()).into(),
+                Package::MAX_BYTES,
+            )
+            .unwrap();
+            let mut capacity = Capacity::default();
+            capacity.work.logical_bytes = logical_bytes;
+            ProofEntry::admit(
+                package,
+                ProofOptions {
+                    capacity,
+                    binding: BindingPolicy::AllowAuthored,
+                    ..Default::default()
+                },
+                Default::default(),
+            )
+            .unwrap()
+            .prove(ProofRequest {
+                public: [("公開".into(), true.into())].into(),
+                private: RoleInputs {
+                    inputs: [("秘密".into(), false.into())].into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+        };
+        let report = prove(Capacity::default().work.logical_bytes).unwrap();
+        assert!(report.is_success());
+        let used = report.invocation_ledger().snapshot();
+        // Conversion reads both Boolean descriptions; the binding root's
+        // canonical encoding and the result reconstruction add to it.
+        let read = value::request_bytes([
+            &crate::entry::Value::from(true),
+            &crate::entry::Value::from(false),
+        ]);
+        assert!(used.logical_bytes > read as u64, "{used:?}");
+        assert!(used.total_value_bytes > 0);
+        // Below the conversion's read, the call refuses before native work.
+        let refused = prove(read as u64 - 1).err().unwrap();
+        assert_eq!(
+            (refused.phase, refused.code()),
+            (P::Preparation, "entry-request-limit")
+        );
+        // The conversion fits but the binding root does not.
+        let refused = prove(read as u64).err().unwrap();
+        assert_eq!(refused.phase, P::Preparation);
+        // Everything but reconstruction fits: no partial result.
+        let report = prove(used.logical_bytes - 1).unwrap();
+        assert_eq!(report.output_error.as_deref(), Some("entry-output-limit"));
+        assert!(report.outputs.is_none());
+    }
+    #[test]
     fn result_encoding_is_refused_over_the_invocation_allowance() {
         let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
         let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
@@ -1082,7 +1203,10 @@ mod publication_tests {
             .unwrap()
         };
         let result = prove(Capacity::default());
-        let work = result.report.native.usage.logical_bytes;
+        // The runner's work and the call's Host-side conversion, binding-root
+        // and reconstruction work, which its invocation ledger holds.
+        let work = result.report.native.usage.logical_bytes
+            + result.report.invocation_ledger().snapshot().logical_bytes;
         assert!(result.encode_results().unwrap().is_some());
         // The execution's own work fits; the first 512-byte result buffer
         // does not, so encoding refuses without a partial buffer.
@@ -1151,7 +1275,7 @@ mod material_tests {
         }
     }
     #[test]
-    fn named_input_invalidation_preserves_vk_and_checked_calls_after_early_failures() {
+    fn named_input_invalidation_clears_only_its_pin_and_preserves_checked_calls() {
         let host = host(Default::default());
         let keys = keys(&host);
         let bounds = host.capacity().backend().ark_bounds();
@@ -1177,11 +1301,27 @@ mod material_tests {
             .material
             .lock()
             .unwrap()
-            .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+            .import_named_prover("key", &pk, fingerprint, keys.verifier_key(), bounds)
             .unwrap();
-        host.invalidate_prover_inputs().unwrap();
+        // Another slot's import, fed by another named input.
+        let other_keys = super::material_tests::keys(&host);
+        let other_pk = other_keys.prover_key().to_bytes(&bounds).unwrap();
+        let other_fingerprint = other_keys.prover_key().material_fingerprint();
+        let kept = host
+            .material
+            .lock()
+            .unwrap()
+            .import_named_prover(
+                "other key",
+                &other_pk,
+                other_fingerprint,
+                other_keys.verifier_key(),
+                bounds,
+            )
+            .unwrap();
+        host.invalidate_input("key").unwrap();
         // The adapter hook precedes even an invalid named binding or malformed
-        // public document; the SDK need not resolve that name to a setup pin.
+        // public document; the import records the setup pin its source fed.
         let error = host
             .preflight_memory_call(
                 ProofOperation::Prove,
@@ -1205,6 +1345,18 @@ mod material_tests {
             .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
             .unwrap();
         assert!(!Arc::ptr_eq(&old, &fresh));
+        // Replacing one named input keeps the other slot's import.
+        assert!(Arc::ptr_eq(
+            &kept,
+            &material
+                .import_prover(
+                    &other_pk,
+                    other_fingerprint,
+                    other_keys.verifier_key(),
+                    bounds
+                )
+                .unwrap()
+        ));
         assert!(Arc::ptr_eq(
             &checked_vk,
             &material.import(&vk, pin, bounds).unwrap()

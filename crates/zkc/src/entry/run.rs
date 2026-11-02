@@ -83,8 +83,12 @@ impl RunEntry {
         retained_inputs: bool,
         cpu: crate::execution::CpuExecution,
     ) -> EntryResult<Self> {
-        let interface =
-            crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
+        limits
+            .interface
+            .validate()
+            .map_err(|e| E::new(P::Admission, e))?;
+        let interface = crate::entry::BoundInterface::read_with(&package, limits.interface)
+            .map_err(|e| E::new(P::Interface, e))?;
         if interface.is_proof() {
             return Err(E::new(P::Admission, "entry-job-kind"));
         }
@@ -136,6 +140,20 @@ impl RunEntry {
         self.interface
             .common_input_requirements(self.native.bundle())
     }
+    /// Produce the canonical `zkc.input-bindings/0` context that these named
+    /// inputs determine, for distribution under an externally trusted pin.
+    /// Preparation resolves every role's inputs exactly as `prepare` does and
+    /// issues no resource; observed components of one class must agree.
+    pub fn common_input_context(&self, request: RunRequest) -> EntryResult<Vec<u8>> {
+        let required = self
+            .common_input_requirements()
+            .map_err(|e| E::new(P::Binding, e))?;
+        let prepared = self.prepare(request)?;
+        prepared
+            .native
+            .common_input_context(&required)
+            .map_err(|e| E::new(P::Preparation, e))
+    }
     /// Pin expectations for every supplied joint input. The compiler owns
     /// inventory completeness; the application owns the external pin's trust.
     pub fn bind_common_inputs(
@@ -184,10 +202,15 @@ impl RunEntry {
             .clone()
             .with_invocation_limits(limits)
             .with_shared_ledger(ledger);
-        let inputs = self.inputs(request).map_err(|e| E::new(P::Request, e))?;
+        let invocation = native.invocation_ledger();
+        let inputs = self.charged_inputs(request, &invocation)?;
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            native.limits().capacity.backend().ark_bounds(),
+            native.installation().clone(),
+        );
         let prepared = native
-            .prepare_typed(&inputs)
-            .map_err(|e| E::new(P::Preparation, e))?;
+            .prepare_charged(&inputs, &mut imports, invocation)
+            .map_err(|e| E::at(P::Preparation, e))?;
         Ok(PreparedRun {
             interface: &self.interface,
             native: prepared,
@@ -215,19 +238,39 @@ impl RunEntry {
         request: RunRequest,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> EntryResult<PreparedRun<'_>> {
-        let inputs = self.inputs(request).map_err(|e| E::new(P::Request, e))?;
+        let invocation = self.native.invocation_ledger();
+        let inputs = self.charged_inputs(request, &invocation)?;
         let native = self
             .native
-            .prepare_with(&inputs, imports)
-            .map_err(|e| E::new(P::Preparation, e))?;
+            .prepare_charged(&inputs, imports, invocation)
+            .map_err(|e| E::at(P::Preparation, e))?;
         Ok(PreparedRun {
             interface: &self.interface,
             native,
         })
     }
+    /// Convert the named request at `Request`, then charge the conversion to
+    /// the invocation ledger and refuse draw allowances above the installed
+    /// maximum, both at `Preparation`.
+    fn charged_inputs(
+        &self,
+        request: RunRequest,
+        invocation: &zkc_runtime::vm::ExecutionLedger,
+    ) -> EntryResult<native::RunInputs> {
+        let read = value::request_bytes(request.roles.values().flat_map(|r| r.inputs.values()));
+        let inputs = self.inputs(request).map_err(|e| E::at(P::Request, e))?;
+        value::charge_conversion(
+            invocation,
+            read,
+            inputs.roles.iter().map(|role| role.inputs.len()).sum(),
+        )
+        .map_err(|e| E::new(P::Preparation, e))?;
+        arguments::check_draw_budgets(inputs.roles.iter().flat_map(|r| r.services.clone()))?;
+        Ok(inputs)
+    }
     fn inputs(&self, mut request: RunRequest) -> Result<native::RunInputs> {
         if request.roles.len() != self.interface.roles().len() {
-            return Err("entry-input-roles".into());
+            return Err(super::EntryCondition::InputRoles.into());
         }
         let material = setups::run_material(
             &self.interface,
@@ -239,7 +282,7 @@ impl RunEntry {
             let values = request
                 .roles
                 .remove(&role.name)
-                .ok_or("entry-input-roles")?;
+                .ok_or(super::EntryCondition::InputRoles)?;
             let inputs = arguments::values(self.interface.input_ports(role), values.inputs, None)?;
             let services = arguments::services(self.interface.services(role), values.services)?;
             roles.push(native::RoleInputs {
@@ -396,7 +439,7 @@ impl PreparedRun<'_> {
         if execution.outcome != Outcome::Completed {
             return public_report(report);
         }
-        match collect(self.interface, execution) {
+        match collect(self.interface, execution, report.native.invocation_ledger()) {
             Ok(outputs) => report.outputs = Some(outputs),
             Err(code) => report.output_error = Some(code),
         }
@@ -412,7 +455,13 @@ fn public_report(mut report: RunReport) -> RunReport {
     report
 }
 
-fn collect(interface: &Interface, execution: &Report<zkc_cpu::CpuBackend>) -> Result<RoleValues> {
+/// Reconstruct every role's named results, charging the reconstruction to the
+/// invocation ledger before it allocates.
+fn collect(
+    interface: &Interface,
+    execution: &Report<zkc_cpu::CpuBackend>,
+    invocation: &zkc_runtime::vm::ExecutionLedger,
+) -> Result<RoleValues> {
     let mut outputs = BTreeMap::new();
     for role in interface.roles() {
         let returned = execution
@@ -420,6 +469,11 @@ fn collect(interface: &Interface, execution: &Report<zkc_cpu::CpuBackend>) -> Re
             .iter()
             .find(|r| r.role == role.native_name)
             .ok_or("entry-output-role")?;
+        value::charge_reconstruction(
+            invocation,
+            interface.output_ports(role).map(|port| &port.schema),
+            &returned.outputs,
+        )?;
         let mut leaves = returned.outputs.iter().cloned();
         let mut values = BTreeMap::new();
         for port in interface.output_ports(role) {
@@ -489,6 +543,45 @@ mod encoding_tests {
     }
 
     #[test]
+    fn request_conversion_and_result_reconstruction_charge_the_invocation_ledger() {
+        let report = completed(HostLimits::default());
+        let used = report.native.invocation_ledger().snapshot();
+        // Conversion reads the request's description; reconstruction reads
+        // the returned leaf and allocates the named result's nodes.
+        let read = value::request_bytes([&crate::entry::Value::from(true)]);
+        assert!(used.logical_bytes > read as u64, "{used:?}");
+        assert!(used.total_value_bytes > 0);
+        let attempt = |logical_bytes: u64| {
+            let mut limits = HostLimits::default();
+            limits.capacity.work.logical_bytes = logical_bytes;
+            entry(limits)
+                .prepare(RunRequest {
+                    session: "encoding".into(),
+                    roles: [(
+                        "P".into(),
+                        RoleInputs {
+                            inputs: [("入力".into(), true.into())].into(),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                    setups: Default::default(),
+                })
+                .map(PreparedRun::execute)
+        };
+        // Below the conversion's read, preparation refuses before any runner.
+        let refused = attempt(read as u64 - 1).err().unwrap();
+        assert_eq!(
+            (refused.phase, refused.code()),
+            (crate::entry::EntryPhase::Preparation, "entry-request-limit")
+        );
+        // Conversion fits but reconstruction does not: no partial result.
+        let report = attempt(used.logical_bytes - 1).unwrap();
+        assert_eq!(report.output_error.as_deref(), Some("entry-output-limit"));
+        assert!(report.outputs.is_none());
+        assert!(attempt(used.logical_bytes).unwrap().is_success());
+    }
+    #[test]
     fn result_encoding_charges_the_run_invocation_ledger() {
         let report = completed(HostLimits::default());
         let ledger = report.native.invocation_ledger().clone();
@@ -504,11 +597,11 @@ mod encoding_tests {
         drop(encoded);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         assert_eq!(ledger.snapshot().total_value_bytes, held.total_value_bytes);
-        // The participant does no logical work, so the run completes under an
-        // allowance smaller than the first 512-byte buffer reservation, and
-        // encoding refuses without a partial buffer.
+        // Conversion and reconstruction charge the invocation ledger; leave
+        // that work and less than the first 512-byte buffer reservation, so
+        // the run completes and encoding refuses without a partial buffer.
         let mut limits = HostLimits::default();
-        limits.capacity.work.logical_bytes = 511;
+        limits.capacity.work.logical_bytes = before.logical_bytes + 511;
         let report = completed(limits);
         assert_eq!(
             report.encode_results(Default::default()).err().unwrap(),

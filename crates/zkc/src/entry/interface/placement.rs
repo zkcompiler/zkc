@@ -339,6 +339,7 @@ pub(super) fn component_type<'a>(port: &'a Port, c: &Component) -> Result<&'a st
 
 /// Roles that can supply every component of an ordinary structural subtree.
 /// Intersect child authority (including zero-array templates); never use a union.
+/// The result is strictly increasing, like the data placements it intersects.
 pub(super) fn ordinary_roles(schema: &Schema, placement: &Placement) -> Option<Vec<u32>> {
     if schema.is_logical() {
         return None;
@@ -355,7 +356,10 @@ pub(super) fn ordinary_roles(schema: &Schema, placement: &Placement) -> Option<V
                 };
                 let next = ordinary_roles(child, p)?;
                 roles = Some(match roles {
-                    Some(previous) => previous.into_iter().filter(|r| next.contains(r)).collect(),
+                    Some(previous) => previous
+                        .into_iter()
+                        .filter(|r| next.binary_search(r).is_ok())
+                        .collect(),
                     None => next,
                 });
             }

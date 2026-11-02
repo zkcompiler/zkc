@@ -1,7 +1,10 @@
 //! Explicit externally pinned admission context. This is neither source
 //! requirement derivation nor a certificate that peers used the same pin.
 use super::wire::{WireBackend, reserve_allocation};
-use crate::vm::{ExecutionLedger, Limits, PhysicalType, Program, Type, Value, WorkBudget};
+use crate::vm::{
+    EntryRole, ExecutionLedger, Limits, LiveReservation, PhysicalType, Program, Type, Value,
+    WorkBudget,
+};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -152,77 +155,23 @@ impl InputBindings {
             .as_array()
             .filter(|a| a.len() == 4)
             .ok_or(BindingError::Requirements)?;
-        if root[0] != "zkc.input-bindings/0"
-            || root[1] != hex(&Sha256::digest(program.bytes()))
-            || root[2] != entry
+        if root[0] != FORMAT || root[1] != hex(&Sha256::digest(program.bytes())) || root[2] != entry
         {
             return Err(BindingError::Subject);
         }
-        let roles = program.entry(entry).ok_or(BindingError::Subject)?;
+        program.entry(entry).ok_or(BindingError::Subject)?;
+        let roles = inventory(program, entry, required)?;
         let bindings = root[3]
             .as_array()
             .filter(|a| a.len() == required.len())
             .ok_or(BindingError::Requirements)?;
         let mut groups = Vec::new();
-        let mut components = 0usize;
         for (requirement, binding) in required.iter().zip(bindings) {
-            components = components
-                .checked_add(requirement.components.len())
-                .filter(|n| *n <= Limits::ARRAY_LENGTH)
-                .ok_or(BindingError::Limit)?;
-            let mut coordinates = BTreeSet::new();
-            let mut participants = BTreeSet::new();
-            for component in &requirement.components {
-                if component.path.len() > crate::vm::TYPE_DEPTH_LIMIT {
-                    return Err(BindingError::Limit);
-                }
-                let role = roles
-                    .iter()
-                    .find(|r| r.role == component.role)
-                    .ok_or(BindingError::Requirements)?;
-                participants.insert(&component.role);
-                if !coordinates.insert((&component.role, component.input, &component.path)) {
-                    return Err(BindingError::Requirements);
-                }
-                let mut ty = role
-                    .inputs
-                    .get(component.input)
-                    .ok_or(BindingError::Requirements)?
-                    .1
-                    .clone();
-                for &(alternative, payload) in &component.path {
-                    ty = ty
-                        .variant_payload(alternative)
-                        .and_then(|p| p.get(payload))
-                        .ok_or(BindingError::Requirements)?
-                        .clone();
-                }
-                if ty != requirement.ty {
-                    return Err(BindingError::Requirements);
-                }
-            }
-            if participants.len() < 2 || !requirement.observation.admits(program, &requirement.ty) {
-                return Err(BindingError::Requirements);
-            }
             let row = binding
                 .as_array()
                 .filter(|a| a.len() == 4)
                 .ok_or(BindingError::Requirements)?;
-            let expected_components: Vec<_> = requirement
-                .components
-                .iter()
-                .map(|c| {
-                    json!([
-                        c.role,
-                        c.input.to_string(),
-                        c.path
-                            .iter()
-                            .flat_map(|(a, p)| [a.to_string(), p.to_string()])
-                            .collect::<Vec<_>>()
-                    ])
-                })
-                .collect();
-            if row[0] != json!(expected_components)
+            if row[0] != components(requirement)
                 || row[1] != requirement.ty.spelling()
                 || row[2] != requirement.observation.encoding()
             {
@@ -268,6 +217,36 @@ impl InputBindings {
         }
         Ok(Self { groups, roles })
     }
+    /// Start producing the canonical context for one exact Program and entry
+    /// from the complete requirement inventory. The inventory is checked
+    /// exactly as `admit_pinned` checks it, and the produced bytes are those
+    /// `admit_pinned` accepts. Producing a context confers no trust: every
+    /// process still pins the bytes through an externally trusted application
+    /// context.
+    pub fn producer(
+        program: &Program,
+        entry: &str,
+        required: &[InputRequirement],
+    ) -> Result<ContextProducer> {
+        if required.len() > Limits::PORTS {
+            return Err(BindingError::Limit);
+        }
+        program.entry(entry).ok_or(BindingError::Subject)?;
+        let roles = inventory(program, entry, required)?;
+        Ok(ContextProducer {
+            program: hex(&Sha256::digest(program.bytes())),
+            entry: entry.to_owned(),
+            groups: required
+                .iter()
+                .map(|requirement| Production {
+                    requirement: requirement.clone(),
+                    observed: None,
+                    _live: Vec::new(),
+                })
+                .collect(),
+            roles,
+        })
+    }
     /// Check actual input components before loading a runner. Uses the same
     /// independently installed canonical data codec as public proof binding.
     /// Inspection and encoding are charged to the invocation's ledger.
@@ -306,32 +285,7 @@ impl InputBindings {
         inputs: &[Option<&B::Value>],
         ledger: &ExecutionLedger,
     ) -> Result<()> {
-        let inspect = |value: &B::Value| {
-            ledger
-                .charge(
-                    WorkBudget {
-                        instructions: 0,
-                        iterations: 0,
-                        logical_bytes: value.retained_bytes() as u64,
-                    },
-                    0,
-                )
-                .map_err(|_| BindingError::Limit)
-        };
-        let ports = &self
-            .roles
-            .iter()
-            .find(|r| r.role == role)
-            .ok_or(BindingError::Input)?
-            .inputs;
-        if ports.len() != inputs.len()
-            || ports
-                .iter()
-                .zip(inputs)
-                .any(|((_, ty), v)| v.is_some_and(|v| !v.has_type(ty)))
-        {
-            return Err(BindingError::Input);
-        }
+        check_ports(&self.roles, role, inputs)?;
         for group in &self.groups {
             for component in group
                 .requirement
@@ -340,97 +294,13 @@ impl InputBindings {
                 .filter(|c| c.role == role)
             {
                 let root = inputs[component.input].ok_or(BindingError::Input)?;
-                inspect(root)?;
-                backend
-                    .validate_value(root)
-                    .map_err(|_| BindingError::Value)?;
-                let mut selected = Some(root.clone());
-                for &(alternative, payload) in &component.path {
-                    let value = selected.take().ok_or(BindingError::Input)?;
-                    inspect(&value)?;
-                    let tag = value
-                        .control_variant_tag()
-                        .map_err(|_| BindingError::Value)?;
-                    if value.physical_type().variant_payload(tag).is_none() {
-                        return Err(BindingError::Value);
-                    }
-                    if tag != alternative {
-                        break;
-                    }
-                    let (ty, tag, values) =
-                        value.unpack_variant().map_err(|_| BindingError::Value)?;
-                    if ty != value.physical_type() || tag != alternative {
-                        return Err(BindingError::Value);
-                    }
-                    selected = Some(values.get(payload).ok_or(BindingError::Value)?.clone());
-                }
-                let Some(value) = selected else {
-                    if group.expected.is_some() {
-                        return Err(BindingError::Value);
-                    }
-                    continue;
-                };
-                let expected = group.expected.as_ref().ok_or(BindingError::Value)?;
-                inspect(&value)?;
-                if !value.has_type(&group.requirement.ty) {
-                    return Err(BindingError::Value);
-                }
-                backend
-                    .validate_value(&value)
-                    .map_err(|_| BindingError::Value)?;
-                // Holds the encoded buffer's live allowance through comparison.
-                let mut _encoded = None;
-                let bytes = match group.requirement.observation {
-                    Observation::Tag => {
-                        let tag = value
-                            .control_variant_tag()
-                            .map_err(|_| BindingError::Value)?;
-                        if tag
-                            >= group
-                                .requirement
-                                .ty
-                                .logical()
-                                .variant_descriptor()
-                                .ok_or(BindingError::Value)?
-                                .alternatives()
-                                .len()
-                        {
-                            return Err(BindingError::Value);
-                        }
-                        tag.to_string().into_bytes()
-                    }
-                    Observation::Extent { axis } => {
-                        let extent = value
-                            .control_extent(axis)
-                            .map_err(|_| BindingError::Value)?;
-                        if extent > Limits::VALUE_BYTES as u64 {
-                            return Err(BindingError::Limit);
-                        }
-                        extent.to_string().into_bytes()
-                    }
-                    Observation::Value => {
-                        if !backend.supports_wire(&group.requirement.ty) {
-                            return Err(BindingError::Codec);
-                        }
-                        // Complete wire permission was independently admitted
-                        // above. The installed codec also supports aggregate
-                        // frames absent from the legacy common-message profile.
-                        let bound = backend
-                            .encoding_bound(&value)
-                            .map_err(|_| BindingError::Codec)?;
-                        _encoded = reserve_allocation(Some(ledger), bound)
-                            .map_err(|_| BindingError::Limit)?;
-                        let bytes = backend
-                            .encode_wire(&value)
-                            .map_err(|_| BindingError::Codec)?;
-                        if bytes.len() > bound {
-                            return Err(BindingError::Codec);
-                        }
-                        bytes
-                    }
-                };
-                if &bytes != expected {
-                    return Err(BindingError::Value);
+                match (
+                    observe(&group.requirement, component, root, backend, ledger)?,
+                    &group.expected,
+                ) {
+                    (None, None) => {}
+                    (Some(observed), Some(expected)) if &observed.bytes == expected => {}
+                    _ => return Err(BindingError::Value),
                 }
             }
         }
@@ -441,4 +311,308 @@ impl InputBindings {
 fn natural(bytes: &[u8]) -> Result<u64> {
     let text = std::str::from_utf8(bytes).map_err(|_| BindingError::Requirements)?;
     zkc_format::logical::natural_index(text).map_err(|_| BindingError::Requirements)
+}
+
+const FORMAT: &str = "zkc.input-bindings/0";
+
+/// Check the complete requirement inventory against the actual entry: exact
+/// component coordinates and physical types, two or more participants per
+/// group and an observation the type admits. Reader and producer share it.
+fn inventory(
+    program: &Program,
+    entry: &str,
+    required: &[InputRequirement],
+) -> Result<Vec<EntryRole>> {
+    let roles = program.entry(entry).ok_or(BindingError::Subject)?;
+    let mut components = 0usize;
+    for requirement in required {
+        components = components
+            .checked_add(requirement.components.len())
+            .filter(|n| *n <= Limits::ARRAY_LENGTH)
+            .ok_or(BindingError::Limit)?;
+        let mut coordinates = BTreeSet::new();
+        let mut participants = BTreeSet::new();
+        for component in &requirement.components {
+            if component.path.len() > crate::vm::TYPE_DEPTH_LIMIT {
+                return Err(BindingError::Limit);
+            }
+            let role = roles
+                .iter()
+                .find(|r| r.role == component.role)
+                .ok_or(BindingError::Requirements)?;
+            participants.insert(&component.role);
+            if !coordinates.insert((&component.role, component.input, &component.path)) {
+                return Err(BindingError::Requirements);
+            }
+            let mut ty = role
+                .inputs
+                .get(component.input)
+                .ok_or(BindingError::Requirements)?
+                .1
+                .clone();
+            for &(alternative, payload) in &component.path {
+                ty = ty
+                    .variant_payload(alternative)
+                    .and_then(|p| p.get(payload))
+                    .ok_or(BindingError::Requirements)?
+                    .clone();
+            }
+            if ty != requirement.ty {
+                return Err(BindingError::Requirements);
+            }
+        }
+        if participants.len() < 2 || !requirement.observation.admits(program, &requirement.ty) {
+            return Err(BindingError::Requirements);
+        }
+    }
+    Ok(roles)
+}
+/// The canonical component coordinates of one group.
+fn components(requirement: &InputRequirement) -> serde_json::Value {
+    json!(
+        requirement
+            .components
+            .iter()
+            .map(|c| {
+                json!([
+                    c.role,
+                    c.input.to_string(),
+                    c.path
+                        .iter()
+                        .flat_map(|(a, p)| [a.to_string(), p.to_string()])
+                        .collect::<Vec<_>>()
+                ])
+            })
+            .collect::<Vec<_>>()
+    )
+}
+/// Exact role inputs in the entry's port order, with holes allowed.
+fn check_ports<V: Value>(roles: &[EntryRole], role: &str, inputs: &[Option<&V>]) -> Result<()> {
+    let ports = &roles
+        .iter()
+        .find(|r| r.role == role)
+        .ok_or(BindingError::Input)?
+        .inputs;
+    if ports.len() != inputs.len()
+        || ports
+            .iter()
+            .zip(inputs)
+            .any(|((_, ty), v)| v.is_some_and(|v| !v.has_type(ty)))
+    {
+        return Err(BindingError::Input);
+    }
+    Ok(())
+}
+/// One component's canonical observation, holding the live allowance of its
+/// encoding while it is retained.
+struct Observed {
+    bytes: Vec<u8>,
+    live: Option<LiveReservation>,
+}
+/// Select one component of an actual root input and observe its required
+/// property: `None` when a variant path is inactive. Each inspected value
+/// charges its retained bytes as logical work before it is validated or
+/// selected, and a value observation charges its canonical encoding bound as
+/// fresh allocation, held live by the returned observation.
+fn observe<B: WireBackend>(
+    requirement: &InputRequirement,
+    component: &InputComponent,
+    root: &B::Value,
+    backend: &B,
+    ledger: &ExecutionLedger,
+) -> Result<Option<Observed>> {
+    let inspect = |value: &B::Value| {
+        ledger
+            .charge(
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: value.retained_bytes() as u64,
+                },
+                0,
+            )
+            .map_err(|_| BindingError::Limit)
+    };
+    inspect(root)?;
+    backend
+        .validate_value(root)
+        .map_err(|_| BindingError::Value)?;
+    let mut selected = Some(root.clone());
+    for &(alternative, payload) in &component.path {
+        let value = selected.take().ok_or(BindingError::Input)?;
+        inspect(&value)?;
+        let tag = value
+            .control_variant_tag()
+            .map_err(|_| BindingError::Value)?;
+        if value.physical_type().variant_payload(tag).is_none() {
+            return Err(BindingError::Value);
+        }
+        if tag != alternative {
+            break;
+        }
+        let (ty, tag, values) = value.unpack_variant().map_err(|_| BindingError::Value)?;
+        if ty != value.physical_type() || tag != alternative {
+            return Err(BindingError::Value);
+        }
+        selected = Some(values.get(payload).ok_or(BindingError::Value)?.clone());
+    }
+    let Some(value) = selected else {
+        return Ok(None);
+    };
+    inspect(&value)?;
+    if !value.has_type(&requirement.ty) {
+        return Err(BindingError::Value);
+    }
+    backend
+        .validate_value(&value)
+        .map_err(|_| BindingError::Value)?;
+    let mut live = None;
+    let bytes = match requirement.observation {
+        Observation::Tag => {
+            let tag = value
+                .control_variant_tag()
+                .map_err(|_| BindingError::Value)?;
+            if tag
+                >= requirement
+                    .ty
+                    .logical()
+                    .variant_descriptor()
+                    .ok_or(BindingError::Value)?
+                    .alternatives()
+                    .len()
+            {
+                return Err(BindingError::Value);
+            }
+            tag.to_string().into_bytes()
+        }
+        Observation::Extent { axis } => {
+            let extent = value
+                .control_extent(axis)
+                .map_err(|_| BindingError::Value)?;
+            if extent > Limits::VALUE_BYTES as u64 {
+                return Err(BindingError::Limit);
+            }
+            extent.to_string().into_bytes()
+        }
+        Observation::Value => {
+            if !backend.supports_wire(&requirement.ty) {
+                return Err(BindingError::Codec);
+            }
+            // Complete wire permission was independently admitted with the
+            // inventory. The installed codec also supports aggregate frames.
+            let bound = backend
+                .encoding_bound(&value)
+                .map_err(|_| BindingError::Codec)?;
+            live = reserve_allocation(Some(ledger), bound).map_err(|_| BindingError::Limit)?;
+            let bytes = backend
+                .encode_wire(&value)
+                .map_err(|_| BindingError::Codec)?;
+            if bytes.len() > bound {
+                return Err(BindingError::Codec);
+            }
+            bytes
+        }
+    };
+    Ok(Some(Observed { bytes, live }))
+}
+
+struct Production {
+    requirement: InputRequirement,
+    /// Absent until a component is observed; then active bytes or inactive.
+    observed: Option<Option<Vec<u8>>>,
+    _live: Vec<LiveReservation>,
+}
+/// Canonical `zkc.input-bindings/0` production for one exact Program and
+/// entry. Each observed role contributes its actual components; every
+/// observed component of a group must agree, and every group needs one.
+pub struct ContextProducer {
+    program: String,
+    entry: String,
+    groups: Vec<Production>,
+    roles: Vec<EntryRole>,
+}
+impl std::fmt::Debug for ContextProducer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Common inputs need not be public. Diagnostics retain no value bytes.
+        f.debug_struct("ContextProducer")
+            .field("groups", &self.groups.len())
+            .finish_non_exhaustive()
+    }
+}
+impl ContextProducer {
+    /// Observe one role's actual inputs, in the entry's port order. Holes are
+    /// allowed only outside required components. Inspection and encoding
+    /// charge the ledger exactly as `InputBindings::check_role_prepared`
+    /// does; observations stay charged live until `encode` returns.
+    pub fn observe_role<B: WireBackend>(
+        &mut self,
+        role: &str,
+        backend: &B,
+        inputs: &[Option<&B::Value>],
+        ledger: &ExecutionLedger,
+    ) -> Result<()> {
+        if inputs.len() > Limits::PORTS {
+            return Err(BindingError::Limit);
+        }
+        check_ports(&self.roles, role, inputs)?;
+        for group in &mut self.groups {
+            for component in group
+                .requirement
+                .components
+                .iter()
+                .filter(|c| c.role == role)
+            {
+                let root = inputs[component.input].ok_or(BindingError::Input)?;
+                let observed = observe(&group.requirement, component, root, backend, ledger)?;
+                let (bytes, live) = match observed {
+                    Some(Observed { bytes, live }) => (Some(bytes), live),
+                    None => (None, None),
+                };
+                match &group.observed {
+                    Some(previous) if previous != &bytes => return Err(BindingError::Value),
+                    Some(_) => {}
+                    None => group.observed = Some(bytes),
+                }
+                group._live.extend(live);
+            }
+        }
+        Ok(())
+    }
+    /// Encode the canonical context. Every group must have an observed
+    /// component; the bytes are charged to the ledger as fresh allocation.
+    pub fn encode(self, ledger: &ExecutionLedger) -> Result<Vec<u8>> {
+        let rows = self
+            .groups
+            .iter()
+            .map(|group| {
+                let expected = match group.observed.as_ref().ok_or(BindingError::Input)? {
+                    Some(bytes) => json!(["active", hex(bytes)]),
+                    None => json!(["inactive"]),
+                };
+                Ok(json!([
+                    components(&group.requirement),
+                    group.requirement.ty.spelling(),
+                    group.requirement.observation.encoding(),
+                    expected
+                ]))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let bytes =
+            zkc_format::logical::encode_tree(&json!([FORMAT, self.program, self.entry, rows]))
+                .map_err(|_| BindingError::Limit)?;
+        if bytes.len() > Limits::ARTIFACT_BYTES {
+            return Err(BindingError::Limit);
+        }
+        ledger
+            .charge(
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: bytes.len() as u64,
+                },
+                bytes.len(),
+            )
+            .map_err(|_| BindingError::Limit)?;
+        Ok(bytes)
+    }
 }

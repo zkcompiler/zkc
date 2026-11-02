@@ -1,7 +1,10 @@
 //! Immutable numerical setup imports. This module grants no invocation authority
 //! and retains no resource reservations; SDK Hosts own both policies.
 use crate::{CpuInstallation, Value};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 use zkc_kernels::arkworks::bls12_381::{Bounds, ProverKey, VerifierKey};
 type Result<T> = std::result::Result<T, String>;
 
@@ -62,6 +65,8 @@ struct ImportedProver {
     verifier: Vec<u8>,
     fingerprint: [u8; 32],
     key: Arc<ProverKey>,
+    /// Named application sources that supplied these bytes for this pin.
+    sources: BTreeSet<String>,
 }
 struct ImportedVerifier {
     retained_bytes: usize,
@@ -124,6 +129,29 @@ impl VerifierMaterials {
         verifier: &VerifierKey,
         bounds: Bounds,
     ) -> Result<Arc<ProverKey>> {
+        self.import_prover_from(None, bytes, fingerprint, verifier, bounds)
+    }
+    /// Import prover material that a named application source supplied for
+    /// the setup slot `verifier` pins. The retained import records the source,
+    /// so replacing that source invalidates exactly the pins it fed.
+    pub fn import_named_prover(
+        &mut self,
+        source: &str,
+        bytes: &[u8],
+        fingerprint: [u8; 32],
+        verifier: &VerifierKey,
+        bounds: Bounds,
+    ) -> Result<Arc<ProverKey>> {
+        self.import_prover_from(Some(source), bytes, fingerprint, verifier, bounds)
+    }
+    fn import_prover_from(
+        &mut self,
+        source: Option<&str>,
+        bytes: &[u8],
+        fingerprint: [u8; 32],
+        verifier: &VerifierKey,
+        bounds: Bounds,
+    ) -> Result<Arc<ProverKey>> {
         if bounds != self.bounds {
             return Err("native-setup-capacity".into());
         }
@@ -132,11 +160,12 @@ impl VerifierMaterials {
         }
         let pin = verifier.metadata().key_id();
         let verifier_bytes = verifier.to_bytes(&self.bounds).map_err(|e| e.to_string())?;
-        if let Some(previous) = self.provers.get(&pin).filter(|previous| {
+        if let Some(previous) = self.provers.get_mut(&pin).filter(|previous| {
             previous.bytes == bytes
                 && previous.fingerprint == fingerprint
                 && previous.verifier == verifier_bytes
         }) {
+            previous.sources.extend(source.map(str::to_owned));
             return Ok(previous.key.clone());
         }
         self.remove_prover(&pin);
@@ -154,6 +183,7 @@ impl VerifierMaterials {
                 verifier: verifier_bytes,
                 fingerprint,
                 key: key.clone(),
+                sources: source.map(str::to_owned).into_iter().collect(),
             },
         );
         self.retained_bytes += retained_bytes;
@@ -179,10 +209,16 @@ impl VerifierMaterials {
         }
         self.remove_prover(pin);
     }
-    /// Named sources do not yet identify a setup pin. Preserve verifier imports
-    /// while forgetting all prover imports before a replacement can fail.
-    pub fn invalidate_provers(&mut self) {
-        while let Some(pin) = self.provers.keys().next().copied() {
+    /// Forget every prover import a replaced named source fed, before the
+    /// replacement can fail. Other pins and all verifier imports remain.
+    pub fn invalidate_source(&mut self, source: &str) {
+        let pins: Vec<_> = self
+            .provers
+            .iter()
+            .filter(|(_, prover)| prover.sources.contains(source))
+            .map(|(pin, _)| *pin)
+            .collect();
+        for pin in pins {
             self.remove_prover(&pin);
         }
     }
@@ -262,7 +298,7 @@ mod tests {
         let mut material = VerifierMaterials::new(bounds, Default::default(), total);
         let v = material.import(&vk, pin, bounds).unwrap();
         let p = material
-            .import_prover(&pk, fingerprint, verifier, bounds)
+            .import_named_prover("pk", &pk, fingerprint, verifier, bounds)
             .unwrap();
         assert_eq!(material.retained_bytes, total);
         assert_bounded(&material);
@@ -273,7 +309,7 @@ mod tests {
                 .import_prover(&pk, fingerprint, verifier, bounds)
                 .unwrap()
         ));
-        material.invalidate_provers();
+        material.invalidate_source("pk");
         assert_eq!(material.retained_bytes, snapshot_bound(vk.len()).unwrap());
         assert!(Arc::ptr_eq(&v, &material.import(&vk, pin, bounds).unwrap()));
         assert!(!Arc::ptr_eq(
@@ -282,6 +318,62 @@ mod tests {
                 .import_prover(&pk, fingerprint, verifier, bounds)
                 .unwrap()
         ));
+        assert_bounded(&material);
+    }
+    #[test]
+    fn replacing_a_named_source_invalidates_exactly_the_pins_it_fed() {
+        let bounds = crate::Policy::default().ark_bounds();
+        let setup = || {
+            zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+                1,
+                &mut ark_std::rand::thread_rng(),
+                &bounds,
+            )
+            .unwrap()
+        };
+        let (first, second) = (setup(), setup());
+        let mut material = VerifierMaterials::new(bounds, Default::default(), usize::MAX);
+        let import = |material: &mut VerifierMaterials,
+                      source: Option<&str>,
+                      keys: &zkc_kernels::arkworks::bls12_381::Keys| {
+            let pk = keys.prover_key().to_bytes(&bounds).unwrap();
+            let fingerprint = keys.prover_key().material_fingerprint();
+            match source {
+                Some(source) => material.import_named_prover(
+                    source,
+                    &pk,
+                    fingerprint,
+                    keys.verifier_key(),
+                    bounds,
+                ),
+                None => material.import_prover(&pk, fingerprint, keys.verifier_key(), bounds),
+            }
+            .unwrap()
+        };
+        let a = import(&mut material, Some("a"), &first);
+        let b = import(&mut material, Some("b"), &second);
+        // Replacing source a forgets the first pin and keeps the second.
+        material.invalidate_source("a");
+        assert!(!Arc::ptr_eq(&a, &import(&mut material, None, &first)));
+        assert!(Arc::ptr_eq(&b, &import(&mut material, None, &second)));
+        // An unnamed import records no source; a cache hit through another
+        // named source adds it.
+        let first_unnamed = import(&mut material, None, &first);
+        material.invalidate_source("a");
+        assert!(Arc::ptr_eq(
+            &first_unnamed,
+            &import(&mut material, None, &first)
+        ));
+        assert!(Arc::ptr_eq(
+            &first_unnamed,
+            &import(&mut material, Some("b"), &first)
+        ));
+        material.invalidate_source("b");
+        assert!(!Arc::ptr_eq(
+            &first_unnamed,
+            &import(&mut material, None, &first)
+        ));
+        assert!(!Arc::ptr_eq(&b, &import(&mut material, None, &second)));
         assert_bounded(&material);
     }
     #[test]

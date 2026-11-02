@@ -1,5 +1,6 @@
 //! Thin command orchestration over project compilation and the shared Entry Host.
 
+mod common;
 mod function;
 mod initialize;
 mod input;
@@ -76,7 +77,7 @@ fn execute(
     } else {
         None
     };
-    if command == "bindings" && !args.has("--output") {
+    if matches!(command, "bindings" | "common-inputs") && !args.has("--output") {
         return Err("cli-usage".into());
     }
     let target = Input::load(args, report)?;
@@ -91,9 +92,18 @@ fn execute(
         return Ok(());
     }
     report["phase"] = json!("compilation");
+    let kind = if command == "common-inputs" {
+        Some(crate::project::EntryKind::Function)
+    } else {
+        operation.map(Operation::kind)
+    };
     let package = measured(args, report, "compilation_and_capture", |report| {
-        target.compile(name, operation.map(Operation::kind), report)
+        target.compile(name, kind, report)
     })?;
+    if command == "common-inputs" {
+        let cpu = cpu.expect("execution command CPU context");
+        return common::produce(package, &target, args, cpu, report);
+    }
     if command == "bindings" {
         let source = super::bindings::rust(&package)?;
         let mut destinations = Outputs::new(&[args.value("--output").unwrap()], &[])?;

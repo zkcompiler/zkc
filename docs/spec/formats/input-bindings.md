@@ -68,6 +68,33 @@ roles of one invocation share that ledger. Failure creates no runtime frame or
 semantic action. Ordinary runner loading still independently admits complete inputs,
 backend authority, services, custody and budgets.
 
+## Production
+
+`InputBindings::producer(program, entry, inventory)` starts the producer that
+sits beside this reader. It checks the inventory exactly as `admit_pinned`
+does. `ContextProducer::observe_role(role, backend, inputs, ledger)` observes
+one role's actual inputs in the entry's port order, with holes allowed only
+outside required components, and computes each of its components' observation
+exactly as the reader does, charging inspection and encoding to the caller's
+ledger in the same way. Every observed component of one group must agree: equal
+canonical bytes, or the inactive marker on every one, or the producer refuses
+with `input-binding-Value`. `ContextProducer::encode(ledger)` requires an
+observed component for every group (`input-binding-Input` otherwise), emits the
+canonical bytes `admit_pinned` accepts, and charges them as fresh allocation.
+A producer may observe one role or all of them; observing all of them also
+checks the participants' agreement before distribution.
+
+Producing a context confers no trust. Hashing the produced bytes yields the pin
+that the application distributes through its externally trusted context; a
+process that hashes bytes it receives still establishes nothing. The SDK exposes
+the producer as `RunEntry::common_input_context(request)`, which prepares the
+named request without issuing resources and charges its invocation ledger, and as
+`BackendRun::common_input_context(inputs, value_budget, work_budget)` for
+caller-owned backend values. The CLI command `zkc common-inputs` writes the
+context of one Run deployment of a Function package and reports its SHA-256.
+
+## Consumers and trust boundary
+
 The Runtime utility checks pins, exact inventories and actual values. It cannot
 establish that other processes used the same externally supplied pin. Current
 joint execution establishes scoped selector/count agreement at actual reached

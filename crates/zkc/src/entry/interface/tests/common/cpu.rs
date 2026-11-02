@@ -72,15 +72,33 @@ fn package(d: &Value, inputs: &[Vec<String>]) -> (Package, String) {
         program,
     )
 }
-fn context(program: &str, rows: Value) -> (Vec<u8>, [u8; 32]) {
-    // A test pin identifies fixture bytes only, not external application trust.
-    let bytes = zkc_format::logical::encode_tree(&json!([
-        "zkc.input-bindings/0",
-        digest(program),
-        "sample_Protocol",
-        rows
-    ]))
-    .unwrap();
+/// The context the SDK produces from a named request, checked against its
+/// canonical rows for this program. A test pin identifies fixture bytes only,
+/// not external application trust.
+fn produced(
+    run: &RunEntry,
+    request: RunRequest,
+    program: &str,
+    rows: Value,
+) -> (Vec<u8>, [u8; 32]) {
+    let bytes = run.common_input_context(request).unwrap();
+    assert_eq!(
+        zkc_format::logical::decode_tree(&bytes).unwrap(),
+        json!([
+            "zkc.input-bindings/0",
+            digest(program),
+            "sample_Protocol",
+            rows
+        ])
+    );
+    let pin = Sha256::digest(&bytes).into();
+    (bytes, pin)
+}
+/// A produced context with edited rows, for reader refusals.
+fn edited(bytes: &[u8], change: impl FnOnce(&mut Value)) -> (Vec<u8>, [u8; 32]) {
+    let mut tree = zkc_format::logical::decode_tree(bytes).unwrap();
+    change(&mut tree);
+    let bytes = zkc_format::logical::encode_tree(&tree).unwrap();
     let pin = Sha256::digest(&bytes).into();
     (bytes, pin)
 }
@@ -154,7 +172,10 @@ fn named_bool_value_and_enum_tag_contexts_execute_and_refuse_before_execution() 
         } else {
             native_hex(&Native::Bool(true))
         };
-        let (bytes, pin) = context(
+        // Tags agree although the payloads differ.
+        let (bytes, pin) = produced(
+            &run,
+            request(make(true), make(!tag_only)),
             &program,
             json!([row(
                 0,
@@ -198,7 +219,10 @@ fn named_extents_preserve_zero_contents_and_both_matrix_axes() {
         );
         let (run, program) = admitted(&d, &[vec![physical(logical)], vec![physical(logical)]]);
         let expected = if axis == 0 { rows } else { cols };
-        let (bytes, pin) = context(
+        let shape = || Native::matrix(rows, cols, &[], &Policy::default()).unwrap();
+        let (bytes, pin) = produced(
+            &run,
+            request(shape().into(), shape().into()),
             &program,
             json!([row(
                 0,
@@ -259,17 +283,36 @@ fn pinned_inventory_rejects_omission_extra_observation_axis_slot_entry_and_progr
         ]),
         json!([obligation(0, json!([]), json!({"kind":"extent","axis":0}))]),
     );
-    let (_run, program) = admitted(
+    let (run, program) = admitted(
         &d,
         &[vec![physical(logical); 2], vec![physical(logical); 2]],
     );
-    let original = json!([row(
-        0,
-        json!([]),
-        logical,
-        json!(["extent", "0"]),
-        json!(["active", "30"])
-    )]);
+    let empty = || entry::Value::from(Native::Bytes(vec![].into()));
+    let both = |role: &str| {
+        (
+            role.to_owned(),
+            RoleInputs {
+                inputs: [("subject".into(), empty()), ("other".into(), empty())].into(),
+                ..Default::default()
+            },
+        )
+    };
+    let (original, _) = produced(
+        &run,
+        RunRequest {
+            session: "common-inputs".into(),
+            setups: BTreeMap::new(),
+            roles: [both("P"), both("V")].into(),
+        },
+        &program,
+        json!([row(
+            0,
+            json!([]),
+            logical,
+            json!(["extent", "0"]),
+            json!(["active", "30"])
+        )]),
+    );
     for attack in [
         "omit", "extra", "value", "axis", "slot", "role", "path", "entry", "program", "pin",
     ] {
@@ -277,30 +320,27 @@ fn pinned_inventory_rejects_omission_extra_observation_axis_slot_entry_and_progr
             &d,
             &[vec![physical(logical); 2], vec![physical(logical); 2]],
         );
-        let mut rows = original.clone();
-        match attack {
-            "omit" => rows = json!([]),
-            "extra" => {
-                let extra = rows[0].clone();
-                rows.as_array_mut().unwrap().push(extra);
+        let (bytes, mut pin) = edited(&original, |tree| {
+            let rows = &mut tree[3];
+            match attack {
+                "omit" => *rows = json!([]),
+                "extra" => {
+                    let extra = rows[0].clone();
+                    rows.as_array_mut().unwrap().push(extra);
+                }
+                "value" => rows[0][2] = json!("value"),
+                "axis" => rows[0][2] = json!(["extent", "1"]),
+                "slot" => {
+                    rows[0][0][0][1] = json!("1");
+                    rows[0][0][1][1] = json!("1");
+                }
+                "role" => rows[0][0][0][0] = json!("P"),
+                "path" => rows[0][0][0][2] = json!(["0", "0"]),
+                "entry" => tree[2] = json!("stale"),
+                "program" => tree[1] = json!("stale"),
+                _ => (),
             }
-            "value" => rows[0][2] = json!("value"),
-            "axis" => rows[0][2] = json!(["extent", "1"]),
-            "slot" => {
-                rows[0][0][0][1] = json!("1");
-                rows[0][0][1][1] = json!("1");
-            }
-            "role" => rows[0][0][0][0] = json!("P"),
-            "path" => rows[0][0][0][2] = json!(["0", "0"]),
-            _ => (),
-        }
-        let (mut bytes, mut pin) = context(&program, rows);
-        if ["entry", "program"].contains(&attack) {
-            let mut tree = zkc_format::logical::decode_tree(&bytes).unwrap();
-            tree[if attack == "entry" { 2 } else { 1 }] = json!("stale");
-            bytes = zkc_format::logical::encode_tree(&tree).unwrap();
-            pin = Sha256::digest(&bytes).into();
-        }
+        });
         if attack == "pin" {
             pin = [0; 32];
         }
@@ -322,7 +362,16 @@ fn pinned_inventory_rejects_omission_extra_observation_axis_slot_entry_and_progr
         &reduced,
         &[vec![physical(logical); 2], vec![physical(logical); 2]],
     );
-    let (bytes, pin) = context(&program, json!([]));
+    let (bytes, pin) = produced(
+        &run,
+        RunRequest {
+            session: "common-inputs".into(),
+            setups: BTreeMap::new(),
+            roles: [both("P"), both("V")].into(),
+        },
+        &program,
+        json!([]),
+    );
     assert!(run.bind_common_inputs(&bytes, &pin).is_ok());
 }
 
@@ -390,7 +439,9 @@ fn nested_payload_inventory_uses_actual_program_types_and_conditional_paths() {
             BTreeMap::new()
         },
     };
-    let (bytes, pin) = context(
+    let (bytes, pin) = produced(
+        &run,
+        request(make(true, true), make(true, true)),
         &program,
         json!([row(
             0,
@@ -425,7 +476,10 @@ fn nested_payload_inventory_uses_actual_program_types_and_conditional_paths() {
         "input-binding-Value"
     );
     let (run, program) = admitted(&d, &[vec![physical(&logical)], vec![physical(&logical)]]);
-    let (bytes, pin) = context(
+    // Dormant paths of every component produce the inactive expectation.
+    let (bytes, pin) = produced(
+        &run,
+        request(make(false, false), make(false, true)),
         &program,
         json!([row(
             0,
@@ -495,7 +549,6 @@ fn shared_root_role_permutations_keep_zero_width_supply_and_participant_position
         "value",
         ["active", native_hex(&Native::Bool(true))]
     ]]);
-    let (bytes, pin) = context(&program, rows);
     let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();
     let groups = run.interface().input_groups();
     let p = decoder
@@ -512,7 +565,6 @@ fn shared_root_role_permutations_keep_zero_width_supply_and_participant_position
             None,
         )
         .unwrap();
-    let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
     let make = |p, v| RunRequest {
         session: "permutation".into(),
         setups: BTreeMap::new(),
@@ -534,6 +586,19 @@ fn shared_root_role_permutations_keep_zero_width_supply_and_participant_position
         ]
         .into(),
     };
+    let decode = |p: &[u8], v: &[u8]| {
+        let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();
+        (
+            decoder.decode(&groups[0], p, None).unwrap(),
+            decoder.decode(&groups[1], v, None).unwrap(),
+        )
+    };
+    let (p_copy, v_copy) = decode(
+        br#"{"state_nested_shared":true,"state_nested_empty":null,"state_tail":null}"#,
+        br#"{"state_header":false,"state_nested_private":false,"state_nested_shared":true}"#,
+    );
+    let (bytes, pin) = produced(&run, make(p_copy, v_copy), &program, rows);
+    let bound = run.bind_common_inputs(&bytes, &pin).unwrap();
     assert!(bound.prepare(make(p, v)).unwrap().execute().is_success());
     // Empty semantic supplies remain mandatory and are never common native slots.
     let mut missing = BTreeMap::new();
@@ -553,7 +618,27 @@ fn authenticating_edited_package_does_not_rebind_a_stale_program_or_inventory_co
         json!([obligation(0, json!([]), json!({"kind":"value"}))]),
     );
     let (original, program) = package(&d, &[vec![physical("bool"); 2], vec![physical("bool"); 2]]);
-    let (bytes, pin) = context(
+    let run = RunEntry::admit(original.clone(), Default::default(), Default::default()).unwrap();
+    let both = |role: &str, other| {
+        (
+            role.to_owned(),
+            RoleInputs {
+                inputs: [
+                    ("subject".into(), Native::Bool(true).into()),
+                    ("other".into(), Native::Bool(other).into()),
+                ]
+                .into(),
+                ..Default::default()
+            },
+        )
+    };
+    let (bytes, pin) = produced(
+        &run,
+        RunRequest {
+            session: "common-inputs".into(),
+            setups: BTreeMap::new(),
+            roles: [both("P", false), both("V", true)].into(),
+        },
         &program,
         json!([row(
             0,

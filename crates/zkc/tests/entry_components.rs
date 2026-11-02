@@ -363,3 +363,87 @@ fn execute_function(host: &FunctionEntry, arguments: entry::NamedValues) -> entr
     assert!(result.is_success(), "{}", result.diagnostics());
     result
 }
+
+#[test]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
+fn fresh_function_proof_child_completes_on_a_later_attempt() {
+    let compiler = compiler();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/function_attempts.zkc");
+    let output = Command::new(&compiler)
+        .arg("language-package")
+        .arg("--source-format=zkc")
+        .arg(format!("--module=m={}", source.display()))
+        .arg("--entry=m::Produce")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let package = capture(&output.stdout);
+    let children = FunctionInterface::deployment_interfaces(&package).unwrap();
+    assert_eq!(children.len(), 1);
+    let id = children[0].id().to_owned();
+    let execute = |attempts: Option<entry::AttemptOptions>| {
+        let entry = FunctionEntry::admit(
+            package.clone(),
+            FunctionOptions {
+                binding: BindingPolicy::AllowAuthored,
+                attempts: attempts
+                    .map(|a| std::collections::BTreeMap::from([(id.clone(), a)]))
+                    .unwrap_or_default(),
+                ..Default::default()
+            },
+            std::collections::BTreeMap::from([(id.clone(), Default::default())]),
+        )
+        .unwrap();
+        let group = entry.interface().input_group();
+        let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();
+        let arguments = decoder
+            .decode(&group, br#"{"public":{},"witness":{}}"#, None)
+            .unwrap();
+        entry
+            .prepare(FunctionRequest {
+                arguments,
+                context: InvocationContext {
+                    deployments: [(
+                        id.clone(),
+                        InvocationBinding::Proof(ProofContext::default()),
+                    )]
+                    .into(),
+                },
+            })
+            .unwrap()
+            .execute()
+    };
+    // Each attempt completes with probability one half. Under an explicit
+    // policy a child whose first attempt requests a retry still produces its
+    // proof; without one, that child fails at the one-attempt limit. Both are
+    // observed within 64 independent calls except with probability 2^-63.
+    let (mut retried, mut limited) = (false, false);
+    for _ in 0..64 {
+        let report = execute(Some(entry::AttemptOptions {
+            count: 64,
+            ..Default::default()
+        }));
+        assert!(report.is_success(), "{}", report.diagnostics());
+        let attempts = report.calls[0].native["attempt_count"].as_u64().unwrap();
+        if attempts >= 2 {
+            assert_eq!(
+                report.calls[0].native["attempts"][0]["decision"],
+                json!({"Ok": false})
+            );
+            retried = true;
+        }
+        let single = execute(None);
+        if !single.is_success() {
+            assert_eq!(single.failure.unwrap().code, "native-attempt-limit");
+            limited = true;
+        }
+        if retried && limited {
+            break;
+        }
+    }
+    assert!(retried && limited);
+}

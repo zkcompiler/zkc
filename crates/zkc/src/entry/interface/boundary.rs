@@ -211,22 +211,145 @@ fn family_aliases_metered(
 }
 
 /// A separate admission algorithm has one cumulative work allowance across
-/// indexing, both supply directions, coverage and classification.
+/// indexing, both supply directions, coverage and classification. Each
+/// reconstructed supply plan separately charges its retained descriptors.
 pub(super) struct Work {
     pub remaining: usize,
+    descriptor_bytes: usize,
 }
 impl Work {
-    pub fn new() -> Self {
+    pub fn new(limits: super::InterfaceLimits) -> Self {
         Self {
-            remaining: 1_000_000,
+            remaining: limits.work,
+            descriptor_bytes: limits.descriptor_bytes,
         }
     }
     pub fn charge(&mut self, count: usize) -> Result<()> {
         self.remaining = self.remaining.checked_sub(count).ok_or(E::Limit)?;
         Ok(())
     }
-    fn lookup(&mut self, entries: usize) -> Result<()> {
+    pub(super) fn lookup(&mut self, entries: usize) -> Result<()> {
         self.charge(1 + entries.checked_ilog2().unwrap_or(0) as usize)
+    }
+}
+/// Whether a placement places `role`, without allocating its role set. Data
+/// roles and oracle receivers are strictly increasing, and so are a
+/// product's arguments except a nominal telescope's, which has at most 16.
+fn places(p: &Placement, role: u32, work: &mut Work) -> Result<bool> {
+    Ok(match p {
+        Placement::Data { roles } => {
+            work.lookup(roles.len())?;
+            roles.binary_search(&role).is_ok()
+        }
+        Placement::Oracle { holder, receivers } => {
+            work.lookup(receivers.len())?;
+            *holder == role || receivers.binary_search(&role).is_ok()
+        }
+        Placement::Product { arguments, .. } if arguments.len() <= 16 => {
+            work.charge(arguments.len())?;
+            arguments.contains(&role)
+        }
+        Placement::Product { arguments, .. } => {
+            work.lookup(arguments.len())?;
+            arguments.binary_search(&role).is_ok()
+        }
+    })
+}
+/// Per-node facts shared by every placed role's walk over one supply plan.
+/// Keys are the addresses of the admitted document's schema and placement
+/// nodes, which outlive the reconstruction.
+#[derive(Default)]
+struct Memo {
+    ordinary: BTreeMap<(usize, usize), Option<Vec<u32>>>,
+    costs: BTreeMap<usize, usize>,
+}
+impl Memo {
+    fn key(s: &Schema, p: &Placement) -> (usize, usize) {
+        (
+            std::ptr::from_ref(s) as usize,
+            std::ptr::from_ref(p) as usize,
+        )
+    }
+    /// Whether `role` can supply every component of this ordinary subtree.
+    fn ordinary(&mut self, s: &Schema, p: &Placement, role: u32, work: &mut Work) -> Result<bool> {
+        self.ordinary_roles(s, p, work)?;
+        let roles = &self.ordinary[&Self::key(s, p)];
+        Ok(match roles {
+            Some(roles) => {
+                work.lookup(roles.len())?;
+                roles.binary_search(&role).is_ok()
+            }
+            None => false,
+        })
+    }
+    /// The memoized, charged form of `placement::ordinary_roles`. Every
+    /// result is strictly increasing, so intersections use binary search.
+    fn ordinary_roles(&mut self, s: &Schema, p: &Placement, work: &mut Work) -> Result<()> {
+        let key = Self::key(s, p);
+        work.lookup(self.ordinary.len())?;
+        if self.ordinary.contains_key(&key) {
+            return Ok(());
+        }
+        let roles = if s.is_logical() {
+            None
+        } else {
+            match p {
+                Placement::Data { roles } => {
+                    work.charge(roles.len())?;
+                    Some(roles.clone())
+                }
+                Placement::Product { fields, .. } => {
+                    let mut roles: Option<Vec<u32>> = None;
+                    let mut complete = true;
+                    for (i, field) in fields.iter().enumerate() {
+                        let child = if s.kind == Kind::Array {
+                            s.element.as_deref()
+                        } else {
+                            s.fields.get(i).map(|f| &f.schema)
+                        };
+                        let Some(child) = child else {
+                            complete = false;
+                            break;
+                        };
+                        self.ordinary_roles(child, field, work)?;
+                        let Some(next) = &self.ordinary[&Self::key(child, field)] else {
+                            complete = false;
+                            break;
+                        };
+                        roles = Some(match roles {
+                            Some(previous) => {
+                                work.charge(
+                                    previous.len()
+                                        * (1 + next.len().checked_ilog2().unwrap_or(0) as usize),
+                                )?;
+                                previous
+                                    .into_iter()
+                                    .filter(|r| next.binary_search(r).is_ok())
+                                    .collect()
+                            }
+                            None => {
+                                work.charge(next.len())?;
+                                next.clone()
+                            }
+                        });
+                    }
+                    roles.filter(|_| complete)
+                }
+                Placement::Oracle { .. } => None,
+            }
+        };
+        self.ordinary.insert(key, roles);
+        Ok(())
+    }
+    fn cost(&mut self, s: &Schema, work: &mut Work) -> Result<usize> {
+        let key = std::ptr::from_ref(s) as usize;
+        work.lookup(self.costs.len())?;
+        if let Some(cost) = self.costs.get(&key) {
+            return Ok(*cost);
+        }
+        let cost = schema_cost(s, work)?;
+        self.costs.insert(key, cost);
+        Ok(cost)
     }
 }
 #[derive(Default)]
@@ -271,14 +394,20 @@ pub(super) fn views(
         .collect();
     work.charge(setup.len())?;
     let public = public_index(public, work)?;
-    let mut remaining = 16 * 1024 * 1024;
+    let mut remaining = work.descriptor_bytes;
     let mut result = Vec::new();
     let mut residual = Vec::new();
     // The same path has the same alias at each participant.
     let mut used = ports.iter().map(|p| p.name.clone()).collect();
     let mut aliases = BTreeMap::new();
+    let mut memo = Memo::default();
     for port in ports {
-        for role in 0..protocol.roles.len() as u32 {
+        // Views exist only at a port's placed roles: compute them once and
+        // walk only those, so the work grows with placed roles, not the roster.
+        let placed = port.placement.roles();
+        work.charge(1 + placed.len())?;
+        let node = public.child(port.index, work)?;
+        for role in placed {
             walk(
                 protocol,
                 port,
@@ -288,7 +417,7 @@ pub(super) fn views(
                 0,
                 role,
                 outputs,
-                public.child(port.index, work)?,
+                node,
                 false,
                 &setup,
                 &mut used,
@@ -296,6 +425,7 @@ pub(super) fn views(
                 &mut result,
                 &mut residual,
                 &mut remaining,
+                &mut memo,
                 work,
             )?;
         }
@@ -303,14 +433,12 @@ pub(super) fn views(
     if outputs {
         // Output families have no context fields. Their direct aliases use the
         // same per-participant roster as generated Host result records.
-        for role in 0..protocol.roles.len() as u32 {
-            work.charge(result.len())?;
-            let indices: Vec<_> = result
-                .iter()
-                .enumerate()
-                .filter(|(_, v)| v.role == role)
-                .map(|(i, _)| i)
-                .collect();
+        work.charge(protocol.roles.len() + result.len())?;
+        let mut by_role = vec![Vec::new(); protocol.roles.len()];
+        for (i, view) in result.iter().enumerate() {
+            by_role[view.role as usize].push(i);
+        }
+        for indices in by_role {
             let coordinates: Vec<_> = indices
                 .iter()
                 .map(|&i| {
@@ -346,13 +474,14 @@ fn walk(
     result: &mut Vec<View>,
     residual: &mut Vec<BoundaryRequirement>,
     remaining: &mut usize,
+    memo: &mut Memo,
     work: &mut Work,
 ) -> Result<()> {
-    work.charge(1 + path.len() + protocol.roles.len())?;
-    if !p.roles().contains(&role) {
+    work.charge(1 + path.len())?;
+    if !places(p, role, work)? {
         return Ok(());
     }
-    let cost = schema_cost(s, work)?;
+    let cost = memo.cost(s, work)?;
     let mut refuse = |reason| -> Result<()> {
         *remaining = remaining
             .checked_sub(128 + path.len() * 4 + protocol.roles[role as usize].len())
@@ -395,8 +524,7 @@ fn walk(
         Kind::Record | Kind::Tuple | Kind::Array | Kind::LogicalRecord
     ) && !s.fields.is_empty();
     let split_setup = setup_count != 0 && selectable_product;
-    let ordinary =
-        super::placement::ordinary_roles(s, p).is_some_and(|roles| roles.contains(&role));
+    let ordinary = memo.ordinary(s, p, role, work)?;
     if ordinary && !splits_public && !split_setup {
         // Views describe typed transport. Public external ingress independently
         // checks recursive constructor authority; retained values keep their origin.
@@ -462,7 +590,7 @@ fn walk(
     for (i, f) in s.fields.iter().enumerate() {
         let cp = child_placement(s, p, i);
         path.push(i as u32);
-        if !f.public && cp.roles().contains(&role) {
+        if !f.public && places(cp, role, work)? {
             *remaining = remaining
                 .checked_sub(128 + path.len() * 4 + protocol.roles[role as usize].len())
                 .ok_or(E::Limit)?;
@@ -495,6 +623,7 @@ fn walk(
                 result,
                 residual,
                 remaining,
+                memo,
                 work,
             )?;
         }

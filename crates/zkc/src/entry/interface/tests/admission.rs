@@ -264,7 +264,7 @@ fn indexed_public_selection_charges_bounded_cumulative_work_even_without_native_
     for count in [1000, 2000] {
         let d = zero_storage_roster(count);
         let view = read(&d).unwrap();
-        let mut work = boundary::Work::new();
+        let mut work = boundary::Work::new(InterfaceLimits::DEFAULT);
         ports::Ports::with_work(
             &view.document,
             view.selected,
@@ -273,16 +273,17 @@ fn indexed_public_selection_charges_bounded_cumulative_work_even_without_native_
             &mut work,
         )
         .unwrap();
-        let used = 1_000_000 - work.remaining;
+        let used = InterfaceLimits::DEFAULT.work - work.remaining;
         eprintln!("{count} public unit fields: {used} reconstruction work");
-        assert!(used < 1_000_000);
+        assert!(used < InterfaceLimits::DEFAULT.work);
         if previous != 0 {
             assert!(used < previous * 5 / 2);
         }
         previous = used;
-        let mut exhausted = boundary::Work {
-            remaining: used - 1,
-        };
+        let mut exhausted = boundary::Work::new(InterfaceLimits {
+            work: used - 1,
+            ..InterfaceLimits::DEFAULT
+        });
         assert!(matches!(
             ports::Ports::with_work(
                 &view.document,

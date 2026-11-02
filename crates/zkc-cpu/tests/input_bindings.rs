@@ -27,7 +27,10 @@ fn backend() -> CpuBackend {
     )
     .unwrap()
 }
-fn pinned(ty: PhysicalType, observation: Observation, expected: &[u8]) -> InputBindings {
+/// Produce the context `observed` determines at role P, check its canonical
+/// expectation, and admit it under its pin.
+fn pinned(observation: Observation, observed: &Value, expected: &[u8]) -> InputBindings {
+    let ty = observed.physical_type();
     let participants: Vec<_> = ["P", "V"]
         .iter()
         .map(|role| {
@@ -67,24 +70,16 @@ fn pinned(ty: PhysicalType, observation: Observation, expected: &[u8]) -> InputB
         ty: ty.clone(),
         observation,
     }];
-    let facet = match observation {
-        Observation::Value => json!("value"),
-        Observation::Tag => json!("tag"),
-        Observation::Extent { axis } => json!(["extent", axis.to_string()]),
-    };
+    let mut producer = InputBindings::producer(&program, "main", &required).unwrap();
+    producer
+        .observe_role("P", &backend(), &[Some(observed)], &ledger())
+        .unwrap();
+    let bytes = producer.encode(&ledger()).unwrap();
+    let tree = zkc_format::logical::decode_tree(&bytes).unwrap();
+    assert_eq!(tree[1], json!(hex(&Sha256::digest(program.bytes()))));
+    assert_eq!(tree[3][0][0], json!([["P", "0", []], ["V", "0", []]]));
+    assert_eq!(tree[3][0][3], json!(["active", hex(expected)]));
     // Local fixture pins identify bytes only; external authority is an application obligation.
-    let bytes = zkc_format::logical::encode_tree(&json!([
-        "zkc.input-bindings/0",
-        hex(&Sha256::digest(program.bytes())),
-        "main",
-        [[
-            [["P", "0", []], ["V", "0", []]],
-            ty.spelling(),
-            facet,
-            ["active", hex(expected)]
-        ]]
-    ]))
-    .unwrap();
     InputBindings::admit_pinned(
         &program,
         "main",
@@ -109,7 +104,7 @@ fn cpu_extent_observation_binds_metadata_without_contents_or_wire_support() {
     .into_iter()
     .map(|values| Value::Sequence(Sequence::new(ty.clone(), values, &Policy::default()).unwrap()))
     .collect();
-    let context = pinned(ty, Observation::Extent { axis: 0 }, b"2");
+    let context = pinned(Observation::Extent { axis: 0 }, &sequences[0], b"2");
     for (role, value) in ["P", "V"].into_iter().zip(sequences) {
         context
             .check_role(role, &backend, &[value], &ledger())
@@ -125,11 +120,7 @@ fn cpu_extent_observation_binds_metadata_without_contents_or_wire_support() {
     ] {
         let left = Value::Vector(left.into());
         let right = Value::Vector(right.into());
-        let context = pinned(
-            left.physical_type(),
-            Observation::Extent { axis: 0 },
-            expected,
-        );
+        let context = pinned(Observation::Extent { axis: 0 }, &left, expected);
         context
             .check_role("P", &backend, &[left], &ledger())
             .unwrap();
@@ -143,7 +134,7 @@ fn cpu_extent_observation_binds_metadata_without_contents_or_wire_support() {
     let fixed =
         Value::FixedVector(zkc_cpu::FixedVector::new(fixed_ty.clone(), vec![].into()).unwrap());
     assert!(!backend.supports_wire(&fixed_ty));
-    pinned(fixed_ty, Observation::Extent { axis: 0 }, b"0")
+    pinned(Observation::Extent { axis: 0 }, &fixed, b"0")
         .check_role("P", &backend, &[fixed], &ledger())
         .unwrap();
 }
@@ -155,7 +146,7 @@ fn cpu_matrix_extent_keeps_rows_columns_and_contents_distinct() {
     let left = Value::matrix(2, 3, &[(0, 1, Scalar::from(1u64))], &policy).unwrap();
     let right = Value::matrix(2, 3, &[(1, 2, Scalar::from(9u64))], &policy).unwrap();
     for (axis, expected) in [(0, b"2"), (1, b"3")] {
-        let context = pinned(left.physical_type(), Observation::Extent { axis }, expected);
+        let context = pinned(Observation::Extent { axis }, &left, expected);
         context
             .check_role("P", &backend, std::slice::from_ref(&left), &ledger())
             .unwrap();
@@ -181,7 +172,7 @@ fn empty_variant_value_is_active_canonical_data_and_not_an_inactive_path() {
     let value = Value::pack_variant(ty.clone(), 0, vec![]).unwrap();
     let backend = backend();
     let encoded = backend.encode_wire(&value).unwrap();
-    let context = pinned(ty, Observation::Value, &encoded);
+    let context = pinned(Observation::Value, &value, &encoded);
     context
         .check_role("P", &backend, &[value], &ledger())
         .unwrap();

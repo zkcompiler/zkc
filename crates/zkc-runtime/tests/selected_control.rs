@@ -5,7 +5,8 @@ use host::{BOOL, Host, TestValue};
 use serde_json::{Value as Json, json};
 use zkc_runtime::{
     host::joint::{
-        self, Bundle, BundleError, BundleLimits, NoHooks, Outcome, RoleInput, RunLimits,
+        self, Bundle, BundleError, BundleLimits, FailureKind, NoHooks, Outcome, RoleInput,
+        RunLimits,
     },
     interpreter::Runner,
     vm::{Action, Contracts, ErrorCode, ExecutionPolicy, PathElement, PhysicalType, Program},
@@ -125,8 +126,8 @@ fn only_selected_boolean_arm_sends_and_creates_frames() {
                 .reached
                 .iter()
                 .filter(|r| !r.path.is_empty())
-                .all(|r| r.path
-                    == vec![PathElement::Branch {
+                .all(|r| *r.path
+                    == [PathElement::Branch {
                         site: "choice".into(),
                         alternative: label.into()
                     }])
@@ -456,12 +457,151 @@ fn nested_loop_branch_preserves_zero_trip_paths_and_count_checks() {
                 );
                 for r in report.reached.iter().filter(|r| r.path.len() == 2) {
                     assert!(
-                        matches!(r.path.as_slice(),[PathElement::Loop {site,..},PathElement::Branch {site:branch,..}] if site=="rounds" && branch=="choice")
+                        matches!(&*r.path,[PathElement::Loop {site,..},PathElement::Branch {site:branch,..}] if site=="rounds" && branch=="choice")
                     );
                 }
             }
         }
     }
+}
+
+/// The branch of `fixture(true)` inside `depth` nested loops, each counting
+/// to the role's `n`, with long site names so that paths dominate storage.
+fn nested_fixture(depth: usize) -> Json {
+    let mut raw = fixture(true);
+    let mut candidate: Json = serde_json::from_str(raw["candidate"].as_str().unwrap()).unwrap();
+    let sites: Vec<_> = (0..depth)
+        .map(|k| format!("{}{k}", "s".repeat(100)))
+        .collect();
+    for role in 0..2 {
+        candidate[3][role][4]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(["n", "index@native.index/0"]));
+        let mut body = candidate[3][role][6][0].clone();
+        for k in (0..depth).rev() {
+            let mut captures = vec![json!(["c", "c"]), json!(["x", "x"])];
+            if k + 1 < depth {
+                captures.push(json!(["n", "n"]));
+            }
+            body = json!([
+                "loop",
+                sites[k],
+                ["value", "n", "3", format!("i{k}")],
+                [],
+                captures,
+                [body, ["yield", []]],
+                []
+            ]);
+        }
+        candidate[3][role][6] = json!([body, ["return", ["x"]]]);
+    }
+    raw["candidate"] = json!(candidate.to_string());
+    let d = depth;
+    let mut steps = json!({"branch":[step(0,d,Some(d)),step(1,d,Some(d))],"arms":[
+        {"alternative":"then","body":[step(0,d+1,Some(d+1)),step(1,d+1,Some(d+1))],
+            "yield":[step(0,d+2,None),step(1,d+2,None)]},
+        {"alternative":"else","body":[],"yield":[step(0,d+3,None),step(1,d+3,None)]}]});
+    for k in (0..d).rev() {
+        let exit = d + 4 + (d - 1 - k);
+        steps = json!({"loop":[step(0,k,Some(k)),step(1,k,Some(k))],"body":[steps],
+            "yield":[step(0,exit,None),step(1,exit,None)]});
+    }
+    raw["steps"] = json!([steps, step(0, 2 * d + 4, None), step(1, 2 * d + 4, None)]);
+    raw
+}
+#[test]
+fn joint_reports_store_each_dynamic_path_once_under_a_report_allowance() {
+    let depth = 6;
+    let bundle = admit(&nested_fixture(depth)).unwrap();
+    let run = |limits: RunLimits| {
+        let inputs = ["P", "V"]
+            .into_iter()
+            .map(|role| RoleInput {
+                role: role.into(),
+                backend: Host::default(),
+                values: vec![
+                    TestValue::Bool(true),
+                    TestValue::Bool(true),
+                    TestValue::Index(2),
+                ],
+            })
+            .collect();
+        joint::run(&bundle, "nested", inputs, limits, &mut NoHooks)
+    };
+    let report = run(RunLimits::default()).unwrap();
+    assert!(matches!(report.outcome, Outcome::Completed));
+    assert_eq!(report.wire.sends, 1 << depth);
+    assert!(report.reached.iter().any(|r| r.path.len() == depth + 1));
+    // Steps of one region share its path; equal paths are one allocation.
+    let mut distinct: Vec<&std::sync::Arc<[PathElement]>> = Vec::new();
+    for r in &report.reached {
+        match distinct.iter().find(|p| p[..] == r.path[..]) {
+            Some(shared) => assert!(std::sync::Arc::ptr_eq(shared, &r.path)),
+            None => distinct.push(&r.path),
+        }
+        assert_eq!(
+            *r.iterations,
+            r.path
+                .iter()
+                .filter_map(|e| match e {
+                    PathElement::Loop { iteration, .. } => Some(*iteration),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        );
+    }
+    assert!(distinct.len() < report.reached.len());
+    // Copying every step's path would retain far more than the charge.
+    let copied: usize = report
+        .reached
+        .iter()
+        .map(|r| {
+            std::mem::size_of_val(&r.path[..])
+                + r.path
+                    .iter()
+                    .map(|e| match e {
+                        PathElement::Loop { site, .. } => site.len(),
+                        PathElement::Branch { site, alternative } => site.len() + alternative.len(),
+                        _ => 0,
+                    })
+                    .sum::<usize>()
+        })
+        .sum();
+    assert!(report.report_bytes > 0);
+    assert!(
+        report.report_bytes < copied,
+        "{} {copied}",
+        report.report_bytes
+    );
+    // The allowance bounds storage exactly: one byte less refuses the run.
+    let used = report.report_bytes;
+    let limited = run(RunLimits {
+        report_bytes: used - 1,
+        ..RunLimits::default()
+    })
+    .unwrap();
+    assert!(
+        matches!(&limited.outcome, Outcome::DriverFailed(f)
+            if f.kind == FailureKind::Limit && f.detail.text == "joint-report-limit"),
+        "{:?}",
+        limited.outcome
+    );
+    assert!(limited.report_bytes < used);
+    let exact = run(RunLimits {
+        report_bytes: used,
+        ..RunLimits::default()
+    })
+    .unwrap();
+    assert!(matches!(exact.outcome, Outcome::Completed));
+    assert_eq!(exact.report_bytes, used);
+    let refused = run(RunLimits {
+        report_bytes: RunLimits::HARD_MAX.report_bytes + 1,
+        ..RunLimits::default()
+    })
+    .err()
+    .unwrap();
+    assert_eq!(refused.failure.detail.text, "joint-limits");
 }
 
 #[test]
@@ -560,44 +700,43 @@ fn one_participant_stopping_or_returning_does_not_complete_an_independent_peer()
     }
 }
 
-fn binding_context(
+/// The canonical context the producer derives from both roles' actual
+/// inputs, and its pin. Trusted application provisioning supplies the pin
+/// separately from the bytes. A role with no inputs is not observed.
+fn produced(
     program: &Program,
     required: &[joint_input::InputRequirement],
-    expected: &[Json],
+    inputs: [Vec<TestValue>; 2],
 ) -> (Vec<u8>, [u8; 32]) {
     use sha2::{Digest, Sha256};
-    let rows: Vec<_> = required
-        .iter()
-        .zip(expected)
-        .map(|(r, e)| {
-            json!([
-                r.components
-                    .iter()
-                    .map(|c| json!([
-                        c.role,
-                        c.input.to_string(),
-                        c.path
-                            .iter()
-                            .flat_map(|(a, p)| [a.to_string(), p.to_string()])
-                            .collect::<Vec<_>>()
-                    ]))
-                    .collect::<Vec<_>>(),
-                r.ty.spelling(),
-                match r.observation {
-                    joint_input::Observation::Value => json!("value"),
-                    joint_input::Observation::Tag => json!("tag"),
-                    joint_input::Observation::Extent { axis } =>
-                        json!(["extent", axis.to_string()]),
-                },
-                e
-            ])
-        })
-        .collect();
-    let digest = Sha256::digest(program.bytes())
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
-    let tree = json!(["zkc.input-bindings/0", digest, "main", rows]);
+    let mut producer = joint_input::InputBindings::producer(program, "main", required).unwrap();
+    for (role, values) in ["P", "V"].into_iter().zip(&inputs) {
+        if values.is_empty() {
+            continue;
+        }
+        producer
+            .observe_role(
+                role,
+                &Host::default(),
+                &values.iter().map(Some).collect::<Vec<_>>(),
+                &ledger(),
+            )
+            .unwrap();
+    }
+    let bytes = producer.encode(&ledger()).unwrap();
+    let pin = Sha256::digest(&bytes).into();
+    (bytes, pin)
+}
+/// A produced context with its expectations replaced, so that a reader
+/// refusal is tested against otherwise canonical bytes.
+fn expecting(bytes: &[u8], expected: &[Json]) -> (Vec<u8>, [u8; 32]) {
+    use sha2::{Digest, Sha256};
+    let mut tree = zkc_format::logical::decode_tree(bytes).unwrap();
+    let rows = tree[3].as_array_mut().unwrap();
+    assert_eq!(rows.len(), expected.len());
+    for (row, expected) in rows.iter_mut().zip(expected) {
+        row[3] = expected.clone();
+    }
     let bytes = zkc_format::logical::encode_tree(&tree).unwrap();
     let pin = Sha256::digest(&bytes).into();
     (bytes, pin)
@@ -651,7 +790,18 @@ fn inspection_and_encoding_charge_one_invocation_ledger_across_roles() {
         false,
         vec![],
     )];
-    let (bytes, pin) = binding_context(program, &required, &[json!(["active", "5a4b4356000501"])]);
+    let (bytes, pin) = produced(
+        program,
+        &required,
+        [
+            vec![TestValue::Bool(true), TestValue::Bool(false)],
+            vec![TestValue::Bool(true), TestValue::Bool(true)],
+        ],
+    );
+    assert_eq!(
+        bytes,
+        expecting(&bytes, &[json!(["active", "5a4b4356000501"])]).0
+    );
     let context = InputBindings::admit_pinned(program, "main", &required, &bytes, &pin).unwrap();
     use zkc_runtime::vm::Value as _;
     let backend = Host::default();
@@ -715,7 +865,18 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
         vec![],
     )];
     // Trusted application provisioning supplies this pin, separately from bytes.
-    let (bytes, pin) = binding_context(program, &required, &[json!(["active", "5a4b4356000501"])]);
+    let (bytes, pin) = produced(
+        program,
+        &required,
+        [
+            vec![TestValue::Bool(true), TestValue::Bool(false)],
+            vec![TestValue::Bool(true), TestValue::Bool(true)],
+        ],
+    );
+    assert_eq!(
+        bytes,
+        expecting(&bytes, &[json!(["active", "5a4b4356000501"])]).0
+    );
     let context = InputBindings::admit_pinned(program, "main", &required, &bytes, &pin).unwrap();
     let backend = Host::default();
     for role in ["P", "V"] {
@@ -791,9 +952,12 @@ fn independent_input_bindings_require_exact_externally_pinned_context() {
     );
     let mut deep = required.clone();
     deep[0].components[0].path = vec![(0, 0); zkc_runtime::vm::TYPE_DEPTH_LIMIT + 1];
-    let (deep_bytes, deep_pin) = binding_context(program, &deep, &[json!(["inactive"])]);
     assert_eq!(
-        InputBindings::admit_pinned(program, "main", &deep, &deep_bytes, &deep_pin).unwrap_err(),
+        InputBindings::admit_pinned(program, "main", &deep, &bytes, &pin).unwrap_err(),
+        E::Limit
+    );
+    assert_eq!(
+        InputBindings::producer(program, "main", &deep).unwrap_err(),
         E::Limit
     );
 
@@ -860,10 +1024,19 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
     let bundle = admit(&enum_fixture()).unwrap();
     let program = bundle.admitted();
     let tags = [requirement(variant_type(), true, vec![])];
-    let (bytes, pin) = binding_context(program, &tags, &[json!(["active", "30"])]); // ordinal 0
+    // Tags agree on ordinal 0 although the payloads differ.
+    let (bytes, pin) = produced(
+        program,
+        &tags,
+        [
+            vec![selector(0, true), TestValue::Bool(false)],
+            vec![selector(0, false), TestValue::Bool(false)],
+        ],
+    );
+    assert_eq!(bytes, expecting(&bytes, &[json!(["active", "30"])]).0);
     let context = InputBindings::admit_pinned(program, "main", &tags, &bytes, &pin).unwrap();
     for invalid in ["32", "3030", "2d31"] {
-        let (bytes, pin) = binding_context(program, &tags, &[json!(["active", invalid])]);
+        let (bytes, pin) = expecting(&bytes, &[json!(["active", invalid])]);
         assert_eq!(
             InputBindings::admit_pinned(program, "main", &tags, &bytes, &pin).unwrap_err(),
             E::Requirements
@@ -893,7 +1066,14 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
         false,
         vec![(0, 0)],
     )];
-    let (bytes, pin) = binding_context(program, &payloads, &[json!(["active", "5a4b4356000501"])]);
+    let (bytes, pin) = produced(
+        program,
+        &payloads,
+        [
+            vec![selector(0, true), TestValue::Bool(false)],
+            vec![selector(0, true), TestValue::Bool(true)],
+        ],
+    );
     let context = InputBindings::admit_pinned(program, "main", &payloads, &bytes, &pin).unwrap();
     context
         .check_role(
@@ -912,7 +1092,16 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
         ),
         Err(E::Value)
     );
-    let (bytes, pin) = binding_context(program, &payloads, &[json!(["inactive"])]);
+    // Dormant payload paths produce the inactive expectation.
+    let (bytes, pin) = produced(
+        program,
+        &payloads,
+        [
+            vec![selector(1, false), TestValue::Bool(false)],
+            vec![selector(1, true), TestValue::Bool(false)],
+        ],
+    );
+    assert_eq!(bytes, expecting(&bytes, &[json!(["inactive"])]).0);
     let context = InputBindings::admit_pinned(program, "main", &payloads, &bytes, &pin).unwrap();
     context
         .check_role(
@@ -942,10 +1131,28 @@ fn trusted_binding_keeps_variant_tags_payload_paths_and_inactive_paths_distinct(
     );
     let mut wrong = payloads.clone();
     wrong[0].components[1].path = vec![(1, 0)];
-    let (bytes, pin) = binding_context(program, &wrong, &[json!(["inactive"])]);
     assert_eq!(
         InputBindings::admit_pinned(program, "main", &wrong, &bytes, &pin).unwrap_err(),
         E::Requirements
+    );
+    // Components that disagree produce no context.
+    let mut producer = InputBindings::producer(program, "main", &payloads).unwrap();
+    producer
+        .observe_role(
+            "P",
+            &Host::default(),
+            &[Some(&selector(0, true)), Some(&TestValue::Bool(false))],
+            &ledger(),
+        )
+        .unwrap();
+    assert_eq!(
+        producer.observe_role(
+            "V",
+            &Host::default(),
+            &[Some(&selector(1, true)), Some(&TestValue::Bool(false))],
+            &ledger(),
+        ),
+        Err(E::Value)
     );
 }
 
@@ -991,7 +1198,16 @@ fn extent_binding_observes_exact_axis_without_encoding_contents_including_zero()
     )];
     required[0].observation = Observation::Extent { axis: 0 };
     for (contents, expected) in [(vec![1, 2], "32"), (vec![], "30")] {
-        let (bytes, pin) = binding_context(&program, &required, &[json!(["active", expected])]);
+        let empty = TestValue::Bytes(vec![].into());
+        let (bytes, pin) = produced(
+            &program,
+            &required,
+            [
+                vec![TestValue::Bytes(contents.clone().into()), empty.clone()],
+                vec![TestValue::Bytes(vec![9; contents.len()].into()), empty],
+            ],
+        );
+        assert_eq!(bytes, expecting(&bytes, &[json!(["active", expected])]).0);
         let context =
             InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap();
         let backend = Host {
@@ -1032,10 +1248,18 @@ fn extent_binding_observes_exact_axis_without_encoding_contents_including_zero()
         assert!(backend.frames.is_empty());
         assert_eq!(format!("{context:?}"), "InputBindings { groups: 1, .. }");
     }
+    let empty = TestValue::Bytes(vec![].into());
+    let (bytes, pin) = produced(
+        &program,
+        &required,
+        [
+            vec![empty.clone(), empty.clone()],
+            vec![empty.clone(), empty],
+        ],
+    );
     for observation in [Observation::Extent { axis: 1 }, Observation::Tag] {
         let mut invalid = required.clone();
         invalid[0].observation = observation;
-        let (bytes, pin) = binding_context(&program, &invalid, &[json!(["active", "30"])]);
         assert_eq!(
             InputBindings::admit_pinned(&program, "main", &invalid, &bytes, &pin).unwrap_err(),
             E::Requirements
@@ -1046,7 +1270,7 @@ fn extent_binding_observes_exact_axis_without_encoding_contents_including_zero()
         json!(["inactive"]),
         json!(["active", "2d31"]),
     ] {
-        let (bytes, pin) = binding_context(&program, &required, &[expected]);
+        let (bytes, pin) = expecting(&bytes, &[expected]);
         assert_eq!(
             InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap_err(),
             E::Requirements
@@ -1057,7 +1281,7 @@ fn extent_binding_observes_exact_axis_without_encoding_contents_including_zero()
         .bytes()
         .map(|b| format!("{b:02x}"))
         .collect::<String>();
-    let (bytes, pin) = binding_context(&program, &required, &[json!(["active", too_large])]);
+    let (bytes, pin) = expecting(&bytes, &[json!(["active", too_large])]);
     assert_eq!(
         InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap_err(),
         E::Limit
@@ -1073,7 +1297,8 @@ fn inventories_are_exact_even_when_components_have_equal_types() {
         false,
         vec![],
     )];
-    let (bytes, pin) = binding_context(&program, &required, &[json!(["active", "5a4b4356000501"])]);
+    let actual = vec![TestValue::Bool(true), TestValue::Bool(false)];
+    let (bytes, pin) = produced(&program, &required, [actual.clone(), actual]);
     for change in ["role", "input", "extra", "observation"] {
         let mut changed = required.to_vec();
         match change {
@@ -1126,13 +1351,21 @@ fn equal_typed_variant_paths_and_inactive_extent_paths_keep_exact_associations()
         vec![(0, 0)],
     )];
     required[0].observation = Observation::Extent { axis: 0 };
-    let (bytes, pin) = binding_context(&program, &required, &[json!(["inactive"])]);
-    let context = InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap();
     let dormant = TestValue::Variant {
         ty: ty.clone(),
         alternative: 1,
         payload: vec![TestValue::Bytes(vec![1, 2, 3].into())],
     };
+    let (bytes, pin) = produced(
+        &program,
+        &required,
+        [
+            vec![dormant.clone(), dormant.clone()],
+            vec![dormant.clone(), dormant.clone()],
+        ],
+    );
+    assert_eq!(bytes, expecting(&bytes, &[json!(["inactive"])]).0);
+    let context = InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap();
     context
         .check_role(
             "P",
@@ -1171,7 +1404,7 @@ fn self_selected_inventory_and_pin_do_not_independently_certify_source_coverage(
     // close that omission boundary; this is deliberately not a source test.
     let bundle = admit(&fixture(false)).unwrap();
     let program = bundle.admitted();
-    let (bytes, self_selected_pin) = binding_context(program, &[], &[]);
+    let (bytes, self_selected_pin) = produced(program, &[], [vec![], vec![]]);
     let context =
         joint_input::InputBindings::admit_pinned(program, "main", &[], &bytes, &self_selected_pin)
             .unwrap();
@@ -1196,7 +1429,12 @@ fn value_bindings_require_the_complete_installed_wire_permission() {
     .unwrap();
     let program = ordinary_input_program(&ty.spelling());
     let required = [requirement(ty, false, vec![])];
-    let (bytes, pin) = binding_context(&program, &required, &[json!(["active", ""])]);
+    // Neither side admits a value observation without an installed codec.
+    assert_eq!(
+        InputBindings::producer(&program, "main", &required).unwrap_err(),
+        E::Requirements
+    );
+    let (bytes, pin) = produced(&program, &[], [vec![], vec![]]);
     assert_eq!(
         InputBindings::admit_pinned(&program, "main", &required, &bytes, &pin).unwrap_err(),
         E::Requirements

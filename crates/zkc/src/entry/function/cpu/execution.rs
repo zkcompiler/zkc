@@ -19,6 +19,8 @@ pub struct FunctionFailure {
     pub code: String,
     pub path: Vec<String>,
     pub native: Option<Json>,
+    /// A child Entry's own refusal, with its phase and schema path.
+    pub entry: Option<Box<EntryError>>,
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FunctionUsage {
@@ -62,7 +64,8 @@ impl FunctionReport {
     }
     pub fn diagnostics(&self) -> Json {
         json!({"format":"zkc.entry-function-result/0","completed":self.is_success(),
-            "failure":self.failure.as_ref().map(|f|json!({"code":f.code,"path":f.path,"native":f.native})),
+            "failure":self.failure.as_ref().map(|f|json!({"code":f.code,"path":f.path,"native":f.native,
+                "phase":f.entry.as_ref().map(|e|format!("{:?}",e.phase)),"input_path":f.entry.as_ref().and_then(|e|e.path())})),
             "usage":{"instructions":self.usage.execution.instructions,"iterations":self.usage.execution.iterations,
                 "logical_bytes":self.usage.execution.logical_bytes,"fresh_bytes":self.usage.execution.total_value_bytes,
                 "live_reserved_bytes":self.usage.execution.live_reserved_bytes,"dispatches":self.usage.dispatches,
@@ -81,10 +84,9 @@ pub struct PreparedFunction<'a> {
 }
 impl EntryHost {
     pub fn prepare(&self, mut request: FunctionRequest) -> Result<PreparedFunction<'_>> {
-        require(
-            request.arguments.len() == self.signature().parameters.len(),
-            "entry-host-argument-names",
-        )?;
+        if request.arguments.len() != self.signature().parameters.len() {
+            return Err(EntryCondition::InputNames.into());
+        }
         let ledger = ExecutionLedger::new(
             self.options.limits.capacity.values,
             self.options.limits.capacity.work,
@@ -103,7 +105,7 @@ impl EntryHost {
                 let value = request
                     .arguments
                     .remove(&p.name)
-                    .ok_or_else(|| error("entry-host-argument-names"))?;
+                    .ok_or(EntryCondition::InputNames)?;
                 data::import(self, &p.schema, value, &ledger)
                     .map_err(|e| EntryError::new(EntryPhase::Preparation, e))
             })
@@ -181,6 +183,14 @@ impl Execution<'_> {
             code: code.to_string(),
             path: self.path.clone(),
             native: self.last_native.clone(),
+            entry: None,
+        }
+    }
+    /// A child's refusal keeps its own phase and schema path.
+    fn fail_entry(&self, error: EntryError) -> FunctionFailure {
+        FunctionFailure {
+            entry: Some(Box::new(error.clone())),
+            ..self.fail(error.code())
         }
     }
     fn charge(&self, instructions: u64, iterations: u64) -> ExecResult<()> {
@@ -561,7 +571,7 @@ impl Execution<'_> {
         match (&deployment.kind, binding) {
             (DeploymentKind::Run(entry), InvocationBinding::Run(context)) => {
                 let request = deployment::run_request(entry, &values[0], context)
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 let service_budgets = entry
                     .interface()
                     .roles()
@@ -580,7 +590,7 @@ impl Execution<'_> {
                 let limits = self.child_limits(entry.interface().roles().len());
                 let report = entry
                     .execute_shared(request, limits, self.ledger.clone())
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 if let Some(execution) = &report.native.execution {
                     for role in &execution.roles {
                         self.execution_counts.merge(&role.execution_counts);
@@ -612,7 +622,7 @@ impl Execution<'_> {
             (DeploymentKind::Proof { entry, operation }, InvocationBinding::Proof(context)) => {
                 let producer = *operation == crate::entry::ProofOperation::Prove;
                 let request = deployment::proof_request(entry, producer, values, context)
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 let p = entry.interface().proof().expect("proof");
                 let role = &entry.interface().roles()[if producer { p.prover } else { p.verifier }];
                 let service_budgets = entry
@@ -651,7 +661,7 @@ impl Execution<'_> {
                         proof_limit,
                         self.ledger.clone(),
                     )
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 self.usage.external_work += report.native.external_work;
                 self.usage.ring_work += report.native.ring_work;
                 self.usage.sequence_work += report.native.sequence_work;

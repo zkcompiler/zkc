@@ -73,13 +73,14 @@ impl Ports {
         selected: usize,
         types: &BTreeMap<String, Leaf>,
         setups: &[super::Setup],
+        limits: super::InterfaceLimits,
     ) -> Result<Self> {
         Self::with_work(
             document,
             selected,
             types,
             setups,
-            &mut super::boundary::Work::new(),
+            &mut super::boundary::Work::new(limits),
         )
     }
     pub(super) fn with_work(
@@ -122,33 +123,35 @@ impl Ports {
         // Native and semantic completion are separate checks. Even a fully
         // constructible plan must supply every role-local original coordinate
         // exactly once; shared coordinates belong to separate participants.
+        // Views, residual requirements and original components are bucketed
+        // by role once, so this check grows with their counts, not with the
+        // roster times each of them.
         for (originals, roster, output) in [
             (&protocol.inputs, &views, false),
             (&protocol.outputs, &outputs, true),
         ] {
-            for role in 0..protocol.roles.len() as u32 {
-                work.charge(roster.len())?;
-                let supplied: Vec<_> = roster
-                    .iter()
-                    .filter(|v| v.role == role)
-                    .flat_map(|v| v.definition.native.iter().copied())
-                    .collect();
-                work.charge(supplied.len())?;
+            let count = protocol.roles.len();
+            work.charge(count + roster.len() + residual.len())?;
+            let mut supplied = vec![Vec::new(); count];
+            for view in roster {
+                work.charge(view.definition.native.len())?;
+                supplied[view.role as usize].extend(view.definition.native.iter().copied());
+            }
+            let mut blocked = vec![false; count];
+            for requirement in residual.iter().filter(|r| r.output == output) {
+                work.lookup(indices.len())?;
+                blocked[indices[requirement.role.as_str()]] = true;
+            }
+            work.charge(originals.iter().map(|p| p.components.len()).sum())?;
+            let mut expected = vec![BTreeSet::new(); count];
+            for component in originals.iter().flat_map(|p| &p.components) {
+                expected[component.role as usize].insert(component.native);
+            }
+            for (role, supplied) in supplied.iter().enumerate() {
                 let unique: BTreeSet<_> = supplied.iter().copied().collect();
                 super::require(unique.len() == supplied.len(), E::Schema)?;
-                work.charge(residual.len())?;
-                if !residual
-                    .iter()
-                    .any(|r| r.output == output && r.role == protocol.roles[role as usize])
-                {
-                    work.charge(originals.iter().map(|p| p.components.len()).sum())?;
-                    let expected: BTreeSet<_> = originals
-                        .iter()
-                        .flat_map(|p| &p.components)
-                        .filter(|c| c.role == role)
-                        .map(|c| c.native)
-                        .collect();
-                    super::require(unique == expected, E::Schema)?;
+                if !blocked[role] {
+                    super::require(unique == expected[role], E::Schema)?;
                 }
             }
         }
@@ -356,6 +359,24 @@ impl Interface {
 }
 
 impl Interface {
+    /// Every role's sorted original input coordinates, in roster order, from
+    /// one pass over the components rather than one pass per role.
+    #[cfg_attr(not(feature = "cpu"), allow(dead_code))]
+    pub(in crate::entry) fn native_inputs_by_role(&self) -> Vec<Vec<u32>> {
+        let mut roles = vec![BTreeSet::new(); self.roles().len()];
+        for component in self
+            .selected_protocol()
+            .inputs
+            .iter()
+            .flat_map(|p| &p.components)
+        {
+            roles[component.role as usize].insert(component.native);
+        }
+        roles
+            .into_iter()
+            .map(|natives| natives.into_iter().collect())
+            .collect()
+    }
     pub(in crate::entry) fn role_native_inputs(&self, role: &RolePorts) -> Vec<u32> {
         let index = self
             .roles()

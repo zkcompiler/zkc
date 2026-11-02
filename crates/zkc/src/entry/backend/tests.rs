@@ -369,18 +369,40 @@ fn trusted_context(run: &BackendRun, backend: &Arithmetic) -> (Vec<u8>, [u8; 32]
         observation: Observation::Value,
     }];
     assert_eq!(run.common_input_requirements().unwrap(), required);
-    let bytes = zkc_format::logical::encode_tree(&json!([
-        "zkc.input-bindings/0",
-        digest(std::str::from_utf8(run.bundle().admitted().bytes()).unwrap()),
-        run.bundle().entry(),
-        [[
-            [["role00000000", "0", []], ["role00000001", "0", []]],
-            backend.ty.spelling(),
-            "value",
-            ["active", "14000000"]
-        ]]
-    ]))
-    .unwrap();
+    // Both participants observe 20 at the common input; the producer derives
+    // the canonical context from those actual values.
+    let inputs = ["role00000000", "role00000001"].map(|role| joint::RoleInput {
+        role: role.into(),
+        backend: Arithmetic {
+            ty: backend.ty.clone(),
+            id: backend.id,
+            frames: 0,
+            applications: 0,
+        },
+        values: [20, 22]
+            .map(|value| Number {
+                value,
+                ty: backend.ty.clone(),
+            })
+            .to_vec(),
+    });
+    let bytes = run
+        .common_input_context(&inputs, ValueBudget::default(), WorkBudget::default())
+        .unwrap();
+    assert_eq!(
+        zkc_format::logical::decode_tree(&bytes).unwrap(),
+        json!([
+            "zkc.input-bindings/0",
+            digest(std::str::from_utf8(run.bundle().admitted().bytes()).unwrap()),
+            run.bundle().entry(),
+            [[
+                [["role00000000", "0", []], ["role00000001", "0", []]],
+                backend.ty.spelling(),
+                "value",
+                ["active", "14000000"]
+            ]]
+        ])
+    );
     let pin = Sha256::digest(&bytes).into();
     (bytes, pin)
 }

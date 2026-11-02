@@ -35,10 +35,9 @@ fn extras<'a>(
         .map(|p| p.name.clone())
         .collect::<std::collections::BTreeSet<_>>();
     for (name, value) in extra {
-        require(
-            allowed.contains(name) && !data.contains_key(name),
-            "entry-host-context-input",
-        )?;
+        if !allowed.contains(name) || data.contains_key(name) {
+            return Err(EntryCondition::InputNames.into());
+        }
         data.insert(name.clone(), data::duplicate(value));
     }
     Ok(data)
@@ -49,13 +48,13 @@ pub(super) fn run_request(
     context: &RunContext,
 ) -> Result<crate::entry::RunRequest> {
     let interface = entry.interface();
-    require(
-        context
-            .roles
-            .keys()
-            .all(|n| interface.roles().iter().any(|r| r.name == *n)),
-        "entry-host-context-role",
-    )?;
+    if !context
+        .roles
+        .keys()
+        .all(|n| interface.roles().iter().any(|r| r.name == *n))
+    {
+        return Err(EntryCondition::InputRoles.into());
+    }
     let mut roles = BTreeMap::new();
     for (role, source) in interface.roles().iter().zip(value.fields()) {
         let context = context.roles.get(&role.name);
@@ -204,6 +203,8 @@ pub(super) fn context_check(host: &EntryHost, context: &InvocationContext) -> Re
         host.options.limits.capacity.work,
     );
     let ledger = &validation;
+    /// Request-shape refusals precede the draw-allowance check, exactly as a
+    /// standalone run or proof orders them.
     fn check_role(
         interface: &crate::entry::Interface,
         role: &crate::entry::interface::RolePorts,
@@ -213,44 +214,36 @@ pub(super) fn context_check(host: &EntryHost, context: &InvocationContext) -> Re
         let context = context.unwrap_or(&empty);
         let services =
             crate::entry::arguments::services(interface.services(role), context.services.clone())
-                .map_err(|e| EntryError::new(EntryPhase::Request, e))?;
-        require(
-            services
-                .into_iter()
-                .all(|n| n <= crate::host::request::RESOURCE_BUDGET_LIMIT),
-            "entry-host-service-budget",
-        )?;
+                .map_err(|e| EntryError::at(EntryPhase::Request, e))?;
         let allowed = interface.context_ports(role).collect::<Vec<_>>();
-        require(
-            context.inputs.len() == allowed.len()
-                && allowed.iter().all(|p| context.inputs.contains_key(&p.name)),
-            "entry-host-context-input",
-        )?;
+        if context.inputs.len() != allowed.len()
+            || !allowed.iter().all(|p| context.inputs.contains_key(&p.name))
+        {
+            return Err(EntryCondition::InputNames.into());
+        }
         for p in allowed {
             let value = &context.inputs[&p.name];
             if p.key == Some("prover_key") {
-                require(
-                    matches!(
-                        value,
-                        crate::entry::Value::Leaf(
-                            crate::execution::InputValue::ProverKey(_)
-                                | crate::execution::InputValue::ProverKeyFile { .. }
-                                | crate::execution::InputValue::ProverKeyInput { .. }
-                        )
-                    ),
-                    "entry-input-key",
-                )?;
+                if !matches!(
+                    value,
+                    crate::entry::Value::Leaf(
+                        crate::execution::InputValue::ProverKey(_)
+                            | crate::execution::InputValue::ProverKeyFile { .. }
+                            | crate::execution::InputValue::ProverKeyInput { .. }
+                    )
+                ) {
+                    return Err(EntryCondition::InputKey.into());
+                }
             } else {
                 crate::entry::value::flatten(&p.schema, data::duplicate(value), &mut Vec::new())
-                    .map_err(|e| EntryError::new(EntryPhase::Request, e))?;
+                    .map_err(|e| EntryError::at(EntryPhase::Request, e))?;
             }
         }
-        Ok(())
+        crate::entry::arguments::check_draw_budgets(services)
     }
-    require(
-        context.deployments.len() == host.deployments.len(),
-        "entry-host-context",
-    )?;
+    if context.deployments.len() != host.deployments.len() {
+        return Err(EntryError::new(EntryPhase::Request, "entry-host-context"));
+    }
     let mut imports = crate::host::setups::VerifierKeys::new(
         host.options.limits.capacity.backend().ark_bounds(),
         host.options.limits.installation.clone(),
@@ -260,38 +253,27 @@ pub(super) fn context_check(host: &EntryHost, context: &InvocationContext) -> Re
         let value = context
             .deployments
             .get(id)
-            .ok_or_else(|| error("entry-host-context"))?;
+            .ok_or_else(|| EntryError::new(EntryPhase::Request, "entry-host-context"))?;
         let (interface, material) = match (&deployment.kind, value) {
             (DeploymentKind::Run(entry), InvocationBinding::Run(v)) => {
-                if let Some(session) = &v.session {
-                    crate::run::RunHost::check_session(session)
-                        .map_err(|e| EntryError::new(EntryPhase::Request, e))?;
-                }
                 let interface = entry.interface();
-                require(
-                    v.roles
-                        .keys()
-                        .all(|n| interface.roles().iter().any(|r| r.name == *n)),
-                    "entry-host-context-role",
-                )?;
+                if !v
+                    .roles
+                    .keys()
+                    .all(|n| interface.roles().iter().any(|r| r.name == *n))
+                {
+                    return Err(EntryCondition::InputRoles.into());
+                }
                 for role in interface.roles() {
                     check_role(interface, role, v.roles.get(&role.name))?;
+                }
+                if let Some(session) = &v.session {
+                    crate::run::RunHost::check_session(session)
+                        .map_err(|e| EntryError::at(EntryPhase::Preparation, e))?;
                 }
                 (interface, &v.setups)
             }
             (DeploymentKind::Proof { entry, operation }, InvocationBinding::Proof(v)) => {
-                require(v.context.len() <= 4096, "native-proof-context-limit")?;
-                if let Some(budget) = v.transcript_budget {
-                    require(
-                        budget <= crate::host::request::RESOURCE_BUDGET_LIMIT,
-                        "native-proof-budget",
-                    )?;
-                    require(
-                        entry.binding_scope() == crate::entry::BindingScope::Transcript
-                            || budget == 0,
-                        "native-proof-unselected-transcript",
-                    )?;
-                }
                 let interface = entry.interface();
                 let proof = interface.proof().expect("admitted proof");
                 let producing = *operation == crate::entry::ProofOperation::Prove;
@@ -304,9 +286,33 @@ pub(super) fn context_check(host: &EntryHost, context: &InvocationContext) -> Re
                     }],
                     Some(&v.private),
                 )?;
+                let preparation = |ok: bool, code: &str| {
+                    if ok {
+                        Ok(())
+                    } else {
+                        Err(EntryError::new(EntryPhase::Preparation, code))
+                    }
+                };
+                preparation(
+                    v.context.len() <= crate::proof::MAX_CONTEXT_BYTES,
+                    "native-proof-context-limit",
+                )?;
+                if let Some(budget) = v.transcript_budget {
+                    crate::entry::arguments::check_draw_budgets([budget])?;
+                    preparation(
+                        entry.binding_scope() == crate::entry::BindingScope::Transcript
+                            || budget == 0,
+                        "native-proof-unselected-transcript",
+                    )?;
+                }
                 (interface, &v.setups)
             }
-            _ => return Err(error("entry-host-context-operation")),
+            _ => {
+                return Err(EntryError::new(
+                    EntryPhase::Request,
+                    "entry-host-context-operation",
+                ));
+            }
         };
         let keys = host
             .cpu
