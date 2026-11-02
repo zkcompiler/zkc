@@ -33,8 +33,6 @@ import tomllib
 
 from bridges.common.lean_render import ROOT, Refused, require
 
-sys.path.append(str(ROOT / "common/tests/support"))
-from toolchain import Missing, Toolchain  # noqa: E402
 
 FORMATS = ("zkc", "zkc-layout")
 OPTION = "--source-format="
@@ -51,6 +49,10 @@ def selected(value, origin):
 @lru_cache(maxsize=None)
 def _graph(manifest):
     """The SDK's project graph of a package manifest; the SDK's refusal code refuses."""
+    # Only the package route runs the SDK, so only it resolves the build tools.
+    if str(ROOT / "common/tests/support") not in sys.path:
+        sys.path.append(str(ROOT / "common/tests/support"))
+    from toolchain import Missing, Toolchain
     try:
         tools = Toolchain()
         command = [tools.runtime, "--json", "inspect", "--view=project", f"--project={manifest}",

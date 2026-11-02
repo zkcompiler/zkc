@@ -378,7 +378,7 @@ def test_pair_validator_matches_complete_independent_export(driver_module, tmp_p
     driver.run = lambda arguments, **_: SimpleNamespace(stdout=outputs[arguments[1]])
     # A fixture source whose directory declares its source format.
     subject = SimpleNamespace(name="test", compiler_options=[], module_arguments=lambda: [],
-        modules={"fixture": "lean/bridges/common/fixtures/schnorr-forms.zkc"},
+        project=None, modules={"fixture": "lean/bridges/common/fixtures/schnorr-forms.zkc"},
         get=lambda table, key, default=None: "entry" if (table, key) == ("entries", "proof") else default,
         generated=lambda key: key == "pair")
     monkeypatch.setattr(capture.pair, "decode", lambda data: (data[1], data[2]))
