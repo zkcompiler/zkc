@@ -97,8 +97,9 @@ outputs. The normal compiler configure step runs this projection; the
 installed-instance and installation tables through the validating
 `DomainCatalog` constructor. The `installed-instances` test retains an ordered
 dump of these owners and of the facts their consumers derive, in
-`compiler/test/fixtures/contracts/installed-instances.json`, and compares the
-remaining restatements with the tables. Cargo
+`compiler/test/fixtures/contracts/installed-instances.json`, and checks that the
+CPU target, the EVM wire generator and the source checker behave as the rows
+state. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source or belongs under `lean/`.
 

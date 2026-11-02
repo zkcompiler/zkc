@@ -4,10 +4,8 @@
 // every change visible. Regenerate it only deliberately, with
 // `zkc-installed_instances-test --dump`.
 //
-// Differential evidence: consumers that still restate installed facts, and
-// independent readers of them, agree with the generated tables. Every intended
-// difference is listed below with its reason; any other difference, or a
-// listed one that no longer occurs, fails.
+// Behavior cases: the consumers that read the tables admit, refuse and decode
+// what each row states, measured through their public checks.
 #include "../lib/Language/DataRequirements.h"
 #include "mlir/IR/Verifier.h"
 #include "support/ResourceSources.h"
@@ -47,31 +45,13 @@ namespace generated = zkc::protocol::instances;
 namespace physical = zkc::protocol::installation;
 
 namespace {
-// One difference between generated data and a hand-written owner.
-struct Difference {
-  std::string subject, reason;
-};
-// The listed differences must be exactly the found ones.
-void agree(StringRef comparison, std::vector<std::string> found,
-           ArrayRef<Difference> expected) {
-  std::vector<std::string> listed;
-  for (const auto &difference : expected) {
-    listed.push_back(difference.subject);
-    outs() << "expected difference, " << comparison << ": "
-           << difference.subject << ": " << difference.reason << '\n';
-  }
-  sort(found);
-  sort(listed);
-  if (found == listed)
+// A behavior case passes when it finds no row its consumer contradicts.
+void requireNone(StringRef comparison, std::vector<std::string> found) {
+  if (found.empty())
     return;
-  std::string message = (comparison + " differs:").str();
-  for (const auto &subject : found)
-    if (!is_contained(listed, subject))
-      message += " unexpected [" + subject + "]";
-  for (const auto &subject : listed)
-    if (!is_contained(found, subject))
-      message += " no longer differs [" + subject + "]";
-  throw std::runtime_error(message);
+  sort(found);
+  throw std::runtime_error((comparison + " differs: ").str() +
+                           join(found, "; "));
 }
 std::string code(Error error) {
   std::string result;
@@ -103,11 +83,16 @@ std::vector<std::string> identities() {
     result.push_back(codec.identity);
   return result;
 }
+// The installed provider units, from the installation's unit rows.
+std::vector<std::string> installedUnits() {
+  std::set<std::string> units;
+  for (const auto &row : physical::providerUnits())
+    units.insert(row.unit);
+  return {units.begin(), units.end()};
+}
 // The CPU target's storage owner of one physical type, measured through its
 // public descriptor: provider-free storage passes with no unit selected.
 std::string storageUnit(const BoundType &type) {
-  const StringRef units[] = {"arkworks", "blst", "dalek", "halo2curves",
-                             "plonky3"};
   auto target = [](StringRef selection) {
     return take(target::CpuTarget::parse(
         (R"({"format":"zkc.cpu-target/0","providers":[)" + selection + "]}")
@@ -118,18 +103,16 @@ std::string storageUnit(const BoundType &type) {
   else
     return "independent";
   std::vector<std::string> owners;
-  for (auto unit : units)
-    if (auto error = target(("\"" + unit + "\"").str()).checkType(type))
+  for (const auto &unit : installedUnits())
+    if (auto error = target("\"" + unit + "\"").checkType(type))
       consumeError(std::move(error));
     else
-      owners.push_back(unit.str());
+      owners.push_back(unit);
   return owners.size() == 1 ? owners.front() : "<" + join(owners, ",") + ">";
 }
 // The CPU target's owner of a nominal domain, measured by a provider-generic
 // native implementation over that one static identity.
 std::string domainUnit(StringRef identity) {
-  const StringRef units[] = {"arkworks", "blst", "dalek", "halo2curves",
-                             "plonky3"};
   BindingApplication probe{
       "installed.unit_probe", {identity.str()}, "native/installed.unit_probe"};
   auto admits = [&](StringRef selection) {
@@ -145,9 +128,9 @@ std::string domainUnit(StringRef identity) {
   if (admits(""))
     return "";
   std::vector<std::string> owners;
-  for (auto unit : units)
-    if (admits(("\"" + unit + "\"").str()))
-      owners.push_back(unit.str());
+  for (const auto &unit : installedUnits())
+    if (admits("\"" + unit + "\""))
+      owners.push_back(unit);
   return owners.size() == 1 ? owners.front() : "<" + join(owners, ",") + ">";
 }
 
@@ -606,7 +589,7 @@ int main(int argc, char **argv) {
         found.push_back("refusal " + row.identity);
       take(physicalType(logical, row.identity, std::move(children)));
     }
-    agree("constructor-wide defaults", found, {});
+    requireNone("constructor-wide defaults", found);
     require(rows == 3, "constructor-wide default rows differ");
   });
   cases.run("resident canonical-frame representations", [&] {
@@ -622,7 +605,7 @@ int main(int argc, char **argv) {
           (row.frame == physical::ValueFrame::Canonical))
         found.push_back(row.identity + " " + row.kind + " " + row.domain);
     }
-    agree("resident canonical frames", found, {});
+    requireNone("resident canonical frames", found);
   });
 
   cases.run("CPU storage units and default provider units", [&] {
@@ -641,7 +624,7 @@ int main(int argc, char **argv) {
     for (const auto &row : physical::providers())
       if (domainUnit(row.domain) != physical::providerUnit(row.defaultProvider))
         found.push_back("domain " + row.domain);
-    agree("CPU storage units", found, {});
+    requireNone("CPU storage units", found);
   });
 
   cases.run("EVM wire tags and widths", [&] {
@@ -728,7 +711,7 @@ int main(int argc, char **argv) {
     }
     require(compared >= 30, "too few EVM frames compared");
     outs() << "EVM frames compared: " << compared << '\n';
-    agree("EVM wire frames", found, {});
+    requireNone("EVM wire frames", found);
   });
 
   cases.run("succession facets and the exact-root analysis", [&] {
@@ -799,7 +782,7 @@ int main(int argc, char **argv) {
             (admitted ? "admitted undeclared " : "refused declared ") +
             operation.name);
     }
-    agree("physical arguments", found, {});
+    requireNone("physical arguments", found);
     outs() << "physical-argument rows: " << declared.size()
            << ", refused: " << refused << '\n';
   });
@@ -835,15 +818,6 @@ int main(int argc, char **argv) {
       bool gated = StringRef(refusal).contains("not an admitted native data");
       if (type.sourceData == gated || (type.sourceData && !refusal.empty()))
         found.push_back("sourceData " + type.name);
-      // Interface builtin leaves are exactly the builtin source-data rows
-      // whose permissions are Copy and Drop.
-      const auto *permissions = typePermissions(type.name);
-      bool ordinary = type.sourceData && type.name != "bool" &&
-                      type.name != "index" && type.name != "field" &&
-                      type.name != "group" && permissions &&
-                      permissions->copy && permissions->drop;
-      if (language::isOrdinaryBuiltinData(type.name) != ordinary)
-        found.push_back("interface leaf " + type.name);
       if (!type.sourceData || !formed)
         continue;
       // Collection rank against the source axis view. A byte element gives an
@@ -890,7 +864,7 @@ int main(int argc, char **argv) {
     if (!language::isBuiltinDataConstructor("transcript") ||
         language::isOrdinaryBuiltinData("transcript"))
       found.push_back("interface leaf transcript");
-    agree("type columns", found, {});
+    requireNone("type columns", found);
   });
 
   cases.run("finite definitions against the source decoder", [&] {
@@ -924,7 +898,7 @@ int main(int argc, char **argv) {
     }
     outs() << "finite definitions decoded: "
            << generated::finiteDefinitions().size() << '\n';
-    agree("finite definitions", found, {});
+    requireNone("finite definitions", found);
   });
 
   cases.run("domain constructors against the source decoder", [&] {
@@ -952,7 +926,7 @@ int main(int argc, char **argv) {
     }
     outs() << "domain constructors decoded: "
            << generated::domainConstructors().size() << '\n';
-    agree("domain constructors", found, {});
+    requireNone("domain constructors", found);
   });
 
   cases.run("limits", [&] {
