@@ -253,7 +253,7 @@ def main():
             descriptor, policy = compiled["descriptor"], compiled["policy"]
             rows = [[*r[:3], v.hex()] for r, v in zip(descriptor[4], public, strict=True)]
             root = encode_tree(["zkc.native-proof-binding/0", "sha256", descriptor[2],
-                compiled["source_sha256"], *policy[1:4], descriptor, rows, ""])
+                compiled["original"], *policy[1:4], descriptor, rows, ""])
             digest = hashlib.sha256(root).digest()
             trace = [{"kind": "sha256", "input": root.hex(), "output": digest.hex(),
                       "status": "return"}]

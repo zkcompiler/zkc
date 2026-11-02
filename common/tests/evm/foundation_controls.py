@@ -195,7 +195,7 @@ class Subjects:
             check_native_outcome(fixture, expected, native_error)
         except AssertionError as error:
             raise AssertionError(f"{path.name}/{name}: {error}") from error
-        if fixture["source"] != compiled["source_sha256"] or descriptor != compiled["descriptor"]:
+        if fixture["source"] != compiled["original"] or descriptor != compiled["descriptor"]:
             raise AssertionError("native and EVM checked subjects differ")
         public = list(map(bytes.fromhex, fixture["public"]))
         calldata = encode_verify(public, bytes.fromhex(fixture["context"]), bytes.fromhex(fixture["proof"]))

@@ -128,34 +128,11 @@ fn source_limits(value: &Value) -> Result<()> {
     Ok(())
 }
 
+/// The effective common-stage options: exactly the shared list a CPU Entry
+/// package publishes, without CPU storage release.
 fn source_options(value: &Value) -> Result<crate::entry::CompileOptions> {
-    let mut options = value.clone();
-    exact_object(
-        &options,
-        &[
-            "simplify",
-            "release_storage",
-            "finite_bulk",
-            "fuse_vector_reductions",
-            "fuse_collect_fold",
-            "calculation_batching",
-            "oracle_realization",
-            "numerical_expressions",
-        ],
-        "evm-source-options",
-    )?;
-    if !matches!(
-        options["numerical_expressions"].as_str(),
-        Some("prefer-native" | "vector-only")
-    ) {
-        return Err("evm-source-options".into());
-    }
-    options
-        .as_object_mut()
-        .unwrap()
-        .remove("numerical_expressions");
     let options: crate::entry::CompileOptions =
-        serde_json::from_value(options).map_err(|_| "evm-source-options")?;
+        serde_json::from_value(value.clone()).map_err(|_| "evm-source-options")?;
     if options.release_storage {
         return Err("evm-source-options".into());
     }
@@ -322,8 +299,6 @@ fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) 
             .iter()
             .zip(ports)
             .any(|(row, port)| row[0] != policy[3] || row[1] != *port)
-        || record["manifest"]["producer"] != policy[2]
-        || record["manifest"]["validator"] != policy[3]
     {
         return Err("evm-source-identity".into());
     }
@@ -332,8 +307,10 @@ fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) 
     Ok(())
 }
 
-/// Exact compiler-owned source response. Capture is transport validation, not
-/// independent authentication of the selected source or compiler.
+/// Exact compiler-owned source response, `zkc.evm-source/0`. Capture is
+/// transport validation, not independent authentication of the selected source
+/// or compiler. The SDK owns the tool facts: the solc release and settings and
+/// the verifier ABI come from the installed target declaration.
 #[derive(Clone, Debug)]
 pub struct Source {
     bytes: Vec<u8>,
@@ -351,60 +328,26 @@ impl Source {
             &record,
             &[
                 "format",
-                "target",
                 "declaration",
                 "fork",
                 "options",
-                "yul",
-                "abi",
-                "descriptor",
-                "policy",
                 "limits",
-                "source_sha256",
-                "manifest",
                 "entry",
                 "capture",
                 "installation",
                 "original",
-            ],
-            "evm-source-format",
-        )?;
-        let manifest = &record["manifest"];
-        exact_object(
-            manifest,
-            &[
-                "format",
-                "target",
-                "fork",
-                "options",
-                "source_sha256",
                 "source_format",
-                "entry",
-                "producer",
-                "validator",
                 "compiler",
-                "yul_sha256",
-                "limits",
-                "solc_version",
-                "optimizer_steps",
-                "release_validation",
-                "capture",
-                "installation",
-                "original",
+                "policy",
+                "descriptor",
+                "yul",
             ],
             "evm-source-format",
         )?;
         if record["format"] != "zkc.evm-source/0"
-            || record["target"] != "evm"
+            || record["source_format"] != "zkc.original-mlir/0"
             || record["yul"].as_str().is_none_or(str::is_empty)
             || record["entry"].as_str().is_none_or(str::is_empty)
-            || record["abi"] != calldata::abi()
-            || manifest["format"] != "zkc.evm-source-manifest/0"
-            || manifest["source_format"] != "zkc.original-mlir/0"
-            || manifest["solc_version"] != SOLC_VERSION.split('+').next().unwrap()
-            || manifest["optimizer_steps"]
-                != solc::optimizer()["details"]["yulDetails"]["optimizerSteps"]
-            || manifest["release_validation"] != "pending-deployment-and-dynamic-trace"
         {
             return Err("evm-source-format".into());
         }
@@ -415,28 +358,14 @@ impl Source {
         }
         let fork = record["fork"].as_str().ok_or("evm-fork")?.parse()?;
         let options = source_options(&record["options"])?;
-        source_options(&manifest["options"])?;
         source_limits(&record["limits"])?;
-        source_limits(&manifest["limits"])?;
-        for key in ["capture", "installation", "original", "source_sha256"] {
+        for key in ["capture", "installation", "original", "compiler"] {
             if record[key]
                 .as_str()
                 .is_none_or(|value| crate::io::bytes::digest(value).is_err())
-                || record["manifest"][key] != record[key]
             {
                 return Err("evm-source-identity".into());
             }
-        }
-        if ["entry", "target", "fork", "options", "limits"]
-            .iter()
-            .any(|key| manifest[key] != record[key])
-            || record["original"] != record["source_sha256"]
-            || manifest["compiler"]
-                .as_str()
-                .is_none_or(|value| crate::io::bytes::digest(value).is_err())
-            || manifest["yul_sha256"] != hash(record["yul"].as_str().unwrap().as_bytes())
-        {
-            return Err("evm-source-identity".into());
         }
         source_descriptor(&record, &options.oracle_realization)?;
         Ok(Self {
@@ -452,8 +381,9 @@ impl Source {
     pub fn yul(&self) -> &str {
         self.record["yul"].as_str().expect("captured source")
     }
-    pub fn abi(&self) -> &Value {
-        &self.record["abi"]
+    /// The verifier ABI of the installed target declaration.
+    pub fn abi(&self) -> &'static Value {
+        &calldata::ABI
     }
     pub fn entry(&self) -> &str {
         self.record["entry"].as_str().expect("captured entry")

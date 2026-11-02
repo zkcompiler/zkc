@@ -239,20 +239,48 @@ fork's code size ceiling deploys within the budget.
 compilation. The SDK's `evm` feature provides this target without a CPU runtime
 or EVM engine dependency. Compilation requires an explicit installed solc path
 and independent executable SHA-256 pin; no download or PATH substitution occurs.
-The declaration pins solc `0.8.38+commit.1835d247`. `--evm-version` selects a
-declared fork, defaulting to the declared default. The typed SDK equivalent is
-`evm::Options { fork, compile }`. Effective common mathematical/oracle options
-flow through checked compilation and are bound into source and artifact identity;
-CPU storage and physical-target selections refuse. Exact standard-JSON settings
-are retained in `solc-input.json`. Reuse requires the same fork and options.
+The declaration pins the solc release and its standard-JSON settings.
+`--evm-version` selects a declared fork, defaulting to the declared default. The
+typed SDK equivalent is `evm::Options { fork, compile }`. Effective common
+mathematical/oracle options flow through checked compilation and are bound into
+source and artifact identity; CPU storage and physical-target selections refuse.
+Exact standard-JSON settings are retained in `solc-input.json`. Reuse requires
+the same fork and options.
+
+### Source response
+
+The compiler's EVM response, `zkc.evm-source/0`, has one producer, the library's
+`encodeEvmCompilation`; the language driver passes it the selected Entry and
+the project's identities and prints its result unchanged. It is one JSON object
+with exactly these members:
+
+| Member | Content |
+|---|---|
+| `format` | `zkc.evm-source/0` |
+| `declaration` | The installed [target declaration](#target-declaration)'s identity |
+| `fork` | The selected declared fork |
+| `options` | The effective common-stage options, the same list and values a CPU `zkc.entry/0` package publishes for the same selection |
+| `limits` | The deployment's effective ceilings, one per declared ceiling |
+| `entry` | The selected source Entry |
+| `capture`, `installation`, `original` | The authored capture, installation and original identities |
+| `source_format` | `zkc.original-mlir/0` |
+| `compiler` | The compiler toolchain identity |
+| `policy` | The native proof policy; its entry symbol names the protocol, distinct from `entry` |
+| `descriptor` | The native proof descriptor |
+| `yul` | The target source |
+
+The response carries no tool facts: the SDK takes the solc release and settings
+and the verifier ABI from the declaration and writes `abi.json` from it. The
+numerical expression mode is not an option of this target, because only CPU
+physical selection reads it.
 
 A `zkc.evm-artifact/0` directory contains:
 
 | File | Content |
 |---|---|
-| `source.json` | Exact compiler response, checked source identities, target declaration identity, descriptor and ceilings |
+| `source.json` | Exact [source response](#source-response) |
 | `verifier.yul` | Target source |
-| `abi.json` | Verifier ABI |
+| `abi.json` | Verifier ABI of the target declaration |
 | `solc-input.json` | Exact tool request and settings |
 | `creation.bin` | Binary deployment bytecode |
 | `runtime.bin` | Binary deployed bytecode |
@@ -260,8 +288,9 @@ A `zkc.evm-artifact/0` directory contains:
 
 The manifest binds authored capture, installation and original identities
 through the exact compiler response, as well as target settings and bytecode.
-Source capture validates the complete current response, repeated metadata and
-deployment ceilings, and rejects duplicate or unknown JSON object fields.
+Source capture validates the complete current response and its deployment
+ceilings against the declaration, and rejects duplicate or unknown JSON object
+fields.
 Import requires an independently retained hash of the exact manifest bytes.
 Internal checksums alone do not authenticate a substituted directory. Reuse
 requires an authenticated immutable artifact and the exact build key; compiler

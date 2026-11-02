@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/Evm.h"
+#include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
@@ -51,8 +52,7 @@ struct EvmCompilation::Storage {
   MLIRContext context;
   OwningOpRef<ModuleOp> module;
   std::string yul, source, digest;
-  json::Value abi = nullptr, descriptor = nullptr, manifest = nullptr;
-  json::Value options = nullptr;
+  json::Value descriptor = nullptr, options = nullptr;
   EvmFork fork = EvmFork::ZKC_EVM_TARGET_DEFAULT_FORK;
   NativeProofPolicy policy;
   EvmLimits limits;
@@ -72,12 +72,8 @@ EvmCompilation::EvmCompilation(EvmCompilation &&) noexcept = default;
 EvmCompilation &EvmCompilation::operator=(EvmCompilation &&) noexcept = default;
 EvmCompilation::~EvmCompilation() = default;
 const std::string &EvmCompilation::yul() const { return storage->yul; }
-const json::Value &EvmCompilation::abi() const { return storage->abi; }
 const json::Value &EvmCompilation::descriptor() const {
   return storage->descriptor;
-}
-const json::Value &EvmCompilation::manifest() const {
-  return storage->manifest;
 }
 const NativeProofPolicy &EvmCompilation::policy() const {
   return storage->policy;
@@ -114,12 +110,6 @@ Error validateLimits(const EvmLimits &limits) {
 std::string digest(StringRef bytes) {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
-json::Value standardAbi() {
-  auto abi = json::parse(evm_target::abiJson);
-  if (!abi)
-    report_fatal_error("generated EVM target ABI is not JSON");
-  return std::move(*abi);
-}
 } // namespace
 
 Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
@@ -129,10 +119,12 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
     return error("evm.fork", "expected a declared fork: " + declaredForks());
   if (auto error = validateLimits(options.limits))
     return std::move(error);
-  auto oracleSelection =
-      protocol::encodeOracleRealizationPolicy(options.oracleSelection);
-  if (!oracleSelection)
-    return oracleSelection.takeError();
+  // The CPU storage choice never reaches this target. The numerical
+  // expression mode is not published: only CPU physical selection reads it.
+  auto published = language::encodeCompileOptions(
+      options.simplify, false, options.mathematics, options.oracleSelection);
+  if (!published)
+    return published.takeError();
   if (bytes.empty() || bytes.size() > 16 * 1024 * 1024 ||
       filename.size() > 4096 || !mlirNestingWithinLimit(bytes))
     return error("evm.source-limit",
@@ -210,40 +202,15 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   result->yul = std::move(*yul);
   result->module = std::move(*module);
   result->descriptor = std::move(constructed->descriptor);
-  result->abi = standardAbi();
   result->policy = std::move(policy);
   result->limits = options.limits;
   result->fork = options.fork;
-  result->options = json::Object{
-      {"simplify", options.simplify},
-      {"release_storage", false},
-      {"finite_bulk", options.mathematics.finiteBulk},
-      {"fuse_vector_reductions", options.mathematics.vectorReductionFusion},
-      {"fuse_collect_fold", options.mathematics.collectFoldFusion},
-      {"calculation_batching", options.mathematics.calculationBatching},
-      {"numerical_expressions", options.mathematics.numericalExpressions ==
-                                        NumericalExpressionMode::PreferNative
-                                    ? "prefer-native"
-                                    : "vector-only"},
-      {"oracle_realization", std::move(*oracleSelection)}};
+  json::Object publishedOptions;
+  for (auto &[name, value] : *published)
+    publishedOptions[name] = std::move(value);
+  result->options = std::move(publishedOptions);
   result->endpoint = std::make_unique<CheckedEndpoint>(std::move(*endpoint));
   result->realization = std::move(constructed->realization);
-  result->manifest = json::Object{
-      {"format", "zkc.evm-source-manifest/0"},
-      {"target", "evm"},
-      {"fork", evmForkName(options.fork)},
-      {"options", result->options},
-      {"source_sha256", result->digest},
-      {"source_format", "zkc.original-mlir/0"},
-      {"entry", result->policy.entry},
-      {"producer", result->policy.producer},
-      {"validator", result->policy.validator},
-      {"compiler", language::compilerToolchainIdentity()},
-      {"yul_sha256", digest(result->yul)},
-      {"limits", encodeEvmLimits(options.limits)},
-      {"solc_version", evm_target::solcRelease},
-      {"optimizer_steps", evm_target::solcOptimizerSteps},
-      {"release_validation", "pending-deployment-and-dynamic-trace"}};
   return EvmCompilation(std::move(result));
 }
 
@@ -265,18 +232,21 @@ compileEvmEntry(const language::CheckedOriginal &original,
                          selected, DialectRegistry());
 }
 
-json::Value encodeEvmCompilation(const EvmCompilation &compiled) {
+json::Value encodeEvmCompilation(const EvmCompilation &compiled,
+                                 const EvmSourceIdentity &source) {
   return json::Object{{"format", "zkc.evm-source/0"},
-                      {"target", "evm"},
                       {"declaration", evm_target::identity},
                       {"fork", evmForkName(compiled.fork())},
                       {"options", compiled.options()},
-                      {"yul", compiled.yul()},
-                      {"abi", compiled.abi()},
-                      {"descriptor", compiled.descriptor()},
-                      {"policy", encodeNativeProofPolicy(compiled.policy())},
                       {"limits", encodeEvmLimits(compiled.limits())},
-                      {"source_sha256", compiled.sourceSha256()},
-                      {"manifest", compiled.manifest()}};
+                      {"entry", source.entry},
+                      {"capture", source.capture},
+                      {"installation", source.installation},
+                      {"original", compiled.sourceSha256()},
+                      {"source_format", "zkc.original-mlir/0"},
+                      {"compiler", language::compilerToolchainIdentity()},
+                      {"policy", encodeNativeProofPolicy(compiled.policy())},
+                      {"descriptor", compiled.descriptor()},
+                      {"yul", compiled.yul()}};
 }
 } // namespace zkc

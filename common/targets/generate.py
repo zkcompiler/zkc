@@ -245,10 +245,6 @@ def _member(name):
     return head + "".join(part.capitalize() for part in tail)
 
 
-def _canonical(value):
-    return json.dumps(value, separators=(",", ":"), sort_keys=True)
-
-
 def render_cpp(document, declaration_identity):
     """Project the validated declaration as X-macro tables and constants."""
     forks, limits = document["forks"], document["limits"]
@@ -272,16 +268,11 @@ def render_cpp(document, declaration_identity):
               "#define ZKC_EVM_TARGET_REVERTS(X) \\"]
     lines += [f"  X({revert['class']}, {_cstring(revert['tag'])}, "
               f"0x{revert['tag'].encode().hex()}u) \\" for revert in document["reverts"]]
-    abi, solc = document["abi"], document["solc"]
+    # The compiler emits the selector's dispatch and names the declaration in
+    # its response; solc settings and the ABI document belong to the SDK.
     constants = [
         ("identity", declaration_identity),
-        ("abiSignature", abi["signature"]),
-        ("abiSelector", abi["selector"]),
-        ("abiJson", _canonical(abi["json"])),
-        ("solcVersion", solc["version"]),
-        ("solcRelease", solc["version"].split("+")[0]),
-        ("solcOptimizerJson", _canonical(solc["optimizer"])),
-        ("solcOptimizerSteps", solc["optimizer"]["details"]["yulDetails"]["optimizerSteps"]),
+        ("abiSelector", document["abi"]["selector"]),
     ]
     lines += ["", "namespace zkc::evm_target {"]
     lines += [f"inline constexpr char {name}[] = {_cstring(value)};" for name, value in constants]

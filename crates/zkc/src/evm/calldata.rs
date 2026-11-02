@@ -10,9 +10,9 @@ pub struct Invocation<'a> {
 }
 
 /// The declared verifier ABI.
-pub(super) fn abi() -> Value {
+pub(super) static ABI: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
     serde_json::from_str(crate::evm_target::ABI_JSON).expect("generated ABI JSON")
-}
+});
 
 fn word(out: &mut Vec<u8>, value: usize) {
     out.extend_from_slice(&[0; 24]);

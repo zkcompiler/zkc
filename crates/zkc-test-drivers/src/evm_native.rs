@@ -211,7 +211,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let evm = if let Some(directory) = options.get("--evm-artifact") {
         let artifact = Artifact::capture(directory, required("--evm-sha256")?)?;
         let source = artifact.source()?;
-        if source.metadata()["source_sha256"] != envelope[1]
+        if source.metadata()["original"] != envelope[1]
             || source.metadata()["descriptor"] != *descriptor
             || source.entry() != entry
         {

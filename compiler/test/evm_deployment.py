@@ -43,30 +43,50 @@ flags = ['--no-simplify', '--no-finite-bulk', '--fuse-vector-reductions',
          '--fuse-collect-fold', '--no-calculation-batching',
          '--oracle-realization=' + json.dumps(oracle)]
 
+# The one producer's keys. Tool facts (solc, its settings, the ABI) belong to
+# the declaration and the SDK; no key is restated in an inner record.
+KEYS = {'format', 'declaration', 'fork', 'options', 'limits', 'entry', 'capture',
+        'installation', 'original', 'source_format', 'compiler', 'policy', 'descriptor',
+        'yul'}
+
 with case('every declared fork retains exact source and effective common options'):
     original = commands.run([compiler, 'language-emit', *inputs])
     for fork in FORKS:
         response = json.loads(commands.run([compiler, 'language-evm', *inputs,
                                             f'--evm-version={fork}', *flags]))
-        assert response['fork'] == response['manifest']['fork'] == fork
+        assert set(response) == KEYS, sorted(response)
+        assert response['fork'] == fork
         assert response['declaration'] == IDENTITY
-        assert response['options'] == response['manifest']['options'] == {
+        assert response['options'] == {
             'simplify': False, 'release_storage': False, 'finite_bulk': False,
             'fuse_vector_reductions': True, 'fuse_collect_fold': True,
-            'calculation_batching': False, 'oracle_realization': oracle,
-            'numerical_expressions': 'prefer-native'}
-        assert response['original'] == response['source_sha256'] == hashlib.sha256(
-            original.encode()).hexdigest()
+            'calculation_batching': False, 'oracle_realization': oracle}
+        assert response['original'] == hashlib.sha256(original.encode()).hexdigest()
         assert response['descriptor'][1] == response['policy']
         assert json.loads(response['descriptor'][8]) == oracle
         assert commands.run([compiler, 'language-emit', *inputs]) == original
+        # The CPU package publishes the same options for the same flags.
+        package = json.loads(commands.run([compiler, 'language-package', *inputs, *flags]))
+        assert response['options'] == package['options']
     default = json.loads(commands.run([compiler, 'language-evm', *inputs]))
-    assert default['fork'] == default['manifest']['fork'] == DECLARATION['default_fork']
+    assert set(default) == KEYS
+    assert default['fork'] == DECLARATION['default_fork']
     assert default['declaration'] == IDENTITY
-    assert default['abi'] == DECLARATION['abi']['json']
-    assert default['manifest']['solc_version'] == DECLARATION['solc']['version'].split('+')[0]
     assert default['limits'] == {row['name']: row['maximum'] for row in DECLARATION['limits']}
     assert default['options']['simplify'] is True
+    assert default['options'] == json.loads(
+        commands.run([compiler, 'language-package', *inputs]))['options']
+
+with case('the source Entry and the policy entry keep distinct keys'):
+    response = json.loads(commands.run([compiler, 'language-evm', *inputs]))
+    # The selected source Entry; the policy keeps the protocol's entry symbol.
+    assert response['entry'] == 'example::Proof'
+    assert response['policy'][1] != response['entry']
+    assert response['source_format'] == 'zkc.original-mlir/0'
+    # The same identities the checked project reports for the same selection.
+    checked = json.loads(commands.run([compiler, 'language-check', *inputs]))
+    for key in ('entry', 'capture', 'installation', 'original'):
+        assert response[key] == checked[key], key
 
 with case('authored zero-transcript Entry retains framed common construction'):
     source = OUT / 'authored.zkc'

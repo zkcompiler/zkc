@@ -193,10 +193,7 @@ impl Compiler {
         if !selection::matches(selection.name, source.entry()) {
             return Err("source-entry-selection".into());
         }
-        if source.fork() != options.fork
-            || source.options() != &options.compile
-            || source.metadata()["options"]["numerical_expressions"] != "prefer-native"
-        {
+        if source.fork() != options.fork || source.options() != &options.compile {
             return Err("evm-source-options".into());
         }
         Ok(source)
@@ -753,15 +750,11 @@ mod tests {
                 crate::entry::OracleQueryOrder::AfterFinalDraw;
             let mut record =
                 crate::evm::tests::source_record("example::Proof", "invocation control");
-            let mut selected = serde_json::to_value(&options.compile).unwrap();
-            selected["numerical_expressions"] = serde_json::json!("prefer-native");
-            record["options"] = selected.clone();
-            record["manifest"]["options"] = selected;
+            record["options"] = serde_json::to_value(&options.compile).unwrap();
             let mut normalized = options.compile.oracle_realization.clone();
             normalized.roots = crate::entry::OracleRoots::Exact(vec![]);
             record["descriptor"][8] = serde_json::json!(normalized.canonical_json().unwrap());
             record["fork"] = serde_json::json!(options.fork);
-            record["manifest"]["fork"] = serde_json::json!(options.fork);
             let mut checks = String::new();
             for flag in options
                 .compile
@@ -796,7 +789,6 @@ mod tests {
             )];
             let mut wrong_fork = record.clone();
             wrong_fork["fork"] = serde_json::json!("cancun");
-            wrong_fork["manifest"]["fork"] = serde_json::json!("cancun");
             ignored.push(wrong_fork);
             for field in [
                 "simplify",
@@ -808,13 +800,11 @@ mod tests {
                 let mut wrong = record.clone();
                 wrong["options"][field] =
                     serde_json::json!(!wrong["options"][field].as_bool().unwrap());
-                wrong["manifest"]["options"] = wrong["options"].clone();
                 ignored.push(wrong);
             }
             let mut wrong_oracle = record.clone();
             wrong_oracle["options"]["oracle_realization"] =
                 serde_json::to_value(crate::entry::OracleSelection::default()).unwrap();
-            wrong_oracle["manifest"]["options"] = wrong_oracle["options"].clone();
             let normalized = crate::entry::OracleSelection {
                 roots: crate::entry::OracleRoots::Exact(vec![]),
                 ..Default::default()
@@ -1282,8 +1272,8 @@ mod tests {
             }
             for (path, replacement) in [
                 ("/unknown", Value::Bool(true)),
-                ("/manifest/format", Value::String("wrong-format".into())),
-                ("/manifest/limits", Value::Null),
+                ("/format", Value::String("wrong-format".into())),
+                ("/limits", Value::Null),
             ] {
                 let mut malformed = sealed.metadata().clone();
                 if path == "/unknown" {
@@ -1297,7 +1287,7 @@ mod tests {
                 );
             }
             let response = serde_json::to_string(sealed.metadata()).unwrap();
-            let duplicate = format!("{{\"target\":\"cpu\",{}", &response[1..]);
+            let duplicate = format!("{{\"fork\":\"cancun\",{}", &response[1..]);
             assert_eq!(
                 crate::evm::Source::capture(duplicate.as_bytes())
                     .unwrap_err()

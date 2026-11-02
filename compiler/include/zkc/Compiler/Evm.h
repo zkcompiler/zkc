@@ -50,13 +50,14 @@ public:
   EvmCompilation &operator=(EvmCompilation &&) noexcept;
   ~EvmCompilation();
   const std::string &yul() const;
-  const llvm::json::Value &abi() const;
   const llvm::json::Value &descriptor() const;
-  const llvm::json::Value &manifest() const;
   const NativeProofPolicy &policy() const;
   EvmFork fork() const;
+  /// The effective common-stage options, in the shared published list.
   const llvm::json::Value &options() const;
+  /// The validated effective deployment ceilings.
   const EvmLimits &limits() const;
+  /// The SHA-256 of the exact original bytes: the original's identity.
   llvm::StringRef sourceSha256() const;
   llvm::StringRef sourceBytes() const;
   mlir::OwningOpRef<mlir::ModuleOp> targetSnapshot() const;
@@ -82,10 +83,22 @@ llvm::Expected<EvmCompilation> compileEvmProof(llvm::StringRef sourceBytes,
 llvm::Expected<EvmCompilation>
 compileEvmEntry(const language::CheckedOriginal &, const EvmOptions & = {});
 
-/// Canonical JSON source object for the SDK/driver. Format zkc.evm-source/0.
-/// It names the installed target declaration by identity beside the selected
-/// fork, so a reader with a different declaration refuses it.
-llvm::json::Value encodeEvmCompilation(const EvmCompilation &);
+/// The project facts a source response binds beside the compilation: the
+/// selected source Entry, distinct from the policy's entry symbol, and the
+/// authored capture and installation identities.
+struct EvmSourceIdentity {
+  std::string entry;
+  std::string capture;
+  std::string installation;
+};
+
+/// The one producer of zkc.evm-source/0, the canonical JSON source object for
+/// the SDK. It names the installed target declaration by identity beside the
+/// selected fork, so a reader with a different declaration refuses it. Tool
+/// facts (solc, its settings and the verifier ABI) belong to the declaration
+/// and the SDK, not to this response.
+llvm::json::Value encodeEvmCompilation(const EvmCompilation &,
+                                       const EvmSourceIdentity &);
 llvm::json::Value encodeEvmLimits(const EvmLimits &);
 } // namespace zkc
 #endif

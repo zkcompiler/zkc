@@ -62,7 +62,7 @@ def invocation(compiled, values):
     descriptor, policy = compiled["descriptor"], compiled["policy"]
     rows = [[*r[:3], v.hex()] for r, v in zip(descriptor[4], public, strict=True)]
     tree = ["zkc.native-proof-binding/0", "sha256", descriptor[2],
-            compiled["source_sha256"], *policy[1:4], descriptor, rows, ""]
+            compiled["original"], *policy[1:4], descriptor, rows, ""]
     root = encode_tree(tree)
     digest = hashlib.sha256(root).digest()
     proof = b"ZKCPRF00" + digest
