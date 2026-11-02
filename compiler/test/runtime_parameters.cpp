@@ -272,5 +272,49 @@ int main() {
                                          builder.getDenseI8ArrayAttr({0}));
     refuses(encodeAssetDigest({}), "asset-reference");
   });
+  cases.run("an array prefix begins its completed canonical encoding", [&] {
+    for (uint64_t arity : {uint64_t(5), uint64_t(300)}) {
+      json::Array elements;
+      for (uint64_t i = 0; i < arity; ++i)
+        elements.push_back(
+            i % 3 ? json::Value(std::to_string(i))
+                  : json::Value(json::Array{std::to_string(i), json::Array{}}));
+      auto full = take(encodeLogicalTree(json::Value(json::Array(elements))));
+      for (uint64_t present :
+           {uint64_t(0), uint64_t(1), uint64_t(3), arity - 1, arity}) {
+        json::Array first;
+        for (uint64_t i = 0; i < present; ++i)
+          first.push_back(elements[i]);
+        auto prefix = take(encodeLogicalTreePrefix(first, arity));
+        require(StringRef(full).starts_with(prefix) &&
+                    (present < arity || prefix == full),
+                "prefix differs from the completed encoding");
+      }
+    }
+    // Every byte of the eight-byte little-endian arity is written.
+    const char header[] = {1, 0, char(0x80), 0, 0, 0, 0, 0, 0};
+    require(take(encodeLogicalTreePrefix({}, 32768)) ==
+                std::string(header, sizeof header),
+            "array arity header differs");
+    refuses(encodeLogicalTreePrefix({}, 32769), "logical-tree-limit");
+    refuses(encodeLogicalTreePrefix(json::Array{"a", "b"}, 1),
+            "logical-tree-limit");
+    refuses(encodeLogicalTreePrefix(json::Array{json::Value(1)}, 2),
+            "logical-tree-kind");
+    // Present elements obey the full encoding's depth limit as children.
+    for (unsigned levels : {63u, 64u}) {
+      json::Value nested = "leaf";
+      for (unsigned i = 0; i < levels; ++i)
+        nested = json::Array{std::move(nested)};
+      auto prefix = encodeLogicalTreePrefix(json::Array{nested}, 2);
+      auto complete = encodeLogicalTree(json::Array{nested, "last"});
+      require(bool(prefix) == bool(complete) && bool(prefix) == (levels == 63),
+              "prefix and completed depth limits differ");
+      if (!prefix)
+        consumeError(prefix.takeError());
+      if (!complete)
+        consumeError(complete.takeError());
+    }
+  });
   return cases.result();
 }

@@ -176,8 +176,10 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   } else {
     return refuse(op, "unsupported transcript occurrence kind");
   }
-  auto prefix = encodeLogicalTree(
-      json::Array{"zkc.native-origin/0", origin->entry, std::move(steps)});
+  // The five-element origin: the coordinates and the event follow the three
+  // static elements.
+  auto prefix = encodeLogicalTreePrefix(
+      json::Array{"zkc.native-origin/0", origin->entry, std::move(steps)}, 5);
   auto suffix = encodeLogicalTree(std::move(event));
   if (!prefix || !suffix) {
     if (!prefix)
@@ -189,7 +191,6 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   if (prefix->size() + suffix->size() + 9 + depth * 29 > 4096)
     return refuse(op,
                   "origin template exceeds the bounded transition workspace");
-  (*prefix)[1] = 5; // Five-slot origin, first three fields encoded here.
   unsigned coordinates = op.getNumOperands() - 2;
   Value coordinateData = op.getOperand(coordinates);
   Value coordinateLength = op.getOperand(coordinates + 1);
@@ -656,12 +657,13 @@ LogicalResult Exporter::outer(func::FuncOp function) {
                    policy.producer,
                    policy.validator,
                    descriptor};
-  auto prefix = encodeLogicalTree(std::move(root));
+  // The ten-element root: the public rows and the context follow the eight
+  // static elements.
+  auto prefix = encodeLogicalTreePrefix(root, 10);
   if (!prefix) {
     consumeError(prefix.takeError());
     return failure();
   }
-  (*prefix)[1] = 10;
   if (prefix->size() + 18 > limits.rootBytes)
     return refuse(
         function,
@@ -698,13 +700,13 @@ LogicalResult Exporter::outer(func::FuncOp function) {
       consumeError(layout.takeError());
       return refuse(function, "unsupported public layout");
     }
-    auto rowPrefix =
-        encodeLogicalTree(json::Array{(*row)[0], (*row)[1], (*row)[2]});
+    // The four-element public row: the value bytes follow.
+    auto rowPrefix = encodeLogicalTreePrefix(
+        json::Array{(*row)[0], (*row)[1], (*row)[2]}, 4);
     if (!rowPrefix) {
       consumeError(rowPrefix.takeError());
       return failure();
     }
-    (*rowPrefix)[1] = 4;
     // Each dynamic element head is relative to the element-head base 132.
     out << "if iszero(eq(calldataload(" << 132 + 32 * index
         << "), sub(next, 132))) { evm_decode(8) }\n"
