@@ -1,6 +1,7 @@
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/ResourceUnit.h"
@@ -18,80 +19,89 @@ namespace {
 using Compatibility = ImplementationDescriptor::Compatibility;
 using Family = ImplementationDescriptor::Family;
 
-// Closed dense family support. These exact tuples supply descriptor facts and
-// validate provider/layout agreement; implementation identities stay opaque.
+// Dense family support: the installation's applied representations that own
+// a single dense child. Each row supplies descriptor facts and validates
+// provider/layout agreement; implementation identities stay opaque. Its
+// provider is the one the child's domain lists (as default or alternative)
+// whose installation unit owns the container, and its vector port is that
+// unit's layout-free vector representation of the child's domain.
 struct DenseLayoutRow {
   Family family;
   StringRef provider, domain, container, vector;
 };
-const DenseLayoutRow denseLayouts[] = {
-    {Family::FieldArray, "arkworks", "bls12-381.fr", "arkworks.field-array/0",
-     "arkworks.fr-vector/0"},
-    {Family::FieldArray, "blst", "bls12-381.fr", "blst/field-array", "blst/fr"},
-    {Family::FixedVector, "blst", "bls12-381.fr", "blst/fixed-vector",
-     "blst/fr"},
-    {Family::FixedVector, "plonky3", "koala-bear", "plonky3.fixed-vector/0",
-     "plonky3.koala-bear-vector/0"}};
-
-const DenseLayoutRow *denseLayoutRow(const ImplementationDescriptor &entry) {
-  auto row = find_if(denseLayouts, [&](const auto &row) {
-    return row.family == entry.family && row.provider == entry.provider;
-  });
-  return row == std::end(denseLayouts) ? nullptr : row;
+[[noreturn]] void invalidDenseLayout(const Twine &reason) {
+  report_fatal_error(Twine("invalid installed dense layout: ") + reason, false);
+}
+ArrayRef<DenseLayoutRow> denseLayouts() {
+  static const std::vector<DenseLayoutRow> rows = [] {
+    std::vector<DenseLayoutRow> result;
+    for (const auto &row : installation::appliedRepresentations()) {
+      if (!row.child)
+        continue;
+      Family family;
+      if (row.constructor == "field_array")
+        family = Family::FieldArray;
+      else if (row.constructor == "fixed_vector")
+        family = Family::FixedVector;
+      else
+        invalidDenseLayout(row.identity + " has no dense family");
+      StringRef domain = row.child->domain;
+      const auto *preference = installation::provider(domain);
+      if (!preference)
+        invalidDenseLayout(domain + " has no provider row");
+      StringRef provider;
+      std::vector<StringRef> named{preference->defaultProvider};
+      named.insert(named.end(), preference->alternatives.begin(),
+                   preference->alternatives.end());
+      for (StringRef candidate : named)
+        if (installation::providerUnit(candidate) == row.unit) {
+          if (!provider.empty())
+            invalidDenseLayout(row.identity + " has two providers");
+          provider = candidate;
+        }
+      StringRef vector;
+      for (const auto &representation : installation::representations())
+        if (representation.kind == "vector" &&
+            representation.domain == domain &&
+            representation.unit == row.unit && representation.layout.empty()) {
+          if (!vector.empty())
+            invalidDenseLayout(row.identity + " has two vector layouts");
+          vector = representation.identity;
+        }
+      if (provider.empty() || vector.empty())
+        invalidDenseLayout(row.identity + " has no provider vector layout");
+      result.push_back({family, provider, domain, row.identity, vector});
+    }
+    return result;
+  }();
+  return rows;
 }
 
-// Applicability is deliberately independent of DefaultProvider in Domains.
-// Changing a preference cannot grant a backend a new nominal domain.
-struct ProviderDomain {
-  StringRef provider, domain;
-};
-constexpr ProviderDomain providerDomains[] = {
-    {"arkworks", "bls12-381.fr"},
-    {"arkworks", "bls12-381.g1"},
-    {"arkworks", "bls12-381.g2"},
-    {"arkworks", "bls12-381.gt"},
-    {"halo2curves-axiom", "bn254.fr"},
-    {"halo2curves-axiom", "bn254.g1"},
-    {"halo2curves-axiom", "bn254.g2"},
-    {"blst", "bls12-381.fr"},
-    {"blst", "bls12-381.g1"},
-    {"blst", "bls12-381.g2"},
-    {"arkworks", "bn254.fr"},
-    {"arkworks", "bn254.g1"},
-    {"arkworks", "bn254.g2"},
-    {"arkworks", "bn254.gt"},
-    {"arkworks", "multilinear.kzg.bls12-381/0"},
-    {"arkworks", "merlin3.bls12-381.fr64be/0"},
-    {"arkworks", "hash-chain.keccak256.bls12-381.fr64be/0"},
-    {"dalek", "ristretto255.scalar"},
-    {"dalek", "ristretto255.group"},
-    {"dalek", "edwards25519.prime"},
-    {"dalek", "merlin3.ristretto255.scalar64le/0"},
-    {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
-    {"plonky3", "merlin3.baby-bear.ext4-binomial11.rejection31le/0"},
-    {"plonky3", "merlin3.goldilocks.ext2-binomial7.rejection64le/0"},
-    {"plonky3",
-     "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"},
-    {"plonky3",
-     "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"},
-    {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
-    {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
-    {"plonky3", "rows.merkle-keccak256.koala-bear.ext4-binomial3/0"},
-    {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
-    {"plonky3", "rows.merkle-poseidon2-16.baby-bear/0"},
-    {"plonky3", "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0"},
-    {"plonky3", "rows.merkle-poseidon2-8.goldilocks/0"},
-    {"plonky3", "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0"},
-
-    {"plonky3", "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
-    {"plonky3", "gf2-64.pentanomial-4-3-1"},
-    {"plonky3", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"},
-    {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
+const DenseLayoutRow *denseLayoutRow(const ImplementationDescriptor &entry) {
+  for (const auto &row : denseLayouts())
+    if (row.family == entry.family && row.provider == entry.provider)
+      return &row;
+  return nullptr;
+}
 
 // Residue arithmetic, canonical bytes and Montgomery words have distinct
-// applicability. Binary fields share canonical little-endian byte operations
-// but cannot inherit residue arithmetic; Goldilocks has no Montgomery32 form.
+// applicability, each from the installation's field forms. Binary fields
+// share canonical little-endian byte operations but cannot inherit residue
+// arithmetic; Goldilocks has no Montgomery32 form.
 enum class FieldSet { None, Residue, LittleEndian, Montgomery32 };
+bool inFieldSet(const installation::FieldForm &form, FieldSet set) {
+  switch (set) {
+  case FieldSet::None:
+    return false;
+  case FieldSet::Residue:
+    return form.arithmetic.has_value();
+  case FieldSet::LittleEndian:
+    return form.byteEncoding && form.byteEncoding->order == "littleEndian";
+  case FieldSet::Montgomery32:
+    return form.montgomery && form.montgomery->radixBits == 32;
+  }
+  llvm_unreachable("field set");
+}
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -416,18 +426,21 @@ const generic::Operation *declaration(StringRef contract) {
 }
 
 bool knownProvider(StringRef provider) {
-  return provider == "native" || any_of(providerDomains, [&](const auto &row) {
-           return row.provider == provider;
+  return provider == "native" ||
+         any_of(installation::providers(), [&](const auto &row) {
+           return row.defaultProvider == provider ||
+                  is_contained(row.alternatives, provider);
          });
 }
 } // namespace
 
+// The providers that a binding may select for a domain: its installation
+// provider row's default and alternatives. A provider still needs an
+// installed implementation, and the target admits the handler separately.
 bool implementationProviderSupports(StringRef provider, StringRef domain) {
-  if (provider == "plonky3" && plonky3Field(domain))
-    return true;
-  return any_of(providerDomains, [&](const auto &row) {
-    return row.provider == provider && row.domain == domain;
-  });
+  const auto *row = installation::provider(domain);
+  return row && (row->defaultProvider == provider ||
+                 is_contained(row->alternatives, provider));
 }
 
 ImplementationCatalog::ImplementationCatalog(
@@ -880,10 +893,6 @@ Error applyImplementationFamily(const ImplementationDescriptor &entry,
 
 const ImplementationCatalog &installedImplementations() {
   static const ImplementationCatalog catalog = [] {
-    for (const auto &row : providerDomains)
-      if (!installedDomains().domain(row.domain))
-        report_fatal_error("invalid installed implementation provider domain",
-                           false);
     std::vector<ImplementationDescriptor> entries;
     std::vector<ImplementationPreference> preferences;
     const std::pair<unsigned, StringRef> providers[] = {
@@ -925,13 +934,9 @@ const ImplementationCatalog &installedImplementations() {
       }
       if (!row.domain.empty() || row.providers != Plonky3)
         report_fatal_error("ambiguous installed implementation row", false);
-      for (const auto &field : plonky3Fields())
-        if (row.fields != FieldSet::Montgomery32 || field.montgomery32)
-          install(row, field.identity);
-      if (row.fields == FieldSet::LittleEndian)
-        for (StringRef field : {"gf2-64.pentanomial-4-3-1",
-                                "gf2-64.pentanomial-4-3-1.ext3-trinomial1"})
-          install(row, field);
+      for (const auto &form : installation::fieldForms())
+        if (inFieldSet(form, row.fields))
+          install(row, form.field);
     }
     // Explicit BN254 provider menu. These positive operation and physical-port
     // inventories do not add a canonical default or a protocol-specific route.

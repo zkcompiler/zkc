@@ -502,8 +502,10 @@ std::vector<Table> dump() {
     if (entry.denseLayout)
       dense =
           json::Array{entry.denseLayout->container, entry.denseLayout->vector};
+    // The admitted domains are a set: only membership is meaningful.
+    std::set<std::string> admitted(entry.domains.begin(), entry.domains.end());
     json::Array domainList;
-    for (const auto &domain : entry.domains)
+    for (const auto &domain : admitted)
       domainList.push_back(domain);
     implementations.push_back(json::Array{
         entry.contract, entry.identity, entry.provider,
@@ -626,48 +628,6 @@ int main(int argc, char **argv) {
           (generated::domain(identity) ? binaryWidth(identity) : 0))
         found.push_back(identity);
     agree("bit-pattern widths", found, {});
-  });
-
-  cases.run("implementation provider relation", [&] {
-    std::vector<std::string> found;
-    for (StringRef provider : {"arkworks", "blst", "dalek", "halo2curves-axiom",
-                               "plonky3", "spongefish", "native"})
-      for (const auto &identity : identities()) {
-        const auto *row = physical::provider(identity);
-        bool listed = row && (row->defaultProvider == provider ||
-                              is_contained(row->alternatives, provider));
-        if (implementationProviderSupports(provider, identity) != listed)
-          found.push_back(provider.str() + " " + identity);
-      }
-    agree("provider relation", found, {});
-  });
-
-  cases.run("implementation field sets and field forms", [&] {
-    std::vector<std::string> found;
-    auto domains = [](StringRef contract) {
-      const auto *entry = installedImplementations().find(
-          contract, ("plonky3/" + contract).str());
-      require(entry, "missing field-set implementation " + contract);
-      std::set<std::string> result(entry->domains.begin(),
-                                   entry->domains.end());
-      return result;
-    };
-    std::set<std::string> residue, littleEndian, montgomery;
-    for (const auto &form : physical::fieldForms()) {
-      if (form.arithmetic)
-        residue.insert(form.field);
-      if (form.byteEncoding && form.byteEncoding->order == "littleEndian")
-        littleEndian.insert(form.field);
-      if (form.montgomery && form.montgomery->radixBits == 32)
-        montgomery.insert(form.field);
-    }
-    if (domains("ring.point") != residue)
-      found.push_back("residue");
-    if (domains("encoding.field_le") != littleEndian)
-      found.push_back("little-endian bytes");
-    if (domains("encoding.field_montgomery_le") != montgomery)
-      found.push_back("Montgomery words");
-    agree("field sets", found, {});
   });
 
   cases.run("resident canonical-frame representations", [&] {
