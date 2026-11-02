@@ -757,7 +757,7 @@ public:
         return std::move(failure);
       if (!decl.origin)
         continue;
-      if (decl.kind == Declaration::Kind::Protocol) {
+      if (isClosedConcreteProtocol(decl)) {
         auto found = protocols.find(decl.symbol);
         if (found == protocols.end())
           return error("source.correspondence",

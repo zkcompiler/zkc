@@ -1,7 +1,6 @@
 #include "zkc/Language/CommonControl.h"
 #include "CommonRequirements.h"
 #include "Semantics.h"
-#include "zkc/Language/Layout.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <numeric>
@@ -1546,6 +1545,11 @@ deriveCommonControlRequirements(const CheckedProject &project,
   detail::Work work{limits};
   return deriveRequirements(declarations, project.assets(), work, target);
 }
+bool isClosedConcreteProtocol(const Declaration &decl) {
+  return decl.kind == Declaration::Kind::Protocol && decl.body &&
+         !decl.abstract && decl.parameters.empty() &&
+         decl.scopedInputs.empty() && decl.domainInputs.empty();
+}
 Expected<std::vector<CommonControlRequirement>>
 deriveCommonControlRequirements(const ClosedEntry &entry,
                                 const Limits &limits) {
@@ -1571,8 +1575,7 @@ deriveCommonControlRequirements(const ClosedEntry &entry, DeclarationId target,
   Limits bounded = limits;
   bounded.work = std::min(remaining, limits.work);
   if (target.index >= entry.declarations().size() ||
-      entry.declarations()[target.index].kind != Declaration::Kind::Protocol ||
-      !entry.declarations()[target.index].body)
+      !isClosedConcreteProtocol(entry.declarations()[target.index]))
     return detail::failure("source.common-provenance",
                            "common target is not a closed concrete Protocol");
   const auto &declarations = detail::DeclarationAccess::get(entry);
@@ -1582,174 +1585,4 @@ deriveCommonControlRequirements(const ClosedEntry &entry, DeclarationId target,
                             target);
 }
 
-Expected<std::vector<NativeCommonControlRequirement>>
-deriveNativeCommonControlRequirements(const ClosedEntry &entry,
-                                      DeclarationId target,
-                                      const Limits &limits) {
-  if (auto error = checkLimits(limits))
-    return error;
-  const auto &declarations = detail::DeclarationAccess::get(entry);
-  if (target.index >= declarations.size() ||
-      declarations[target.index].kind != Declaration::Kind::Protocol ||
-      !declarations[target.index].body || declarations[target.index].abstract ||
-      !declarations[target.index].parameters.empty() ||
-      !declarations[target.index].scopedInputs.empty() ||
-      !declarations[target.index].domainInputs.empty())
-    return detail::failure("source.common-component",
-                           "common target is not a concrete retained Protocol");
-  const auto &protocol = declarations[target.index];
-  uint64_t remaining = limits.work;
-  detail::Work work{limits};
-  work.allowance = &remaining;
-  auto source =
-      deriveRequirements(declarations, entry.project().assets(), work, target);
-  if (!source)
-    return source.takeError();
-  Layouts layouts(entry, limits, remaining);
-  if (auto e = work.charge(protocol.roles.size() + protocol.inputs.size() + 1,
-                           protocol.span))
-    return e;
-  std::vector<ProtocolPortLayout> ports;
-  std::vector<unsigned> offsets{0};
-  // Map each role's actual data inputs, omitting every absent peer component.
-  std::vector<std::map<unsigned, unsigned>> participants(protocol.roles.size());
-  for (const auto &port : protocol.inputs) {
-    if (auto e = work.charge(1, port.span))
-      return e;
-    auto observed = layouts.protocolPort(port);
-    if (!observed)
-      return observed.takeError();
-    for (const auto &component : observed->components) {
-      if (auto e = work.charge(component.fieldPath.size() + 1, port.span))
-        return e;
-      auto &indices = participants.at(component.role);
-      unsigned original = offsets.back() + component.nativeIndex;
-      indices.try_emplace(original, unsigned(indices.size()));
-    }
-    offsets.push_back(offsets.back() + observed->size());
-    ports.push_back(std::move(*observed));
-  }
-  for (auto &participant : participants) {
-    unsigned input = 0;
-    for (auto &entry : participant) {
-      if (auto e = work.charge())
-        return e;
-      entry.second = input++;
-    }
-  }
-  std::vector<NativeCommonControlRequirement> result;
-  for (const auto &requirement : *source) {
-    if (auto e = work.charge(1, requirement.control))
-      return e;
-    auto type = layouts.get(requirement.type);
-    if (!type)
-      return type.takeError();
-    if ((**type).leaves.size() != 1 || !(**type).leaves.front().data())
-      return detail::failure(
-          "source.common-component",
-          "common input must resolve to one ordinary native component",
-          requirement.control);
-    if (auto e =
-            work.charge((**type).leaves.front().cost(), requirement.control))
-      return e;
-    auto physical =
-        protocol::parseBoundType(*(**type).leaves.front().data(), false);
-    if (!physical)
-      return physical.takeError();
-    NativeCommonControlRequirement mapped{{},
-                                          *physical,
-                                          requirement.tagOnly,
-                                          requirement.control,
-                                          requirement.extentAxis};
-    for (const auto &component : requirement.components) {
-      if (auto e = work.charge(component.path.size() + 1, requirement.control))
-        return e;
-      if (component.input >= ports.size() ||
-          component.role >= participants.size())
-        return detail::failure("source.common-component",
-                               "common input is outside the Entry interface",
-                               requirement.control);
-      const auto &port = ports[component.input];
-      auto layout = port.body;
-      unsigned offset = 0;
-      std::optional<unsigned> original, alternative;
-      std::vector<unsigned> path;
-      for (unsigned i = 0; i < component.path.size(); ++i) {
-        const auto &step = component.path[i];
-        if (step.kind == CommonControlStep::Kind::Field) {
-          if (step.index >= layout->fields.size())
-            return detail::failure("source.common-component",
-                                   "common field differs from the exact schema",
-                                   requirement.control);
-          offset += layout->fields[step.index].offset;
-          layout = layout->fields[step.index].layout;
-        } else if (step.kind == CommonControlStep::Kind::Alternative) {
-          if (i + 1 >= component.path.size() ||
-              component.path[i + 1].kind != CommonControlStep::Kind::Payload ||
-              step.index >= layout->alternatives.size())
-            return detail::failure(
-                "source.common-component",
-                "common alternative/payload association differs",
-                requirement.control);
-          if (!original) {
-            if (offset >= port.nativeOffsets.size() - 1)
-              return detail::failure("source.common-component",
-                                     "common variant has no native component",
-                                     requirement.control);
-            original = offsets[component.input] + port.nativeOffsets[offset];
-          } else {
-            path.push_back(*alternative);
-            path.push_back(offset);
-          }
-          alternative = step.index;
-          const auto &fields = layout->alternatives[step.index].fields;
-          unsigned payload = component.path[++i].index;
-          if (payload >= fields.size())
-            return detail::failure(
-                "source.common-component",
-                "common payload is outside its declared alternative",
-                requirement.control);
-          offset = fields[payload].offset;
-          layout = fields[payload].layout;
-        } else
-          return detail::failure("source.common-component",
-                                 "common payload lacks its alternative",
-                                 requirement.control);
-      }
-      if (layout->leaves.size() != 1 || !layout->leaves.front().data())
-        return detail::failure("source.common-component",
-                               "common path is not an ordinary leaf",
-                               requirement.control);
-      if (original) {
-        path.push_back(*alternative);
-        path.push_back(offset);
-      } else {
-        if (offset >= port.nativeOffsets.size() - 1)
-          return detail::failure("source.common-component",
-                                 "common field has no native component",
-                                 requirement.control);
-        original = offsets[component.input] + port.nativeOffsets[offset];
-      }
-      auto participant = participants[component.role].find(*original);
-      if (participant == participants[component.role].end())
-        return detail::failure("source.common-component",
-                               "common leaf is absent at its named participant",
-                               requirement.control);
-      mapped.components.push_back({*original, participant->second,
-                                   component.role, std::move(path), component});
-    }
-    result.push_back(std::move(mapped));
-  }
-  return result;
-}
-Expected<std::vector<NativeCommonControlRequirement>>
-deriveNativeCommonControlRequirements(const ClosedEntry &entry,
-                                      const Limits &limits) {
-  if (!entry.protocolOrNull())
-    return detail::failure(
-        "source.common-provenance",
-        "Host entry requires its selected Protocol invocation");
-  return deriveNativeCommonControlRequirements(entry, entry.protocol().id,
-                                               limits);
-}
 } // namespace zkc::language

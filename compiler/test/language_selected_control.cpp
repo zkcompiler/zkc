@@ -1,5 +1,10 @@
+#include "mlir/Parser/Parser.h"
 #include "support/ExternalSupply.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/CommonControl.h"
+#include "zkc/Compiler/Language.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Language/CommonControl.h"
 #include "zkc/Language/Inspection.h"
 #include "llvm/ADT/STLExtras.h"
@@ -27,6 +32,34 @@ ClosedEntry closed(const CheckedProject &project) {
   // Semantic control checks also cover inputs supplied by another protocol,
   // including oracle handles and private record fields.
   return take(closeSubject(project, "m::Run"));
+}
+/// Publish through the production comparison, which maps every published
+/// inventory through the component map and compares it with the actual native
+/// analysis; return that analysis for the selected Protocol.
+llvm::SmallVector<zkc::CommonControlRequirement>
+nativeInventory(const ClosedEntry &entry) {
+  auto original = take(prepareOriginal(entry));
+  take(readInterface(original.bytes(), original.interfaceJson()));
+  // Native rows refer to context-owned types and attributes.
+  static auto *context = [] {
+    mlir::DialectRegistry registry;
+    zkc::registerDialects(registry);
+    auto *result = new mlir::MLIRContext(registry);
+    result->loadAllAvailableDialects();
+    return result;
+  }();
+  auto module =
+      mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), context);
+  require(bool(module), "original did not parse");
+  zkc::protocol_ir::MathematicalOp root;
+  module->walk([&](zkc::protocol_ir::MathematicalOp function) {
+    if (function.getSymName() == entry.protocol().symbol)
+      root = function;
+  });
+  require(bool(root), "original omitted the selected Protocol");
+  uint64_t remaining = 8000000;
+  zkc::facts::Work work(remaining);
+  return take(zkc::deriveCommonControlRequirements(root, work));
 }
 const Control &control(const Declaration &decl) {
   for (const auto &op : decl.body->operations)
@@ -221,10 +254,17 @@ pub protocol Run roles(P,V)(value: Choice @(P,V)) -> bool @(P,V):
                 path[1].kind == CommonControlStep::Kind::Payload &&
                 path[1].index == 0,
             "payload requirement lost exact constructor association");
-    auto native = take(deriveNativeCommonControlRequirements(closed(project)));
-    require(native[1].components[0].originalInput == 0 &&
-                native[1].components[0].participantInput == 0 &&
-                native[1].components[0].path == std::vector<unsigned>({0, 0}),
+    // The production comparison maps the published payload through the
+    // component map; the actual native analysis observes its variant path.
+    auto native = nativeInventory(closed(project));
+    require(llvm::any_of(native,
+                         [](const auto &requirement) {
+                           const auto &component = requirement.components[0];
+                           return !requirement.tagOnly &&
+                                  component.input == 0 &&
+                                  ArrayRef<unsigned>(component.path) ==
+                                      ArrayRef<unsigned>({0, 0});
+                         }),
             "payload did not map to the exact native variant path");
   });
   cases.run("fixed-role record branches preserve recursive placement", [] {
@@ -424,12 +464,13 @@ protocol Run roles(P,V)(xs:Vector<Fr>@(P,V),value:bool@(P,V))->(r:bool@(P,V)) {
 })",
                                    "extent.zkc"}}));
     auto project = take(analyze(captured).checkedProject());
-    auto requirements =
-        take(deriveNativeCommonControlRequirements(closed(project)));
+    auto entry = closed(project);
+    auto requirements = take(deriveCommonControlRequirements(entry));
     require(requirements.size() == 1 && requirements[0].extentAxis == 0 &&
                 !requirements[0].tagOnly &&
-                requirements[0].components[0].source.input == 0,
+                requirements[0].components[0].input == 0,
             "count provenance was replaced with whole-container equality");
+    nativeInventory(entry);
   });
   return cases.result();
 }

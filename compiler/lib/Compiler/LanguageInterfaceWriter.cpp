@@ -430,7 +430,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
     });
     out.attributeArray("protocols", [&] {
       for (const auto &protocol : entry.declarations()) {
-        if (!protocol.body || protocol.kind != Declaration::Kind::Protocol)
+        if (!isClosedConcreteProtocol(protocol))
           continue;
         if (!charge(protocol.symbol.size() + 1))
           break;

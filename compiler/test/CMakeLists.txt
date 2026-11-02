@@ -37,8 +37,8 @@ mlir_target_link_libraries(zkc-representation_formation-test PRIVATE MLIRAsmPars
 add_zkc_test(role_assembly CpuTarget role-assembly)
 add_zkc_test(language_value_placement Language language-value-placement)
 add_zkc_test(language_invocation_provenance Language language-invocation-provenance)
-add_zkc_test(language_selected_control Language language-selected-control)
-add_zkc_test(language_common_recurrence Translation language-common-recurrence)
+add_zkc_test(language_selected_control Compiler language-selected-control)
+add_zkc_test(language_common_recurrence Compiler language-common-recurrence)
 mlir_target_link_libraries(zkc-language_common_recurrence-test PRIVATE MLIRParser)
 zkc_source_project(zkc-language_common_recurrence-test
   "${PROJECT_SOURCE_DIR}/../libraries/core/algebra/zkc.toml")

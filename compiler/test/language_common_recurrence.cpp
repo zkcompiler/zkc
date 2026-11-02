@@ -3,6 +3,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/SourceProject.h"
 #include "zkc/Analysis/CommonControl.h"
+#include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/Registry.h"
@@ -71,34 +72,6 @@ std::string pure(bool exitControl = true) {
          header("state") + "        state := xor(state, step)\n" +
          (exitControl ? header("state", 4) : "") + "    return ()\n";
 }
-// Canonical connected equality classes, separately for exact physical type and
-// observation. Direction, spanning edges and emission order carry no meaning.
-using Inventory = std::map<std::string, std::set<std::set<std::string>>>;
-Inventory canonical(
-    const std::vector<std::pair<std::string, std::set<std::string>>> &rows) {
-  Inventory result;
-  for (const auto &row : rows) {
-    auto observation = row.first;
-    auto components = row.second;
-    auto &classes = result[observation];
-    bool merged;
-    do {
-      merged = false;
-      for (auto it = classes.begin(); it != classes.end(); ++it)
-        if (llvm::any_of(*it, [&](const auto &item) {
-              return components.count(item);
-            })) {
-          components.insert(it->begin(), it->end());
-          classes.erase(it);
-          merged = true;
-          break;
-        }
-    } while (merged);
-    if (components.size() > 1)
-      classes.insert(std::move(components));
-  }
-  return result;
-}
 std::string facetKey(mlir::Type type, bool tag,
                      std::optional<unsigned> extent) {
   std::string key;
@@ -107,13 +80,6 @@ std::string facetKey(mlir::Type type, bool tag,
   stream << (extent ? ":extent:" + std::to_string(*extent)
              : tag  ? ":tag"
                     : ":value");
-  return key;
-}
-std::string componentKey(unsigned input, StringRef role,
-                         ArrayRef<unsigned> path) {
-  std::string key = std::to_string(input) + ":" + role.str();
-  for (unsigned step : path)
-    key += ":" + std::to_string(step);
   return key;
 }
 protocol_ir::MathematicalOp nativeProtocol(mlir::ModuleOp module,
@@ -126,73 +92,63 @@ protocol_ir::MathematicalOp nativeProtocol(mlir::ModuleOp module,
   require(bool(result), "emitted original omitted Protocol: " + symbol);
   return result;
 }
-auto pairedEntry(mlir::MLIRContext &context, const ClosedEntry &entry,
-                 const Limits &limits = {}) {
+/// One actual native analysis row of the selected Protocol: original input,
+/// native role and native variant path per component.
+struct NativeRow {
+  std::string type;
+  bool tagOnly;
+  std::optional<unsigned> extentAxis;
+  std::vector<std::tuple<unsigned, std::string, std::vector<unsigned>>>
+      components;
+};
+std::vector<NativeRow> nativeRows(mlir::MLIRContext &context,
+                                  const ClosedEntry &entry) {
+  auto bytes = take(emitOriginal(entry, context));
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+  require(bool(module), "real emitted original did not parse");
+  uint64_t remaining = 8000000;
+  facts::Work work(remaining);
+  auto native = take(zkc::deriveCommonControlRequirements(
+      nativeProtocol(*module, entry.protocol().symbol), work));
+  std::vector<NativeRow> result;
+  for (const auto &requirement : native) {
+    NativeRow row{facetKey(requirement.type, false, {}),
+                  requirement.tagOnly,
+                  requirement.extentAxis,
+                  {}};
+    for (const auto &component : requirement.components)
+      row.components.emplace_back(
+          component.input, component.role.getValue().str(),
+          std::vector<unsigned>(component.path.begin(), component.path.end()));
+    result.push_back(std::move(row));
+  }
+  return result;
+}
+/// Check the actual original, then the production comparison: every closed
+/// concrete Protocol's published inventory equals the closed source inventory
+/// and, mapped through the published component map, the actual native
+/// analysis. Returns the selected Protocol's closed source inventory.
+std::vector<zkc::language::CommonControlRequirement>
+pairedEntry(mlir::MLIRContext &context, const ClosedEntry &entry,
+            const Limits &limits = {}) {
   auto bytes = take(emitOriginal(entry, context, limits));
   auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
   require(bool(module), "real emitted original did not parse");
   require(mlir::succeeded(admitStage(*module)),
           "real emitted original failed native admission");
   take(compareOriginal(entry, *module, limits));
-  std::vector<NativeCommonControlRequirement> rootRequirements;
-  unsigned compared = 0;
-  for (const auto &decl : entry.declarations()) {
-    if (decl.kind != Declaration::Kind::Protocol || !decl.body ||
-        decl.abstract || !decl.parameters.empty() ||
-        !decl.scopedInputs.empty() || !decl.domainInputs.empty())
-      continue;
-    auto root = nativeProtocol(*module, decl.symbol);
-    uint64_t remaining = 8000000;
-    facts::Work work(remaining);
-    auto native = take(zkc::deriveCommonControlRequirements(root, work));
-    auto mapped =
-        take(deriveNativeCommonControlRequirements(entry, decl.id, limits));
-    std::vector<std::pair<std::string, std::set<std::string>>> actual, expected;
-    for (const auto &requirement : native) {
-      std::set<std::string> parts;
-      for (const auto &component : requirement.components)
-        parts.insert(componentKey(component.input, component.role.getValue(),
-                                  component.path));
-      actual.emplace_back(facetKey(requirement.type, requirement.tagOnly,
-                                   requirement.extentAxis),
-                          std::move(parts));
-    }
-    for (const auto &requirement : mapped) {
-      std::set<std::string> parts;
-      for (const auto &component : requirement.components) {
-        auto role = nativeRoleName(component.role);
-        require(component.originalInput < root.getInputRoles().size(),
-                "source mapped outside actual original input telescope");
-        unsigned participantInput = 0;
-        for (unsigned i = 0; i < component.originalInput; ++i)
-          if (!mlir::isa<protocol_ir::ServiceReferenceType>(
-                  root.getBody().front().getArgument(i).getType()) &&
-              llvm::any_of(
-                  mlir::cast<mlir::ArrayAttr>(root.getInputRoles()[i]),
-                  [&](mlir::Attribute r) {
-                    return mlir::cast<mlir::StringAttr>(r).getValue() == role;
-                  }))
-            ++participantInput;
-        require(component.participantInput == participantInput,
-                "flat participant coordinate differs from actual original");
-        parts.insert(
-            componentKey(component.originalInput, role, component.path));
-      }
-      expected.emplace_back(
-          facetKey(protocol::decodeBoundType(&context, requirement.type),
-                   requirement.tagOnly, requirement.extentAxis),
-          std::move(parts));
-    }
-    require(canonical(actual) == canonical(expected),
-            "canonical source/native input/path/type/observation inventory "
-            "differs: " +
-                decl.name);
-    ++compared;
-    if (decl.id.index == entry.protocol().id.index)
-      rootRequirements = std::move(mapped);
-  }
-  require(compared > 0, "no actual concrete Protocol inventories compared");
-  return rootRequirements;
+  auto original = take(prepareOriginal(entry, limits));
+  auto view =
+      take(readInterface(original.bytes(), original.interfaceJson(), limits));
+  if (auto error = compareInterface(entry, view, limits))
+    throw std::runtime_error(toString(std::move(error)));
+  unsigned concrete = 0;
+  for (const auto &decl : entry.declarations())
+    concrete += isClosedConcreteProtocol(decl);
+  require(concrete > 0 && view.protocols.size() == concrete,
+          "no actual concrete Protocol inventories compared");
+  return take(
+      deriveCommonControlRequirements(entry, entry.protocol().id, limits));
 }
 auto pairedProject(mlir::MLIRContext &context, const CheckedProject &project,
                    const Limits &limits = {}) {
@@ -223,6 +179,11 @@ protocol Run roles(P,V)(n:index@(P,V),flag:bool@(P,V))->(){
 auto paired(mlir::MLIRContext &context, StringRef source, bool legacy = false) {
   return pairedProject(context, take(check(source, legacy)));
 }
+auto nativePaired(mlir::MLIRContext &context, StringRef source,
+                  bool legacy = false) {
+  return nativeRows(
+      context, take(closeNativeRun(take(check(source, legacy)), "m::Run")));
+}
 void rawInputs(StringRef source, ArrayRef<unsigned> inputs) {
   auto project = take(check(source, true));
   auto rows = take(zkc::language::deriveCommonControlRequirements(
@@ -237,17 +198,16 @@ void rawInputs(StringRef source, ArrayRef<unsigned> inputs) {
               actual == std::set<unsigned>(inputs.begin(), inputs.end()),
           "raw checked-source observable dependencies differ");
 }
-void exactInputs(ArrayRef<NativeCommonControlRequirement> rows,
+void exactInputs(ArrayRef<zkc::language::CommonControlRequirement> rows,
                  ArrayRef<unsigned> inputs) {
   require(rows.size() == inputs.size(), "nonminimal common input inventory");
   std::set<unsigned> actual;
   for (const auto &row : rows) {
     require(!row.tagOnly && !row.extentAxis && row.components.size() == 2,
             "wrong value observation");
-    auto input = row.components[0].source.input;
+    auto input = row.components[0].input;
     for (const auto &component : row.components)
-      require(component.source.input == input &&
-                  component.source.path.empty() && component.path.empty(),
+      require(component.input == input && component.path.empty(),
               "input/path association differs");
     actual.insert(input);
   }
@@ -390,13 +350,13 @@ int main() {
                 for (unsigned input : {0, 1}) {
                   unsigned tags = 0, payloads = 0;
                   for (const auto &row : rows)
-                    if (row.components[0].source.input == input) {
+                    if (row.components[0].input == input) {
                       if (row.tagOnly) {
-                        require(row.components[0].source.path.empty(),
+                        require(row.components[0].path.empty(),
                                 "tag path differs");
                         ++tags;
                       } else {
-                        const auto &path = row.components[0].source.path;
+                        const auto &path = row.components[0].path;
                         require(path.size() == 2 &&
                                     path[0].kind ==
                                         CommonControlStep::Kind::Alternative &&
@@ -478,7 +438,7 @@ pub protocol Run roles(P,V)(count: index @(P,V), a: bool @(P,V), b: bool @(P,V),
     auto rows = paired(context, source);
     exactInputs(rows, {0, 1, 2, 3, 4});
     for (const auto &row : rows) {
-      unsigned input = row.components[0].source.input;
+      unsigned input = row.components[0].input;
       require(row.components[0].role == (input < 3 ? 1u : 0u) &&
                   row.components[1].role == (input < 3 ? 0u : 1u),
               "actual helper role permutation was sorted away");
@@ -513,15 +473,17 @@ pub protocol Run roles(P,V)(leftCount: index @(P,V), rightCount: index @(P,V)) -
         source = replaceText(source, "match state:", "match state.choice:");
         auto rows = paired(context, source);
         require(rows.size() == 6, "nested field observation missing");
-        for (const auto &row : rows) {
-          const auto &component = row.components[0];
-          require(
-              component.source.path[0].kind == CommonControlStep::Kind::Field &&
-                  component.source.path[0].index == 1 &&
-                  component.originalInput == component.source.input * 2 + 1 &&
-                  component.path.size() == (row.tagOnly ? 0u : 2u),
-              "source field confused with native variant payload");
-        }
+        for (const auto &row : rows)
+          require(row.components[0].path[0].kind ==
+                          CommonControlStep::Kind::Field &&
+                      row.components[0].path[0].index == 1,
+                  "source field confused with native variant payload");
+        // Each Box flattens to its padding and its choice: the choice is the
+        // odd original input, observed by tag or by its payload path.
+        for (const auto &row : nativePaired(context, source))
+          for (const auto &[input, role, path] : row.components)
+            require(input % 2 == 1 && path.size() == (row.tagOnly ? 0u : 2u),
+                    "source field confused with native variant payload");
       });
   cases.run("nested variant payload projections retain every alternative", [&] {
     auto source = replaceText(variantInputs(true), "pub protocol Run",
@@ -539,10 +501,15 @@ pub protocol Run roles(P,V)(leftCount: index @(P,V), rightCount: index @(P,V)) -
             header("bit", 24));
     auto rows = paired(context, source);
     require(rows.size() == 8, "nested conditional inventory differs");
+    // Each source (alternative, payload) step pair is one native
+    // (alternative, payload offset) pair.
+    std::multiset<size_t> sourcePaths, nativePaths;
     for (const auto &row : rows)
-      require(row.components[0].source.path.size() ==
-                  row.components[0].path.size(),
-              "nested native alternative path truncated");
+      sourcePaths.insert(row.components[0].path.size());
+    for (const auto &row : nativePaired(context, source))
+      nativePaths.insert(std::get<2>(row.components[0]).size());
+    require(sourcePaths == nativePaths,
+            "nested native alternative path truncated");
   });
   cases.run("selected enum recurrence transports only tag obligations", [&] {
     auto source = replaceText(variantInputs(false), "        state := step\n",
@@ -572,9 +539,9 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
     std::set<unsigned> inputs;
     for (const auto &row : rows) {
       require(!row.tagOnly && row.extentAxis == 0 &&
-                  row.components[0].source.path.empty(),
+                  row.components[0].path.empty(),
               "extent facet or axis differs");
-      inputs.insert(row.components[0].source.input);
+      inputs.insert(row.components[0].input);
     }
     require(inputs == std::set<unsigned>({0, 1}),
             "extent base or step missing");
@@ -622,10 +589,11 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
         replaceText(pure(), "(count: index", "(private: bool @V, count: index");
     auto rows = paired(context, source);
     exactInputs(rows, {1, 2, 3});
-    for (const auto &row : rows)
-      for (const auto &component : row.components)
-        require(component.participantInput ==
-                    component.originalInput - (component.role == 0 ? 1u : 0u),
+    // The verifier-only input keeps its original slot; no common component
+    // is shifted onto it at either participant.
+    for (const auto &row : nativePaired(context, source))
+      for (const auto &[input, role, path] : row.components)
+        require(input >= 1 && input <= 3 && path.empty(),
                 "absent peer input shifted the wrong participant");
   });
   cases.run("three-role equality classes retain every base and step edge", [&] {
@@ -639,10 +607,10 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
       std::set<unsigned> roles;
       unsigned edges = 0;
       for (const auto &row : rows)
-        if (row.components[0].source.input == input) {
+        if (row.components[0].input == input) {
           ++edges;
           for (const auto &component : row.components) {
-            require(component.source.input == input && component.path.empty(),
+            require(component.input == input && component.path.empty(),
                     "three-role input association differs");
             roles.insert(component.role);
           }
@@ -664,23 +632,22 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
         for (const auto &row : rows) {
           auto span =
               StringRef(source).slice(row.control.begin, row.control.end);
-          require(span.starts_with(row.components[0].source.input == 0
-                                       ? "for "
-                                       : "if state"),
+          require(span.starts_with(row.components[0].input == 0 ? "for "
+                                                                : "if state"),
                   "requirement lost the actual source establishing control");
         }
       });
   cases.run("retained Protocol overload refuses non-Protocol targets", [&] {
     auto project = take(check(pure()));
     auto entry = take(closeNativeRun(project, "m::Run"));
-    require(take(deriveNativeCommonControlRequirements(entry, {})).size() == 3,
+    require(take(deriveCommonControlRequirements(entry, {})).size() == 3,
             "existing braced Limits call changed meaning");
-    refuses(deriveNativeCommonControlRequirements(entry,
-                                                  named(project, "xor").id, {}),
-            "source.common-component");
-    refuses(deriveNativeCommonControlRequirements(
-                entry, DeclarationId{0xffffffffu}, {}),
-            "source.common-component");
+    refuses(
+        deriveCommonControlRequirements(entry, named(project, "xor").id, {}),
+        "source.common-provenance");
+    refuses(
+        deriveCommonControlRequirements(entry, DeclarationId{0xffffffffu}, {}),
+        "source.common-provenance");
   });
   cases.run("lowered source derivation depth ceilings refuse exactly", [&] {
     auto project = take(check(pure()));
@@ -703,7 +670,7 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
     refuses(check(source), "source.common-provenance");
     auto rows = paired(context, replaceText(source, "index<2>", "index<1>"));
     require(rows.size() == 1 && rows[0].tagOnly &&
-                rows[0].components[0].source.input == 0,
+                rows[0].components[0].input == 0,
             "one-trip body demanded a received successor tag");
   });
   cases.run("generic finite state retains actual product type and provenance",
@@ -973,7 +940,7 @@ protocol Run roles(P,V)(flag:bool@(P,V),choice:Choice@(P,V),a:bool@(P,V),b:bool@
     rawInputs(source, {1});
     auto rows = paired(context, source, true);
     require(rows.size() == 1 && rows[0].tagOnly && !rows[0].extentAxis &&
-                rows[0].components[0].source.input == 1,
+                rows[0].components[0].input == 1,
             "tag projection demanded selector, sibling or payload");
   });
   for (bool distinct : {false, true})
@@ -1000,7 +967,7 @@ protocol Run roles(P,V)(flag:bool@(P,V),xs:Vector<Fr>@(P,V),ys:Vector<Fr>@(P,V))
                   "extent observation count differs");
           for (const auto &row : rows)
             require(!row.tagOnly &&
-                        row.extentAxis == (row.components[0].source.input == 0
+                        row.extentAxis == (row.components[0].input == 0
                                                ? std::optional<unsigned>{}
                                                : std::optional<unsigned>{0}),
                     "extent was confused with whole-vector equality");
@@ -1179,11 +1146,14 @@ protocol Run roles(P,V)(n:index@(P,V))->(r:bool@(P,V)){
         auto mapped = pairedEntry(context, entry);
         require(mapped.size() == 1, "closed projected array inventory differs");
         for (const auto &component : mapped[0].components)
-          require(
-              component.source.input == 0 && component.originalInput == 1 &&
-                  component.participantInput == 1 && component.path.empty() &&
-                  component.source.path == rows[0].components[0].path,
-              "closed array element was not mapped to its actual native port");
+          require(component.input == 0 &&
+                      component.path == rows[0].components[0].path,
+                  "closed array element lost its source path");
+        auto native = nativeRows(context, entry);
+        require(native.size() == 1, "closed projected array inventory differs");
+        for (const auto &[input, role, path] : native[0].components)
+          require(input == 1 && path.empty(),
+                  "closed array element is not its actual native port");
         for (uint64_t n : {0, 1})
           refuses(closeNativeRun(project, "m::Run", {}, {naturalArgument(n)}),
                   "source.bound");
@@ -1196,8 +1166,7 @@ protocol Run roles(P,V)(n:index@(P,V))->(r:bool@(P,V)){
         project, named(project, "Run").id, limits));
     require(rows.size() == 2, "nested control dependencies differ");
     auto entry = take(closeNativeRun(project, "m::Run", limits));
-    exactInputs(take(deriveNativeCommonControlRequirements(entry, limits)),
-                {0, 1});
+    exactInputs(take(deriveCommonControlRequirements(entry, limits)), {0, 1});
     // Common-control limits are checked above. The original/correspondence
     // validators have their own independently bounded traversal.
     exactInputs(pairedEntry(context, entry), {0, 1});
@@ -1247,9 +1216,11 @@ protocol Run<N:nat> roles(P,V)(xs:[[bool;N];2]@(P,V))->(r:bool@(P,V)){
             "nested array path was truncated");
     auto entry =
         take(closeNativeRun(project, "m::Run", {}, {naturalArgument(3)}));
-    auto rows = pairedEntry(context, entry);
-    require(rows.size() == 1 && rows[0].components[0].originalInput == 4 &&
-                rows[0].components[1].originalInput == 4,
+    require(pairedEntry(context, entry).size() == 1,
+            "nested array inventory differs");
+    auto native = nativeRows(context, entry);
+    require(native.size() == 1 && std::get<0>(native[0].components[0]) == 4 &&
+                std::get<0>(native[0].components[1]) == 4,
             "nested array did not flatten to the exact fourth port");
   });
   cases.run(
@@ -1265,17 +1236,16 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
         auto rows = pairedEntry(context, entry);
         require(rows.size() == 2, "array variant lost an observation");
         for (const auto &row : rows)
-          for (const auto &component : row.components) {
-            require(component.originalInput == 1 &&
-                        component.source.path[0].kind ==
-                            CommonControlStep::Kind::Field &&
-                        component.source.path[0].index == 1 && !row.extentAxis,
+          for (const auto &component : row.components)
+            require(component.path[0].kind == CommonControlStep::Kind::Field &&
+                        component.path[0].index == 1 && !row.extentAxis,
                     "variant array element association differs");
-            require(component.path == (row.tagOnly
-                                           ? std::vector<unsigned>{}
-                                           : std::vector<unsigned>{0, 0}),
+        for (const auto &row : nativeRows(context, entry))
+          for (const auto &[input, role, path] : row.components)
+            require(input == 1 &&
+                        path == (row.tagOnly ? std::vector<unsigned>{}
+                                             : std::vector<unsigned>{0, 0}),
                     "variant payload was confused with a flat array element");
-          }
       });
   cases.run("closed zero and out-of-range array reads remain invalid", [&] {
     refuses(check(arrayProtocol("0", 0), true), "source.index");
@@ -1359,8 +1329,8 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
     require(take(zkc::language::deriveCommonControlRequirements(entry, limits))
                     .size() == 1,
             "one observed element required a whole interface layout");
-    refuses(deriveNativeCommonControlRequirements(entry, limits),
-            "source.limit");
+    // Publication lays out the whole port and keeps the capacity limit.
+    refuses(prepareOriginal(entry, limits), "source.limit");
   });
   cases.run(
       "actual array operand mutation changes native inventory and refuses "
@@ -1369,7 +1339,9 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
         auto project = take(check(arrayProtocol(), true));
         auto entry =
             take(closeNativeRun(project, "m::Run", {}, {naturalArgument(3)}));
-        auto mapped = pairedEntry(context, entry);
+        require(pairedEntry(context, entry).size() == 1,
+                "array inventory differs");
+        auto mapped = nativeRows(context, entry);
         auto bytes = take(emitOriginal(entry, context));
         auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
         require(bool(module), "array original did not parse");
@@ -1385,8 +1357,7 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
         auto native = take(zkc::deriveCommonControlRequirements(root, work));
         require(
             native.size() == 1 && native[0].components[0].input == 0 &&
-                mapped.size() == 1 &&
-                mapped[0].components[0].originalInput == 1,
+                mapped.size() == 1 && std::get<0>(mapped[0].components[0]) == 1,
             "mutated candidate retained a stale array requirement inventory");
         refuses(compareOriginal(entry, *module), "source.correspondence");
       });
@@ -1514,12 +1485,15 @@ protocol Run<N:nat> roles(P,V)(xs:[Vector<Fr>;N]@(P,V))->(){
         require(rows.size() == 1 && !rows[0].tagOnly && rows[0].extentAxis == 0,
                 "projected collection gained whole-value obligations");
         for (const auto &component : rows[0].components)
-          require(component.originalInput == 1 && component.path.empty() &&
-                      component.source.path.size() == 1 &&
-                      component.source.path[0].kind ==
+          require(component.path.size() == 1 &&
+                      component.path[0].kind ==
                           CommonControlStep::Kind::Field &&
-                      component.source.path[0].index == 1,
+                      component.path[0].index == 1,
                   "collection extent lost the selected array element");
+        for (const auto &row : nativeRows(context, entry))
+          for (const auto &[input, role, path] : row.components)
+            require(input == 1 && path.empty(),
+                    "collection extent lost the selected native element");
       });
   cases.run("projected array tuples observe only the selected field", [&] {
     auto project = take(check(R"(module m;
@@ -1533,11 +1507,13 @@ protocol Run<N:nat> roles(P,V)(xs:[(index,bool);N]@(P,V))->(r:bool@(P,V)){
     require(rows.size() == 1 && !rows[0].tagOnly && !rows[0].extentAxis,
             "tuple array observation differs");
     for (const auto &component : rows[0].components)
-      require(component.originalInput == 3 && component.path.empty() &&
-                  component.source.path.size() == 2 &&
-                  component.source.path[0].index == 1 &&
-                  component.source.path[1].index == 1,
+      require(component.path.size() == 2 && component.path[0].index == 1 &&
+                  component.path[1].index == 1,
               "array tuple sibling leaked into the input inventory");
+    for (const auto &row : nativeRows(context, entry))
+      for (const auto &[input, role, path] : row.components)
+        require(input == 3 && path.empty(),
+                "array tuple sibling leaked into the native inventory");
   });
   cases.run(
       "symbolic array access still requires its source natural premise", [&] {
@@ -1554,8 +1530,10 @@ protocol Run<N:nat> roles(P,V)(xs:[bool;N]@(P,V))->(r:bool@(P,V)) where 2<=N {
                                   true));
         auto entry =
             take(closeNativeRun(project, "m::Run", {}, {naturalArgument(3)}));
-        auto rows = pairedEntry(context, entry);
-        require(rows.size() == 1 && rows[0].components[0].originalInput == 1,
+        require(pairedEntry(context, entry).size() == 1,
+                "declared array premise changed the inventory");
+        auto native = nativeRows(context, entry);
+        require(native.size() == 1 && std::get<0>(native[0].components[0]) == 1,
                 "declared array premise changed the demanded component");
         refuses(closeNativeRun(project, "m::Run", {}, {naturalArgument(1)}),
                 "source.bound");
@@ -1624,10 +1602,13 @@ protocol Run<M:nat> roles(P,V)(xs:[bool;pow2(M+1)]@(P,V))->(r:bool@(P,V)){
     require(mapped.size() == 1 && mapped[0].components.size() == 2,
             "demanded array shape changed the common inventory");
     for (const auto &component : mapped[0].components)
-      require(component.source.input == 0 && component.originalInput == 0 &&
-                  component.participantInput == 0 && component.path.empty() &&
-                  component.source.path == raw[0].components[0].path,
-              "demanded array shape lost its exact native element");
+      require(component.input == 0 &&
+                  component.path == raw[0].components[0].path,
+              "demanded array shape lost its exact source element");
+    for (const auto &row : nativeRows(context, entry))
+      for (const auto &[input, role, path] : row.components)
+        require(input == 0 && path.empty(),
+                "demanded array shape lost its exact native element");
   });
   for (bool shared : {false, true})
     for (bool demanded : {false, true})

@@ -118,16 +118,18 @@ Protocol and scoped calls. Nested control regions retain that callable depth
 and use the expression-depth ceiling separately, with the same cumulative work
 allowance.
 
-`deriveNativeCommonControlRequirements` derives those requirements again and
-maps them through the exact `ProtocolPortLayout`. Each component retains its
-source association, original native input index, actual participant data-input
-index, role and native variant `(alternative,payload)` path. Physical types
-come from checked layouts. Missing or non-data components refuse with
-`source.common-component`; logical anchors and custody are not canonical input
-bytes. The adapter does not replace native derivation from the actual original.
-Its overload taking a `DeclarationId` applies to that concrete retained Protocol
-in the closed environment, with coordinates relative to its own input and role
-telescopes. It uses the same layouts and derivation as the selected root.
+The interface publishes these requirements in source coordinates for every
+closed concrete Protocol: a Protocol with a body that is not abstract and has no
+open static, scoped or domain parameter. Closed derivation, interface
+publication and interface comparison select Protocols by that one predicate.
+There is one source-to-native mapping: the interface reader maps each published
+inventory through the published component map onto the original native input,
+role and native variant `(alternative,payload)` path, and compares it with
+native derivation from the actual original. Physical types come from checked
+layouts. A missing or non-data component, or any difference, refuses with
+`source.interface`; logical anchors and custody are not canonical input bytes.
+The closed overload taking a `DeclarationId` applies to that closed concrete
+Protocol, with coordinates relative to its own input and role telescopes.
 One API work allowance covers derivation, layout observation (including nested
 semantic queries), participant-index setup and component mapping together.
 These stages cannot each restart the requested allowance.

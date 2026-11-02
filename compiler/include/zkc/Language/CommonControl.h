@@ -1,7 +1,6 @@
 #ifndef ZKC_LANGUAGE_COMMONCONTROL_H
 #define ZKC_LANGUAGE_COMMONCONTROL_H
 
-#include "zkc/Contracts/Bindings.h"
 #include "zkc/Language/Project.h"
 
 namespace zkc::language {
@@ -32,6 +31,10 @@ struct CommonControlRequirement {
   /// This facet is never combined with tagOnly.
   std::optional<unsigned> extentAxis = {};
 };
+/// A closed concrete Protocol: a Protocol with a body and no open static,
+/// scoped or domain parameters, which is not abstract. Closed derivation, the
+/// interface writer and the interface comparison select by this one predicate.
+bool isClosedConcreteProtocol(const Declaration &);
 /// Recompute from the immutable checked body and its complete call closure.
 /// Public markings and availability never establish common provenance. Unknown
 /// Local/received/service provenance refuses with source.common-provenance.
@@ -43,7 +46,7 @@ deriveCommonControlRequirements(const CheckedProject &, DeclarationId,
                                 const Limits & = {});
 llvm::Expected<std::vector<CommonControlRequirement>>
 deriveCommonControlRequirements(const ClosedEntry &, const Limits & = {});
-/// Derive for one retained concrete declaration using this closed call closure.
+/// Derive for one closed concrete Protocol using this closed call closure.
 /// Explicit Limits preserves existing (entry, {}) root calls.
 llvm::Expected<std::vector<CommonControlRequirement>>
 deriveCommonControlRequirements(const ClosedEntry &, DeclarationId,
@@ -52,33 +55,5 @@ deriveCommonControlRequirements(const ClosedEntry &, DeclarationId,
 llvm::Expected<std::vector<CommonControlRequirement>>
 deriveCommonControlRequirements(const ClosedEntry &, DeclarationId,
                                 const Limits &, uint64_t &remaining);
-/// Exact handoff to the native original and flat participant data ABI. Native
-/// variant paths retain (alternative, payload) pairs. Source association
-/// remains available for diagnostics and SDK interface checks.
-struct NativeCommonControlComponent {
-  unsigned originalInput, participantInput, role;
-  std::vector<unsigned> path;
-  CommonControlComponent source;
-};
-struct NativeCommonControlRequirement {
-  std::vector<NativeCommonControlComponent> components;
-  protocol::BoundType type;
-  bool tagOnly;
-  Span control;
-  /// Observe only this collection axis; type remains the container type.
-  /// This facet is never combined with tagOnly.
-  std::optional<unsigned> extentAxis = {};
-};
-/// Derive and flatten the actual source requirements; no caller-provided
-/// annotations or requirement manifest is accepted as authority.
-llvm::Expected<std::vector<NativeCommonControlRequirement>>
-deriveNativeCommonControlRequirements(const ClosedEntry &, const Limits & = {});
-/// The same independent source derivation and exact layout handoff for one
-/// concrete retained Protocol in this closed declaration environment. This is
-/// used to validate helper inventories, not just the selected root's inventory.
-/// Explicit Limits keeps existing (entry, {}) calls unambiguous.
-llvm::Expected<std::vector<NativeCommonControlRequirement>>
-deriveNativeCommonControlRequirements(const ClosedEntry &, DeclarationId,
-                                      const Limits &);
 } // namespace zkc::language
 #endif

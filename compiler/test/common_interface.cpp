@@ -1,14 +1,21 @@
 #include "../lib/Compiler/LanguageInterface.h"
+#include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "support/SourceProject.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Registry.h"
+#include "zkc/Language/CommonControl.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include <functional>
+#include <set>
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
@@ -79,18 +86,21 @@ int main(int argc, char **argv) {
     uint64_t remaining = limits.work;
     unsigned protocols = 0, requirements = 0;
     for (const auto &decl : entry.declarations()) {
-      if (decl.kind != Declaration::Kind::Protocol || !decl.body ||
-          decl.abstract || !decl.parameters.empty() ||
-          !decl.scopedInputs.empty() || !decl.domainInputs.empty())
+      if (!isClosedConcreteProtocol(decl))
         continue;
       ++protocols;
       requirements += take(zkc::language::detail::sourceCommonRequirements(
                                entry, decl, remaining, limits))
                           .size();
-      take(deriveNativeCommonControlRequirements(entry, decl.id, limits));
     }
     require(protocols > 1 && requirements > 0,
             "FRI did not exercise retained common inventories");
+    // The production comparison maps every published inventory through the
+    // component map and compares it with the actual native analysis.
+    auto original = take(prepareOriginal(entry));
+    auto view = take(readInterface(original.bytes(), original.interfaceJson()));
+    require(view.protocols.size() == protocols,
+            "interface and closure disagree on closed concrete Protocols");
     outs() << "FRI: " << protocols << " Protocols, " << requirements
            << " source classes, " << limits.work - remaining
            << " cumulative inventory work\n";
@@ -118,8 +128,7 @@ protocol Run roles(P,V)(s:State@(P,V))->(r:bool@(P,V)){
         uint64_t total = 0;
         std::vector<DeclarationId> protocols;
         for (const auto &decl : entry.declarations()) {
-          if (decl.kind != Declaration::Kind::Protocol || !decl.body ||
-              !decl.parameters.empty() || decl.abstract)
+          if (!isClosedConcreteProtocol(decl))
             continue;
           protocols.push_back(decl.id);
           uint64_t derivedRemaining = limits.work;
@@ -350,64 +359,46 @@ protocol Run roles(P,V)()->(){return();})",
     require(observe(cost - 1, false) < cost - 1,
             "bounded natural layout refunded partial spending");
   });
-  cases.run(
-      "natural source and native inventories retain combined budgets", [] {
-        std::string text = "module m;";
-        for (unsigned i = 0; i < 16; ++i)
-          text += "struct NaturalInventoryPadding" + std::to_string(i) +
-                  std::string(32, 'x') + "{pub ignored:bool}";
-        text += R"(struct Sized<N:nat>{pub values:[bool;pow2(N)]}
+  cases.run("natural source inventories retain combined budgets", [] {
+    std::string text = "module m;";
+    for (unsigned i = 0; i < 16; ++i)
+      text += "struct NaturalInventoryPadding" + std::to_string(i) +
+              std::string(32, 'x') + "{pub ignored:bool}";
+    text += R"(struct Sized<N:nat>{pub values:[bool;pow2(N)]}
 protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
  let r=if s.values[0]{true}else{false};return(r=r);
 })";
-        auto original = compile(text);
-        const auto &entry = original.entry();
-        Limits limits;
-        uint64_t remaining = limits.work;
-        auto source = take(deriveCommonControlRequirements(
-            entry, entry.protocol().id, limits, remaining));
-        auto derivationCost = limits.work - remaining;
-        remaining = limits.work;
-        Layouts requirements(entry, limits, remaining);
-        for (const auto &requirement : source)
-          take(requirements.get(requirement.type));
-        const auto requiredLayoutCost = limits.work - remaining;
-        remaining = limits.work;
-        auto inventory = take(zkc::language::detail::sourceCommonRequirements(
-            entry, entry.protocol(), remaining, limits));
-        auto sourceCost = limits.work - remaining;
-        require(!inventory.empty() &&
-                    sourceCost >= derivationCost + requiredLayoutCost,
-                "natural source inventory omitted its observation work");
-        remaining = sourceCost;
-        take(zkc::language::detail::sourceCommonRequirements(
-            entry, entry.protocol(), remaining, limits));
-        require(remaining == 0, "natural source inventory work was not exact");
-        remaining = sourceCost - 1;
-        refuses(zkc::language::detail::sourceCommonRequirements(
-                    entry, entry.protocol(), remaining, limits),
-                "source.limit");
-        require(remaining < sourceCost - 1,
-                "failed source inventory refunded work");
-        remaining = limits.work;
-        Layouts layouts(entry, limits, remaining);
-        for (const auto &port : entry.protocol().inputs)
-          take(layouts.protocolPort(port));
-        for (const auto &requirement : source)
-          take(layouts.get(requirement.type));
-        auto layoutCost = limits.work - remaining;
-        require(!take(deriveNativeCommonControlRequirements(entry)).empty(),
-                "natural native inventory disappeared");
-        limits.work = std::max(derivationCost, layoutCost);
-        take(deriveCommonControlRequirements(entry, entry.protocol().id,
-                                             limits));
-        Layouts independent(entry, limits);
-        for (const auto &port : entry.protocol().inputs)
-          take(independent.protocolPort(port));
-        refuses(deriveNativeCommonControlRequirements(entry, limits),
-                "source.limit");
-      });
-  cases.run("native derivation and port mapping share one API allowance", [] {
+    auto original = compile(text);
+    const auto &entry = original.entry();
+    Limits limits;
+    uint64_t remaining = limits.work;
+    auto source = take(deriveCommonControlRequirements(
+        entry, entry.protocol().id, limits, remaining));
+    auto derivationCost = limits.work - remaining;
+    remaining = limits.work;
+    Layouts requirements(entry, limits, remaining);
+    for (const auto &requirement : source)
+      take(requirements.get(requirement.type));
+    const auto requiredLayoutCost = limits.work - remaining;
+    remaining = limits.work;
+    auto inventory = take(zkc::language::detail::sourceCommonRequirements(
+        entry, entry.protocol(), remaining, limits));
+    auto sourceCost = limits.work - remaining;
+    require(!inventory.empty() &&
+                sourceCost >= derivationCost + requiredLayoutCost,
+            "natural source inventory omitted its observation work");
+    remaining = sourceCost;
+    take(zkc::language::detail::sourceCommonRequirements(
+        entry, entry.protocol(), remaining, limits));
+    require(remaining == 0, "natural source inventory work was not exact");
+    remaining = sourceCost - 1;
+    refuses(zkc::language::detail::sourceCommonRequirements(
+                entry, entry.protocol(), remaining, limits),
+            "source.limit");
+    require(remaining < sourceCost - 1,
+            "failed source inventory refunded work");
+  });
+  cases.run("source derivation and layouts share one inventory allowance", [] {
     auto original = compile(booleanSource);
     const auto &entry = original.entry();
     Limits limits;
@@ -422,14 +413,19 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
     for (const auto &requirement : source)
       take(layouts.get(requirement.type));
     auto layoutCost = limits.work - remaining;
-    require(take(deriveNativeCommonControlRequirements(entry)).size() == 2,
-            "native positive inventory changed");
+    remaining = limits.work;
+    require(take(zkc::language::detail::sourceCommonRequirements(
+                     entry, entry.protocol(), remaining, limits))
+                    .size() == 2,
+            "positive inventory changed");
     limits.work = std::max(derivationCost, layoutCost);
     take(deriveCommonControlRequirements(entry, entry.protocol().id, limits));
     Layouts independent(entry, limits);
     for (const auto &port : entry.protocol().inputs)
       take(independent.protocolPort(port));
-    refuses(deriveNativeCommonControlRequirements(entry, limits),
+    remaining = limits.work;
+    refuses(zkc::language::detail::sourceCommonRequirements(
+                entry, entry.protocol(), remaining, limits),
             "source.limit");
   });
   cases.run(
@@ -466,7 +462,9 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
         refuses(deriveCommonControlRequirements(project, checkedTarget, limits),
                 "source.limit");
         refuses(deriveCommonControlRequirements(entry, limits), "source.limit");
-        refuses(deriveNativeCommonControlRequirements(entry, limits),
+        uint64_t inventoryRemaining = limits.work;
+        refuses(zkc::language::detail::sourceCommonRequirements(
+                    entry, entry.protocol(), inventoryRemaining, limits),
                 "source.limit");
         limits.work = 1;
         refuses(deriveCommonControlRequirements(project, checkedTarget, limits),
@@ -475,7 +473,9 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
         refuses(deriveCommonControlRequirements(entry, entry.protocol().id,
                                                 limits, remaining),
                 "source.limit");
-        refuses(deriveNativeCommonControlRequirements(entry, limits),
+        remaining = 1;
+        refuses(zkc::language::detail::sourceCommonRequirements(
+                    entry, entry.protocol(), remaining, limits),
                 "source.limit");
       });
   cases.run("actual Boolean inventory and exact source comparison", [] {
@@ -554,6 +554,103 @@ protocol Run roles(P,V)(flag:bool@(P,V),other:bool@(P,V))->(r:bool@(P,V)) {
                              : json::Object{{"kind", "extent"}, {"axis", 0}};
       });
     });
+  // The production comparison maps the published inventory through the
+  // component map and compares it with the actual native analysis, so a
+  // component-map or native-body mutation refuses.
+  for (StringRef name : {"native", "role", "guard"})
+    cases.run("product inventory tamper: " + name, [&] {
+      auto original = compile(R"(module m;
+struct State{pub flag:bool,pub other:bool}
+protocol Run roles(P,V)(s:State@(P,V))->(r:bool@(P,V)) {
+ let r=if s.flag {if s.other {true}else{false}}else{false};return(r=r);
+})");
+      take(readInterface(original.bytes(), original.interfaceJson()));
+      if (name != "guard") {
+        mutate(original, [&](auto &v) {
+          auto &components =
+              *protocol(v).getArray("inputs")->front().getAsObject()->getArray(
+                  "components");
+          auto at = [&](int64_t field, int64_t role) -> json::Object & {
+            for (auto &value : components) {
+              auto &component = *value.getAsObject();
+              if ((*component.getArray("path"))[0].getAsInteger() == field &&
+                  component.getInteger("role") == role)
+                return component;
+            }
+            throw std::runtime_error("missing published component");
+          };
+          if (name == "native")
+            std::swap(at(0, 0)["native"], at(1, 0)["native"]);
+          else
+            at(0, 1)["role"] = 0;
+        });
+        return;
+      }
+      mlir::DialectRegistry registry;
+      zkc::registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      context.loadAllAvailableDialects();
+      auto module =
+          mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+      require(bool(module), "original did not parse");
+      zkc::protocol_ir::BranchOp outer;
+      module->walk([&](zkc::protocol_ir::BranchOp op) {
+        if (mlir::isa<zkc::protocol_ir::MathematicalOp>(op->getParentOp()))
+          outer = op;
+      });
+      require(bool(outer), "original has no guard");
+      auto root = outer->getParentOfType<zkc::protocol_ir::MathematicalOp>();
+      outer->setOperand(0, root.getBody().front().getArgument(1));
+      std::string bytes;
+      raw_string_ostream stream(bytes);
+      module->print(stream);
+      auto v = take(json::parse(original.interfaceJson()));
+      v.getAsObject()->operator[]("original") =
+          toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
+      refuses(readInterface(bytes, zkc::printJson(v)), "source.interface");
+    });
+  cases.run(
+      "one closed concrete Protocol predicate selects derivation and "
+      "publication",
+      [] {
+        auto project = take(analyze(take(capture({{"m", R"(module m;
+protocol Pick<N:nat> roles(P,V)(xs:[bool;N]@(P,V))->(r:bool@(P,V)){
+ let r=if xs[0] {true}else{false};return(r=r);
+}
+protocol Run roles(P,V)(xs:[bool;2]@(P,V))->(r:bool@(P,V)){
+ let r=Pick<2> roles(P,V)(xs);return(r=r);
+})",
+                                                   "closed-concrete.zkc"}})))
+                                .checkedProject());
+        // A checked template is not closed; project derivation keeps its
+        // wider generic admission.
+        DeclarationId pick{};
+        for (const auto &decl : project.declarations())
+          if (decl.qualifiedName == "m::Pick")
+            pick = decl.id;
+        require(!isClosedConcreteProtocol(project.declarations()[pick.index]),
+                "an open template counted as closed concrete");
+        take(deriveCommonControlRequirements(project, pick));
+        auto entry = take(closeNativeRun(project, "m::Run"));
+        std::set<std::string> concrete;
+        for (const auto &decl : entry.declarations()) {
+          if (isClosedConcreteProtocol(decl)) {
+            concrete.insert(decl.symbol);
+            take(deriveCommonControlRequirements(entry, decl.id, {}));
+          } else if (decl.kind == Declaration::Kind::Protocol)
+            refuses(deriveCommonControlRequirements(entry, decl.id, {}),
+                    "source.common-provenance");
+        }
+        require(concrete.size() == 2, "closure lost a concrete instance");
+        auto original = take(prepareOriginal(entry));
+        std::set<std::string> published;
+        for (const auto &protocol : original.interface().protocols)
+          published.insert(protocol.symbol);
+        require(published == concrete,
+                "publication selected other Protocols than derivation");
+        if (auto error = compareInterface(entry, original.interface()))
+          throw std::runtime_error(toString(std::move(error)));
+      });
   cases.run("bounds precede projection and sorting", [] {
     auto original = compile(booleanSource);
     mutate(

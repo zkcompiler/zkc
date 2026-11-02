@@ -239,53 +239,17 @@ pub protocol Run roles(P,V)(value: Choice @(P,V)) -> bool @(P,V):
           root = function;
       });
       require(bool(root), "original omitted the selected protocol");
+      // The production comparison maps every published inventory through the
+      // component map and compares it with the actual native analysis.
+      auto view =
+          take(readInterface(original.bytes(), original.interfaceJson()));
+      if (auto error = compareInterface(entry, view))
+        throw std::runtime_error(toString(std::move(error)));
       uint64_t remaining = 8000000;
       facts::Work work(remaining);
       auto native = take(zkc::deriveCommonControlRequirements(root, work));
-      auto source =
-          take(zkc::language::deriveNativeCommonControlRequirements(entry));
-      auto key = [&](mlir::Type type, bool tagOnly,
-                     std::optional<unsigned> extentAxis, auto components,
-                     auto getRole, auto getInput) {
-        std::string result;
-        raw_string_ostream stream(result);
-        type.print(stream);
-        stream << (tagOnly ? ":tag" : ":value");
-        if (extentAxis)
-          stream << ":extent=" << *extentAxis;
-        std::vector<std::string> parts;
-        for (const auto &component : components) {
-          std::string part =
-              std::to_string(getInput(component)) + ":" + getRole(component);
-          for (auto index : component.path)
-            part += ":" + std::to_string(index);
-          parts.push_back(std::move(part));
-        }
-        llvm::sort(parts);
-        for (const auto &part : parts)
-          stream << "/" << part;
-        return result;
-      };
-      std::vector<std::string> actual, expected;
-      for (const auto &requirement : native)
-        actual.push_back(key(
-            requirement.type, requirement.tagOnly, requirement.extentAxis,
-            requirement.components,
-            [](const auto &component) {
-              return component.role.getValue().str();
-            },
-            [](const auto &component) { return component.input; }));
-      for (const auto &requirement : source)
-        expected.push_back(key(
-            protocol::decodeBoundType(&context, requirement.type),
-            requirement.tagOnly, requirement.extentAxis, requirement.components,
-            [](const auto &component) {
-              return nativeRoleName(component.role);
-            },
-            [](const auto &component) { return component.originalInput; }));
-      llvm::sort(actual);
-      llvm::sort(expected);
-      require(actual == expected,
+      require(native.empty() ==
+                  view.selectedProtocol().commonInputRequirements.empty(),
               "independent exact component/type/tag obligations differ");
     });
 #endif
