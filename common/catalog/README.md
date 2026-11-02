@@ -78,13 +78,16 @@ python3 common/catalog/generate.py --source common/catalog/declarations.json \
   --installation common/catalog/installation.json --output build/compiler/include/zkc/Contracts
 ```
 
-`test_instances.py` validates both documents, refuses forged rows, and compares
-the data with the independently authored Python oracles of the EVM wire,
-foundation, binomial and hash-chain references without changing them.
+`test_instances.py` validates both documents, runs the shared cases against
+the generator, and compares the data with the independently authored Python
+oracles of the EVM wire, foundation, binomial and hash-chain references without
+changing them.
 
 `validation-cases.json` is the case list shared by the three validators: edits
 of the two documents that each validator must accept, and edits that each must
-refuse, with the diagnostic each one gives. `validation_cases.py` specifies and
+refuse, with the diagnostic each one gives. It owns the refusal cases of every
+rule of both chapters; a validator's own tests cover only what the edits cannot
+express or project, such as JSON syntax, key order and TableGen spelling. `validation_cases.py` specifies and
 applies the edits. `test_instances.py` runs them against the generator, the
 compiler's `catalog-source` test against the generator and `zkc-tblgen`, and
 `crates/zkc-catalog/tests/validation_cases.rs` against the Rust build.
