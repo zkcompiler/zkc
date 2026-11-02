@@ -801,7 +801,7 @@ Error checkHostArtifact(StringRef bytes, const LanguageInterface &interface,
                         const Limits &limits) {
   auto parsed = detail::parseEntryJson(
       bytes, std::min<uint64_t>(limits.irBytes, 16 * 1024 * 1024),
-      16 * 1024 * 1024, "entry.artifact");
+      16 * 1024 * 1024, detail::HostArtifactJsonNodes, "entry.artifact");
   if (!parsed)
     return parsed.takeError();
   return Admission(interface, limits).run(*parsed);

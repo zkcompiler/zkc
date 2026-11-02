@@ -1,5 +1,6 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/NativeLanguage.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <functional>
@@ -88,6 +89,16 @@ int main() {
                                     .roles.size() == 1024,
                         "roster deployment differs");
               });
+  cases.run("a 1,024-role Protocol's generated Host package is published", [] {
+    // The generated wrapper restates its role-indexed input and result
+    // families at every signature, block argument and child deployment, about
+    // 235 lexical nodes per role. Its carrier ceiling covers the full roster.
+    auto closed =
+        take(closeEntry(check(many(1024, Shape::OnePort)), "m::Many"));
+    auto compiled = take(compileEntry(take(prepareOriginal(closed))));
+    require(std::holds_alternative<CompiledHost>(compiled.artifact()),
+            "a direct Protocol selection publishes a Host package");
+  });
   cases.run("closure work grows linearly with the roster", [] {
     std::vector<uint64_t> work;
     for (unsigned count : {128, 256, 512}) {
@@ -100,6 +111,29 @@ int main() {
     Limits limits;
     limits.work = work[2] * 5 / 2;
     take(closeEntry(check(many(1024, Shape::OnePort)), "m::Many", limits));
+  });
+  cases.run("a 1,024-role record with a field per role checks linearly", [] {
+    // Fields are expanded once per record instance, and each placed role
+    // visits only the fields placed at it.
+    auto wide = [](unsigned fields) {
+      std::string body;
+      for (unsigned i = 0; i < fields; ++i)
+        body += "    pub f" + std::to_string(i) + ": index @A" +
+                std::to_string(i % 1024) + "\n";
+      return "struct Wide roles(" + roles(1024, "A") + "):\n" + body +
+             "pub protocol Fan roles(" + roles(1024) + ")(w: Wide roles(" +
+             roles(1024) + ")) -> bool @R1:\n    return true\n";
+    };
+    std::vector<uint64_t> work;
+    for (unsigned fields : {256, 512, 1024}) {
+      work.push_back(check(wide(fields), true).checkedWork());
+      outs() << "1024 roles, " << fields << " fields: check " << work.back()
+             << '\n';
+    }
+    // Doubling the fields doubles the increment; a quadratic term would
+    // quadruple it.
+    require(work[2] - work[1] <= 3 * (work[1] - work[0]),
+            "checking grows faster than the record's field count");
   });
   cases.run("a permuted 17-role telescope keeps its order", [] {
     // Each participant receives the field placed at the record role that its

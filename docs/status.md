@@ -967,10 +967,20 @@ interface within the 32,000,000-unit phase work ceiling, with work growing
 linearly in roles ([roster capacity controls](../compiler/test/language_roster_capacity.cpp)).
 Work limits and output-size limits are separate: an admitted roster size does
 not guarantee that every program of that size fits every output budget. The
-generated Host package of a direct Protocol selection grows by about 220 Entry
-JSON nodes per role and exceeds the 200,000-node ceiling beyond about 900 roles,
-while the Protocol's own package admits all 1,024 roles. Participant projection
-separately bounds roles times operations and ports at 100,000.
+generated Host package of a direct Protocol selection restates its role-indexed
+families at each signature, block argument and child deployment, about 235
+Entry JSON nodes per role; its 800,000-node carrier ceiling admits the full
+roster (about 240,000 nodes with one port, 369,000 with one port placed at
+every role). Rust admission of that wrapper still refuses with
+`entry-interface-limit`: one interface validation of the 1,024-role wrapper
+exceeds the SDK's validation work allowance, which the runtime fixes at
+1,000,000 units as both default and maximum. A distributed record's fields are expanded once per instance and
+each placed role visits only the fields placed at it, so a 1,024-role record
+with one field per role checks in about 16.9 million units, growing linearly
+with its fields. Mathematical participant projection separately bounds roles
+times SSA nodes at 100,000 per common body ([limits](spec/ir/limits.md)): with
+one port per role it refuses from 312 roles, and a 1,024-role Protocol admits
+at most 97 nodes in its mathematical programs.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Layout role assembly explicitly selects existing components of ordinary shared

@@ -84,6 +84,12 @@ public:
                                                      unsigned = 1);
   std::optional<std::vector<TypeField>> fields(const Type &, Span,
                                                unsigned = 1);
+  /// The fields of a product type without copying a memoized declared record.
+  /// The result points into `computed` or into this view's record memo and is
+  /// valid until the next query.
+  const std::vector<TypeField> *
+  productFields(const Type &, Span, unsigned,
+                std::optional<std::vector<TypeField>> &computed);
   /// Signature-only product shape. An abstract representation or open array
   /// length returns no shape and no diagnostic; it cannot select an overload.
   std::optional<std::vector<TypeField>> structuralFields(const Type &, Span);
@@ -208,6 +214,16 @@ private:
   /// Keyed by the family target, the walked Protocol, the direction and the
   /// exact static substitution. Valid for this view's declarations.
   std::map<std::string, FamilyRoster> familyRosters;
+  /// A declared record's substituted fields, keyed by its complete
+  /// instantiated type. Field types, placements and spans depend only on that
+  /// type and on the declaration, whose signature is complete before any type
+  /// term names it. `depth` is the greatest query depth that produced them; a
+  /// deeper query recomputes, so depth refusals are unchanged.
+  struct DeclaredFields {
+    std::vector<TypeField> fields;
+    unsigned depth;
+  };
+  std::map<std::string, DeclaredFields> declaredFields;
 };
 llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
                        Work &, DeclarationId,

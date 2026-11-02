@@ -13,7 +13,7 @@ producer, uses that row's generated constant.
 | Declared role roster | 1,024 roles, the catalog limit `protocol.roles` |
 | Helper depth and expanded helper analysis | 64 levels; 100,000 operations |
 | Helper dependency analysis and availability replay | 1,000,000 words/indices within their separate budgets |
-| Role expansion | 100,000 operation/port visits |
+| Mathematical participant projection | 100,000 role-node visits per common body, owned by IR / Mathematical: each mathematical program charges its role count times its SSA nodes, one each for the program, its inputs and results, and its operations, operands, results and block arguments; exhaustion refuses with `mathematical-projection-limit` before any participant body is built |
 | Scoped helper substitution | 1,000,000 operation/port visits, 4,096 callable/domain definitions and 4,096 bindings; outlined control bodies consume structural work, 64 nesting levels, and 16 MiB occurrence text; independent comparison has its own 1,000,000 visits |
 | Exact resource-origin analysis | 100,000 shared work units and 64 call/region levels |
 | Pointwise map formulas and correspondence | Shared helper expansion budget; expanded formula within the Ring view limits of 65,536 nodes and depth 1,024; 1,000,000 matcher steps |

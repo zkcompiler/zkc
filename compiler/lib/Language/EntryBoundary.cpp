@@ -187,6 +187,12 @@ Semantics::entryFields(const Declaration &protocol, const Declaration *entry,
           for (auto [index, field] : enumerate(*children)) {
             if (!atoms && !field.isPublic)
               continue;
+            // A field of a distributed record placed only at other roles
+            // supplies nothing here; it is visited at each of its own roles.
+            if (product && index < product->fields.size() &&
+                !llvm::is_contained(placementRoles(product->fields[index]),
+                                    role))
+              continue;
             auto childPlacement = projectedPlacement(
                 current, where, {unsigned(index)}, port.span);
             if (!childPlacement)

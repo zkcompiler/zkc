@@ -176,8 +176,9 @@ bool Semantics::admitPlaced(const PlacedType &value, Span span,
 std::optional<ValuePlacement>
 Semantics::projectedPlacement(const Type &input, const ValuePlacement &root,
                               ArrayRef<unsigned> path, Span span) {
+  // Select within the root tree and copy only the selected subtree.
   Type type = input;
-  ValuePlacement result = root;
+  const ValuePlacement *result = &root;
   for (auto ordinal : path) {
     if (!charge(1, span))
       return {};
@@ -187,16 +188,15 @@ Semantics::projectedPlacement(const Type &input, const ValuePlacement &root,
         fail("source.index", "static array index is out of range", span);
         return {};
       }
-      if (const auto *product = std::get_if<ProductPlacement>(&result.value)) {
+      if (const auto *product = std::get_if<ProductPlacement>(&result->value)) {
         if (product->instance != typeIdentity(type) ||
             product->fields.size() != 1) {
           fail("source.placement",
                "array element placement disagrees with its schema", span);
           return {};
         }
-        auto element = product->fields[0];
-        result = std::move(element);
-      } else if (!std::holds_alternative<DataPlacement>(result.value)) {
+        result = &product->fields[0];
+      } else if (!std::holds_alternative<DataPlacement>(result->value)) {
         fail("source.placement",
              "array requires data or element-schema placement", span);
         return {};
@@ -205,29 +205,30 @@ Semantics::projectedPlacement(const Type &input, const ValuePlacement &root,
       type = std::move(element);
       continue;
     }
-    auto fields = this->fields(type, span);
+    std::optional<std::vector<TypeField>> computed;
+    const auto *fields = productFields(type, span, 1, computed);
     if (!fields || ordinal >= fields->size()) {
       if (!diagnostic)
         fail("source.placement", "invalid placed field ordinal", span);
       return {};
     }
-    if (const auto *product = std::get_if<ProductPlacement>(&result.value)) {
+    if (const auto *product = std::get_if<ProductPlacement>(&result->value)) {
       if (product->instance != typeIdentity(type) ||
           product->fields.size() != fields->size()) {
         fail("source.placement", "placed product disagrees with its schema",
              span);
         return {};
       }
-      auto selected = product->fields[ordinal];
-      result = std::move(selected);
-    } else if (!std::holds_alternative<DataPlacement>(result.value)) {
+      result = &product->fields[ordinal];
+    } else if (!std::holds_alternative<DataPlacement>(result->value)) {
       fail("source.placement", "direct oracle has no ordinary product fields",
            span);
       return {};
     }
-    type = (*fields)[ordinal].type;
+    auto selected = (*fields)[ordinal].type;
+    type = std::move(selected);
   }
-  return result;
+  return *result;
 }
 
 std::optional<PlacedType> Checker::placedType(const Declaration &context,

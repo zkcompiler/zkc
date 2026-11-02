@@ -13,39 +13,53 @@ Permissions intersect(Permissions a, const Permissions &b) {
 
 std::optional<std::vector<TypeField>>
 Semantics::fields(const Type &type, Span span, unsigned depth) {
+  std::optional<std::vector<TypeField>> computed;
+  const auto *result = productFields(type, span, depth, computed);
+  if (!result)
+    return {};
+  if (computed)
+    return computed;
+  // A memoized declared record is copied for this caller.
+  if (!charge(result->size(), span))
+    return {};
+  return *result;
+}
+const std::vector<TypeField> *
+Semantics::productFields(const Type &type, Span span, unsigned depth,
+                         std::optional<std::vector<TypeField>> &computed) {
   if (depth > work.limits.typeDepth || !charge(1, span)) {
     if (!diagnostic)
       fail("source.limit", "field expansion depth", span);
-    return {};
+    return nullptr;
   }
-  std::vector<TypeField> result;
+  auto &result = computed.emplace();
   if (type.kind == Type::Kind::Unit)
-    return result;
+    return &result;
   if (type.kind == Type::Kind::Tuple) {
     for (unsigned i = 0; i < type.arguments.size(); ++i) {
       if (!chargeType(type.arguments[i], span))
-        return {};
+        return nullptr;
       result.push_back({std::to_string(i), type.arguments[i], true, span});
     }
-    return result;
+    return &result;
   }
   if (type.kind == Type::Kind::Array) {
     if (!type.dimension.isClosed()) {
       fail("source.bound", "array expansion requires a closed length", span);
-      return {};
+      return nullptr;
     }
     if (type.dimension.closedValue() > work.limits.aggregateLeaves) {
       fail("source.limit", "array layout exceeds bound", span);
-      return {};
+      return nullptr;
     }
     if (!charge(type.dimension.closedValue(), span))
-      return {};
+      return nullptr;
     for (uint64_t i = 0; i < type.dimension.closedValue(); ++i) {
       if (!chargeType(type.arguments.front(), span))
-        return {};
+        return nullptr;
       result.push_back({std::to_string(i), type.arguments.front(), true, span});
     }
-    return result;
+    return &result;
   }
   auto *decl = typeDeclaration(type);
   if (!decl || (type.kind != Type::Kind::Record &&
@@ -55,7 +69,7 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
          "type has no product fields; variants require match: " +
              spelling(type),
          span);
-    return {};
+    return nullptr;
   }
   if (decl->generated) {
     StringRef member = decl->generated->member;
@@ -63,10 +77,10 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
         member == "ProverOutputs" || member == "VerifierOutputs") {
       auto selected = entryFamilyFields(*decl, type.arguments, span);
       if (!selected)
-        return {};
+        return nullptr;
       for (auto &field : *selected)
         result.push_back({field.name, std::move(field.type), true, span});
-      return result;
+      return &result;
     }
   }
   auto bindings = substitution(*decl, type.arguments);
@@ -74,39 +88,52 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
     if (decl->abstract) {
       fail("source.private", "abstract type representation is unavailable",
            span);
-      return {};
+      return nullptr;
     }
     const auto &base = type.arguments.front();
     auto &owner = declarations[decl->parent->index];
     bindings = substitution(owner, base.arguments);
     auto repr = substitute(decl->domain, bindings, span, depth + 1);
     if (!repr)
-      return {};
+      return nullptr;
     result.push_back({"value", *repr, false, span});
-    return result;
+    return &result;
   }
+  // Placement checks walk each field of a wide record once per placed role;
+  // reuse the substituted declaration instead of expanding it again.
+  computed.reset();
+  auto key = typeIdentity(type);
+  if (!charge(key.size(), span))
+    return nullptr;
+  auto memoized = declaredFields.find(key);
+  if (memoized != declaredFields.end() && depth <= memoized->second.depth)
+    return &memoized->second.fields;
+  std::vector<TypeField> expanded;
   for (const auto &source : decl->fields) {
     auto t = substitute(source.type, bindings, span, depth + 1);
     if (!t)
-      return {};
+      return nullptr;
     TypeField field{source.name, std::move(*t), source.isPublic, source.span};
     if (source.maximumRows) {
       field.maximumRows =
           substitute(*source.maximumRows, bindings, span, depth + 1);
       if (!field.maximumRows)
-        return {};
+        return nullptr;
     }
     if (source.placement) {
       field.placement = placement(field.type, *source.placement,
                                   decl->roles.size(), field.span, depth + 1);
       if (!field.placement)
-        return {};
+        return nullptr;
     }
     if (type.kind == Type::Kind::LogicalRecord && !oracleField(field))
-      return {};
-    result.push_back(std::move(field));
+      return nullptr;
+    expanded.push_back(std::move(field));
   }
-  return result;
+  auto &entry = declaredFields[key];
+  entry.fields = std::move(expanded);
+  entry.depth = depth;
+  return &entry.fields;
 }
 bool Semantics::oracleField(const TypeField &field) {
   if (field.maximumRows) {

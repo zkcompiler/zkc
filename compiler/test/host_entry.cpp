@@ -566,10 +566,11 @@ entry def Run(inputs: Zero::Inputs) -> Zero::RunResult:
     auto check = [&](StringRef bytes, StringRef code) {
       rejects(checkHostArtifact(bytes, entry.original().interface()), code);
     };
-    // One array and 199999 scalar tokens reach structural admission. One more
+    // One array and 799999 scalar tokens reach structural admission. One more
     // token must refuse before shape checks, just as the independent reader.
+    // The carrier ceiling is four times an interface document's 200000.
     std::string nodes = "[0";
-    for (unsigned i = 1; i < 199999; ++i)
+    for (unsigned i = 1; i < 799999; ++i)
       nodes += ",0";
     nodes += ']';
     check(nodes, "entry.artifact");

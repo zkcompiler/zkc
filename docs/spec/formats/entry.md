@@ -595,7 +595,11 @@ a `functions` signature inventory. Its `protocols`, `relations` and `setups`
 arrays are empty: child native packages own those contracts.
 
 Compiler publication and Rust admission bound the Host artifact to 16 MiB,
-JSON nesting to 256 and lexical nodes to 200,000 before structural decoding.
+JSON nesting to 256 and lexical nodes to 800,000 before structural decoding.
+The node ceiling is four times an interface document's, as its byte ceiling
+is: a Host artifact restates each signature, block-argument and deployment
+schema, so the generated wrapper of a Protocol selection grows by about 235
+nodes per role and its 1,024-role roster needs about 240,000.
 Scalar tokens have at most ten bytes. Embedded program and package strings
 share the artifact byte ceiling; interface metadata retains its narrower string
 limit. Duplicate decoded keys, invalid Unicode and noncanonical numeric tokens

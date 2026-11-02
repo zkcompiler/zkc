@@ -81,11 +81,15 @@ llvm::Expected<std::string> interfaceSchemaIdentity(const llvm::json::Value &,
                                                     const Limits &);
 llvm::Expected<llvm::json::Value> parseInterface(llvm::StringRef,
                                                  const Limits &);
+/// Lexical node ceilings. An interface document is metadata within 4 MiB. A
+/// Host carrier has four times its byte ceiling and restates each signature,
+/// block-argument and deployment schema, so its node ceiling scales with bytes.
+constexpr size_t InterfaceJsonNodes = 200000;
+constexpr size_t HostArtifactJsonNodes = 800000;
 /// Common lexical bounds for interfaces and executable Host carriers. Embedded
 /// program/package strings use the carrier ceiling instead of the metadata cap.
-llvm::Expected<llvm::json::Value> parseEntryJson(llvm::StringRef,
-                                                 size_t byteLimit,
-                                                 size_t stringLimit,
-                                                 llvm::StringRef invalidCode);
+llvm::Expected<llvm::json::Value>
+parseEntryJson(llvm::StringRef, size_t byteLimit, size_t stringLimit,
+               size_t nodeLimit, llvm::StringRef invalidCode);
 } // namespace zkc::language::detail
 #endif

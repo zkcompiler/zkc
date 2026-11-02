@@ -21,11 +21,12 @@ namespace zkc::language {
 namespace {
 // LLVM JSON replaces duplicate object members. Reject them before parsing so a
 // second spelling cannot silently replace an identity-bearing field.
-Error preflight(StringRef bytes, size_t stringLimit, StringRef invalidCode) {
+Error preflight(StringRef bytes, size_t stringLimit, size_t nodeLimit,
+                StringRef invalidCode) {
   if (!json::isUTF8(bytes))
     return error(invalidCode, "Entry JSON is not UTF-8");
   std::vector<std::optional<std::set<std::string>>> stack;
-  unsigned nodes = 0;
+  size_t nodes = 0;
   bool invalidNumeric = false;
   for (size_t i = 0; i < bytes.size();) {
     char c = bytes[i++];
@@ -86,7 +87,7 @@ Error preflight(StringRef bytes, size_t stringLimit, StringRef invalidCode) {
            !all_of(token, [](char digit) { return isDigit(digit); })))
         invalidNumeric = true;
     }
-    if (nodes > 200000)
+    if (nodes > nodeLimit)
       return error("source.limit", "Entry JSON node limit exceeded");
   }
   if (invalidNumeric)
@@ -370,14 +371,16 @@ Expected<json::Value> detail::parseInterface(StringRef bytes,
   if (auto error = checkLimits(limits))
     return std::move(error);
   return parseEntryJson(bytes, limits.interfaceBytes,
-                        6 * protocol::VariantSpellingBytes, "source.interface");
+                        6 * protocol::VariantSpellingBytes, InterfaceJsonNodes,
+                        "source.interface");
 }
 Expected<json::Value> detail::parseEntryJson(StringRef bytes, size_t byteLimit,
                                              size_t stringLimit,
+                                             size_t nodeLimit,
                                              StringRef invalidCode) {
   if (bytes.size() > byteLimit)
     return error("source.limit", "Entry JSON byte limit exceeded");
-  if (auto error = preflight(bytes, stringLimit, invalidCode))
+  if (auto error = preflight(bytes, stringLimit, nodeLimit, invalidCode))
     return std::move(error);
   auto actual = json::parse(bytes);
   if (!actual) {
