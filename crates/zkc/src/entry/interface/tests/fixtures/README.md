@@ -42,4 +42,4 @@ The authored recursive specimen is not compiler output and has no row.
 
 | File | SHA-256 |
 |---|---|
-| `fri-interface.json` | `3aa34332ee4907be2661b1a0733dc53aa08821158c7d11a7a07353b11a77637e` |
+| `fri-interface.json` | `e90c5643c6bff548fff28ecf42386b4725d1b053b8db71ea433686938e39653e` |

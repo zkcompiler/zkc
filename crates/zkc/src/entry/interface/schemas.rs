@@ -229,6 +229,9 @@ impl<'a> Schemas<'a> {
         }
         self.logical_schema(schema, depth)?;
         self.shape(schema)?;
+        // Keyed by the published nominal identity, which binds the defining
+        // source authority. The memo borrows one interface document and lives
+        // no longer than this one admission.
         if let Some(previous) = self.schemas.insert(&schema.identity, schema) {
             self.charge(1 + schema.leaves.len() + schema.fields.len() + schema.alternatives.len())?;
             // Children were checked and interned first, so their exact identities

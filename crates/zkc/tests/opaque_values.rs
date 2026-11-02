@@ -474,3 +474,149 @@ fn fresh_source_retained_root_roundtrip() {
         Value::Opaque(_)
     ));
 }
+
+// The encapsulation unit of an opaque value is the defining source authority
+// that its published nominal identity binds: the library unit and its private
+// dependency closure. Rust compares only the identities the compiler publishes.
+// A library nominal applied to a client type argument legitimately changes with
+// that client, so these cases transport a closed library type.
+const DEPENDENCY: &str = "pub def f(x: index) -> index:\n    return x\n";
+const LIBRARY: &str = "pub struct Secret:\n    value: index\n\
+    pub def make(value: index) -> Secret:\n    return Secret {value: dep::f(value)}\n";
+const CLIENT: &str = "entry def Fetch() -> lib::Secret:\n    return lib::make(7)\n\
+    entry def Echo(value: lib::Secret) -> lib::Secret:\n    return value\n";
+
+/// Compile one capture of named modules, writing each distinct unit once so an
+/// unchanged unit is byte-identical across captures.
+fn compile_units(dir: &Path, units: &[(&str, &str)], entry: &str) -> Package {
+    let compiler =
+        std::env::var_os("ZKC_OPAQUE_COMPILER").expect("explicit immutable compiler path");
+    let mut command = Command::new(compiler);
+    command
+        .arg("language-package")
+        .arg("--source-format=zkc-layout");
+    for (module, text) in units {
+        let path = dir.join(format!("{module}-{}.zkc", &digest(text)[..16]));
+        std::fs::write(&path, text).unwrap();
+        command.arg(format!("--module={module}={}", path.display()));
+    }
+    let output = command.arg(format!("--entry={entry}")).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{entry}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    capture(&output.stdout)
+}
+
+/// One `lib::Secret` produced by `m::Fetch` over the reference library and
+/// client, passed whole to `m::Echo` of another capture.
+struct Transport {
+    /// The identity the producer published for the opaque value.
+    produced: String,
+    /// The identity the consumer published for its parameter.
+    expected: String,
+    /// The identity of the consumer's opaque result, or its preparation refusal.
+    outcome: Result<String, String>,
+}
+
+fn transport(consumer: &[(&str, &str)]) -> Transport {
+    let dir = zkc_test_support::evidence(module_path!());
+    let producer = compile_units(
+        dir.path(),
+        &[("dep", DEPENDENCY), ("lib", LIBRARY), ("m", CLIENT)],
+        "m::Fetch",
+    );
+    let report = admit(producer)
+        .prepare(Default::default())
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{}", report.diagnostics());
+    let Value::Opaque(owner) = report.value.unwrap().into_value() else {
+        panic!("a library value with private storage must remain opaque")
+    };
+    let produced = owner.schema().identity.clone();
+    let consumer = compile_units(dir.path(), consumer, "m::Echo");
+    let expected = entry::FunctionInterface::read(&consumer, entry::InterfaceLimits::DEFAULT)
+        .unwrap()
+        .signature()
+        .parameters[0]
+        .schema
+        .identity
+        .clone();
+    let outcome = admit(consumer)
+        .prepare(FunctionRequest {
+            arguments: [("value".into(), Value::Opaque(owner))].into(),
+            ..Default::default()
+        })
+        .map(|prepared| {
+            let report = prepared.execute();
+            assert!(report.is_success(), "{}", report.diagnostics());
+            let Value::Opaque(result) = report.value.unwrap().into_value() else {
+                panic!("a transported library value must remain opaque")
+            };
+            result.schema().identity.clone()
+        })
+        .map_err(|error| error.code().to_owned());
+    Transport {
+        produced,
+        expected,
+        outcome,
+    }
+}
+
+/// Another authority publishes another identity, and transport refuses it.
+fn refused(transport: Transport) {
+    assert_eq!(transport.outcome, Err("entry-value-schema".into()));
+    assert_ne!(transport.expected, transport.produced);
+}
+
+#[test]
+#[ignore = "requires a freshly built C++ compiler with revision-bound nominal identity; set ZKC_OPAQUE_COMPILER"]
+fn library_values_pass_between_clients_that_differ_elsewhere() {
+    let client = format!("{CLIENT}def unrelated(x: index) -> index:\n    return x\n");
+    let transport = transport(&[("dep", DEPENDENCY), ("lib", LIBRARY), ("m", &client)]);
+    assert_eq!(transport.expected, transport.produced);
+    assert_eq!(transport.outcome, Ok(transport.produced));
+}
+
+#[test]
+#[ignore = "requires a freshly built C++ compiler with revision-bound nominal identity; set ZKC_OPAQUE_COMPILER"]
+fn homonymous_library_types_from_other_bytes_refuse() {
+    let other = "pub struct Secret:\n    value: index\n\
+        pub def make(value: index) -> Secret:\n    return Secret {value: value}\n";
+    refused(transport(&[("lib", other), ("m", CLIENT)]));
+}
+
+#[test]
+#[ignore = "requires a freshly built C++ compiler with revision-bound nominal identity; set ZKC_OPAQUE_COMPILER"]
+fn structural_twins_refuse() {
+    let client = "entry def Echo(value: twin::Secret) -> twin::Secret:\n    return value\n";
+    refused(transport(&[
+        ("dep", DEPENDENCY),
+        ("twin", LIBRARY),
+        ("m", client),
+    ]));
+}
+
+#[test]
+#[ignore = "requires a freshly built C++ compiler with revision-bound nominal identity; set ZKC_OPAQUE_COMPILER"]
+fn changed_private_library_dependencies_refuse() {
+    let dependency = "pub def f(x: index) -> index:\n    return 0\n";
+    refused(transport(&[
+        ("dep", dependency),
+        ("lib", LIBRARY),
+        ("m", CLIENT),
+    ]));
+}
+
+#[test]
+#[ignore = "requires a freshly built C++ compiler with revision-bound nominal identity; set ZKC_OPAQUE_COMPILER"]
+fn library_comment_edits_refuse() {
+    let commented = format!("{LIBRARY}// The defining closure's bytes include comments.\n");
+    refused(transport(&[
+        ("dep", DEPENDENCY),
+        ("lib", &commented),
+        ("m", CLIENT),
+    ]));
+}
