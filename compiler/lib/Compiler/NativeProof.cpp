@@ -11,6 +11,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
@@ -63,22 +64,36 @@ std::optional<unsigned> number(const json::Value &v) {
     return {};
   return n;
 }
+bool verifierKey(const protocol::BoundType &type) {
+  return protocol::setupKey(type.kind) == protocol::SetupKey::Verifier;
+}
+// The catalog's input-only frames: a codec frame of layout Table, the
+// standalone public table input.
+bool inputOnlyFrame(const protocol::BoundType &type) {
+  const auto *codec =
+      protocol::installedDomains().defaultCodec(type.kind, type.identity);
+  const auto *row =
+      codec ? protocol::instances::codec(codec->identity) : nullptr;
+  const auto *tag = row && row->frame
+                        ? protocol::instances::frameTag(row->frame->tag)
+                        : nullptr;
+  return tag && tag->layout == protocol::instances::FrameLayout::Table;
+}
 Expected<protocol::BoundType> wire(Type type, bool input = false) {
   auto logical = protocol::encodeBoundType(type, false);
   if (!logical)
     return logical.takeError();
+  // Inputs also admit the catalog's input-only frames and verifier keys,
+  // which exist only over commitments whose scheme requires a setup.
   if (protocol::nativeMessageData(*logical) ||
-      (input && logical->kind == "table" &&
-       logical->identity == "bls12-381.fr") ||
-      (input && logical->kind == "verifier_key" &&
-       logical->identity == "multilinear.kzg.bls12-381/0"))
+      (input && (inputOnlyFrame(*logical) || verifierKey(*logical))))
     return *logical;
   return error("native-proof-wire-type");
 }
 StringRef wireCodec(const protocol::BoundType &type) {
   if (protocol::nativeDataFrame(type))
     return "zkc.native-data/0";
-  if (type.kind == "verifier_key")
+  if (verifierKey(type))
     return "zkc.native-verifier-key/0";
   return type.kind == "field_array" ? "zkc.native-field-array/0"
                                     : protocol::defaultCodec(type);
@@ -305,7 +320,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         consumeError(logical.takeError());
         continue;
       }
-      if (logical->kind == "verifier_key" &&
+      if (verifierKey(*logical) &&
           !owns(cast<ArrayAttr>(source.getInputRoles()[i]), policy.validator))
         return error("native-proof-verifier-key-port");
     }
@@ -318,7 +333,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       auto logical = protocol::encodeBoundType(signature.getInput(i), false);
       if (!logical)
         return logical.takeError();
-      keys += logical->kind == "verifier_key";
+      keys += verifierKey(*logical);
     }
     if (keys > 64 || (needsKey && !keys))
       return error("native-proof-setup-coverage");

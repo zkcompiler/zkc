@@ -1406,9 +1406,13 @@ domain fn positions<F: Field>(xs: Vector<F>) -> domain<index> {
 }
 ```
 
-Registered domain definitions validate their complete signatures. Constructors
-cover container elements and indices, half-open ranges, strict zip, independent
-product, explicit matrix rows/columns/coordinate order, and fixed source arrays.
+Registered domain definitions validate their complete signatures. Each
+`domain("...")` identity names a row of the catalog's
+[source vocabulary](../formats/contract-declarations.md#source-vocabulary),
+whose kind and axis are its meaning; an identity without a row refuses.
+Constructors cover container elements and indices, half-open ranges, strict
+zip, independent product, explicit matrix rows/columns/coordinate order, and
+fixed source arrays.
 The [finite IR contract](../ir/finite.md#domain-declarations) defines enumeration
 and admission. Defined factories compose domain calls and immutable aliases;
 ordinary computations producing their data operands stay at the call site.
@@ -1472,6 +1476,11 @@ fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
 ) -> Sequence<B> effects(stop) = finite("local.collect.sequence");
 ```
 
+Each `finite("...")` identity names a row of the catalog's
+[source vocabulary](../formats/contract-declarations.md#source-vocabulary): its
+mode, fold or collect, collected constructor and predicate form are that row's
+columns, and an identity without a row refuses. A collect admits the collected
+constructor's catalog collection view as its result.
 The complete signature is checked against the selected identity. Fold state
 and domain item types are independent; Unit is a valid state. Fold requires
 exactly the origin map `{1 -> 0}`: its second callback input receives the whole

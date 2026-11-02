@@ -7,18 +7,14 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 using K = Type::Kind;
-bool dataConstructor(StringRef name) {
-  // Managed services and source nominal representations have separate owners.
-  // These are native data representations, including runtime polynomial data;
-  // formal polynomials are a distinct mathematical type.
-  return name == "vector" || name == "matrix" || name == "groups" ||
-         name == "transcript" || name == "shake128_state" ||
-         name == "quotient_matrix" || name == "indices" || name == "bytes" ||
-         name == "polynomial" || name == "table" || name == "point" ||
-         name == "round" || name == "sequence" || name == "field_array" ||
-         name == "commitment" || name == "commitments" || name == "proof" ||
-         name == "prover_key" || name == "verifier_key" ||
-         name == "opening_state" || name == "opening_states";
+// A catalog type with source data is a builtin data constructor, except the
+// four whose values have their own source kinds. Managed services and source
+// nominal representations have separate owners; runtime polynomial data is
+// native data, distinct from the formal mathematical polynomial type.
+bool dataConstructor(const protocol::TypeDeclaration &declared) {
+  return declared.sourceData && declared.name != "bool" &&
+         declared.name != "index" && declared.name != "field" &&
+         declared.name != "group";
 }
 } // namespace
 bool isDomainSort(StringRef sort) {
@@ -188,7 +184,7 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
        (name == "group" && arguments[0].kind == K::Group)))
     return arguments[0];
   const auto *constructor = protocol::typeDeclaration(name);
-  if (!dataConstructor(name) || !constructor)
+  if (!constructor || !dataConstructor(*constructor))
     return error("source.builtin",
                  "constructor is not an admitted native data type");
   if (arguments.size() != constructor->parameters.size())

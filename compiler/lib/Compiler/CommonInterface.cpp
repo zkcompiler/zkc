@@ -1,5 +1,6 @@
 #include "LanguageInterface.h"
 #include "zkc/Analysis/CommonControl.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
@@ -232,14 +233,10 @@ Error checkObservation(const InterfaceSchema &schema,
     auto type = protocol::parseBoundType(schema.leaves.front(), false);
     if (!type)
       return type.takeError();
-    StringRef kind = type->kind;
-    unsigned rank = kind == "matrix" ? 2
-                    : kind == "bytes" || kind == "sequence" ||
-                            kind == "vector" || kind == "groups" ||
-                            kind == "indices" || kind == "field_array" ||
-                            kind == "fixed_vector"
-                        ? 1
-                        : 0;
+    // The collection rank is the constructor's catalog row.
+    const auto *declared = protocol::typeDeclaration(type->kind);
+    unsigned rank =
+        declared && declared->collection ? declared->collection->rank : 0;
     if (extent->axis >= rank)
       return invalid("common extent axis is outside its collection");
   }

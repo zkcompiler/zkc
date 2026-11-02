@@ -1,5 +1,6 @@
 #include "zkc/Language/EntryBoundary.h"
 #include "Semantics.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
 #include <set>
@@ -208,7 +209,7 @@ Semantics::entryFields(const Declaration &protocol, const Declaration *entry,
           return false;
         bool initialized = false;
         if (inputs && entry && current.kind == Type::Kind::Builtin &&
-            current.domain == "verifier_key")
+            protocol::setupKey(current.domain) == protocol::SetupKey::Verifier)
           for (const auto &slot : entry->setups)
             for (const auto &selection : slot.inputs) {
               if (!charge(selection.path.size() + 1, port.span))

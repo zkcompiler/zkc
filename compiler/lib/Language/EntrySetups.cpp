@@ -41,7 +41,8 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
                                input.span))
         return e;
       auto roles = leaf.roles();
-      if (choices.proof() && type->kind == "prover_key" &&
+      auto key = protocol::setupKey(type->kind);
+      if (choices.proof() && key == protocol::SetupKey::Prover &&
           is_contained(roles, choices.proof()->verifier))
         return failure("source.entry",
                        "proof prover keys must stay with the prover",
@@ -49,7 +50,7 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
       unsigned index = offset + leaf.nativeOffset;
       if (protocol::nativeSetupType(*type))
         expected.insert(index);
-      if (type->kind == "verifier_key") {
+      if (key == protocol::SetupKey::Verifier) {
         auto selected = observed->body;
         for (auto step : leaf.path)
           selected = selected->fields[step].layout;

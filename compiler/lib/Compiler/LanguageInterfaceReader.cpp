@@ -189,9 +189,11 @@ class Reader {
                        protocol::discardable(*type)};
     nativeLeaves.emplace(
         spelling.str(),
-        NativeLeaf{result, policy->shared, policy->constructible, policy->total,
-                   protocol::nativeSetupType(*type),
-                   type->kind == "verifier_key", type->kind == "prover_key"});
+        NativeLeaf{
+            result, policy->shared, policy->constructible, policy->total,
+            protocol::nativeSetupType(*type),
+            protocol::setupKey(type->kind) == protocol::SetupKey::Verifier,
+            protocol::setupKey(type->kind) == protocol::SetupKey::Prover});
     return result;
   }
   bool sameFields(ArrayRef<InterfaceField> a, ArrayRef<InterfaceField> b) {

@@ -81,8 +81,7 @@ public:
   }
   bool key(const InterfaceSchema &s) {
     return s.kind == Type::Kind::Builtin && s.leaves.size() == 1 &&
-           (protocol::typeKind(s.leaves[0]) == "prover_key" ||
-            protocol::typeKind(s.leaves[0]) == "verifier_key");
+           protocol::setupKey(protocol::typeKind(s.leaves[0])).has_value();
   }
   bool setup(const InterfaceSchema &s, unsigned depth = 0) {
     if (!charge(1, depth))

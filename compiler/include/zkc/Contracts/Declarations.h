@@ -45,6 +45,11 @@ struct TypeDeclaration {
 };
 llvm::ArrayRef<TypeDeclaration> typeDeclarations();
 const TypeDeclaration *typeDeclaration(llvm::StringRef name);
+/// The setup-key role of a type constructor: its catalog row's `setup`.
+inline std::optional<SetupKey> setupKey(llvm::StringRef constructor) {
+  const auto *declared = typeDeclaration(constructor);
+  return declared ? declared->setup : std::nullopt;
+}
 llvm::ArrayRef<std::string> domainSorts();
 llvm::ArrayRef<CapabilityDeclaration> capabilityDeclarations();
 llvm::ArrayRef<AssociatedMemberDeclaration> associatedMemberDeclarations();

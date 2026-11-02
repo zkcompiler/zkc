@@ -909,8 +909,7 @@ Expected<EntryBoundaryPlan> Layouts::entryBoundary(const Declaration &protocol,
       if (!selected)
         return selected.takeError();
       bool key = field.type.kind == Type::Kind::Builtin &&
-                 (field.type.domain == "verifier_key" ||
-                  field.type.domain == "prover_key");
+                 protocol::setupKey(field.type.domain).has_value();
       bool setup = false;
       for (const auto &slot : entry.setups)
         for (const auto &association : slot.inputs) {

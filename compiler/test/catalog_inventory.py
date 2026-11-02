@@ -1,6 +1,7 @@
 """Check the neutral catalog's exact schema and independent ABI witnesses."""
 import json
 from pathlib import Path
+import re
 import subprocess
 
 from cases import case, counted
@@ -65,6 +66,16 @@ def main():
             assert {"sourceData", "collection", "setup"} <= row.keys()
             assert row["collection"] is None or row["collection"].keys() == {"rank", "element"}
         assert {row["name"] for row in catalog["types"] if row["setup"]} == {"prover_key", "verifier_key"}
+    with case("every library finite and domain declaration names a catalog row"):
+        libraries = Path(__file__).resolve().parents[2] / "libraries"
+        named = {"finite": set(), "domain": set()}
+        for source in libraries.rglob("*.zkc"):
+            text = source.read_text()
+            for kind in named:
+                named[kind] |= set(re.findall(kind + r'\("([^"]+)"\)', text))
+        assert named["finite"] and named["domain"]
+        assert named["finite"] <= {row["identity"] for row in catalog["finiteDefinitions"]}
+        assert named["domain"] <= {row["identity"] for row in catalog["domainConstructors"]}
     types = {t["name"]: t for t in catalog["types"]}
     operations = {o["name"]: o for o in catalog["operations"]}
     with case("structured primitive profile preserves its independent consumer ABI"):
