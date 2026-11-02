@@ -315,6 +315,21 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     assert_eq!(empty.messages, 1);
     assert_eq!(empty.bytes, 0);
 
+    // A proof-byte allowance above the native proof limit refuses; it is
+    // never clamped to the limit.
+    assert_eq!(
+        host.clone()
+            .with_invocation_limits(
+                host.capacity,
+                host.external_work_limit,
+                host.ring_work_limit,
+                host.sequence_work_limit,
+                MAX_PROOF_BYTES + 1,
+            )
+            .err()
+            .unwrap(),
+        "native-proof-proof-limit"
+    );
     // Application calls attach one cumulative ledger; it must retain the same
     // raw format, including the single empty message, without native framing.
     for payload in [b"raw payload".as_slice(), b"".as_slice()] {
@@ -331,6 +346,7 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
                 host.sequence_work_limit,
                 host.proof_bytes_limit,
             )
+            .unwrap()
             .with_shared_ledger(ledger.clone());
         let report = shared
             .execute(&request(false, true, true), Invocation::Verify(payload))
@@ -400,6 +416,7 @@ fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
             host.sequence_work_limit,
             host.proof_bytes_limit,
         )
+        .unwrap()
         .with_shared_ledger(ledger);
     for producer in [true, false] {
         let mut imports = crate::host::setups::VerifierKeys::new(

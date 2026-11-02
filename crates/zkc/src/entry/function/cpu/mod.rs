@@ -23,9 +23,11 @@ use zkc_runtime::vm::{LogicalType, Program};
 pub struct FunctionOptions {
     pub limits: HostLimits,
     pub binding: crate::entry::BindingPolicy,
-    /// Maximum retained child call receipts, including failed calls.
+    /// Maximum retained child call receipts, including failed calls
+    /// ([`Allowances::JOURNAL_EVENTS`](crate::host::capacity::Allowances)).
     pub journal_events: usize,
-    /// Invocation-wide service allowances, reserved before issuing child roots.
+    /// Invocation-wide service allowances, reserved before issuing child roots
+    /// ([`Allowances::FUNCTION_SERVICE_DRAWS`](crate::host::capacity::Allowances)).
     pub service_draws: u64,
     /// Explicit retry authorization for producing proof children, by static
     /// deployment, as `ProofEntry::prove_attempts` takes it. Other children
@@ -37,8 +39,8 @@ impl Default for FunctionOptions {
         Self {
             limits: HostLimits::default(),
             binding: crate::entry::BindingPolicy::default(),
-            journal_events: 256,
-            service_draws: 64 * crate::entry::DEFAULT_DRAW_BUDGET,
+            journal_events: crate::host::capacity::Allowances::JOURNAL_EVENTS.default as usize,
+            service_draws: crate::host::capacity::Allowances::FUNCTION_SERVICE_DRAWS.default,
             attempts: BTreeMap::new(),
         }
     }

@@ -16,20 +16,47 @@ The CLI reports the effective record, including defaults:
 ```
 
 All entries are canonical decimal strings. The file is at most 4 KiB and has
-exact arity; unknown fields or tags refuse. Defaults are 65,536 elements,
-4,096 collection/aggregate group points, 16 MiB wire, 64 MiB per value/live
-values, 256 MiB cumulative fresh allocation, one million instructions,
-100,000 iterations and 4 GiB of logical work. Element/group counts may rise to
-1,048,576/32,768, and instructions and iterations to 2^32 (4,294,967,296) each.
-Other ceilings may only be lowered. The instruction and iteration counters are
-64-bit and charged one unit at a time after their bound check, so no selected
-budget can overflow them; loop indices and origin iterations are 64-bit too. The
-maximum of 2^32 matches the logical-work ceiling and keeps every reported counter
-an exact integer for JSON readers, including JavaScript Hosts. The one million
-instruction and 100,000 iteration figures are defaults, not limits of meaning: a
-Host authorizes more work explicitly in this record. Numeric elements and group
-points are counted across a complete nested message, not separately for each
-child collection. For
+exact arity; unknown fields or tags refuse. Each field names one Host policy
+allowance. A selection above the maximum refuses with `native-capacity-limit`;
+it is never clamped. Where the default equals the maximum, a Host can only
+lower the allowance.
+
+| Field | Unit | Default | Maximum | Scope |
+|---|---|---|---|---|
+| `elements` | Numeric elements in one collection or complete nested message | 65,536 | 1,048,576 | Operation |
+| `groups` | Group points in one collection or complete nested message | 4,096 | 32,768 | Operation |
+| `wire_bytes` | Bytes of one canonical wire frame | 16 MiB | 16 MiB | Operation |
+| `value_bytes` | Retained bytes of one native value | 64 MiB | 64 MiB | Operation |
+| `instructions` | Executed instructions | 1,000,000 | 2^32 | Runner |
+| `iterations` | Entered loop iterations | 100,000 | 2^32 | Runner |
+| `logical_bytes` | Logical work bytes | 4 GiB | 4 GiB (2^32) | Runner; invocation root |
+| `live_bytes` | Live retained payload bytes | 64 MiB | 64 MiB | Runner; invocation root |
+| `total_bytes` | Cumulative fresh allocation bytes | 256 MiB | 256 MiB | Runner; invocation root |
+
+Scopes are the extents over which a counter accumulates: one operation (a
+value, collection, frame, message, service, admission algorithm or call), one
+participant runner (cumulative across the attempts of one proof call), one
+attempt, or one invocation, whose
+[accounting root](#invocation-ledgers) runs from input preparation through
+output publication. The last three fields each select two separate allowances
+of the same size: every runner's own ledger, and the invocation root. Equal
+sizes never merge them: a runner's charges reach the root only when the runner
+shares it. Instructions and iterations are runner fuel only. A root that no
+runner shares counts no instruction; a Function's root, which its interpreter
+and attached children share, bounds them for the whole composite invocation.
+
+The instruction and iteration counters are 64-bit and charged one unit at a
+time after their bound check, so no selected budget can overflow them; loop
+indices and origin iterations are 64-bit too. The maximum of 2^32 matches the
+logical-work maximum and keeps every reported counter an exact integer for JSON
+readers, including JavaScript Hosts. Records, ledgers and reports carry these
+three counters and their selections as 64-bit integers, never as pointer-sized
+integers, so the 2^32 maxima keep their exact value on 32-bit targets such as
+wasm32, where 2^32 does not fit a pointer-sized integer. The one million
+instruction and 100,000 iteration figures are defaults, not limits of
+meaning: a Host authorizes more work explicitly in this record. Numeric
+elements and group points are counted across a complete nested message, not
+separately for each child collection. For
 the QAP matrix sequence, the nonzeros across A, B and C share the element ceiling:
 three matrices with 25,000 entries each exceed the default 65,536 aggregate
 limit even though each matrix fits individually. A zero group collection ceiling does not
@@ -56,15 +83,16 @@ service registry and runner budgets. Attempts cannot exceed these invocation
 ceilings. Signature-only deployment admission uses a dummy default backend;
 it loads no invocation payload and grants no capacity. Existing setup/provider
 limits and the separately configured external-work ledger retain their owners.
-Input admission and runtime execution use separate accounting ledgers: the same
-`total_bytes` setting bounds loading work and cumulative runtime fresh allocation
-independently. Canonical public values needed by the selected role are admitted
-once and reused after checking exact data-row bytes and physical layout. Other
-public values are checked and discarded. These ledgers do not bound total process
-memory or combined work across both phases. Byte
-preflight for native wire inputs precedes decoding; the loading ledger admits
-the decoded value afterward, so a reduced loading ceiling alone does not prevent
-a single decode allocation permitted by the backend value ceiling.
+Input loading charges the invocation root: its file reads and decoding as
+logical work, and the loaded pool as fresh and live bytes. The per-bind loading
+bounds (`LoadLimits`: pool bytes, value count and loading work) remain
+operation-scoped sublimits beside the root. Canonical public values needed by
+the selected role are admitted once and reused after checking exact data-row
+bytes and physical layout. Other public values are checked and discarded. The
+root and the runners' ledgers do not bound total process memory. Byte
+preflight for native wire inputs precedes decoding; loading admits the decoded
+value afterward, so a reduced loading ceiling alone does not prevent a single
+decode allocation permitted by the backend value ceiling.
 
 The [joint Host](../../runtime/bundles.md) uses the same capacity record. The group
 quota covers one collection or complete nested message. It is not
@@ -157,16 +185,18 @@ path. This completes under the default record.
 
 ## Shared invocation execution policy
 
-`ExecutionLedger::new(ValueBudget, WorkBudget)` adds optional policy across
-independent runners and Host scopes. Its cloneable handle shares atomic
-instruction, iteration, logical-byte and cumulative fresh-byte allowances. Each
+`ExecutionLedger::new(ValueBudget, WorkBudget)` is the handle of an
+[invocation root](#invocation-ledgers). Its cloneable handle shares atomic
+instruction, iteration, logical-byte and cumulative fresh-byte allowances
+across the Host scopes of one invocation and the runners that share it. Each
 runner keeps its own limits and backend-local retention/validation ledger.
-Every participant of a joint invocation, every proof attempt and every numerical
-child must receive a clone of the same handle from the Host. Creating a child
-never replenishes shared capacity. Native sequence, external and Ring work are
+When an invocation's runners share its root, as a Function's children do, every
+participant of a joint child, every proof attempt and every numerical child
+receives a clone of the same handle from the Host. Creating a child never
+replenishes shared capacity. Native sequence, external and Ring work are
 [Host allowances](#host-allowances); wire/proof transport, loading and scratch
-retain their existing owners. Hosts apply cumulative policy to those counters
-separately.
+also charge the root while keeping their own allowances. Hosts apply
+cumulative policy to those counters separately.
 
 Before loading inputs, each shared runner reserves its entire selected live-byte
 allowance. Simultaneously live parent and child runners therefore count together,
@@ -215,34 +245,90 @@ allocation identity cannot transfer authority.
 
 ## Invocation ledgers
 
-Every Entry kind creates one invocation ledger with the selected capacity record
-and charges the Host-side allocation and encoding it performs to that ledger:
+Every Entry kind keeps one invocation accounting root: an `ExecutionLedger`
+with the selected capacity record. It runs from input preparation through
+output publication. Before each effect, it charges the Host-side work and
+storage of:
 
-| Entry kind | Invocation ledger | Host-side charges |
+- request document decoding and request conversion;
+- setup imports, including reuse of a persistent import, and input loading
+  with its file reads;
+- common-input inspection, context production and canonical encoding;
+- the binding root, proof buffers of every attempt, received proof payloads,
+  and joint wire transport and payload decoding;
+- diagnostics: joint report rows and their shared dynamic paths, and Function
+  call receipts;
+- returned values the Host retains, result reconstruction and every result
+  encoding.
+
+| Entry kind | Root | Runners |
 |---|---|---|
-| Run | Created at preparation; a run started by an outer invocation uses the outer ledger | Request conversion; common-input inspection, context production and canonical encoding for all roles; result reconstruction; result encoding through `RunReport::encode_results` |
-| Proof | Created for each call; a proof started by an outer invocation uses the outer ledger | Request conversion; the binding root's canonical public rows and encoding; result reconstruction; result encoding through `ProofResult::encode_results`, which first replays the call's native usage, retained material and proof bytes into the same ledger |
-| Function | Created at preparation and shared with every reached child | Context, argument, journal, request, transport and result reservations; result encoding through `FunctionResultEncoder::encode_report` |
-| Backend participant | `InputBoundBackendRun::start_role` builds it from the selected value and work budgets and attaches it to the started Runner | Common-input inspection and canonical encoding |
+| Run | Created at preparation; a run started by an outer invocation uses the outer root | Each participant keeps its own budget beside the root |
+| Proof | Created at the call's preflight (`preflight_call`, `preflight_document_call`) or at `prove`, `verify` or `prove_attempts`, and kept by `ProofCall`, `ProofReport` and `ProofResult`; a proof started by an outer invocation uses the outer root | The selected role's runner, and each attempt's runner, keep their own budgets beside the root |
+| Function | Created at preparation and shared with every reached child | Child runners share the root; each receives a partitioned live allowance |
+| Backend run | `BackendRun::execute` creates it from the selected `RunLimits`; the report keeps it | Each participant keeps its own budget beside the root |
+| Backend participant | `InputBoundBackendRun::start_role` creates one for each started participant, an invocation of its own as in an independent process | The started runner shares it |
+
+Per-runner budgets are sublimits beside the root. A runner that does not share
+the root keeps its own instruction and iteration fuel and its own logical-work
+and retained-value ledger, so a roster never pools fuel. Its Host and the
+runner exchange custody at the runner's boundaries. Loaded inputs pass to the
+runner when it starts, and the root's reservation of them ends there. Returned
+values pass back when it finishes. The Host then reserves their retained bytes
+in the root as live bytes without a fresh charge, because custody moves
+without a new allocation. If the root cannot hold them, the Host releases them
+and the invocation fails with `bundle-output-limit` (run) or
+`native-output-limit` (proof). A runner that shares the root reserves its whole
+live allowance there; the reservation travels with its returned values.
+
+Retained results keep their reservations: `RunReport`, `ProofReport`,
+`ProofResult` and `FunctionReport` hold every live allowance of their values,
+proof bytes and imports until they are dropped. Each encoding of a retained
+result (`RunReport::encode_results`, `ProofResult::encode_results` and
+`encode_results_owned`, `FunctionResultEncoder::encode_report`) is a new
+buffer: it charges that buffer to the root and keeps its live allowance until
+the buffer is dropped. Repeating an encoding charges the new buffer and nothing
+else. An owned encoding keeps the result, and so its root and reservations,
+alive for deferred readers such as browser getters, and every copy a reader
+takes is a new allocation charged to the same root. Publication therefore has
+no separate allowance.
+
+Diagnostics are charged where they are retained and where they are rendered.
+Joint report rows and their shared paths, and Function call receipts, hold
+their live bytes in the root while the report or journal exists. Rendering a
+joint run's diagnostics (`HostReport::diagnostics`) repeats each row's control
+path, so the Host first charges a bound proportional to the rows, their path
+strings and iteration numbers, the roles and the retained records; when the
+root cannot afford it, the rendering is the bounded summary with
+`"diagnostics": "omitted"`. `HostReport::encode_outputs` charges each encoding's
+bound and holds its live bytes with the encoding; one the root cannot afford is
+unavailable with `bundle-output-limit`. A proof report's diagnostics are bounded
+by its attempt maximum and fixed-size records. Diagnostics that a Host never
+renders charge nothing beyond their retained storage.
+
+Reusing a persistent setup import avoids decoding it again, but each invocation
+still charges its own retained snapshot, 16 bytes per canonical byte plus 4,096,
+to its root. Reuse never resets a cumulative charge or grants authority. Within
+one invocation, a second import of identical bytes under the same pin shares the
+first import and its charge.
 
 Request conversion charges the named values' description bytes as logical work
 and the converted operand list as fresh allocation, before native preparation;
-a refusal is `entry-request-limit` at `Preparation`. Result reconstruction
-charges every returned native value's retained bytes as logical work and 128
-fresh bytes per schema node of the named result before it allocates; a refusal
-is the report's `entry-output-limit`. A standalone proof's runner keeps its own
-budget beside the call's ledger, as a standalone run's participants do.
+a refusal is `entry-request-limit` at `Preparation`. Decoded request documents
+are charged as fresh allocation and held live until conversion. Result
+reconstruction charges every returned native value's retained bytes as logical
+work and 128 fresh bytes per schema node of the named result before it
+allocates, and the report holds the nodes' live bytes; a refusal is the
+report's `entry-output-limit`.
 
 Common-input inspection charges each inspected value's retained bytes as logical
 work before validating it. A value observation charges its canonical encoding
 bound as fresh allocation and holds that live allowance until the comparison
 ends. All roles checked for one invocation draw on the same allowance; no
-allowance restarts per role. Child material is charged once, when a reached
-child loads it: Function preparation validates every deployment's context,
-including dormant ones, against a separate allowance with the same capacity
-that it discards before the call. Participants of a standalone run keep their
-per-runner budgets beside the invocation ledger, so the live allowance is not
-partitioned across a roster. Input loading keeps its own admission ledger.
+allowance restarts per role. Function preparation validates every deployment's
+context, including deployments the call never reaches; that validation decodes
+and imports real material, so it charges the root, and a reached child's later
+loading is a second real allocation charged again.
 
 ## Byte construction
 
@@ -254,19 +340,29 @@ while the full operand-read charge accounts for reading its fragments.
 
 ## Host allowances
 
-The Host policy record owns each native work allowance that is not an
-instruction, iteration or retained-value budget. Each has one default and one
-maximum, defined once (`run::Allowances`); a selection above the maximum
-refuses without clamping:
+The Host policy record owns each native work allowance that is not a field of
+the capacity record. Each names its unit and scope and has one default and one
+maximum, defined once (`run::Allowances`, with `run::Scope`); a selection above
+the maximum refuses without clamping:
 
-| Allowance | Unit | Default | Maximum | Selected by |
-|---|---|---|---|---|
-| Ring work | Ring expression substitution work per role | 2^28 | 2^28 | `HostLimits::ring_work`, `ProofOptions::ring_work` |
-| Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
-| External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | `HostLimits::external_work`, `ProofOptions::external_work` |
-| Service draws | Draws of one managed service or transcript | 1,000,000 | 1,000,000 | Request service budgets and `transcript_budget` |
-| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 1,000,000 | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::work`) |
-| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::descriptor_bytes`) |
+| Allowance | Unit | Default | Maximum | Scope | Selected by |
+|---|---|---|---|---|---|
+| Ring work | Ring expression substitution work units | 2^28 | 2^28 | Runner (per role) | `HostLimits::ring_work`, `ProofOptions::ring_work` |
+| Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
+| External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::external_work`, `ProofOptions::external_work` |
+| Service draws | Draws | 1,000,000 | 1,000,000 | Operation (one managed service or transcript) | Request service budgets and `transcript_budget` |
+| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 1,000,000 | Operation | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::work`) |
+| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface` (`InterfaceLimits::descriptor_bytes`) |
+| Dispatches | Joint and Function dispatch occurrences, including repeated loop steps | 32,768 | 32,768 | Invocation | `HostLimits::steps` |
+| Function service draws | Draws reserved for children before their roots are issued | 64,000,000 | 32,768,000,000 | Invocation | `FunctionOptions::service_draws` |
+| Journal events | Retained Function call receipts, including failed calls | 256 | 4,096 | Invocation | `FunctionOptions::journal_events` |
+| Attempts | Completed or discarded trials of one producing proof call | 1 | 1,024 | Invocation | `AttemptOptions::count`, `FunctionOptions::attempts` |
+| Attempt proof bytes | Proof buffer bytes of one attempt, including framing | 16 MiB | 16 MiB | Attempt | `AttemptOptions::proof_bytes` |
+
+The Function service-draw maximum is one maximal service allowance for every
+dispatch a Function can make. The joint Host's message, cumulative wire and
+report storage allowances are listed with
+[joint dispatch](joint.md#joint-dispatch-and-handoff).
 
 A Function takes the same record in `FunctionOptions::limits`. Each reached child receives what remains of each
 allowance after earlier children, divided equally across a joint roster; a child

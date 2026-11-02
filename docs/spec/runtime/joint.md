@@ -299,26 +299,48 @@ receiver exposure stop or decoder Limit/Backend leaves the slot occupied. An
 accepted `complete_receive`, including Decode or runtime Limit, clears it once;
 an API refusal preserves it. The report owns any payload still pending at exit.
 
-Default driver caps are 32768 dispatches, 4096 bytes per wire payload or hook
-replacement, 16 MiB accumulated original plus replacement bytes, and a 64 MiB
-report allowance (`RunLimits.report_bytes`). Hosts may lower these caps. The
-report allowance charges every reached step's fixed record and, when the first
-step of a region references it, that region's shared path: its elements, their
-site and alternative strings, its iteration numbers and both allocation headers.
-`Report.report_bytes` records the charge. A step that would exceed the allowance
-fails as `DriverFailed(Limit)` with detail `joint-report-limit` before it is
-exposed; a region no step reaches retains and charges nothing. `ValueBudget` separately controls runner retention; the joint
-driver requires its live and cumulative charges to fit 64 MiB and 256 MiB.
-`RunLimits.work` separately selects instruction, iteration and logical-work
-budgets: by default one million instructions, 100,000 iterations and 4 GiB, and
-at most 2^32 instructions, 2^32 iterations and 4 GiB. Requests above
-any installed driver ceiling refuse before entry and preserve caller-owned inputs.
-`Report.limits` records the requested policy without silent clamping. The lower-level
-`Runner` refuses instruction, iteration and logical-work allowances above those
-maxima but permits configurable live and cumulative retained-value budgets. Its 64 MiB
-individual-value ceiling remains independent of those aggregate budgets.
-The driver reserves reached-step and result-port capacity before any entry,
-for at most as many steps as the report allowance can record.
+The driver allowances in `RunLimits` are:
+
+| Allowance | Unit | Default | Maximum | Scope |
+|---|---|---|---|---|
+| `steps` | Dispatched occurrences, including returns and repeated loop steps | 32,768 | 32,768 | Invocation |
+| `wire_bytes` | Bytes of one wire payload or hook replacement | 4,096 | 4,096 | Operation (one message) |
+| `total_wire_bytes` | Accumulated original plus replacement bytes | 16 MiB | 16 MiB | Invocation |
+| `report_bytes` | Retained report storage | 64 MiB | 64 MiB | Invocation |
+| `values` | Live and cumulative fresh payload bytes | 64 MiB, 256 MiB | 64 MiB, 256 MiB | Runner |
+| `work` | Instructions, iterations and logical-work bytes | 1,000,000, 100,000, 4 GiB | 2^32, 2^32, 4 GiB | Runner |
+
+Hosts may lower the allowances whose default is their maximum. The report
+allowance charges every reached step's fixed record and, when the first step of
+a region references it, that region's shared path: its elements, their site
+and alternative strings, its iteration numbers and both allocation headers.
+`Report.report_bytes` records the charge. A step that would exceed the
+allowance fails as `DriverFailed(Limit)` with detail `joint-report-limit`
+before it is exposed; a region no step reaches retains and charges nothing.
+Requests above any installed driver maximum refuse before entry and preserve
+caller-owned inputs. `Report.limits` records the requested policy without
+silent clamping. The lower-level `Runner` refuses instruction, iteration and
+logical-work allowances above those maxima but permits configurable live and
+cumulative retained-value budgets. Its 64 MiB individual-value ceiling remains
+independent of those aggregate budgets. The driver reserves result-port
+capacity before any entry.
+
+`run_with_ledgers` takes two optional ledgers. A runner ledger, when present,
+is shared by every runner, which reserves its whole live allowance there. A
+Host ledger is the [invocation root](capacity.md#invocation-ledgers): it
+charges wire transport, the logical work and decoding reservation of every
+received payload, and report storage. Each record, with its region's shared
+path when it is the region's first, is charged to the root before it is
+stored, so the report holds exactly `Report.report_bytes` live in the root; a
+record the root cannot afford fails as `joint-report-limit` before its step is
+exposed.
+`Report::invocation_ledger` exposes the root, and the report keeps those live
+allowances until it is dropped. A runner
+without a shared ledger keeps its separate budget. `Report::unreserved_output_bytes`
+names the returned values whose runner kept no shared reservation, which a Host
+retaining the report reserves in its root; `Report::release_outputs` drops
+returned values a Host does not keep. `run_with_ledger` passes one ledger as
+both.
 Cancellation includes the bounded host reason and can occur between send and
 receive; the committed message remains in the resulting report. This policy has no asynchronous queue or readiness
 scheduler.
@@ -449,7 +471,8 @@ budgets at most one million. A resource row's `index` names the original input
 position for a capability or service position for a service, as shown in `layout`.
 Names/session are 1–128 ASCII alphanumeric or
 `_.-` characters. The entire input document is bounded to 16 MiB; key loading
-and retained values share an invocation-wide admission ledger across roles.
+and retained values of every role charge the run's
+[invocation root](capacity.md#invocation-ledgers).
 Each planned resource reserves the backend's conservative capability byte charge.
 The installed host refuses transcript-typed entry inputs; it does not invent
 an authenticated transcript root from caller bytes. Custom interpreter clients

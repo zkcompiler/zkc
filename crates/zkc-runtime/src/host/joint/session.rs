@@ -208,7 +208,12 @@ struct Execution<B: WireBackend> {
     slots: Vec<Slot<B>>,
     report: Report<B>,
     limits: RunLimits,
-    shared_ledger: Option<crate::vm::ExecutionLedger>,
+    /// Report records the selected step and report allowances admit.
+    records: usize,
+    /// Shared by every runner, when the invocation pools runner charges.
+    runner_ledger: Option<crate::vm::ExecutionLedger>,
+    /// The invocation root: wire transport, decoding and report storage.
+    host_ledger: Option<crate::vm::ExecutionLedger>,
 }
 enum StepResult {
     Completed,
@@ -241,16 +246,42 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
     limits: RunLimits,
     hooks: &mut H,
 ) -> Result<Report<B>, StartError<B>> {
-    run_with_ledger(bundle, session, inputs, limits, hooks, None)
+    run_with_ledgers(bundle, session, inputs, limits, hooks, None, None)
 }
 /// Joint runners share cumulative charging before any owner begins execution.
+/// The same ledger is also the invocation root of the Host's wire transport,
+/// decoding and report storage.
 pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
+    bundle: &Bundle,
+    session: &str,
+    inputs: Vec<RoleInput<B>>,
+    limits: RunLimits,
+    hooks: &mut H,
+    shared_ledger: Option<crate::vm::ExecutionLedger>,
+) -> Result<Report<B>, StartError<B>> {
+    run_with_ledgers(
+        bundle,
+        session,
+        inputs,
+        limits,
+        hooks,
+        shared_ledger.clone(),
+        shared_ledger,
+    )
+}
+/// Run with separate runner and Host accounting. `runners`, when present, is
+/// shared by every runner, which then reserves its live allowance there.
+/// `host` is the invocation root: it charges wire transport, received payload
+/// decoding and report storage, and the report keeps its live allowances.
+/// Runners without a shared ledger keep their separate per-runner budgets.
+pub fn run_with_ledgers<B: WireBackend, H: Hooks<B>>(
     bundle: &Bundle,
     session: &str,
     mut inputs: Vec<RoleInput<B>>,
     limits: RunLimits,
     hooks: &mut H,
-    shared_ledger: Option<crate::vm::ExecutionLedger>,
+    runners: Option<crate::vm::ExecutionLedger>,
+    host: Option<crate::vm::ExecutionLedger>,
 ) -> Result<Report<B>, StartError<B>> {
     if let Err(failure) = limits.validate() {
         return Err(StartError { failure, inputs });
@@ -302,17 +333,16 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     }
     let mut slots = Vec::new();
     let mut rows = Vec::new();
-    let mut reached = Vec::new();
     let mut backends = Vec::new();
     // Each reached record charges at least its own size, so the report
-    // allowance bounds this reservation as well as the step count.
+    // allowance bounds the record storage as well as the step count. Records
+    // are stored on demand, each charged to the invocation root first.
     let records = limits
         .steps
         .min(limits.report_bytes / std::mem::size_of::<Reached>());
     if slots.try_reserve_exact(inputs.len()).is_err()
         || rows.try_reserve_exact(inputs.len()).is_err()
         || backends.try_reserve_exact(inputs.len()).is_err()
-        || reached.try_reserve_exact(records).is_err()
     {
         return refuse(FailureKind::Limit, "report-allocation", inputs);
     }
@@ -352,12 +382,14 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
         wire_live: None,
         slots,
         limits,
-        shared_ledger,
+        records,
+        runner_ledger: runners,
+        host_ledger: host.clone(),
         report: Report {
             session: session.into(),
             limits,
             outcome: Outcome::Completed,
-            reached,
+            reached: Vec::new(),
             report_bytes: 0,
             wire: WireUsage::default(),
             pending: None,
@@ -365,6 +397,8 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
             backends,
             retained: Vec::new(),
             wire_live: None,
+            storage_live: Vec::new(),
+            invocation: host,
         },
     };
     let outcome = execution
@@ -373,6 +407,25 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     Ok(execution.finalize(outcome, hooks))
 }
 impl<B: WireBackend> Execution<B> {
+    /// Charge one report record, with its region's shared path when this is the
+    /// region's first record, to the invocation root before storing it, and
+    /// keep the live allowance with the report: the root then holds exactly
+    /// `report_bytes` for the report's storage.
+    fn retain_record(&mut self, charge: usize) -> bool {
+        if self.report.reached.len() >= self.records
+            || self.report.reached.try_reserve(1).is_err()
+            || self.report.storage_live.try_reserve(1).is_err()
+        {
+            return false;
+        }
+        match crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), charge) {
+            Ok(live) => {
+                self.report.storage_live.extend(live);
+                true
+            }
+            Err(_) => false,
+        }
+    }
     fn initialize(&mut self, bundle: &Bundle, session: &str) -> Option<Outcome> {
         for (index, slot) in self.slots.iter_mut().enumerate() {
             let backend = slot.backend.take().expect("unstarted backend");
@@ -385,7 +438,7 @@ impl<B: WireBackend> Execution<B> {
                 std::mem::take(&mut slot.inputs),
                 self.limits.values,
                 self.limits.work,
-                self.shared_ledger.clone(),
+                self.runner_ledger.clone(),
             ) {
                 Ok(runner) => {
                     let stopped = runner.stop().is_some();
@@ -656,7 +709,7 @@ impl<B: WireBackend> Execution<B> {
         else {
             return Some(Outcome::DriverFailed(report_limit()));
         };
-        if self.report.reached.len() == self.report.reached.capacity() {
+        if !self.retain_record(charge) {
             return Some(Outcome::DriverFailed(report_limit()));
         }
         self.report.report_bytes = bytes;
@@ -757,7 +810,7 @@ impl<B: WireBackend> Execution<B> {
                 // Both allocations coexist until the replacement is accepted.
                 // Retained storage includes spare Vec capacity, not just wire bytes.
                 let replacement_live = crate::host::wire::reserve_allocation(
-                    self.shared_ledger.as_ref(),
+                    self.host_ledger.as_ref(),
                     bytes.capacity(),
                 )
                 .map_err(|_| limit())?;
@@ -909,7 +962,7 @@ impl<B: WireBackend> Execution<B> {
                 // bytes, not bytes sent. Only an installed fixed width can decide
                 // this limit before encoding. Dynamic frames are fully reserved
                 // here and checked below before committing the send.
-                if self.shared_ledger.is_some()
+                if self.host_ledger.is_some()
                     && runner
                         .backend()
                         .fixed_wire_size(&value.physical_type())
@@ -926,7 +979,7 @@ impl<B: WireBackend> Execution<B> {
                     return Err(limit());
                 }
                 let wire_live =
-                    crate::host::wire::reserve_allocation(self.shared_ledger.as_ref(), bound)
+                    crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), bound)
                         .map_err(|_| limit())?;
                 let bytes = runner.backend().encode_wire(&value).map_err(codec)?;
                 if bytes.len() > bound {
@@ -985,7 +1038,7 @@ impl<B: WireBackend> Execution<B> {
                     .pending
                     .as_ref()
                     .ok_or_else(|| contract("empty-handoff"))?;
-                if let Some(ledger) = &self.shared_ledger {
+                if let Some(ledger) = &self.host_ledger {
                     ledger
                         .charge(
                             WorkBudget {
@@ -997,18 +1050,16 @@ impl<B: WireBackend> Execution<B> {
                         )
                         .map_err(|_| limit())?;
                 }
-                let (_decoded_live, invalid) = match runner
-                    .backend()
-                    .decoding_bound(ty, &pending.bytes)
-                {
-                    Ok(bound) => (
-                        crate::host::wire::reserve_allocation(self.shared_ledger.as_ref(), bound)
-                            .map_err(|_| limit())?,
-                        None,
-                    ),
-                    Err(WireError::Invalid(reason)) => (None, Some(reason)),
-                    Err(error) => return Err(codec(error)),
-                };
+                let (_decoded_live, invalid) =
+                    match runner.backend().decoding_bound(ty, &pending.bytes) {
+                        Ok(bound) => (
+                            crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), bound)
+                                .map_err(|_| limit())?,
+                            None,
+                        ),
+                        Err(WireError::Invalid(reason)) => (None, Some(reason)),
+                        Err(error) => return Err(codec(error)),
+                    };
                 let decoded = match invalid {
                     Some(reason) => Err(reason),
                     None => match runner.backend().decode_wire(ty, &pending.bytes) {

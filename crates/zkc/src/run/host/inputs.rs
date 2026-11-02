@@ -328,9 +328,10 @@ pub(super) fn prepare<'a>(
         }
     }
     let policy = host.limits.capacity.backend();
+    // Loading, its file reads and setup cache hits charge the invocation root.
     let mut admission = Admission::new(host.limits.capacity.loading())?
         .with_material(imports.material())
-        .with_shared_ledger(host.shared_ledger.clone())
+        .with_shared_ledger(Some(invocation.clone()))
         .with_retained_inputs(host.retained_inputs);
     // Charge setup scans before importing even receive-only material.
     for bytes in request.setups.values() {
@@ -452,12 +453,7 @@ pub(super) fn prepare<'a>(
     // Charge the entire invocation, not a separate resettable budget per role.
     // Key files are frozen and imported only after every declaration is checked.
     // All roles share this native codec policy and authorized key registry.
-    let (loaded, loading) = if let Some(ledger) = &host.shared_ledger {
-        let (values, guard) = admission.load_shared(&roles[0].1, &policy, ledger, 0)?;
-        (values, Some(guard))
-    } else {
-        (admission.load(&roles[0].1, &policy)?, None)
-    };
+    let (loaded, loading) = admission.load_shared(&roles[0].1, &policy, &invocation, 0)?;
     let roles = roles
         .into_iter()
         .map(

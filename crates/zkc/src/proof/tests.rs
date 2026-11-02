@@ -483,6 +483,54 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert!(report.outcome.is_err());
             assert_eq!(report.attempts.len(), 3);
             assert!(report.attempts.iter().all(|a| a.decision == Ok(false)));
+
+            // Every attempt charges the call's one invocation root for its
+            // proof buffer, while each attempt's runner keeps its own fuel.
+            let rooted = |root: &zkc_runtime::vm::ExecutionLedger, attempts| {
+                let policy = AttemptPolicy {
+                    limits: zkc_runtime::attempt::Limits {
+                        attempts,
+                        proof_bytes: MAX_PROOF_BYTES,
+                    },
+                    ..policy.clone()
+                };
+                execute(
+                    &repeated.clone().with_invocation_ledger(root.clone()),
+                    &inputs,
+                    Invocation::Attempts(&policy),
+                )
+                .unwrap()
+            };
+            let one = repeated.capacity.invocation_ledger();
+            assert_eq!(rooted(&one, 1).attempts.len(), 1);
+            let three = repeated.capacity.invocation_ledger();
+            let counted = rooted(&three, 3);
+            assert_eq!(counted.attempts.len(), 3);
+            let (one, three) = (one.snapshot(), three.snapshot());
+            assert!(counted.usage.instructions > 0);
+            assert_eq!(three.instructions, 0);
+            // Discarded attempts keep their charges: each retry adds the same
+            // buffer charge to the cumulative fresh bytes.
+            let attempt = (three.total_value_bytes - one.total_value_bytes) / 2;
+            assert!(attempt > 0);
+            assert_eq!(three.total_value_bytes, one.total_value_bytes + 2 * attempt);
+            // A root that affords only two attempts' buffers refuses the third
+            // attempt; the runners' own budgets are untouched.
+            let tight = zkc_runtime::vm::ExecutionLedger::new(
+                zkc_runtime::vm::ValueBudget {
+                    total_bytes: one.total_value_bytes + attempt + attempt / 2,
+                    ..repeated.capacity.values
+                },
+                repeated.capacity.work,
+            );
+            let refused = rooted(&tight, 3);
+            assert!(refused.outcome.is_err());
+            assert_eq!(refused.attempts.len(), 3);
+            assert_eq!(refused.attempts[1].decision, Ok(false));
+            assert!(refused.attempts[2].decision.is_err());
+            assert!(
+                tight.snapshot().total_value_bytes <= one.total_value_bytes + attempt + attempt / 2
+            );
             if let Some(counts) = report.execution_counts.json() {
                 assert_eq!(counts["events"]["created_frames"], 6);
                 assert_eq!(counts["events"]["backend_enter_calls"], 6);

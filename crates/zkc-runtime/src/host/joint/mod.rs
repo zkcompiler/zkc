@@ -13,4 +13,5 @@ pub use report::{
 };
 pub use session::{
     Exchange, Hooks, NoHooks, RoleInput, RunLimits, StartError, run, run_with_ledger,
+    run_with_ledgers,
 };

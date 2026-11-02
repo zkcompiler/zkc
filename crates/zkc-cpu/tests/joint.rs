@@ -655,6 +655,9 @@ fn native_measurement_preserves_malformed_receive_outcomes_with_shared_capacity(
         assert!(report.pending.is_none());
         assert_eq!(report.roles[1].usage.unwrap().instructions, 1);
         if let Some(ledger) = ledger {
+            // Only the report's records stay live while the report exists.
+            assert_eq!(ledger.snapshot().live_reserved_bytes, report.report_bytes);
+            drop(report);
             assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         }
     }

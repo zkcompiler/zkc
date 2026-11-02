@@ -674,8 +674,8 @@ impl NativeDeployment {
         self.shared_ledger = Some(ledger);
         self
     }
-    /// Charge one standalone invocation's Host-side work, such as its binding
-    /// root encoding, to `ledger` while runners keep their own budgets.
+    /// Charge one standalone invocation's Host-side work to its invocation
+    /// root `ledger`, while runners keep their own budgets.
     pub(crate) fn with_invocation_ledger(
         mut self,
         ledger: zkc_runtime::vm::ExecutionLedger,
@@ -683,13 +683,27 @@ impl NativeDeployment {
         self.invocation_ledger = Some(ledger);
         self
     }
-    /// The ledger that charges Host-side encoding: the shared ledger of an
-    /// outer invocation, otherwise this invocation's own ledger, if any.
+    /// The invocation root that charges Host-side work: the shared ledger of
+    /// an outer invocation, otherwise this invocation's own root, if any.
     pub(crate) fn host_ledger(&self) -> Option<&zkc_runtime::vm::ExecutionLedger> {
         self.shared_ledger
             .as_ref()
             .or(self.invocation_ledger.as_ref())
     }
+    /// This deployment with an invocation root: the attached one, or a new
+    /// root with the selected capacity for a low-level call.
+    fn rooted(&self) -> std::borrow::Cow<'_, Self> {
+        if self.host_ledger().is_some() {
+            std::borrow::Cow::Borrowed(self)
+        } else {
+            std::borrow::Cow::Owned(
+                self.clone()
+                    .with_invocation_ledger(self.capacity.invocation_ledger()),
+            )
+        }
+    }
+    /// Select one invocation's allowances. A proof-byte allowance above the
+    /// native proof limit refuses rather than being clamped.
     pub(crate) fn with_invocation_limits(
         mut self,
         capacity: Capacity,
@@ -697,13 +711,16 @@ impl NativeDeployment {
         ring: u64,
         sequence: u64,
         proof_bytes: usize,
-    ) -> Self {
+    ) -> Result<Self> {
+        if proof_bytes > MAX_PROOF_BYTES {
+            return Err("native-proof-proof-limit".into());
+        }
         self.capacity = capacity;
         self.external_work_limit = external;
         self.ring_work_limit = ring;
         self.sequence_work_limit = sequence;
-        self.proof_bytes_limit = proof_bytes.min(MAX_PROOF_BYTES);
-        self
+        self.proof_bytes_limit = proof_bytes;
+        Ok(self)
     }
     /// Execute immutable role inputs with an explicit production, verification
     /// or retry request. Public inputs and setups remain application-authorized.
@@ -719,7 +736,8 @@ impl NativeDeployment {
             self.capacity.backend().ark_bounds(),
             self.installation().clone(),
         );
-        self.execute_prepared(input, invocation, &mut imports)
+        self.rooted()
+            .execute_prepared(input, invocation, &mut imports)
     }
     /// Deterministic provider controls for tests. No production command or file
     /// format selects this feature-gated entry point.
@@ -735,7 +753,8 @@ impl NativeDeployment {
             self.capacity.backend().ark_bounds(),
             self.installation().clone(),
         );
-        self.execute_with_imports(input, invocation.plan(self)?, &entropy, &mut imports)
+        let rooted = self.rooted();
+        rooted.execute_with_imports(input, invocation.plan(self)?, &entropy, &mut imports)
     }
     pub(crate) fn execute_prepared(
         &self,
@@ -753,7 +772,8 @@ impl NativeDeployment {
             self.capacity.backend().ark_bounds(),
             self.installation().clone(),
         );
-        self.prepare_inputs(input, invocation.is_producer(), &mut imports)
+        self.rooted()
+            .prepare_inputs(input, invocation.is_producer(), &mut imports)
             .map(|_| ())
     }
     fn selected_role(&self, producing: bool) -> Result<&EntryRole> {
@@ -770,7 +790,8 @@ impl NativeDeployment {
         producer: bool,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<inputs::Prepared> {
-        imports.set_ledger(self.shared_ledger.clone());
+        // Setup imports, including persistent cache hits, charge the root.
+        imports.set_ledger(self.host_ledger().cloned());
         let role = self.selected_role(producer)?;
         self.cpu
             .enter(|| inputs::prepare(self, input, role, producer, imports))
@@ -798,7 +819,7 @@ impl NativeDeployment {
             planned,
             root,
             binding,
-            loading,
+            mut loading,
             encoding,
         } = self.prepare_inputs(input, proof.is_none(), imports)?;
         let policy = self.capacity.backend();
@@ -856,7 +877,7 @@ impl NativeDeployment {
             {
                 let ty = &role.inputs.last().expect("admitted codec input").1;
                 retained.extend(zkc_runtime::host::wire::reserve_allocation(
-                    self.shared_ledger.as_ref(),
+                    self.host_ledger(),
                     proof.len().saturating_add(512),
                 )?);
                 values.push(
@@ -884,6 +905,8 @@ impl NativeDeployment {
             }
             Ok(values)
         })();
+        // The operands now hold the loaded values; the Host keeps no copy.
+        drop(loaded);
         let mut report = NativeProofReport {
             verification: None,
             retained,
@@ -928,101 +951,118 @@ impl NativeDeployment {
                     &mut report,
                 );
             }
-            Ok(values) => match Runner::new_for_role_with_ledger(
-                self.entry.admitted(),
-                self.entry.entry(),
-                &role.role,
-                "native-proof",
-                backend,
-                values,
-                zkc_runtime::vm::ValueBudget {
-                    live_bytes: self
-                        .capacity
-                        .values
-                        .live_bytes
-                        .saturating_sub(loading.as_ref().map_or(0, |v| v.bytes())),
-                    ..self.capacity.values
-                },
-                self.capacity.work,
-                self.shared_ledger.clone(),
-            ) {
-                Err(failed) => {
-                    report.outcome = Err(failed.error.to_string());
-                    report.usage = failed.usage;
-                    backend = failed.backend;
-                }
-                Ok(mut runner) => {
-                    match proof {
-                        None => {
-                            let produced = self.prepared_call(&mut runner, role, |runner| {
-                                driver::produce(
-                                    runner,
-                                    &binding,
-                                    self.transport(),
-                                    self.proof_bytes_limit,
-                                    self.shared_ledger.clone(),
-                                )
-                            });
-                            retain_driver_stop(&mut report, &produced);
-                            report.outcome = produced
-                                .outcome
-                                .map(|p| {
-                                    let (proof, outputs, retained) = p.into_parts();
-                                    report.retained.extend(retained);
-                                    report.outputs = Some(self.original_outputs(role, outputs));
-                                    proof
-                                })
-                                .map_err(|e| driver_failure(&e));
-                            report.messages = produced.messages;
-                            report.bytes = produced.bytes;
-                            report.cancelled = produced.cancelled.is_some();
-                        }
-                        Some(proof) => {
-                            let validated = self.prepared_call(&mut runner, role, |runner| {
-                                driver::validate(
-                                    runner,
-                                    proof,
-                                    &binding,
-                                    self.transport(),
-                                    self.entry.acceptance(),
-                                    self.shared_ledger.clone(),
-                                )
-                            });
-                            retain_driver_stop(&mut report, &validated);
-                            report.verification = match &validated.outcome {
-                                Ok(_) => Some(VerificationDecision::Accepted),
-                                Err(driver::ArtifactFailure::Rejected) => {
-                                    Some(VerificationDecision::Rejected)
-                                }
-                                Err(_) => None,
-                            };
-                            report.outcome = validated
-                                .outcome
-                                .map(|values| {
-                                    report.outputs = Some(self.original_outputs(role, values));
-                                    Vec::new()
-                                })
-                                .map_err(|e| driver_failure(&e));
-                            report.messages = validated.messages;
-                            report.bytes = validated.bytes;
-                            report.cancelled = validated.cancelled.is_some();
-                        }
+            Ok(values) => {
+                let started = Runner::new_for_role_with_ledger(
+                    self.entry.admitted(),
+                    self.entry.entry(),
+                    &role.role,
+                    "native-proof",
+                    backend,
+                    values,
+                    zkc_runtime::vm::ValueBudget {
+                        // A runner sharing the root reserves its whole live
+                        // allowance there beside the loaded inputs.
+                        live_bytes: self.capacity.values.live_bytes.saturating_sub(
+                            loading
+                                .as_ref()
+                                .filter(|_| self.shared_ledger.is_some())
+                                .map_or(0, |v| v.bytes()),
+                        ),
+                        ..self.capacity.values
+                    },
+                    self.capacity.work,
+                    self.shared_ledger.clone(),
+                );
+                self.standalone_boundary(&mut loading);
+                match started {
+                    Err(failed) => {
+                        report.outcome = Err(failed.error.to_string());
+                        report.usage = failed.usage;
+                        backend = failed.backend;
                     }
-                    report.usage = runner.usage();
-                    report.execution_counts = runner.execution_counts();
-                    report.return_at = runner.early_return().map(|(o, s)| (o.clone(), s.into()));
-                    let (returned_backend, outputs) = runner.into_retained_outputs();
-                    report.retained_outputs.extend(outputs);
-                    backend = returned_backend;
+                    Ok(mut runner) => {
+                        match proof {
+                            None => {
+                                let produced = self.prepared_call(&mut runner, role, |runner| {
+                                    driver::produce(
+                                        runner,
+                                        &binding,
+                                        self.transport(),
+                                        self.proof_bytes_limit,
+                                        self.host_ledger().cloned(),
+                                    )
+                                });
+                                retain_driver_stop(&mut report, &produced);
+                                report.outcome = produced
+                                    .outcome
+                                    .map(|p| {
+                                        let (proof, outputs, retained) = p.into_parts();
+                                        report.retained.extend(retained);
+                                        report.outputs = Some(self.original_outputs(role, outputs));
+                                        proof
+                                    })
+                                    .map_err(|e| driver_failure(&e));
+                                report.messages = produced.messages;
+                                report.bytes = produced.bytes;
+                                report.cancelled = produced.cancelled.is_some();
+                            }
+                            Some(proof) => {
+                                let validated = self.prepared_call(&mut runner, role, |runner| {
+                                    driver::validate(
+                                        runner,
+                                        proof,
+                                        &binding,
+                                        self.transport(),
+                                        self.entry.acceptance(),
+                                        self.host_ledger().cloned(),
+                                    )
+                                });
+                                retain_driver_stop(&mut report, &validated);
+                                report.verification = match &validated.outcome {
+                                    Ok(_) => Some(VerificationDecision::Accepted),
+                                    Err(driver::ArtifactFailure::Rejected) => {
+                                        Some(VerificationDecision::Rejected)
+                                    }
+                                    Err(_) => None,
+                                };
+                                report.outcome = validated
+                                    .outcome
+                                    .map(|values| {
+                                        report.outputs = Some(self.original_outputs(role, values));
+                                        Vec::new()
+                                    })
+                                    .map_err(|e| driver_failure(&e));
+                                report.messages = validated.messages;
+                                report.bytes = validated.bytes;
+                                report.cancelled = validated.cancelled.is_some();
+                            }
+                        }
+                        report.usage = runner.usage();
+                        report.execution_counts = runner.execution_counts();
+                        report.return_at =
+                            runner.early_return().map(|(o, s)| (o.clone(), s.into()));
+                        let (returned_backend, outputs) = runner.into_retained_outputs();
+                        report.retained_outputs.extend(outputs);
+                        backend = returned_backend;
+                    }
                 }
-            },
+            }
         }
+        report.retain_outputs(self.host_ledger());
         report.instructions = report.usage.instructions;
         report.external_work = backend.external_work_spent();
         report.ring_work = backend.ring_work_spent();
         report.sequence_work = backend.sequence_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
         Ok(report)
+    }
+    /// A runner that does not share the root takes custody of its loaded
+    /// inputs under its own budget once it exists; the Host's reservation of
+    /// them in the root ends at that boundary.
+    fn standalone_boundary(&self, loading: &mut Option<zkc_runtime::vm::LiveReservation>) {
+        if self.shared_ledger.is_none() {
+            loading.take();
+        }
     }
     /// Native admission has checked the output map against the role signature.
     /// Private successors belong to cleanup, not immutable application results.
@@ -1150,6 +1190,35 @@ fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
         "cleanup_errors":s.cleanup_errors.iter().map(ToString::to_string).collect::<Vec<_>>()})
 }
 impl NativeProofReport {
+    /// Take custody of the runner's returned values in the invocation root.
+    /// A standalone runner kept them under its own budget, which ends with
+    /// the runner; custody passes without a new allocation, so the root
+    /// reserves their live bytes without a fresh charge. A runner that shared
+    /// the root keeps its own reservation with the values. When the root
+    /// cannot hold them, the values are released and the call fails with
+    /// `native-output-limit`.
+    fn retain_outputs(&mut self, ledger: Option<&zkc_runtime::vm::ExecutionLedger>) {
+        let Some(ledger) = ledger else {
+            return;
+        };
+        let bytes = self
+            .retained_outputs
+            .iter()
+            .filter(|outputs| outputs.reservation_bytes() == 0)
+            .flat_map(|outputs| outputs.iter())
+            .map(zkc_runtime::vm::Value::retained_bytes)
+            .fold(0, usize::saturating_add);
+        match ledger.reserve_live(bytes) {
+            Ok(live) => self.retained.push(live),
+            Err(_) => {
+                self.retained_outputs.clear();
+                self.outputs = None;
+                if self.outcome.is_ok() {
+                    self.outcome = Err("native-output-limit".into());
+                }
+            }
+        }
+    }
     /// A completed verification may reject normally. Never infer that case from
     /// diagnostic strings, and never turn an operational failure into rejection.
     pub fn verification_result(&self) -> Option<bool> {

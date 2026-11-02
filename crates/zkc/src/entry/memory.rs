@@ -81,13 +81,25 @@ impl ProofEntry {
             self.check_result_encoding(operation)
                 .map_err(|e| EntryError::new(EntryPhase::Request, e))?;
         }
+        // The call's invocation root starts with request decoding: each
+        // decoded document is a fresh allocation, held until conversion.
+        let invocation = self.capacity().invocation_ledger();
+        let mut documents = Vec::new();
+        let mut decoded = |values: &NamedValues| {
+            let bytes = super::value::request_bytes(values.values());
+            zkc_runtime::host::wire::reserve_allocation(Some(&invocation), bytes)
+                .map(|live| documents.extend(live))
+                .map_err(|_| EntryError::new(EntryPhase::Preparation, "entry-request-limit"))
+        };
         let groups = self.interface().input_groups();
         let public = load(&groups[0]).map_err(EntryError::input)?;
+        decoded(&public)?;
         let private = if operation == ProofOperation::Prove {
             load(&groups[1]).map_err(EntryError::input)?
         } else {
             NamedValues::new()
         };
+        decoded(&private)?;
         let role = self
             .interface()
             .proof_role(operation)
@@ -97,7 +109,7 @@ impl ProofEntry {
         if !services.is_empty() {
             return Err(EntryError::new(EntryPhase::Request, "entry-service-names"));
         }
-        self.preflight_call(
+        self.preflight_rooted(
             operation,
             ProofRequest {
                 public,
@@ -111,6 +123,8 @@ impl ProofEntry {
             },
             attempts,
             encode_results,
+            invocation,
+            documents,
         )
     }
     /// Bounded resident documents, with the same input/setup/proof precedence as

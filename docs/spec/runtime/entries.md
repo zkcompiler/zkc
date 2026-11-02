@@ -244,13 +244,16 @@ run does not imply a protocol acceptance predicate: the caller must inspect its
 explicit result values. No source evaluation or protocol-specific execution loop
 is added.
 
-Each preparation creates the run's [invocation ledger](capacity.md#invocation-ledgers)
-with the admitted capacity. `InputBoundRunEntry::prepare` charges every role's
-common-input inspection and canonical encoding to it, and
-`RunReport::encode_results` charges the `zkc.entry-outputs/0` buffer to it; the
-encoded buffer keeps its live allowance until it is dropped. `HostLimits`
-selects the run's external, Ring and sequence work; `with_ring_work_limit` sets
-the same Ring allowance.
+Each preparation creates the run's [invocation root](capacity.md#invocation-ledgers)
+with the admitted capacity. Request conversion, setup imports, loading and
+`InputBoundRunEntry::prepare`'s common-input inspection and canonical encoding
+of every role charge it before execution; wire transport and report storage
+charge it during execution. Participants keep their own per-runner budgets.
+When they finish, the root reserves the returned values the report retains, and
+reconstruction holds the named results' live bytes; `RunReport::encode_results`
+charges each `zkc.entry-outputs/0` buffer, which keeps its live allowance until
+it is dropped. `HostLimits` selects the run's external, Ring and sequence work;
+`with_ring_work_limit` sets the same Ring allowance.
 
 Retained Host calls transport already typed ordinary values from admitted
 outputs or calculations without repeating external constructor checks. They
@@ -321,7 +324,12 @@ contains only nonpublic inputs and external service budgets. The source adapter
 assembles shared operands from these public values. Private overrides refuse;
 native admission still checks canonical agreement. Setup imports may reuse
 identical canonical bytes under the same authorized pin within an invocation;
-each native operand retains its usual resource charge.
+each native operand retains its usual resource charge. Each call has one
+[invocation root](capacity.md#invocation-ledgers), created at its preflight or
+at `prove`, `verify` or `prove_attempts`. It charges decoded request documents,
+output-setup imports, conversion, loading, the binding root, every attempt's
+proof buffer, the returned values the call retains, reconstruction and every
+result encoding. The selected role's runner keeps its own budget beside it.
 
 `preflight_document_call` owns common request assembly: requested output codecs
 are checked before loading documents, public data precedes the witness, and
@@ -372,8 +380,13 @@ and cleanup details.
 `ProofResult::encode_results` returns a borrowed `EncodedResults` envelope;
 `encode_results_owned` on an `Arc<ProofResult>` returns `OwnedEncodedResults`.
 Both retain the original result's custody and charged encoded storage through
-publication or transport copying. Encoding failure publishes no partial buffer.
-Callers check the execution report separately from encoding and delivery.
+publication or transport copying. Each encoding charges its new buffer to the
+call's invocation root, and nothing else. Encoding failure publishes no partial
+buffer. `ProofResult::copy_bytes`, `copy_proof` and `OwnedEncodedResults::copy`
+take copies for readers outside the call, and `retain_bytes` holds storage a
+reader keeps with the result, such as rendered diagnostics; each charges the
+same root. Callers check the execution report separately from encoding and
+delivery.
 
 ## Attempts and operational defaults
 
@@ -786,8 +799,9 @@ admitted setup material across calls under the standalone proof Entry's rules,
 and observe setup replacement the same way.
 
 Preparation validates every deployment's context, including deployments the
-call never reaches, against its own allowance with the selected capacity. Child
-material is charged to the invocation ledger once, when a reached child loads it.
+call never reaches. The validation decodes and imports real material, so it
+charges the invocation root; a reached child's loading is a second real
+allocation and charges the root again.
 
 The selected live-byte limit covers the whole Entry invocation. Before starting
 one native child, the Host subtracts live parent reservations and assigns half

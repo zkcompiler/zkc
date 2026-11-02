@@ -87,16 +87,13 @@ impl EntryHost {
         if request.arguments.len() != self.signature().parameters.len() {
             return Err(EntryCondition::InputNames.into());
         }
-        let ledger = ExecutionLedger::new(
-            self.options.limits.capacity.values,
-            self.options.limits.capacity.work,
-        );
+        let ledger = self.options.limits.capacity.invocation_ledger();
         let context_live = zkc_runtime::host::wire::reserve_allocation(
             Some(&ledger),
             deployment::context_bytes(&request.context),
         )
         .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
-        deployment::context_check(self, &request.context)?;
+        deployment::context_check(self, &request.context, &ledger)?;
         let arguments = self
             .signature()
             .parameters

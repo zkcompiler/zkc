@@ -264,18 +264,32 @@ impl ProofSession {
         let started = now();
         let diagnostics = report.native.diagnostics();
         let diagnostics_ms = now() - started;
-        let text = json!({"success":success,"accepted":accepted,
-            "error":report.native.outcome.as_ref().err(), "diagnostics":diagnostics,
-            "output_error":report.output_error.as_ref().or(encoding_error.as_ref()),
-            "timings": { "memory_preflight_ms": memory_preflight_ms,
-                "execute_cleanup_ms": execute_cleanup_ms, "output_encode_ms": output_encode_ms,
-                "diagnostics_ms": diagnostics_ms }})
-        .to_string();
+        let render = |diagnostics: Json| {
+            json!({"success":success,"accepted":accepted,
+                "error":report.native.outcome.as_ref().err(), "diagnostics":diagnostics,
+                "output_error":report.output_error.as_ref().or(encoding_error.as_ref()),
+                "timings": { "memory_preflight_ms": memory_preflight_ms,
+                    "execute_cleanup_ms": execute_cleanup_ms, "output_encode_ms": output_encode_ms,
+                    "diagnostics_ms": diagnostics_ms }})
+            .to_string()
+        };
+        // The retained report text is charged to the call's invocation root.
+        // When its diagnostics do not fit, the report keeps the outcome and
+        // marks the omitted diagnostics instead.
+        let mut text = render(diagnostics);
+        let retention = match result.retain_bytes(text.len()) {
+            Ok(retention) => retention,
+            Err(_) => {
+                text = render(json!({"omitted": "entry-output-limit"}));
+                result.retain_bytes(text.len())?
+            }
+        };
         Ok(ProofResult {
             result,
             publish_proof: success && proof.is_none(),
             report: text,
             outputs,
+            _report: retention,
         })
     }
 }
@@ -288,6 +302,9 @@ fn entry_refusal(error: entry::EntryError) -> String {
 }
 
 /// Returned byte arrays are copies. Absence of `accepted` is not acceptance.
+/// Every getter call takes a new copy: it is charged to the call's invocation
+/// root before copying, and a getter refuses with `entry-output-limit` once
+/// the root cannot afford another copy.
 #[wasm_bindgen]
 pub struct ProofResult {
     // Custody lasts through getter copies and Worker publication, until free.
@@ -295,30 +312,30 @@ pub struct ProofResult {
     publish_proof: bool,
     report: String,
     outputs: Option<entry::OwnedEncodedResults>,
+    // The retained report text's live allowance in the invocation root.
+    _report: entry::ResultRetention,
 }
 #[wasm_bindgen]
 impl ProofResult {
     #[wasm_bindgen(getter)]
-    pub fn proof(&self) -> Vec<u8> {
+    pub fn proof(&self) -> Result<Vec<u8>> {
         if self.publish_proof {
-            self.result
-                .report
-                .native
-                .outcome
-                .as_ref()
-                .expect("successful proof")
-                .clone()
+            self.result.copy_proof()
         } else {
-            Vec::new()
+            Ok(Vec::new())
         }
     }
     #[wasm_bindgen(getter)]
-    pub fn report(&self) -> String {
-        self.report.clone()
+    pub fn report(&self) -> Result<String> {
+        let copy = self.result.copy_bytes(self.report.as_bytes())?;
+        Ok(String::from_utf8(copy).expect("copy of UTF-8 text"))
     }
     #[wasm_bindgen(getter)]
-    pub fn outputs(&self) -> Option<Vec<u8>> {
-        self.outputs.as_ref().map(|bytes| bytes.as_bytes().to_vec())
+    pub fn outputs(&self) -> Result<Option<Vec<u8>>> {
+        self.outputs
+            .as_ref()
+            .map(entry::OwnedEncodedResults::copy)
+            .transpose()
     }
 }
 

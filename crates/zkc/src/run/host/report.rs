@@ -15,6 +15,8 @@ pub struct HostReport {
     limits: Json,
     layout: Json,
     invocation: zkc_runtime::vm::ExecutionLedger,
+    /// The returned values' live allowance after the Host took custody.
+    outputs_live: Option<zkc_runtime::vm::LiveReservation>,
 }
 impl HostReport {
     pub(super) fn new(
@@ -35,6 +37,30 @@ impl HostReport {
             limits: host.limits.record(),
             layout: host.layout(),
             invocation,
+            outputs_live: None,
+        }
+    }
+    /// Take custody of the runners' returned values in the invocation root.
+    /// Standalone runners kept them under their own budgets, which end with
+    /// the runners; custody passes without a new allocation, so the root
+    /// reserves their live bytes without a fresh charge. Runners that shared
+    /// the root keep their own reservations with the values. When the root
+    /// cannot hold them, the report releases the values and records
+    /// `bundle-output-limit`. Cleanup observations precede this step.
+    pub(super) fn retain_outputs(&mut self) {
+        let Some(execution) = &mut self.execution else {
+            return;
+        };
+        match self
+            .invocation
+            .reserve_live(execution.unreserved_output_bytes())
+        {
+            Ok(live) => self.outputs_live = Some(live),
+            Err(_) => {
+                execution.release_outputs();
+                self.failure
+                    .get_or_insert_with(|| "bundle-output-limit".into());
+            }
         }
     }
     /// The ledger that charged this invocation's Host-side inspection; result
@@ -139,7 +165,11 @@ impl HostReport {
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&r.outputs)})
             }).collect::<Vec<_>>())})
     }
-    /// Materialize readable native outputs without consuming returned resources.
+    /// Materialize readable native outputs without consuming returned
+    /// resources. Each encoding is a new allocation: its conservative bound is
+    /// charged to the invocation root before encoding, and the returned
+    /// encoding holds its live allowance. An encoding the root cannot afford
+    /// is `Unavailable` with `bundle-output-limit`.
     pub fn encode_outputs(&self) -> Vec<RoleOutputEncoding> {
         self.execution
             .as_ref()
@@ -155,36 +185,118 @@ impl HostReport {
                     .find(|(name, _)| name == &role.role)
                     .expect("role custody")
                     .1;
+                let mut retained = Vec::new();
+                let values = role
+                    .outputs
+                    .iter()
+                    .map(|value| {
+                        let ty = value.physical_type();
+                        if !backend.installation().supports_wire(&ty) {
+                            return EncodedOutput::Private {
+                                physical_type: ty.spelling(),
+                            };
+                        }
+                        match zkc_runtime::host::wire::reserve_allocation(
+                            Some(&self.invocation),
+                            zkc_cpu::native_encoding_bound(value),
+                        ) {
+                            Ok(live) => retained.extend(live),
+                            Err(_) => {
+                                return EncodedOutput::Unavailable {
+                                    code: "bundle-output-limit".into(),
+                                };
+                            }
+                        }
+                        match backend.encode_native_value(value) {
+                            Ok(bytes) => EncodedOutput::Wire {
+                                physical_type: ty.spelling(),
+                                bytes,
+                            },
+                            Err(error) => EncodedOutput::Unavailable {
+                                code: error.to_string(),
+                            },
+                        }
+                    })
+                    .collect();
                 RoleOutputEncoding {
                     role: role.role.clone(),
-                    values: role
-                        .outputs
-                        .iter()
-                        .map(|value| {
-                            let ty = value.physical_type();
-                            if !backend.installation().supports_wire(&ty) {
-                                EncodedOutput::Private {
-                                    physical_type: ty.spelling(),
-                                }
-                            } else {
-                                match backend.encode_native_value(value) {
-                                    Ok(bytes) => EncodedOutput::Wire {
-                                        physical_type: ty.spelling(),
-                                        bytes,
-                                    },
-                                    Err(error) => EncodedOutput::Unavailable {
-                                        code: error.to_string(),
-                                    },
-                                }
-                            }
-                        })
-                        .collect(),
+                    values,
+                    _retained: retained,
                 }
             })
             .collect()
     }
+    /// A bound of the rendered diagnostics: a fixed allowance for each reached
+    /// row, role, resource and cleanup record, plus the strings and iteration
+    /// numbers that each row's rendered control path repeats, and the retained
+    /// layout and limit records.
+    fn diagnostics_bound(&self) -> usize {
+        const RECORD: usize = 2048;
+        const ELEMENT: usize = 256;
+        const ITERATION: usize = 64;
+        let json = |value: &Json| value.to_string().len().saturating_mul(4);
+        let rows = self.execution.as_ref().map_or(0, |execution| {
+            execution
+                .reached
+                .iter()
+                .map(|row| {
+                    let path = row
+                        .path
+                        .iter()
+                        .map(|element| {
+                            use zkc_runtime::vm::PathElement;
+                            ELEMENT
+                                + match element {
+                                    PathElement::Branch { site, alternative }
+                                    | PathElement::Match { site, alternative } => {
+                                        site.len() + alternative.len()
+                                    }
+                                    PathElement::Conditional { site, .. }
+                                    | PathElement::For { site, .. }
+                                    | PathElement::Loop { site, .. } => site.len(),
+                                }
+                        })
+                        .fold(0usize, usize::saturating_add);
+                    RECORD
+                        .saturating_add(path)
+                        .saturating_add(row.iterations.len().saturating_mul(ITERATION))
+                })
+                .fold(0usize, usize::saturating_add)
+                .saturating_add(execution.roles.len().saturating_mul(RECORD))
+        });
+        let records = self
+            .resources
+            .len()
+            .saturating_add(self.cleanup_errors.len())
+            .saturating_add(self.unstarted.len())
+            .saturating_mul(RECORD);
+        rows.saturating_add(records)
+            .saturating_add(json(&self.layout))
+            .saturating_add(json(&self.limits))
+            .saturating_add(RECORD)
+    }
     /// Resource and control observations, without a command envelope or values.
+    /// Rendering repeats each row's control path, so its bound is charged to
+    /// the invocation root first. When the root cannot afford it, the result is
+    /// the bounded summary with `"diagnostics": "omitted"`.
     pub fn diagnostics(&self) -> Json {
+        let bound = self.diagnostics_bound();
+        if self
+            .invocation
+            .charge(
+                zkc_runtime::vm::WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: bound as u64,
+                },
+                bound,
+            )
+            .is_err()
+        {
+            let mut summary = self.diagnostics_summary();
+            summary["diagnostics"] = json!("omitted");
+            return summary;
+        }
         let diagnostics = self.cleanup_errors.clone();
         let mut result = json!({"phase":self.phase,
             "bundle_sha256":self.identity,"session":self.session,"limits":self.limits,"layout":self.layout,
@@ -222,9 +334,11 @@ impl HostReport {
     }
 }
 /// Per-role semantic output encoding, independent of command presentation.
+/// It holds the encodings' live allowance in the invocation root.
 pub struct RoleOutputEncoding {
     pub role: String,
     pub values: Vec<EncodedOutput>,
+    _retained: Vec<zkc_runtime::vm::LiveReservation>,
 }
 pub enum EncodedOutput {
     Wire {

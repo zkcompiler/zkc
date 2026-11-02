@@ -3,12 +3,31 @@ use super::admission::LoadLimits;
 use crate::io::bytes::*;
 use serde_json::{Value as Json, json};
 use zkc_cpu::{CpuBackend, Policy};
-use zkc_runtime::vm::{Limits, ValueBudget, WorkBudget};
+use zkc_runtime::vm::{ExecutionLedger, Limits, ValueBudget, WorkBudget};
 
-/// One Host work allowance outside the VM ledgers: the value used when the
-/// application selects none, and the most an application may authorize.
+/// The extent over which one allowance counts. Allowances with equal numbers
+/// but different scopes or units remain separate selections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// One Entry invocation, from input preparation through output
+    /// publication: the invocation accounting root.
+    Invocation,
+    /// One participant runner, cumulative across the attempts of one proof
+    /// call; a Function charges its interpreter and nested children here too.
+    Runner,
+    /// One proof attempt.
+    Attempt,
+    /// One individual operation: a value, collection, frame, message, service,
+    /// admission algorithm or call.
+    Operation,
+}
+/// One Host policy allowance: what it counts, where it counts, the value used
+/// when the application selects none, and the most an application may
+/// authorize. A selection above the maximum is refused, never clamped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Allowance {
+    pub unit: &'static str,
+    pub scope: Scope,
     pub default: u64,
     pub maximum: u64,
 }
@@ -18,45 +37,95 @@ impl Allowance {
         value <= self.maximum
     }
 }
-/// The Host policy owner of every native work allowance that is not an
-/// instruction, iteration or retained-value budget. Run, proof and Function
-/// entries read their defaults and maxima from here; each child of a Function
-/// invocation receives what remains of the parent's selected allowance.
+/// The Host policy owner of every native work allowance that is not a field
+/// of the [`Capacity`] record. Run, proof and Function entries read their
+/// defaults and maxima from here; each child of a Function invocation receives
+/// what remains of the parent's selected allowance.
 pub struct Allowances;
 impl Allowances {
     /// Ring expression substitution work per role.
     pub const RING_WORK: Allowance = Allowance {
+        unit: "Ring expression substitution work units",
+        scope: Scope::Runner,
         default: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
         maximum: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
     };
     /// Nested sequence traversal work per role: three units per examined node
     /// and call, a retained validated root counting as one node.
     pub const SEQUENCE_WORK: Allowance = Allowance {
+        unit: "sequence traversal work units",
+        scope: Scope::Runner,
         default: zkc_cpu::Sequence::DEFAULT_WORK_LIMIT,
         maximum: zkc_cpu::Sequence::DEFAULT_WORK_LIMIT,
     };
     /// External construction primitive work per role: one unit per hash call,
     /// hashed byte, permutation, observe or sample.
     pub const EXTERNAL_WORK: Allowance = Allowance {
+        unit: "external primitive work units",
+        scope: Scope::Runner,
         default: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         maximum: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
     };
     /// Draws granted to one managed service or transcript invocation.
     pub const SERVICE_DRAWS: Allowance = Allowance {
+        unit: "draws",
+        scope: Scope::Operation,
         default: 1_000_000,
         maximum: 1_000_000,
     };
     /// Cumulative work of one interface admission algorithm: schema
     /// validation, or supply reconstruction with public selection indexing.
     pub const INTERFACE_WORK: Allowance = Allowance {
+        unit: "interface admission work units",
+        scope: Scope::Operation,
         default: crate::entry::InterfaceLimits::DEFAULT.work as u64,
         maximum: crate::entry::InterfaceLimits::MAXIMUM.work as u64,
     };
     /// Retained descriptor bytes of the interface schema summaries, of each
     /// reconstructed supply plan and of a Function's native descriptor cache.
     pub const INTERFACE_DESCRIPTORS: Allowance = Allowance {
+        unit: "retained descriptor bytes",
+        scope: Scope::Operation,
         default: crate::entry::InterfaceLimits::DEFAULT.descriptor_bytes as u64,
         maximum: crate::entry::InterfaceLimits::MAXIMUM.descriptor_bytes as u64,
+    };
+    /// Service draw allowances that a Function reserves for its children
+    /// before issuing their roots: 64 default service allowances by default,
+    /// and at most one maximal allowance for every dispatch a Function can
+    /// make.
+    pub const FUNCTION_SERVICE_DRAWS: Allowance = Allowance {
+        unit: "reserved draws",
+        scope: Scope::Invocation,
+        default: 64 * Self::SERVICE_DRAWS.default,
+        maximum: Self::SERVICE_DRAWS.maximum * Self::DISPATCHES.maximum,
+    };
+    /// Retained Function call receipts, including failed calls.
+    pub const JOURNAL_EVENTS: Allowance = Allowance {
+        unit: "retained call receipts",
+        scope: Scope::Invocation,
+        default: 256,
+        maximum: 4096,
+    };
+    /// Joint and Function dispatch occurrences, including repeated loop steps.
+    pub const DISPATCHES: Allowance = Allowance {
+        unit: "dispatch occurrences",
+        scope: Scope::Invocation,
+        default: zkc_runtime::host::joint::RunLimits::HARD_MAX.steps as u64,
+        maximum: zkc_runtime::host::joint::RunLimits::HARD_MAX.steps as u64,
+    };
+    /// Completed or discarded trials of one producing proof call.
+    pub const ATTEMPTS: Allowance = Allowance {
+        unit: "attempts",
+        scope: Scope::Invocation,
+        default: 1,
+        maximum: crate::proof::AttemptPolicy::MAX_ATTEMPTS,
+    };
+    /// Proof buffer bytes of one attempt, including framing.
+    pub const ATTEMPT_PROOF_BYTES: Allowance = Allowance {
+        unit: "proof bytes",
+        scope: Scope::Attempt,
+        default: zkc_format::proof::MAX_PROOF_BYTES as u64,
+        maximum: zkc_format::proof::MAX_PROOF_BYTES as u64,
     };
 }
 
@@ -64,9 +133,16 @@ impl Allowances {
 /// iteration budgets within installed hard limits, or lower byte and logical
 /// work ceilings. Neither proof nor deployment data grants this authority.
 /// Setup and provider-specific ceilings keep their existing owners.
+///
+/// Each field has one scope. Element, group, wire and value bytes bound one
+/// operation. Instructions and iterations are the fuel of each runner,
+/// cumulative across the attempts of one proof call; an invocation root that
+/// no runner shares never limits them. Logical work and the live and
+/// cumulative fresh bytes bound each runner's own ledger and, separately, the
+/// invocation root ([`Capacity::invocation_ledger`]).
 #[derive(Clone, Copy, Debug)]
 pub struct Capacity {
-    /// Maximum elements in one numeric collection.
+    /// Maximum elements in one numeric collection or complete nested message.
     pub elements: usize,
     /// Maximum group elements in one collection.
     pub groups: usize,
@@ -74,10 +150,11 @@ pub struct Capacity {
     pub wire_bytes: usize,
     /// Retained bytes in one native value.
     pub value_bytes: usize,
-    /// Instructions, loop iterations and logical work bytes per runner
-    /// (cumulative for proof retries).
+    /// Instructions and loop iterations per runner (cumulative for proof
+    /// retries), and logical work bytes per runner and per invocation root.
     pub work: WorkBudget,
-    /// Live retained payload and cumulative fresh allocation, in bytes.
+    /// Live retained payload and cumulative fresh allocation, in bytes, per
+    /// runner and per invocation root.
     pub values: ValueBudget,
 }
 impl Default for Capacity {
@@ -133,6 +210,15 @@ impl Capacity {
             max_value_bytes: self.value_bytes,
             ..Policy::default()
         }
+    }
+    /// The invocation accounting root this record selects: one ledger that
+    /// charges an Entry invocation's Host-side work and storage, from input
+    /// preparation, setup material and cache hits, common-input inspection,
+    /// transport and diagnostics through output publication. A runner that
+    /// shares it charges it too; a standalone runner keeps its own budget
+    /// beside it, so standalone instruction fuel is never pooled.
+    pub(crate) fn invocation_ledger(&self) -> ExecutionLedger {
+        ExecutionLedger::new(self.values, self.work)
     }
     pub(crate) fn loading(&self) -> LoadLimits {
         LoadLimits {
@@ -206,6 +292,87 @@ impl Capacity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn every_host_allowance_names_its_unit_scope_default_and_maximum() {
+        let allowances = [
+            (Allowances::RING_WORK, Scope::Runner),
+            (Allowances::SEQUENCE_WORK, Scope::Runner),
+            (Allowances::EXTERNAL_WORK, Scope::Runner),
+            (Allowances::SERVICE_DRAWS, Scope::Operation),
+            (Allowances::INTERFACE_WORK, Scope::Operation),
+            (Allowances::INTERFACE_DESCRIPTORS, Scope::Operation),
+            (Allowances::FUNCTION_SERVICE_DRAWS, Scope::Invocation),
+            (Allowances::JOURNAL_EVENTS, Scope::Invocation),
+            (Allowances::DISPATCHES, Scope::Invocation),
+            (Allowances::ATTEMPTS, Scope::Invocation),
+            (Allowances::ATTEMPT_PROOF_BYTES, Scope::Attempt),
+        ];
+        for (allowance, scope) in allowances {
+            assert!(!allowance.unit.is_empty());
+            assert_eq!(allowance.scope, scope);
+            assert!(allowance.default <= allowance.maximum);
+            // The maximum is admitted and anything above it refused, never
+            // reduced to it.
+            assert!(allowance.admits(allowance.maximum));
+            assert!(!allowance.admits(allowance.maximum + 1));
+        }
+        // Equal numbers stay separate allowances with their own scopes.
+        assert_eq!(
+            Allowances::SERVICE_DRAWS.default,
+            Allowances::INTERFACE_WORK.default
+        );
+        assert_ne!(
+            Allowances::SERVICE_DRAWS.scope,
+            Allowances::FUNCTION_SERVICE_DRAWS.scope
+        );
+    }
+    #[test]
+    fn maxima_of_two_to_the_thirty_two_keep_their_value_on_thirty_two_bit_targets() {
+        // 2^32 does not fit a 32-bit integer, so on wasm32 it does not fit a
+        // pointer-sized one either.
+        for maximum in [
+            Limits::MAX_INSTRUCTIONS,
+            Limits::MAX_ITERATIONS,
+            Limits::LOGICAL_BYTES,
+        ] {
+            assert_eq!(maximum, 1 << 32);
+            assert!(u32::try_from(maximum).is_err());
+            // JSON readers, including JavaScript, read it exactly.
+            assert!(maximum <= 1 << 53);
+        }
+        // Records, ledgers and reports carry them as 64-bit integers.
+        let record = Capacity::HARD_MAX.record();
+        assert_eq!(record[5], json!(["4294967296", "4294967296", "4294967296"]));
+        let parsed = Capacity::parse(record.to_string().as_bytes()).unwrap();
+        assert_eq!(parsed.work, Capacity::HARD_MAX.work);
+        let root = parsed.invocation_ledger();
+        root.charge(parsed.work, 0).unwrap();
+        let used = root.snapshot();
+        assert_eq!(
+            (used.instructions, used.iterations, used.logical_bytes),
+            (1 << 32, 1 << 32, 1 << 32)
+        );
+        for work in [
+            WorkBudget {
+                instructions: 1,
+                iterations: 0,
+                logical_bytes: 0,
+            },
+            WorkBudget {
+                instructions: 0,
+                iterations: 1,
+                logical_bytes: 0,
+            },
+            WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: 1,
+            },
+        ] {
+            assert!(root.charge(work, 0).is_err());
+        }
+        assert_eq!(root.snapshot(), used);
+    }
     fn record(instructions: u64, iterations: u64) -> Vec<u8> {
         let mut capacity = Capacity::default();
         capacity.work.instructions = instructions;

@@ -71,6 +71,7 @@ mod proof;
 pub use proof::{
     AttemptOptions, BindingPolicy, BindingScope, EncodedResults, OwnedEncodedResults, ProofCall,
     ProofEntry, ProofOperation, ProofOptions, ProofReport, ProofRequest, ProofResult,
+    ResultRetention,
 };
 
 #[cfg(all(feature = "files", feature = "cpu"))]

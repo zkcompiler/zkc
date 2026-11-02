@@ -78,6 +78,12 @@ fn ledger() -> ExecutionLedger {
         WorkBudget::default(),
     )
 }
+/// Live bytes the invocation root holds for `count` report records of the
+/// fixture bundle, whose steps all share the empty root path: each record,
+/// plus the root path's two shared allocation headers once.
+fn records(count: usize) -> usize {
+    count * std::mem::size_of::<Reached>() + 4 * std::mem::size_of::<usize>()
+}
 fn inputs<B: Backend<Value = TestValue>>(producer: B, validator: B) -> Vec<RoleInput<B>> {
     vec![
         RoleInput {
@@ -473,7 +479,12 @@ impl Hooks<Host> for ReplaceStorage {
     ) -> Result<Option<Vec<u8>>, String> {
         assert_eq!(bytes, b"ZKCV\0\x05\x01");
         self.before = Some(self.ledger.snapshot());
-        assert_eq!(self.before.unwrap().live_reserved_bytes, 2 * 64 + 7);
+        // Both runner allowances, the sent message, and the send and receive
+        // records the report already holds.
+        assert_eq!(
+            self.before.unwrap().live_reserved_bytes,
+            2 * 64 + 7 + records(2)
+        );
         Ok(self.replacement.take())
     }
     fn observe(&mut self, _: &str, _: &Host, phase: Phase) -> Result<Option<String>, String> {
@@ -491,8 +502,9 @@ fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
     let capacity = replacement.capacity();
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            // Both runner allowances, replacement capacity and decode storage.
-            live_bytes: 2 * 64 + capacity + 8,
+            // Both runner allowances, replacement capacity, decode storage and
+            // the report's four records.
+            live_bytes: 2 * 64 + capacity + 8 + records(4),
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -528,16 +540,18 @@ fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
     assert_eq!(report.backends[1].1.measurements.get(), 1);
     assert_eq!(report.backends[1].1.decodes.get(), 1);
     let used = ledger.snapshot();
-    assert_eq!(used.live_reserved_bytes, 2 * 64);
+    assert_eq!(report.report_bytes, records(4));
+    assert_eq!(used.live_reserved_bytes, 2 * 64 + report.report_bytes);
     // Decoder allowance, the received inline value and its retained root result
-    // each charge eight bytes under the existing VM contract.
+    // each charge eight bytes under the existing VM contract; the two return
+    // records follow the transfer.
     assert_eq!(
         used.total_value_bytes,
-        hooks.before.unwrap().total_value_bytes + capacity + 3 * 8
+        hooks.before.unwrap().total_value_bytes + capacity + 3 * 8 + records(4) - records(2)
     );
     assert_eq!(
         hooks.before_cancellation.unwrap().live_reserved_bytes,
-        2 * 64
+        2 * 64 + report.report_bytes
     );
     drop(report);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
@@ -549,8 +563,8 @@ fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counter
     // Wire oversize, overlapping live storage, then cumulative allocation refusal.
     for (length, live_bytes, total_bytes, charged) in [
         (4097usize, 16384, 65536, false),
-        (7, 2 * 64 + 64, 65536, true),
-        (7, 1024, 8 + 7 + 63, false),
+        (7, 2 * 64 + 64 + records(2), 65536, true),
+        (7, 1024 + records(2), 8 + 7 + 63 + records(2), false),
     ] {
         let mut replacement = Vec::with_capacity(length.max(64));
         replacement.resize(length, 0);
@@ -609,11 +623,12 @@ fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counter
         ));
         let used = ledger.snapshot();
         let before = hooks.before.unwrap();
+        assert_eq!(report.report_bytes, records(2));
         assert_eq!(
             hooks.before_cancellation.unwrap().live_reserved_bytes,
-            2 * 64 + 7
+            2 * 64 + 7 + records(2)
         );
-        assert_eq!(used.live_reserved_bytes, 7);
+        assert_eq!(used.live_reserved_bytes, 7 + records(2));
         assert_eq!(
             used.total_value_bytes,
             before.total_value_bytes + if charged { capacity } else { 0 }
@@ -635,7 +650,7 @@ fn joint_larger_replacement_keeps_its_reservation_after_measurement_refusal() {
     let capacity = replacement.capacity();
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            live_bytes: 2 * 64 + 7 + capacity,
+            live_bytes: 2 * 64 + 7 + capacity + records(2),
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -696,9 +711,9 @@ fn joint_larger_replacement_keeps_its_reservation_after_measurement_refusal() {
     let before = hooks.before.unwrap();
     assert_eq!(
         hooks.before_cancellation.unwrap().live_reserved_bytes,
-        2 * 64 + capacity
+        2 * 64 + capacity + records(2)
     );
-    assert_eq!(used.live_reserved_bytes, capacity);
+    assert_eq!(used.live_reserved_bytes, capacity + records(2));
     assert_eq!(used.total_value_bytes, before.total_value_bytes + capacity);
     assert_eq!(
         used.logical_bytes,
@@ -1066,7 +1081,7 @@ fn raw_record_borrows_payload_and_respects_publication_limit() {
 fn shared_decode_capacity_refuses_before_materialization_and_keeps_consumed_work() {
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            live_bytes: 135,
+            live_bytes: 135 + records(2),
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -1090,7 +1105,10 @@ fn shared_decode_capacity_refuses_before_materialization_and_keeps_consumed_work
     assert_eq!((report.wire.sends, report.wire.receives), (1, 0));
     assert!(report.pending.is_some());
     assert_eq!(report.backends[1].1.decodes.get(), 0);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 7);
+    assert_eq!(
+        ledger.snapshot().live_reserved_bytes,
+        7 + report.report_bytes
+    );
     let cumulative = ledger.snapshot().total_value_bytes;
     drop(report);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);

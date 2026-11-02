@@ -120,6 +120,13 @@ Shared and detached buffers are refused. Transport uses owned transferable
 buffers; crossing the JS/Wasm ABI still copies bytes. Returned proof/output
 arrays are owned copies. The Worker holds the generated result through getter
 copies and successful transferable publication, then calls `result.free()`.
+The result keeps the call's invocation root and every reservation in it: the
+proof, the encoded outputs and the retained report text. Each `proof`,
+`outputs` and `report` getter call takes a new copy in Wasm memory; it is
+charged to that root before copying and refuses with `entry-output-limit` when
+the root cannot afford another copy. When the rendered diagnostics do not fit
+the root, the report keeps the outcome and replaces `diagnostics` with
+`{"omitted":"entry-output-limit"}`.
 Publication does not guarantee delivery to the client.
 
 The client dispatches at most one call at a time. Defaults allow eight queued
@@ -226,8 +233,9 @@ This facade exposes proof calls. Input documents resolve existing SDK reference
 forms through the explicitly supplied `setInput` name map. Missing names are
 refused; a `file` field grants no network or filesystem capability. JavaScript
 passes opaque bytes and the shared SDK owns decoding and key import. Managed
-capacities bound their documented payload/work scopes, not the entire Wasm heap, JS byte
-copies or provider-private allocations. `wasm32` address space and `usize`
+capacities bound their documented payload/work scopes, including result getter
+copies, not the entire Wasm heap, JavaScript-side copies or provider-private
+allocations. `wasm32` address space and `usize`
 limits also apply; native capacities need not all fit a browser. The default artifact
 uses portable target features. A separately deployed SIMD artifact is selected
 only before initialization; browser numerical threading is not provided.

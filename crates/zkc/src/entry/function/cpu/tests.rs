@@ -2636,6 +2636,53 @@ fn function_policy_owns_child_ring_sequence_and_attempt_settings() {
     assert_eq!(attempts("absent", true), "entry-host-attempts");
     assert_eq!(attempts("proof", false), "entry-attempt-operation");
     assert_eq!(attempts("proof", true), "entry-attempt-completion");
+    // The invocation-scoped journal and draw-reservation allowances admit
+    // their maxima and refuse anything above them, without clamping.
+    assert_eq!(
+        defaults.journal_events as u64,
+        Allowances::JOURNAL_EVENTS.default
+    );
+    assert_eq!(
+        defaults.service_draws,
+        Allowances::FUNCTION_SERVICE_DRAWS.default
+    );
+    let admit = |journal_events: u64, service_draws| {
+        FunctionEntry::admit(
+            capture(&proof_document(true)),
+            FunctionOptions {
+                binding: crate::entry::BindingPolicy::AllowAuthored,
+                journal_events: journal_events as usize,
+                service_draws,
+                ..FunctionOptions::default()
+            },
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .map(|error| error.code().to_owned())
+    };
+    assert_eq!(
+        admit(
+            Allowances::JOURNAL_EVENTS.maximum,
+            Allowances::FUNCTION_SERVICE_DRAWS.maximum
+        ),
+        None
+    );
+    assert_eq!(
+        admit(
+            Allowances::JOURNAL_EVENTS.maximum + 1,
+            Allowances::FUNCTION_SERVICE_DRAWS.default
+        )
+        .as_deref(),
+        Some("entry-host-journal-limit")
+    );
+    assert_eq!(
+        admit(
+            Allowances::JOURNAL_EVENTS.default,
+            Allowances::FUNCTION_SERVICE_DRAWS.maximum + 1
+        )
+        .as_deref(),
+        Some("entry-host-service-limit")
+    );
 }
 
 /// Edit one member of a captured package frame, keeping every other byte.

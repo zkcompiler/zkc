@@ -367,7 +367,7 @@ impl Session<'_> {
                                             .proof_bytes_limit
                                             .saturating_sub(proof_bytes),
                                     ),
-                                    self.deployment.shared_ledger.clone(),
+                                    self.deployment.host_ledger().cloned(),
                                 )
                             },
                         );
@@ -517,7 +517,7 @@ pub(super) fn execute(
                     Ok((false, _)) => Ok(Decision::Retry(())),
                     Ok((true, produced)) => {
                         let retention = zkc_runtime::host::wire::reserve_allocation(
-                            deployment.shared_ledger.as_ref(),
+                            deployment.host_ledger(),
                             produced.proof.len(),
                         );
                         let retention = match retention {

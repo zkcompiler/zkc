@@ -318,21 +318,20 @@ impl RunHost {
         imports: &mut crate::host::setups::VerifierKeys,
         invocation: zkc_runtime::vm::ExecutionLedger,
     ) -> Result<PreparedRun<'_>> {
-        imports.set_ledger(self.shared_ledger.clone());
+        // Setup imports, including persistent cache hits, charge the root.
+        imports.set_ledger(Some(invocation.clone()));
         self.cpu
             .enter(|| inputs::prepare(self, request, imports, invocation))
     }
-    /// The ledger that charges this invocation's Host-side inspection and
-    /// encoding: the outer invocation's ledger when one is attached, otherwise a
-    /// new ledger with the selected capacity. Participant runners of a
-    /// standalone run keep their separate per-runner budgets.
+    /// The invocation accounting root: the outer invocation's ledger when one
+    /// is attached, otherwise a new root with the selected capacity. It
+    /// charges preparation, loading, setup imports, inspection, transport,
+    /// report storage, result reconstruction and encoding. Participant runners
+    /// of a standalone run keep their separate per-runner budgets beside it.
     pub(crate) fn invocation_ledger(&self) -> zkc_runtime::vm::ExecutionLedger {
-        self.shared_ledger.clone().unwrap_or_else(|| {
-            zkc_runtime::vm::ExecutionLedger::new(
-                self.limits.capacity.values,
-                self.limits.capacity.work,
-            )
-        })
+        self.shared_ledger
+            .clone()
+            .unwrap_or_else(|| self.limits.capacity.invocation_ledger())
     }
 }
 struct PreparedRole {
@@ -346,7 +345,9 @@ pub struct PreparedRun<'a> {
     session: String,
     roles: Vec<PreparedRole>,
     loaded: Vec<Value>,
-    loading: Option<zkc_runtime::vm::LiveReservation>,
+    /// The loaded inputs' live allowance in the invocation root, held while
+    /// the Host owns them.
+    loading: zkc_runtime::vm::LiveReservation,
     invocation: zkc_runtime::vm::ExecutionLedger,
 }
 impl PreparedRun<'_> {
@@ -483,13 +484,24 @@ impl PreparedRun<'_> {
         }
         drop(loaded);
         let mut execution_limits = self.host.limits.execution();
-        if let Some(loading) = &self.loading {
+        let shared = self.host.shared_ledger.clone();
+        let _loading = if shared.is_some() {
+            // Runners that share the root reserve their whole live allowance
+            // there beside the loaded inputs, so each one's allowance excludes
+            // its share of the loading reservation.
             let roles = inputs.len().max(1);
             execution_limits.values.live_bytes = execution_limits
                 .values
                 .live_bytes
-                .saturating_sub(loading.bytes().div_ceil(roles));
-        }
+                .saturating_sub(self.loading.bytes().div_ceil(roles));
+            Some(self.loading)
+        } else {
+            // Standalone runners take custody of their inputs under their own
+            // budgets; the Host's reservation ends at that boundary.
+            drop(self.loading);
+            None
+        };
+        let invocation = self.invocation.clone();
         let mut report = HostReport::new(self.host, &self.session, self.invocation);
         if let Some(error) = failure {
             report.phase = "issuance";
@@ -497,13 +509,14 @@ impl PreparedRun<'_> {
             report.unstarted = inputs.into_iter().map(|i| (i.role, i.backend)).collect();
         } else {
             report.phase = "execution";
-            match run_with_ledger(
+            match run_with_ledgers(
                 &self.host.bundle,
                 &self.session,
                 inputs,
                 execution_limits,
                 &mut NoHooks,
-                self.host.shared_ledger.clone(),
+                shared,
+                Some(invocation),
             ) {
                 Ok(execution) => {
                     if matches!(&execution.outcome, Outcome::DriverFailed(failure) if failure.kind == FailureKind::Setup)
@@ -524,6 +537,7 @@ impl PreparedRun<'_> {
             }
         }
         report.finalize(&registry, &resources, &services);
+        report.retain_outputs();
         report
     }
 }

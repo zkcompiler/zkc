@@ -841,6 +841,74 @@ fn independent_concurrent_hosts_charge_the_same_ledger_before_execution() {
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 }
 
+#[test]
+fn standalone_runs_keep_one_root_beside_separate_runner_fuel() {
+    let (raw, request) = fixture("bool");
+    let request = request.to_string();
+    let run = |limits| {
+        host(&raw, limits)
+            .prepare(request.as_bytes())
+            .unwrap()
+            .execute()
+    };
+    let prepared = host(&raw, HostLimits::default());
+    let prepared = prepared.prepare(request.as_bytes()).unwrap();
+    let root = prepared.invocation_ledger().clone();
+    // Loading charged the root and holds the loaded inputs until the runners
+    // take custody of them.
+    let loaded = root.snapshot();
+    assert!(loaded.logical_bytes > 0 && loaded.live_reserved_bytes > 0);
+    let report = prepared.execute();
+    let execution = report.execution.as_ref().unwrap();
+    assert_eq!(execution.outcome, Outcome::Completed);
+    assert!(report.failure.is_none());
+    let used = root.snapshot();
+    // Each participant kept its own fuel: no instruction reached the root.
+    assert!(
+        execution
+            .roles
+            .iter()
+            .all(|role| role.usage.unwrap().instructions > 0)
+    );
+    assert_eq!(used.instructions, 0);
+    // The root holds the report's records and the returned values the Host
+    // took custody of; custody adds live bytes without a fresh charge.
+    let returned = execution.unreserved_output_bytes();
+    assert!(returned > 0);
+    assert_eq!(used.live_reserved_bytes, execution.report_bytes + returned);
+    assert_eq!(
+        used.total_value_bytes,
+        loaded.total_value_bytes + execution.report_bytes
+    );
+    drop(report);
+    assert_eq!(root.snapshot().live_reserved_bytes, 0);
+    assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
+    // A root that holds the records but not the returned values refuses
+    // custody: the report releases them instead of retaining them unreserved.
+    let mut limits = HostLimits::default();
+    limits.capacity.values.live_bytes = used.live_reserved_bytes - 1;
+    let report = run(limits);
+    assert_eq!(report.failure.as_deref(), Some("bundle-output-limit"));
+    let execution = report.execution.as_ref().unwrap();
+    assert_eq!(execution.outcome, Outcome::Completed);
+    assert!(execution.roles.iter().all(|role| role.outputs.is_empty()));
+    assert_eq!(execution.unreserved_output_bytes(), 0);
+    // Rendering repeats each record's path, so it charges the root first; a
+    // root that cannot afford it renders the bounded summary instead.
+    let report = run(HostLimits::default());
+    let root = report.invocation_ledger().clone();
+    let before = root.snapshot();
+    let rendered = report.diagnostics();
+    assert!(rendered["reached"].is_array());
+    assert!(root.snapshot().total_value_bytes > before.total_value_bytes);
+    let mut limits = HostLimits::default();
+    limits.capacity.values.total_bytes = before.total_value_bytes + 1;
+    let report = run(limits);
+    let summary = report.diagnostics();
+    assert_eq!(summary["diagnostics"], "omitted");
+    assert_eq!(summary["outcome"], json!(["completed"]));
+}
+
 /// The two-role Boolean fixture with an externally pinned value agreement.
 fn bound_bool_run(
     limits: HostLimits,
@@ -907,18 +975,22 @@ fn bound_bool_run(
 fn common_input_inspection_charges_one_invocation_ledger_for_all_roles() {
     let (host, request, bindings) = bound_bool_run(HostLimits::default());
     let prepared = host.prepare(&request).unwrap();
-    assert_eq!(prepared.invocation_ledger().snapshot(), Default::default());
+    // Loading charged the same root and holds the loaded inputs.
+    let loaded = prepared.invocation_ledger().snapshot();
+    assert!(loaded.logical_bytes > 0 && loaded.live_reserved_bytes > 0);
     prepared.check_common_inputs(&bindings).unwrap();
     let both = prepared.invocation_ledger().snapshot();
-    assert!(both.logical_bytes > 0 && both.total_value_bytes > 0);
-    assert_eq!(both.live_reserved_bytes, 0);
-    assert_eq!(both.logical_bytes % 2, 0);
-    // The invocation's selected logical-work allowance bounds the inspection.
-    // Half of it admits the first role only: nothing restarts per role.
+    let inspection = both.logical_bytes - loaded.logical_bytes;
+    assert!(inspection > 0 && both.total_value_bytes > loaded.total_value_bytes);
+    assert_eq!(both.live_reserved_bytes, loaded.live_reserved_bytes);
+    assert_eq!(inspection % 2, 0);
+    // The invocation's selected logical-work allowance bounds loading and
+    // inspection together. Half of the inspection admits the first role only:
+    // nothing restarts per role.
     for (allowance, admitted) in [
         (both.logical_bytes, true),
         (both.logical_bytes - 1, false),
-        (both.logical_bytes / 2, false),
+        (loaded.logical_bytes + inspection / 2, false),
     ] {
         let mut limits = HostLimits::default();
         limits.capacity.work.logical_bytes = allowance;

@@ -259,6 +259,17 @@ fn independent_backend_executes_authenticated_source_application() {
         .unwrap();
     assert_eq!(report.outcome, joint::Outcome::Completed);
     assert_eq!(report.roles[0].outputs[0].value, 42);
+    // The run's invocation root holds the report's records; the runner kept
+    // its own fuel, so no instruction reached the root.
+    let root = report.invocation_ledger().unwrap().clone();
+    let used = root.snapshot();
+    assert!(report.roles[0].usage.unwrap().instructions > 0);
+    assert_eq!(used.instructions, 0);
+    assert_eq!(used.live_reserved_bytes, report.report_bytes);
+    assert!(report.report_bytes > 0);
+    drop(report);
+    assert_eq!(root.snapshot().live_reserved_bytes, 0);
+    assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
 }
 #[test]
 fn typed_backend_values_do_not_grant_source_constructor_authority() {

@@ -214,9 +214,10 @@ pub(super) fn prepare(
         }
     }
     let policy = host.capacity.backend();
+    // Loading, its file reads and setup cache hits charge the invocation root.
     let mut admission = Admission::new(host.capacity.loading())?
         .with_material(imports.material())
-        .with_shared_ledger(host.shared_ledger.clone())
+        .with_shared_ledger(host.host_ledger().cloned())
         .with_retained_inputs(host.retained_inputs);
     for ((input, port), ty) in request
         .public
@@ -441,7 +442,7 @@ pub(super) fn prepare(
             budget: request.transcript_budget,
         })?;
     }
-    let (loaded, loading) = if let Some(ledger) = &host.shared_ledger {
+    let (loaded, loading) = if let Some(ledger) = host.host_ledger() {
         let (values, guard) = admission.load_shared(&backend, &policy, ledger, 0)?;
         (values, Some(guard))
     } else {

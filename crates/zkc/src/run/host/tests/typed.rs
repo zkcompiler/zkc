@@ -823,14 +823,13 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
         fingerprint: material.fingerprint(),
     };
     assert!(host.prepare_typed(&raw_inputs).is_err());
+    // The invocation root holds the setup import and the loaded pool
+    // together, so it refuses before the pool alone exceeds its bound.
     let mut limits = HostLimits::default();
     limits.capacity.values.live_bytes = 2 * material.value().retained_bytes()
         + Value::VerifierKey(Arc::new(keys.verifier_key().clone())).retained_bytes()
         - 1;
-    assert_eq!(
-        refusal(&admit(limits), &inputs),
-        "artifact-input-bytes-limit"
-    );
+    assert_eq!(refusal(&admit(limits), &inputs), "Limit");
     limits = HostLimits::default();
     limits.capacity.value_bytes = material.value().retained_bytes() - 1;
     assert!(refusal(&admit(limits), &inputs).contains("output-bytes"));

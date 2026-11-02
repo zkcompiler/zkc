@@ -378,14 +378,16 @@ pub(super) fn charge_conversion(
         )
         .map_err(|_| "entry-request-limit".into())
 }
-/// Charge reconstructing named results: every returned native value is read
-/// once as logical work, and each schema node of the description is a fresh
-/// allocation.
+/// Charge reconstructing named results before they are allocated: every
+/// returned native value is read once as logical work, and each schema node of
+/// the description is a fresh allocation. The returned guard holds the
+/// reconstructed nodes' live allowance in the invocation root; the native
+/// leaves they share were already reserved when the Host took custody.
 pub(super) fn charge_reconstruction<'a>(
     ledger: &zkc_runtime::vm::ExecutionLedger,
     schemas: impl IntoIterator<Item = &'a Schema>,
     leaves: impl IntoIterator<Item = &'a NativeValue>,
-) -> Result<()> {
+) -> Result<zkc_runtime::vm::LiveReservation> {
     fn nodes(schema: &Schema) -> usize {
         1 + schema
             .fields
@@ -412,6 +414,9 @@ pub(super) fn charge_reconstruction<'a>(
             },
             fresh,
         )
+        .map_err(|_| "entry-output-limit")?;
+    ledger
+        .reserve_live(fresh)
         .map_err(|_| "entry-output-limit".into())
 }
 

@@ -147,6 +147,11 @@ impl BackendRun {
 
     /// Start the common Host with caller-owned backend instances and values.
     /// The common linker independently checks each actual installation again.
+    ///
+    /// The invocation root has the selected value and work budgets. It charges
+    /// wire transport, received payload decoding and report storage, and the
+    /// report keeps it ([`joint::Report::invocation_ledger`]). Each runner
+    /// keeps its own budget from the same selection beside the root.
     pub fn execute<B: WireBackend, H: joint::Hooks<B>>(
         &self,
         session: &str,
@@ -154,7 +159,16 @@ impl BackendRun {
         limits: joint::RunLimits,
         hooks: &mut H,
     ) -> Result<joint::Report<B>, joint::StartError<B>> {
-        joint::run(&self.bundle, session, inputs, limits, hooks)
+        let root = ExecutionLedger::new(limits.values, limits.work);
+        joint::run_with_ledgers(
+            &self.bundle,
+            session,
+            inputs,
+            limits,
+            hooks,
+            None,
+            Some(root),
+        )
     }
 }
 
@@ -178,9 +192,10 @@ impl InputBoundBackendRun {
     /// retains backend custody with zero execution usage. Runner admission still
     /// independently checks installations, capabilities, inputs and budgets.
     ///
-    /// The selected budgets form this participant's invocation ledger. Common
-    /// input inspection and encoding charge it before the Runner exists, and
-    /// the Runner shares it, so both draw on one allowance.
+    /// Each started participant is its own invocation, as in an independent
+    /// process: the selected budgets form its invocation root. Common input
+    /// inspection and encoding charge it before the Runner exists, and the
+    /// Runner shares it, so both draw on one allowance.
     pub fn start_role<B: WireBackend>(
         &self,
         session: &str,

@@ -340,6 +340,8 @@ pub struct RunReport {
     pub outputs: Option<RoleValues>,
     pub output_error: Option<String>,
     encoding: ResultEncoding,
+    /// The reconstructed results' live allowance in the invocation root.
+    _results: Vec<zkc_runtime::vm::LiveReservation>,
 }
 /// The admitted policy that encodes this run's results.
 struct ResultEncoding {
@@ -429,6 +431,7 @@ impl PreparedRun<'_> {
             outputs: None,
             output_error: None,
             encoding,
+            _results: Vec::new(),
         };
         if report.native.failure.is_some() || !report.native.cleanup_errors.is_empty() {
             return public_report(report);
@@ -439,8 +442,17 @@ impl PreparedRun<'_> {
         if execution.outcome != Outcome::Completed {
             return public_report(report);
         }
-        match collect(self.interface, execution, report.native.invocation_ledger()) {
-            Ok(outputs) => report.outputs = Some(outputs),
+        let mut retained = Vec::new();
+        match collect(
+            self.interface,
+            execution,
+            report.native.invocation_ledger(),
+            &mut retained,
+        ) {
+            Ok(outputs) => {
+                report.outputs = Some(outputs);
+                report._results = retained;
+            }
             Err(code) => report.output_error = Some(code),
         }
         public_report(report)
@@ -456,11 +468,13 @@ fn public_report(mut report: RunReport) -> RunReport {
 }
 
 /// Reconstruct every role's named results, charging the reconstruction to the
-/// invocation ledger before it allocates.
+/// invocation ledger before it allocates; `retained` receives the results'
+/// live allowances.
 fn collect(
     interface: &Interface,
     execution: &Report<zkc_cpu::CpuBackend>,
     invocation: &zkc_runtime::vm::ExecutionLedger,
+    retained: &mut Vec<zkc_runtime::vm::LiveReservation>,
 ) -> Result<RoleValues> {
     let mut outputs = BTreeMap::new();
     for role in interface.roles() {
@@ -469,11 +483,11 @@ fn collect(
             .iter()
             .find(|r| r.role == role.native_name)
             .ok_or("entry-output-role")?;
-        value::charge_reconstruction(
+        retained.push(value::charge_reconstruction(
             invocation,
             interface.output_ports(role).map(|port| &port.schema),
             &returned.outputs,
-        )?;
+        )?);
         let mut leaves = returned.outputs.iter().cloned();
         let mut values = BTreeMap::new();
         for port in interface.output_ports(role) {
@@ -586,23 +600,48 @@ mod encoding_tests {
         let report = completed(HostLimits::default());
         let ledger = report.native.invocation_ledger().clone();
         let before = ledger.snapshot();
+        // The completed report holds its retained results and report storage
+        // in the invocation root before any encoding.
+        assert!(before.live_reserved_bytes > 0);
         let encoded = report.encode_results(Default::default()).unwrap();
         let document: serde_json::Value = serde_json::from_slice(encoded.as_bytes()).unwrap();
         assert_eq!(document["format"], "zkc.entry-outputs/0");
         assert_eq!(document["roles"]["P"]["結果"], true);
         let held = ledger.snapshot();
-        assert!(held.live_reserved_bytes >= encoded.as_bytes().len());
+        assert!(held.live_reserved_bytes >= before.live_reserved_bytes + encoded.as_bytes().len());
         assert!(held.total_value_bytes > before.total_value_bytes);
         assert!(held.logical_bytes > before.logical_bytes);
         drop(encoded);
-        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        assert_eq!(
+            ledger.snapshot().live_reserved_bytes,
+            before.live_reserved_bytes
+        );
         assert_eq!(ledger.snapshot().total_value_bytes, held.total_value_bytes);
+        // Each encoding is a new buffer: repeating it charges the same buffer
+        // again, and two retained encodings hold both buffers.
+        let again = report.encode_results(Default::default()).unwrap();
+        let one = ledger.snapshot();
+        let twice = report.encode_results(Default::default()).unwrap();
+        let two = ledger.snapshot();
+        assert_eq!(again.as_bytes(), twice.as_bytes());
+        assert_eq!(
+            two.live_reserved_bytes - one.live_reserved_bytes,
+            held.live_reserved_bytes - before.live_reserved_bytes
+        );
+        assert_eq!(
+            two.total_value_bytes - one.total_value_bytes,
+            held.total_value_bytes - before.total_value_bytes
+        );
+        drop((again, twice));
+        drop(report);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         // Conversion and reconstruction charge the invocation ledger; leave
         // that work and less than the first 512-byte buffer reservation, so
         // the run completes and encoding refuses without a partial buffer.
         let mut limits = HostLimits::default();
         limits.capacity.work.logical_bytes = before.logical_bytes + 511;
         let report = completed(limits);
+        let retained = report.native.invocation_ledger().snapshot();
         assert_eq!(
             report.encode_results(Default::default()).err().unwrap(),
             "entry-output-limit"
@@ -613,7 +652,7 @@ mod encoding_tests {
                 .invocation_ledger()
                 .snapshot()
                 .live_reserved_bytes,
-            0
+            retained.live_reserved_bytes
         );
     }
 }

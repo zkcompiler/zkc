@@ -197,12 +197,15 @@ pub(super) fn verify_value(outputs: Option<NamedValues>) -> crate::entry::Value 
 /// call. Material is charged to the invocation ledger once, when a reached
 /// child loads it; this check has its own allowance with the same capacity,
 /// discarded when it returns.
-pub(super) fn context_check(host: &EntryHost, context: &InvocationContext) -> Result<()> {
-    let validation = zkc_runtime::vm::ExecutionLedger::new(
-        host.options.limits.capacity.values,
-        host.options.limits.capacity.work,
-    );
-    let ledger = &validation;
+/// Validate every deployment's context, including deployments the call never
+/// reaches. The validation decodes and imports real material, so it charges
+/// the invocation root; a reached child's later loading is a second real
+/// allocation and charges it again.
+pub(super) fn context_check(
+    host: &EntryHost,
+    context: &InvocationContext,
+    ledger: &zkc_runtime::vm::ExecutionLedger,
+) -> Result<()> {
     /// Request-shape refusals precede the draw-allowance check, exactly as a
     /// standalone run or proof orders them.
     fn check_role(

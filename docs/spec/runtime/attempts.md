@@ -110,10 +110,11 @@ cryptographic retry probability.
 
 | Budget | Scope |
 |---|---|
-| Attempt count | Whole host invocation; 1 through 1024. |
-| Proof bytes | Each tentative proof, including framing, enforced by the writer during production. |
-| Instructions and iterations | Cumulative across all runners in the invocation, bounded by the selected capacity; by default one million instructions and 100,000 iterations, at most 2^32 of each. |
+| Attempt count | Whole host invocation; default 1, maximum 1024. |
+| Proof bytes | Each tentative proof, including framing, enforced by the writer during production; default and maximum 16 MiB. |
+| Instructions and iterations | Runner fuel, cumulative across the attempts of one call, bounded by the selected capacity; by default one million instructions and 100,000 iterations, at most 2^32 of each. |
 | Retained payload charge | Live limit per runner and cumulative total charge across attempts; counts bindings, not process RSS. |
+| Host storage and work | The call's [invocation root](capacity.md#invocation-ledgers): every attempt's proof buffer and the completed proof's retained copy are charged there before they grow, and a discarded attempt keeps its cumulative charge. |
 | RNG and service draws | One persistent root budget; failed scalar consumes can increment generation/debit before refusal. |
 | Transcript transitions | Per freshly issued attempt transcript; observations remain in the attempt record. |
 | Transcript initialization | Reabsorbs the bounded invocation root once per attempt, outside interpreter and external-work charges; bounded by root size times attempt count. |

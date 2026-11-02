@@ -47,11 +47,6 @@ impl VerifierKeys {
         }
         Ok(())
     }
-    pub(crate) fn retained_bytes(&self) -> usize {
-        self.keys.values().flatten().fold(0usize, |total, key| {
-            total.saturating_add(key.bytes.len().saturating_mul(16).saturating_add(4096))
-        })
-    }
     pub(crate) fn material(&self) -> Arc<std::sync::Mutex<zkc_cpu::material::VerifierMaterials>> {
         self.material.clone()
     }

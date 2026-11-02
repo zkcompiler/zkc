@@ -71,17 +71,20 @@ fn render(report: &HostReport) -> Json {
                 } => json!(["wire", physical_type, hex(&bytes)]),
                 EncodedOutput::Private { physical_type } => json!(["private", physical_type]),
                 EncodedOutput::Unavailable { code } => {
-                    result["diagnostics"].as_array_mut().unwrap().push(
-                        json!({"role":encoded.role,"output":index,"kind":"output","code":code}),
-                    );
+                    // Rendering the summary instead omits the diagnostic list.
+                    if let Some(diagnostics) = result["diagnostics"].as_array_mut() {
+                        diagnostics.push(
+                            json!({"role":encoded.role,"output":index,"kind":"output","code":code}),
+                        );
+                    }
                     json!(["unavailable", code])
                 }
             })
             .collect::<Vec<_>>();
         if let Some(role) = result["roles"]
             .as_array_mut()
-            .unwrap()
-            .iter_mut()
+            .into_iter()
+            .flatten()
             .find(|r| r["role"] == encoded.role)
         {
             role["outputs"] = json!(values);

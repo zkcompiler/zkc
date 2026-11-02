@@ -12,7 +12,15 @@ pub(super) fn admit(
         .limits
         .validate()
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
-    require(options.journal_events <= 4096, "entry-host-journal-limit")?;
+    use crate::host::capacity::Allowances;
+    require(
+        Allowances::JOURNAL_EVENTS.admits(options.journal_events as u64),
+        "entry-host-journal-limit",
+    )?;
+    require(
+        Allowances::FUNCTION_SERVICE_DRAWS.admits(options.service_draws),
+        "entry-host-service-limit",
+    )?;
     let interface = FunctionInterface::read_with(package, options.limits.interface)?;
     let document: Document = decode(
         package.artifact().as_bytes(),

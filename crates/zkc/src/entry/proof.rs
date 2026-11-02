@@ -133,11 +133,14 @@ pub struct ProofReport {
     pub output_error: Option<String>,
     pub binding_scope: BindingScope,
     invocation: zkc_runtime::vm::ExecutionLedger,
+    /// The reconstructed results' live allowance in the invocation root.
+    _results: Option<zkc_runtime::vm::LiveReservation>,
 }
 impl ProofReport {
-    /// The ledger that charged this call's Host-side work: request conversion,
-    /// binding-root encoding and result reconstruction. A child of an outer
-    /// invocation uses the outer ledger; a standalone call's runners keep
+    /// The invocation root of this call: request decoding and conversion,
+    /// setup imports and cache hits, loading, the binding root, proof buffers,
+    /// result custody and reconstruction, and result encoding. A child of an
+    /// outer invocation uses the outer root; a standalone call's runners keep
     /// their own budgets beside it.
     pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
         &self.invocation
@@ -340,7 +343,7 @@ impl ProofEntry {
             options.validate()?;
             n.with_capacity(options.capacity)
         })
-        .map(|n| {
+        .and_then(|n| {
             n.with_invocation_limits(
                 options.capacity,
                 options.external_work,
@@ -485,25 +488,29 @@ impl ProofEntry {
         proof: Option<&[u8]>,
         attempts: Option<AttemptOptions>,
     ) -> EntryResult<ProofReport> {
+        let invocation = self.native.capacity().invocation_ledger();
         let mut imports = crate::host::setups::VerifierKeys::new(
             self.native.capacity().backend().ark_bounds(),
             self.installation().clone(),
         )
         .with_material(self.material.clone());
-        self.execute_with(request, proof, attempts, &mut imports)
+        imports.set_ledger(Some(invocation.clone()));
+        self.execute_with(request, proof, attempts, &mut imports, invocation)
     }
+    /// Execute one standalone call under its invocation root, which already
+    /// holds any charges of the call's preflight.
     pub(crate) fn execute_with(
         &self,
         request: ProofRequest,
         proof: Option<&[u8]>,
         attempts: Option<AttemptOptions>,
         imports: &mut crate::host::setups::VerifierKeys,
+        invocation: zkc_runtime::vm::ExecutionLedger,
     ) -> EntryResult<ProofReport> {
         self.observe_setups(&request.setups);
         let producer = proof.is_none();
         let capacity = self.native.capacity();
         let attempts = self.attempt_policy(producer, attempts, capacity)?;
-        let invocation = zkc_runtime::vm::ExecutionLedger::new(capacity.values, capacity.work);
         let inputs = self.inputs(request, producer, capacity, &invocation)?;
         let native = self
             .native
@@ -562,6 +569,7 @@ impl ProofEntry {
                 limits.sequence_work,
                 proof_bytes,
             )
+            .map_err(|e| E::new(P::Preparation, e))?
             .with_shared_ledger(ledger);
         let mut imports = crate::host::setups::VerifierKeys::new(
             capacity.backend().ark_bounds(),
@@ -598,13 +606,24 @@ impl ProofEntry {
         operation: ProofOperation,
         attempts: Option<AttemptOptions>,
     ) -> EntryResult<()> {
+        // A check is an invocation of its own: one root from conversion
+        // through loading.
+        let ledger = self.native.capacity().invocation_ledger();
+        self.check_inputs_rooted(request, operation, attempts, ledger)
+    }
+    fn check_inputs_rooted(
+        &self,
+        request: ProofRequest,
+        operation: ProofOperation,
+        attempts: Option<AttemptOptions>,
+        ledger: zkc_runtime::vm::ExecutionLedger,
+    ) -> EntryResult<()> {
         let producer = operation == ProofOperation::Prove;
         if !producer && attempts.is_some() {
             return Err(E::new(P::Request, "entry-attempt-operation"));
         }
         let capacity = self.native.capacity();
         let attempts = self.attempt_policy(producer, attempts, capacity)?;
-        let ledger = zkc_runtime::vm::ExecutionLedger::new(capacity.values, capacity.work);
         let inputs = self.inputs(request, producer, capacity, &ledger)?;
         let invocation = attempts.as_ref().map_or_else(
             || {
@@ -617,6 +636,8 @@ impl ProofEntry {
             crate::proof::Invocation::Attempts,
         );
         self.native
+            .clone()
+            .with_invocation_ledger(ledger)
             .check_inputs(&inputs, invocation)
             .map_err(|e| E::at(P::Preparation, e))
     }
@@ -720,6 +741,7 @@ impl ProofEntry {
             output_error: None,
             binding_scope: self.scope,
             invocation,
+            _results: None,
         };
         let native_outputs = report.native.outputs.take();
         if report.native.outcome.is_err() || !report.native.cleanup_errors.is_empty() {
@@ -727,8 +749,8 @@ impl ProofEntry {
         }
         if let Some(outputs) = &native_outputs {
             let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
-            let result = (|| -> Result<NamedValues> {
-                value::charge_reconstruction(
+            let result = (|| -> Result<(NamedValues, zkc_runtime::vm::LiveReservation)> {
+                let live = value::charge_reconstruction(
                     &report.invocation,
                     self.interface.output_ports(role).map(|port| &port.schema),
                     outputs.values(),
@@ -753,10 +775,13 @@ impl ProofEntry {
                 if !leaves.is_empty() {
                     return Err("entry-output-shape".into());
                 }
-                Ok(values)
+                Ok((values, live))
             })();
             match result {
-                Ok(values) => report.outputs = Some(values),
+                Ok((values, live)) => {
+                    report.outputs = Some(values);
+                    report._results = Some(live);
+                }
                 Err(code) => report.output_error = Some(code),
             }
         }
@@ -766,6 +791,8 @@ impl ProofEntry {
 
 /// One call retains setup imports from output preflight through execution.
 /// Candidate proof bytes are supplied only after this preflight succeeds.
+/// Its invocation root exists from preflight on, so decoded documents and
+/// output-setup imports are charged to the same root as execution.
 pub struct ProofCall<'a> {
     host: &'a ProofEntry,
     operation: ProofOperation,
@@ -774,6 +801,9 @@ pub struct ProofCall<'a> {
     imports: crate::host::setups::VerifierKeys,
     output_setups: zkc_cpu::SetupRegistry,
     encode_results: bool,
+    invocation: zkc_runtime::vm::ExecutionLedger,
+    /// Live allowance of decoded request documents until conversion.
+    documents: Vec<zkc_runtime::vm::LiveReservation>,
 }
 impl ProofEntry {
     /// Check requested result codecs before input loading or execution.
@@ -807,6 +837,26 @@ impl ProofEntry {
         attempts: Option<AttemptOptions>,
         encode_results: bool,
     ) -> EntryResult<ProofCall<'_>> {
+        self.preflight_rooted(
+            operation,
+            request,
+            attempts,
+            encode_results,
+            self.native.capacity().invocation_ledger(),
+            Vec::new(),
+        )
+    }
+    /// Preflight under an invocation root that already charged the call's
+    /// decoded request documents, whose live allowances `documents` holds.
+    pub(super) fn preflight_rooted(
+        &self,
+        operation: ProofOperation,
+        request: ProofRequest,
+        attempts: Option<AttemptOptions>,
+        encode_results: bool,
+        invocation: zkc_runtime::vm::ExecutionLedger,
+        documents: Vec<zkc_runtime::vm::LiveReservation>,
+    ) -> EntryResult<ProofCall<'_>> {
         self.observe_setups(&request.setups);
         if operation == ProofOperation::Verify && attempts.is_some() {
             return Err(E::new(P::Request, "entry-attempt-operation"));
@@ -821,6 +871,8 @@ impl ProofEntry {
             self.installation().clone(),
         )
         .with_material(self.material.clone());
+        // Output-setup imports and their cache hits charge this call's root.
+        imports.set_ledger(Some(invocation.clone()));
         let output_setups = if encode_results {
             // Reconstruct logical setup pins from the checked deployment, rather
             // than accepting result-encoding authority from candidate data.
@@ -846,22 +898,31 @@ impl ProofEntry {
             imports,
             output_setups,
             encode_results,
+            invocation,
+            documents,
         })
     }
 }
 impl ProofCall<'_> {
     /// Validate the assembled inputs without executing or issuing resources.
+    /// Check under the call's own root, which holds its decoded documents.
     pub fn check_inputs(self) -> EntryResult<()> {
         self.host
-            .check_inputs(self.request, self.operation, self.attempts)
+            .check_inputs_rooted(self.request, self.operation, self.attempts, self.invocation)
     }
     pub fn execute(mut self, proof: Option<&[u8]>) -> EntryResult<ProofResult> {
         if (self.operation == ProofOperation::Verify) != proof.is_some() {
             return Err(E::new(P::Request, "entry-proof-operation"));
         }
-        let report =
-            self.host
-                .execute_with(self.request, proof, self.attempts, &mut self.imports)?;
+        let report = self.host.execute_with(
+            self.request,
+            proof,
+            self.attempts,
+            &mut self.imports,
+            self.invocation,
+        )?;
+        // Conversion has consumed the decoded documents.
+        drop(self.documents);
         Ok(ProofResult {
             installation: self.host.installation().clone(),
             report,
@@ -870,11 +931,12 @@ impl ProofCall<'_> {
             output_setups: self.output_setups,
             encode_results: self.encode_results,
             _imports: self.imports,
-            encoding: std::sync::OnceLock::new(),
         })
     }
 }
-/// Execution observations survive later result encoding failures.
+/// Execution observations survive later result encoding failures. The result
+/// keeps the call's invocation root and every reservation in it: imported
+/// setups, the proof buffer, the returned values and their reconstruction.
 pub struct ProofResult {
     installation: zkc_cpu::CpuInstallation,
     pub report: ProofReport,
@@ -884,11 +946,6 @@ pub struct ProofResult {
     encode_results: bool,
     // Keep charged canonical snapshots and imported keys alive with results.
     _imports: crate::host::setups::VerifierKeys,
-    encoding: std::sync::OnceLock<Result<OutputAllowance>>,
-}
-struct OutputAllowance {
-    ledger: zkc_runtime::vm::ExecutionLedger,
-    _live: zkc_runtime::vm::LiveReservation,
 }
 /// Encoded output borrows the pending result, retaining both its original
 /// reservations and the new buffer's allowance through publication/handoff.
@@ -924,6 +981,18 @@ impl OwnedEncodedResults {
     pub fn as_bytes(&self) -> &[u8] {
         &self.buffer.bytes
     }
+    /// Copy the encoded results for a reader outside the call, as
+    /// [`ProofResult::copy_bytes`] does.
+    pub fn copy(&self) -> Result<Vec<u8>> {
+        self._result.copy_bytes(&self.buffer.bytes)
+    }
+}
+/// A live allowance in a call's invocation root for storage that a reader
+/// retains with the result, such as rendered diagnostics. Dropping it releases
+/// the live bytes; the fresh charge remains.
+#[must_use = "keep the retention while the retained storage exists"]
+pub struct ResultRetention {
+    _live: Option<zkc_runtime::vm::LiveReservation>,
 }
 impl AsRef<[u8]> for OwnedEncodedResults {
     fn as_ref(&self) -> &[u8] {
@@ -937,6 +1006,40 @@ impl std::ops::Deref for OwnedEncodedResults {
     }
 }
 impl ProofResult {
+    /// Copy bytes this result retains, such as its proof or an encoding, for a
+    /// reader outside the call, such as a browser getter. Every copy is a new
+    /// allocation: it is charged to the call's invocation root before copying,
+    /// and its live allowance ends when the copy is handed off. Repeated copies
+    /// are charged each time; the retained original is never charged again.
+    pub fn copy_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        let _live =
+            zkc_runtime::host::wire::reserve_allocation(Some(&self.report.invocation), bytes.len())
+                .map_err(|_| "entry-output-limit")?;
+        let mut copy = Vec::new();
+        copy.try_reserve_exact(bytes.len())
+            .map_err(|_| "entry-output-limit")?;
+        copy.extend_from_slice(bytes);
+        Ok(copy)
+    }
+    /// Copy the produced proof, as [`Self::copy_bytes`] does. A call without a
+    /// produced proof copies nothing.
+    pub fn copy_proof(&self) -> Result<Vec<u8>> {
+        let proof = self
+            .report
+            .native
+            .outcome
+            .as_ref()
+            .map_or(&[][..], Vec::as_slice);
+        self.copy_bytes(proof)
+    }
+    /// Charge `bytes` of storage that a reader retains with this result, such
+    /// as rendered diagnostics, to the call's invocation root, and hold their
+    /// live allowance until the retention is dropped.
+    pub fn retain_bytes(&self, bytes: usize) -> Result<ResultRetention> {
+        zkc_runtime::host::wire::reserve_allocation(Some(&self.report.invocation), bytes)
+            .map(|live| ResultRetention { _live: live })
+            .map_err(|_| "entry-output-limit".into())
+    }
     pub fn encode_results(&self) -> Result<Option<EncodedResults<'_>>> {
         Ok(self.encode_results_buffer()?.map(|buffer| EncodedResults {
             buffer,
@@ -955,6 +1058,9 @@ impl ProofResult {
                 _result: self.clone(),
             }))
     }
+    /// Every encoding is a new buffer charged to the call's invocation root,
+    /// which already holds the result's own reservations; repeating it
+    /// charges each new buffer and nothing else.
     fn encode_results_buffer(&self) -> Result<Option<super::outputs::EncodedBuffer>> {
         if !self.encode_results {
             return Ok(None);
@@ -964,61 +1070,13 @@ impl ProofResult {
             .outputs
             .as_ref()
             .ok_or("entry-proof-incomplete")?;
-        let allowance = self
-            .encoding
-            .get_or_init(|| {
-                // The call's invocation ledger already holds its Host-side
-                // conversion, binding-root and reconstruction charges.
-                let ledger = self.report.invocation.clone();
-                // Replay already produced payloads into the publication allowance.
-                // Original report/import guards remain in place; this accounts for
-                // coexistence with one or several encoded buffers, without issuing
-                // or reusing an invocation reservation from the material cache.
-                let material = self._imports.retained_bytes();
-                let proof = self.report.native.outcome.as_ref().map_or(0, Vec::len);
-                let live = self
-                    .report
-                    .native
-                    .usage
-                    .live_value_bytes
-                    .checked_add(material)
-                    .and_then(|n| n.checked_add(proof))
-                    .ok_or("entry-output-limit")?;
-                let fresh = self
-                    .report
-                    .native
-                    .usage
-                    .total_value_bytes
-                    .checked_add(material)
-                    .and_then(|n| n.checked_add(proof))
-                    .ok_or("entry-output-limit")?;
-                ledger
-                    .charge(
-                        zkc_runtime::vm::WorkBudget {
-                            instructions: 0,
-                            iterations: 0,
-                            logical_bytes: self.report.native.usage.logical_bytes,
-                        },
-                        fresh,
-                    )
-                    .map_err(|_| "entry-output-limit")?;
-                let held = ledger
-                    .reserve_live(live)
-                    .map_err(|_| "entry-output-limit")?;
-                Ok(OutputAllowance {
-                    ledger,
-                    _live: held,
-                })
-            })
-            .as_ref()
-            .map_err(Clone::clone)?;
         let buffer = crate::entry::outputs::proof_outputs_reserved(
             values,
             self.capacity,
             self.output_setups.clone(),
             self.cpu.clone(),
             self.installation.clone(),
-            Some(allowance.ledger.clone()),
+            Some(self.report.invocation.clone()),
         )?;
         Ok(Some(buffer))
     }
@@ -1074,15 +1132,26 @@ mod publication_tests {
             .execute(None)
             .unwrap(),
         );
+        let ledger = result.report.invocation_ledger().clone();
+        // The call's root already holds the result's own reservations.
+        let retained = ledger.snapshot();
+        assert!(retained.live_reserved_bytes > 0);
         let first = result.encode_results().unwrap().unwrap();
-        let allowance = result.encoding.get().unwrap().as_ref().unwrap();
-        let ledger = allowance.ledger.clone();
         let one = ledger.snapshot();
-        assert!(one.live_reserved_bytes > 0);
+        assert!(one.live_reserved_bytes > retained.live_reserved_bytes);
         let second = result.encode_results().unwrap().unwrap();
         let two = ledger.snapshot();
         assert_eq!(first.as_bytes(), second.as_bytes());
-        assert!(two.live_reserved_bytes > one.live_reserved_bytes);
+        // A repeated encoding is a second real buffer: it is charged again,
+        // and nothing else is replayed.
+        assert_eq!(
+            two.live_reserved_bytes - one.live_reserved_bytes,
+            one.live_reserved_bytes - retained.live_reserved_bytes
+        );
+        assert_eq!(
+            two.total_value_bytes - one.total_value_bytes,
+            one.total_value_bytes - retained.total_value_bytes
+        );
         drop(second);
         assert_eq!(
             ledger.snapshot().live_reserved_bytes,
@@ -1203,18 +1272,128 @@ mod publication_tests {
             .unwrap()
         };
         let result = prove(Capacity::default());
-        // The runner's work and the call's Host-side conversion, binding-root
-        // and reconstruction work, which its invocation ledger holds.
-        let work = result.report.native.usage.logical_bytes
-            + result.report.invocation_ledger().snapshot().logical_bytes;
+        // The call's root holds its Host-side work: decoding, conversion,
+        // loading, the binding root, the proof buffer, result custody and
+        // reconstruction. The runner's work stays in its own budget.
+        let work = result.report.invocation_ledger().snapshot().logical_bytes;
+        assert!(result.report.native.usage.logical_bytes <= work + 511);
         assert!(result.encode_results().unwrap().is_some());
         // The execution's own work fits; the first 512-byte result buffer
-        // does not, so encoding refuses without a partial buffer.
+        // does not, so encoding refuses without a partial buffer and without
+        // replaying any earlier charge.
         let mut capacity = Capacity::default();
         capacity.work.logical_bytes = work + 511;
         let result = prove(capacity);
         assert!(result.report.is_success());
+        let before = result.report.invocation_ledger().snapshot();
         assert_eq!(result.encode_results().err().unwrap(), "entry-output-limit");
+        assert_eq!(
+            result
+                .report
+                .invocation_ledger()
+                .snapshot()
+                .live_reserved_bytes,
+            before.live_reserved_bytes
+        );
+    }
+    fn entry(capacity: Capacity) -> ProofEntry {
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
+        let package = Package::capture(
+            frame.as_bytes(),
+            &Sha256::digest(frame.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap();
+        ProofEntry::admit(
+            package,
+            ProofOptions {
+                capacity,
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap()
+    }
+    fn preflight(host: &ProofEntry, encode: bool) -> EntryResult<ProofCall<'_>> {
+        host.preflight_memory_call(
+            ProofOperation::Prove,
+            Some(r#"{"公開":true}"#.as_bytes()),
+            Some(r#"{"秘密":false}"#.as_bytes()),
+            &Default::default(),
+            Default::default(),
+            None,
+            encode,
+        )
+    }
+    #[test]
+    fn decoded_request_documents_charge_the_call_root_at_preflight() {
+        let host = entry(Capacity::default());
+        let call = preflight(&host, false).unwrap();
+        // Both decoded documents are fresh allocations of the call's root,
+        // live until conversion consumes them.
+        let held = call.invocation.snapshot();
+        assert!(held.live_reserved_bytes > 0);
+        assert_eq!(held.total_value_bytes, held.live_reserved_bytes);
+        assert_eq!(held.logical_bytes, held.live_reserved_bytes as u64);
+        let root = call.invocation.clone();
+        let result = call.execute(None).unwrap();
+        assert!(result.report.is_success());
+        assert!(root.snapshot().total_value_bytes > held.total_value_bytes);
+        // A root that cannot afford the decoded documents refuses at
+        // preflight, before any setup import, loading or execution.
+        let mut capacity = Capacity::default();
+        capacity.work.logical_bytes = held.logical_bytes - 1;
+        let host = entry(capacity);
+        let refused = preflight(&host, false).err().unwrap();
+        assert_eq!(
+            (refused.phase, refused.code()),
+            (P::Preparation, "entry-request-limit")
+        );
+    }
+    #[test]
+    fn reader_copies_are_new_allocations_charged_to_the_call_root() {
+        let host = entry(Capacity::default());
+        let result = std::sync::Arc::new(preflight(&host, true).unwrap().execute(None).unwrap());
+        let ledger = result.report.invocation_ledger().clone();
+        let owned = result.encode_results_owned().unwrap().unwrap();
+        let held = ledger.snapshot();
+        // Each copy charges its own bytes; the retained buffer is never
+        // charged again, and the copy's live bytes end when it is handed off.
+        let first = owned.copy().unwrap();
+        assert_eq!(first, owned.as_bytes());
+        let one = ledger.snapshot();
+        assert_eq!(one.total_value_bytes - held.total_value_bytes, first.len());
+        assert_eq!(one.live_reserved_bytes, held.live_reserved_bytes);
+        let second = owned.copy().unwrap();
+        let two = ledger.snapshot();
+        assert_eq!(two.total_value_bytes - one.total_value_bytes, second.len());
+        let proof = result.copy_proof().unwrap();
+        assert_eq!(&proof, result.report.native.outcome.as_ref().unwrap());
+        assert_eq!(
+            ledger.snapshot().total_value_bytes - two.total_value_bytes,
+            proof.len()
+        );
+        // Storage a reader keeps with the result, such as rendered
+        // diagnostics, holds its live bytes until it is dropped.
+        let retained = result.retain_bytes(100).unwrap();
+        assert_eq!(
+            ledger.snapshot().live_reserved_bytes,
+            two.live_reserved_bytes + 100
+        );
+        drop(retained);
+        // A root without room for another copy refuses it.
+        let free = Capacity::default().values.live_bytes - ledger.snapshot().live_reserved_bytes;
+        let hold = ledger.reserve_live(free - first.len() + 1).unwrap();
+        assert_eq!(owned.copy().unwrap_err(), "entry-output-limit");
+        drop(hold);
+        assert_eq!(owned.copy().unwrap(), first);
+        drop((owned, result));
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
     }
 }
 
@@ -1273,6 +1452,49 @@ mod material_tests {
             let second = material.import(&bytes, pin, bounds).unwrap();
             assert_eq!(Arc::ptr_eq(&first, &second), live.min(total) > 0);
         }
+    }
+    #[test]
+    fn persistent_import_reuse_charges_every_call_root_alike() {
+        let host = host(Default::default());
+        let keys = keys(&host);
+        let bounds = host.capacity().backend().ark_bounds();
+        let vk = keys.verifier_key().to_bytes(&bounds).unwrap();
+        let pin = keys.verifier_key().metadata().key_id();
+        let mut charges = Vec::new();
+        let mut imported = Vec::new();
+        for _ in 0..2 {
+            let mut call = host
+                .preflight_memory_call(
+                    ProofOperation::Prove,
+                    Some(r#"{"公開":true}"#.as_bytes()),
+                    Some(r#"{"秘密":false}"#.as_bytes()),
+                    &Default::default(),
+                    ProofCallOptions::default(),
+                    None,
+                    false,
+                )
+                .unwrap();
+            let before = call.invocation.snapshot();
+            imported.push(call.imports.import(&vk, pin).unwrap());
+            let after = call.invocation.snapshot();
+            charges.push((
+                after.total_value_bytes - before.total_value_bytes,
+                after.live_reserved_bytes - before.live_reserved_bytes,
+            ));
+            // Identical bytes under the same pin share the call's first
+            // import and its charge.
+            assert!(Arc::ptr_eq(
+                &imported[imported.len() - 1],
+                &call.imports.import(&vk, pin).unwrap()
+            ));
+            assert_eq!(call.invocation.snapshot(), after);
+            assert!(call.execute(None).unwrap().report.is_success());
+        }
+        // The second call reused the persistent import without decoding it,
+        // yet charged its own root exactly as the first call did.
+        assert!(Arc::ptr_eq(&imported[0], &imported[1]));
+        assert_eq!(charges[0], charges[1]);
+        assert_eq!(charges[0], (16 * vk.len() + 4096, 16 * vk.len() + 4096));
     }
     #[test]
     fn named_input_invalidation_clears_only_its_pin_and_preserves_checked_calls() {
