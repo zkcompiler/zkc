@@ -7,6 +7,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/ApplicationMap.h"
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/NativeCompilation.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/OracleObligations.h"
@@ -38,6 +39,12 @@ int zkc::runCompiler(int argc, char **argv,
   extensions.appendTo(registry);
   if (argc == 2 &&
       (StringRef(argv[1]) == "--help" || StringRef(argv[1]) == "-h")) {
+    // The fork options are the installed EVM target declaration's rows.
+    std::string forks;
+#define ZKC_EVM_FORK_OPTION(Enumerator, name, ...)                             \
+  forks += (forks.empty() ? "" : "|") + std::string(name);
+    ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_OPTION)
+#undef ZKC_EVM_FORK_OPTION
     outs()
         << "usage: zkc-compile COMMAND FILE\n\n"
            "Language (.zkc; explicit module map):\n"
@@ -50,9 +57,10 @@ int zkc::runCompiler(int argc, char **argv,
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
            "    [--no-calculation-batching]\n"
-           "    language-evm selects a proof Entry and emits checked Cancun "
-           "Yul.\n"
-           "    language-check may omit --entry to check definitions alone.\n"
+           "    language-evm selects a proof Entry and emits checked Yul for "
+           "--evm-version="
+        << forks << " (default " << evmForkName(EvmOptions().fork) << ").\n"
+        << "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands accept [--entry-kind=function|proof] and "
            "select the "
            "sole eligible Entry when --entry is omitted.\n"

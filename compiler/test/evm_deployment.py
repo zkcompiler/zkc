@@ -13,15 +13,25 @@ commands = Commands(OUT)
 ROOT = Path(__file__).resolve().parents[2]
 inputs = ['--source-format=zkc', '--entry=example::Proof',
           *project_arguments(ROOT / 'examples/projects/sumcheck-keccak/zkc.toml')]
+DECLARATION_BYTES = (ROOT / 'common/targets/evm.json').read_bytes()
+DECLARATION = json.loads(DECLARATION_BYTES)
+FORKS = [fork['name'] for fork in DECLARATION['forks']]
+IDENTITY = 'zkc.evm-target/0:' + hashlib.sha256(DECLARATION_BYTES).hexdigest()
 
 with case('deployment fork is exact and belongs only to EVM compilation'):
-    for value in ('', 'Cancun', 'Prague', 'shanghai', 'latest', 'prague, cancun'):
+    for value in ('', 'shanghai', 'latest', ', '.join(FORKS),
+                  *(name.capitalize() for name in FORKS)):
         commands.run([compiler, 'language-evm', *inputs, f'--evm-version={value}'],
                      refuses='evm.fork')
     commands.run([compiler, 'language-evm', *inputs,
-                  '--evm-version=cancun', '--evm-version=prague'], refuses='evm.fork')
-    commands.run([compiler, 'language-package', *inputs, '--evm-version=prague'],
+                  f'--evm-version={FORKS[0]}', f'--evm-version={FORKS[-1]}'], refuses='evm.fork')
+    commands.run([compiler, 'language-package', *inputs, f'--evm-version={FORKS[-1]}'],
                  refuses='evm.fork')
+
+with case('help names the declared forks and their default'):
+    help_text = commands.run([compiler, '--help'])
+    assert (f"--evm-version={'|'.join(FORKS)} (default {DECLARATION['default_fork']})"
+            in help_text), help_text
 
 with case('CPU physical and storage selections refuse at the EVM boundary'):
     for option in ('--cpu-target=portable', '--release-storage', '--dump=closed'):
@@ -33,12 +43,13 @@ flags = ['--no-simplify', '--no-finite-bulk', '--fuse-vector-reductions',
          '--fuse-collect-fold', '--no-calculation-batching',
          '--oracle-realization=' + json.dumps(oracle)]
 
-with case('both deployment forks retain exact source and effective common options'):
+with case('every declared fork retains exact source and effective common options'):
     original = commands.run([compiler, 'language-emit', *inputs])
-    for fork in ('cancun', 'prague'):
+    for fork in FORKS:
         response = json.loads(commands.run([compiler, 'language-evm', *inputs,
                                             f'--evm-version={fork}', *flags]))
         assert response['fork'] == response['manifest']['fork'] == fork
+        assert response['declaration'] == IDENTITY
         assert response['options'] == response['manifest']['options'] == {
             'simplify': False, 'release_storage': False, 'finite_bulk': False,
             'fuse_vector_reductions': True, 'fuse_collect_fold': True,
@@ -50,7 +61,11 @@ with case('both deployment forks retain exact source and effective common option
         assert json.loads(response['descriptor'][8]) == oracle
         assert commands.run([compiler, 'language-emit', *inputs]) == original
     default = json.loads(commands.run([compiler, 'language-evm', *inputs]))
-    assert default['fork'] == default['manifest']['fork'] == 'cancun'
+    assert default['fork'] == default['manifest']['fork'] == DECLARATION['default_fork']
+    assert default['declaration'] == IDENTITY
+    assert default['abi'] == DECLARATION['abi']['json']
+    assert default['manifest']['solc_version'] == DECLARATION['solc']['version'].split('+')[0]
+    assert default['limits'] == {row['name']: row['maximum'] for row in DECLARATION['limits']}
     assert default['options']['simplify'] is True
 
 with case('authored zero-transcript Entry retains framed common construction'):

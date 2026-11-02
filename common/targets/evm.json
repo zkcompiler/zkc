@@ -1,0 +1,64 @@
+{
+  "format": "zkc.evm-target/0",
+  "abi": {
+    "signature": "verify(bytes[],bytes,bytes)",
+    "selector": "a488e1e4",
+    "json": [
+      {
+        "type": "function",
+        "name": "verify",
+        "stateMutability": "view",
+        "inputs": [
+          {"name": "publicInputs", "type": "bytes[]"},
+          {"name": "context", "type": "bytes"},
+          {"name": "proof", "type": "bytes"}
+        ],
+        "outputs": [{"name": "accepted", "type": "bool"}]
+      }
+    ]
+  },
+  "solc": {
+    "version": "0.8.38+commit.1835d247",
+    "optimizer": {"enabled": true, "details": {"yul": true, "yulDetails": {"optimizerSteps": ":"}}}
+  },
+  "default_fork": "cancun",
+  "forks": [
+    {
+      "name": "cancun",
+      "solc": "cancun",
+      "hardfork": "Cancun",
+      "transaction_gas_cap": null,
+      "runtime_code_bytes": 24576,
+      "initcode_bytes": 49152,
+      "rules": ["EIP-170", "EIP-2565", "EIP-3860", "EIP-5656"]
+    },
+    {
+      "name": "prague",
+      "solc": "prague",
+      "hardfork": "Prague",
+      "transaction_gas_cap": null,
+      "runtime_code_bytes": 24576,
+      "initcode_bytes": 49152,
+      "rules": ["EIP-170", "EIP-2565", "EIP-3860", "EIP-5656", "EIP-7623"]
+    }
+  ],
+  "limits": [
+    {"name": "rounds", "minimum": 1, "maximum": 10},
+    {"name": "public_elements", "minimum": 1, "maximum": 1024},
+    {"name": "frame_bytes", "minimum": 1, "maximum": 65536},
+    {"name": "public_bytes", "minimum": 1, "maximum": 131072},
+    {"name": "context_bytes", "minimum": 1, "maximum": 4096},
+    {"name": "proof_bytes", "minimum": 1, "maximum": 65536},
+    {"name": "calldata_bytes", "minimum": 1, "maximum": 262144},
+    {"name": "root_bytes", "minimum": 1, "maximum": 262144},
+    {"name": "memory_bytes", "minimum": 4096, "maximum": 2097152},
+    {"name": "transcript_transitions", "minimum": 1, "maximum": 64},
+    {"name": "practical_gas", "minimum": 1, "maximum": 20000000}
+  ],
+  "reverts": [
+    {"class": "decode", "tag": "ZKCD"},
+    {"class": "fault", "tag": "ZKCT"},
+    {"class": "resource", "tag": "ZKCR"},
+    {"class": "source", "tag": "ZKCS"}
+  ]
+}

@@ -363,6 +363,7 @@ impl Source {
             &[
                 "format",
                 "target",
+                "declaration",
                 "fork",
                 "options",
                 "yul",
@@ -416,6 +417,11 @@ impl Source {
             || manifest["release_validation"] != "pending-deployment-and-dynamic-trace"
         {
             return Err("evm-source-format".into());
+        }
+        // The response names the compiler's installed target declaration; a
+        // different one states other forks, ceilings or tool settings.
+        if record["declaration"] != crate::evm_target::IDENTITY {
+            return Err("evm-target-declaration".into());
         }
         let fork = record["fork"].as_str().ok_or("evm-fork")?.parse()?;
         let options = source_options(&record["options"])?;

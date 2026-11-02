@@ -624,6 +624,34 @@ proof Proof=Work {
     refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),
             "evm.limits");
   });
+  cases.run("runtime revert helpers follow the declared classes", [&] {
+    std::string helpers = evm::detail::runtimeHelpers(EvmLimits(), nullptr);
+    // The emitted helper comment names each tag beside the helper's word.
+#define ZKC_EVM_REVERT_CHECK(name, tag, word)                                  \
+  require(StringRef(helpers).contains(                                         \
+              "function evm_" #name "(code) { evm_fail(0x" +                   \
+              utohexstr(word, true, 8) + ", code) }") &&                       \
+              StringRef(helpers).contains(tag),                                \
+          "runtime helpers differ from declared revert class " #name);
+    ZKC_EVM_TARGET_REVERTS(ZKC_EVM_REVERT_CHECK)
+#undef ZKC_EVM_REVERT_CHECK
+  });
+  cases.run("deployment ceilings default to and stay within declared rows",
+            [&] {
+#define ZKC_EVM_LIMIT_BOUNDS(member, name, minimum, maximum)                   \
+  {                                                                            \
+    require(EvmLimits().member == maximum,                                     \
+            Twine(name) + " does not default to its declared maximum");        \
+    for (uint64_t value : {minimum - 1, maximum + 1}) {                        \
+      EvmOptions options;                                                      \
+      options.limits.member = value;                                           \
+      refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),  \
+              "evm.limits");                                                   \
+    }                                                                          \
+  }
+              ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_BOUNDS)
+#undef ZKC_EVM_LIMIT_BOUNDS
+            });
   cases.run("deployment forks are typed and exact", [&] {
     require(take(parseEvmFork("cancun")) == EvmFork::Cancun &&
                 take(parseEvmFork("prague")) == EvmFork::Prague,
@@ -633,6 +661,14 @@ proof Proof=Work {
             "fork spelling is not canonical");
     for (StringRef name : {"", "Cancun", "Prague", "shanghai"})
       refuses(parseEvmFork(name), "evm.fork");
+#define ZKC_EVM_FORK_ROUND_TRIP(Enumerator, name, ...)                         \
+  require(take(parseEvmFork(name)) == EvmFork::Enumerator &&                   \
+              evmForkName(EvmFork::Enumerator) == name,                        \
+          Twine("declared fork ") + name + " does not round-trip");
+    ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_ROUND_TRIP)
+#undef ZKC_EVM_FORK_ROUND_TRIP
+    require(EvmOptions().fork == EvmFork::ZKC_EVM_TARGET_DEFAULT_FORK,
+            "EVM options do not select the declared default fork");
     EvmOptions options;
     options.fork = static_cast<EvmFork>(255);
     refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),

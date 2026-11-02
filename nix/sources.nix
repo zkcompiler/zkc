@@ -26,6 +26,7 @@ let
     "compiler/tools"
     "common/unicode"
     "common/catalog"
+    "common/targets"
   ];
   rust = [
     "Cargo.toml"
@@ -36,6 +37,8 @@ let
     "common/catalog/declarations.json"
     "common/catalog/installation.json"
     "common/catalog/validation-cases.json"
+    "common/targets/evm.json"
+    "common/targets/evm-validation-cases.json"
   ];
   projects = [
     "zkc.workspace.toml"

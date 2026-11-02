@@ -2,6 +2,13 @@
 pub mod entry;
 #[cfg(feature = "evm")]
 pub mod evm;
+/// The installed EVM target declaration, `zkc.evm-target/0`, generated from
+/// `common/targets/evm.json`: the verifier ABI, solc settings, forks,
+/// deployment ceilings and revert classes.
+#[cfg(feature = "evm")]
+pub mod evm_target {
+    include!(concat!(env!("OUT_DIR"), "/evm_target.rs"));
+}
 #[cfg(feature = "cpu")]
 mod host;
 mod io;

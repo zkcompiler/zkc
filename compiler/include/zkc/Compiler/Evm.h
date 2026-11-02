@@ -4,30 +4,29 @@
 #include "mlir/IR/DialectRegistry.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Target/Evm/Declaration.h.inc"
 #include <cstdint>
 #include <memory>
 
 namespace zkc {
-/// Exact external deployment setting; no arbitrary solc version string.
-enum class EvmFork { Cancun, Prague };
+/// Exact external deployment setting; no arbitrary solc version string. The
+/// forks are the rows of the installed zkc.evm-target/0 declaration.
+enum class EvmFork {
+#define ZKC_EVM_FORK_ENUMERATOR(Enumerator, ...) Enumerator,
+  ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_ENUMERATOR)
+#undef ZKC_EVM_FORK_ENUMERATOR
+};
 llvm::StringRef evmForkName(EvmFork);
 llvm::Expected<EvmFork> parseEvmFork(llvm::StringRef);
 
-/// Deployment configuration. The compiler accepts only positive ceilings at or
-/// below these defaults. Once compiled, callers cannot supply or raise a
-/// budget.
+/// Deployment configuration. The compiler accepts only ceilings within each
+/// declared row's minimum and maximum; the defaults are the maxima. Once
+/// compiled, callers cannot supply or raise a budget.
 struct EvmLimits {
-  uint64_t rounds = 10;
-  uint64_t publicElements = 1024;
-  uint64_t frameBytes = 65536;
-  uint64_t publicBytes = 131072;
-  uint64_t contextBytes = 4096;
-  uint64_t proofBytes = 65536;
-  uint64_t calldataBytes = 262144;
-  uint64_t rootBytes = 262144;
-  uint64_t memoryBytes = 2097152;
-  uint64_t transcriptTransitions = 64;
-  uint64_t practicalGas = 20000000;
+#define ZKC_EVM_LIMIT_MEMBER(member, name, minimum, maximum)                   \
+  uint64_t member = maximum;
+  ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_MEMBER)
+#undef ZKC_EVM_LIMIT_MEMBER
 };
 
 struct EvmOptions {
@@ -35,7 +34,7 @@ struct EvmOptions {
   /// common checker; the authored empty suite needs no draw selection.
   /// compileEvmEntry derives this from CheckedOriginal.
   NativeProofPolicy policy;
-  EvmFork fork = EvmFork::Cancun;
+  EvmFork fork = EvmFork::ZKC_EVM_TARGET_DEFAULT_FORK;
   bool simplify = true;
   MathematicalSelectionPolicy mathematics = {};
   protocol::OracleRealizationPolicy oracleSelection = {};
@@ -84,6 +83,8 @@ llvm::Expected<EvmCompilation>
 compileEvmEntry(const language::CheckedOriginal &, const EvmOptions & = {});
 
 /// Canonical JSON source object for the SDK/driver. Format zkc.evm-source/0.
+/// It names the installed target declaration by identity beside the selected
+/// fork, so a reader with a different declaration refuses it.
 llvm::json::Value encodeEvmCompilation(const EvmCompilation &);
 llvm::json::Value encodeEvmLimits(const EvmLimits &);
 } // namespace zkc

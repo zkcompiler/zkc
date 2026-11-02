@@ -372,6 +372,9 @@ def main():
     contract_instances = manifest.parent / "include/zkc/Contracts/Instances.inc"
     assert contract_instances.is_file(), "missing installed-instance tables"
     assert contract_instances not in generated, "installed-instance tables must not belong to IR generation"
+    evm_target_declaration = manifest.parent / "include/zkc/Target/Evm/Declaration.h.inc"
+    assert evm_target_declaration.is_file(), "missing EVM target declaration tables"
+    assert evm_target_declaration not in generated, "the EVM target declaration must not belong to IR generation"
     mathematical_recipes = manifest.parent / "generated/Transforms/MathematicalRecipes.inc"
     assert mathematical_recipes.is_file(), "missing private mathematical recipes"
     assert mathematical_recipes not in generated, "recipes must not belong to IR generation"
@@ -400,6 +403,8 @@ def main():
         if "ZkcContracts" in closure(name):
             permitted.add(contract_mathematics)
             permitted.add(contract_instances)
+        if "ZkcEvmTarget" in closure(name):
+            permitted.add(evm_target_declaration)
         visited = set()
 
         def visit(path):

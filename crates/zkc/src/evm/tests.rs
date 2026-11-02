@@ -64,6 +64,7 @@ pub(crate) fn source_record(entry: &str, body: &str) -> Value {
         "yul_sha256":hash(body.as_bytes()), "limits":limits, "solc_version":"0.8.38",
         "optimizer_steps":":", "release_validation":"pending-deployment-and-dynamic-trace"});
     json!({"format":"zkc.evm-source/0", "target":"evm", "fork":"cancun",
+        "declaration":crate::evm_target::IDENTITY,
         "yul":body, "abi":super::calldata::abi(),"entry":entry,
         "capture":identity,"installation":identity,"original":identity,"source_sha256":identity,
         "manifest":manifest,"limits":limits,"descriptor":descriptor,"policy":policy,"options":options})
@@ -464,6 +465,24 @@ fn source_duplicate_keys_refuse_even_when_equal_escaped_or_nested() {
             }
         }
     }
+}
+
+#[test]
+fn source_declaration_identity_is_checked() {
+    let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
+    Source::capture(&encode(&valid).unwrap()).unwrap();
+    let mut other = valid.clone();
+    other["declaration"] = json!(format!("zkc.evm-target/0:{}", "0".repeat(64)));
+    assert_eq!(
+        Source::capture(&encode(&other).unwrap()).unwrap_err().0,
+        "evm-target-declaration"
+    );
+    let mut missing = valid;
+    missing.as_object_mut().unwrap().remove("declaration");
+    assert_eq!(
+        Source::capture(&encode(&missing).unwrap()).unwrap_err().0,
+        "evm-source-format"
+    );
 }
 
 #[test]

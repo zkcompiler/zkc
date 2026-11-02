@@ -1,9 +1,10 @@
 # EVM verifier target
 
 The EVM target compiles a selected proof Entry's checked verifier closure to
-Cancun or Prague bytecode. It shares source admission, mathematical realization,
-construction and closed Exec formation with the CPU target. It does not execute
-`zkc.program/0` in EVM. The prover remains a normal native proof Entry.
+bytecode for a fork of its [target declaration](#target-declaration). It shares
+source admission, mathematical realization, construction and closed Exec
+formation with the CPU target. It does not execute `zkc.program/0` in EVM. The
+prover remains a normal native proof Entry.
 
 ## Compilation boundary
 
@@ -79,6 +80,48 @@ does not silently select an EVM realization. The invocation adapter selects the
 Entry's checked Boolean acceptance output, including when other data results
 precede it, and validates all returned managed transcript state.
 
+## Target declaration
+
+`common/targets/evm.json`, format `zkc.evm-target/0`, is the one authored
+source of the target's ABI, tool configuration, fork mapping, deployment
+ceilings and revert classes. It stays outside the
+[logical catalog](../formats/contract-declarations.md): it states no
+operation, codec or suite fact. Its identity is `zkc.evm-target/0:` followed by
+the lowercase SHA-256 of the file's exact bytes, so any change to it is a new
+identity.
+
+| Field | Content |
+|---|---|
+| `abi` | The verifier's Solidity `signature`, its four-byte `selector` and the standard ABI `json` |
+| `solc` | The pinned compiler `version`, with its commit, and the standard-JSON `optimizer` settings |
+| `forks` | Per fork: `name`, solc `evmVersion` (`solc`), engine `hardfork`, consensus `transaction_gas_cap` or null, `runtime_code_bytes`, `initcode_bytes` and the named consensus `rules` |
+| `default_fork` | The fork selected when a caller names none |
+| `limits` | Per deployment ceiling: `name`, `minimum` and `maximum` |
+| `reverts` | Per revert class: `class` and its four-byte ASCII `tag` |
+
+The declared forks are `cancun` and `prague`; the default is `cancun`. Each
+validator requires exactly these fields at every level and rejects repeated
+keys, fractional numbers and non-ASCII bytes. Fork names, solc `evmVersion`
+values and hardforks are unique, fork names are lowercase, and the default
+names a fork. Every fork lists explicit, unique `EIP-N` rules, including
+EIP-5656 because the emitted code copies memory with MCOPY; rules are not
+inherited between forks. The selector is eight lowercase hexadecimal digits
+equal to the first four bytes of the signature's Keccak-256, and the ABI JSON
+declares exactly that function. Limit names are unique and each limit satisfies
+1 ≤ `minimum` ≤ `maximum` < 2^64. Revert classes and tags are unique, and a tag
+is four uppercase ASCII letters.
+
+The compiler's configure step validates the declaration with
+`common/targets/generate.py` and generates its fork, limit and revert tables,
+so a declaration change changes the compiler's build identity. The Rust SDK
+build validates the same file independently and generates the typed
+`zkc::evm_target` module. Shared refusal cases in
+`common/targets/evm-validation-cases.json` name the rule each validator must
+report. Every reader validates the facts it uses; an artifact's self-stated
+numbers are not authority. The `zkc.evm-source/0` response names the
+declaration by its identity in `declaration`, beside the selected `fork`, so a
+reader with a different declaration refuses it.
+
 ## Invocation
 
 The sole function is:
@@ -88,7 +131,7 @@ function verify(bytes[] publicInputs, bytes context, bytes proof)
     external view returns (bool accepted);
 ```
 
-The selector is `0xa488e1e4`. Public values follow descriptor port order and use
+The declared selector is `0xa488e1e4`. Public values follow descriptor port order and use
 the existing [canonical value codecs](../realization/codecs.md). Context is an
 opaque byte string. Proof uses the unchanged [native framed transport](../formats/proof.md).
 The last two arguments have the same ABI type; their order remains significant.
@@ -135,8 +178,8 @@ trace, not its textual Yul or a static opcode count.
 ## Outcomes and capacity
 
 A successful call returns the canonical ABI Boolean. False is a completed
-verification decision. Reverts have a four-byte class followed by one 32-byte
-code:
+verification decision. Reverts have a four-byte declared class followed by one
+32-byte code:
 
 | Class | Bytes | Meaning |
 |---|---|---|
@@ -148,8 +191,8 @@ code:
 EVM out-of-gas is a machine halt, separate from these structured outcomes. EVM
 gas does not implement native VM instruction fuel.
 
-The compiler fixes ceilings in each deployment. The supported maxima are 10
-rounds, 1,024 collection elements per reached wire value, 65,536 bytes per frame
+The compiler fixes ceilings in each deployment, each within its declared
+minimum and maximum. The declared maxima are 10 rounds, 1,024 collection elements per reached wire value, 65,536 bytes per frame
 and proof, 131,072 public wire bytes, 4,096 context bytes, 262,144 calldata and binding-root bytes,
 2,097,152 memory bytes and 64 transcript transitions. Compiler callers may
 lower supported ceilings, never raise them. Finite local ranges retain the
@@ -165,8 +208,8 @@ budgets through the verifier ABI. The practical validation gas ceiling is
 compilation. The SDK's `evm` feature provides this target without a CPU runtime
 or EVM engine dependency. Compilation requires an explicit installed solc path
 and independent executable SHA-256 pin; no download or PATH substitution occurs.
-The target pins solc `0.8.38+commit.1835d247`. `--evm-version=cancun|prague`
-selects the fork, defaulting to Cancun. The typed SDK equivalent is
+The declaration pins solc `0.8.38+commit.1835d247`. `--evm-version` selects a
+declared fork, defaulting to the declared default. The typed SDK equivalent is
 `evm::Options { fork, compile }`. Effective common mathematical/oracle options
 flow through checked compilation and are bound into source and artifact identity;
 CPU storage and physical-target selections refuse. Exact standard-JSON settings
@@ -176,7 +219,7 @@ A `zkc.evm-artifact/0` directory contains:
 
 | File | Content |
 |---|---|
-| `source.json` | Exact compiler response, checked source identities, descriptor and ceilings |
+| `source.json` | Exact compiler response, checked source identities, target declaration identity, descriptor and ceilings |
 | `verifier.yul` | Target source |
 | `abi.json` | Verifier ABI |
 | `solc-input.json` | Exact tool request and settings |
@@ -191,8 +234,8 @@ deployment ceilings, and rejects duplicate or unknown JSON object fields.
 Import requires an independently retained hash of the exact manifest bytes.
 Internal checksums alone do not authenticate a substituted directory. Reuse
 requires an authenticated immutable artifact and the exact build key; compiler
-and solc identity checks still run. Deployment initcode and runtime obey EIP-3860
-and EIP-170 size limits.
+and solc identity checks still run. Deployment initcode and runtime obey the
+selected fork's declared EIP-3860 and EIP-170 size limits.
 
 Publication stages a complete sibling directory and atomically renames it
 without replacement. Existing destinations refuse. The current atomic directory

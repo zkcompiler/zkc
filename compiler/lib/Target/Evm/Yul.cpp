@@ -854,12 +854,12 @@ Expected<std::string> Exporter::run() {
     out << "data \"" << item.name << "\" hex\"" << toHex(item.bytes, true)
         << "\"\n";
   out << "}\n}\n";
-  // Ethereum selector uses Keccak, calculated from the fixed public signature.
-  // This constant is independently checked by the ABI conformance test.
+  // The installed target declaration states the selector, and its validators
+  // check it against the Keccak-256 of the declared signature.
   const std::string marker = "@SELECTOR@";
   size_t at = text.find(marker);
   if (at != std::string::npos)
-    text.replace(at, marker.size(), "a488e1e4");
+    text.replace(at, marker.size(), evm_target::abiSelector);
   return std::move(text);
 }
 } // namespace

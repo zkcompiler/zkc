@@ -17,21 +17,35 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc {
+namespace {
+// The declared fork names, in declaration order, for fork refusals.
+std::string declaredForks() {
+  std::string names;
+#define ZKC_EVM_FORK_NAME(Enumerator, name, ...)                               \
+  names += (names.empty() ? "" : ", ") + std::string(name);
+  ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_NAME)
+#undef ZKC_EVM_FORK_NAME
+  return names;
+}
+} // namespace
+
 StringRef evmForkName(EvmFork fork) {
   switch (fork) {
-  case EvmFork::Cancun:
-    return "cancun";
-  case EvmFork::Prague:
-    return "prague";
+#define ZKC_EVM_FORK_CASE(Enumerator, name, ...)                               \
+  case EvmFork::Enumerator:                                                    \
+    return name;
+    ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_CASE)
+#undef ZKC_EVM_FORK_CASE
   }
   return {};
 }
 Expected<EvmFork> parseEvmFork(StringRef name) {
-  if (name == "cancun")
-    return EvmFork::Cancun;
-  if (name == "prague")
-    return EvmFork::Prague;
-  return error("evm.fork", "expected cancun or prague");
+#define ZKC_EVM_FORK_PARSE(Enumerator, spelling, ...)                          \
+  if (name == spelling)                                                        \
+    return EvmFork::Enumerator;
+  ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_PARSE)
+#undef ZKC_EVM_FORK_PARSE
+  return error("evm.fork", "expected a declared fork: " + declaredForks());
 }
 struct EvmCompilation::Storage {
   MLIRContext context;
@@ -39,7 +53,7 @@ struct EvmCompilation::Storage {
   std::string yul, source, digest;
   json::Value abi = nullptr, descriptor = nullptr, manifest = nullptr;
   json::Value options = nullptr;
-  EvmFork fork = EvmFork::Cancun;
+  EvmFork fork = EvmFork::ZKC_EVM_TARGET_DEFAULT_FORK;
   NativeProofPolicy policy;
   EvmLimits limits;
   std::unique_ptr<CheckedEndpoint> endpoint;
@@ -78,51 +92,33 @@ OwningOpRef<ModuleOp> EvmCompilation::targetSnapshot() const {
 }
 
 json::Value encodeEvmLimits(const EvmLimits &limits) {
-  return json::Object{{"rounds", limits.rounds},
-                      {"public_elements", limits.publicElements},
-                      {"frame_bytes", limits.frameBytes},
-                      {"public_bytes", limits.publicBytes},
-                      {"context_bytes", limits.contextBytes},
-                      {"proof_bytes", limits.proofBytes},
-                      {"calldata_bytes", limits.calldataBytes},
-                      {"root_bytes", limits.rootBytes},
-                      {"memory_bytes", limits.memoryBytes},
-                      {"transcript_transitions", limits.transcriptTransitions},
-                      {"practical_gas", limits.practicalGas}};
+  json::Object result;
+#define ZKC_EVM_LIMIT_ENCODE(member, name, minimum, maximum)                   \
+  result[name] = limits.member;
+  ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_ENCODE)
+#undef ZKC_EVM_LIMIT_ENCODE
+  return result;
 }
 namespace {
+// Each ceiling lies within its declared row. The declared minimum of the
+// memory ceiling holds the fixed target state.
 Error validateLimits(const EvmLimits &limits) {
-  EvmLimits ceiling;
-  uint64_t EvmLimits::*members[] = {
-      &EvmLimits::rounds,        &EvmLimits::publicElements,
-      &EvmLimits::frameBytes,    &EvmLimits::publicBytes,
-      &EvmLimits::contextBytes,  &EvmLimits::proofBytes,
-      &EvmLimits::calldataBytes, &EvmLimits::rootBytes,
-      &EvmLimits::memoryBytes,   &EvmLimits::transcriptTransitions,
-      &EvmLimits::practicalGas};
-  for (auto member : members)
-    if (limits.*member == 0 || limits.*member > ceiling.*member)
-      return error("evm.limits", "deployment ceilings must be positive and "
-                                 "cannot exceed the supported profile");
-  if (limits.memoryBytes < 4096)
-    return error("evm.limits",
-                 "memory ceiling cannot hold the fixed target state");
+#define ZKC_EVM_LIMIT_CHECK(member, name, minimum, maximum)                    \
+  if (limits.member < minimum || limits.member > maximum)                      \
+    return error("evm.limits", Twine("deployment ceiling ") + name +           \
+                                   " lies outside its declared range");
+  ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_CHECK)
+#undef ZKC_EVM_LIMIT_CHECK
   return Error::success();
 }
 std::string digest(StringRef bytes) {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
 json::Value standardAbi() {
-  return json::Array{json::Object{
-      {"type", "function"},
-      {"name", "verify"},
-      {"stateMutability", "view"},
-      {"inputs",
-       json::Array{json::Object{{"name", "publicInputs"}, {"type", "bytes[]"}},
-                   json::Object{{"name", "context"}, {"type", "bytes"}},
-                   json::Object{{"name", "proof"}, {"type", "bytes"}}}},
-      {"outputs",
-       json::Array{json::Object{{"name", "accepted"}, {"type", "bool"}}}}}};
+  auto abi = json::parse(evm_target::abiJson);
+  if (!abi)
+    report_fatal_error("generated EVM target ABI is not JSON");
+  return std::move(*abi);
 }
 } // namespace
 
@@ -130,7 +126,7 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
                                          const EvmOptions &options,
                                          const DialectRegistry &registry) {
   if (evmForkName(options.fork).empty())
-    return error("evm.fork", "expected cancun or prague");
+    return error("evm.fork", "expected a declared fork: " + declaredForks());
   if (auto error = validateLimits(options.limits))
     return std::move(error);
   auto oracleSelection =
@@ -245,8 +241,8 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
       {"compiler", language::compilerToolchainIdentity()},
       {"yul_sha256", digest(result->yul)},
       {"limits", encodeEvmLimits(options.limits)},
-      {"solc_version", "0.8.38"},
-      {"optimizer_steps", ":"},
+      {"solc_version", evm_target::solcRelease},
+      {"optimizer_steps", evm_target::solcOptimizerSteps},
       {"release_validation", "pending-deployment-and-dynamic-trace"}};
   return EvmCompilation(std::move(result));
 }
@@ -272,6 +268,7 @@ compileEvmEntry(const language::CheckedOriginal &original,
 json::Value encodeEvmCompilation(const EvmCompilation &compiled) {
   return json::Object{{"format", "zkc.evm-source/0"},
                       {"target", "evm"},
+                      {"declaration", evm_target::identity},
                       {"fork", evmForkName(compiled.fork())},
                       {"options", compiled.options()},
                       {"yul", compiled.yul()},

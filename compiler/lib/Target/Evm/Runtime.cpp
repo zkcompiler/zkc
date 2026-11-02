@@ -1,5 +1,6 @@
 #include "Runtime.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringExtras.h"
 
 namespace zkc::evm::detail {
 namespace {
@@ -97,11 +98,7 @@ function evm_fail(kind, code) {
   // Source stop ZKCS, decode ZKCD, target fault ZKCT, resource refusal ZKCR.
   mstore(0, shl(224, kind)) mstore(4, code) revert(0, 36)
 }
-function evm_decode(code) { evm_fail(0x5a4b4344, code) }
-function evm_fault(code) { evm_fail(0x5a4b4354, code) }
-function evm_resource(code) { evm_fail(0x5a4b4352, code) }
-function evm_source(code) { evm_fail(0x5a4b4353, code) }
-@CHALLENGE_PRIME@function evm_alloc(n) -> p {
+@REVERT_CLASSES@@CHALLENGE_PRIME@function evm_alloc(n) -> p {
   p := mload(0x40)
   if gt(n, @MEMORY@) { evm_resource(1) }
   let end := add(p, and(add(n, 31), not(31)))
@@ -294,6 +291,16 @@ function evm_sha256(p, n) -> digest {
             .str();
     helpers = transcriptHelpers.str();
   }
+  // One helper per declared revert class, reverting with its four-byte tag.
+  std::string classes;
+#define ZKC_EVM_REVERT_HELPER(name, tag, word)                                 \
+  classes +=                                                                   \
+      "function evm_" #name "(code) { evm_fail(" +                             \
+      llvm::utohexstr(word, /*LowerCase=*/true, /*Width=*/8).insert(0, "0x") + \
+      ", code) }\n";
+  ZKC_EVM_TARGET_REVERTS(ZKC_EVM_REVERT_HELPER)
+#undef ZKC_EVM_REVERT_HELPER
+  insert("@REVERT_CLASSES@", classes);
   insert("@CHALLENGE_PRIME@", prime);
   insert("@TRANSCRIPT@", helpers);
   replace("@MEMORY@", limits.memoryBytes);
