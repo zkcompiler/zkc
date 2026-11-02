@@ -208,7 +208,11 @@ pub(super) fn check_draw_budgets(budgets: impl IntoIterator<Item = u64>) -> Resu
 
 /// Supply public statement data once at the source boundary. Only immutable data
 /// is duplicated, after native constructor/shape checks and before native byte
-/// admission independently checks the complete invocation.
+/// admission independently checks the complete invocation. The statement's
+/// wire bytes, counted at every role operand they initialize, are bounded by
+/// `public_bytes`
+/// ([`Allowances::PUBLIC_BYTES`](crate::host::capacity::Allowances::PUBLIC_BYTES)).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn proof_inputs(
     interface: &Interface,
     role: &RolePorts,
@@ -216,6 +220,7 @@ pub(super) fn proof_inputs(
     public_types: &[zkc_runtime::vm::PhysicalType],
     private: NamedValues,
     capacity: crate::host::capacity::Capacity,
+    public_bytes: usize,
     installation: &zkc_cpu::CpuInstallation,
 ) -> Result<Vec<InputValue>, String> {
     let private = values(interface.named_inputs(role), private, None)?;
@@ -254,7 +259,7 @@ pub(super) fn proof_inputs(
                 if assigned
                     .insert(
                         *original,
-                        duplicate(input, capacity, &mut public_wire_bytes)?,
+                        duplicate(input, public_bytes, &mut public_wire_bytes)?,
                     )
                     .is_some()
                 {
@@ -275,7 +280,7 @@ pub(super) fn proof_inputs(
 
 fn duplicate(
     input: &InputValue,
-    capacity: crate::host::capacity::Capacity,
+    public_bytes: usize,
     public_wire_bytes: &mut usize,
 ) -> Result<InputValue, String> {
     Ok(match input {
@@ -284,7 +289,7 @@ fn duplicate(
             *public_wire_bytes = public_wire_bytes
                 .checked_add(bytes.len())
                 .ok_or("entry-input-limit")?;
-            if *public_wire_bytes > capacity.values.live_bytes.min(capacity.values.total_bytes) {
+            if *public_wire_bytes > public_bytes {
                 return Err("entry-input-limit".into());
             }
             InputValue::Wire(bytes.clone())
@@ -302,7 +307,7 @@ fn duplicate(
             alternative: *alternative,
             payload: payload
                 .iter()
-                .map(|p| duplicate(p, capacity, public_wire_bytes))
+                .map(|p| duplicate(p, public_bytes, public_wire_bytes))
                 .collect::<Result<_, _>>()?,
         },
         _ => return Err("entry-input-public".into()),

@@ -272,10 +272,12 @@ impl RunEntry {
         if request.roles.len() != self.interface.roles().len() {
             return Err(super::EntryCondition::InputRoles.into());
         }
+        let limits = self.native.limits();
         let material = setups::run_material(
             &self.interface,
             request.setups,
-            self.native.limits().capacity,
+            limits.capacity,
+            limits.material.setup_bytes,
         )?;
         let mut roles = Vec::new();
         for role in self.interface.roles() {

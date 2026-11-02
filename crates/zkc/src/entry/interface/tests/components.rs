@@ -163,6 +163,7 @@ mod cpu {
             &[ty],
             private,
             Default::default(),
+            crate::execution::MaterialLimits::DEFAULT.public_bytes,
             &Default::default(),
         )
         .unwrap();

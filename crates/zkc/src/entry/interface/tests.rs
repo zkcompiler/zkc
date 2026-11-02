@@ -1029,14 +1029,17 @@ fn setup_alias_keys_share_the_pin_and_original_representative() {
     assert_eq!(native.keys, [(0, [9; 32]), (3, [9; 32])].into());
     assert_eq!(native.inputs, [(1, 0), (2, 0)].into());
     let material = [("pcs".into(), vec![1, 2, 3])].into();
+    // The copies are bounded by the setup material allowance. A runner's
+    // capacity too small to hold them does not bound them.
     let mut capacity = crate::execution::Capacity::default();
+    capacity.values.live_bytes = 0;
+    capacity.values.total_bytes = 0;
     assert_eq!(
-        crate::entry::setups::material_bytes(&interface, &material, capacity).unwrap(),
+        crate::entry::setups::material_bytes(&interface, &material, capacity, 6).unwrap(),
         6
     );
-    capacity.values.live_bytes = 5;
     assert_eq!(
-        crate::entry::setups::material_bytes(&interface, &material, capacity).unwrap_err(),
+        crate::entry::setups::material_bytes(&interface, &material, capacity, 5).unwrap_err(),
         "entry-setup-limit"
     );
 }

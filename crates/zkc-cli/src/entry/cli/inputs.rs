@@ -87,9 +87,14 @@ impl Options {
             match key {
                 "--key" => {
                     let (name, path) = assignment(value)?;
-                    let capacity = options.proof.capacity;
-                    let remaining = capacity.values.total_bytes.saturating_sub(material_bytes);
-                    let bytes = read(path, capacity.wire_bytes.min(remaining))?;
+                    // The keys together are one call's setup material, bounded
+                    // by its own allowance rather than the runner's capacity.
+                    let bytes = zkc::entry::files::read_setup_material(
+                        std::path::Path::new(path),
+                        options.proof.capacity,
+                        options.proof.material.setup_bytes,
+                        material_bytes,
+                    )?;
                     material_bytes += bytes.len();
                     if options.material.insert(name.into(), bytes).is_some() {
                         return Err("entry-setup-material".into());

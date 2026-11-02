@@ -1082,6 +1082,11 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
         record["loading"]["work"],
         json!(Allowances::LOADING_WORK.default)
     );
+    assert_eq!(limits.material, crate::execution::MaterialLimits::DEFAULT);
+    assert_eq!(
+        record["material"]["setup_bytes"],
+        json!(Allowances::SETUP_BYTES.default)
+    );
     for (field, code) in [
         ("ring", "bundle-ring-work-limit"),
         ("sequence", "bundle-sequence-work-limit"),
@@ -1090,6 +1095,10 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
         ("live", "native-invocation-limit"),
         ("total", "native-invocation-limit"),
         ("logical", "native-invocation-limit"),
+        ("public", "entry-public-bytes-limit"),
+        ("reference", "entry-reference-bytes-limit"),
+        ("setup", "entry-setup-bytes-limit"),
+        ("retained", "entry-retained-imports-limit"),
     ] {
         let mut lowered = HostLimits::default();
         let mut raised = HostLimits::default();
@@ -1119,6 +1128,23 @@ fn host_policy_owns_ring_sequence_and_external_allowances() {
             "logical" => {
                 lowered.invocation.logical_bytes = 0;
                 raised.invocation.logical_bytes = Allowances::INVOCATION_LOGICAL_BYTES.maximum + 1;
+            }
+            "public" => {
+                lowered.material.public_bytes = 0;
+                raised.material.public_bytes = Allowances::PUBLIC_BYTES.maximum as usize + 1;
+            }
+            "reference" => {
+                lowered.material.reference_bytes = 0;
+                raised.material.reference_bytes = Allowances::REFERENCE_BYTES.maximum as usize + 1;
+            }
+            "setup" => {
+                lowered.material.setup_bytes = 0;
+                raised.material.setup_bytes = Allowances::SETUP_BYTES.maximum as usize + 1;
+            }
+            "retained" => {
+                lowered.material.retained_imports = 0;
+                raised.material.retained_imports =
+                    Allowances::RETAINED_IMPORTS.maximum as usize + 1;
             }
             _ => {
                 lowered.external_work = 0;

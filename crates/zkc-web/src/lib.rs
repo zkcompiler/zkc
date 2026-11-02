@@ -128,16 +128,24 @@ impl ProofSession {
     }
 
     /// Supply material for an independently pinned slot. SDK preflight checks
-    /// its authority before execution. Persistent copies have an aggregate cap.
+    /// its authority before execution. Each call supplies every persistent
+    /// copy, so together they are bounded by one call's setup material
+    /// allowance.
     #[wasm_bindgen(js_name = setSetup)]
     pub fn set_setup(&mut self, slot: &str, material: &[u8]) -> Result<()> {
         let entry = self.active()?;
         if !entry.interface().setup_names().any(|name| name == slot) {
             return Err("web-setup-slot".into());
         }
+        let allowance = entry.material_limits().setup_bytes;
         entry.invalidate_setup(slot)?;
         self.setups.remove(slot);
-        self.check_material_capacity(material.len())?;
+        check_material(
+            material.len(),
+            self.setups.values().map(Vec::len),
+            self.capacity.wire_bytes,
+            allowance,
+        )?;
         self.setups.insert(slot.into(), material.into());
         Ok(())
     }
@@ -146,12 +154,19 @@ impl ProofSession {
     /// grants no file access, material identity or setup authority.
     #[wasm_bindgen(js_name = setInput)]
     pub fn set_input(&mut self, name: &str, bytes: &[u8]) -> Result<()> {
-        self.active()?.invalidate_input(name)?;
+        let entry = self.active()?;
+        let allowance = entry.material_limits().reference_bytes;
+        entry.invalidate_input(name)?;
         self.inputs.remove(name);
         if name.is_empty() || name.len() > 4096 || self.inputs.len() >= 1024 {
             return Err("web-input-name".into());
         }
-        self.check_material_capacity(bytes.len())?;
+        check_material(
+            bytes.len(),
+            self.inputs.values().map(|value| value.len()),
+            self.capacity.wire_bytes,
+            allowance,
+        )?;
         self.inputs.insert(name.into(), Arc::new(bytes.into()));
         Ok(())
     }
@@ -195,19 +210,6 @@ impl ProofSession {
         self.entry
             .as_ref()
             .ok_or_else(|| "web-session-disposed".into())
-    }
-    fn check_material_capacity(&self, incoming: usize) -> Result<()> {
-        let total = self
-            .setups
-            .values()
-            .map(Vec::len)
-            .chain(self.inputs.values().map(|value| value.len()))
-            .try_fold(incoming, |total, len| total.checked_add(len))
-            .ok_or("web-setup-limit")?;
-        if incoming > self.capacity.wire_bytes || total > self.capacity.values.total_bytes {
-            return Err("web-setup-limit".into());
-        }
-        Ok(())
     }
     fn execute(
         &self,
@@ -292,6 +294,25 @@ impl ProofSession {
             _report: retention,
         })
     }
+}
+
+/// Each persistent copy is one wire frame, and the copies of one kind together
+/// stay within the allowance every call binds them under: setups within the
+/// setup material allowance, named inputs within the named reference
+/// allowance. Neither derives from the runner's capacity.
+fn check_material(
+    incoming: usize,
+    mut held: impl Iterator<Item = usize>,
+    wire_bytes: usize,
+    allowance: usize,
+) -> Result<()> {
+    let total = held
+        .try_fold(incoming, |total, len| total.checked_add(len))
+        .ok_or("web-setup-limit")?;
+    if incoming > wire_bytes || total > allowance {
+        return Err("web-setup-limit".into());
+    }
+    Ok(())
 }
 
 fn entry_refusal(error: entry::EntryError) -> String {
@@ -383,5 +404,29 @@ mod tests {
             ProofSession::new(&[], &[0; 31], "{}", &[]).err().unwrap(),
             "entry-package-pin"
         );
+    }
+    #[test]
+    fn persistent_material_stays_within_the_allowance_each_call_binds_it_under() {
+        let limits = zkc::execution::MaterialLimits::DEFAULT;
+        let wire = Capacity::default().wire_bytes;
+        for allowance in [limits.setup_bytes, limits.reference_bytes] {
+            // Copies of one kind together fill the allowance and no more.
+            let frames = allowance / wire;
+            let held = || std::iter::repeat_n(wire, frames - 1).chain([1]);
+            let room = allowance - (frames - 1) * wire - 1;
+            assert!(room < wire);
+            check_material(room, held(), wire, allowance).unwrap();
+            assert_eq!(
+                check_material(room + 1, held(), wire, allowance).unwrap_err(),
+                "web-setup-limit"
+            );
+        }
+        // Each copy is still one wire frame.
+        assert_eq!(
+            check_material(wire + 1, std::iter::empty(), wire, usize::MAX).unwrap_err(),
+            "web-setup-limit"
+        );
+        // Setups and named inputs have separate allowances.
+        assert_ne!(limits.setup_bytes, limits.reference_bytes);
     }
 }

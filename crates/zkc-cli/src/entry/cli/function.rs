@@ -23,7 +23,7 @@ pub(super) fn execute(
     let output_setups = invocation.results.is_some() && interface.result_requires_setup();
     let mut bindings = files::Invocations::load(
         args.value("--invocations").map(std::path::Path::new),
-        capacity,
+        &options.run,
         output_setups,
     )?;
     bindings.protect(&mut destinations)?;

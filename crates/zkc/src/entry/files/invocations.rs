@@ -263,22 +263,18 @@ impl Invocations {
                 .map(|&(id, operation, _)| (id, operation)),
         )
     }
+    /// Load declared contexts under the Function's Host policy record and
+    /// retain its selected support and capacity for result encoding. The setup
+    /// material of every deployment together is one invocation's setup
+    /// material allowance (`limits.material.setup_bytes`).
     pub fn load(
         path: Option<&Path>,
-        capacity: crate::execution::Capacity,
+        limits: &crate::run::HostLimits,
         output_setups: bool,
     ) -> Result<Self> {
-        Self::load_with_installation(path, capacity, output_setups, Default::default())
-    }
-    /// Load declared contexts and retain selected support for result encoding.
-    pub fn load_with_installation(
-        path: Option<&Path>,
-        capacity: crate::execution::Capacity,
-        output_setups: bool,
-        installation: zkc_cpu::CpuInstallation,
-    ) -> Result<Self> {
+        let capacity = limits.capacity;
         let mut result = Self {
-            installation,
+            installation: limits.installation.clone(),
             authority: BTreeMap::new(),
             context: InvocationContext::default(),
             output_setups: Default::default(),
@@ -401,10 +397,12 @@ impl Invocations {
                     return Err("entry-setup-material".into());
                 }
                 let path = directory.join(path);
-                let remaining = capacity.values.total_bytes.saturating_sub(material_bytes);
-                let bytes = read(
-                    path.to_str().ok_or("entry-setup-material")?,
-                    capacity.wire_bytes.min(remaining),
+                path.to_str().ok_or("entry-setup-material")?;
+                let bytes = files::read_setup_material(
+                    &path,
+                    capacity,
+                    limits.material.setup_bytes,
+                    material_bytes,
                 )?;
                 material_bytes += bytes.len();
                 result.paths.push(path);
@@ -483,7 +481,7 @@ mod tests {
         let path = directory.join("invocations.json");
         std::fs::write(&path, value.to_string()).unwrap();
         let path = path.to_str().unwrap();
-        Invocations::load(Some(Path::new(path)), Default::default(), true)
+        Invocations::load(Some(Path::new(path)), &Default::default(), true)
     }
     fn proof() -> Json {
         json!({"operation":"verify","authority":{"format":"zkc.entry-setups/0","keys":{}},
@@ -543,7 +541,7 @@ mod tests {
     #[test]
     fn consumed_invocations_retain_the_result_encoding_capacity() {
         let value = crate::entry::Value::from(zkc_cpu::Value::Bool(true));
-        let (_, context, encoder) = Invocations::load(None, Default::default(), false)
+        let (_, context, encoder) = Invocations::load(None, &Default::default(), false)
             .unwrap()
             .into_parts();
         assert!(context.deployments.is_empty());
@@ -554,7 +552,11 @@ mod tests {
             wire_bytes: 6,
             ..Default::default()
         };
-        let (_, _, encoder) = Invocations::load(None, capacity, false)
+        let limits = crate::run::HostLimits {
+            capacity,
+            ..Default::default()
+        };
+        let (_, _, encoder) = Invocations::load(None, &limits, false)
             .unwrap()
             .into_parts();
         assert_eq!(encoder.encode(&value).unwrap_err(), "entry-output-encoding");
@@ -628,6 +630,20 @@ mod tests {
             materials.push((id, key.metadata(), bytes));
         }
         let bindings = load(dir.path(), &document).unwrap();
+        // Every deployment's material together is one invocation's setup
+        // material allowance.
+        let total: usize = materials.iter().map(|(_, _, bytes)| bytes.len()).sum();
+        let path = dir.path().join("invocations.json");
+        for (setup_bytes, admitted) in [(total, true), (total - 1, false)] {
+            let mut limits = crate::run::HostLimits::default();
+            limits.material.setup_bytes = setup_bytes;
+            let loaded = Invocations::load(Some(&path), &limits, true);
+            if admitted {
+                loaded.unwrap();
+            } else {
+                assert_eq!(loaded.err().unwrap(), "entry-setup-limit");
+            }
+        }
         for (id, metadata, bytes) in &materials {
             assert_eq!(bindings.authority[*id].keys["setup"], metadata.key_id());
             assert!(bindings.output_setups.get(*metadata).is_some());
@@ -652,10 +668,43 @@ mod tests {
         let value = crate::entry::Value::Array(commitments);
         let encoded: Json = serde_json::from_slice(&encoder.encode(&value).unwrap()).unwrap();
         assert_eq!(encoded["value"].as_array().unwrap().len(), 2);
-        let (_, _, empty) = Invocations::load(None, Default::default(), false)
+        let (_, _, empty) = Invocations::load(None, &Default::default(), false)
             .unwrap()
             .into_parts();
         assert_eq!(empty.encode(&value).unwrap_err(), "entry-output-encoding");
+    }
+    #[test]
+    fn setup_material_is_bounded_by_its_own_allowance() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("setup.zkvk"), vec![0; 64]).unwrap();
+        let mut binding = proof();
+        binding["authority"]["keys"] = json!({"setup":"0".repeat(64)});
+        binding["setups"] = json!({"setup":"setup.zkvk"});
+        let document = json!({"format":"zkc.entry-invocations/0","deployments":{"child":binding}});
+        let path = dir.path().join("invocations.json");
+        std::fs::write(&path, document.to_string()).unwrap();
+        let load = |limits: &crate::run::HostLimits| {
+            Invocations::load(Some(&path), limits, true).err().unwrap()
+        };
+        // The material is read under the setup material allowance. A runner's
+        // capacity too small to hold it does not bound it, so the bytes reach
+        // material admission, which refuses these.
+        let mut limits = crate::run::HostLimits::default();
+        limits.capacity.values.live_bytes = 0;
+        limits.capacity.values.total_bytes = 0;
+        limits.material.setup_bytes = 64;
+        for read in [load(&limits), load(&Default::default())] {
+            assert!(
+                !["entry-setup-limit", "artifact-byte-limit"].contains(&read.as_str()),
+                "{read}"
+            );
+        }
+        limits.material.setup_bytes = 63;
+        assert_eq!(load(&limits), "entry-setup-limit");
+        // One file is still one wire frame of the runner's capacity.
+        let mut limits = crate::run::HostLimits::default();
+        limits.capacity.wire_bytes = 63;
+        assert_eq!(load(&limits), "artifact-byte-limit");
     }
     #[test]
     fn malformed_contexts_and_unbacked_authority_refuse() {

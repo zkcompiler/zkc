@@ -905,10 +905,7 @@ impl NativeDeployment {
                 && let Some(proof) = proof
             {
                 let ty = &role.inputs.last().expect("admitted codec input").1;
-                retained.extend(zkc_runtime::host::wire::reserve_allocation(
-                    self.host_ledger(),
-                    proof.len().saturating_add(512),
-                )?);
+                retained.extend(self.retain_received_proof(proof)?);
                 values.push(
                     backend
                         .decode_raw_bytes(ty, proof)
@@ -1085,6 +1082,18 @@ impl NativeDeployment {
         report.sequence_work = backend.sequence_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
         Ok(report)
+    }
+    /// Charge a received proof that the record codec decodes to the
+    /// invocation root before it is decoded: its bytes and a fixed header
+    /// allowance, read once and held live with the call. A root that cannot
+    /// afford it refuses with `native-proof-received-work-limit` or
+    /// `native-proof-received-bytes-limit`.
+    fn retain_received_proof(
+        &self,
+        proof: &[u8],
+    ) -> Result<Option<zkc_runtime::vm::LiveReservation>> {
+        crate::host::capacity::RootCharge::RECEIVED_PROOF
+            .reserve_bytes(self.host_ledger(), proof.len().saturating_add(512))
     }
     /// A runner that does not share the root takes custody of its loaded
     /// inputs under its own budget once it exists; the Host's reservation of

@@ -143,6 +143,7 @@ pub(super) fn admit(
                             interface: options.limits.interface,
                             invocation: options.limits.invocation,
                             loading_work: options.limits.loading_work,
+                            material: options.limits.material,
                             binding: options.binding,
                             installation: options.limits.installation.clone(),
                         },

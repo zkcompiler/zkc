@@ -101,6 +101,7 @@ fn public_wire_duplication_preserves_the_original_payload_allocation() {
             &public_types(&interface),
             NamedValues::new(),
             Capacity::default(),
+            crate::execution::MaterialLimits::DEFAULT.public_bytes,
             &Default::default(),
         )
         .unwrap();
@@ -137,15 +138,12 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
         ],
     }];
     let bound = 3 * owner.len();
-    for (live, total, succeeds) in [
-        (bound, bound + 1, true),
-        (bound + 1, bound, true),
-        (bound - 1, bound, false),
-        (bound, bound - 1, false),
-    ] {
+    for (public_bytes, succeeds) in [(bound, true), (bound + 1, true), (bound - 1, false)] {
+        // The statement's own allowance bounds every occurrence. A runner's
+        // capacity too small to hold the statement does not.
         let mut capacity = Capacity::default();
-        capacity.values.live_bytes = live;
-        capacity.values.total_bytes = total;
+        capacity.values.live_bytes = 0;
+        capacity.values.total_bytes = 0;
         let result = proof_inputs(
             &interface,
             role,
@@ -153,6 +151,7 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &public_types(&interface),
             NamedValues::new(),
             capacity,
+            public_bytes,
             &Default::default(),
         );
         if succeeds {
@@ -173,9 +172,10 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             assert_eq!(result.unwrap_err(), "entry-input-limit");
         }
     }
-    let mut capacity = Capacity::default();
-    capacity.values.live_bytes = 0;
-    capacity.wire_bytes = owner.len() - 1;
+    let mut capacity = Capacity {
+        wire_bytes: owner.len() - 1,
+        ..Capacity::default()
+    };
     assert_eq!(
         proof_inputs(
             &interface,
@@ -184,6 +184,7 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &public_types(&interface),
             NamedValues::new(),
             capacity,
+            0,
             &Default::default(),
         )
         .unwrap_err(),
@@ -201,6 +202,7 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &public_types(&interface),
             NamedValues::new(),
             capacity,
+            0,
             &Default::default(),
         )
         .unwrap_err(),
@@ -225,6 +227,7 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &public_types(&interface),
             NamedValues::new(),
             capacity,
+            0,
             &Default::default(),
         )
         .unwrap_err(),

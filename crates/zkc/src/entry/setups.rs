@@ -102,10 +102,16 @@ pub(super) fn proof_authority(
     }
     Ok(result)
 }
+/// The setup material bytes the Host holds for one invocation, counting every
+/// copy: one per verifier-key port for a proof, one per slot for a run. They
+/// are bounded by the setup material allowance
+/// ([`Allowances::SETUP_BYTES`](crate::host::capacity::Allowances::SETUP_BYTES)),
+/// not by a runner's capacity.
 pub(super) fn material_bytes(
     interface: &Interface,
     material: &BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
+    setup_bytes: usize,
 ) -> Result<usize> {
     if material.len() != interface.setups.len() {
         return Err("entry-setup-material".into());
@@ -123,7 +129,7 @@ pub(super) fn material_bytes(
         bytes = bytes
             .checked_add(key.len().checked_mul(copies).ok_or("entry-setup-limit")?)
             .ok_or("entry-setup-limit")?;
-        if bytes > capacity.values.live_bytes.min(capacity.values.total_bytes) {
+        if bytes > setup_bytes {
             return Err("entry-setup-limit".into());
         }
     }
@@ -133,8 +139,9 @@ pub(super) fn public_keys<'a>(
     interface: &Interface,
     material: &'a BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
+    setup_bytes: usize,
 ) -> Result<BTreeMap<u32, &'a [u8]>> {
-    material_bytes(interface, material, capacity)?;
+    material_bytes(interface, material, capacity, setup_bytes)?;
     Ok(interface
         .setups
         .iter()
@@ -150,8 +157,9 @@ pub(super) fn run_material(
     interface: &Interface,
     mut material: BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
+    setup_bytes: usize,
 ) -> Result<BTreeMap<String, Vec<u8>>> {
-    material_bytes(interface, &material, capacity)?;
+    material_bytes(interface, &material, capacity, setup_bytes)?;
     interface
         .setups
         .iter()
@@ -171,11 +179,12 @@ pub(super) fn check_pinned_material(
     authority: &SetupAuthority,
     material: &BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
+    setup_bytes: usize,
     imports: &mut crate::host::setups::VerifierKeys,
     installation: &zkc_cpu::CpuInstallation,
 ) -> Result<BTreeMap<String, std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>>> {
     check(interface, authority)?;
-    material_bytes(interface, material, capacity)?;
+    material_bytes(interface, material, capacity, setup_bytes)?;
     interface
         .setups
         .iter()

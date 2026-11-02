@@ -516,10 +516,11 @@ pub(super) fn execute(
                     Err(_) => Err(Stop::Abort),
                     Ok((false, _)) => Ok(Decision::Retry(())),
                     Ok((true, produced)) => {
-                        let retention = zkc_runtime::host::wire::reserve_allocation(
-                            deployment.host_ledger(),
-                            produced.proof.len(),
-                        );
+                        // The completed attempt's proof is retained by the
+                        // root; a refusal names the root allowance that
+                        // refused.
+                        let retention = crate::host::capacity::RootCharge::ATTEMPT_PROOF
+                            .reserve_bytes(deployment.host_ledger(), produced.proof.len());
                         let retention = match retention {
                             Ok(r) => r,
                             Err(error) => {

@@ -36,9 +36,9 @@ lower the allowance.
 Scopes are the extents over which a counter accumulates: one operation (a
 value, collection, frame, message, service, admission algorithm or call), one
 participant runner (cumulative across the attempts of one proof call), one
-attempt, or one invocation, whose
+attempt, one invocation, whose
 [accounting root](#invocation-ledgers) runs from input preparation through
-output publication. In every invocation each field selects one allowance. The
+output publication, or one admitted Entry across all of its calls. In every invocation each field selects one allowance. The
 last three bound every runner's own ledger only. The invocation root has its
 own [allowances](#host-allowances), which this record does not select; equal
 numbers never merge them, and a runner's charges reach the root only when the
@@ -99,9 +99,8 @@ runner's live and fresh allowances, a value count, and its own
 [loading work allowance](#host-allowances), in loading work units rather than
 bytes. A refusal names the loading allowance that was exhausted, whether the
 sublimit or the root refused: `artifact-input-work-limit` for loading work and
-`artifact-input-bytes-limit` for loaded input bytes. The root charges a
-loading's work before its bytes, so a bytes refusal leaves that work committed;
-committed charges are never refunded. Canonical public values needed by
+`artifact-input-bytes-limit` for loaded input bytes, as for every
+[root refusal](#root-refusals). Canonical public values needed by
 the selected role are admitted once and reused after checking exact data-row
 bytes and physical layout. Other public values are checked and discarded. The
 root and the runners' ledgers do not bound total process memory. Byte
@@ -330,6 +329,41 @@ afford it, the rendering is the bounded summary with
 `"diagnostics": "omitted"`. Each rendering charges again. Diagnostics that a Host never renders charge nothing
 beyond their retained storage.
 
+### Root refusals
+
+The root's ledger refuses without naming the allowance it could not afford.
+Each charge the Host makes reports the code of its charged item instead, never
+the ledger's generic limit. Where an item has separate work and bytes codes, the
+Host charges its logical work and its bytes separately and reports the work
+code when the root's logical work allowance refuses and the bytes code when its
+fresh or live byte allowance does. The work is charged first, so a bytes
+refusal leaves it committed; committed charges are never refunded.
+
+| Charged item | Work refused | Bytes refused |
+|---|---|---|
+| Input loading, its file reads, captured references and imported setup material | `artifact-input-work-limit` | `artifact-input-bytes-limit` |
+| A proof's binding root, the canonical encodings of its public values and the public copies of its verifier keys | `native-proof-binding-work-limit` | `native-proof-binding-bytes-limit` |
+| A received proof retained for its record codec | `native-proof-received-work-limit` | `native-proof-received-bytes-limit` |
+| A completed attempt's proof retained by the call | `native-attempt-proof-work-limit` | `native-attempt-proof-bytes-limit` |
+| A Function's invocation context, frames, environments, call receipts and typed values, and its children's requests and results | `entry-host-work-limit` | `entry-host-bytes-limit` |
+| Request documents and their conversion | `entry-request-limit` | `entry-request-limit` |
+| Common-input inspection and context encoding | `input-binding-Limit` | `input-binding-Limit` |
+| Result reconstruction, named result encodings and copies of retained results | `entry-output-limit` | `entry-output-limit` |
+| Returned values taken into custody | — | `bundle-output-limit` (run), `native-output-limit` (proof) |
+| A native run's output encodings | `bundle-output-limit` | `bundle-output-limit` |
+
+A Function interpreter's own charge of its pooled meter refuses with
+`entry-host-instruction-limit` or `entry-host-iteration-limit`, naming the
+exhausted meter. A rendering of diagnostics that the root cannot afford is the
+bounded summary rather than a refusal. A child invocation's refusal keeps its
+code when it reaches the Function.
+
+Charges that the runtime makes in the root keep their owners' codes: joint
+wire transport and received payload decoding refuse with `joint-limit`, joint
+report storage with `joint-report-limit`, and a proof's transport buffers and
+received messages with `proof-limit`. A runner that shares the root stops with
+its own limit stop when the root cannot afford its execution.
+
 Reusing a persistent setup import avoids decoding it again, but each invocation
 still charges its own retained snapshot, 16 bytes per canonical byte plus 4,096,
 to its root. Reuse never resets a cumulative charge or grants authority. Within
@@ -389,11 +423,33 @@ maximum refuses without clamping:
 | Function instructions | Instructions of the Function interpreter and every reached child | 1,000,000 | 2^32 | Invocation | `FunctionOptions::limits.capacity` (`instructions`) |
 | Function iterations | Loop iterations of the Function interpreter and every reached child | 100,000 | 2^32 | Invocation | `FunctionOptions::limits.capacity` (`iterations`) |
 | Loading work | Loading work units of one input loading: one per input node, wire scan or native measurement, plus each byte read and each retained estimate, including cache hits | 2^28 | 2^28 | Operation (one input loading) | `HostLimits::loading_work`, `ProofOptions::loading_work` |
+| Public bytes | Wire bytes of one proof call's public statement, counted at every role operand a public value initializes, including shared owners | 64 MiB | 64 MiB | Operation (one proof call) | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::public_bytes`) |
+| Reference bytes | Bytes of the named references one memory request binds | 256 MiB | 256 MiB | Invocation | `ProofOptions::material` (`MaterialLimits::reference_bytes`) |
+| Setup bytes | Setup material of one invocation, counted at every copy the Host holds: each verifier-key copy for a proof's public port, and the material of every deployment of a Function invocation | 64 MiB | 64 MiB | Invocation | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::setup_bytes`) |
+| Retained imports | Retained bytes of the setup imports an admitted proof Entry keeps for reuse across its calls | 64 MiB | 64 MiB | Entry | `ProofOptions::material`, `HostLimits::material` (`MaterialLimits::retained_imports`) |
 
 The Function service-draw maximum is one maximal service allowance for every
 dispatch a Function can make. The joint Host's message, cumulative wire and
 report storage allowances are listed with
 [joint dispatch](joint.md#joint-dispatch-and-handoff).
+
+The material allowances (`MaterialLimits`) bound what an application supplies
+beside its named values: a proof call's public statement, a memory request's
+named references, an invocation's setup material and the imports a proof Entry
+retains. None derives from a runner's capacity, even where the numbers agree.
+Exceeding one refuses with `entry-input-limit`, `entry-request-limit` or
+`entry-setup-limit` respectively. A setup file is read only up to the
+remaining setup allowance, and one that it cannot hold refuses with
+`entry-setup-limit`.
+Imports that do not fit the retained-import allowance are imported for the call
+without being retained. A selection above a maximum refuses with that
+allowance's own code: `entry-public-bytes-limit`,
+`entry-reference-bytes-limit`, `entry-setup-bytes-limit` or
+`entry-retained-imports-limit`. A Function's children take the material
+allowances of `FunctionOptions::limits`. The CLI selects no material
+allowance and takes these defaults. A browser session keeps its setup and
+named input copies within the setup and reference allowances, because every
+call binds all of them.
 
 The invocation allowances (`InvocationLimits`) bound the root that a Run,
 Proof or Function invocation creates; a selection above their maxima refuses

@@ -43,6 +43,9 @@ pub struct ProofOptions {
     pub invocation: crate::execution::InvocationLimits,
     /// Each input loading's work ([`Allowances::LOADING_WORK`]).
     pub loading_work: u64,
+    /// The public statement, named references and setup material of each
+    /// call, and the setup imports retained across calls.
+    pub material: crate::execution::MaterialLimits,
     pub binding: BindingPolicy,
 }
 impl Default for ProofOptions {
@@ -55,6 +58,7 @@ impl Default for ProofOptions {
             interface: super::InterfaceLimits::DEFAULT,
             invocation: crate::execution::InvocationLimits::DEFAULT,
             loading_work: Allowances::LOADING_WORK.default,
+            material: crate::execution::MaterialLimits::DEFAULT,
             binding: BindingPolicy::default(),
             installation: Default::default(),
         }
@@ -82,6 +86,7 @@ impl ProofOptions {
             return Err("native-proof-loading-work-limit".into());
         }
         self.invocation.validate()?;
+        self.material.validate()?;
         self.interface.validate().map_err(|e| e.to_string())
     }
 }
@@ -132,6 +137,8 @@ pub struct ProofEntry {
     setup_authority: SetupAuthority,
     roles: (usize, usize),
     material: std::sync::Arc<std::sync::Mutex<zkc_cpu::material::VerifierMaterials>>,
+    /// The admitted allowances over supplied material.
+    material_limits: crate::execution::MaterialLimits,
 }
 /// The outer call result distinguishes preparation refusal. This report must
 /// still be checked for execution success, including rejection and cleanup.
@@ -393,19 +400,18 @@ impl ProofEntry {
         let native = native
             .with_ring_assets(assets.registry().clone())
             .with_relation_assets(assets.relation_registry().clone());
+        // Retained imports have their own allowance, independent of the
+        // runner's capacity.
         let material = std::sync::Arc::new(std::sync::Mutex::new(
             zkc_cpu::material::VerifierMaterials::new(
                 native.capacity().backend().ark_bounds(),
                 native.installation().clone(),
-                native
-                    .capacity()
-                    .values
-                    .live_bytes
-                    .min(native.capacity().values.total_bytes),
+                options.material.retained_imports,
             ),
         ));
         Ok(Self {
             material,
+            material_limits: options.material,
             completion,
             setup_authority,
             roles,
@@ -451,6 +457,11 @@ impl ProofEntry {
     }
     pub fn capacity(&self) -> Capacity {
         self.native.capacity()
+    }
+    /// The admitted allowances over the material each call supplies and the
+    /// imports retained across calls.
+    pub fn material_limits(&self) -> crate::execution::MaterialLimits {
+        self.material_limits
     }
     /// The allowances of each call's invocation root.
     pub fn invocation(&self) -> crate::execution::InvocationLimits {
@@ -532,7 +543,13 @@ impl ProofEntry {
         let producer = proof.is_none();
         let capacity = self.native.capacity();
         let attempts = self.attempt_policy(producer, attempts, capacity)?;
-        let inputs = self.inputs(request, producer, capacity, &invocation)?;
+        let inputs = self.inputs(
+            request,
+            producer,
+            capacity,
+            self.material_limits,
+            &invocation,
+        )?;
         let native = self
             .native
             .clone()
@@ -574,11 +591,17 @@ impl ProofEntry {
         let attempts = self.attempt_policy(producer, attempts, capacity)?;
         // Public binding owns one wire copy per verifier-key port. Reserve all
         // copies before argument construction, under the effective child limit.
-        let key_bytes = setups::material_bytes(&self.interface, &request.setups, capacity)
-            .map_err(|e| E::new(P::Request, e))?;
-        let _keys_live = zkc_runtime::host::wire::reserve_allocation(Some(&ledger), key_bytes)
+        let key_bytes = setups::material_bytes(
+            &self.interface,
+            &request.setups,
+            capacity,
+            limits.material.setup_bytes,
+        )
+        .map_err(|e| E::new(P::Request, e))?;
+        let _keys_live = crate::host::capacity::RootCharge::BINDING
+            .reserve_bytes(Some(&ledger), key_bytes)
             .map_err(|e| E::at(P::Preparation, e))?;
-        let inputs = self.inputs(request, producer, capacity, &ledger)?;
+        let inputs = self.inputs(request, producer, capacity, limits.material, &ledger)?;
         let invocation = ledger.clone();
         let native = self
             .native
@@ -646,7 +669,7 @@ impl ProofEntry {
         }
         let capacity = self.native.capacity();
         let attempts = self.attempt_policy(producer, attempts, capacity)?;
-        let inputs = self.inputs(request, producer, capacity, &ledger)?;
+        let inputs = self.inputs(request, producer, capacity, self.material_limits, &ledger)?;
         let invocation = attempts.as_ref().map_or_else(
             || {
                 if producer {
@@ -698,6 +721,7 @@ impl ProofEntry {
         request: ProofRequest,
         producer: bool,
         capacity: Capacity,
+        material: crate::execution::MaterialLimits,
         invocation: &zkc_runtime::vm::ExecutionLedger,
     ) -> EntryResult<ProofInputs> {
         let read = value::request_bytes(
@@ -707,7 +731,7 @@ impl ProofEntry {
                 .chain(request.private.inputs.values()),
         );
         let inputs = self
-            .convert(request, producer, capacity)
+            .convert(request, producer, capacity, material)
             .map_err(|e| E::at(P::Request, e))?;
         value::charge_conversion(invocation, read, inputs.public.len() + inputs.inputs.len())
             .map_err(|e| E::new(P::Preparation, e))?;
@@ -725,10 +749,16 @@ impl ProofEntry {
         request: ProofRequest,
         producer: bool,
         capacity: Capacity,
+        material: crate::execution::MaterialLimits,
     ) -> Result<ProofInputs> {
         let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
         let managed = self.native.entry().transcript().is_some();
-        let keys = setups::public_keys(&self.interface, &request.setups, capacity)?;
+        let keys = setups::public_keys(
+            &self.interface,
+            &request.setups,
+            capacity,
+            material.setup_bytes,
+        )?;
         let public = arguments::values(self.interface.public_ports(), request.public, Some(&keys))?;
         let inputs = arguments::proof_inputs(
             &self.interface,
@@ -737,6 +767,7 @@ impl ProofEntry {
             self.native.public_types(),
             request.private.inputs,
             capacity,
+            material.public_bytes,
             self.installation(),
         )?;
         Ok(ProofInputs {
@@ -1512,6 +1543,9 @@ mod material_tests {
     use zkc_kernels::arkworks::bls12_381::Keys;
 
     fn host(capacity: Capacity) -> ProofEntry {
+        host_with(capacity, Default::default())
+    }
+    fn host_with(capacity: Capacity, material: crate::execution::MaterialLimits) -> ProofEntry {
         let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
         let frame = serde_json::json!({"format":"zkc.entry/0","original":"original",
             "interface":interface.to_string(),"artifact":artifact,"assets":[],
@@ -1527,6 +1561,7 @@ mod material_tests {
             package,
             ProofOptions {
                 capacity,
+                material,
                 binding: BindingPolicy::AllowAuthored,
                 ..Default::default()
             },
@@ -1543,12 +1578,26 @@ mod material_tests {
         .unwrap()
     }
     #[test]
-    fn admitted_material_retention_uses_the_smaller_live_and_total_ceiling() {
-        for (live, total) in [(0, 65536), (65536, 0), (65536, 65536)] {
+    fn admitted_material_retention_has_its_own_allowance() {
+        use crate::execution::MaterialLimits;
+        // The retained-import allowance decides retention. A runner's
+        // capacity, however small, does not.
+        for (runner, retained_imports, reused) in [
+            (0, MaterialLimits::DEFAULT.retained_imports, true),
+            (65536, 65536, true),
+            (Capacity::default().values.live_bytes, 0, false),
+        ] {
             let mut capacity = Capacity::default();
-            capacity.values.live_bytes = live;
-            capacity.values.total_bytes = total;
-            let host = host(capacity);
+            capacity.values.live_bytes = runner;
+            capacity.values.total_bytes = runner;
+            let host = host_with(
+                capacity,
+                MaterialLimits {
+                    retained_imports,
+                    ..MaterialLimits::DEFAULT
+                },
+            );
+            assert_eq!(host.material_limits().retained_imports, retained_imports);
             let keys = keys(&host);
             let bounds = capacity.backend().ark_bounds();
             let bytes = keys.verifier_key().to_bytes(&bounds).unwrap();
@@ -1556,8 +1605,38 @@ mod material_tests {
             let mut material = host.material.lock().unwrap();
             let first = material.import(&bytes, pin, bounds).unwrap();
             let second = material.import(&bytes, pin, bounds).unwrap();
-            assert_eq!(Arc::ptr_eq(&first, &second), live.min(total) > 0);
+            assert_eq!(Arc::ptr_eq(&first, &second), reused);
         }
+        // An allowance above its maximum refuses at admission, unclamped.
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame = serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
+        let package = Package::capture(
+            frame.as_bytes(),
+            &Sha256::digest(frame.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap();
+        let refused = ProofEntry::admit(
+            package,
+            ProofOptions {
+                material: MaterialLimits {
+                    retained_imports: MaterialLimits::MAXIMUM.retained_imports + 1,
+                    ..MaterialLimits::DEFAULT
+                },
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            (refused.phase, refused.code()),
+            (P::Admission, "entry-retained-imports-limit")
+        );
     }
     #[test]
     fn persistent_import_reuse_charges_every_call_root_alike() {

@@ -325,6 +325,7 @@ pub(super) fn context_check(
                     &deployment.authority,
                     material,
                     host.options.limits.capacity,
+                    host.options.limits.material.setup_bytes,
                     &mut imports,
                     &host.options.limits.installation,
                 )

@@ -58,8 +58,10 @@ The application obtains the expected SHA-256 pin and setup authority independent
 of downloaded candidate data. Public/witness JSON documents use the SDK's input
 schemas and readable values. `admit` accepts optional `authority` bytes in
 `zkc.entry-setups/0`; `setSetup(slot, materialBytes)` supplies material for a
-declared, independently pinned slot. Material never grants authority. Setup
-and named input copies share the selected SDK byte budgets. `setInput(name,
+declared, independently pinned slot. Material never grants authority. Every
+call binds all retained setups and named inputs, so setup copies stay within
+the SDK's setup material allowance and named input copies within its named
+reference allowance; neither derives from the `capacity` record. `setInput(name,
 materialBytes, callOptions)` binds opaque bytes to an exact name for the existing
 SDK input-reference decoder. For an admitted package with setup authority:
 
@@ -75,13 +77,14 @@ The SDK imports and checks the material fingerprint and setup association.
 `setSetup` supplies a verifier key for an authorized slot; `setInput` supplies
 named input bytes without granting setup authority. Both use the same queue,
 snapshot/consuming-transfer rules and per-call controls as proof calls. Rust
-retains immutable input bytes, bounds aggregate setup and input storage, and
-allows at most 1,024 input names of at most 4,096 UTF-8 bytes each. A rejected
+retains immutable input bytes, bounds each copy by one wire frame and each kind
+of copy by its allowance, refusing more with `web-setup-limit`, and allows at
+most 1,024 input names of at most 4,096 UTF-8 bytes each. A rejected
 replacement in Rust invalidates the previous binding. Supply a valid replacement
 before retrying; there is no fallback to previous material.
 Replacing a named input clears cached prover imports before validation; replacing
 a setup clears its verifier and prover imports. The SDK bounds retained numerical
-material separately by the admitted value-byte ceiling. Cache pressure evicts or
+material separately by its retained-import allowance. Cache pressure evicts or
 bypasses retention while each call still authenticates, charges and authorizes
 its own inputs.
 
@@ -89,7 +92,7 @@ The constructor options accepted by the generated `ProofSession` also include
 `operation` (`both`, `prove`,
 `verify`), the existing SDK `capacity` record of per-operation and runner
 limits, `package_bytes`, `external_work`, and `allow_authored`. Each call's
-invocation root keeps the SDK's default invocation allowances. The provider set is fixed at admission; a different
+invocation root keeps the SDK's default invocation allowances, and the session the default material allowances. The provider set is fixed at admission; a different
 installation requires a fresh Worker and admission. The SDK checks actual
 compiled provider support and exact package bindings without reselection.
 

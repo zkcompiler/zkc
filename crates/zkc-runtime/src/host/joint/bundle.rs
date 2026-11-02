@@ -46,6 +46,12 @@ impl BundleLimits {
         Ok(())
     }
 }
+/// The deepest admitted control nesting. Only loop and branch segments count:
+/// a control segment directly in `steps` is level 1, and one in the body of a
+/// level-n loop or an arm of a level-n branch is level n + 1. Step segments add
+/// no level, so a level-64 control segment keeps its body of steps; a level-65
+/// control segment refuses, as it does in the producer.
+pub(super) const CONTROL_LEVELS: usize = 64;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BundleError {
     Limit,
@@ -285,16 +291,18 @@ fn validate_preorder(segments: &[Segment], count: usize) -> Result<(), BundleErr
         *next += 1;
         Ok(())
     }
+    // `depth` counts the control segments enclosing `nodes`, so a control
+    // segment among them is at level depth + 1.
     fn walk(
         nodes: &[Segment],
         next: &mut usize,
         count: usize,
         depth: usize,
     ) -> Result<(), BundleError> {
-        if depth >= crate::vm::Limits::STACK_DEPTH {
-            return Err(BundleError::Limit);
-        }
         for node in nodes {
+            if !matches!(node, Segment::Action(_)) && depth >= CONTROL_LEVELS {
+                return Err(BundleError::Limit);
+            }
             match node {
                 Segment::Action(i) => index(*i, next, count)?,
                 Segment::Branch { entries, arms } => {
@@ -373,6 +381,52 @@ mod coverage_tests {
                 validate_preorder(&bad, expected_count),
                 Err(BundleError::Coverage)
             );
+        }
+    }
+    /// One control segment per entry of `branches`, each in the body of the
+    /// one before, around one step, numbered in preorder: every entry, the
+    /// step, then every exit. An entry selects a branch arm or a loop body.
+    fn nested(branches: &[bool], next: &mut usize) -> Vec<Segment> {
+        let entry = *next;
+        *next += 1;
+        let Some((&branch, inner)) = branches.split_first() else {
+            return vec![Segment::Action(entry)];
+        };
+        let body = nested(inner, next);
+        let exits = vec![*next];
+        *next += 1;
+        vec![if branch {
+            Segment::Branch {
+                entries: vec![entry],
+                arms: vec![BranchArm {
+                    alternative: "then".into(),
+                    body,
+                    exits,
+                }],
+            }
+        } else {
+            Segment::Loop {
+                entries: vec![entry],
+                body,
+                exits,
+            }
+        }]
+    }
+    #[test]
+    fn preorder_walk_admits_control_level_64_with_a_body_and_refuses_level_65() {
+        // A branch arm is a level as a loop body is.
+        for innermost_branch in [false, true] {
+            let mut levels = vec![false; CONTROL_LEVELS];
+            levels[CONTROL_LEVELS - 1] = innermost_branch;
+            let mut count = 0;
+            let admitted = nested(&levels, &mut count);
+            assert_eq!(count, 2 * CONTROL_LEVELS + 1);
+            assert_eq!(validate_preorder(&admitted, count), Ok(()));
+            // One more control segment, a loop in the level-64 body or arm.
+            levels.push(false);
+            let mut count = 0;
+            let refused = nested(&levels, &mut count);
+            assert_eq!(validate_preorder(&refused, count), Err(BundleError::Limit));
         }
     }
 }

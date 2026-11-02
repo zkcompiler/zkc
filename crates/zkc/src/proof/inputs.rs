@@ -3,6 +3,7 @@ use super::*;
 use zkc_format::binding;
 
 use super::MAX_CONTEXT_BYTES as CONTEXT_LIMIT;
+use crate::host::capacity::RootCharge;
 use crate::host::request::RESOURCE_BUDGET_LIMIT;
 
 /// Values follow the admitted public, role-input and service order. Public
@@ -240,7 +241,9 @@ pub(super) fn prepare(
             )?;
         }
     }
-    let _root_tree = zkc_runtime::host::wire::reserve_allocation(
+    // The binding root, its public encodings and its retained encoding charge
+    // the invocation root; a refusal names the root allowance that refused.
+    let _root_tree = RootCharge::BINDING.reserve_bytes(
         host.host_ledger(),
         host.binding_metadata_bytes
             .saturating_add(request.context.len() * 2),
@@ -467,7 +470,7 @@ pub(super) fn prepare(
     let mut encoding_retained = Vec::new();
     for (port, input) in host.public.iter().zip(&request.public) {
         if input.wire_bytes().is_none() {
-            encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
+            encoding_retained.extend(RootCharge::BINDING.reserve_bytes(
                 host.host_ledger(),
                 zkc_cpu::native_encoding_bound(&loaded[public_ids[&port.original]]),
             )?);
@@ -489,7 +492,7 @@ pub(super) fn prepare(
     }
     for (original, id, input) in shared {
         let _live = if input.wire_bytes().is_none() {
-            zkc_runtime::host::wire::reserve_allocation(
+            RootCharge::BINDING.reserve_bytes(
                 host.host_ledger(),
                 zkc_cpu::native_encoding_bound(&loaded[id]),
             )?
@@ -533,21 +536,12 @@ pub(super) fn prepare(
     if retain_root {
         host.capacity.check_wire(encoding.size())?;
     }
-    encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
+    encoding_retained.extend(RootCharge::BINDING.reserve_bytes(
         host.host_ledger(),
         if retain_root { encoding.size() } else { 0 },
     )?);
     if let Some(ledger) = host.host_ledger() {
-        ledger
-            .charge(
-                zkc_runtime::vm::WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: encoding.size() as u64,
-                },
-                0,
-            )
-            .map_err(|e| e.to_string())?;
+        RootCharge::BINDING.charge(ledger, encoding.size() as u64, 0)?;
     }
     let (root, binding) =
         binding::encode_binding(&encoding, retain_root).map_err(|e| e.to_string())?;

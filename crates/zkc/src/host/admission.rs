@@ -165,49 +165,17 @@ fn add(total: &mut usize, amount: usize, limit: usize, error: &str) -> Result<()
     Ok(())
 }
 
-/// Charge loading to the invocation root: its loading work as logical work,
-/// then its input bytes as fresh allocation. A refusal names the loading
-/// allowance that the root could not afford, `artifact-input-work-limit` or
-/// `artifact-input-bytes-limit`, never the root's generic limit.
-fn charge_input(ledger: &zkc_runtime::vm::ExecutionLedger, work: u64, bytes: usize) -> Result<()> {
-    let budget = |logical_bytes| zkc_runtime::vm::WorkBudget {
-        instructions: 0,
-        iterations: 0,
-        logical_bytes,
-    };
-    ledger
-        .charge(budget(work), 0)
-        .map_err(|_| "artifact-input-work-limit")?;
-    ledger
-        .charge(budget(0), bytes)
-        .map_err(|_| "artifact-input-bytes-limit")?;
-    Ok(())
-}
-
-/// Reserve loaded input storage in the invocation root before it exists: its
-/// loading work, its fresh bytes and its live bytes, each refusal naming its
-/// loading allowance.
-fn reserve_root_input(
-    ledger: &zkc_runtime::vm::ExecutionLedger,
-    work: u64,
-    bytes: usize,
-) -> Result<zkc_runtime::vm::LiveReservation> {
-    charge_input(ledger, work, bytes)?;
-    Ok(ledger
-        .reserve_live(bytes)
-        .map_err(|_| "artifact-input-bytes-limit")?)
-}
-
 /// Reserve loaded input storage, such as a captured reference or imported
-/// setup material, in the invocation root when there is one.
+/// setup material, in the invocation root when there is one: its loading work
+/// as logical work, then its bytes as fresh and live allocation. A refusal
+/// names the loading allowance the root could not afford,
+/// `artifact-input-work-limit` or `artifact-input-bytes-limit`.
 pub(crate) fn reserve_input(
     ledger: Option<&zkc_runtime::vm::ExecutionLedger>,
     work: u64,
     bytes: usize,
 ) -> Result<Option<zkc_runtime::vm::LiveReservation>> {
-    ledger
-        .map(|ledger| reserve_root_input(ledger, work, bytes))
-        .transpose()
+    super::capacity::RootCharge::LOADING.reserve(ledger, work, bytes)
 }
 
 pub(crate) struct Admission<'a> {
@@ -267,7 +235,7 @@ impl<'a> Admission<'a> {
             "artifact-input-work-limit",
         )?;
         if let Some(ledger) = &self.ledger {
-            charge_input(ledger, amount as u64, 0)?;
+            super::capacity::RootCharge::LOADING.charge(ledger, amount as u64, 0)?;
         }
         self.work = work;
         Ok(())
@@ -402,7 +370,9 @@ impl<'a> Admission<'a> {
                 .checked_add(bytes)
                 .ok_or("entry-host-loading-limit")?
         };
-        let live = reserve_root_input(ledger, work as u64, bytes)?;
+        let live = super::capacity::RootCharge::LOADING
+            .charge(ledger, work as u64, bytes)
+            .and_then(|()| super::capacity::RootCharge::LOADING.hold(ledger, bytes))?;
         let values = self.load(backend, policy)?;
         Ok((values, live))
     }

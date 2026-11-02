@@ -8,6 +8,7 @@ use crate::run::HostLimits;
 use crate::source_names::encode_nominal_identity;
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{LogicalType, PhysicalType};
+const SETUP_BYTES: usize = crate::execution::MaterialLimits::DEFAULT.setup_bytes;
 
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =
@@ -345,7 +346,7 @@ fn unicode_setup_authority_and_material_translate_together() {
     assert_eq!(native.inputs[&("role00000001".into(), 0)], "setup00000000");
     let material = [("鍵₂".into(), vec![1, 2, 3])].into();
     let native_material =
-        entry::setups::run_material(&interface, material, Default::default()).unwrap();
+        entry::setups::run_material(&interface, material, Default::default(), SETUP_BYTES).unwrap();
     assert_eq!(
         native_material,
         [("setup00000000".into(), vec![1, 2, 3])].into()
@@ -355,7 +356,7 @@ fn unicode_setup_authority_and_material_translate_together() {
     assert_eq!(proof.inputs, [(1, 0), (2, 0)].into());
     let material = [("鍵₂".into(), vec![1, 2, 3])].into();
     assert_eq!(
-        entry::setups::public_keys(&interface, &material, Default::default()).unwrap(),
+        entry::setups::public_keys(&interface, &material, Default::default(), SETUP_BYTES).unwrap(),
         [(0, &[1, 2, 3][..])].into()
     );
     for key in ["setup00000000", "鍵₃", "鍵₂\u{200d}"] {
@@ -369,7 +370,8 @@ fn unicode_setup_authority_and_material_translate_together() {
         assert!(entry::setups::proof_authority(&interface, authority).is_err());
         let material = [(key.into(), vec![1])].into();
         assert_eq!(
-            entry::setups::run_material(&interface, material, Default::default()).unwrap_err(),
+            entry::setups::run_material(&interface, material, Default::default(), SETUP_BYTES)
+                .unwrap_err(),
             "entry-setup-material"
         );
     }
@@ -1466,8 +1468,13 @@ fn memory_bindings_share_digest_checks_and_document_budgets() {
     );
     let groups = host.interface().input_groups();
     let empty = Default::default();
-    let mut documents =
-        Documents::new(Default::default(), host.installation().clone(), &empty).unwrap();
+    let mut documents = Documents::new(
+        Default::default(),
+        host.material_limits().reference_bytes,
+        host.installation().clone(),
+        &empty,
+    )
+    .unwrap();
     assert_eq!(
         documents.load(&groups[0], None).unwrap_err().code,
         "entry-input-missing"
@@ -1476,6 +1483,101 @@ fn memory_bindings_share_digest_checks_and_document_budgets() {
     assert_eq!(
         documents.load(&groups[0], Some(&large)).unwrap_err().code,
         "entry-request-limit"
+    );
+}
+#[test]
+fn memory_references_are_bounded_by_their_own_allowance() {
+    use crate::entry::memory::{Documents, ProofCallOptions};
+    use crate::execution::MaterialLimits;
+    use std::{collections::BTreeMap, sync::Arc};
+    let (doc, artifact) = proof_fixture();
+    let typed = proof_request(
+        ProofEntry::admit(
+            package(&doc, &artifact),
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .unwrap()
+        .interface(),
+        true,
+    );
+    let entry::Value::Leaf(crate::execution::InputValue::Wire(bytes)) = &typed.public["公開"]
+    else {
+        panic!()
+    };
+    let reference =
+        json!({"公開":{"file":"statement","sha256":crate::io::bytes::hash(bytes)}}).to_string();
+    let bindings: BTreeMap<String, Arc<Vec<u8>>> = [("statement".into(), bytes.clone())].into();
+    let call = |reference_bytes: usize| {
+        let host = ProofEntry::admit(
+            package(&doc, &artifact),
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                material: MaterialLimits {
+                    reference_bytes,
+                    ..MaterialLimits::DEFAULT
+                },
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .unwrap();
+        host.preflight_memory_call(
+            ProofOperation::Prove,
+            Some(reference.as_bytes()),
+            Some(r#"{"秘密":false}"#.as_bytes()),
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .map(drop)
+        .map_err(|error| error.code().to_owned())
+    };
+    // The references one request binds are bounded by their own allowance.
+    call(bytes.len()).unwrap();
+    assert_eq!(call(bytes.len() - 1).unwrap_err(), "entry-request-limit");
+    // A runner's capacity too small to hold them does not bound them, and an
+    // allowance above its maximum refuses rather than being clamped.
+    let mut capacity = crate::execution::Capacity::default();
+    capacity.values.live_bytes = 0;
+    capacity.values.total_bytes = 0;
+    let installation = zkc_cpu::CpuInstallation::default();
+    Documents::new(capacity, bytes.len(), installation.clone(), &bindings).unwrap();
+    for (reference_bytes, code) in [
+        (bytes.len() - 1, "entry-request-limit"),
+        (
+            MaterialLimits::MAXIMUM.reference_bytes + 1,
+            "entry-reference-bytes-limit",
+        ),
+    ] {
+        assert_eq!(
+            Documents::new(capacity, reference_bytes, installation.clone(), &bindings)
+                .err()
+                .unwrap(),
+            code
+        );
+    }
+    assert_eq!(
+        ProofEntry::admit(
+            package(&doc, &artifact),
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                material: MaterialLimits {
+                    reference_bytes: MaterialLimits::MAXIMUM.reference_bytes + 1,
+                    ..MaterialLimits::DEFAULT
+                },
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .err()
+        .unwrap()
+        .code(),
+        "entry-reference-bytes-limit"
     );
 }
 #[test]

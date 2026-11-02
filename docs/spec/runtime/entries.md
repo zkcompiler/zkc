@@ -340,12 +340,16 @@ are checked before loading documents, public data precedes the witness, and
 the selected role's services are checked before ordinary call preflight.
 `preflight_memory_call` and `files::Documents::preflight_call` use this path with
 the same schema decoder. Memory references resolve only explicit named bytes;
-they confer no filesystem access. Candidate proof bytes enter `ProofCall::execute`
+they confer no filesystem access. Each is one wire frame, and together they are
+bounded by the named-reference allowance (`ProofOptions::material`), not by a
+runner's capacity; more refuses with `entry-request-limit`. Candidate proof bytes enter `ProofCall::execute`
 after document preflight. `ProofCall::check_inputs` validates the assembled
 request without executing or issuing resources.
 
 An admitted CPU proof Entry can retain immutable numerical imports across calls,
-bounded by the smaller admitted live/total value-byte ceiling. Reuse requires
+bounded by its retained-import allowance (`ProofOptions::material`,
+[Host allowances](capacity.md#host-allowances)), not by a runner's capacity.
+Reuse requires
 exact bytes, independent pins, fixed bounds and installation; prover imports also
 match the selected verifier snapshot and material fingerprint. Replacement
 invalidates affected imports before validation. A prover import from a named
@@ -647,6 +651,10 @@ Diagnostics name a logical input path when
 readable decoding or reference resolution fails, without printing input values.
 
 For proof commands, whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
+One call's key files, like the setup files of all deployments in an
+`--invocations` document, are together bounded by the setup material
+allowance; a file the remaining allowance cannot hold refuses with
+`entry-setup-limit`.
 Independent authority comes from `--setups=FILE`, containing exactly
 `format: "zkc.entry-setups/0"` and a `keys` map of expected setup identities.
 Service overrides use `--service=ROLE.NAME=COUNT`; context and transcript budget
@@ -800,7 +808,12 @@ instruction per call and operation and one iteration per loop step; each
 reached child runs on what remains. A Function invocation's aggregate work must
 be bounded across its children, so its runners pool their fuel there. A
 standalone run or proof instead gives each runner its own fuel from the same
-record fields, and its root meters no instruction.
+record fields, and its root meters no instruction. When the interpreter's own
+charge finds a meter exhausted, the failure names it:
+`entry-host-instruction-limit` or `entry-host-iteration-limit`. The
+Function's own storage and work in the root refuse with
+`entry-host-bytes-limit` or `entry-host-work-limit`
+([root refusals](capacity.md#root-refusals)).
 
 `FunctionOptions::limits` is the same Host policy record a standalone run
 admits. Each reached child receives what remains of its dispatch, wire, external,

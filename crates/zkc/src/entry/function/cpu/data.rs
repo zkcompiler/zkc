@@ -1,11 +1,10 @@
 //! Executable data has no file paths, material import requests or capabilities.
 use super::*;
 use crate::execution::{Capacity, InputValue};
+use crate::host::capacity::RootCharge;
 use std::sync::Arc;
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Value as Native};
-use zkc_runtime::vm::{
-    ExecutionLedger, LiveReservation, PhysicalType, Value as RuntimeValue, WorkBudget,
-};
+use zkc_runtime::vm::{ExecutionLedger, LiveReservation, PhysicalType, Value as RuntimeValue};
 
 type DataResult<T> = std::result::Result<T, String>;
 // Measurement vectors can grow geometrically within the existing conservative
@@ -177,21 +176,11 @@ fn backend_for(
     )
     .map_err(|e| e.to_string())
 }
+/// Charge and hold a typed value's Host storage in the invocation root; a
+/// refusal names the root allowance that refused.
 fn charge(ledger: &ExecutionLedger, fresh: usize) -> DataResult<Arc<LiveReservation>> {
-    ledger
-        .charge(
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: 0,
-            },
-            fresh,
-        )
-        .map_err(|e| e.to_string())?;
-    ledger
-        .reserve_live(fresh)
-        .map(Arc::new)
-        .map_err(|e| e.to_string())
+    RootCharge::FUNCTION.charge(ledger, 0, fresh)?;
+    RootCharge::FUNCTION.hold(ledger, fresh).map(Arc::new)
 }
 fn measure_native_value(
     backend: &CpuBackend,
@@ -200,17 +189,11 @@ fn measure_native_value(
 ) -> DataResult<zkc_cpu::NativeInputSize> {
     // Charge the retained bound before walking payloads, including repeated
     // uses of shared data. Recursive sequences and variants cache that bound.
-    ledger
-        .charge(
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: u64::try_from(value.retained_bytes())
-                    .map_err(|_| "entry-host-output-limit")?,
-            },
-            0,
-        )
-        .map_err(|e| e.to_string())?;
+    RootCharge::FUNCTION.charge(
+        ledger,
+        u64::try_from(value.retained_bytes()).map_err(|_| "entry-host-output-limit")?,
+        0,
+    )?;
     if !backend.installation().supports_type(&value.physical_type()) {
         return Err("native-input-type".into());
     }

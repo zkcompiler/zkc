@@ -753,6 +753,54 @@ fn repeated_children_exhaust_one_cumulative_meter_and_suppress_return() {
     assert!(r.usage.execution.instructions > 1);
 }
 #[test]
+fn the_interpreters_own_charges_name_the_exhausted_meter() {
+    let c = calculation();
+    let f = c["results"][0].clone();
+    let mut d = document(
+        vec![
+            ("a", f.clone()),
+            ("b", f.clone()),
+            ("lo", index()),
+            ("hi", index()),
+        ],
+        f.clone(),
+        json!([{"op":"for","carried":1,"operands":[2,3,0,1],"results":[definition(8,f.clone())],
+        "regions":[block(json!([definition(4,index()),definition(5,f.clone()),definition(6,f.clone())]),json!([{"op":"numeric","calculation":"sum","operands":[5,6],"results":[definition(7,f.clone())]}]),json!([7]))]}]),
+        json!([8]),
+    );
+    d["calculations"] = json!([c]);
+    let run = |instructions, iterations| {
+        let mut options = FunctionOptions::default();
+        options.limits.capacity.work.instructions = instructions;
+        options.limits.capacity.work.iterations = iterations;
+        let entry = FunctionEntry::admit(capture(&d), options, BTreeMap::new()).unwrap();
+        entry
+            .prepare(request(vec![
+                (
+                    "a",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
+                ),
+                (
+                    "b",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
+                ),
+                ("lo", 0u64.into()),
+                ("hi", 20u64.into()),
+            ]))
+            .unwrap()
+            .execute()
+    };
+    // Entering the function takes the only instruction; its first operation
+    // finds none left.
+    let report = run(1, 100);
+    assert_eq!(report.failure.unwrap().code, "entry-host-instruction-limit");
+    assert_eq!(report.usage.execution.instructions, 1);
+    // No iteration is left for the loop's first step.
+    let report = run(1000, 0);
+    assert_eq!(report.failure.unwrap().code, "entry-host-iteration-limit");
+    assert_eq!(report.usage.execution.iterations, 0);
+}
+#[test]
 fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
     let input = || {
         request(vec![
@@ -1641,10 +1689,29 @@ fn parent_live_reservations_limit_child_construction_before_effects() {
         - prepared.ledger.snapshot().live_reserved_bytes;
     let parent = prepared.ledger.reserve_live(remaining - 1024).unwrap();
     let report = prepared.execute();
-    assert!(report.failure.is_some());
+    // The root names the allowance that refused the Function's storage.
+    assert_eq!(
+        report.failure.as_ref().unwrap().code,
+        "entry-host-bytes-limit"
+    );
     assert!(report.value.is_none());
     assert!(report.calls.is_empty());
     assert!(report.usage.execution.live_reserved_bytes >= parent.bytes());
+    drop(parent);
+    // With room for the diagnostics scratch and the interpreter's frames but
+    // not for the first child call's receipt, the child dispatch refuses with
+    // the same code before any receipt or child exists.
+    let prepared = entry.prepare(joint_request()).unwrap();
+    let remaining = entry.host.options.limits.invocation.live_bytes
+        - prepared.ledger.snapshot().live_reserved_bytes;
+    let room = crate::host::diagnostics::SCRATCH_BYTES + 32 * 1024;
+    let parent = prepared.ledger.reserve_live(remaining - room).unwrap();
+    let report = prepared.execute();
+    let failure = report.failure.as_ref().unwrap();
+    assert_eq!(failure.code, "entry-host-bytes-limit");
+    assert_eq!(failure.path.last().map(String::as_str), Some("operation:0"));
+    assert!(report.calls.is_empty());
+    assert_eq!(report.usage.dispatches, 0);
     drop(parent);
 }
 
@@ -2137,7 +2204,7 @@ fn nested_variant_measurement_refuses_with_exhausted_shared_work() {
             &ledger,
         )
         .unwrap_err(),
-        "Limit"
+        "entry-host-work-limit"
     );
     let usage = ledger.snapshot();
     assert_eq!(usage.logical_bytes, work);
@@ -2267,7 +2334,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
                     &ledger,
                 )
             };
-            assert_eq!(result.unwrap_err(), "Limit");
+            assert_eq!(result.unwrap_err(), "entry-host-work-limit");
             let usage = ledger.snapshot();
             assert_eq!(usage.logical_bytes, 3 * work);
             assert_eq!(usage.live_reserved_bytes, held);
@@ -2299,7 +2366,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         pair_value(&native, false),
         &ledger,
     );
-    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(result.unwrap_err(), "entry-host-work-limit");
     assert_eq!(ledger.snapshot().logical_bytes, work);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 
@@ -2322,7 +2389,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         vec![value.clone()],
         &ledger,
     );
-    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(result.unwrap_err(), "entry-host-bytes-limit");
     assert_eq!(ledger.snapshot().logical_bytes, 0);
     assert_eq!(ledger.snapshot().live_reserved_bytes, held);
     drop(value);
@@ -2338,7 +2405,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         capacity.work,
     );
     let result = data::from_output(entry.host(), &entry.signature().result, output(), &ledger);
-    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(result.unwrap_err(), "entry-host-bytes-limit");
     let usage = ledger.snapshot();
     assert_eq!(usage.logical_bytes, work);
     assert_eq!(usage.live_reserved_bytes, 0);

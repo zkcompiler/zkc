@@ -457,6 +457,52 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             let malformed = execute(&rejected, &inputs, Invocation::Verify(&[])).unwrap();
             assert_eq!(malformed.verification_result(), None);
 
+            // A completed attempt's proof is retained by the call's root, as
+            // its last fresh allocation and logical work. A root one unit
+            // short refuses it with the code of the allowance that refused.
+            let completing = AttemptPolicy {
+                completion: 1,
+                rng: vec![],
+                limits: zkc_runtime::attempt::Limits {
+                    attempts: 1,
+                    proof_bytes: MAX_PROOF_BYTES,
+                },
+                work: deployment.capacity.work,
+                values: deployment.capacity.values,
+            };
+            let attempt = |limits: InvocationLimits| {
+                let root = limits.root();
+                let report = execute(
+                    &deployment.clone().with_invocation_ledger(root.clone()),
+                    &inputs,
+                    Invocation::Attempts(&completing),
+                )
+                .unwrap();
+                (report, root.snapshot())
+            };
+            let (completed, used) = attempt(InvocationLimits::DEFAULT);
+            assert!(completed.outcome.is_ok(), "{:?}", completed.outcome);
+            for (limits, code) in [
+                (
+                    InvocationLimits {
+                        total_bytes: used.total_value_bytes - 1,
+                        ..InvocationLimits::DEFAULT
+                    },
+                    "native-attempt-proof-bytes-limit",
+                ),
+                (
+                    InvocationLimits {
+                        logical_bytes: used.logical_bytes - 1,
+                        ..InvocationLimits::DEFAULT
+                    },
+                    "native-attempt-proof-work-limit",
+                ),
+            ] {
+                let (refused, _) = attempt(limits);
+                assert_eq!(refused.outcome.as_ref().unwrap_err(), code);
+                assert_eq!(refused.attempts[0].decision.as_ref().unwrap_err(), code);
+            }
+
             // Three completed false trials exercise aggregation independently
             // of successful one-shot proving and verification above.
             let mut program: Json = serde_json::from_str(&candidate).unwrap();

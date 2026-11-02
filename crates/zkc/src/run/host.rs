@@ -1,5 +1,5 @@
 //! Application-owned loading and lifecycle for an authenticated native bundle.
-use crate::execution::{Capacity, CpuExecution, InvocationLimits};
+use crate::execution::{Capacity, CpuExecution, InvocationLimits, MaterialLimits};
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
     capacity::Allowances,
@@ -24,8 +24,10 @@ pub use report::{EncodedOutput, HostReport, RoleOutputEncoding};
 /// budgets. The latter counts dispatch occurrences, including repeated loop steps.
 /// External, Ring and sequence work are per-role allowances, `interface`
 /// bounds source interface admission, `invocation` is the invocation root's
-/// own allowance and `loading_work` bounds each input loading; their defaults
-/// and maxima are the installed [`Allowances`](crate::host::capacity::Allowances).
+/// own allowance, `loading_work` bounds each input loading and `material`
+/// bounds the material an application supplies beside its named values; their
+/// defaults and maxima are the installed
+/// [`Allowances`](crate::host::capacity::Allowances).
 #[derive(Clone, Debug)]
 pub struct HostLimits {
     pub installation: zkc_cpu::CpuInstallation,
@@ -42,6 +44,7 @@ pub struct HostLimits {
     pub interface: crate::entry::InterfaceLimits,
     pub invocation: InvocationLimits,
     pub loading_work: u64,
+    pub material: MaterialLimits,
 }
 impl Default for HostLimits {
     fn default() -> Self {
@@ -60,6 +63,7 @@ impl Default for HostLimits {
             interface: crate::entry::InterfaceLimits::DEFAULT,
             invocation: InvocationLimits::DEFAULT,
             loading_work: Allowances::LOADING_WORK.default,
+            material: MaterialLimits::DEFAULT,
         }
     }
 }
@@ -117,6 +121,7 @@ impl HostLimits {
             return Err("bundle-loading-work-limit".into());
         }
         self.invocation.validate()?;
+        self.material.validate()?;
         self.interface.validate().map_err(|e| e.to_string())
     }
     pub fn record(&self) -> Json {
@@ -127,7 +132,8 @@ impl HostLimits {
             "message_bytes":self.message_bytes,"total_wire_bytes":self.total_wire_bytes,"report_bytes":self.report_bytes,"external_work_per_role":self.external_work,
             "ring_work_per_role":self.ring_work,"sequence_work_per_role":self.sequence_work},
             "interface":{"work":self.interface.work,"descriptor_bytes":self.interface.descriptor_bytes},
-            "invocation":self.invocation.record(),"loading":{"work":self.loading_work}})
+            "invocation":self.invocation.record(),"loading":{"work":self.loading_work},
+            "material":self.material.record()})
     }
     /// The per-bind loading sublimits under the selected loading work.
     pub(crate) fn loading(&self) -> crate::host::admission::LoadLimits {

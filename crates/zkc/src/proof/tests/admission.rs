@@ -359,6 +359,117 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     }
 }
 
+#[test]
+fn binding_root_refusals_name_the_root_allowance_that_refused() {
+    use crate::execution::{InvocationLimits, PreparedData};
+    const DEFAULT: InvocationLimits = InvocationLimits::DEFAULT;
+    let host = admit(&deployment()).unwrap();
+    // The verifier's public value also initializes its role operand. A native
+    // operand is encoded and compared under its own reservation; a wire
+    // operand is compared as it is, so the public value's own encoding is the
+    // last fresh allocation of preparation.
+    let shared = request(false, true, true);
+    let mut encoded = request(false, true, true);
+    let wire = PreparedData::from_value(Value::Bool(true), Default::default()).unwrap();
+    encoded.inputs[0] = InputValue::Wire(wire.canonical_bytes().to_vec().into());
+    for request in [shared, encoded] {
+        let check = |limits: InvocationLimits| {
+            let root = limits.root();
+            host.clone()
+                .with_invocation_ledger(root.clone())
+                .check_inputs(&request, Invocation::Verify(&[]))
+                .map(|()| root.snapshot())
+        };
+        let used = check(DEFAULT).unwrap();
+        for (limits, code) in [
+            // The binding root's tree is the first charge of preparation.
+            (
+                InvocationLimits {
+                    live_bytes: 0,
+                    ..DEFAULT
+                },
+                "native-proof-binding-bytes-limit",
+            ),
+            (
+                InvocationLimits {
+                    logical_bytes: 0,
+                    ..DEFAULT
+                },
+                "native-proof-binding-work-limit",
+            ),
+            // The last fresh allocation encodes or compares a public value.
+            (
+                InvocationLimits {
+                    total_bytes: used.total_value_bytes - 1,
+                    ..DEFAULT
+                },
+                "native-proof-binding-bytes-limit",
+            ),
+            // The last logical work encodes the binding root.
+            (
+                InvocationLimits {
+                    logical_bytes: used.logical_bytes - 1,
+                    ..DEFAULT
+                },
+                "native-proof-binding-work-limit",
+            ),
+        ] {
+            assert_eq!(check(limits).unwrap_err(), code, "{limits:?}");
+        }
+    }
+}
+
+#[test]
+fn a_retained_received_proof_names_the_root_allowance_that_refused() {
+    use crate::execution::InvocationLimits;
+    let host = admit(&deployment()).unwrap();
+    let proof = [7; 100];
+    let charge = proof.len() + 512;
+    let retain = |limits: InvocationLimits| {
+        let root = limits.root();
+        host.clone()
+            .with_invocation_ledger(root.clone())
+            .retain_received_proof(&proof)
+            .map(|held| (held.map(|held| held.bytes()), root.snapshot()))
+    };
+    let (held, used) = retain(InvocationLimits {
+        live_bytes: charge,
+        total_bytes: charge,
+        logical_bytes: charge as u64,
+    })
+    .unwrap();
+    assert_eq!(held, Some(charge));
+    assert_eq!(
+        (used.total_value_bytes, used.logical_bytes),
+        (charge, charge as u64)
+    );
+    for (limits, code) in [
+        (
+            InvocationLimits {
+                logical_bytes: charge as u64 - 1,
+                ..InvocationLimits::DEFAULT
+            },
+            "native-proof-received-work-limit",
+        ),
+        (
+            InvocationLimits {
+                total_bytes: charge - 1,
+                ..InvocationLimits::DEFAULT
+            },
+            "native-proof-received-bytes-limit",
+        ),
+        (
+            InvocationLimits {
+                live_bytes: charge - 1,
+                ..InvocationLimits::DEFAULT
+            },
+            "native-proof-received-bytes-limit",
+        ),
+    ] {
+        assert_eq!(retain(limits).unwrap_err(), code);
+    }
+}
+
 fn request(producer: bool, decision: bool, public: bool) -> ProofInputs {
     let value = |v| InputValue::Native(Box::new(Value::Bool(v)));
     ProofInputs {

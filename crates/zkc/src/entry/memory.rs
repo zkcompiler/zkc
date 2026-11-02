@@ -23,12 +23,20 @@ pub struct Documents<'a> {
     bindings: &'a BTreeMap<String, Arc<Vec<u8>>>,
 }
 impl<'a> Documents<'a> {
+    /// Each named reference is one wire frame of `capacity`; together they are
+    /// bounded by `reference_bytes`
+    /// ([`Allowances::REFERENCE_BYTES`](crate::run::Allowances::REFERENCE_BYTES)),
+    /// not by a runner's capacity.
     pub fn new(
         capacity: Capacity,
+        reference_bytes: usize,
         installation: zkc_cpu::CpuInstallation,
         bindings: &'a BTreeMap<String, Arc<Vec<u8>>>,
     ) -> Result<Self, String> {
         capacity.validate()?;
+        if !crate::run::Allowances::REFERENCE_BYTES.admits(reference_bytes as u64) {
+            return Err("entry-reference-bytes-limit".into());
+        }
         if bindings.len() > 1024 {
             return Err("entry-input-reference-limit".into());
         }
@@ -37,7 +45,7 @@ impl<'a> Documents<'a> {
             capacity.check_wire(bytes.len())?;
             total = total
                 .checked_add(bytes.len())
-                .filter(|n| *n <= capacity.values.total_bytes)
+                .filter(|n| *n <= reference_bytes)
                 .ok_or("entry-request-limit")?;
         }
         Ok(Self {
@@ -145,11 +153,16 @@ impl ProofEntry {
         self.preflight_document_call(operation, options, attempts, encode_results, |group| {
             if documents.is_none() {
                 documents = Some(
-                    Documents::new(self.capacity(), self.installation().clone(), bindings)
-                        .map_err(|code| InputError {
-                            code,
-                            path: group.name().into(),
-                        })?,
+                    Documents::new(
+                        self.capacity(),
+                        self.material_limits().reference_bytes,
+                        self.installation().clone(),
+                        bindings,
+                    )
+                    .map_err(|code| InputError {
+                        code,
+                        path: group.name().into(),
+                    })?,
                 );
             }
             documents.as_mut().expect("initialized documents").load(
