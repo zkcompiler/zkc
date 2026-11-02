@@ -67,7 +67,7 @@ See the [target contract](../spec/targets/evm.md) and
 ## Inspect and explain
 
 `inspect` defaults to the checked Entry interface. `--view=project` shows the
-resolved dependency graph and settings; `api` shows checked public contracts and
+resolved dependency graph and settings without running the compiler; `api` shows checked public contracts and
 exports; `placement` shows completed callable contracts. Expression placement is
 available in Protocol IR dumps. `notations` shows syntax metadata, with optional
 `--notation-private` and `--notation-installation` visibility. Source inventories

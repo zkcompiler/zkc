@@ -161,7 +161,7 @@ Every byte fact of a leaf comes from the catalog's
 the codec row's tag and element width, the aggregate frame's tag, and the
 commitment row's digest and digest-word widths. A field coordinate has its
 base field's codec width. A codec whose widths the target's layouts do not
-realize refuses Yul export; its diagnostic carries the `[evm.wire-type]` tag.
+realize refuses Yul export; its diagnostic carries the `evm.wire-type` code.
 Sequences and variants compose these leaves. Root/path support preserves their
 canonical envelopes; it performs no authentication. Unsupported inactive arms
 and empty-container element types still refuse compilation.
@@ -347,7 +347,7 @@ The compiler's EVM target refuses, in pipeline order:
 | `evm.lowering` | A reachable operation or type without an EVM realization; the joined `evm.diagnostics` names it with `[evm.unsupported-operation]` or `[evm.unsupported-type]` |
 | `evm.control-flow` | A lowered function whose control flow cannot be structured, such as a statically infinite loop |
 | `evm.target-legality` | An operation or type that remains outside the closed target after lowering or before export |
-| `evm.yul` | A Yul export failure at the invocation boundary or in a target function; the joined `evm.diagnostics` carries the exporter's tagged reason: `[evm.wire-type]` for a message type without a supported wire frame, `[evm.wire-operation]` for a sequence, bytes or variant operation without a wire implementation, `[evm.arithmetic]` for a field or vector operation without an implementation, and `[evm.root-limit]` for a static invocation root above `root_bytes` |
+| `evm.yul` | A Yul export failure at the invocation boundary or in a target function; the joined `evm.diagnostics` carries the exporter's reason, `[evm.yul]` followed by the coded refusal: `evm.wire-type` for a message type without a supported wire frame, `evm.wire-operation` for a sequence, bytes or variant operation without a wire implementation, `evm.arithmetic` for a field or vector operation without an implementation; a static invocation root above `root_bytes` reports `[evm.root-limit]` |
 
 `evm.diagnostics` is never a refusal of its own: it joins a lowering or export
 refusal with every diagnostic captured so far.
