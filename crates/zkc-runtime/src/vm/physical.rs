@@ -3,6 +3,9 @@ use super::structural::{ParseBudget, TYPE_DEPTH_LIMIT, TYPE_NODE_LIMIT};
 use super::{AdmissionError, ErrorCode, Identity, LogicalType, PhysicalType, Representation, Type};
 type Result<T> = std::result::Result<T, AdmissionError>;
 pub(super) const PHYSICAL_SPELLING_LIMIT: usize = 1024 * 1024;
+/// Descriptor charge units of one stored child slot of an aggregate layout
+/// (`docs/spec/formats/program-bytes.md`).
+pub(super) const PHYSICAL_CHILD_CHARGE: usize = 88;
 fn invalid(detail: &str) -> AdmissionError {
     AdmissionError::new(ErrorCode::Representation, detail)
 }
@@ -202,9 +205,15 @@ impl PhysicalType {
             |n, c| n.saturating_add(c.descriptor_bytes()),
         )
     }
+    /// The specified charge of an aggregate layout's stored child slots: 256
+    /// units plus one stored child size per slot, a stated constant rather than
+    /// the platform's layout, so independent readers charge the same units.
     fn child_storage_bytes(&self) -> usize {
+        const {
+            assert!(std::mem::size_of::<Self>() <= PHYSICAL_CHILD_CHARGE);
+        }
         self.children.as_ref().map_or(0, |children| {
-            256usize.saturating_add(children.len().saturating_mul(std::mem::size_of::<Self>()))
+            256usize.saturating_add(children.len().saturating_mul(PHYSICAL_CHILD_CHARGE))
         })
     }
     /// Visit complete metadata, including inactive variant alternatives and

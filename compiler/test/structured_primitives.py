@@ -369,7 +369,7 @@ with case('received-vector-malformation-and-capacity-stay-distinct'):
         f'%received = "protocol.exchange"(%a0) {{sender="P",receiver="V",site="receive"}} : ({vector})->{vector}\n%result = "protocol.local_call"(%received)')
     source = source.replace('callee=@work,role="P"', 'callee=@work,role="V"').replace('output_roles=[["P"]]', 'output_roles=[["V"]]')
     export(source)
-    action = ['receive', 'receive', 'P', 'V', ['vector', 'bls12-381.fr']]
+    action = ['receive', 'receive', 'P', 'V', ['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]]]
     def replies(value):
         return [['reply', action, ['value', value]]]
     assert run(source, [None], role='V', replies=replies(['3', '7'])) == [

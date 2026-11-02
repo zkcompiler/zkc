@@ -656,8 +656,9 @@ fn exact_tags_arities_names_and_limits() {
     j[3][0][1] = json!("é");
     reject(&j, ErrorCode::Name);
     let mut j = identity();
+    // The identifier length is a carrier bound, refused as capacity.
     j[3][0][1] = json!("x".repeat(129));
-    reject(&j, ErrorCode::Name);
+    reject(&j, ErrorCode::Limit);
     let mut j = identity();
     j[3][0][6][0].as_array_mut().unwrap().push(json!([]));
     reject(&j, ErrorCode::Record);
@@ -2721,8 +2722,40 @@ fn execution_counts_include_early_stop_cleanup() {
     }
 }
 
+/// Expand a corpus wire: one string, or ordered segments in which
+/// `{"repeat": item, "count": n, "separator": s}` writes `item` n times with
+/// `{i}` replaced by 0..n, separated by `s`.
+fn program_byte_wire(wire: &Json) -> Vec<u8> {
+    let segments = match wire {
+        Json::String(text) => return text.as_bytes().to_vec(),
+        Json::Array(segments) => segments,
+        _ => panic!("malformed wire"),
+    };
+    let mut out = String::new();
+    for segment in segments {
+        match segment {
+            Json::String(text) => out.push_str(text),
+            Json::Object(repeat) => {
+                assert_eq!(repeat.len(), 3, "malformed repeat segment");
+                let item = repeat["repeat"].as_str().unwrap();
+                let separator = repeat["separator"].as_str().unwrap();
+                for i in 0..repeat["count"].as_u64().unwrap() {
+                    if i != 0 {
+                        out.push_str(separator);
+                    }
+                    out.push_str(&item.replace("{i}", &i.to_string()));
+                }
+            }
+            _ => panic!("malformed wire segment"),
+        }
+    }
+    out.into_bytes()
+}
+
 /// The same exact bytes are consumed by the compiler and independent readers.
-/// These are admission controls, not execution or source-correspondence proofs.
+/// Each case expects normalized measures of an admitted program or the class
+/// of its refusal, never diagnostic prose. These are admission controls, not
+/// execution or source-correspondence proofs.
 #[test]
 fn shared_program_byte_language_controls() {
     let corpus: Json = serde_json::from_str(include_str!(
@@ -2736,9 +2769,24 @@ fn shared_program_byte_language_controls() {
     for case in corpus["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
         assert!(names.insert(name), "duplicate byte control: {name}");
-        let result = Program::decode(case["wire"].as_str().unwrap().as_bytes(), &contracts);
-        if result.is_ok() != case["admitted"].as_bool().unwrap() {
-            failures.push(format!("program byte control {name}: {result:?}"));
+        let expected = match (case.get("admitted"), case.get("refused")) {
+            (Some(admitted), None) => json!({"admitted": admitted}),
+            (None, Some(class)) => json!({"refused": class}),
+            _ => panic!("program byte control {name} needs one expected result"),
+        };
+        let result = Program::decode(&program_byte_wire(&case["wire"]), &contracts);
+        let actual = match &result {
+            Ok(program) => json!({"admitted": {
+                "static_instructions": program.static_instructions(),
+                "descriptor_charge": program.descriptor_charge(),
+            }}),
+            Err(error) => json!({"refused": error.class().as_str()}),
+        };
+        if actual != expected {
+            let refusal = result.err().map(|e| e.to_string()).unwrap_or_default();
+            failures.push(format!(
+                "program byte control {name}: expected {expected}, read {actual} {refusal}"
+            ));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

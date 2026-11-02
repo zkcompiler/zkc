@@ -12,6 +12,7 @@
 #include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -385,7 +386,7 @@ class ExecutionModelReader {
     // Artifact-local value names have no authority over service identities.
     // Reserve the latter before choosing names for actual SSA data arguments.
     if (auto ports = op->getAttrOfType<ArrayAttr>("service_ports")) {
-      if (ports.size() > 1024) {
+      if (ports.size() > program::listEntryLimit) {
         fail("interactive-port-limit");
         return {};
       }

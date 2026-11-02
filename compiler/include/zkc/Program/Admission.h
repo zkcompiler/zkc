@@ -14,9 +14,16 @@ llvm::Error admitNativeLocalDefinitions(const program::LocalDefinitions &);
 /// selected. Unresolved mathematical calls are not permitted.
 llvm::Error admitExecutionDefinitions(const program::LocalDefinitions &,
                                       bool physical = false);
+/// Normalized measures of an admitted program, which independent readers
+/// compare.
+struct AdmissionReport {
+  size_t staticInstructions = 0;
+  uint64_t descriptorCharge = 0;
+};
 /// Check executable formation and local definitions.
 /// The model interface does not require an MLIR context.
-llvm::Error admit(const program::Participants &);
+llvm::Error admit(const program::Participants &,
+                  AdmissionReport *report = nullptr);
 } // namespace zkc::protocol
 
 #endif

@@ -905,20 +905,19 @@ fn logical_spelling_limit_excludes_the_outer_representation() {
             [["return", ["x"]]],
             ["Identity", []]
         ]]);
+        // The program carrier bounds the complete physical spelling as one
+        // string, so the suffix does count against the carrier's string bound.
         let error = zkc_runtime::vm::Program::decode(
             &serde_json::to_vec(&value).unwrap(),
             &zkc_runtime::vm::Contracts::standard(
                 zkc_runtime::vm::ExecutionPolicy::general_purpose(),
             ),
         )
-        .and_then(|program| {
-            program.check_installation(&NoBackend)?;
-            Ok(program)
-        })
         .err()
         .unwrap();
-        assert_eq!(error.code, ErrorCode::Representation);
-        assert_eq!(error.detail, "unrepresented logical type");
+        assert_eq!(error.code, ErrorCode::Limit);
+        assert_eq!(error.detail, "string byte ceiling");
+        assert_eq!(error.class(), zkc_runtime::vm::RefusalClass::Capacity);
     }
     let spelling = structural_with_bytes(4097);
     assert_eq!(

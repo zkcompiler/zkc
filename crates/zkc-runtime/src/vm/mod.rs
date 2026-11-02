@@ -65,7 +65,8 @@ pub use bindings::{
     ResolvedBinding, bit_pattern_literal,
 };
 pub use model::{
-    AdmissionError, AttributeRule, ErrorCode, Limits, LogicalOrigin, OperationSignature, Type,
+    AdmissionError, AttributeRule, ErrorCode, Limits, LogicalOrigin, OperationSignature,
+    RefusalClass, Type,
 };
 pub use observe::{
     Action, Cut, CutKind, DecodeReason, Envelope, LoadError, LocalAction, LocalContext, Origin,

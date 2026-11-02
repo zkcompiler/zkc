@@ -3,383 +3,1361 @@
   "cases": [
     {
       "name": "identity",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "whitespace",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": " \n\t[\n  \"zkc.program/0\",\n  [],\n  [\n    [\n      \"function\",\n      \"identity\",\n      [\n        [\n          \"x\",\n          \"bool@native.bool/0\"\n        ]\n      ],\n      [\n        \"bool@native.bool/0\"\n      ],\n      [\n        [\n          \"return\",\n          [\n            \"x\"\n          ]\n        ]\n      ],\n      [\n        \"identity\",\n        []\n      ]\n    ]\n  ],\n  [],\n  []\n]\r\n"
     },
     {
       "name": "escaped_identifier",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"\\u0069dentity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"\\u0069dentity\",[]]]],[],[]]"
     },
     {
       "name": "boolean_literal",
-      "admitted": true,
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"literal\",[],[\"bool@native.bool/0\"],[[\"bool_constant\",\"value\",\"x\",true],[\"return\",[\"x\"]]],[\"literal\",[]]]],[],[]]"
     },
     {
       "name": "local_if",
-      "admitted": true,
+      "admitted": {"static_instructions": 5, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"branch\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"bool_constant\",\"no\",\"y\",false],[\"yield\",[\"y\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"branch\",[]]]],[],[]]"
     },
     {
       "name": "local_for",
-      "admitted": true,
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"loop\",[[\"lower\",\"index@native.index/0\"],[\"upper\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"for\",\"round\",\"i\",\"lower\",\"upper\",[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"loop\",[]]]],[],[]]"
     },
     {
       "name": "local_for_while",
-      "admitted": true,
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"loop\",[[\"lower\",\"index@native.index/0\"],[\"upper\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"for_while\",\"round\",\"i\",\"lower\",\"upper\",[[\"state\",\"x\"]],[],[[\"yield\",[\"state\",\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"loop\",[]]]],[],[]]"
     },
     {
       "name": "stop_reject",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"stopped\",[],[],[[\"stop\",\"end\",\"reject\"]],[\"stopped\",[]]]],[],[]]"
     },
     {
       "name": "stop_abort",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"stopped\",[],[],[[\"stop\",\"end\",\"abort\"]],[\"stopped\",[]]]],[],[]]"
     },
     {
       "name": "stop_exhausted",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"stopped\",[],[],[[\"stop\",\"end\",\"exhausted\"]],[\"stopped\",[]]]],[],[]]"
     },
     {
       "name": "stop_incomplete",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"stopped\",[],[],[[\"stop\",\"end\",\"incomplete\"]],[\"stopped\",[]]]],[],[]]"
     },
     {
       "name": "stop_refused",
-      "admitted": true,
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"stopped\",[],[],[[\"stop\",\"end\",\"refused\"]],[\"stopped\",[]]]],[],[]]"
     },
     {
       "name": "participant_loop",
-      "admitted": true,
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"16\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "participant_conditional_completion",
-      "admitted": true,
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return_if\",\"done\",\"x\",[\"x\"],[]],[\"return\",[\"x\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "missing_origin",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]]]],[],[]]"
     },
     {
       "name": "null_origin",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],null]],[],[]]"
     },
     {
       "name": "empty_origin",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[]]],[],[]]"
     },
     {
       "name": "extra_function_field",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]],[]]],[],[]]"
     },
     {
       "name": "object_instead_of_ports",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",{},[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "return_with_site",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",\"unexpected\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "unknown_return_value",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"missing\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "duplicate_function",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]],[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "duplicate_input",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "local_send",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"send\",\"message\",\"schema\",\"P\",\"x\"],[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "participant_local_instruction",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"bool_constant\",\"constant\",\"y\",true],[\"loop\",\"round\",[\"value\",\"n\",\"16\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "noncanonical_maximum",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"016\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "numeric_maximum",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",16,\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "negative_maximum",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"-1\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "maximum_over_limit",
-      "admitted": false,
+      "refused": "capacity",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"1048577\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "unknown_entry_target",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"16\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"missing\"]]]]]"
     },
     {
       "name": "empty_entry_roles",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"16\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[]]]]"
     },
     {
       "name": "unknown_dormant_instruction",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"branch\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"unknown\",\"dormant\"],[\"bool_constant\",\"no\",\"y\",false],[\"yield\",[\"y\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"branch\",[]]]],[],[]]"
     },
     {
       "name": "unknown_dormant_value",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"branch\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"bool_constant\",\"no\",\"y\",false],[\"yield\",[\"missing\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"branch\",[]]]],[],[]]"
     },
     {
       "name": "unknown_unused_function",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]],[\"function\",\"unused\",[],[],[[\"unknown\",\"dormant\"]],[\"unused\",[]]]],[],[]]"
     },
     {
       "name": "wrong_result_type",
-      "admitted": false,
+      "refused": "types",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"index@native.index/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "empty_program",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[],[]]"
     },
     {
       "name": "trailing_json",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]][]"
     },
     {
       "name": "unpaired_surrogate",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"\\ud800\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"\\ud800\",[]]]],[],[]]"
     },
     {
       "name": "unknown_format",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/1\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
     },
     {
       "name": "raw_boolean",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "true"
     },
     {
       "name": "raw_object",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "{}"
     },
     {
       "name": "completion_copy_successor",
-      "admitted": false,
+      "refused": "types",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return_if\",\"done\",\"x\",[\"x\"],[\"continue\"]],[\"return\",[\"continue\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"]]]]]"
     },
     {
       "name": "bound_operation",
-      "admitted": true,
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[[\"index_literal\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"constant\",[],[\"index@native.index/0\"],[[\"op\",\"value\",\"index_literal\",[\"7\"],[],[\"x\"]],[\"return\",[\"x\"]]],[\"constant\",[]]]],[],[]]"
     },
     {
       "name": "variant_match",
-      "admitted": true,
+      "admitted": {"static_instructions": 6, "descriptor_charge": 2712},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"choice\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\",\"some\",[\"x\"],\"choice\"],[\"match\",\"select\",\"choice\",[],[[\"some\",[\"value\"],[[\"yield\",[\"value\"]]]],[\"none\",[],[[\"bool_constant\",\"fallback\",\"value\",false],[\"yield\",[\"value\"]]]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"choice\",[]]]],[],[]]"
     },
     {
       "name": "release",
-      "admitted": true,
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"discard\",[[\"x\",\"bool@native.bool/0\"]],[],[[\"release\",[\"x\"]],[\"return\",[]]],[\"discard\",[]]]],[],[]]"
     },
     {
       "name": "send_receive",
-      "admitted": true,
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"x\",\"bool@native.bool/0\"]],[],[[\"send\",\"message\",\"payload\",\"V\",\"x\"],[\"return\",[]]],[]],[\"participant\",\"mainV\",\"root\",\"V\",[],[\"bool@native.bool/0\"],[[\"receive\",\"message\",\"payload\",\"P\",\"x\",\"bool@native.bool/0\"],[\"return\",[\"x\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"],[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "scoped_local_call",
-      "admitted": true,
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"local\",\"compute\",\"identity\",[\"x\"],[\"y\"]],[\"return\",[\"y\"]]],[]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "service_query",
-      "admitted": true,
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"bound\",\"index@native.index/0\"]],[\"index@native.index/0\"],[[\"query\",\"sample\",\"rng\",\"index\",[\"bound\"],[\"x\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"1\"]]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "match_omitted_alternative",
-      "admitted": false,
+      "refused": "types",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"choice\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\",\"some\",[\"x\"],\"choice\"],[\"match\",\"select\",\"choice\",[],[[\"some\",[\"value\"],[[\"yield\",[\"value\"]]]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"choice\",[]]]],[],[]]"
     },
     {
       "name": "variant_unknown_alternative",
-      "admitted": false,
+      "refused": "types",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"choice\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\",\"unknown\",[\"x\"],\"choice\"],[\"match\",\"select\",\"choice\",[],[[\"some\",[\"value\"],[[\"yield\",[\"value\"]]]],[\"none\",[],[[\"bool_constant\",\"fallback\",\"value\",false],[\"yield\",[\"value\"]]]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"choice\",[]]]],[],[]]"
     },
     {
       "name": "noncanonical_service_input",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"bound\",\"index@native.index/0\"]],[\"index@native.index/0\"],[[\"query\",\"sample\",\"rng\",\"index\",[\"bound\"],[\"x\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"01\"]]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "unknown_service_method",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"bound\",\"index@native.index/0\"]],[\"index@native.index/0\"],[[\"query\",\"sample\",\"rng\",\"unknown\",[\"bound\"],[\"x\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"1\"]]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "missing_operation_binding",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"constant\",[],[\"index@native.index/0\"],[[\"op\",\"value\",\"constant\",[\"7\"],[],[\"x\"]],[\"return\",[\"x\"]]],[\"constant\",[]]]],[],[]]"
     },
     {
       "name": "unknown_local_callee",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"local\",\"compute\",\"missing\",[\"x\"],[\"y\"]],[\"return\",[\"y\"]]],[]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "schema_type_mismatch",
-      "admitted": false,
+      "refused": "types",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainP\",\"root\",\"P\",[[\"x\",\"bool@native.bool/0\"]],[],[[\"send\",\"message\",\"payload\",\"V\",\"x\"],[\"return\",[]]],[]],[\"participant\",\"mainV\",\"root\",\"V\",[],[\"bool@native.bool/0\"],[[\"receive\",\"message\",\"payload\",\"P\",\"x\",\"index@native.index/0\"],[\"return\",[\"x\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"mainP\"],[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "participant_selected_if",
-      "admitted": true,
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "dormant_unbound",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"ambient\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"yield\",[\"ambient\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "dormant_wrong_yield",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"yield\",[]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_extra_if_field",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"],[]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_return_in_arm",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"return\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "syntax",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"return\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_wrong_selector",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_local_op_in_arm",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"bool_constant\",\"bad\",\"bad\",false],[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "syntax",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"yield\",[\"x\"]]],[[\"bool_constant\",\"bad\",\"bad\",false],[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_selected_match",
-      "admitted": true,
+      "admitted": {"static_instructions": 4, "descriptor_charge": 2712},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_selected_if_copy_aliases",
-      "admitted": true,
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"first\",\"x\"],[\"second\",\"x\"]],[[\"yield\",[\"first\"]]],[[\"yield\",[\"second\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_selected_if_name_captures",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_selected_if_repeated_formal",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"first\",\"x\"],[\"first\",\"x\"]],[[\"yield\",[\"first\"]]],[[\"yield\",[\"first\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_selected_if_malformed_capture",
-      "admitted": false,
+      "refused": "syntax",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"bool@native.bool/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"c\",[[\"first\",\"x\",\"extra\"]],[[\"yield\",[\"first\"]]],[[\"yield\",[\"first\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_capture_service_name",
-      "admitted": false,
+      "refused": "names-and-ssa",
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"bound\",\"index@native.index/0\"],[\"c\",\"bool@native.bool/0\"]],[\"index@native.index/0\"],[[\"if\",\"choice\",\"c\",[[\"rng\",\"bound\"]],[[\"yield\",[\"rng\"]]],[[\"yield\",[\"rng\"]]],[\"x\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "participant_capture_distinct_from_service",
-      "admitted": true,
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
       "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"mainV\",\"root\",\"V\",[[\"bound\",\"index@native.index/0\"],[\"c\",\"bool@native.bool/0\"]],[\"index@native.index/0\"],[[\"if\",\"choice\",\"c\",[[\"local\",\"bound\"]],[[\"yield\",[\"local\"]]],[[\"yield\",[\"local\"]]],[\"x\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"V\",\"mainV\"]]]]]"
     },
     {
       "name": "participant_dormant_payload_leak",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"payload\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"payload\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_nonexhaustive_match",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_duplicate_match_tag",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"some\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"some\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_wrong_payload_arity",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "participant_payload_cannot_shadow_service",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[\"x\"],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[[\"payload\",\"random.bls12-381.fr/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"choice\",\"c\",[[\"x\",\"x\"]],[[\"some\",[\"payload\"],[[\"yield\",[\"payload\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"result\"]],[\"return\",[\"result\"]]],[[\"payload\",\"random.bls12-381.fr/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
     },
     {
       "name": "match_alternatives_64",
-      "admitted": true,
+      "admitted": {"static_instructions": 67, "descriptor_charge": 29184},
       "wire": "[\"zkc.program/0\",[],[[\"function\",\"wide\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2257696465222c5b2230222c2231225d2c226130222c5b5d2c5b2233222c2234225d2c226131222c5b2236222c2234225d2c226132222c5b2238222c2234225d2c226133222c5b223130222c2234225d2c226134222c5b223132222c2234225d2c226135222c5b223134222c2234225d2c226136222c5b223136222c2234225d2c226137222c5b223138222c2234225d2c226138222c5b223230222c2234225d2c226139222c5b223232222c2234225d2c22613130222c5b223234222c2234225d2c22613131222c5b223236222c2234225d2c22613132222c5b223238222c2234225d2c22613133222c5b223330222c2234225d2c22613134222c5b223332222c2234225d2c22613135222c5b223334222c2234225d2c22613136222c5b223336222c2234225d2c22613137222c5b223338222c2234225d2c22613138222c5b223430222c2234225d2c22613139222c5b223432222c2234225d2c22613230222c5b223434222c2234225d2c22613231222c5b223436222c2234225d2c22613232222c5b223438222c2234225d2c22613233222c5b223530222c2234225d2c22613234222c5b223532222c2234225d2c22613235222c5b223534222c2234225d2c22613236222c5b223536222c2234225d2c22613237222c5b223538222c2234225d2c22613238222c5b223630222c2234225d2c22613239222c5b223632222c2234225d2c22613330222c5b223634222c2234225d2c22613331222c5b223636222c2234225d2c22613332222c5b223638222c2234225d2c22613333222c5b223730222c2234225d2c22613334222c5b223732222c2234225d2c22613335222c5b223734222c2234225d2c22613336222c5b223736222c2234225d2c22613337222c5b223738222c2234225d2c22613338222c5b223830222c2234225d2c22613339222c5b223832222c2234225d2c22613430222c5b223834222c2234225d2c22613431222c5b223836222c2234225d2c22613432222c5b223838222c2234225d2c22613433222c5b223930222c2234225d2c22613434222c5b223932222c2234225d2c22613435222c5b223934222c2234225d2c22613436222c5b223936222c2234225d2c22613437222c5b223938222c2234225d2c22613438222c5b22313030222c2234225d2c22613439222c5b22313032222c2234225d2c22613530222c5b22313034222c2234225d2c22613531222c5b22313036222c2234225d2c22613532222c5b22313038222c2234225d2c22613533222c5b22313130222c2234225d2c22613534222c5b22313132222c2234225d2c22613535222c5b22313134222c2234225d2c22613536222c5b22313136222c2234225d2c22613537222c5b22313138222c2234225d2c22613538222c5b22313230222c2234225d2c22613539222c5b22313232222c2234225d2c22613630222c5b22313234222c2234225d2c22613631222c5b22313236222c2234225d2c22613632222c5b22313238222c2234225d2c22613633222c5b22313330222c2234225d2c5b2235222c2237222c2239222c223131222c223133222c223135222c223137222c223139222c223231222c223233222c223235222c223237222c223239222c223331222c223333222c223335222c223337222c223339222c223431222c223433222c223435222c223437222c223439222c223531222c223533222c223535222c223537222c223539222c223631222c223633222c223635222c223637222c223639222c223731222c223733222c223735222c223737222c223739222c223831222c223833222c223835222c223837222c223839222c223931222c223933222c223935222c223937222c223939222c22313031222c22313033222c22313035222c22313037222c22313039222c22313131222c22313133222c22313135222c22313137222c22313139222c22313231222c22313233222c22313235222c22313237222c22313239222c22313331225d2c5b2232222c22313332225d5d5d@logical.variant/0\",\"a0\",[],\"choice\"],[\"match\",\"select\",\"choice\",[\"x\"],[[\"a0\",[],[[\"yield\",[\"x\"]]]],[\"a1\",[],[[\"yield\",[\"x\"]]]],[\"a2\",[],[[\"yield\",[\"x\"]]]],[\"a3\",[],[[\"yield\",[\"x\"]]]],[\"a4\",[],[[\"yield\",[\"x\"]]]],[\"a5\",[],[[\"yield\",[\"x\"]]]],[\"a6\",[],[[\"yield\",[\"x\"]]]],[\"a7\",[],[[\"yield\",[\"x\"]]]],[\"a8\",[],[[\"yield\",[\"x\"]]]],[\"a9\",[],[[\"yield\",[\"x\"]]]],[\"a10\",[],[[\"yield\",[\"x\"]]]],[\"a11\",[],[[\"yield\",[\"x\"]]]],[\"a12\",[],[[\"yield\",[\"x\"]]]],[\"a13\",[],[[\"yield\",[\"x\"]]]],[\"a14\",[],[[\"yield\",[\"x\"]]]],[\"a15\",[],[[\"yield\",[\"x\"]]]],[\"a16\",[],[[\"yield\",[\"x\"]]]],[\"a17\",[],[[\"yield\",[\"x\"]]]],[\"a18\",[],[[\"yield\",[\"x\"]]]],[\"a19\",[],[[\"yield\",[\"x\"]]]],[\"a20\",[],[[\"yield\",[\"x\"]]]],[\"a21\",[],[[\"yield\",[\"x\"]]]],[\"a22\",[],[[\"yield\",[\"x\"]]]],[\"a23\",[],[[\"yield\",[\"x\"]]]],[\"a24\",[],[[\"yield\",[\"x\"]]]],[\"a25\",[],[[\"yield\",[\"x\"]]]],[\"a26\",[],[[\"yield\",[\"x\"]]]],[\"a27\",[],[[\"yield\",[\"x\"]]]],[\"a28\",[],[[\"yield\",[\"x\"]]]],[\"a29\",[],[[\"yield\",[\"x\"]]]],[\"a30\",[],[[\"yield\",[\"x\"]]]],[\"a31\",[],[[\"yield\",[\"x\"]]]],[\"a32\",[],[[\"yield\",[\"x\"]]]],[\"a33\",[],[[\"yield\",[\"x\"]]]],[\"a34\",[],[[\"yield\",[\"x\"]]]],[\"a35\",[],[[\"yield\",[\"x\"]]]],[\"a36\",[],[[\"yield\",[\"x\"]]]],[\"a37\",[],[[\"yield\",[\"x\"]]]],[\"a38\",[],[[\"yield\",[\"x\"]]]],[\"a39\",[],[[\"yield\",[\"x\"]]]],[\"a40\",[],[[\"yield\",[\"x\"]]]],[\"a41\",[],[[\"yield\",[\"x\"]]]],[\"a42\",[],[[\"yield\",[\"x\"]]]],[\"a43\",[],[[\"yield\",[\"x\"]]]],[\"a44\",[],[[\"yield\",[\"x\"]]]],[\"a45\",[],[[\"yield\",[\"x\"]]]],[\"a46\",[],[[\"yield\",[\"x\"]]]],[\"a47\",[],[[\"yield\",[\"x\"]]]],[\"a48\",[],[[\"yield\",[\"x\"]]]],[\"a49\",[],[[\"yield\",[\"x\"]]]],[\"a50\",[],[[\"yield\",[\"x\"]]]],[\"a51\",[],[[\"yield\",[\"x\"]]]],[\"a52\",[],[[\"yield\",[\"x\"]]]],[\"a53\",[],[[\"yield\",[\"x\"]]]],[\"a54\",[],[[\"yield\",[\"x\"]]]],[\"a55\",[],[[\"yield\",[\"x\"]]]],[\"a56\",[],[[\"yield\",[\"x\"]]]],[\"a57\",[],[[\"yield\",[\"x\"]]]],[\"a58\",[],[[\"yield\",[\"x\"]]]],[\"a59\",[],[[\"yield\",[\"x\"]]]],[\"a60\",[],[[\"yield\",[\"x\"]]]],[\"a61\",[],[[\"yield\",[\"x\"]]]],[\"a62\",[],[[\"yield\",[\"x\"]]]],[\"a63\",[],[[\"yield\",[\"x\"]]]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"wide\",[]]]],[],[]]"
     },
     {
-      "name": "match_alternatives_65",
-      "admitted": false,
-      "wire": "[\"zkc.program/0\",[],[[\"function\",\"wide\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2257696465222c5b2230222c2231225d2c226130222c5b5d2c5b2233222c2234225d2c226131222c5b2236222c2234225d2c226132222c5b2238222c2234225d2c226133222c5b223130222c2234225d2c226134222c5b223132222c2234225d2c226135222c5b223134222c2234225d2c226136222c5b223136222c2234225d2c226137222c5b223138222c2234225d2c226138222c5b223230222c2234225d2c226139222c5b223232222c2234225d2c22613130222c5b223234222c2234225d2c22613131222c5b223236222c2234225d2c22613132222c5b223238222c2234225d2c22613133222c5b223330222c2234225d2c22613134222c5b223332222c2234225d2c22613135222c5b223334222c2234225d2c22613136222c5b223336222c2234225d2c22613137222c5b223338222c2234225d2c22613138222c5b223430222c2234225d2c22613139222c5b223432222c2234225d2c22613230222c5b223434222c2234225d2c22613231222c5b223436222c2234225d2c22613232222c5b223438222c2234225d2c22613233222c5b223530222c2234225d2c22613234222c5b223532222c2234225d2c22613235222c5b223534222c2234225d2c22613236222c5b223536222c2234225d2c22613237222c5b223538222c2234225d2c22613238222c5b223630222c2234225d2c22613239222c5b223632222c2234225d2c22613330222c5b223634222c2234225d2c22613331222c5b223636222c2234225d2c22613332222c5b223638222c2234225d2c22613333222c5b223730222c2234225d2c22613334222c5b223732222c2234225d2c22613335222c5b223734222c2234225d2c22613336222c5b223736222c2234225d2c22613337222c5b223738222c2234225d2c22613338222c5b223830222c2234225d2c22613339222c5b223832222c2234225d2c22613430222c5b223834222c2234225d2c22613431222c5b223836222c2234225d2c22613432222c5b223838222c2234225d2c22613433222c5b223930222c2234225d2c22613434222c5b223932222c2234225d2c22613435222c5b223934222c2234225d2c22613436222c5b223936222c2234225d2c22613437222c5b223938222c2234225d2c22613438222c5b22313030222c2234225d2c22613439222c5b22313032222c2234225d2c22613530222c5b22313034222c2234225d2c22613531222c5b22313036222c2234225d2c22613532222c5b22313038222c2234225d2c22613533222c5b22313130222c2234225d2c22613534222c5b22313132222c2234225d2c22613535222c5b22313134222c2234225d2c22613536222c5b22313136222c2234225d2c22613537222c5b22313138222c2234225d2c22613538222c5b22313230222c2234225d2c22613539222c5b22313232222c2234225d2c22613630222c5b22313234222c2234225d2c22613631222c5b22313236222c2234225d2c22613632222c5b22313238222c2234225d2c22613633222c5b22313330222c2234225d2c22613634222c5b22313332222c2234225d2c5b2235222c2237222c2239222c223131222c223133222c223135222c223137222c223139222c223231222c223233222c223235222c223237222c223239222c223331222c223333222c223335222c223337222c223339222c223431222c223433222c223435222c223437222c223439222c223531222c223533222c223535222c223537222c223539222c223631222c223633222c223635222c223637222c223639222c223731222c223733222c223735222c223737222c223739222c223831222c223833222c223835222c223837222c223839222c223931222c223933222c223935222c223937222c223939222c22313031222c22313033222c22313035222c22313037222c22313039222c22313131222c22313133222c22313135222c22313137222c22313139222c22313231222c22313233222c22313235222c22313237222c22313239222c22313331222c22313333225d2c5b2232222c22313334225d5d5d@logical.variant/0\",\"a0\",[],\"choice\"],[\"match\",\"select\",\"choice\",[\"x\"],[[\"a0\",[],[[\"yield\",[\"x\"]]]],[\"a1\",[],[[\"yield\",[\"x\"]]]],[\"a2\",[],[[\"yield\",[\"x\"]]]],[\"a3\",[],[[\"yield\",[\"x\"]]]],[\"a4\",[],[[\"yield\",[\"x\"]]]],[\"a5\",[],[[\"yield\",[\"x\"]]]],[\"a6\",[],[[\"yield\",[\"x\"]]]],[\"a7\",[],[[\"yield\",[\"x\"]]]],[\"a8\",[],[[\"yield\",[\"x\"]]]],[\"a9\",[],[[\"yield\",[\"x\"]]]],[\"a10\",[],[[\"yield\",[\"x\"]]]],[\"a11\",[],[[\"yield\",[\"x\"]]]],[\"a12\",[],[[\"yield\",[\"x\"]]]],[\"a13\",[],[[\"yield\",[\"x\"]]]],[\"a14\",[],[[\"yield\",[\"x\"]]]],[\"a15\",[],[[\"yield\",[\"x\"]]]],[\"a16\",[],[[\"yield\",[\"x\"]]]],[\"a17\",[],[[\"yield\",[\"x\"]]]],[\"a18\",[],[[\"yield\",[\"x\"]]]],[\"a19\",[],[[\"yield\",[\"x\"]]]],[\"a20\",[],[[\"yield\",[\"x\"]]]],[\"a21\",[],[[\"yield\",[\"x\"]]]],[\"a22\",[],[[\"yield\",[\"x\"]]]],[\"a23\",[],[[\"yield\",[\"x\"]]]],[\"a24\",[],[[\"yield\",[\"x\"]]]],[\"a25\",[],[[\"yield\",[\"x\"]]]],[\"a26\",[],[[\"yield\",[\"x\"]]]],[\"a27\",[],[[\"yield\",[\"x\"]]]],[\"a28\",[],[[\"yield\",[\"x\"]]]],[\"a29\",[],[[\"yield\",[\"x\"]]]],[\"a30\",[],[[\"yield\",[\"x\"]]]],[\"a31\",[],[[\"yield\",[\"x\"]]]],[\"a32\",[],[[\"yield\",[\"x\"]]]],[\"a33\",[],[[\"yield\",[\"x\"]]]],[\"a34\",[],[[\"yield\",[\"x\"]]]],[\"a35\",[],[[\"yield\",[\"x\"]]]],[\"a36\",[],[[\"yield\",[\"x\"]]]],[\"a37\",[],[[\"yield\",[\"x\"]]]],[\"a38\",[],[[\"yield\",[\"x\"]]]],[\"a39\",[],[[\"yield\",[\"x\"]]]],[\"a40\",[],[[\"yield\",[\"x\"]]]],[\"a41\",[],[[\"yield\",[\"x\"]]]],[\"a42\",[],[[\"yield\",[\"x\"]]]],[\"a43\",[],[[\"yield\",[\"x\"]]]],[\"a44\",[],[[\"yield\",[\"x\"]]]],[\"a45\",[],[[\"yield\",[\"x\"]]]],[\"a46\",[],[[\"yield\",[\"x\"]]]],[\"a47\",[],[[\"yield\",[\"x\"]]]],[\"a48\",[],[[\"yield\",[\"x\"]]]],[\"a49\",[],[[\"yield\",[\"x\"]]]],[\"a50\",[],[[\"yield\",[\"x\"]]]],[\"a51\",[],[[\"yield\",[\"x\"]]]],[\"a52\",[],[[\"yield\",[\"x\"]]]],[\"a53\",[],[[\"yield\",[\"x\"]]]],[\"a54\",[],[[\"yield\",[\"x\"]]]],[\"a55\",[],[[\"yield\",[\"x\"]]]],[\"a56\",[],[[\"yield\",[\"x\"]]]],[\"a57\",[],[[\"yield\",[\"x\"]]]],[\"a58\",[],[[\"yield\",[\"x\"]]]],[\"a59\",[],[[\"yield\",[\"x\"]]]],[\"a60\",[],[[\"yield\",[\"x\"]]]],[\"a61\",[],[[\"yield\",[\"x\"]]]],[\"a62\",[],[[\"yield\",[\"x\"]]]],[\"a63\",[],[[\"yield\",[\"x\"]]]],[\"a64\",[],[[\"yield\",[\"x\"]]]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"wide\",[]]]],[],[]]"
+      "name": "match_arms_over_bound",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"wide\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2257696465222c5b2230222c2231225d2c226130222c5b5d2c5b2233222c2234225d2c226131222c5b2236222c2234225d2c226132222c5b2238222c2234225d2c226133222c5b223130222c2234225d2c226134222c5b223132222c2234225d2c226135222c5b223134222c2234225d2c226136222c5b223136222c2234225d2c226137222c5b223138222c2234225d2c226138222c5b223230222c2234225d2c226139222c5b223232222c2234225d2c22613130222c5b223234222c2234225d2c22613131222c5b223236222c2234225d2c22613132222c5b223238222c2234225d2c22613133222c5b223330222c2234225d2c22613134222c5b223332222c2234225d2c22613135222c5b223334222c2234225d2c22613136222c5b223336222c2234225d2c22613137222c5b223338222c2234225d2c22613138222c5b223430222c2234225d2c22613139222c5b223432222c2234225d2c22613230222c5b223434222c2234225d2c22613231222c5b223436222c2234225d2c22613232222c5b223438222c2234225d2c22613233222c5b223530222c2234225d2c22613234222c5b223532222c2234225d2c22613235222c5b223534222c2234225d2c22613236222c5b223536222c2234225d2c22613237222c5b223538222c2234225d2c22613238222c5b223630222c2234225d2c22613239222c5b223632222c2234225d2c22613330222c5b223634222c2234225d2c22613331222c5b223636222c2234225d2c22613332222c5b223638222c2234225d2c22613333222c5b223730222c2234225d2c22613334222c5b223732222c2234225d2c22613335222c5b223734222c2234225d2c22613336222c5b223736222c2234225d2c22613337222c5b223738222c2234225d2c22613338222c5b223830222c2234225d2c22613339222c5b223832222c2234225d2c22613430222c5b223834222c2234225d2c22613431222c5b223836222c2234225d2c22613432222c5b223838222c2234225d2c22613433222c5b223930222c2234225d2c22613434222c5b223932222c2234225d2c22613435222c5b223934222c2234225d2c22613436222c5b223936222c2234225d2c22613437222c5b223938222c2234225d2c22613438222c5b22313030222c2234225d2c22613439222c5b22313032222c2234225d2c22613530222c5b22313034222c2234225d2c22613531222c5b22313036222c2234225d2c22613532222c5b22313038222c2234225d2c22613533222c5b22313130222c2234225d2c22613534222c5b22313132222c2234225d2c22613535222c5b22313134222c2234225d2c22613536222c5b22313136222c2234225d2c22613537222c5b22313138222c2234225d2c22613538222c5b22313230222c2234225d2c22613539222c5b22313232222c2234225d2c22613630222c5b22313234222c2234225d2c22613631222c5b22313236222c2234225d2c22613632222c5b22313238222c2234225d2c22613633222c5b22313330222c2234225d2c5b2235222c2237222c2239222c223131222c223133222c223135222c223137222c223139222c223231222c223233222c223235222c223237222c223239222c223331222c223333222c223335222c223337222c223339222c223431222c223433222c223435222c223437222c223439222c223531222c223533222c223535222c223537222c223539222c223631222c223633222c223635222c223637222c223639222c223731222c223733222c223735222c223737222c223739222c223831222c223833222c223835222c223837222c223839222c223931222c223933222c223935222c223937222c223939222c22313031222c22313033222c22313035222c22313037222c22313039222c22313131222c22313133222c22313135222c22313137222c22313139222c22313231222c22313233222c22313235222c22313237222c22313239222c22313331225d2c5b2232222c22313332225d5d5d@logical.variant/0\",\"a0\",[],\"choice\"],[\"match\",\"select\",\"choice\",[\"x\"],[[\"a0\",[],[[\"yield\",[\"x\"]]]],[\"a1\",[],[[\"yield\",[\"x\"]]]],[\"a2\",[],[[\"yield\",[\"x\"]]]],[\"a3\",[],[[\"yield\",[\"x\"]]]],[\"a4\",[],[[\"yield\",[\"x\"]]]],[\"a5\",[],[[\"yield\",[\"x\"]]]],[\"a6\",[],[[\"yield\",[\"x\"]]]],[\"a7\",[],[[\"yield\",[\"x\"]]]],[\"a8\",[],[[\"yield\",[\"x\"]]]],[\"a9\",[],[[\"yield\",[\"x\"]]]],[\"a10\",[],[[\"yield\",[\"x\"]]]],[\"a11\",[],[[\"yield\",[\"x\"]]]],[\"a12\",[],[[\"yield\",[\"x\"]]]],[\"a13\",[],[[\"yield\",[\"x\"]]]],[\"a14\",[],[[\"yield\",[\"x\"]]]],[\"a15\",[],[[\"yield\",[\"x\"]]]],[\"a16\",[],[[\"yield\",[\"x\"]]]],[\"a17\",[],[[\"yield\",[\"x\"]]]],[\"a18\",[],[[\"yield\",[\"x\"]]]],[\"a19\",[],[[\"yield\",[\"x\"]]]],[\"a20\",[],[[\"yield\",[\"x\"]]]],[\"a21\",[],[[\"yield\",[\"x\"]]]],[\"a22\",[],[[\"yield\",[\"x\"]]]],[\"a23\",[],[[\"yield\",[\"x\"]]]],[\"a24\",[],[[\"yield\",[\"x\"]]]],[\"a25\",[],[[\"yield\",[\"x\"]]]],[\"a26\",[],[[\"yield\",[\"x\"]]]],[\"a27\",[],[[\"yield\",[\"x\"]]]],[\"a28\",[],[[\"yield\",[\"x\"]]]],[\"a29\",[],[[\"yield\",[\"x\"]]]],[\"a30\",[],[[\"yield\",[\"x\"]]]],[\"a31\",[],[[\"yield\",[\"x\"]]]],[\"a32\",[],[[\"yield\",[\"x\"]]]],[\"a33\",[],[[\"yield\",[\"x\"]]]],[\"a34\",[],[[\"yield\",[\"x\"]]]],[\"a35\",[],[[\"yield\",[\"x\"]]]],[\"a36\",[],[[\"yield\",[\"x\"]]]],[\"a37\",[],[[\"yield\",[\"x\"]]]],[\"a38\",[],[[\"yield\",[\"x\"]]]],[\"a39\",[],[[\"yield\",[\"x\"]]]],[\"a40\",[],[[\"yield\",[\"x\"]]]],[\"a41\",[],[[\"yield\",[\"x\"]]]],[\"a42\",[],[[\"yield\",[\"x\"]]]],[\"a43\",[],[[\"yield\",[\"x\"]]]],[\"a44\",[],[[\"yield\",[\"x\"]]]],[\"a45\",[],[[\"yield\",[\"x\"]]]],[\"a46\",[],[[\"yield\",[\"x\"]]]],[\"a47\",[],[[\"yield\",[\"x\"]]]],[\"a48\",[],[[\"yield\",[\"x\"]]]],[\"a49\",[],[[\"yield\",[\"x\"]]]],[\"a50\",[],[[\"yield\",[\"x\"]]]],[\"a51\",[],[[\"yield\",[\"x\"]]]],[\"a52\",[],[[\"yield\",[\"x\"]]]],[\"a53\",[],[[\"yield\",[\"x\"]]]],[\"a54\",[],[[\"yield\",[\"x\"]]]],[\"a55\",[],[[\"yield\",[\"x\"]]]],[\"a56\",[],[[\"yield\",[\"x\"]]]],[\"a57\",[],[[\"yield\",[\"x\"]]]],[\"a58\",[],[[\"yield\",[\"x\"]]]],[\"a59\",[],[[\"yield\",[\"x\"]]]],[\"a60\",[],[[\"yield\",[\"x\"]]]],[\"a61\",[],[[\"yield\",[\"x\"]]]],[\"a62\",[],[[\"yield\",[\"x\"]]]],[\"a63\",[],[[\"yield\",[\"x\"]]]],[\"a63\",[],[[\"yield\",[\"x\"]]]]],[\"answer\"]],[\"return\",[\"answer\"]]],[\"wide\",[]]]],[],[]]"
+    },
+    {
+      "name": "variant_descriptor_alternatives_over_bound",
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2257696465222c5b2230222c2231225d2c226130222c5b5d2c5b2233222c2234225d2c226131222c5b2236222c2234225d2c226132222c5b2238222c2234225d2c226133222c5b223130222c2234225d2c226134222c5b223132222c2234225d2c226135222c5b223134222c2234225d2c226136222c5b223136222c2234225d2c226137222c5b223138222c2234225d2c226138222c5b223230222c2234225d2c226139222c5b223232222c2234225d2c22613130222c5b223234222c2234225d2c22613131222c5b223236222c2234225d2c22613132222c5b223238222c2234225d2c22613133222c5b223330222c2234225d2c22613134222c5b223332222c2234225d2c22613135222c5b223334222c2234225d2c22613136222c5b223336222c2234225d2c22613137222c5b223338222c2234225d2c22613138222c5b223430222c2234225d2c22613139222c5b223432222c2234225d2c22613230222c5b223434222c2234225d2c22613231222c5b223436222c2234225d2c22613232222c5b223438222c2234225d2c22613233222c5b223530222c2234225d2c22613234222c5b223532222c2234225d2c22613235222c5b223534222c2234225d2c22613236222c5b223536222c2234225d2c22613237222c5b223538222c2234225d2c22613238222c5b223630222c2234225d2c22613239222c5b223632222c2234225d2c22613330222c5b223634222c2234225d2c22613331222c5b223636222c2234225d2c22613332222c5b223638222c2234225d2c22613333222c5b223730222c2234225d2c22613334222c5b223732222c2234225d2c22613335222c5b223734222c2234225d2c22613336222c5b223736222c2234225d2c22613337222c5b223738222c2234225d2c22613338222c5b223830222c2234225d2c22613339222c5b223832222c2234225d2c22613430222c5b223834222c2234225d2c22613431222c5b223836222c2234225d2c22613432222c5b223838222c2234225d2c22613433222c5b223930222c2234225d2c22613434222c5b223932222c2234225d2c22613435222c5b223934222c2234225d2c22613436222c5b223936222c2234225d2c22613437222c5b223938222c2234225d2c22613438222c5b22313030222c2234225d2c22613439222c5b22313032222c2234225d2c22613530222c5b22313034222c2234225d2c22613531222c5b22313036222c2234225d2c22613532222c5b22313038222c2234225d2c22613533222c5b22313130222c2234225d2c22613534222c5b22313132222c2234225d2c22613535222c5b22313134222c2234225d2c22613536222c5b22313136222c2234225d2c22613537222c5b22313138222c2234225d2c22613538222c5b22313230222c2234225d2c22613539222c5b22313232222c2234225d2c22613630222c5b22313234222c2234225d2c22613631222c5b22313236222c2234225d2c22613632222c5b22313238222c2234225d2c22613633222c5b22313330222c2234225d2c22613634222c5b22313332222c2234225d2c5b2235222c2237222c2239222c223131222c223133222c223135222c223137222c223139222c223231222c223233222c223235222c223237222c223239222c223331222c223333222c223335222c223337222c223339222c223431222c223433222c223435222c223437222c223439222c223531222c223533222c223535222c223537222c223539222c223631222c223633222c223635222c223637222c223639222c223731222c223733222c223735222c223737222c223739222c223831222c223833222c223835222c223837222c223839222c223931222c223933222c223935222c223937222c223939222c22313031222c22313033222c22313035222c22313037222c22313039222c22313131222c22313133222c22313135222c22313137222c22313139222c22313231222c22313233222c22313235222c22313237222c22313239222c22313331222c22313333225d2c5b2232222c22313334225d5d5d@logical.variant/0\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "malformed_operand_name",
+      "refused": "syntax",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"bad/name\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "overlong_operand_name",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "malformed_alternative_label",
+      "refused": "syntax",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[[\"variant\",\"s\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\",\"bad/label\",[\"x\"],\"v\"],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "unknown_binding_contract",
+      "refused": "unsupported-profile",
+      "wire": "[\"zkc.program/0\",[[\"c\",\"invented.operation\",[],\"native/invented.operation\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+    },
+    {
+      "name": "unknown_binding_implementation",
+      "refused": "unsupported-profile",
+      "wire": "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"invented/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+    },
+    {
+      "name": "unknown_service_contract",
+      "refused": "unsupported-profile",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[[\"rng\",\"random.invented/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "consumed_operand_reuse",
+      "refused": "affine-use",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"u\",\"resource_unit:Slot.A@logical.resource_unit/0\"]],[\"resource_unit:Slot.A@logical.resource_unit/0\",\"resource_unit:Slot.A@logical.resource_unit/0\"],[[\"return\",[\"u\",\"u\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "affine_local_loop_capture",
+      "refused": "affine-use",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"lo\",\"index@native.index/0\"],[\"hi\",\"index@native.index/0\"],[\"u\",\"resource_unit:Slot.A@logical.resource_unit/0\"]],[\"resource_unit:Slot.A@logical.resource_unit/0\"],[[\"for\",\"round\",\"i\",\"lo\",\"hi\",[],[\"u\"],[[\"yield\",[]]],[]],[\"return\",[\"u\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "history_operation_in_local_match",
+      "refused": "unsupported-profile",
+      "wire": "[\"zkc.program/0\",[[\"kernel\",\"external.openvm.observe\",[],\"native/external.openvm.observe\",[]]],[[\"function\",\"work\",[[\"s\",\"indices@native.indices/0\"],[\"w\",\"indices@native.indices/0\"]],[\"indices@native.indices/0\"],[[\"variant\",\"pack\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c22546167222c5b2230222c2231225d2c22796573222c5b5d2c5b2233222c2234225d2c226e6f222c5b2236222c2234225d2c5b2235222c2237225d2c5b2232222c2238225d5d5d@logical.variant/0\",\"yes\",[],\"v\"],[\"match\",\"case\",\"v\",[\"s\",\"w\"],[[\"yes\",[],[[\"op\",\"effect\",\"kernel\",[],[\"s\",\"w\"],[\"s2\"]],[\"yield\",[\"s2\"]]]],[\"no\",[],[[\"yield\",[\"s\"]]]]],[\"out\"]],[\"return\",[\"out\"]]],[\"work\",[]]]],[],[]]"
+    },
+    {
+      "name": "release_of_resource_unit",
+      "admitted": {"static_instructions": 2, "descriptor_charge": 256},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"u\",\"resource_unit:Slot.A@logical.resource_unit/0\"]],[],[[\"release\",[\"u\"]],[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "release_of_undroppable_value",
+      "refused": "affine-use",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"r\",\"rng:bls12-381.fr@host.resource/0\"]],[],[[\"release\",[\"r\"]],[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "resource_unit_port",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 256},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"u\",\"resource_unit:Slot.A@logical.resource_unit/0\"]],[\"resource_unit:Slot.A@logical.resource_unit/0\"],[[\"return\",[\"u\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "loop_body_reuses_outer_name",
+      "admitted": {"static_instructions": 5, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"x\"]],[\"yield\",[\"x\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "sibling_loops_reuse_name",
+      "admitted": {"static_instructions": 8, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"first\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call1\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"a\"]],[\"loop\",\"second\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"a\"]],[],[[\"local\",\"call2\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"b\"]],[\"return\",[\"b\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "name_bound_after_loop",
+      "admitted": {"static_instructions": 6, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"answer\"]],[\"local\",\"after\",\"identity\",[\"answer\"],[\"t\"]],[\"return\",[\"t\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "loop_induction_reuses_outer_name",
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"x\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "arm_reuses_outer_name",
+      "admitted": {"static_instructions": 6, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[[\"c\",\"x\"]],[[\"local\",\"call\",\"identity\",[\"c\"],[\"x\"]],[\"yield\",[\"x\"]]],[[\"yield\",[\"c\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "name_bound_after_arm",
+      "admitted": {"static_instructions": 7, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[[\"c\",\"x\"]],[[\"local\",\"call\",\"identity\",[\"c\"],[\"t\"]],[\"yield\",[\"t\"]]],[[\"yield\",[\"c\"]]],[\"r\"]],[\"local\",\"after\",\"identity\",[\"r\"],[\"t\"]],[\"return\",[\"t\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "nested_loop_shadowing",
+      "admitted": {"static_instructions": 8, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"outer\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[[\"m\",\"n\"]],[[\"local\",\"call1\",\"identity\",[\"state\"],[\"t\"]],[\"loop\",\"inner\",[\"value\",\"m\",\"4\",\"j\"],[[\"inner_state\",\"t\"]],[],[[\"local\",\"call2\",\"identity\",[\"inner_state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"u\"]],[\"yield\",[\"u\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "duplicate_binding_in_loop_body",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call1\",\"identity\",[\"state\"],[\"t\"]],[\"local\",\"call2\",\"identity\",[\"t\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "duplicate_binding_in_arm",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[[\"c\",\"x\"]],[[\"local\",\"call1\",\"identity\",[\"c\"],[\"t\"]],[\"local\",\"call2\",\"identity\",[\"t\"],[\"t\"]],[\"yield\",[\"t\"]]],[[\"yield\",[\"c\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "untaken_arm_duplicate_binding",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"choice\",\"x\",[[\"c\",\"x\"]],[[\"yield\",[\"c\"]]],[[\"local\",\"call1\",\"identity\",[\"c\"],[\"t\"]],[\"local\",\"call2\",\"identity\",[\"t\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "loop_formal_collision",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"i\",\"x\"]],[],[[\"yield\",[\"i\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "loop_capture_collides_with_carried",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[[\"state\",\"n\"]],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "loop_body_uses_uncaptured_outer_name",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"x\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "loop_binding_not_visible_after",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"answer\"]],[\"return\",[\"t\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "zero_trip_loop",
+      "admitted": {"static_instructions": 5, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"0\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "zero_trip_loop_duplicate_binding",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"0\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call1\",\"identity\",[\"state\"],[\"t\"]],[\"local\",\"call2\",\"identity\",[\"t\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "loop_body_binds_service_name",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"rng\"]],[\"yield\",[\"rng\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "duplicate_site_across_sibling_loops",
+      "refused": "names-and-ssa",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"first\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"a\"]],[\"loop\",\"second\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"a\"]],[],[[\"local\",\"call\",\"identity\",[\"state\"],[\"t\"]],[\"yield\",[\"t\"]]],[\"b\"]],[\"return\",[\"b\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "schema_type_across_sibling_loops",
+      "refused": "types",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"first\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[],[[\"send\",\"out1\",\"payload\",\"V\",\"state\"],[\"yield\",[\"state\"]]],[\"a\"]],[\"loop\",\"second\",[\"value\",\"n\",\"4\",\"i\"],[[\"k\",\"n\"]],[],[[\"send\",\"out2\",\"payload\",\"V\",\"k\"],[\"yield\",[\"k\"]]],[\"b\"]],[\"return\",[\"a\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "raw_bytes_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]",
+        {"repeat": " ", "count": 4194165, "separator": ""}
+      ]
+    },
+    {
+      "name": "raw_bytes_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]",
+        {"repeat": " ", "count": 4194166, "separator": ""}
+      ]
+    },
+    {
+      "name": "json_nodes_at_bound",
+      "admitted": {"static_instructions": 26, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"vector.constant\",[\"bls12-381.fr\"],\"arkworks/vector.constant\",[]]],[[\"function\",\"f\",[],[\"vector:bls12-381.fr@arkworks.fr-vector/0\"],[[\"op\",\"s0\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v0\"]],[\"op\",\"s1\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v1\"]],[\"op\",\"s2\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v2\"]],[\"op\",\"s3\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v3\"]],[\"op\",\"s4\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v4\"]],[\"op\",\"s5\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v5\"]],[\"op\",\"s6\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v6\"]],[\"op\",\"s7\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v7\"]],[\"op\",\"s8\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v8\"]],[\"op\",\"s9\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v9\"]],[\"op\",\"s10\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v10\"]],[\"op\",\"s11\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v11\"]],[\"op\",\"s12\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v12\"]],[\"op\",\"s13\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v13\"]],[\"op\",\"s14\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v14\"]],[\"op\",\"s15\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v15\"]],[\"op\",\"s16\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v16\"]],[\"op\",\"s17\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v17\"]],[\"op\",\"s18\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v18\"]],[\"op\",\"s19\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v19\"]],[\"op\",\"s20\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v20\"]],[\"op\",\"s21\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v21\"]],[\"op\",\"s22\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v22\"]],[\"op\",\"s23\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v23\"]],[\"op\",\"s24\",\"c\",[",
+        {"repeat": "\"0\"", "count": 6557, "separator": ","},
+        "],[],[\"v24\"]],[\"return\",[\"v0\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "json_nodes_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"vector.constant\",[\"bls12-381.fr\"],\"arkworks/vector.constant\",[]]],[[\"function\",\"f\",[],[\"vector:bls12-381.fr@arkworks.fr-vector/0\"],[[\"op\",\"s0\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v0\"]],[\"op\",\"s1\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v1\"]],[\"op\",\"s2\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v2\"]],[\"op\",\"s3\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v3\"]],[\"op\",\"s4\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v4\"]],[\"op\",\"s5\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v5\"]],[\"op\",\"s6\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v6\"]],[\"op\",\"s7\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v7\"]],[\"op\",\"s8\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v8\"]],[\"op\",\"s9\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v9\"]],[\"op\",\"s10\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v10\"]],[\"op\",\"s11\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v11\"]],[\"op\",\"s12\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v12\"]],[\"op\",\"s13\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v13\"]],[\"op\",\"s14\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v14\"]],[\"op\",\"s15\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v15\"]],[\"op\",\"s16\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v16\"]],[\"op\",\"s17\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v17\"]],[\"op\",\"s18\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v18\"]],[\"op\",\"s19\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v19\"]],[\"op\",\"s20\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v20\"]],[\"op\",\"s21\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v21\"]],[\"op\",\"s22\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v22\"]],[\"op\",\"s23\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v23\"]],[\"op\",\"s24\",\"c\",[",
+        {"repeat": "\"0\"", "count": 6558, "separator": ","},
+        "],[],[\"v24\"]],[\"return\",[\"v0\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "operation_attributes_at_bound",
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"vector.constant\",[\"bls12-381.fr\"],\"arkworks/vector.constant\",[]]],[[\"function\",\"f\",[],[\"vector:bls12-381.fr@arkworks.fr-vector/0\"],[[\"op\",\"s0\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16384, "separator": ","},
+        "],[],[\"v0\"]],[\"return\",[\"v0\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "operation_attributes_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"vector.constant\",[\"bls12-381.fr\"],\"arkworks/vector.constant\",[]]],[[\"function\",\"f\",[],[\"vector:bls12-381.fr@arkworks.fr-vector/0\"],[[\"op\",\"s0\",\"c\",[",
+        {"repeat": "\"0\"", "count": 16385, "separator": ","},
+        "],[],[\"v0\"]],[\"return\",[\"v0\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "attribute_bytes_at_bound",
+      "refused": "types",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"vector.constant\",[\"bls12-381.fr\"],\"arkworks/vector.constant\",[]]],[[\"function\",\"f\",[],[\"vector:bls12-381.fr@arkworks.fr-vector/0\"],[[\"op\",\"s\",\"c\",[\"",
+        {"repeat": "1", "count": 16384, "separator": ""},
+        "\"],[],[\"v\"]],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "attribute_bytes_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"vector.constant\",[\"bls12-381.fr\"],\"arkworks/vector.constant\",[]]],[[\"function\",\"f\",[],[\"vector:bls12-381.fr@arkworks.fr-vector/0\"],[[\"op\",\"s\",\"c\",[\"",
+        {"repeat": "1", "count": 16385, "separator": ""},
+        "\"],[],[\"v\"]],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "array_elements_at_bound",
+      "admitted": {"static_instructions": 32768, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[],[",
+        {"repeat": "[\"bool_constant\",\"b{i}\",\"v{i}\",true]", "count": 32767, "separator": ","},
+        ",[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "array_elements_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[],[",
+        {"repeat": "[\"bool_constant\",\"b{i}\",\"v{i}\",true]", "count": 32768, "separator": ","},
+        ",[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "static_instructions_at_bound",
+      "admitted": {"static_instructions": 65536, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[],[",
+        {"repeat": "[\"bool_constant\",\"b{i}\",\"v{i}\",true]", "count": 32767, "separator": ","},
+        ",[\"return\",[]]],[\"f\",[]]],[\"function\",\"g\",[],[],[",
+        {"repeat": "[\"bool_constant\",\"b{i}\",\"v{i}\",true]", "count": 32767, "separator": ","},
+        ",[\"return\",[]]],[\"g\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "static_instructions_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[],[",
+        {"repeat": "[\"bool_constant\",\"b{i}\",\"v{i}\",true]", "count": 32767, "separator": ","},
+        ",[\"return\",[]]],[\"f\",[]]],[\"function\",\"g\",[],[],[",
+        {"repeat": "[\"bool_constant\",\"b{i}\",\"v{i}\",true]", "count": 32767, "separator": ","},
+        ",[\"return\",[]]],[\"g\",[]]],[\"function\",\"h\",[],[],[[\"return\",[]]],[\"h\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "json_depth_at_bound",
+      "admitted": {"static_instructions": 88, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"s0\",\"x\",[\"x\"],[[\"if\",\"s1\",\"x\",[\"x\"],[[\"if\",\"s2\",\"x\",[\"x\"],[[\"if\",\"s3\",\"x\",[\"x\"],[[\"if\",\"s4\",\"x\",[\"x\"],[[\"if\",\"s5\",\"x\",[\"x\"],[[\"if\",\"s6\",\"x\",[\"x\"],[[\"if\",\"s7\",\"x\",[\"x\"],[[\"if\",\"s8\",\"x\",[\"x\"],[[\"if\",\"s9\",\"x\",[\"x\"],[[\"if\",\"s10\",\"x\",[\"x\"],[[\"if\",\"s11\",\"x\",[\"x\"],[[\"if\",\"s12\",\"x\",[\"x\"],[[\"if\",\"s13\",\"x\",[\"x\"],[[\"if\",\"s14\",\"x\",[\"x\"],[[\"if\",\"s15\",\"x\",[\"x\"],[[\"if\",\"s16\",\"x\",[\"x\"],[[\"if\",\"s17\",\"x\",[\"x\"],[[\"if\",\"s18\",\"x\",[\"x\"],[[\"if\",\"s19\",\"x\",[\"x\"],[[\"if\",\"s20\",\"x\",[\"x\"],[[\"if\",\"s21\",\"x\",[\"x\"],[[\"if\",\"s22\",\"x\",[\"x\"],[[\"if\",\"s23\",\"x\",[\"x\"],[[\"if\",\"s24\",\"x\",[\"x\"],[[\"if\",\"s25\",\"x\",[\"x\"],[[\"if\",\"s26\",\"x\",[\"x\"],[[\"if\",\"s27\",\"x\",[\"x\"],[[\"if\",\"s28\",\"x\",[\"x\"],[[\"yield\",[\"x\"]]],[[\"yield\",[\"x\"]]],[\"r28\"]],[\"yield\",[\"r28\"]]],[[\"yield\",[\"x\"]]],[\"r27\"]],[\"yield\",[\"r27\"]]],[[\"yield\",[\"x\"]]],[\"r26\"]],[\"yield\",[\"r26\"]]],[[\"yield\",[\"x\"]]],[\"r25\"]],[\"yield\",[\"r25\"]]],[[\"yield\",[\"x\"]]],[\"r24\"]],[\"yield\",[\"r24\"]]],[[\"yield\",[\"x\"]]],[\"r23\"]],[\"yield\",[\"r23\"]]],[[\"yield\",[\"x\"]]],[\"r22\"]],[\"yield\",[\"r22\"]]],[[\"yield\",[\"x\"]]],[\"r21\"]],[\"yield\",[\"r21\"]]],[[\"yield\",[\"x\"]]],[\"r20\"]],[\"yield\",[\"r20\"]]],[[\"yield\",[\"x\"]]],[\"r19\"]],[\"yield\",[\"r19\"]]],[[\"yield\",[\"x\"]]],[\"r18\"]],[\"yield\",[\"r18\"]]],[[\"yield\",[\"x\"]]],[\"r17\"]],[\"yield\",[\"r17\"]]],[[\"yield\",[\"x\"]]],[\"r16\"]],[\"yield\",[\"r16\"]]],[[\"yield\",[\"x\"]]],[\"r15\"]],[\"yield\",[\"r15\"]]],[[\"yield\",[\"x\"]]],[\"r14\"]],[\"yield\",[\"r14\"]]],[[\"yield\",[\"x\"]]],[\"r13\"]],[\"yield\",[\"r13\"]]],[[\"yield\",[\"x\"]]],[\"r12\"]],[\"yield\",[\"r12\"]]],[[\"yield\",[\"x\"]]],[\"r11\"]],[\"yield\",[\"r11\"]]],[[\"yield\",[\"x\"]]],[\"r10\"]],[\"yield\",[\"r10\"]]],[[\"yield\",[\"x\"]]],[\"r9\"]],[\"yield\",[\"r9\"]]],[[\"yield\",[\"x\"]]],[\"r8\"]],[\"yield\",[\"r8\"]]],[[\"yield\",[\"x\"]]],[\"r7\"]],[\"yield\",[\"r7\"]]],[[\"yield\",[\"x\"]]],[\"r6\"]],[\"yield\",[\"r6\"]]],[[\"yield\",[\"x\"]]],[\"r5\"]],[\"yield\",[\"r5\"]]],[[\"yield\",[\"x\"]]],[\"r4\"]],[\"yield\",[\"r4\"]]],[[\"yield\",[\"x\"]]],[\"r3\"]],[\"yield\",[\"r3\"]]],[[\"yield\",[\"x\"]]],[\"r2\"]],[\"yield\",[\"r2\"]]],[[\"yield\",[\"x\"]]],[\"r1\"]],[\"yield\",[\"r1\"]]],[[\"yield\",[\"x\"]]],[\"r0\"]],[\"return\",[\"r0\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "json_depth_over_bound",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"s0\",\"x\",[\"x\"],[[\"if\",\"s1\",\"x\",[\"x\"],[[\"if\",\"s2\",\"x\",[\"x\"],[[\"if\",\"s3\",\"x\",[\"x\"],[[\"if\",\"s4\",\"x\",[\"x\"],[[\"if\",\"s5\",\"x\",[\"x\"],[[\"if\",\"s6\",\"x\",[\"x\"],[[\"if\",\"s7\",\"x\",[\"x\"],[[\"if\",\"s8\",\"x\",[\"x\"],[[\"if\",\"s9\",\"x\",[\"x\"],[[\"if\",\"s10\",\"x\",[\"x\"],[[\"if\",\"s11\",\"x\",[\"x\"],[[\"if\",\"s12\",\"x\",[\"x\"],[[\"if\",\"s13\",\"x\",[\"x\"],[[\"if\",\"s14\",\"x\",[\"x\"],[[\"if\",\"s15\",\"x\",[\"x\"],[[\"if\",\"s16\",\"x\",[\"x\"],[[\"if\",\"s17\",\"x\",[\"x\"],[[\"if\",\"s18\",\"x\",[\"x\"],[[\"if\",\"s19\",\"x\",[\"x\"],[[\"if\",\"s20\",\"x\",[\"x\"],[[\"if\",\"s21\",\"x\",[\"x\"],[[\"if\",\"s22\",\"x\",[\"x\"],[[\"if\",\"s23\",\"x\",[\"x\"],[[\"if\",\"s24\",\"x\",[\"x\"],[[\"if\",\"s25\",\"x\",[\"x\"],[[\"if\",\"s26\",\"x\",[\"x\"],[[\"if\",\"s27\",\"x\",[\"x\"],[[\"if\",\"s28\",\"x\",[\"x\"],[[\"yield\",[[\"x\"]]]],[[\"yield\",[\"x\"]]],[\"r28\"]],[\"yield\",[\"r28\"]]],[[\"yield\",[\"x\"]]],[\"r27\"]],[\"yield\",[\"r27\"]]],[[\"yield\",[\"x\"]]],[\"r26\"]],[\"yield\",[\"r26\"]]],[[\"yield\",[\"x\"]]],[\"r25\"]],[\"yield\",[\"r25\"]]],[[\"yield\",[\"x\"]]],[\"r24\"]],[\"yield\",[\"r24\"]]],[[\"yield\",[\"x\"]]],[\"r23\"]],[\"yield\",[\"r23\"]]],[[\"yield\",[\"x\"]]],[\"r22\"]],[\"yield\",[\"r22\"]]],[[\"yield\",[\"x\"]]],[\"r21\"]],[\"yield\",[\"r21\"]]],[[\"yield\",[\"x\"]]],[\"r20\"]],[\"yield\",[\"r20\"]]],[[\"yield\",[\"x\"]]],[\"r19\"]],[\"yield\",[\"r19\"]]],[[\"yield\",[\"x\"]]],[\"r18\"]],[\"yield\",[\"r18\"]]],[[\"yield\",[\"x\"]]],[\"r17\"]],[\"yield\",[\"r17\"]]],[[\"yield\",[\"x\"]]],[\"r16\"]],[\"yield\",[\"r16\"]]],[[\"yield\",[\"x\"]]],[\"r15\"]],[\"yield\",[\"r15\"]]],[[\"yield\",[\"x\"]]],[\"r14\"]],[\"yield\",[\"r14\"]]],[[\"yield\",[\"x\"]]],[\"r13\"]],[\"yield\",[\"r13\"]]],[[\"yield\",[\"x\"]]],[\"r12\"]],[\"yield\",[\"r12\"]]],[[\"yield\",[\"x\"]]],[\"r11\"]],[\"yield\",[\"r11\"]]],[[\"yield\",[\"x\"]]],[\"r10\"]],[\"yield\",[\"r10\"]]],[[\"yield\",[\"x\"]]],[\"r9\"]],[\"yield\",[\"r9\"]]],[[\"yield\",[\"x\"]]],[\"r8\"]],[\"yield\",[\"r8\"]]],[[\"yield\",[\"x\"]]],[\"r7\"]],[\"yield\",[\"r7\"]]],[[\"yield\",[\"x\"]]],[\"r6\"]],[\"yield\",[\"r6\"]]],[[\"yield\",[\"x\"]]],[\"r5\"]],[\"yield\",[\"r5\"]]],[[\"yield\",[\"x\"]]],[\"r4\"]],[\"yield\",[\"r4\"]]],[[\"yield\",[\"x\"]]],[\"r3\"]],[\"yield\",[\"r3\"]]],[[\"yield\",[\"x\"]]],[\"r2\"]],[\"yield\",[\"r2\"]]],[[\"yield\",[\"x\"]]],[\"r1\"]],[\"yield\",[\"r1\"]]],[[\"yield\",[\"x\"]]],[\"r0\"]],[\"return\",[\"r0\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "definitions_at_bound",
+      "admitted": {"static_instructions": 4096, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[",
+        {"repeat": "[\"function\",\"f{i}\",[],[],[[\"return\",[]]],[\"f{i}\",[]]]", "count": 2048, "separator": ","},
+        "],[",
+        {"repeat": "[\"participant\",\"p{i}\",\"i{i}\",\"P\",[],[],[[\"return\",[]]],[]]", "count": 2048, "separator": ","},
+        "],[[\"entry\",\"main\",[[\"P\",\"p0\"]]]]]"
+      ]
+    },
+    {
+      "name": "definitions_combined_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[",
+        {"repeat": "[\"function\",\"f{i}\",[],[],[[\"return\",[]]],[\"f{i}\",[]]]", "count": 2049, "separator": ","},
+        "],[",
+        {"repeat": "[\"participant\",\"p{i}\",\"i{i}\",\"P\",[],[],[[\"return\",[]]],[]]", "count": 2048, "separator": ","},
+        "],[[\"entry\",\"main\",[[\"P\",\"p0\"]]]]]"
+      ]
+    },
+    {
+      "name": "entries_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[],[],[[\"return\",[]]],[]]],[",
+        {"repeat": "[\"entry\",\"e{i}\",[[\"P\",\"p\"]]]", "count": 4096, "separator": ","},
+        "]]"
+      ]
+    },
+    {
+      "name": "entries_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[],[[\"participant\",\"p\",\"root\",\"P\",[],[],[[\"return\",[]]],[]]],[",
+        {"repeat": "[\"entry\",\"e{i}\",[[\"P\",\"p\"]]]", "count": 4097, "separator": ","},
+        "]]"
+      ]
+    },
+    {
+      "name": "bindings_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[",
+        {"repeat": "[\"b{i}\",\"index.constant\",[],\"native/index.constant\",[]]", "count": 4096, "separator": ","},
+        "],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "bindings_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[",
+        {"repeat": "[\"b{i}\",\"index.constant\",[],\"native/index.constant\",[]]", "count": 4097, "separator": ","},
+        "],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "binding_static_arguments_at_bound",
+      "refused": "unsupported-profile",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[",
+        {"repeat": "\"bls12-381.fr\"", "count": 128, "separator": ","},
+        "],\"native/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "binding_static_arguments_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[",
+        {"repeat": "\"bls12-381.fr\"", "count": 129, "separator": ","},
+        "],\"native/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "binding_physical_arguments_at_bound",
+      "refused": "unsupported-profile",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"native/index.constant\",[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 128, "separator": ","},
+        "]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "binding_physical_arguments_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"native/index.constant\",[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 129, "separator": ","},
+        "]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "origin_assignments_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[],[[\"return\",[]]],[\"f\",[",
+        {"repeat": "[\"p{i}\",\"1\"]", "count": 128, "separator": ","},
+        "]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "origin_assignments_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[],[[\"return\",[]]],[\"f\",[",
+        {"repeat": "[\"p{i}\",\"1\"]", "count": 129, "separator": ","},
+        "]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "binding_name_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+    },
+    {
+      "name": "binding_name_over_bound",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+    },
+    {
+      "name": "site_over_bound",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[],[\"bool@native.bool/0\"],[[\"bool_constant\",\"sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\",\"v\",true],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "string_bytes_at_bound",
+      "refused": "unsupported-profile",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"",
+        {"repeat": "c", "count": 4096, "separator": ""},
+        "\",[],\"native/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "string_bytes_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"",
+        {"repeat": "c", "count": 4097, "separator": ""},
+        "\",[],\"native/index.constant\",[]]],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "type_spelling_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 17936},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2257575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "type_spelling_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"",
+        {"repeat": "t", "count": 4097, "separator": ""},
+        "\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "function_ports_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "function_ports_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1025, "separator": ","},
+        "],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "function_results_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1024, "separator": ","},
+        "],[[\"return\",[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "function_results_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1025, "separator": ","},
+        "],[[\"return\",[",
+        {"repeat": "\"x\"", "count": 1025, "separator": ","},
+        "]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "participant_interface_at_bound",
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1023, "separator": ","},
+        "],[],[[\"return\",[]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"1023\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_interface_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[],[[\"return\",[]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"1024\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "local_if_captures_at_bound",
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[\"bool@native.bool/0\"],[[\"if\",\"s\",\"x0\",[",
+        {"repeat": "\"x{i}\"", "count": 1024, "separator": ","},
+        "],[[\"yield\",[\"x0\"]]],[[\"yield\",[\"x1\"]]],[\"r\"]],[\"return\",[\"r\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "local_if_captures_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[\"bool@native.bool/0\"],[[\"if\",\"s\",\"x0\",[",
+        {"repeat": "\"x{i}\"", "count": 1024, "separator": ","},
+        ",\"x0\"],[[\"yield\",[\"x0\"]]],[[\"yield\",[\"x1\"]]],[\"r\"]],[\"return\",[\"r\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "participant_if_capture_rows_at_bound",
+      "admitted": {"static_instructions": 5, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"s\",\"x\",[",
+        {"repeat": "[\"c{i}\",\"x\"]", "count": 1024, "separator": ","},
+        "],[[\"yield\",[\"c0\"]]],[[\"yield\",[\"c1\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_if_capture_rows_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"s\",\"x\",[",
+        {"repeat": "[\"c{i}\",\"x\"]", "count": 1025, "separator": ","},
+        "],[[\"yield\",[\"c0\"]]],[[\"yield\",[\"c1\"]]],[\"r\"]],[\"return\",[\"r\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_loop_capture_rows_at_bound",
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"s\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[",
+        {"repeat": "[\"c{i}\",\"n\"]", "count": 1024, "separator": ","},
+        "],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_loop_capture_rows_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"s\",[\"value\",\"n\",\"4\",\"i\"],[[\"state\",\"x\"]],[",
+        {"repeat": "[\"c{i}\",\"n\"]", "count": 1025, "separator": ","},
+        "],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "local_for_carried_at_bound",
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"lo\",\"index@native.index/0\"],[\"hi\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1024, "separator": ","},
+        "],[[\"for\",\"s\",\"i\",\"lo\",\"hi\",[",
+        {"repeat": "[\"s{i}\",\"x\"]", "count": 1024, "separator": ","},
+        "],[],[[\"yield\",[",
+        {"repeat": "\"s{i}\"", "count": 1024, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1024, "separator": ","},
+        "]],[\"return\",[",
+        {"repeat": "\"o{i}\"", "count": 1024, "separator": ","},
+        "]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "local_for_carried_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"lo\",\"index@native.index/0\"],[\"hi\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1025, "separator": ","},
+        "],[[\"for\",\"s\",\"i\",\"lo\",\"hi\",[",
+        {"repeat": "[\"s{i}\",\"x\"]", "count": 1025, "separator": ","},
+        "],[],[[\"yield\",[",
+        {"repeat": "\"s{i}\"", "count": 1025, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1025, "separator": ","},
+        "]],[\"return\",[",
+        {"repeat": "\"o{i}\"", "count": 1025, "separator": ","},
+        "]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "for_while_yield_at_bound",
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"lo\",\"index@native.index/0\"],[\"hi\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1023, "separator": ","},
+        "],[[\"for_while\",\"s\",\"i\",\"lo\",\"hi\",[",
+        {"repeat": "[\"s{i}\",\"x\"]", "count": 1023, "separator": ","},
+        "],[],[[\"bool_constant\",\"go\",\"more\",true],[\"yield\",[\"more\",",
+        {"repeat": "\"s{i}\"", "count": 1023, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1023, "separator": ","},
+        "]],[\"return\",[",
+        {"repeat": "\"o{i}\"", "count": 1023, "separator": ","},
+        "]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "for_while_yield_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"lo\",\"index@native.index/0\"],[\"hi\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1024, "separator": ","},
+        "],[[\"for_while\",\"s\",\"i\",\"lo\",\"hi\",[",
+        {"repeat": "[\"s{i}\",\"x\"]", "count": 1024, "separator": ","},
+        "],[],[[\"bool_constant\",\"go\",\"more\",true],[\"yield\",[\"more\",",
+        {"repeat": "\"s{i}\"", "count": 1024, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1024, "separator": ","},
+        "]],[\"return\",[",
+        {"repeat": "\"o{i}\"", "count": 1024, "separator": ","},
+        "]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "participant_loop_carried_at_bound",
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"s\",[\"value\",\"n\",\"4\",\"i\"],[",
+        {"repeat": "[\"s{i}\",\"x\"]", "count": 1024, "separator": ","},
+        "],[],[[\"yield\",[",
+        {"repeat": "\"s{i}\"", "count": 1024, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1024, "separator": ","},
+        "]],[\"return\",[\"o0\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_loop_carried_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"s\",[\"value\",\"n\",\"4\",\"i\"],[",
+        {"repeat": "[\"s{i}\",\"x\"]", "count": 1025, "separator": ","},
+        "],[],[[\"yield\",[",
+        {"repeat": "\"s{i}\"", "count": 1025, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1025, "separator": ","},
+        "]],[\"return\",[\"o0\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_if_outputs_at_bound",
+      "admitted": {"static_instructions": 5, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"s\",\"x\",[[\"c\",\"x\"]],[[\"yield\",[",
+        {"repeat": "\"c\"", "count": 1024, "separator": ","},
+        "]]],[[\"yield\",[",
+        {"repeat": "\"c\"", "count": 1024, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1024, "separator": ","},
+        "]],[\"return\",[\"o0\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "participant_if_outputs_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"if\",\"s\",\"x\",[[\"c\",\"x\"]],[[\"yield\",[",
+        {"repeat": "\"c\"", "count": 1025, "separator": ","},
+        "]]],[[\"yield\",[",
+        {"repeat": "\"c\"", "count": 1025, "separator": ","},
+        "]]],[",
+        {"repeat": "\"o{i}\"", "count": 1025, "separator": ","},
+        "]],[\"return\",[\"o0\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "entry_role_map_at_bound",
+      "admitted": {"static_instructions": 1024, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[],[",
+        {"repeat": "[\"participant\",\"q{i}\",\"root\",\"R{i}\",[],[],[[\"return\",[]]],[]]", "count": 1024, "separator": ","},
+        "],[[\"entry\",\"main\",[",
+        {"repeat": "[\"R{i}\",\"q{i}\"]", "count": 1024, "separator": ","},
+        "]]]]"
+      ]
+    },
+    {
+      "name": "entry_role_map_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[],[",
+        {"repeat": "[\"participant\",\"q{i}\",\"root\",\"R{i}\",[],[],[[\"return\",[]]],[]]", "count": 1025, "separator": ","},
+        "],[[\"entry\",\"main\",[",
+        {"repeat": "[\"R{i}\",\"q{i}\"]", "count": 1025, "separator": ","},
+        "]]]]"
+      ]
+    },
+    {
+      "name": "operation_inputs_at_bound",
+      "refused": "types",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"f\",[[\"x\",\"index@native.index/0\"]],[\"index@native.index/0\"],[[\"op\",\"s\",\"c\",[\"7\"],[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "],[\"v\"]],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "operation_inputs_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"f\",[[\"x\",\"index@native.index/0\"]],[\"index@native.index/0\"],[[\"op\",\"s\",\"c\",[\"7\"],[",
+        {"repeat": "\"x\"", "count": 1025, "separator": ","},
+        "],[\"v\"]],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "operation_outputs_at_bound",
+      "refused": "types",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"f\",[],[\"index@native.index/0\"],[[\"op\",\"s\",\"c\",[\"7\"],[],[",
+        {"repeat": "\"v{i}\"", "count": 1024, "separator": ","},
+        "]],[\"return\",[\"v0\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "operation_outputs_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[[\"c\",\"index.constant\",[],\"native/index.constant\",[]]],[[\"function\",\"f\",[],[\"index@native.index/0\"],[[\"op\",\"s\",\"c\",[\"7\"],[],[",
+        {"repeat": "\"v{i}\"", "count": 1025, "separator": ","},
+        "]],[\"return\",[\"v0\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "release_values_at_bound",
+      "admitted": {"static_instructions": 2, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[],[[\"release\",[",
+        {"repeat": "\"x{i}\"", "count": 1024, "separator": ","},
+        "]],[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "release_values_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[",
+        {"repeat": "[\"x{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[],[[\"release\",[",
+        {"repeat": "\"x{i}\"", "count": 1024, "separator": ","},
+        ",\"x0\"]],[\"return\",[]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "return_if_values_at_bound",
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1024, "separator": ","},
+        "],[[\"return_if\",\"s\",\"x\",[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "],[]],[\"return\",[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "return_if_values_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[",
+        {"repeat": "\"bool@native.bool/0\"", "count": 1024, "separator": ","},
+        "],[[\"return_if\",\"s\",\"x\",[",
+        {"repeat": "\"x\"", "count": 1025, "separator": ","},
+        "],[]],[\"return\",[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "local_call_inputs_at_bound",
+      "admitted": {"static_instructions": 3, "descriptor_charge": 0},
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"g\",[",
+        {"repeat": "[\"y{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[],[[\"return\",[]]],[\"g\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"local\",\"s\",\"g\",[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "],[]],[\"return\",[\"x\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "local_call_inputs_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"g\",[",
+        {"repeat": "[\"y{i}\",\"bool@native.bool/0\"]", "count": 1024, "separator": ","},
+        "],[],[[\"return\",[]]],[\"g\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"local\",\"s\",\"g\",[",
+        {"repeat": "\"x\"", "count": 1025, "separator": ","},
+        "],[]],[\"return\",[\"x\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "query_inputs_at_bound",
+      "refused": "types",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"query\",\"s\",\"rng\",\"index\",[",
+        {"repeat": "\"n\"", "count": 1024, "separator": ","},
+        "],[\"v\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "query_inputs_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"query\",\"s\",\"rng\",\"index\",[",
+        {"repeat": "\"n\"", "count": 1025, "separator": ","},
+        "],[\"v\"]],[\"return\",[\"x\"]]],[[\"rng\",\"random.koala-bear.ext8-binomial3/0\",\"2\"]]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+      ]
+    },
+    {
+      "name": "variant_payload_values_at_bound",
+      "refused": "types",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[[\"variant\",\"s\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\",\"some\",[",
+        {"repeat": "\"x\"", "count": 1024, "separator": ","},
+        "],\"v\"],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "variant_payload_values_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"bool@native.bool/0\"]],[\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[[\"variant\",\"s\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\",\"some\",[",
+        {"repeat": "\"x\"", "count": 1025, "separator": ","},
+        "],\"v\"],[\"return\",[\"v\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "match_payload_bindings_at_bound",
+      "refused": "types",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"s\",\"c\",[\"x\"],[[\"some\",[",
+        {"repeat": "\"p{i}\"", "count": 1024, "separator": ","},
+        "],[[\"yield\",[\"x\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"r\"]],[\"return\",[\"r\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "match_payload_bindings_over_bound",
+      "refused": "capacity",
+      "wire": [
+        "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"c\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c2243686f696365222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"match\",\"s\",\"c\",[\"x\"],[[\"some\",[",
+        {"repeat": "\"p{i}\"", "count": 1025, "separator": ","},
+        "],[[\"yield\",[\"x\"]]]],[\"none\",[],[[\"yield\",[\"x\"]]]]],[\"r\"]],[\"return\",[\"r\"]]],[\"f\",[]]]],[],[]]"
+      ]
+    },
+    {
+      "name": "loop_maximum_at_bound",
+      "admitted": {"static_instructions": 4, "descriptor_charge": 0},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"identity\",[[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"return\",[\"x\"]]],[\"identity\",[]]]],[[\"participant\",\"p\",\"root\",\"P\",[[\"n\",\"index@native.index/0\"],[\"x\",\"bool@native.bool/0\"]],[\"bool@native.bool/0\"],[[\"loop\",\"round\",[\"value\",\"n\",\"1048576\",\"i\"],[[\"state\",\"x\"]],[],[[\"yield\",[\"state\"]]],[\"answer\"]],[\"return\",[\"answer\"]]],[]]],[[\"entry\",\"main\",[[\"P\",\"p\"]]]]]"
+    },
+    {
+      "name": "nested_descriptor_charge",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 6180616},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x\",\"variant:5b227a6b632e76617269616e742f30222c5b224f75746572222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"y\",\"variant:5b227a6b632e76617269616e742f30222c5b224f75746572222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "descriptor_charge_at_bound",
+      "admitted": {"static_instructions": 1, "descriptor_charge": 67108864},
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x0\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657230222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x1\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657231222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x2\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657232222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x3\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657233222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x4\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657234222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x5\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657235222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x6\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657236222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x7\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657237222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x8\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657238222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x9\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657239222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x10\",\"variant:5b227a6b632e76617269616e742f30222c5b2246696c6c3130222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x11\",\"variant:5b227a6b632e76617269616e742f30222c5b2246696c6c3131222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x12\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c225330575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "descriptor_charge_over_bound",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x0\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657230222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x1\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657231222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x2\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657232222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x3\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657233222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x4\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657234222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x5\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657235222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x6\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657236222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x7\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657237222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x8\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657238222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x9\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657239222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x10\",\"variant:5b227a6b632e76617269616e742f30222c5b2246696c6c3130222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x11\",\"variant:5b227a6b632e76617269616e742f30222c5b2246696c6c3131222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x12\",\"variant:5b227a6b632e76617269616e742f30222c5b2270726f6772616d5f627974655f636f6e74726f6c222c22533057575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757575757222c5b2230222c2231225d2c22736f6d65222c22626f6f6c222c5b2234225d2c5b2233222c2235225d2c226e6f6e65222c5b5d2c5b2237222c2238225d2c5b2236222c2239225d2c5b2232222c223130225d5d5d@logical.variant/0\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
+    },
+    {
+      "name": "distinct_descriptors_over_budget",
+      "refused": "capacity",
+      "wire": "[\"zkc.program/0\",[],[[\"function\",\"f\",[[\"x0\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657230222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x1\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657231222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x2\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657232222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x3\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657233222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x4\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657234222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x5\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657235222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x6\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657236222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x7\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657237222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x8\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657238222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x9\",\"variant:5b227a6b632e76617269616e742f30222c5b224f7574657239222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"],[\"x10\",\"variant:5b227a6b632e76617269616e742f30222c5b224f757465723130222c226d616e79222c22496e6e6572222c224c656166222c226974656d222c22626f6f6c222c5b2235225d2c5b2234222c2236225d2c5b2237225d2c5b2233222c2238225d2c5b2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239222c2239225d2c5b2231222c223130225d2c5b223131225d2c5b2232222c223132225d2c5b223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133222c223133225d2c5b2231222c223134225d2c5b223135225d2c5b2230222c223136225d5d5d@logical.variant/0\"]],[],[[\"return\",[]]],[\"f\",[]]]],[],[]]"
     }
   ]
 }

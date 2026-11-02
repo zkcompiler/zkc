@@ -4,9 +4,6 @@ use serde_json::Value as Json;
 use std::{collections::BTreeMap, sync::Arc};
 
 type Result<T> = std::result::Result<T, AdmissionError>;
-/// A match lists one arm per alternative, so the variant alternative ceiling
-/// of the Data type language bounds its arms.
-const MATCH_ALTERNATIVES: usize = 64;
 fn err(code: ErrorCode, detail: &str) -> AdmissionError {
     AdmissionError::new(code, detail)
 }
@@ -109,7 +106,7 @@ fn record<'a>(v: &'a Json, tag: &str, len: usize) -> Result<&'a [Json]> {
 pub(crate) fn valid_name(s: &str) -> bool {
     let b = s.as_bytes();
     !b.is_empty()
-        && b.len() <= 128
+        && b.len() <= Limits::IDENTIFIER_BYTES
         && (b[0].is_ascii_alphabetic() || b[0] == b'_')
         && b[1..]
             .iter()
@@ -117,6 +114,9 @@ pub(crate) fn valid_name(s: &str) -> bool {
 }
 fn name(v: &Json) -> Result<String> {
     let s = string(v)?;
+    if s.len() > Limits::IDENTIFIER_BYTES {
+        return Err(err(ErrorCode::Limit, "identifier byte ceiling"));
+    }
     if !valid_name(s) {
         return Err(err(ErrorCode::Name, "invalid ASCII identifier"));
     }
@@ -134,8 +134,10 @@ fn natural(v: &Json) -> Result<u64> {
     if !canonical_decimal(s) {
         return Err(err(ErrorCode::Natural, "noncanonical-natural"));
     }
-    s.parse()
-        .map_err(|_| err(ErrorCode::Natural, "natural exceeds u64"))
+    // Overflowing digits exceed every natural bound of the carrier.
+    s.parse().map_err(|_| {
+        err(ErrorCode::Natural, "natural exceeds u64").with_class(RefusalClass::Capacity)
+    })
 }
 fn list(v: &Json, limit: usize) -> Result<&[Json]> {
     let a = array(v)?;
@@ -185,14 +187,25 @@ impl Decoder<'_> {
         let spelling = value
             .as_str()
             .ok_or_else(|| err(ErrorCode::Record, "expected type string"))?;
+        // A type spelling is an ordinary carrier string.
+        if spelling.len() > Limits::STRING_BYTES {
+            return Err(err(ErrorCode::Limit, "string byte ceiling"));
+        }
         if let Some(ty) = self.types.get(spelling) {
             return Ok(ty.clone());
         }
         let ty = self.contracts.physical_type(spelling).map_err(|error| {
             // The carrier-level reason agrees with source readers; keep the
             // descriptor parser's more specific reason for callers diagnosing it.
-            if spelling.starts_with("variant:") && error.code != ErrorCode::Limit {
+            let error = if spelling.starts_with("variant:") && error.code != ErrorCode::Limit {
                 AdmissionError::new(error.code, format!("binding-type: {}", error.detail))
+            } else {
+                error
+            };
+            // A type's own formation limits belong to its type language, not
+            // to the carrier bounds.
+            if error.class() == RefusalClass::Capacity {
+                error.with_class(RefusalClass::Types)
             } else {
                 error
             }
@@ -259,7 +272,7 @@ impl Decoder<'_> {
                 Some("match") => {
                     let a = record(v, "match", 6)?;
                     let mut arms = Vec::new();
-                    for arm in list(&a[4], MATCH_ALTERNATIVES)? {
+                    for arm in list(&a[4], Limits::MATCH_ARMS)? {
                         let arm = array(arm)?;
                         if arm.len() != 3 {
                             return Err(err(ErrorCode::Record, "match arm arity"));
@@ -352,7 +365,7 @@ impl Decoder<'_> {
                 }
                 let mut seen = BTreeMap::new();
                 let mut arguments = Vec::new();
-                for pair in list(&r[1], 128)? {
+                for pair in list(&r[1], Limits::ORIGIN_ASSIGNMENTS)? {
                     let pair = array(pair)?;
                     if pair.len() != 2 {
                         return Err(err(ErrorCode::Record, "logical parameter arity"));
@@ -362,7 +375,8 @@ impl Decoder<'_> {
                     if !super::bindings::valid_static_argument(identity) {
                         return Err(err(ErrorCode::Type, "logical origin static identity"));
                     }
-                    insert(&mut seen, parameter.clone(), (), ErrorCode::Name)?;
+                    insert(&mut seen, parameter.clone(), (), ErrorCode::Name)
+                        .map_err(|error| error.with_class(RefusalClass::NamesAndSsa))?;
                     arguments.push((parameter, identity.to_owned()));
                 }
                 LogicalOrigin {
@@ -398,7 +412,7 @@ impl Decoder<'_> {
                 Some("match") => {
                     let a = record(v, "match", 6)?;
                     let mut arms = Vec::new();
-                    for arm in list(&a[4], MATCH_ALTERNATIVES)? {
+                    for arm in list(&a[4], Limits::MATCH_ARMS)? {
                         let arm = array(arm)?;
                         if arm.len() != 3 {
                             return Err(err(ErrorCode::Record, "match arm arity"));
@@ -535,38 +549,42 @@ pub(crate) fn physical(bytes: &[u8], contracts: &super::Contracts) -> Result<Mod
     let mut binding_type_bytes = 0usize;
     match string(&a[0])? {
         "zkc.program/0" => {
-            for value in list(&a[1], Limits::DEFINITIONS)? {
+            for value in list(&a[1], Limits::BINDINGS)? {
                 let r = array(value)?;
                 if r.len() != 5 {
                     return Err(err(ErrorCode::Record, "operation binding arity"));
                 }
                 let declaration = OperationBinding {
                     contract: string(&r[1])?.into(),
-                    arguments: list(&r[2], 128)?
+                    arguments: list(&r[2], Limits::BINDING_ARGUMENTS)?
                         .iter()
                         .map(|v| Ok(string(v)?.to_owned()))
                         .collect::<Result<_>>()?,
                     implementation: string(&r[3])?.into(),
-                    physical_arguments: list(&r[4], 128)?
+                    physical_arguments: list(&r[4], Limits::BINDING_ARGUMENTS)?
                         .iter()
-                        .map(|v| {
-                            let spelling = v
-                                .as_str()
-                                .ok_or_else(|| err(ErrorCode::Record, "expected type string"))?;
-                            if spelling.len() > super::physical::PHYSICAL_SPELLING_LIMIT {
-                                return Err(err(ErrorCode::Limit, "physical type spelling limit"));
-                            }
-                            Ok(spelling.to_owned())
-                        })
+                        .map(|v| Ok(string(v)?.to_owned()))
                         .collect::<Result<_>>()?,
                 };
-                let binding = contracts.resolve(declaration)?;
+                let declared = !declaration.physical_arguments.is_empty();
+                // A binding that does not select an installed contract
+                // application is outside the admitted profile.
+                let binding = contracts
+                    .resolve(declaration)
+                    .map_err(|error| error.with_class(RefusalClass::UnsupportedProfile))?;
+                // Every signature position and declared physical argument is
+                // charged, including bindings no instruction uses.
+                let physical: &[PhysicalType] = if declared {
+                    binding.physical_arguments()
+                } else {
+                    &[]
+                };
                 for ty in binding
                     .signature()
                     .inputs
                     .iter()
                     .chain(&binding.signature().outputs)
-                    .chain(binding.physical_arguments())
+                    .chain(physical)
                 {
                     binding_type_bytes = binding_type_bytes
                         .checked_add(ty.descriptor_bytes())
@@ -592,6 +610,11 @@ pub(crate) fn physical(bytes: &[u8], contracts: &super::Contracts) -> Result<Mod
     };
     let (mut functions, mut participants, mut entries) =
         (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
+    // Functions and participants share one definition bound, counted before
+    // either list is decoded.
+    if array(&a[2])?.len() + array(&a[3])?.len() > Limits::DEFINITIONS {
+        return Err(err(ErrorCode::Limit, "definition ceiling"));
+    }
     for v in list(&a[2], Limits::DEFINITIONS)? {
         let f = decoder.function(v)?;
         insert(
@@ -610,19 +633,19 @@ pub(crate) fn physical(bytes: &[u8], contracts: &super::Contracts) -> Result<Mod
             ErrorCode::Symbol,
         )?;
     }
-    for v in list(&a[4], Limits::DEFINITIONS)? {
+    for v in list(&a[4], Limits::ENTRIES)? {
         let a = record(v, "entry", 3)?;
         let mut roles = BTreeMap::new();
         for (role, symbol) in pairs(&a[2])? {
             insert(&mut roles, role, symbol, ErrorCode::Role)?;
         }
         if roles.is_empty() {
-            return Err(err(ErrorCode::Role, "entry has no roles"));
+            return Err(err(ErrorCode::Role, "entry has no roles").with_class(RefusalClass::Syntax));
         }
         insert(&mut entries, name(&a[1])?, roles, ErrorCode::Symbol)?;
     }
     if entries.is_empty() && (functions.is_empty() || !participants.is_empty()) {
-        return Err(err(ErrorCode::Symbol, "module has no entry"));
+        return Err(err(ErrorCode::Symbol, "module has no entry").with_class(RefusalClass::Syntax));
     }
     for name in decoder.bindings.keys() {
         if functions.contains_key(name)
@@ -639,6 +662,8 @@ pub(crate) fn physical(bytes: &[u8], contracts: &super::Contracts) -> Result<Mod
         functions,
         participants,
         entries,
+        static_instructions: decoder.instructions,
+        descriptor_charge: decoder.type_bytes,
     })
 }
 
@@ -704,6 +729,48 @@ mod tests {
             [["entry", "main", [["P", "p"]]]]
         ]))
         .unwrap()
+    }
+    /// Serialized input reaches the JSON nesting bound first; the decoder
+    /// bounds body nesting below each definition body independently.
+    #[test]
+    fn body_nesting_is_bounded_below_each_definition_body() {
+        fn nested(levels: usize) -> Json {
+            let mut body = json!([["yield", ["x"]]]);
+            for level in (0..levels).rev() {
+                let output = format!("r{level}");
+                body = json!([
+                    [
+                        "if",
+                        format!("s{level}"),
+                        "x",
+                        ["x"],
+                        body,
+                        [["yield", ["x"]]],
+                        [output]
+                    ],
+                    ["yield", [output]]
+                ]);
+            }
+            body
+        }
+        let contracts =
+            super::super::Contracts::standard(super::super::ExecutionPolicy::general_purpose());
+        let mut decoder = Decoder {
+            contracts: &contracts,
+            bindings: BTreeMap::new(),
+            instructions: 0,
+            types: BTreeMap::new(),
+            type_bytes: 0,
+        };
+        assert!(decoder.local_body(&nested(Limits::BLOCK_DEPTH), 0).is_ok());
+        let error = decoder
+            .local_body(&nested(Limits::BLOCK_DEPTH + 1), 0)
+            .err()
+            .unwrap();
+        assert_eq!(
+            (error.code, error.class()),
+            (ErrorCode::Limit, RefusalClass::Capacity)
+        );
     }
     #[test]
     fn repeated_physical_and_nested_variant_descriptors_are_shared() {

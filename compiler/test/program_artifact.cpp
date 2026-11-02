@@ -338,6 +338,49 @@ module { "protocol.module"() ({
       }
     }
   });
+  cases.run("body nesting is bounded below each definition body", [&] {
+    // Serialized input reaches the JSON nesting bound first, so a directly
+    // built program exercises the body nesting bound itself.
+    auto nested = [](unsigned levels) {
+      auto yield = [](std::string value) {
+        program::Instruction instruction;
+        instruction.value = program::Yield{{std::move(value)}};
+        return instruction;
+      };
+      program::Body body{yield("x")};
+      for (unsigned level = levels; level-- > 0;) {
+        auto output = "r" + std::to_string(level);
+        program::Instruction branch;
+        branch.site = "s" + std::to_string(level);
+        branch.value = program::Conditional{
+            "x", {"x"}, std::move(body), program::Body{yield("x")}, {output}};
+        body = program::Body{std::move(branch), yield(output)};
+      }
+      program::Instruction finish;
+      finish.value =
+          program::Return{std::move(body.back().get<program::Yield>()->values)};
+      body.back() = std::move(finish);
+      program::Participants candidate;
+      candidate.stage = program::Participants::Stage::Physical;
+      candidate.functions.push_back({"f",
+                                     {{"x", "bool@native.bool/0"}},
+                                     {"bool@native.bool/0"},
+                                     std::move(body),
+                                     program::LogicalOrigin{"f", {}}});
+      return candidate;
+    };
+    if (auto e = program::checkStructure(nested(program::bodyNestingLimit)))
+      throw std::runtime_error(llvm::toString(std::move(e)));
+    bool capacity = false;
+    llvm::handleAllErrors(
+        program::checkStructure(nested(program::bodyNestingLimit + 1)),
+        [&](const program::ProgramRefusal &refusal) {
+          capacity = refusal.kind == program::RefusalClass::Capacity &&
+                     refusal.code == "interactive-body-depth";
+        },
+        [](const llvm::ErrorInfoBase &) {});
+    require(capacity, "body nesting bound was not enforced as capacity");
+  });
   cases.run("production capacity includes escaped bodies and conversions", [&] {
     auto expression = [&](unsigned multiplications) {
       std::vector<ring::Node> nodes{ring::Node::slot(0)};

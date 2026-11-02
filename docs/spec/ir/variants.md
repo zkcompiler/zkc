@@ -26,9 +26,15 @@ own boundary; none narrows formation:
 | [Portable descriptor](#portable-representation) | 64 | `variant-type` when a formed variant is spelled |
 | [Program `match`](../formats/program-bytes.md#bounds-and-admission) | 64 arms | `local-match-shape`, `interactive-match-shape` |
 | [Source variants](../language/definitions.md#types-and-static-terms) | 64 | `source.limit` |
+| [Oracle opening exchange](../formats/oracle-realization.md#common-opening-communication) | 32 constructors | `oracle-common-communication-profile` |
 
 A variant that forms with more than 64 alternatives can therefore be selected
 over in MLIR, but has no portable spelling and no Program `match`.
+The oracle opening exchange answers with one response alternative per remote
+constructor. One exchange dispatches at most 32 constructors, the capacity its
+response and packet helpers and their verifiers share; the planner refuses a
+larger inventory before it forms the response type. The limit lies below the
+wire's 64, so the alternative count never makes a response unspellable.
 
 A value contains exactly one alternative label and that alternative's payload.
 An inactive payload does not exist. Nested variants obey the same rule. Copy and

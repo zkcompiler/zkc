@@ -6,10 +6,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 type Result<T> = std::result::Result<T, AdmissionError>;
 fn invalid(detail: &str) -> AdmissionError {
-    AdmissionError {
-        code: ErrorCode::Type,
-        detail: format!("variant:{detail}"),
-    }
+    AdmissionError::new(ErrorCode::Type, format!("variant:{detail}"))
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VariantAlternative {

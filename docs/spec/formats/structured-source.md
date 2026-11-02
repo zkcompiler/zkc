@@ -1019,6 +1019,12 @@ record := ["request", reply-position, request]
         | ["stop", reason, site, reply-position]
 ```
 
+A request's `type` is an inline [logical type](logical-types.md) tree, the
+general type grammar of this format: Boolean, index, field, group and vector
+types are applications such as `["apply", "bool", []]` and
+`["apply", "field", [["domain", "Field", identity]]]`. Request and replay
+records carry the same trees.
+
 Inputs occupy the original ordered ports; `null` is an absent component. The
 selected participant's input scopes mask inputs, and output scopes filter results
 after execution. Boolean values are JSON Booleans; field, group, index and service

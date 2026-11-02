@@ -12,7 +12,7 @@ from tools import compiler, records
 commands = Commands(records())
 root = Path(__file__).resolve().parents[2]
 reference = Path(compiler).parent / 'test/zkc-structured_reference-test'
-field = ['field', 'bls12-381.fr']
+field = ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]
 service = 'random.bls12-381.fr/0'
 P, V, W = (f'role{i:08x}' for i in range(3))
 serial = 0

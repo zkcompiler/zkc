@@ -12,8 +12,11 @@ commands = Commands(records())
 repository_root = Path(__file__).resolve().parents[2]
 fixtures = Path(__file__).parent / 'fixtures'
 reference = Path(compiler).parent / 'test/zkc-structured_reference-test'
-field = ['field', 'bls12-381.fr']
-group = ['group', 'bls12-381.g1']
+# Message types in requests are inline logical type trees.
+field_domain = 'bls12-381.fr'
+group_domain = 'bls12-381.g1'
+field = ['apply', 'field', [['domain', 'Field', field_domain]]]
+group = ['apply', 'group', [['domain', 'Group', group_domain]]]
 contract = 'random.bls12-381.fr/0'
 modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 serial = 0
@@ -120,8 +123,8 @@ with case('select-depends-on-condition-and-both-values'):
 with case('group-scale-order-domain-and-additive-test-model'):
     defs = definitions(export(groups))
     ops = defs['scale'][9][1]
-    assert [op[0] for op in ops] == [['group.identity', group[1]], ['group.scale', group[1], field[1]],
-                                    ['group.add', group[1]], ['group.equal', group[1]]]
+    assert [op[0] for op in ops] == [['group.identity', group_domain], ['group.scale', group_domain, field_domain],
+                                    ['group.add', group_domain], ['group.equal', group_domain]]
     assert ops[1][1] == [1, 2]
     assert run(groups, ['7', '3'], 'V') == returned(['21', False])
     assert run(groups, ['7', '1'], 'V') == returned(['7', True])
@@ -135,10 +138,10 @@ with case('group-scale-order-domain-and-additive-test-model'):
 with case('service-alias-and-distinct-handles-exact-query-order'):
     defs = definitions(export(services))
     ops = defs['main'][9][1]
-    assert ops[0] == [['draw', 'P', field[1]], [0], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'first']
-    assert ops[1] == [['draw', 'P', field[1]], [2], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'second']
+    assert ops[0] == [['draw', 'P', field_domain], [0], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'first']
+    assert ops[1] == [['draw', 'P', field_domain], [2], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'second']
     for handles in [('17', '17'), ('17', '29'), ('0', '18446744073709551615')]:
-        script = [reply(['draw', site, 'P', contract, handle, field[1]], value)
+        script = [reply(['draw', site, 'P', contract, handle, field_domain], value)
                   for site, handle, value in zip(['first', 'second'], handles, ['3', '8'])]
         assert run(services, [*handles, True], replies=script) == returned(['3', '8', None], trace(script), 2)
         assert run(services, [*handles, True], 'V') == returned([None, None, True])
@@ -149,12 +152,12 @@ with case('service-alias-and-distinct-handles-exact-query-order'):
     run(services, ['18446744073709551616', '1', True], refusal='structured-reference-input')
 
 with case('missing-mismatched-invalid-and-stopping-replies'):
-    action = ['draw', 'first', 'P', contract, '17', field[1]]
+    action = ['draw', 'first', 'P', contract, '17', field_domain]
     script = [reply(action, '3')]
     missing = run(services, ['17', '17', True])
     assert missing == ['zkc.structured-open-result/0', ['stopped', 'incomplete', 'first'],
                        [['request', 0, action], ['stop', 'incomplete', 'first', 0]], 0]
-    for changed in [reply(action[:-2] + ['18', field[1]], '3'),
+    for changed in [reply(action[:-2] + ['18', field_domain], '3'),
                     ['reply', action, ['unit']], reply(action, str(modulus)), reply(action, None)]:
         result = run(services, ['17', '17', True], replies=[changed])
         assert result[1] == ['stopped', 'refused', 'first'] and result[-1] == 0
@@ -179,14 +182,14 @@ with case('exact-open-request-shape'):
     run(components, ['1', '2'], closed=True, refusal='structured-reference-input')
 
 with case('draw-reply-matches-every-action-field-and-leaves-suffix-unconsumed'):
-    action = ['draw', 'first', 'P', contract, '17', field[1]]
+    action = ['draw', 'first', 'P', contract, '17', field_domain]
     for position, replacement in enumerate(['receive', 'wrong_site', 'V', 'random.bn254.fr/0', '18', 'bn254.fr']):
         changed = action.copy()
         changed[position] = replacement
         result = run(services, ['17', '17', True], replies=[reply(changed, '3')])
         assert result == ['zkc.structured-open-result/0', ['stopped', 'refused', 'first'],
                           [['request', 0, action], ['stop', 'refused', 'first', 0]], 0]
-    script = [reply(['draw', site, 'P', contract, '17', field[1]], '3') for site in ['first', 'second']]
+    script = [reply(['draw', site, 'P', contract, '17', field_domain], '3') for site in ['first', 'second']]
     assert run(services, ['17', '17', True], replies=script + [reply(action, '99')]) == returned(
         ['3', '3', None], trace(script), 2)
 
@@ -203,7 +206,7 @@ with case('replay-record-capacity-is-independent-of-request-byte-capacity'):
     sites = [('site' + str(i)).ljust(401, 'x') for i in range(1800)]
 
     def draw_script():
-        return [reply(['draw', site, 'P', contract, '17', field[1]], str(modulus - 1)) for site in sites]
+        return [reply(['draw', site, 'P', contract, '17', field_domain], str(modulus - 1)) for site in sites]
 
     padding = 1024 * 1024 - len(json.dumps(trace(draw_script()), separators=(',', ':')))
     assert 0 <= padding <= sum(512 - len(site) for site in sites)
@@ -234,13 +237,14 @@ with case('receive-vector-capacity-remains-a-reference-diagnostic'):
       }) {sym_name="main",origin=["main",[]],function_type=(!V)->!V,roles=["P","V"],input_roles=[["P"]],output_roles=[["V"]]} : ()->()
     }) {profile=#protocol.profile<protocol>} : ()->() }'''
     export(source)
-    action = ['receive', 'vector', 'P', 'V', ['vector', field[1]]]
+    action = ['receive', 'vector', 'P', 'V',
+              ['apply', 'vector', [['domain', 'Field', field_domain]]]]
     script = [reply(action, ['1', '2'])]
     assert run(source, [None], 'V', replies=script) == returned([['1', '2']], trace(script), 1)
     run(source, [None], 'V', replies=[reply(action, ['0'] * 4097)], refusal='structured-reference-capacity')
 
 with case('guard-owner-and-nonowner-after-query-effects'):
-    script = [reply(['draw', site, 'P', contract, '17', field[1]], '3')
+    script = [reply(['draw', site, 'P', contract, '17', field_domain], '3')
               for site in ['first', 'second']]
     result = run(services, ['17', '17', False], replies=script)
     assert result == ['zkc.structured-open-result/0', ['stopped', 'reject', 'check'],
@@ -353,7 +357,7 @@ with case('statement-zero-and-nonzero-acceptance-and-opaque-relation-metadata'):
 
 with case('schnorr-independent-receive-send-alias-and-cross-owner-service-alias'):
     actions = [['receive', 'commitment', 'Alice', 'Bob', group],
-               ['draw', 'draw_challenge', 'Bob', contract, '29', field[1]],
+               ['draw', 'draw_challenge', 'Bob', contract, '29', field_domain],
                ['send', 'challenge', 'Bob', 'Alice', field, '5'],
                ['receive', 'response', 'Alice', 'Bob', field]]
     script = [reply(action, value) for action, value in zip(actions, ['14', '5', None, '22'])]
@@ -369,7 +373,7 @@ with case('schnorr-independent-receive-send-alias-and-cross-owner-service-alias'
         assert result[-1] == position + 1 and result[2] == trace(prefix) + [['stop', 'abort', actions[position][1], position + 1]]
     run(schnorr, ['2', '3', '6', '17', '17'], 'Bob', refusal='structured-reference-input')
     # Prover receives a challenge independent of the verifier's local value.
-    prover = [reply(['draw', 'nonce', 'Alice', contract, '17', field[1]], '7'),
+    prover = [reply(['draw', 'nonce', 'Alice', contract, '17', field_domain], '7'),
               reply(['send', 'commitment', 'Alice', 'Bob', group, '14']),
               reply(['receive', 'challenge', 'Bob', 'Alice', field], '11'),
               reply(['send', 'response', 'Alice', 'Bob', field, '40'])]

@@ -21,10 +21,10 @@ impl ServiceContract {
             "random.goldilocks.ext2-binomial7/0" => Ok(Self::RandomGoldilocksExt2),
             "random.koala-bear.ext8-binomial3/0" => Ok(Self::RandomExtensionField),
             "random.koala-bear.ext4-binomial3/0" => Ok(Self::RandomKoalaBearExt4),
-            _ => Err(AdmissionError::new(
-                ErrorCode::Type,
-                "unsupported service contract",
-            )),
+            _ => Err(
+                AdmissionError::new(ErrorCode::Type, "unsupported service contract")
+                    .with_class(super::RefusalClass::UnsupportedProfile),
+            ),
         }
     }
     pub fn name(self) -> &'static str {

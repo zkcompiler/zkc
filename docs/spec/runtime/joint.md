@@ -194,9 +194,13 @@ loop nesting, header/yield pairing, and identical loop site/maximum across roles
 Every static loop site must appear in exactly one segment with **all** candidate
 headers at that site. Splitting a shared loop into per-role segments is refused.
 Only participating roles appear in its body. Ordinary exchange/group rules apply
-recursively. Typed visitors bound depth to 64 loop levels and the global step
-count across all segments. Positional array substitutes for step/loop objects
-are refused; raw outer JSON depth remains separately bounded.
+recursively. Typed visitors bound control nesting and the global step count
+across all segments. Control nesting counts loop and branch segments only: a
+control segment directly in `steps` is level 1, and a control segment in the
+body of a level-n loop or in an arm of a level-n branch is level n + 1. Level 64
+is admitted and level 65 is refused, by the producer and by independent bundle
+admission alike; step segments add no level. Positional array substitutes for
+step/loop objects are refused; raw outer JSON depth remains separately bounded.
 
 At a reached loop, the driver executes necessary count calculations and validates
 each participant's actual count and local bound. A local failure stops with that

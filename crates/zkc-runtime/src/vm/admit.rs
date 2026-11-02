@@ -141,6 +141,14 @@ impl Program {
     pub fn requires_boolean_literals(&self) -> bool {
         self.executable.requires_boolean_literals
     }
+    /// Instruction records across all bodies, as admission counted them.
+    pub fn static_instructions(&self) -> usize {
+        self.program.static_instructions
+    }
+    /// Cumulative descriptor charge units, as admission charged them.
+    pub fn descriptor_charge(&self) -> usize {
+        self.program.descriptor_charge
+    }
 }
 
 #[derive(Clone)]
@@ -170,7 +178,8 @@ fn lookup(env: &Env, name: &str) -> Result<PhysicalType> {
         return Err(err(
             ErrorCode::Ssa,
             format!("interactive-resource-reuse: consumed operand {name}"),
-        ));
+        )
+        .with_class(RefusalClass::AffineUse));
     }
     Ok(b.ty.clone())
 }
@@ -525,7 +534,8 @@ fn local_body(
                     // external duplex states are ordinary checked data and carry
                     // no origin attribute, yet they hold the same history.
                     if LocalInstruction::walk(&arm.body).iter().any(|op| matches!(op, LocalInstruction::Op { binding, .. } if binding.observes_history())) {
-                        return Err(err(ErrorCode::Signature, "match-protocol-effect"));
+                        return Err(err(ErrorCode::Signature, "match-protocol-effect")
+                            .with_class(RefusalClass::UnsupportedProfile));
                     }
                     if arm.alternative != declared.label()
                         || arm.payload.len() != declared.payload().len()
@@ -636,7 +646,8 @@ fn local_body(
                 for name in captures {
                     let ty = lookup(&env, name)?;
                     if !ty.is_duplicable() {
-                        return Err(err(ErrorCode::Capture, "affine local loop capture"));
+                        return Err(err(ErrorCode::Capture, "affine local loop capture")
+                            .with_class(RefusalClass::AffineUse));
                     }
                     if diagonal(ty.clone()) {
                         return Err(err(ErrorCode::Signature, "diagonal-escape"));
@@ -731,7 +742,8 @@ fn local_body(
                     // ordinary storage. Resource exclusion is a logical-kind
                     // property, independently of the physical representation.
                     if !ty.is_discardable() {
-                        return Err(err(ErrorCode::Type, "release-resource"));
+                        return Err(err(ErrorCode::Type, "release-resource")
+                            .with_class(RefusalClass::AffineUse));
                     }
                     env.get_mut(name).expect("looked up").available = false;
                 }
@@ -933,10 +945,11 @@ impl Check<'_> {
                         .iter()
                         .find(|p| &p.name == port)
                         .ok_or_else(|| err(ErrorCode::Symbol, "unknown service port"))?;
-                    let signature = port
-                        .contract
-                        .signature(method)
-                        .ok_or_else(|| err(ErrorCode::Type, "unsupported service method"))?;
+                    // Methods resolve in the service contract's namespace.
+                    let signature = port.contract.signature(method).ok_or_else(|| {
+                        err(ErrorCode::Type, "unsupported service method")
+                            .with_class(RefusalClass::NamesAndSsa)
+                    })?;
                     operands(&mut env, inputs, &signature.inputs)?;
                     results(&mut env, &mut self.seen, outputs, &signature.outputs)?;
                 }
@@ -989,7 +1002,8 @@ impl Check<'_> {
                 } => {
                     site(&mut self.sites, s)?;
                     if count.maximum > Limits::LOOP_COUNT {
-                        return Err(err(ErrorCode::Record, "interactive-loop-count"));
+                        return Err(err(ErrorCode::Record, "interactive-loop-count")
+                            .with_class(RefusalClass::Capacity));
                     }
                     let induction_type = lookup(&env, &count.value)?;
                     if induction_type != PhysicalType::parse("index@native.index/0")? {
@@ -1004,32 +1018,40 @@ impl Check<'_> {
                         &carried.iter().map(|p| p.1.clone()).collect::<Vec<_>>(),
                         &types,
                     )?;
+                    // The body is a nested lexical environment: its formals and
+                    // the service ports. Its bindings are not visible after the
+                    // loop, and outer names may be reused in it. Sites and
+                    // message schemas stay participant-wide.
                     let mut child = Env::new();
+                    let region = self.region_names(&child);
+                    let outer_seen = std::mem::replace(&mut self.seen, region);
                     define(&mut child, &mut self.seen, &count.induction, induction_type)?;
                     for ((arg, _), ty) in carried.iter().zip(&types) {
                         define(&mut child, &mut self.seen, arg, ty.clone())?;
                     }
                     for (local, parent) in captures {
                         if self.services.iter().any(|port| &port.name == local) {
-                            return Err(err(ErrorCode::Type, "service-port-interface"));
+                            return Err(err(ErrorCode::Type, "service-port-interface")
+                                .with_class(RefusalClass::NamesAndSsa));
                         }
                         let ty = lookup(&env, parent)?;
                         if !ty.is_duplicable() {
                             return Err(err(
                                 ErrorCode::Capture,
                                 "affine values must be loop-carried, not invariant captures",
-                            ));
-                        }
-                        self.seen.insert(local.clone());
-                        if child
-                            .insert(
-                                local.clone(),
-                                Binding {
-                                    ty,
-                                    available: true,
-                                },
                             )
-                            .is_some()
+                            .with_class(RefusalClass::AffineUse));
+                        }
+                        if !self.seen.insert(local.clone())
+                            || child
+                                .insert(
+                                    local.clone(),
+                                    Binding {
+                                        ty,
+                                        available: true,
+                                    },
+                                )
+                                .is_some()
                         {
                             return Err(err(ErrorCode::Capture, "duplicate/overlapping capture"));
                         }
@@ -1048,6 +1070,7 @@ impl Check<'_> {
                         vec![FrameInputs::with_captures(explicit, captured.into())],
                     );
                     self.body(body, child, Some(&types), true)?;
+                    self.seen = outer_seen;
                     results(&mut env, &mut self.seen, outputs, &types)?;
                 }
                 Instruction::ReturnIf {
@@ -1123,7 +1146,8 @@ impl Check<'_> {
         for ((local, _), ty) in captures.iter().zip(types) {
             // Service names share the participant value namespace.
             if self.services.iter().any(|port| &port.name == local) {
-                return Err(err(ErrorCode::Type, "service-port-interface"));
+                return Err(err(ErrorCode::Type, "service-port-interface")
+                    .with_class(RefusalClass::NamesAndSsa));
             }
             if child
                 .insert(
@@ -1168,7 +1192,7 @@ fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayout
         {
             return Err(err(ErrorCode::Type, "variant-participant-boundary"));
         }
-        if participant.inputs.len() + participant.services.len() > Limits::PORTS {
+        if participant.inputs.len() + participant.services.len() > Limits::PARTICIPANT_INTERFACE {
             return Err(err(ErrorCode::Limit, "interactive-port-limit"));
         }
         let (env, mut seen) = environment(&participant.inputs)?;
@@ -1178,7 +1202,8 @@ fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayout
                 || !indices.insert(port.input_index)
                 || port.input_index >= participant.inputs.len() + participant.services.len()
             {
-                return Err(err(ErrorCode::Type, "service-port-interface"));
+                return Err(err(ErrorCode::Type, "service-port-interface")
+                    .with_class(RefusalClass::NamesAndSsa));
             }
         }
         Check {

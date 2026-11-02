@@ -1749,16 +1749,10 @@ class Reference {
         Kind::Stop, {}, reason.str(), context ? context->site(raw) : raw.str()};
   }
 
-  json::Array messageType(Type type) {
-    if (type.isSignlessInteger(1))
-      return json::Array{"bool"};
-    if (type.isUnsignedInteger(64))
-      return json::Array{"index"};
-    if (auto field = dyn_cast<algebra::FieldType>(type))
-      return json::Array{"field", field.getDomain()};
-    if (auto group = dyn_cast<algebra::GroupType>(type))
-      return json::Array{"group", group.getDomain()};
-    return json::Array{"vector", cast<data::FieldVectorType>(type).getDomain()};
+  // Requests carry message types as inline logical type trees, the general
+  // type grammar of the structured source format.
+  Expected<json::Value> messageType(Type type) {
+    return exportLogicalTypeData(type);
   }
 
   Expected<Outcome> replay(Operation &op, json::Array action, Type replyType,
@@ -1824,20 +1818,27 @@ class Reference {
         auto value = encode(args[0]);
         if (!value)
           return value.takeError();
-        auto result =
-            replay(op,
-                   json::Array{"send", site(exchange.getSite()), sender,
-                               receiver, messageType(type), std::move(*value)},
-                   {}, context);
+        auto described = messageType(type);
+        if (!described)
+          return described.takeError();
+        auto result = replay(
+            op,
+            json::Array{"send", site(exchange.getSite()), sender, receiver,
+                        std::move(*described), std::move(*value)},
+            {}, context);
         if (result && !result->stopped())
           result->values.push_back(args[0]);
         return result;
       }
-      if (self == receiver)
+      if (self == receiver) {
+        auto described = messageType(type);
+        if (!described)
+          return described.takeError();
         return replay(op,
                       json::Array{"receive", site(exchange.getSite()), sender,
-                                  receiver, messageType(type)},
+                                  receiver, std::move(*described)},
                       type, context);
+      }
       return absent(op);
     }
     auto query = cast<protocol_ir::QueryOp>(op);
