@@ -25,10 +25,23 @@ struct AssociatedMemberDeclaration {
   std::string name;
   StaticParameter owner, result;
 };
+/// The element of a source collection: the value type of the first parameter,
+/// an index, or a byte.
+enum class CollectionElement { Parameter, Index, Byte };
+struct TypeCollection {
+  unsigned rank;
+  CollectionElement element;
+};
+enum class SetupKey { Prover, Verifier };
 struct TypeDeclaration {
   std::string name;
   std::vector<StaticParameter> parameters;
   bool nativeLocal, mathematical, participants, constructible, message;
+  /// Source vocabulary: native source data, the collection view and the
+  /// setup-key role. These grant no codec, transport or execution authority.
+  bool sourceData = false;
+  std::optional<TypeCollection> collection = {};
+  std::optional<SetupKey> setup = {};
 };
 llvm::ArrayRef<TypeDeclaration> typeDeclarations();
 const TypeDeclaration *typeDeclaration(llvm::StringRef name);

@@ -13,6 +13,10 @@ def source():
     return json.loads(Path(__file__).with_name("declarations.json").read_text(), object_pairs_hook=unique)
 
 
+def installation():
+    return json.loads(Path(__file__).with_name("installation.json").read_text(), object_pairs_hook=unique)
+
+
 def enroll(value, operation):
     value["operations"].append(operation)
     value["consumerProfiles"][0]["operations"].append({
@@ -37,7 +41,7 @@ class Profiles(unittest.TestCase):
             roots = [t["parameter"] for t in member["scope"] if t["kind"] == "root"]
             self.assertEqual(roots, [] if member["operation"].startswith("index.") else [
                 {"kind": "Domain", "sort": "Slot" if member["operation"].startswith("resource_unit.") else "Field"}])
-        self.assertEqual(project(value), project(value))
+        self.assertEqual(project(value, installation()), project(value, installation()))
 
     def test_profile_refusals(self):
         cases = [
@@ -104,7 +108,7 @@ class Profiles(unittest.TestCase):
         })
         value["consumerProfiles"].append(other)
         validate(value)
-        project(value)
+        project(value, installation())
         self.assertEqual(value["consumerProfiles"][0], original)
 
     def test_closed_nested_type_dependencies(self):

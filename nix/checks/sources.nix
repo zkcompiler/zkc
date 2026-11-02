@@ -10,6 +10,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compiler}/common/unicode/generate.py
   test -f ${sources.compiler}/common/catalog/generate.py
   test -f ${sources.compiler}/common/catalog/declarations.json
+  test -f ${sources.compiler}/common/catalog/installation.json
   test ! -e ${sources.compiler}/compiler/test
   test ! -e ${sources.compiler}/common/tests
   test ! -e ${sources.compiler}/lean
@@ -28,6 +29,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.rust}/crates/zkc-catalog/codegen/projection.rs
   test -f ${sources.rust}/crates/zkc-catalog/codegen/validation.rs
   test -f ${sources.rust}/common/catalog/declarations.json
+  test -f ${sources.rust}/common/catalog/installation.json
   test ! -e ${sources.rust}/common/catalog/generate.py
   test -f ${sources.rustConsumer}/common/tests/check_rust_sdk.py
   test -f ${sources.rustConsumer}/common/tests/consumer/rust/main.rs

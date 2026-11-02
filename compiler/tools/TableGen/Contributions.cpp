@@ -39,6 +39,21 @@ std::string semanticKey(const Record *r) {
   } else if (r->isSubClassOf("ZKC_Parameter")) {
     reference("kind");
     part(r->getValueAsString("sort"));
+  } else if (r->isSubClassOf("ZKC_InstalledDomain") ||
+             r->isSubClassOf("ZKC_Codec") ||
+             r->isSubClassOf("ZKC_FiniteDefinition") ||
+             r->isSubClassOf("ZKC_DomainConstructor")) {
+    part(r->getValueAsString("identity"));
+  } else if (r->isSubClassOf("ZKC_LogicalTypeInstance")) {
+    part(r->getValueAsString("kind"));
+    part(r->getValueAsString("domain"));
+  } else if (r->isSubClassOf("ZKC_FrameTag")) {
+    part(std::to_string(r->getValueAsInt("tag")));
+  } else if (r->isSubClassOf("ZKC_AggregateFrame")) {
+    part(r->getValueAsString("constructor"));
+    part(r->getValueAsString("domain"));
+  } else if (r->isSubClassOf("ZKC_RandomService")) {
+    part(r->getValueAsString("contract"));
   } else {
     part(r->getValueAsString("name"));
   }

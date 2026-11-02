@@ -520,6 +520,11 @@ target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE
   ${MLIR_INCLUDE_DIRS} ${PROJECT_BINARY_DIR}/include)
 mlir_target_link_libraries(zkc-type_adapter_ambiguity-test PRIVATE MLIRIR)
 add_zkc_test(contract_inventory Contracts)
+# Generated installed-instance and native installation tables against the
+# hand-written owners, the CPU and EVM targets and the source checker.
+add_zkc_test(installed_instances EvmTarget installed-instances)
+target_link_libraries(zkc-installed_instances-test PRIVATE ZkcCpuTarget)
+mlir_target_link_libraries(zkc-installed_instances-test PRIVATE MLIRAsmParser)
 add_zkc_test(contract_conformance Contracts)
 add_test(NAME contract-declarations-generation
   COMMAND ${CMAKE_COMMAND}

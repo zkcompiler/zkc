@@ -1,17 +1,37 @@
 # Shared declaration source
 
-`declarations.json` is authored neutral data, not a generated snapshot. It owns
-the built-in declaration facts in [`zkc.contract-declarations/0`](../../docs/spec/formats/contract-declarations.md).
-Edit this source when changing identities, kinded signatures, requirements,
-permissions, mathematical or operational facets, or owner-fixed consumer profiles. Array order is declaration order; nominal
-identity determines meaning. No row installs executable code or a formal interpretation.
+The catalog package is two authored documents, neither of them a generated
+snapshot:
 
-The compiler's configure step checks exact JSON shapes and projects ordinary
-TableGen records. `zkc-tblgen` independently checks declaration formation before
-generating native C++ data and MLIR adapter inputs. The Rust `zkc-catalog` build
-checks the same source independently and emits static typed tables in `OUT_DIR`.
-Rust does not run Python or LLVM; the compiler does not run Cargo. Generated
-records and tables are build outputs and are not checked in.
+- `declarations.json` owns the built-in declaration facts in
+  [`zkc.contract-declarations/0`](../../docs/spec/formats/contract-declarations.md):
+  identities, kinded signatures, requirements, permissions, mathematical or
+  operational facets, owner-fixed consumer profiles, and the
+  [installed-instance tables](../../docs/spec/formats/contract-declarations.md#installed-instances)
+  (domains, logical type instances, frame tags, codecs, aggregate frames,
+  random services, limits and the source vocabulary).
+- `installation.json` owns the physical choices in
+  [`zkc.native-installation/0`](../../docs/spec/formats/native-installation.md):
+  representations, provider preferences and units, field forms and backend
+  calling conventions. Its rows reference declaration keys; the declarations
+  never reference it.
+
+Array order is declaration order; nominal identity determines meaning. Every
+row is explicit: no identity is formed by concatenation, a family or a loop. No
+row installs executable code or a formal interpretation.
+
+Three validators check both documents independently. The compiler's configure
+step runs `generate.py`, which checks every rule of both chapters on the JSON,
+including the cross-document references, and projects ordinary TableGen records:
+`Catalog.td` holds the logical declarations only and `NativeInstallation.td`
+holds the physical records. `zkc-tblgen` checks the same rules again over those
+records before generating native C++ data, MLIR adapter inputs and the
+installed-instance tables (`zkc/Contracts/Instances.h`); its
+`-dump-contract-declarations` and `-dump-native-installation` actions each print
+only their own document. The Rust `zkc-catalog` build checks the same sources
+independently and emits static typed tables in `OUT_DIR`. Rust does not run
+Python or LLVM; the compiler does not run Cargo. Generated records and tables
+are build outputs and are not checked in.
 
 The source format is intentionally explicit. Scope references, signature-family
 tags and facets remain data rather than authoring-class privileges. Backend
@@ -53,12 +73,21 @@ Build-free source controls and TableGen input regeneration:
 ```sh
 python3 common/catalog/test_profiles.py -v
 python3 common/catalog/test_deterministic_data.py -v
-python3 common/catalog/generate.py --source common/catalog/declarations.json --output build/compiler/include/zkc/Contracts
+python3 common/catalog/test_instances.py -v
+python3 common/catalog/generate.py --source common/catalog/declarations.json \
+  --installation common/catalog/installation.json --output build/compiler/include/zkc/Contracts
 ```
 
-`Catalog.td` and `Mathematical.td` are generated outputs. The normal compiler
-configure step runs this projection; the `ZkcContractDeclarationsGen` target
-then regenerates native `Declarations.cpp.inc` using `zkc-tblgen`. Cargo
+`test_instances.py` validates both documents, refuses forged rows, and compares
+the data with the independently authored Python oracles of the EVM wire,
+foundation, binomial and hash-chain references without changing them.
+
+`Catalog.td`, `Mathematical.td` and `NativeInstallation.td` are generated
+outputs. The normal compiler configure step runs this projection; the
+`ZkcContractDeclarationsGen` target then regenerates native
+`Declarations.cpp.inc` and `Instances.inc` using `zkc-tblgen`. The compiler's
+own owners do not read the installed-instance tables yet; the
+`installed-instances` test compares them with those owners. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source or belongs under `lean/`.
 

@@ -303,6 +303,13 @@ returns a typed answer without resuming. `resume` checks the evaluator's actual
 request identity and resumes using its own continuation coordinates. Neither
 helper establishes authority for an arbitrary caller-supplied association.
 
+The opening exchange of one remote row dispatches at most 32 base constructors,
+so the `open` response and `response.answer` have at most 32 alternatives each;
+a larger receiver inventory refuses with `oracle-common-communication-profile`.
+This limit belongs to this format and is independent of the other layers'
+[variant limits](../ir/variants.md#type-and-value): 512 alternatives in the
+logical formation profile and 64 in the portable descriptor and Program `match`.
+
 `packet.group` computes first-use physical groups at runtime. A key is the
 exact source constructor, instance and selected physical leaf. Equal roots or
 Data never merge different anchors. Logical order and multiplicity remain in

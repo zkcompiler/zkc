@@ -34,6 +34,7 @@ let
     "crates"
     "common/unicode"
     "common/catalog/declarations.json"
+    "common/catalog/installation.json"
   ];
   projects = [
     "zkc.workspace.toml"

@@ -5,7 +5,7 @@ import unittest
 
 from generate import validate
 from tablegen import project
-from test_profiles import source
+from test_profiles import installation, source
 
 
 # Independent finite coverage witness. A new name never enrolls by prefix.
@@ -116,7 +116,7 @@ class DeterministicData(unittest.TestCase):
             value["operations"].append(operation)
         validate(value)
         self.assertEqual(selected(value, "DeterministicData"), enrolled)
-        self.assertEqual(project(value)[0].count("DeterministicData"), len(enrolled))
+        self.assertEqual(project(value, installation())[0].count("DeterministicData"), len(enrolled))
 
     def test_public_replay_remains_total_restricted_vocabulary(self):
         value = source()

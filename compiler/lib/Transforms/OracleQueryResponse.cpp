@@ -29,7 +29,8 @@ struct Emitter {
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)) {}
   Error plan(OracleVirtualFunctionWork &work) {
     auto refuse = [] { return error("oracle-response-layout"); };
-    if (model.arms.empty() || model.arms.size() > 32 ||
+    if (model.arms.empty() ||
+        model.arms.size() > oracleExchangeConstructorLimit ||
         model.state.size() > 505 || model.receiverStores.size() > 505)
       return error("oracle-response-capacity");
     if (model.state.size() < Controller::HeaderSize ||

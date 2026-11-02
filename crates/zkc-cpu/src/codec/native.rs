@@ -98,7 +98,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
             (Field, Binary64Ext3) => Some((76, 30)),
             (Field, Ristretto255Scalar) => Some((13, 38)),
             (Group, Ristretto255Group) => Some((16, 38)),
-            (Group, Edwards25519Prime) => Some((68, 38)),
+            (Group, Edwards25519Prime) => Some((81, 38)),
             _ => Option::None,
         }
     } else {
@@ -512,7 +512,7 @@ impl CpuBackend {
                 ))
                 .ok_or(Invalid(DecodeReason::Scalar))?,
             ),
-            68 => Value::EdwardsGroup(
+            81 => Value::EdwardsGroup(
                 (crate::EdwardsPrime::from_bytes(&bytes[6..])
                     .ok_or(Invalid(DecodeReason::Group))?)
                 .into(),
@@ -586,9 +586,23 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
 #[cfg(test)]
 mod tag_tests {
     use super::*;
-    use zkc_runtime::vm::{Identity, LogicalType};
+    use std::collections::{BTreeMap, BTreeSet};
+    use zkc_runtime::vm::{Identity, LogicalType, ResourceDomain};
 
-    /// The frame tag of every default physical type over the listed identities.
+    /// Every variant of a fieldless enum. The match has no wildcard arm, so the
+    /// list stops compiling when a variant is added, and a repeated variant is
+    /// an unreachable pattern.
+    macro_rules! every {
+        ($enum:ident: $($variant:ident),+ $(,)?) => {{
+            let all = [$($enum::$variant),+];
+            all.into_iter().for_each(|value| match value {
+                $($enum::$variant)|+ => {}
+            });
+            all
+        }};
+    }
+
+    /// The frame tag the native codec writes for a complete physical type.
     fn tag(ty: &PhysicalType) -> Option<u8> {
         frame(ty)
             .map(|(tag, _)| tag)
@@ -598,96 +612,132 @@ mod tag_tests {
             .or_else(|| table_type(ty).then_some(2))
     }
 
+    /// The frame a tag identifies, named by the logical type it carries.
+    /// Sequence, variant and field-array frames take their element, payload or
+    /// length from the expected type, and digest-generic Merkle frames take
+    /// their scheme from it, so each of these families is one frame.
+    fn owner(ty: &PhysicalType) -> String {
+        let logical = ty.logical();
+        match ty.kind() {
+            Type::Sequence | Type::Variant => ty.kind().name().into(),
+            Type::FieldArray => {
+                let (field, _) = logical.field_array_parts().expect("field array");
+                format!("field_array:{}", field.name())
+            }
+            kind if crate::merkle::Scheme::from_identity(logical.identity()).is_some() => {
+                format!("{}:digest-generic-merkle", kind.name())
+            }
+            _ => logical.spelling(),
+        }
+    }
+
     #[test]
-    fn binary_field_frame_tags_are_unique() {
-        let identities = [
-            "",
-            "bn254.fr",
-            "bn254.g1",
-            "bn254.g2",
-            "bn254.gt",
-            "bls12-381.fr",
-            "bls12-381.g1",
-            "bls12-381.g2",
-            "bls12-381.gt",
-            "multilinear.kzg.bls12-381/0",
-            "rows.merkle-keccak256.koala-bear/0",
-            "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
-            "rows.merkle-poseidon2-16.koala-bear/0",
-            "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
-            "merlin3.bls12-381.fr64be/0",
-            "merlin3.ristretto255.scalar64le/0",
-            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
-            "hash-chain.keccak256.bls12-381.fr64be/0",
-            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
-            "ristretto255.scalar",
-            "ristretto255.group",
-            "edwards25519.prime",
-            "koala-bear",
-            "koala-bear.ext8-binomial3",
-            "koala-bear.ext4-binomial3",
-            "gf2-64.pentanomial-4-3-1",
-            "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
-        ];
-        let kinds = [
-            "bool",
-            "index",
-            "indices",
-            "bytes",
-            "shake128_state",
-            "field",
-            "vector",
-            "polynomial",
-            "round",
-            "matrix",
-            "table",
-            "point",
-            "rng",
-            "nonce",
-            "group",
-            "groups",
-            "transcript",
-            "commitment",
-            "proof",
-            "opening_state",
-            "commitments",
-            "opening_states",
-            "prover_key",
-            "verifier_key",
-        ];
-        let mut owners: std::collections::BTreeMap<u8, Vec<String>> = Default::default();
+    fn frame_tags_and_frames_correspond_one_to_one() {
+        let identities = every!(Identity:
+            None, Bn254Fr, Bn254G1, Bn254G2, Bn254Gt, Bls12381Fr, Bls12381G1,
+            MultilinearKzgBls12381, MerkleKoalaBear, MerkleKoalaBearExt8, MerkleKoalaBearExt4,
+            MerklePoseidon2KoalaBear, MerklePoseidon2KoalaBearExt4, MerklePoseidon2BabyBear,
+            MerklePoseidon2BabyBearExt4, MerklePoseidon2Goldilocks, MerklePoseidon2GoldilocksExt2,
+            Merlin3KoalaBearExt8, Merlin3Fr64Be, Spongefish080KeccakFr64Be, Ristretto255Scalar,
+            KoalaBear, KoalaBearExt8, KoalaBearExt4, BabyBear, BabyBearExt4, Goldilocks,
+            GoldilocksExt2, Merlin3BabyBearExt4, Merlin3GoldilocksExt2, Ristretto255Group,
+            Edwards25519Prime, Merlin3Ristretto64Le, Bls12381G2, Bls12381Gt,
+            HashChainKeccak256Fr64Be, HashChainKeccak256KoalaBearExt8,
+            HashChainKeccak256KoalaBearExt4, Binary64, Binary64Ext3,
+        );
+        let kinds = every!(Type:
+            Sequence, FieldArray, FixedVector, Variant, ResourceUnit, Index, Indices, Bytes,
+            Shake128State, QuotientMatrix, Matrix, Vector, Polynomial, Field, Table, Point,
+            Round, Bool, Rng, Commitment, Commitments, OpeningStates, Proof, ProverKey,
+            VerifierKey, OpeningState, Group, Nonce, Transcript, Groups,
+        );
+        // Every leaf kind over every identity, then the structural kinds over
+        // those leaves.
+        let leaves: Vec<_> = kinds
+            .iter()
+            .flat_map(|kind| {
+                identities
+                    .iter()
+                    .filter_map(move |identity| LogicalType::new(*kind, *identity).ok())
+            })
+            .collect();
+        let mut types = leaves.clone();
+        for leaf in &leaves {
+            types.extend(LogicalType::sequence(leaf.clone()).ok());
+            types.extend(LogicalType::fixed_vector(leaf.clone(), 2).ok());
+            let variant = zkc_test_support::variants::logical(
+                "Message",
+                serde_json::json!([["value", [leaf.spelling()]], ["none", []]]),
+            );
+            types.extend(LogicalType::parse(&variant).ok());
+        }
         for identity in identities {
-            for kind in kinds {
-                let spelling = if identity.is_empty() {
-                    kind.to_string()
-                } else {
-                    format!("{kind}:{identity}")
-                };
-                let Ok(logical) = LogicalType::parse(&spelling) else {
-                    continue;
-                };
-                let ty = PhysicalType::default_for(logical).unwrap();
+            for length in [0, 1, 3] {
+                types.extend(LogicalType::field_array(identity, length).ok());
+            }
+        }
+        types.push(LogicalType::resource_unit(
+            ResourceDomain::parse("Slot.A").unwrap(),
+        ));
+        assert_eq!(
+            types.iter().map(LogicalType::kind).collect::<BTreeSet<_>>(),
+            BTreeSet::from(kinds)
+        );
+        assert_eq!(
+            leaves
+                .iter()
+                .map(LogicalType::identity)
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(identities)
+        );
+        // Default and resident representations of one logical type share its frame.
+        let mut pairs = BTreeSet::new();
+        for logical in &types {
+            let (kind, identity) = (logical.kind(), logical.identity());
+            let representations = [
+                PhysicalType::default_for(logical.clone()).ok(),
+                crate::operations::blst::physical(kind, identity),
+                crate::operations::halo2curves::physical(kind, identity),
+            ];
+            for ty in representations.into_iter().flatten() {
                 if let Some(tag) = tag(&ty) {
-                    owners.entry(tag).or_default().push(spelling);
+                    pairs.insert((tag, owner(&ty)));
                 }
             }
         }
-        let expected = [
+        let mut owners: BTreeMap<u8, BTreeSet<&str>> = BTreeMap::new();
+        let mut tags: BTreeMap<&str, BTreeSet<u8>> = BTreeMap::new();
+        for (tag, frame) in &pairs {
+            owners.entry(*tag).or_default().insert(frame);
+            tags.entry(frame).or_default().insert(*tag);
+        }
+        let shared: BTreeMap<_, _> = owners.iter().filter(|(_, f)| f.len() > 1).collect();
+        assert!(
+            shared.is_empty(),
+            "tags identifying several frames: {shared:?}"
+        );
+        let split: BTreeMap<_, _> = tags.iter().filter(|(_, t)| t.len() > 1).collect();
+        assert!(
+            split.is_empty(),
+            "frames written with several tags: {split:?}"
+        );
+        for (tag, frame) in [
+            (68, "indices"),
+            (69, "sequence"),
             (73, "field:gf2-64.pentanomial-4-3-1"),
             (74, "vector:gf2-64.pentanomial-4-3-1"),
             (75, "matrix:gf2-64.pentanomial-4-3-1"),
             (76, "field:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
             (77, "vector:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
             (78, "matrix:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
-        ];
-        for (tag, spelling) in expected {
-            assert_eq!(owners[&tag], vec![spelling.to_string()], "tag {tag}");
+            (81, "group:edwards25519.prime"),
+            (82, "groups:edwards25519.prime"),
+        ] {
+            assert_eq!(
+                owners.get(&tag),
+                Some(&BTreeSet::from([frame])),
+                "tag {tag}"
+            );
         }
-        // Appended after every earlier tag, so no earlier frame can collide.
-        let earlier = owners.keys().copied().filter(|t| *t < 73).max();
-        assert_eq!(earlier, Some(72));
-        assert!(owners.keys().all(|t| *t <= 78));
-        assert!(Identity::Binary64.bit_pattern_width().is_some());
     }
 }

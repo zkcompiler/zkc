@@ -37,8 +37,8 @@ struct Emitter {
         boolean(builder.getI1Type()) {}
   Error plan(OracleVirtualFunctionWork &work) {
     if (!capacity || capacity >= 1048576 || model.arms.empty() ||
-        model.arms.size() > 32 || model.receiverStores.size() > 480 ||
-        model.holderStores.size() > 480)
+        model.arms.size() > oracleExchangeConstructorLimit ||
+        model.receiverStores.size() > 480 || model.holderStores.size() > 480)
       return error("oracle-packet-capacity");
     auto refuse = [] { return error("oracle-packet-layout"); };
     for (auto types : {ArrayRef<Type>(model.receiverStores),

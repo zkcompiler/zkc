@@ -294,7 +294,7 @@ fn facet(v: &Value) -> Result<String> {
             object(v, &["kind", "identity"], &[])?;
             return Ok(format!("Facet::Mathematical({})", quoted(&v["identity"])?));
         }
-        "History" => (
+        "History" | "Succession" => (
             &["stateInput", "stateOutput"],
             vec![
                 ("state_input", count(&v["stateInput"])?),
@@ -467,9 +467,13 @@ fn constructor(v: &Value) -> Result<String> {
             "participants",
             "constructible",
             "message",
+            "sourceData",
+            "collection",
+            "setup",
         ],
         &[],
     )?;
+    source_vocabulary(v)?;
     Ok(record(
         "TypeConstructor",
         &[
@@ -492,6 +496,23 @@ fn constructor(v: &Value) -> Result<String> {
             ("message", flag(&v["message"])?),
         ],
     ))
+}
+// The source-vocabulary columns are checked but not projected; they grant no
+// codec, transport or execution authority.
+fn source_vocabulary(v: &Value) -> Result<()> {
+    boolean(&v["sourceData"])?;
+    let collection = &v["collection"];
+    if !collection.is_null() {
+        object(collection, &["rank", "element"], &[])?;
+        if !matches!(number(&collection["rank"])?, 1 | 2) {
+            return Err("collection rank must be 1 or 2".into());
+        }
+        choice(&collection["element"], &["parameter", "index", "byte"])?;
+    }
+    if !v["setup"].is_null() {
+        choice(&v["setup"], &["prover", "verifier"])?;
+    }
+    Ok(())
 }
 
 fn consumer_operation(v: &Value) -> Result<String> {
@@ -646,11 +667,20 @@ fn laws(v: &Value) -> Result<String> {
     ))
 }
 
-pub fn generate(bytes: &[u8]) -> Result<String> {
+fn read(bytes: &[u8]) -> Result<Value> {
     if bytes.len() > 64 * 1024 * 1024 {
         return Err("declaration byte limit".into());
     }
     let Unique(v) = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    Ok(v)
+}
+
+/// Project the declaration document after validating it together with the
+/// native installation document, which is checked but not projected.
+pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
+    let v = read(declarations)?;
+    let installation =
+        read(installation).map_err(|error| format!("native installation: {error}"))?;
     object(
         &v,
         &[
@@ -670,6 +700,15 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
             "frontendAssociations",
             "frontendHomes",
             "serviceMethods",
+            "domains",
+            "logicalTypes",
+            "frameTags",
+            "codecs",
+            "aggregateFrames",
+            "randomServices",
+            "limits",
+            "finiteDefinitions",
+            "domainConstructors",
         ],
         &[],
     )?;
@@ -902,7 +941,7 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
             })?,
         ),
     ];
-    validation::validate(&v)?;
+    validation::validate(&v, &installation)?;
     Ok(format!(
         "// Generated from the shared declaration source.\npub static CATALOG: Catalog = {};\n",
         record("Catalog", &fields)

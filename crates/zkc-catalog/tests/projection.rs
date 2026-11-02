@@ -8,8 +8,20 @@ use zkc_catalog::{CATALOG, Facet, Kind, NumericalResult, Signature, Term};
 fn source() -> Value {
     serde_json::from_str(include_str!("../../../common/catalog/declarations.json")).unwrap()
 }
+fn installation() -> Value {
+    serde_json::from_str(include_str!("../../../common/catalog/installation.json")).unwrap()
+}
+fn check_both(declarations: &Value, installation: &Value) -> Result<String, String> {
+    projection::generate(
+        &serde_json::to_vec(declarations).unwrap(),
+        &serde_json::to_vec(installation).unwrap(),
+    )
+}
 fn check(value: &Value) -> Result<String, String> {
-    projection::generate(&serde_json::to_vec(value).unwrap())
+    check_both(value, &installation())
+}
+fn check_installation(value: &Value) -> Result<String, String> {
+    check_both(&source(), value)
 }
 fn operation<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
     value["operations"]
@@ -87,6 +99,16 @@ fn complete_static_inventory() {
             ..
         }]
     ));
+    assert_eq!(
+        pass.facets,
+        [Facet::Succession {
+            state_input: 0,
+            state_output: 0
+        }]
+    );
+    for name in ["resource_unit.create", "resource_unit.consume"] {
+        assert!(zkc_catalog::operation(name).unwrap().facets.is_empty());
+    }
     assert!(matches!(
         zkc_catalog::operation("numerical.map").unwrap().signature,
         Signature::Numerical {
@@ -397,39 +419,52 @@ fn shapes(value: &Value, path: String, out: &mut BTreeMap<String, String>) {
 
 #[test]
 fn unknown_and_missing_fields_refuse_at_every_record_shape() {
-    let original = source();
-    let mut cases = BTreeMap::new();
-    shapes(&original, String::new(), &mut cases);
-    assert!(cases.len() > 30);
-    for path in cases.values() {
-        let mut changed = original.clone();
-        changed
-            .pointer_mut(path)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .insert("unexpected".into(), json!(0));
-        assert!(check(&changed).is_err(), "unknown field at {path}");
-        // Optional fields may legitimately disappear; remove all fields for a
-        // missing-shape control instead of treating optional data as required.
-        changed
-            .pointer_mut(path)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .clear();
-        assert!(check(&changed).is_err(), "missing fields at {path}");
+    type Check = fn(&Value) -> Result<String, String>;
+    let documents: [(Value, Check, usize); 2] = [
+        (source(), check, 30),
+        (installation(), check_installation, 10),
+    ];
+    for (original, check, minimum) in documents {
+        let mut cases = BTreeMap::new();
+        shapes(&original, String::new(), &mut cases);
+        assert!(cases.len() > minimum);
+        for path in cases.values() {
+            let mut changed = original.clone();
+            changed
+                .pointer_mut(path)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .insert("unexpected".into(), json!(0));
+            assert!(check(&changed).is_err(), "unknown field at {path}");
+            // Optional fields may legitimately disappear; remove all fields for a
+            // missing-shape control instead of treating optional data as required.
+            changed
+                .pointer_mut(path)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .clear();
+            assert!(check(&changed).is_err(), "missing fields at {path}");
+        }
     }
 }
 
 #[test]
 fn duplicate_keys_and_noninteger_counts_refuse() {
-    let text = serde_json::to_string(&source()).unwrap();
-    let duplicate = text.replacen('{', "{\"format\":\"zkc.contract-declarations/0\",", 1);
+    let declarations = serde_json::to_string(&source()).unwrap();
+    let installed = serde_json::to_string(&installation()).unwrap();
+    let duplicate = declarations.replacen('{', "{\"format\":\"zkc.contract-declarations/0\",", 1);
     assert!(
-        projection::generate(duplicate.as_bytes())
+        projection::generate(duplicate.as_bytes(), installed.as_bytes())
             .unwrap_err()
             .contains("duplicate key")
+    );
+    let duplicate = installed.replacen('{', "{\"format\":\"zkc.native-installation/0\",", 1);
+    let error = projection::generate(declarations.as_bytes(), duplicate.as_bytes()).unwrap_err();
+    assert!(
+        error.contains("native installation: duplicate key"),
+        "{error}"
     );
     for value in [
         json!(-1),
@@ -532,6 +567,141 @@ fn cross_references_and_permissions_refuse() {
         mutate(&mut changed);
         assert!(check(&changed).is_err(), "{name}");
     }
+}
+
+#[test]
+fn source_vocabulary_columns_are_exact() {
+    let original = source();
+    let row = |name: &str| -> usize {
+        original["types"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|t| t["name"] == name)
+            .unwrap()
+    };
+    for (name, field, value, message) in [
+        ("field", "sourceData", Value::Null, "expected Boolean"),
+        ("field", "sourceData", json!("true"), "expected Boolean"),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 3, "element": "parameter"}),
+            "collection rank",
+        ),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 0, "element": "parameter"}),
+            "collection rank",
+        ),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 1, "element": "row"}),
+            "unknown declaration alternative row",
+        ),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 1}),
+            "missing field element",
+        ),
+        (
+            "vector",
+            "collection",
+            json!("parameter"),
+            "expected declaration object",
+        ),
+        (
+            "prover_key",
+            "setup",
+            json!("both"),
+            "unknown declaration alternative both",
+        ),
+        (
+            "prover_key",
+            "setup",
+            json!(false),
+            "expected declaration string",
+        ),
+    ] {
+        let mut changed = original.clone();
+        changed["types"][row(name)][field] = value;
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(message), "{name}.{field}: {error}");
+    }
+    for field in ["sourceData", "collection", "setup"] {
+        let mut changed = original.clone();
+        changed["types"][0].as_object_mut().unwrap().remove(field);
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(&format!("missing field {field}")), "{error}");
+    }
+}
+
+#[test]
+fn succession_transfers_exactly_one_resource_identity() {
+    let mut base = source();
+    let mut example = operation(&mut base, "resource_unit.pass").clone();
+    example["name"] = json!("example.succession");
+    base["operations"].as_array_mut().unwrap().push(example);
+    assert!(check(&base).is_ok());
+    type Mutation = (&'static str, fn(&mut Value));
+    let cases: &[Mutation] = &[
+        ("unscoped declaration reference", |op| {
+            op["facets"][0]["stateInput"] = json!(1);
+        }),
+        ("unscoped declaration reference", |op| {
+            op["facets"][0]["stateOutput"] = json!(1);
+        }),
+        ("facet port constructor mismatch", |op| {
+            op["signature"]["inputs"][0] = json!({"constructor": "bool", "arguments": []});
+        }),
+        ("succession resource type mismatch", |op| {
+            op["scope"].as_array_mut().unwrap().push(json!(
+                {"kind": "root", "name": "T", "parameter": {"kind": "Domain", "sort": "Slot"}}
+            ));
+            op["signature"]["outputs"][0]["arguments"] = json!([1]);
+        }),
+        ("succession admits no other resource port", |op| {
+            let extra = op["signature"]["inputs"][0].clone();
+            op["signature"]["inputs"]
+                .as_array_mut()
+                .unwrap()
+                .push(extra);
+        }),
+        ("succession admits no other resource port", |op| {
+            let extra = op["signature"]["outputs"][0].clone();
+            op["signature"]["outputs"]
+                .as_array_mut()
+                .unwrap()
+                .insert(0, extra);
+        }),
+    ];
+    for (message, mutate) in cases {
+        let mut changed = base.clone();
+        mutate(operation(&mut changed, "example.succession"));
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(message), "{message}: {error}");
+    }
+    // A Slot reached through an associated member is not the scope's root.
+    let mut projected = base.clone();
+    projected["members"].as_array_mut().unwrap().push(json!({
+        "name": "Unit",
+        "owner": {"kind": "Domain", "sort": "Field"},
+        "result": {"kind": "Domain", "sort": "Slot"}
+    }));
+    let op = operation(&mut projected, "example.succession");
+    op["scope"] = json!([
+        {"kind": "root", "name": "F", "parameter": {"kind": "Domain", "sort": "Field"}},
+        {"kind": "project", "member": "Unit", "parent": 0}
+    ]);
+    op["signature"]["inputs"][0]["arguments"] = json!([1]);
+    op["signature"]["outputs"][0]["arguments"] = json!([1]);
+    let error = check(&projected).unwrap_err();
+    assert!(error.contains("succession requires a Slot root"), "{error}");
+    operation(&mut projected, "example.succession")["facets"] = json!([]);
+    assert!(check(&projected).is_ok());
 }
 
 #[test]
@@ -655,4 +825,933 @@ fn frontend_association_mutations_refuse() {
     let mut renamed = original.clone();
     renamed["frontendAssociations"][0]["name"] = json!("open_payload");
     assert!(check(&renamed).is_ok());
+}
+
+type Mutation = (&'static str, fn(&mut Value));
+
+fn rows<'a>(value: &'a mut Value, table: &str) -> &'a mut Vec<Value> {
+    value[table].as_array_mut().unwrap()
+}
+fn row<'a>(value: &'a mut Value, table: &str, key: &str, name: &str) -> &'a mut Value {
+    rows(value, table)
+        .iter_mut()
+        .find(|row| row[key] == name)
+        .unwrap_or_else(|| panic!("{table}: {name}"))
+}
+fn domain<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
+    row(value, "domains", "identity", name)
+}
+fn codec<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
+    row(value, "codecs", "identity", name)
+}
+fn representation<'a>(value: &'a mut Value, name: &str, kind: &str, on: &str) -> &'a mut Value {
+    rows(value, "representations")
+        .iter_mut()
+        .find(|row| row["identity"] == name && row["kind"] == kind && row["domain"] == on)
+        .unwrap_or_else(|| panic!("representation {name}"))
+}
+fn without(list: &mut Value, item: &str) {
+    list.as_array_mut().unwrap().retain(|value| *value != item);
+}
+fn refuse(original: &Value, cases: &[Mutation], check: fn(&Value) -> Result<String, String>) {
+    assert!(check(original).is_ok());
+    for (message, mutate) in cases {
+        let mut changed = original.clone();
+        mutate(&mut changed);
+        let error = check(&changed).expect_err(message);
+        assert!(error.contains(message), "{message}: {error}");
+    }
+}
+
+#[test]
+fn staged_catalog_documents_validate_together() {
+    let generated = check(&source()).unwrap();
+    // The native installation document is validated, not projected.
+    let mut changed = installation();
+    rows(&mut changed, "representations").retain(|row| row["identity"] != "arkworks.mle-msb/0");
+    assert_eq!(check_installation(&changed).unwrap(), generated);
+    for table in [
+        "domains",
+        "logicalTypes",
+        "frameTags",
+        "codecs",
+        "aggregateFrames",
+        "randomServices",
+        "limits",
+        "finiteDefinitions",
+        "domainConstructors",
+    ] {
+        assert!(!source()[table].as_array().unwrap().is_empty(), "{table}");
+    }
+}
+
+#[test]
+fn unknown_and_missing_root_keys_refuse_in_each_document() {
+    let mut declarations = source();
+    declarations["unexpected"] = json!([]);
+    let error = check(&declarations).unwrap_err();
+    assert!(error.contains("unknown field unexpected"), "{error}");
+    let mut installed = installation();
+    installed["unexpected"] = json!([]);
+    let error = check_installation(&installed).unwrap_err();
+    assert!(
+        error.contains("native installation: unknown field unexpected"),
+        "{error}"
+    );
+    for key in [
+        "domains",
+        "logicalTypes",
+        "frameTags",
+        "codecs",
+        "aggregateFrames",
+        "randomServices",
+        "limits",
+        "finiteDefinitions",
+        "domainConstructors",
+    ] {
+        let mut changed = source();
+        changed.as_object_mut().unwrap().remove(key);
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(&format!("missing field {key}")), "{error}");
+    }
+    for key in [
+        "format",
+        "representations",
+        "appliedRepresentations",
+        "providers",
+        "providerUnits",
+        "fieldForms",
+        "physicalArguments",
+    ] {
+        let mut changed = installation();
+        changed.as_object_mut().unwrap().remove(key);
+        let error = check_installation(&changed).unwrap_err();
+        assert!(error.contains(&format!("missing field {key}")), "{error}");
+    }
+    let mut changed = installation();
+    changed["format"] = json!("zkc.native-installation/1");
+    assert!(
+        check_installation(&changed)
+            .unwrap_err()
+            .contains("unknown declaration alternative zkc.native-installation/1")
+    );
+}
+
+#[test]
+fn nominal_domain_mutations_refuse_for_the_stated_rule() {
+    let cases: &[Mutation] = &[
+        ("invalid identity", |v| {
+            domain(v, "bn254.gt")["identity"] = json!("9-gt");
+        }),
+        ("identity is not unique across domains and codecs", |v| {
+            domain(v, "bn254.gt")["identity"] = json!("bn254.g2");
+        }),
+        ("identity is not unique across domains and codecs", |v| {
+            codec(v, "zkcv.bool/0")["identity"] = json!("koala-bear");
+        }),
+        (
+            "domain sort must be a declared sort other than Codec and Slot",
+            |v| {
+                domain(v, "bn254.gt")["sort"] = json!("Slot");
+            },
+        ),
+        ("BaseField is not a declared member of sort Group", |v| {
+            domain(v, "bn254.gt")["members"][0][0] = json!("BaseField");
+        }),
+        ("duplicate member Scalar", |v| {
+            let members = &mut domain(v, "bn254.gt")["members"];
+            let pair = members[0].clone();
+            members.as_array_mut().unwrap().push(pair);
+        }),
+        (
+            "member ChallengeField must name a domain of sort Field",
+            |v| {
+                domain(v, "merlin3.bls12-381.fr64be/0")["members"][0][1] = json!("bls12-381.g1");
+            },
+        ),
+        ("member Scalar must name a domain of sort Field", |v| {
+            domain(v, "bn254.gt")["members"][0][1] = json!("missing");
+        }),
+        ("unknown capability Missing", |v| {
+            rows(domain(v, "koala-bear"), "capabilities").push(json!("Missing"));
+        }),
+        ("ScalarAction is not a unary predicate over Field", |v| {
+            rows(domain(v, "koala-bear"), "capabilities").push(json!("ScalarAction"));
+        }),
+        ("duplicate capability Field", |v| {
+            rows(domain(v, "koala-bear"), "capabilities").push(json!("Field"));
+        }),
+        ("capabilities are not closed under", |v| {
+            without(&mut domain(v, "koala-bear")["capabilities"], "Field");
+        }),
+        ("a PairingField row names a PairingG2 group", |v| {
+            rows(domain(v, "bn254.fr"), "members").retain(|pair| pair[0] != "PairingG2");
+        }),
+        ("pairing groups must be distinct", |v| {
+            domain(v, "bn254.fr")["members"][1][1] = json!("bn254.g1");
+        }),
+        (
+            "bn254.g1 must hold ScalarAction with bn254.fr as Scalar",
+            |v| {
+                without(&mut domain(v, "bn254.g1")["capabilities"], "ScalarAction");
+            },
+        ),
+        (
+            "PointField and EvaluationField occur only on multilinearKzg commitments",
+            |v| {
+                rows(domain(v, "rows.merkle-keccak256.koala-bear/0"), "members")
+                    .push(json!(["PointField", "koala-bear"]));
+            },
+        ),
+        ("noncanonical decimal", |v| {
+            domain(v, "koala-bear")["field"]["characteristic"] = json!("02130706433");
+        }),
+        ("noncanonical decimal", |v| {
+            domain(v, "koala-bear")["field"]["characteristic"] = json!("1".repeat(1025));
+        }),
+        ("characteristic must be at least 2", |v| {
+            domain(v, "koala-bear")["field"]["characteristic"] = json!("1");
+        }),
+        (
+            "CharacteristicNotTwo must hold exactly when the characteristic is not 2",
+            |v| {
+                without(
+                    &mut domain(v, "baby-bear")["capabilities"],
+                    "CharacteristicNotTwo",
+                );
+            },
+        ),
+        ("exactly the prime rows hold PrimeField", |v| {
+            without(&mut domain(v, "goldilocks")["capabilities"], "PrimeField");
+        }),
+        ("exactly the rows over BaseField hold ExtensionField", |v| {
+            without(
+                &mut domain(v, "koala-bear.ext4-binomial3")["capabilities"],
+                "ExtensionField",
+            );
+        }),
+        (
+            "exactly the rows over BaseField have a BaseField member",
+            |v| {
+                domain(v, "koala-bear.ext4-binomial3")["members"] = json!([]);
+            },
+        ),
+        ("BaseField must have the same characteristic", |v| {
+            domain(v, "koala-bear.ext4-binomial3")["members"][0][1] = json!("baby-bear");
+        }),
+        ("reduction is a nonempty list", |v| {
+            domain(v, "goldilocks.ext2-binomial7")["field"]["structure"]["reduction"] = json!([]);
+        }),
+        ("extension degree must be at least 2", |v| {
+            domain(v, "goldilocks.ext2-binomial7")["field"]["structure"]["degree"] = json!(1);
+        }),
+        (
+            "reduction exponents must strictly decrease below the degree",
+            |v| {
+                domain(v, "gf2-64.pentanomial-4-3-1")["field"]["structure"]["reduction"][1][0] =
+                    json!(4);
+            },
+        ),
+        (
+            "reduction exponents must strictly decrease below the degree",
+            |v| {
+                domain(v, "goldilocks.ext2-binomial7")["field"]["structure"]["reduction"][0][0] =
+                    json!(2);
+            },
+        ),
+        (
+            "reduction coefficients must be nonzero and below the characteristic",
+            |v| {
+                domain(v, "koala-bear.ext4-binomial3")["field"]["structure"]["reduction"][0][1] =
+                    json!("0");
+            },
+        ),
+        (
+            "reduction coefficients must be nonzero and below the characteristic",
+            |v| {
+                domain(v, "koala-bear.ext4-binomial3")["field"]["structure"]["reduction"][0][1] =
+                    json!("2130706433");
+            },
+        ),
+        ("twoAdic is only on prime rows", |v| {
+            let mut two_adic = domain(v, "koala-bear")["field"]["twoAdic"].clone();
+            two_adic["convention"] = json!("koala-bear.ext4.two-adic/0");
+            domain(v, "koala-bear.ext4-binomial3")["field"]["twoAdic"] = two_adic;
+        }),
+        ("maximalRoot must be below the characteristic", |v| {
+            domain(v, "koala-bear")["field"]["twoAdic"]["maximalRoot"] = json!("2130706433");
+        }),
+        ("twoAdicity must be between 1 and 64", |v| {
+            domain(v, "koala-bear")["field"]["twoAdic"]["twoAdicity"] = json!(0);
+        }),
+        ("twoAdicity must be between 1 and 64", |v| {
+            domain(v, "koala-bear")["field"]["twoAdic"]["twoAdicity"] = json!(65);
+        }),
+        ("unknown declaration alternative bitReversed", |v| {
+            domain(v, "koala-bear")["field"]["twoAdic"]["ordering"] = json!("bitReversed");
+        }),
+        ("duplicate two-adic convention", |v| {
+            domain(v, "baby-bear")["field"]["twoAdic"]["convention"] =
+                json!("koala-bear.two-adic.1791270792/0");
+        }),
+        (
+            "TwoAdicField must hold exactly when the row or its prime base has a convention",
+            |v| {
+                without(
+                    &mut domain(v, "koala-bear.ext8-binomial3")["capabilities"],
+                    "TwoAdicField",
+                );
+            },
+        ),
+        (
+            "TwoAdicField must hold exactly when the row or its prime base has a convention",
+            |v| {
+                rows(domain(v, "bls12-381.fr"), "capabilities").push(json!("TwoAdicField"));
+            },
+        ),
+        ("cyclic BaseField chain", |v| {
+            let base = domain(v, "gf2-64.pentanomial-4-3-1");
+            base["field"]["structure"]["over"] = json!("BaseField");
+            base["members"] = json!([["BaseField", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"]]);
+            rows(base, "capabilities").push(json!("ExtensionField"));
+        }),
+    ];
+    refuse(&source(), cases, check);
+}
+
+#[test]
+fn transcript_and_commitment_mutations_refuse_for_the_stated_rule() {
+    let cases: &[Mutation] = &[
+        ("unknown declaration alternative merlin4", |v| {
+            domain(v, "merlin3.bls12-381.fr64be/0")["transcript"]["family"] = json!("merlin4");
+        }),
+        (
+            "hash is keccak256 exactly for hash-chain transcripts, otherwise null",
+            |v| {
+                domain(v, "hash-chain.keccak256.bls12-381.fr64be/0")["transcript"]["hash"] =
+                    Value::Null;
+            },
+        ),
+        (
+            "hash is keccak256 exactly for hash-chain transcripts, otherwise null",
+            |v| {
+                domain(v, "merlin3.bls12-381.fr64be/0")["transcript"]["hash"] = json!("keccak256");
+            },
+        ),
+        ("fr64be requires a prime challenge field", |v| {
+            domain(v, "merlin3.koala-bear.ext8-binomial3.rejection31le/0")["transcript"]["decoder"] =
+                json!("fr64be");
+        }),
+        (
+            "rejection31le requires a challenge characteristic below 2^31",
+            |v| {
+                domain(v, "merlin3.goldilocks.ext2-binomial7.rejection64le/0")["transcript"]["decoder"] =
+                    json!("rejection31le");
+            },
+        ),
+        (
+            "rejection64le requires a challenge characteristic below 2^64",
+            |v| {
+                domain(v, "merlin3.bls12-381.fr64be/0")["transcript"]["decoder"] =
+                    json!("rejection64le");
+            },
+        ),
+        (
+            "a transcript row holds Transcript and FieldTranscript",
+            |v| {
+                without(
+                    &mut domain(v, "merlin3.bls12-381.fr64be/0")["capabilities"],
+                    "FieldTranscript",
+                );
+            },
+        ),
+        ("a transcript row has a ChallengeField member", |v| {
+            domain(v, "merlin3.bls12-381.fr64be/0")["members"] = json!([]);
+        }),
+        ("unknown declaration alternative sha256Rows", |v| {
+            domain(v, "rows.merkle-keccak256.koala-bear/0")["commitment"]["scheme"] =
+                json!("sha256Rows");
+        }),
+        ("digestBytes must be 32", |v| {
+            domain(v, "rows.merkle-keccak256.koala-bear/0")["commitment"]["digestBytes"] =
+                json!(16);
+        }),
+        ("unknown permutation koala-bear.poseidon2-24", |v| {
+            domain(v, "rows.merkle-poseidon2-16.koala-bear/0")["commitment"]["permutation"] =
+                json!("koala-bear.poseidon2-24");
+        }),
+        (
+            "the permutation field must be the ValueField member or its prime base",
+            |v| {
+                domain(v, "rows.merkle-poseidon2-16.koala-bear/0")["commitment"]["permutation"] =
+                    json!("goldilocks.poseidon2-8");
+            },
+        ),
+        (
+            "digestWordBytes must equal the element width of the koala-bear field codec frame",
+            |v| {
+                domain(v, "rows.merkle-poseidon2-16.koala-bear/0")["commitment"]["digestWordBytes"] =
+                    json!(8);
+            },
+        ),
+        ("a commitment row has a ValueField member", |v| {
+            domain(v, "rows.merkle-keccak256.koala-bear/0")["members"] = json!([]);
+        }),
+    ];
+    refuse(&source(), cases, check);
+}
+
+#[test]
+fn instance_frame_and_codec_mutations_refuse_for_the_stated_rule() {
+    let cases: &[Mutation] = &[
+        ("duplicate logical type instance", |v| {
+            rows(v, "logicalTypes").push(json!({"kind": "bool", "domain": ""}));
+        }),
+        ("a nullary instance has the empty domain", |v| {
+            rows(v, "logicalTypes").push(json!({"kind": "bool", "domain": "koala-bear"}));
+        }),
+        ("a unary instance names a domain of sort Field", |v| {
+            rows(v, "logicalTypes").push(json!({"kind": "field", "domain": "bn254.g1"}));
+        }),
+        ("variant and resource_unit have their own formation", |v| {
+            rows(v, "logicalTypes").push(json!({"kind": "resource_unit", "domain": ""}));
+        }),
+        (
+            "only nullary and unary domain constructors have logical type instances",
+            |v| {
+                rows(v, "logicalTypes").push(json!({"kind": "sequence", "domain": ""}));
+            },
+        ),
+        ("undeclared constructor variant", |v| {
+            rows(v, "logicalTypes").push(json!({"kind": "variant", "domain": ""}));
+        }),
+        (
+            "setup keys are admitted only over multilinearKzg commitments",
+            |v| {
+                rows(v, "logicalTypes").push(
+                    json!({"kind": "prover_key", "domain": "rows.merkle-keccak256.koala-bear/0"}),
+                );
+            },
+        ),
+        ("frame tags are between 1 and 255", |v| {
+            rows(v, "frameTags").push(json!({"tag": 256, "layout": "Scalar", "shared": null}));
+        }),
+        ("duplicate frame tag 1", |v| {
+            rows(v, "frameTags").push(json!({"tag": 1, "layout": "Scalar", "shared": null}));
+        }),
+        ("unknown declaration alternative Matrix", |v| {
+            v["frameTags"][0]["layout"] = json!("Matrix");
+        }),
+        ("unshared frame tag 254 needs exactly one user", |v| {
+            rows(v, "frameTags").push(json!({"tag": 254, "layout": "Scalar", "shared": null}));
+        }),
+        ("unshared frame tag 19 needs exactly one user", |v| {
+            codec(v, "zkcv.field.baby-bear/0")["frame"]["tag"] = json!(19);
+        }),
+        (
+            "frame tag 71 must be shared by exactly the proof codecs over poseidon2Rows commitments, at least two",
+            |v| {
+                // The commitment codecs keep tag 71 while its listing names
+                // another kind, so its actual users are unlisted.
+                for tag in rows(v, "frameTags") {
+                    if tag["tag"] == 71 {
+                        tag["shared"]["kind"] = json!("proof");
+                    }
+                }
+            },
+        ),
+        (
+            "frame tag 72 must be shared by exactly the proof codecs over poseidon2Rows commitments, at least two",
+            |v| {
+                rows(v, "frameTags")
+                    .push(json!({"tag": 200, "layout": "DigestProof", "shared": null}));
+                codec(v, "zkcv.proof.rows-merkle-poseidon2-8.goldilocks/0")["frame"]["tag"] =
+                    json!(200);
+            },
+        ),
+        ("shared frame tags name a declared constructor", |v| {
+            for tag in rows(v, "frameTags") {
+                if tag["tag"] == 71 {
+                    tag["shared"]["kind"] = json!("missing");
+                }
+            }
+        }),
+        ("(field, bn254.g1) is not a logical type instance", |v| {
+            codec(v, "zkcv.field.koala-bear/0")["domain"] = json!("bn254.g1");
+        }),
+        ("at most one codec per logical type instance", |v| {
+            let mut copy = codec(v, "zkcv.polynomial.koala-bear/0").clone();
+            copy["identity"] = json!("zkcv.polynomial.koala-bear/1");
+            rows(v, "codecs").push(copy);
+        }),
+        (
+            "Encodes.field must be declared over Codec and the payload sort",
+            |v| {
+                row(v, "capabilities", "name", "Encodes.field")["parameters"] =
+                    json!([{"kind": "Domain", "sort": "Codec"}]);
+            },
+        ),
+        ("Encodes.round is not declared", |v| {
+            rows(v, "capabilities").retain(|c| c["name"] != "Encodes.round");
+        }),
+        ("a message type's codec has a frame", |v| {
+            codec(v, "zkcv.field.koala-bear/0")["frame"] = Value::Null;
+        }),
+        (
+            "only message types and the input-only table frame have frames",
+            |v| {
+                rows(v, "frameTags").push(json!({"tag": 254, "layout": "Vector", "shared": null}));
+                codec(v, "zkcv.polynomial.koala-bear/0")["frame"] =
+                    json!({"tag": 254, "elementBytes": 4});
+            },
+        ),
+        ("unknown frame tag 254", |v| {
+            codec(v, "zkcv.field.koala-bear/0")["frame"]["tag"] = json!(254);
+        }),
+        ("unknown field elementBytes", |v| {
+            codec(v, "zkcv.commitment.rows-merkle-keccak256.koala-bear/0")["frame"]["elementBytes"] =
+                json!(32);
+        }),
+        ("missing field elementBytes", |v| {
+            codec(v, "zkcv.field.koala-bear/0")["frame"] = json!({"tag": 19});
+        }),
+        ("Sequence is not a codec frame layout", |v| {
+            codec(v, "zkcv.field.koala-bear/0")["frame"] = json!({"tag": 69});
+        }),
+        ("vector codecs do not use the Scalar layout", |v| {
+            codec(v, "zkcv.vector.koala-bear/0")["frame"]["tag"] = json!(19);
+        }),
+        ("elementBytes must follow the field structure", |v| {
+            codec(v, "zkcv.field.koala-bear/0")["frame"]["elementBytes"] = json!(8);
+        }),
+        ("elementBytes must follow the field structure", |v| {
+            codec(v, "zkcv.matrix.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0")["frame"]["elementBytes"] =
+                json!(8);
+        }),
+        ("gf2-64.pentanomial-4-3-1 has no element width rule", |v| {
+            domain(v, "gf2-64.pentanomial-4-3-1")["field"]["structure"]["degree"] = json!(60);
+        }),
+        (
+            "group and groups codecs of bls12-381.g1 must have equal elementBytes",
+            |v| {
+                codec(v, "zkcv.groups.bls12-381.g1/0")["frame"]["elementBytes"] = json!(96);
+            },
+        ),
+        (
+            "sequence and variant frames have the empty domain and field_array frames a Field domain",
+            |v| {
+                row(v, "aggregateFrames", "constructor", "sequence")["domain"] =
+                    json!("koala-bear");
+            },
+        ),
+        (
+            "sequence and variant frames have the empty domain and field_array frames a Field domain",
+            |v| {
+                row(v, "aggregateFrames", "constructor", "field_array")["domain"] =
+                    json!("bls12-381.g1");
+            },
+        ),
+        // The field's scalar codec frame encodes the array's elements.
+        (
+            "field_array frames need a field codec of bls12-381.fr with a Scalar frame",
+            |v| {
+                rows(v, "codecs").retain(|c| c["identity"] != "zkcv.field.bls12-381.fr/0");
+            },
+        ),
+        ("sequence frames do not use the Variant layout", |v| {
+            row(v, "aggregateFrames", "constructor", "sequence")["tag"] = json!(65);
+        }),
+        ("duplicate aggregate frame (sequence, )", |v| {
+            rows(v, "frameTags").push(json!({"tag": 254, "layout": "Sequence", "shared": null}));
+            rows(v, "aggregateFrames")
+                .push(json!({"constructor": "sequence", "domain": "", "tag": 254}));
+        }),
+        ("unknown declaration alternative map", |v| {
+            row(v, "aggregateFrames", "constructor", "sequence")["constructor"] = json!("map");
+        }),
+    ];
+    refuse(&source(), cases, check);
+}
+
+#[test]
+fn service_limit_and_vocabulary_mutations_refuse_for_the_stated_rule() {
+    let cases: &[Mutation] = &[
+        ("random services and rng types correspond one to one", |v| {
+            rows(v, "randomServices").retain(|s| s["field"] != "goldilocks.ext2-binomial7");
+        }),
+        ("random services and rng types correspond one to one", |v| {
+            rows(v, "randomServices")
+                .push(json!({"contract": "random.koala-bear/0", "field": "koala-bear"}));
+        }),
+        ("duplicate random service random.bn254.fr/0", |v| {
+            v["randomServices"][0]["contract"] = json!("random.bn254.fr/0");
+        }),
+        ("a random service draws from a declared Field domain", |v| {
+            v["randomServices"][0]["field"] = json!("bls12-381.g1");
+        }),
+        ("duplicate limit protocol.roles", |v| {
+            let limit = v["limits"][0].clone();
+            rows(v, "limits").push(limit);
+        }),
+        (
+            "limit value must be a JSON integer from 0 to 2^63 - 1",
+            |v| {
+                v["limits"][0]["value"] = json!("1024");
+            },
+        ),
+        (
+            "limit value must be a JSON integer from 0 to 2^63 - 1",
+            |v| {
+                v["limits"][0]["value"] = json!(-1);
+            },
+        ),
+        (
+            "limit value must be a JSON integer from 0 to 2^63 - 1",
+            |v| {
+                v["limits"][0]["value"] = json!(1_u64 << 63);
+            },
+        ),
+        ("unknown declaration alternative seconds", |v| {
+            v["limits"][0]["unit"] = json!("seconds");
+        }),
+        ("unknown declaration alternative runtime", |v| {
+            v["limits"][0]["phase"] = json!("runtime");
+        }),
+        ("limit owner and scope are nonempty", |v| {
+            v["limits"][0]["owner"] = json!("");
+        }),
+        ("invalid identity", |v| {
+            v["limits"][0]["name"] = json!("protocol roles");
+        }),
+        ("math.fold: collection is null exactly for fold", |v| {
+            row(v, "finiteDefinitions", "identity", "math.fold")["collection"] = json!("vector");
+        }),
+        ("collection is null exactly for fold", |v| {
+            row(v, "finiteDefinitions", "identity", "math.collect.vector")["collection"] =
+                Value::Null;
+        }),
+        ("field_array collections are not filtered", |v| {
+            row(
+                v,
+                "finiteDefinitions",
+                "identity",
+                "local.collect.field_array",
+            )["filtered"] = json!(true);
+        }),
+        ("duplicate finite definition math.fold", |v| {
+            row(v, "finiteDefinitions", "identity", "local.fold")["identity"] = json!("math.fold");
+        }),
+        ("unknown declaration alternative global", |v| {
+            row(v, "finiteDefinitions", "identity", "math.fold")["mode"] = json!("global");
+        }),
+        ("unknown declaration alternative matrix", |v| {
+            row(v, "finiteDefinitions", "identity", "math.collect.vector")["collection"] =
+                json!("matrix");
+        }),
+        ("axis is 0 or 1", |v| {
+            row(v, "domainConstructors", "identity", "zip")["axis"] = json!(2);
+        }),
+        ("unknown declaration alternative Columns", |v| {
+            row(v, "domainConstructors", "identity", "zip")["kind"] = json!("Columns");
+        }),
+        ("duplicate domain constructor range", |v| {
+            row(v, "domainConstructors", "identity", "zip")["identity"] = json!("range");
+        }),
+        (
+            "a parameter collection element needs a Field, Group or Type first parameter",
+            |v| {
+                row(v, "types", "name", "bool")["collection"] =
+                    json!({"rank": 1, "element": "parameter"});
+            },
+        ),
+        // The installation document's references are checked against the
+        // declarations: an instance it names must remain declared.
+        ("undeclared logical type instance", |v| {
+            rows(v, "logicalTypes")
+                .retain(|t| !(t["kind"] == "nonce" && t["domain"] == "bls12-381.fr"));
+        }),
+    ];
+    refuse(&source(), cases, check);
+}
+
+#[test]
+fn native_installation_mutations_refuse_for_the_stated_rule() {
+    let cases: &[Mutation] = &[
+        ("undeclared logical type instance", |v| {
+            representation(v, "arkworks.point/0", "point", "bls12-381.fr")["domain"] =
+                json!("bn254.fr");
+        }),
+        ("duplicate representation", |v| {
+            let copy = representation(v, "blst/fr", "field", "bls12-381.fr").clone();
+            rows(v, "representations").push(copy);
+        }),
+        ("second default representation", |v| {
+            representation(v, "arkworks.mle-msb/0", "table", "bls12-381.fr")["default"] =
+                json!(true);
+        }),
+        ("(point, bls12-381.fr) has no default representation", |v| {
+            representation(v, "arkworks.point/0", "point", "bls12-381.fr")["default"] =
+                json!(false);
+        }),
+        ("layout lsb is selected twice for one instance", |v| {
+            representation(v, "arkworks.mle-msb/0", "table", "bls12-381.fr")["layout"] =
+                json!("lsb");
+        }),
+        ("invalid identity", |v| {
+            representation(v, "arkworks.mle-msb/0", "table", "bls12-381.fr")["layout"] =
+                json!("most significant");
+        }),
+        ("invalid identity", |v| {
+            representation(v, "blst/fr", "field", "bls12-381.fr")["identity"] = json!("");
+        }),
+        (
+            "the default of an instance with a framed codec is canonical",
+            |v| {
+                representation(v, "plonky3.koala-bear/0", "field", "koala-bear")["frame"] =
+                    json!("local");
+            },
+        ),
+        // The table input codec's frame counts as a codec frame.
+        (
+            "the default of an instance with a framed codec is canonical",
+            |v| {
+                representation(v, "arkworks.mle-lsb/0", "table", "bls12-381.fr")["frame"] =
+                    json!("local");
+            },
+        ),
+        ("a canonical representation requires a framed codec", |v| {
+            representation(v, "arkworks.polynomial/0", "polynomial", "bls12-381.fr")["frame"] =
+                json!("canonical");
+        }),
+        ("a canonical representation requires a framed codec", |v| {
+            representation(v, "host.resource/0", "rng", "bls12-381.fr")["frame"] =
+                json!("canonical");
+        }),
+        (
+            "the default of a unary instance has the unit of its domain's default provider",
+            |v| {
+                representation(v, "arkworks.fr/0", "field", "bls12-381.fr")["unit"] = json!("blst");
+            },
+        ),
+        (
+            "the default of a nullary instance has unit independent",
+            |v| {
+                representation(v, "native.bool/0", "bool", "")["unit"] = json!("arkworks");
+            },
+        ),
+        ("unknown declaration alternative remote", |v| {
+            representation(v, "blst/fr", "field", "bls12-381.fr")["frame"] = json!("remote");
+        }),
+        ("unknown declaration alternative native", |v| {
+            representation(v, "blst/fr", "field", "bls12-381.fr")["unit"] = json!("native");
+        }),
+        ("undeclared constructor", |v| {
+            v["appliedRepresentations"][0]["constructor"] = json!("missing");
+        }),
+        (
+            "applied representations need a constructor with parameters",
+            |v| {
+                v["appliedRepresentations"][0]["constructor"] = json!("bool");
+                v["appliedRepresentations"][0]["arguments"] = json!([]);
+                v["appliedRepresentations"][0]["child"] = Value::Null;
+            },
+        ),
+        ("one pattern per parameter", |v| {
+            rows(&mut v["appliedRepresentations"][0], "arguments").pop();
+        }),
+        ("pattern does not match its parameter kind", |v| {
+            v["appliedRepresentations"][0]["arguments"][1] =
+                json!(["domain", "Field", "bls12-381.fr"]);
+        }),
+        ("domain pattern must name a declared Field domain", |v| {
+            v["appliedRepresentations"][0]["arguments"][0] = json!(["domain", "Field", "bn254.g1"]);
+        }),
+        ("natural range minimum exceeds its maximum", |v| {
+            v["appliedRepresentations"][0]["arguments"][1] = json!(["natRange", "5", "4"]);
+        }),
+        ("natural range bound above 1,048,576", |v| {
+            v["appliedRepresentations"][0]["arguments"][1] = json!(["natRange", "0", "1048577"]);
+        }),
+        ("noncanonical natural", |v| {
+            v["appliedRepresentations"][0]["arguments"][1] = json!(["natRange", "00", "1"]);
+        }),
+        (
+            "(missing, ) is not an admitted logical type instance",
+            |v| {
+                v["appliedRepresentations"][2]["arguments"][0] =
+                    json!(["type", ["apply", "missing", []]]);
+            },
+        ),
+        (
+            "(rng, koala-bear) is not an admitted logical type instance",
+            |v| {
+                v["appliedRepresentations"][2]["arguments"][0] = json!([
+                    "type",
+                    ["apply", "rng", [["domain", "Field", "koala-bear"]]]
+                ]);
+            },
+        ),
+        ("field_array pattern is not a logical type instance", |v| {
+            v["appliedRepresentations"][2]["arguments"][0] = json!([
+                "type",
+                [
+                    "apply",
+                    "field_array",
+                    [["domain", "Field", "bls12-381.fr"], ["nat", "4"]]
+                ]
+            ]);
+        }),
+        (
+            "field pattern argument must name a declared domain of its sort",
+            |v| {
+                v["appliedRepresentations"][2]["arguments"][0] = json!([
+                    "type",
+                    ["apply", "field", [["domain", "Field", "bn254.g1"]]]
+                ]);
+            },
+        ),
+        ("field pattern argument is not a domain", |v| {
+            v["appliedRepresentations"][2]["arguments"][0] =
+                json!(["type", ["apply", "field", [["nat", "1"]]]]);
+        }),
+        (
+            "Type patterns are constructor applications, never variant, oracle or service trees",
+            |v| {
+                v["appliedRepresentations"][2]["arguments"][0] =
+                    json!(["type", ["variant", ["atom", "Choice"], [["some", []]]]]);
+            },
+        ),
+        (
+            "Type patterns are constructor applications, never variant, oracle or service trees",
+            |v| {
+                v["appliedRepresentations"][2]["arguments"][0] =
+                    json!(["type", ["oracle", "vector", []]]);
+            },
+        ),
+        ("Type patterns are constructor applications", |v| {
+            v["appliedRepresentations"][2]["arguments"][0] =
+                json!(["type", ["service", "random.bls12-381.fr/0"]]);
+        }),
+        ("child names no representation row", |v| {
+            v["appliedRepresentations"][0]["child"]["representation"] = json!("missing");
+        }),
+        ("child is not the logical child of the applied type", |v| {
+            v["appliedRepresentations"][3]["child"] =
+                json!({"kind": "field", "domain": "bls12-381.fr", "representation": "blst/fr"});
+        }),
+        ("child is not the logical child of the applied type", |v| {
+            v["appliedRepresentations"][4]["child"] = json!(
+                {"kind": "field", "domain": "koala-bear", "representation": "plonky3.koala-bear/0"}
+            );
+        }),
+        ("overlapping patterns share an identity or a default", |v| {
+            v["appliedRepresentations"][1]["default"] = json!(true);
+        }),
+        ("overlapping patterns share an identity or a default", |v| {
+            v["appliedRepresentations"][1]["identity"] = json!("arkworks.field-array/0");
+        }),
+        (
+            "a canonical applied representation requires an aggregate frame for its constructor",
+            |v| {
+                v["appliedRepresentations"][3]["frame"] = json!("canonical");
+            },
+        ),
+        (
+            "a canonical applied representation requires an aggregate frame for its constructor",
+            |v| {
+                v["appliedRepresentations"][6]["frame"] = json!("canonical");
+            },
+        ),
+        // A field_array frame belongs to its exact field: koala-bear has none.
+        (
+            "a canonical applied representation requires an aggregate frame for its constructor",
+            |v| {
+                let applied = &mut v["appliedRepresentations"][0];
+                applied["arguments"][0] = json!(["domain", "Field", "koala-bear"]);
+                applied["child"] = json!(
+                    {"kind": "field", "domain": "koala-bear", "representation": "plonky3.koala-bear/0"}
+                );
+            },
+        ),
+        ("goldilocks has no provider row", |v| {
+            rows(v, "providers").retain(|p| p["domain"] != "goldilocks");
+        }),
+        ("koala-bear has more than one provider row", |v| {
+            let copy = row(v, "providers", "domain", "koala-bear").clone();
+            rows(v, "providers").push(copy);
+        }),
+        ("bn254.fr: provider arkworks appears twice", |v| {
+            row(v, "providers", "domain", "bn254.fr")["alternatives"] = json!(["arkworks"]);
+        }),
+        ("unknown declaration alternative risc0", |v| {
+            row(v, "providers", "domain", "koala-bear")["default"] = json!("risc0");
+        }),
+        ("missing is not a declared domain", |v| {
+            row(v, "providers", "domain", "koala-bear")["domain"] = json!("missing");
+        }),
+        ("spongefish has no installation unit row", |v| {
+            rows(v, "providerUnits").retain(|u| u["provider"] != "spongefish");
+        }),
+        ("blst has no installation unit row", |v| {
+            rows(v, "providerUnits").retain(|u| u["provider"] != "blst");
+        }),
+        ("plonky3 has more than one unit row", |v| {
+            let copy = row(v, "providerUnits", "provider", "plonky3").clone();
+            rows(v, "providerUnits").push(copy);
+        }),
+        ("spongefish is installed by the arkworks unit", |v| {
+            row(v, "providerUnits", "provider", "spongefish")["unit"] = json!("plonky3");
+        }),
+        ("independent is the unit of provider-free storage", |v| {
+            row(v, "providerUnits", "provider", "plonky3")["unit"] = json!("independent");
+        }),
+        (
+            "koala-bear: arithmetic names the default representation of its field instance",
+            |v| {
+                row(v, "fieldForms", "field", "koala-bear")["arithmetic"]["representation"] =
+                    json!("plonky3.koala-bear-vector/0");
+            },
+        ),
+        ("unknown declaration alternative montgomery", |v| {
+            row(v, "fieldForms", "field", "koala-bear")["arithmetic"]["form"] = json!("montgomery");
+        }),
+        ("koala-bear: wordBytes * 8 must equal radixBits", |v| {
+            row(v, "fieldForms", "field", "koala-bear")["montgomery"]["radixBits"] = json!(31);
+        }),
+        ("koala-bear: montgomery requires an arithmetic row", |v| {
+            row(v, "fieldForms", "field", "koala-bear")["arithmetic"] = Value::Null;
+        }),
+        (
+            "goldilocks: montgomery requires a characteristic below 2^radixBits",
+            |v| {
+                row(v, "fieldForms", "field", "goldilocks")["montgomery"] =
+                    json!({"wordBytes": 4, "radixBits": 32});
+            },
+        ),
+        (
+            "koala-bear: byteEncoding names the framed field codec of its field",
+            |v| {
+                row(v, "fieldForms", "field", "koala-bear")["byteEncoding"]["codec"] =
+                    json!("zkcv.vector.koala-bear/0");
+            },
+        ),
+        ("unknown declaration alternative bigEndian", |v| {
+            row(v, "fieldForms", "field", "koala-bear")["byteEncoding"]["order"] =
+                json!("bigEndian");
+        }),
+        ("bn254.g1 is not a declared Field domain", |v| {
+            row(v, "fieldForms", "field", "koala-bear")["field"] = json!("bn254.g1");
+        }),
+        ("goldilocks has more than one field form", |v| {
+            let copy = row(v, "fieldForms", "field", "goldilocks").clone();
+            rows(v, "fieldForms").push(copy);
+        }),
+        ("missing.operation is not a declared operation", |v| {
+            v["physicalArguments"][0]["operation"] = json!("missing.operation");
+        }),
+        ("sequence.at is listed twice", |v| {
+            rows(v, "physicalArguments").push(json!({"operation": "sequence.at"}));
+        }),
+    ];
+    refuse(&installation(), cases, check_installation);
 }

@@ -29,8 +29,10 @@ does not install a runtime implementation by adding a declaration.
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
 `mathematicalIntrinsics`, `consumerProfiles`, `frontendAssociations`,
-`frontendHomes` and `serviceMethods`. The format tag is
-`zkc.contract-declarations/0`. Every list follows the contribution dependency
+`frontendHomes`, `serviceMethods`, and the [installed-instance](#installed-instances)
+tables `domains`, `logicalTypes`, `frameTags`, `codecs`, `aggregateFrames`,
+`randomServices`, `limits`, `finiteDefinitions` and `domainConstructors`. The
+format tag is `zkc.contract-declarations/0`. Every list follows the contribution dependency
 order and then its explicit declaration order. No consumer may infer meaning
 from an ordinal instead of the declared identity. Unknown fields, duplicate
 identities or keys, invalid Unicode and unresolved references refuse.
@@ -43,7 +45,8 @@ canonical strings as defined below.
 ```text
 Kind       = {kind, sort}
 Type       = {name, parameters, copy, drop, custody, nativeLocal,
-              mathematical, participants, constructible, message}
+              mathematical, participants, constructible, message,
+              sourceData, collection, setup}
 Capability = {name, parameters}
 Member     = {name, owner, result}
 Rule       = [premise, conclusion]
@@ -70,6 +73,15 @@ availability and authorization remain separate facts. The retired
 `scalar` and `capability` are not logical constructors and have no catalog
 rows. Actual logical fields, randomness, transcripts and resource slots retain
 their own constructor identities.
+
+The source-vocabulary columns describe how the frontend uses a constructor.
+`sourceData` is true when source declarations may name the constructor as
+native data. `collection` is null or `{rank, element}`: `rank` is 1 or 2 and
+`element` is `parameter` (the element is the value type of the first
+parameter: `field` over a Field domain, `group` over a Group domain, or the
+Type argument itself), `index` or `byte`. `setup` is null, `prover` or
+`verifier` and marks the setup-key constructors. These columns grant no
+codec, transport or execution authority.
 
 An operation's scope is an ordered list of exact tagged terms:
 
@@ -113,6 +125,7 @@ interpretation and grants no positive optimization fact.
 | `PublicReplay`, `DeterministicData`, `AcceptanceGuard`, `Conjunction`, `SourceHistory`, `ManagedHistory` | None |
 | `Mathematical` | `identity`: a declared mathematical identity |
 | `History` | `stateInput`, `stateOutput` |
+| `Succession` | `stateInput`, `stateOutput` |
 | `Observation` | `stateInput`, `payloadInput`, `stateOutput` |
 | `Sampling` | `provider` (`Entropy` or `Transcript`), `domain` (`Field`, `FieldVector`, `BoundedIndex` or `IndexBlock`), `stateInput`, `valueOutput`, `stateOutput`, `boundInput` (port or null) |
 | `Diagonal` | `factorsInput`, `valuesInput`, `resultOutput` |
@@ -124,6 +137,18 @@ interpretation and grants no positive optimization fact.
 a nullary operation. Unused legacy default fields are absent. The other rules
 derive values under their mathematical domain contract; they do not license
 removing a reached check or assume nonzero divisors.
+
+`Succession` states a resource identity transfer: output `stateOutput` is the
+successor of the exact resource received at input `stateInput`. The operation
+consumes that input and returns the same resource identity, with the same
+`resource_unit` type and Slot, at that output. Both ports are `resource_unit`
+applications of the same scope term, the operation's scope has that Slot root,
+and the signature has no other `resource_unit` input or output, so custody is
+neither duplicated nor dropped. The facet establishes identity succession
+only: it grants no value equality, purity, reordering or speculation, and no
+operation acquires it from a matching signature shape. Validation refuses
+ports outside the signature, ports of another type, unequal resource types and
+any additional resource input or output.
 
 ### Deterministic data
 
@@ -216,6 +241,259 @@ Catalog presence grants no purity, totality, admissibility or permission to
 remove a reached call. Mathematical totality does not erase execution budgets
 or allocation failures. Installation metadata is a separate projection, checked
 against complete logical and represented signatures.
+
+## Installed instances
+
+The installed-instance tables declare which nominal domains, logical type
+instances, codecs and frames exist. They separate four facts:
+
+1. **Declared meaning:** domains, their associated members and capabilities,
+   field structure, and the named transcript and commitment algorithms.
+2. **Permitted logical use and encoding:** logical type instances, codecs,
+   frame tags and aggregate frames, random services, shared limits and the
+   source vocabulary.
+3. **Available physical choices:** representations, provider preferences,
+   installation units, arithmetic forms and calling conventions, in the
+   separate [native installation](native-installation.md) document.
+4. **Actual compiled support:** the selected target's registered handlers,
+   exact signatures, storage owners and enabled contributions.
+
+The first three are generated facts. The fourth stays an independent check:
+a declared domain, codec or representation without a registered handler is
+refused by that target, and a provider preference is not an installation
+grant. This document never references the native-installation document.
+
+Every table is an explicit list of rows. No identity is formed by
+concatenation, by a family of rows or by a loop, and no row inherits facts
+from a name, prefix or spelling. Row order is declaration order and is part of
+the published bytes: the [structured-source catalogue](structured-source.md)
+emits domains with their members and capabilities, and random services, in
+this order. Identities use the catalog name rule: 1 to 256 characters, a
+letter or `_` first, then letters, digits, `_`, `.`, `-` or `/`.
+
+```text
+Domain         = {identity, sort, members, capabilities}
+                 plus exactly {field} for sort Field, {transcript} for sort
+                 Transcript, {commitment} for sort Commitment
+Field          = {characteristic, structure, twoAdic}
+Structure      = {kind: "prime"}
+               | {kind: "extension", over, degree, reduction}
+TwoAdic        = null | {convention, maximalRoot, twoAdicity, ordering}
+Transcript     = {family, hash, decoder, bindsSuite}
+Commitment     = {scheme: "keccak256Rows", digestBytes}
+               | {scheme: "poseidon2Rows", permutation, digestBytes,
+                  digestWordBytes}
+               | {scheme: "multilinearKzg"}
+LogicalType    = {kind, domain}
+FrameTag       = {tag, layout, shared}
+Codec          = {identity, kind, domain, frame}
+AggregateFrame = {constructor, domain, tag}
+RandomService  = {contract, field}
+Limit          = {name, value, unit, owner, scope, phase}
+FiniteDefinition  = {identity, mode, operation, collection, filtered}
+DomainConstructor = {identity, kind, axis}
+```
+
+### Nominal domains
+
+A domain's identity is unique across `domains` and `codecs`. Its sort is a
+declared sort other than `Codec` and `Slot`. `members` is an ordered list of
+`[member, identity]` pairs: each member is a declared Member whose owner sort
+is the row's sort, at most once per row, naming a domain of the member's
+result sort. `capabilities` is an ordered list of unique declared unary
+predicates over the row's sort, closed under `rules`. A `PairingField` row
+names distinct `PairingG1` and `PairingG2` groups, and optionally a distinct
+`PairingGT` group, each holding `ScalarAction` with this field as `Scalar`.
+`PointField` and `EvaluationField` members occur only on `multilinearKzg`
+commitments.
+
+`characteristic` is the field's characteristic as a canonical decimal at most
+1,024 digits long, at least 2; for a prime field it is also the order. It
+bounds the canonical representatives of natural casts. `CharacteristicNotTwo`
+holds exactly when it is not 2.
+
+`structure` fixes each element's coordinates:
+
+- `prime`: the element is one canonical integer below the characteristic.
+  Exactly the rows holding `PrimeField` have this structure, and they have no
+  `BaseField` member.
+- `extension`: the field is `B[X]/(X^degree - sum(c * X^e))`, where
+  `reduction` is a nonempty list of the `[e, c]` terms in strictly decreasing exponent order,
+  each exponent below `degree` (at least 2), and each coefficient a nonzero
+  canonical decimal below the characteristic, read in the prime subfield of
+  `B`. `over` names `B`: `BaseField` is the row's `BaseField` member, which
+  has the same characteristic; `PrimeSubfield` is `GF(characteristic)`. The
+  ordered basis is `1, X, ..., X^(degree-1)`, and each coordinate is a `B`
+  element in `B`'s own basis, recursively. Rows over `BaseField` are exactly
+  the rows holding `ExtensionField`. A row over `PrimeSubfield` holds neither
+  `PrimeField` nor `ExtensionField` and has no `BaseField` member.
+
+For example, `koala-bear.ext4-binomial3` is over `BaseField` with degree 4 and
+reduction `[[0, "3"]]`; `gf2-64.pentanomial-4-3-1` is over `PrimeSubfield`
+with degree 64 and reduction `[[4, "1"], [3, "1"], [1, "1"], [0, "1"]]`; its
+cubic extension is over `BaseField` with degree 3 and reduction
+`[[1, "1"], [0, "1"]]`, so an element is three GF(2^64) coordinates of 64 bits
+each. Primality, irreducibility and root orders are trusted mathematical
+declarations: validation checks their shape and references, not these
+properties. Independent witnesses, such as the field tables of the native
+tests and the Python field references, check them separately.
+
+`twoAdic` is non-null only on `prime` rows. `maximalRoot` is a canonical
+decimal below the characteristic, declared to be a primitive
+`2^twoAdicity`-th root of unity,
+`twoAdicity` is between 1 and 64, and `convention` is a unique identity naming
+the coset convention. `ordering` is `powers`: the coset of size `2^k` with
+shift `s` lists `s * w^i` for `i = 0 .. 2^k - 1`, where
+`w = maximalRoot^(2^(twoAdicity - k))`. An extension uses the convention of
+its prime base. `TwoAdicField` holds exactly when the row, or its prime base, has a
+convention.
+
+A transcript row names its algorithm by `family`; the other columns are typed
+facts about that specified algorithm, not a recipe. Equal columns never make
+two suites interchangeable, and a consumer admits a suite by its exact
+identity. The row has a `ChallengeField` member.
+
+| Column | Values and their specified laws |
+|---|---|
+| `family` | `merlin3`: Merlin 3 with domain `zkc.artifact/0` ([transcript state](../ir/construction.md#transcript-state-and-occurrence-identity)); `spongefish0.8.0`: the Spongefish 0.8.0 Keccak sponge with the frame encoding of [hash-chain suites](../ir/construction.md#encoding); `hash-chain`: [native hash-chain suites](../ir/construction.md#native-hash-chain-suites) |
+| `hash` | `keccak256` exactly for `hash-chain`, otherwise null |
+| `decoder` | `fr64be` and `rejection31le` as in [decoders](../ir/construction.md#decoders); `rejection64le` as in [UniformIndex realization](../runtime/services.md#uniformindex-realization); `scalar64le` reads one 64-byte answer as a little-endian integer and reduces it modulo the challenge field's characteristic |
+| `bindsSuite` | Whether initialization absorbs the complete suite identity under label `suite` before the binding root |
+
+`fr64be` and `scalar64le` require a prime challenge field; `rejection31le`
+and `rejection64le` require a characteristic below `2^31` and `2^64`
+respectively. A transcript row holds `Transcript` and `FieldTranscript`.
+
+A commitment row names its scheme. `keccak256Rows` is the
+[binary Keccak row scheme](../domains/oracles.md#installed-binary-merkle-schemes)
+with `digestBytes` 32. `poseidon2Rows` is the
+[digest-generic row scheme](../domains/oracles.md#digest-generic-merkle-schemes)
+over the [Poseidon2 instance](../domains/oracles.md#poseidon2-instances)
+named by `permutation`: `koala-bear.poseidon2-16`, `baby-bear.poseidon2-16` or
+`goldilocks.poseidon2-8`, each the pinned Plonky3 0.8.0 default parameter set
+for that field and width. The permutation's field is the `ValueField` member
+or its prime base, `digestBytes` is 32, and `digestWordBytes` is the element
+width of that field's codec frame. `multilinearKzg` is the
+[multilinear KZG scheme](proof.md#pcs-message-bytes); it requires an
+authorized setup, and logical types of the constructors with a non-null
+`setup` exist only over `multilinearKzg` commitments. Every commitment row has a `ValueField` member. A hash,
+permutation width and digest width alone never identify a scheme.
+
+### Logical type instances
+
+`logicalTypes` lists each admitted instance of a declared nullary or unary
+constructor, other than `variant` and `resource_unit`, which have their own
+formation. A nullary instance has the empty domain; a unary instance names a
+domain whose sort is the constructor's Domain parameter sort. Pairs are
+unique. An instance supplies or requires no codec, representation, capability
+or implementation.
+
+### Frame tags and codecs
+
+Every canonical value frame begins with ASCII `ZKCV`, byte 0 and one tag byte.
+`frameTags` owns the tag space: each `tag` is unique, between 1 and 255. The
+[message chapter](messages.md#canonical-value-frames) specifies each
+`layout`: `Scalar`, `Vector`, `SparseMatrix`, `MerkleRoot`, `MerklePath`,
+`DigestRoot`, `DigestProof`, `PcsCommitment`, `PcsProof`, `Table`, `Sequence`,
+`Variant` or `FieldArray`.
+
+`shared` is null when exactly one codec or aggregate frame uses the tag.
+Otherwise it is `{kind, scheme}`: the tag is used by exactly the codecs of
+logical kind `kind` over commitment domains of scheme `scheme`, at least two of
+them, all with the tag's layout. Such a frame does not name its scheme. It is
+decoded under the expected type, whose commitment row supplies the digest and
+word widths and the canonical word rule; bytes never select among the
+sharers. The same bytes may be canonical under two sharers, and the declared
+type, not the frame, carries the scheme.
+
+A codec has a unique identity, a `(kind, domain)` pair in `logicalTypes`, and
+the declared predicate `Encodes.<kind>` over `Codec` and the domain's sort
+(only `Codec` for a nullary payload). At most one codec exists per pair.
+`frame` is null or an object whose `tag` names a frame tag; its other fields
+follow the tag's layout:
+
+| Layout | Frame fields |
+|---|---|
+| `Scalar`, `Vector`, `SparseMatrix` | `tag`, `elementBytes` |
+| `PcsCommitment` | `tag`, `bytes` (the complete frame) |
+| `PcsProof` | `tag`, `bytes` (the complete frame for arity zero), `bytesPerArity` |
+| `MerkleRoot`, `MerklePath`, `DigestRoot`, `DigestProof`, `Table` | `tag` |
+
+A codec has a frame exactly when its kind's type row has `message`, except the
+standalone public table input frame, layout `Table`, which is input-only. The
+codec's kind fixes its tag's layout: `field`, `group`, `bool` and `index` use
+`Scalar`; `vector`, `groups`, `indices` and `bytes` use `Vector`; `matrix`
+uses `SparseMatrix`; `table` uses `Table`; and `commitment` and `proof` use
+`MerkleRoot` and `MerklePath` for `keccak256Rows`, `DigestRoot` and
+`DigestProof` for `poseidon2Rows`, and `PcsCommitment` and `PcsProof` for
+`multilinearKzg`. Only aggregate frames use `Sequence`, `Variant` and
+`FieldArray`, each for its own constructor.
+Merkle and digest frames take their widths from the commitment row. For a
+`field`, `vector` or `matrix` codec, `elementBytes` follows the structure:
+the least number of bytes holding `characteristic - 1` for a prime field;
+`degree` times the base's element width over `BaseField`; and `degree / 8`
+over `PrimeSubfield` of characteristic 2. A field whose structure gives no
+width, an extension over `PrimeSubfield` of odd characteristic or a degree not
+divisible by 8, has no `field`, `vector` or `matrix` codec. The `group` and `groups` codecs of
+one group have equal `elementBytes`. These facts fix bytes; they do not grant
+transport, which also requires a canonical-frame representation and an
+installed implementation.
+
+### Aggregate frames
+
+An aggregate frame row grants a message frame for one constructor: `sequence`
+and `variant` with the empty domain, and `field_array` with the one Field
+domain it names; that field has a `field` codec with a `Scalar` frame, which
+encodes the array's elements. Encoding restrictions stay separate from type formation:
+`field_array` over a field without a row is a valid logical type without a
+message frame, and a row is required before any reader admits such a frame.
+
+### Random services
+
+A random service names a unique `contract` and the Field domain it draws
+from. Services and the `rng` logical types correspond one to one through that
+field. Service methods remain the declared `serviceMethods` rules gated by the
+field's capabilities.
+
+### Limits
+
+`limits` holds ceilings that independent implementations in more than one
+language enforce for the same contract. `name` follows the catalog name rule
+and is unique; `owner` and `scope` are nonempty; `value` is a JSON
+integer from 0 to 2^63 - 1; `unit` is one of `roles`, `bytes`, `elements`, `entries` or `steps`;
+`owner` names the owning component; `scope` states what one count covers; and
+`phase` is `formation`, `admission`, `publication` or `execution`. A shared
+value does not merge two contracts: native, export, message and target
+ceilings keep separate rows or owners even when numerically equal. A reached
+ceiling is an observable refusal, not an implementation detail.
+
+| Name | Value | Unit | Owner | Scope | Phase |
+|---|---:|---|---|---|---|
+| `protocol.roles` | 1,024 | `roles` | IR / Protocol | Ordered role roster of one protocol, participant or Entry | `admission` |
+
+### Source vocabulary
+
+`finiteDefinitions` lists the admitted finite-definition identities. `mode`
+is `math` or `local`; `operation` is `fold` or `collect`; `collection` is
+null for `fold` and otherwise one of `vector`, `groups`, `sequence`, `indices`
+or `field_array`; `filtered` selects the predicate form and is false for
+`field_array`. `domainConstructors` lists the finite domain constructors with
+their `kind` (`Elements`, `Indices`, `Range`, `Zip`, `Product`, `MatrixRow`,
+`MatrixColumn`, `MatrixCoordinates` or `SourceArray`) and `axis` (0 or 1).
+Identities are unique within each table. A library finite or domain
+declaration names a row;
+the identity is a lookup key and the columns are its meaning.
+
+### Validation
+
+The generator, the native TableGen backend and the Rust build independently
+check every rule in this section, including exact record shapes, unique keys,
+reference resolution, sort and member typing, rule closure, structure and
+characteristic agreement, convention placement, codec and frame agreement,
+tag ownership, the service correspondence and the vocabulary sets. They check
+the published schema; they are not three proofs of a field or cryptographic
+algorithm. Tests against the actual kernels and codecs, independent byte
+vectors and negative mutations remain separate evidence.
 
 ## Static values and typed signatures
 

@@ -54,6 +54,7 @@ add_zkc_component(Contracts
   lib/Contracts/Numerical.cpp
   lib/Contracts/NumericalPlan.cpp
   lib/Contracts/Domains.cpp
+  lib/Contracts/Instances.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
   lib/Contracts/OracleKinds.cpp

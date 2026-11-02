@@ -69,25 +69,30 @@ preserves its native encounter order. Private computation declarations derived
 from scoped bodies follow the native declarations in reader encounter order.
 There is no cross-category declaration-order field.
 
+Types are inline [logical type](logical-types.md) trees, the general type
+grammar of this format: a declared type constructor is applied as
+`["apply", constructor, [arguments...]]`, and variants, oracle handles and
+services have their own tags. This profile admits these types:
+
 | Type | Native interpretation |
 |---|---|
-| `["bool"]` | `i1` |
-| `["index"]` | unsigned 64-bit index |
-| `["field", domain]` | nominal scalar field |
-| `["vector", domain]` | immutable vector over that field |
-| `["group", domain]` | nominal group |
-| `["groups", domain]` | immutable vector over that group |
-| `["indices"]` | immutable ordered unsigned indices |
+| `["apply", "bool", []]` | `i1` |
+| `["apply", "index", []]` | unsigned 64-bit index |
+| `["apply", "field", [["domain", "Field", domain-id]]]` | nominal scalar field |
+| `["apply", "vector", [["domain", "Field", domain-id]]]` | immutable vector over that field |
+| `["apply", "group", [["domain", "Group", domain-id]]]` | nominal group |
+| `["apply", "groups", [["domain", "Group", domain-id]]]` | immutable vector over that group |
+| `["apply", "indices", []]` | immutable ordered unsigned indices |
 | `["oracle", kind-id, arguments]` | logical occurrence anchor, with associated Data/Query/Answer |
 | `["oracle_sequence", kind-id, arguments, maximum]` | bounded ordered logical handles; `maximum` is a uint64 decimal string |
 | `["service", contract]` | owner-local reusable service reference |
-| `["sequence", element-type]` | ordered immutable `data.sequence` |
-| `["product", identity, constructor, component-types]` | one-constructor packed product, with ordered components |
+| `["apply", "sequence", [["type", element-type]]]` | ordered immutable `data.sequence` |
+| `["variant", identity, [[alternative, payload-types]...]]` | nominal variant with ordered alternatives; a one-constructor packed product has one alternative with its ordered components |
 
-A product retains the complete canonical JSON encoding of its native nominal
-descriptor, its single constructor label, and all flattened component types in
-order. Equal shapes do not identify different products. This represented identity
-does not replace the frontend schema that associates source fields with ports.
+A product retains its complete structured nominal identity, its single
+constructor label, and all flattened component types in order. Equal shapes do
+not identify different products. This represented identity does not replace the
+frontend schema that associates source fields with ports.
 Types nest at most 64 levels; a product has at most 512 components. Every nested
 domain is checked, including in dormant declarations. Nested service handles
 are outside this profile. Ordinary variants retain their complete ordered alternatives and payload types.

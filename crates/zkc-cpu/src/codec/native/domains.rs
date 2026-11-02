@@ -9,7 +9,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         Value::Vector(v) => (66, 32, v.len()),
         Value::RistrettoVector(v) => (14, 32, v.len()),
         Value::RistrettoGroups(v) => (17, 32, v.len()),
-        Value::EdwardsGroups(v) => (69, 32, v.len()),
+        Value::EdwardsGroups(v) => (82, 32, v.len()),
         Value::Bls12381G2Vector(v) => (52, 96, v.len()),
         _ => return None,
     };

@@ -25,6 +25,12 @@ struct OracleQueryExchange {
   std::vector<mlir::Type> state, receiverStores, holderStores;
   std::vector<Arm> arms;
 };
+// One exchange dispatches at most this many base constructors. Each arm opens
+// one base constructor of the receiver controller at its holder and is one
+// alternative of the opening response and checked answer variants. The
+// planner, the response and packet helpers and their verifiers share this
+// limit, which lies below the portable descriptor's 64 alternatives.
+inline constexpr size_t oracleExchangeConstructorLimit = 32;
 enum class OracleExchangeAction { Open };
 struct OracleExchangeRecipe : OracleHelperSignature {
   OracleExchangeAction action;

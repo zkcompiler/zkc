@@ -976,9 +976,9 @@ def applied_probes(declarations, catalog):
     assert len({json.dumps(p, sort_keys=True) for p in patterns}) == len(patterns), "duplicate pattern"
     probes, coverage = set(), []
     for pattern in patterns:
-        assert set(pattern) == {"constructor", "arguments", "representation", "default"}
+        assert set(pattern) == {"constructor", "arguments", "representation", "default", "child"}
         assert type(pattern["default"]) is bool
-        assert pattern["representation"]
+        assert pattern["representation"] and pattern["child"]
         constructor = pattern["constructor"]
         assert [p["kind"] for p in pattern["arguments"]] == [p["kind"] for p in types[constructor]["parameters"]]
         base, maximum = [], []

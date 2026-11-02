@@ -86,34 +86,26 @@ Unknown tags and wrong record arities refuse independently. See the
 
 ## Carrier size
 
-Ordinary decoded strings are bounded to 4096 UTF-8 bytes. An entry in an
-operation's parameter array is bounded to 16384 bytes; its declared parameter
-contract imposes any smaller semantic bound. This separate parameter ceiling
-admits the complete [physical numerical plan](../runtime/numerical-plans.md),
-whose nested Ring expression remains bounded to 4096 bytes. It does not enlarge
-names, sites, nominal identities, type spellings, message payloads or hook data.
-The version-zero root and operation record shapes are unchanged.
+The program byte language's [bounds table](program-bytes.md#bounds-and-admission)
+owns every carrier bound. An entry in an operation's parameter array has its own
+attribute ceiling there; its declared parameter contract imposes any smaller
+semantic bound. This separate parameter ceiling admits the complete
+[physical numerical plan](../runtime/numerical-plans.md), whose nested Ring
+expression remains bounded to 4096 bytes. It does not enlarge names, sites,
+nominal identities, type spellings, message payloads or hook data. The
+version-zero root and operation record shapes are unchanged.
 
-Raw participant JSON and its compact encoding are each bounded to 4 MiB.
-C++ `program::parse` applies this ceiling before array parsing, and
-`program::checkStructure` checks compact size and the 400,000-node ceiling
-for programmatic producers.
-Rust admission independently checks raw size and a 400,000-node JSON ceiling
-before decoding. Arrays, strings and Boolean literals each count as one node. The native
-proof producer and joint Host use the same participant ceiling; their outer
-file and proof limits remain separate. Node, array, definition, instruction,
-name and depth bounds still apply independently.
+The native proof producer and joint Host apply the same raw byte bound to a
+participant program; their outer file and proof limits remain separate.
 
-The complete program admits at most 65,536 static instructions across all
-definitions, including storage releases, nested bodies and returns. Each array
-retains its separate 32,768-element ceiling. C++ and Rust enforce the same
-instruction limit. The allowance includes the validation and release bookkeeping
-of checked library contexts; it does not increase execution work budgets.
+The static instruction allowance includes the validation and release
+bookkeeping of checked library contexts; it does not increase execution work
+budgets.
 
 The byte allowance supports composition of protocol libraries whose specialized
-local definitions remain within those structural bounds. It changes capacity,
-not the program grammar or instruction meanings. Generic array-JSON consumers
-retain their own default 1 MiB ceiling.
+local definitions remain within the table's structural bounds. It changes
+capacity, not the program grammar or instruction meanings. Generic array-JSON
+consumers retain their own default 1 MiB ceiling.
 
 ## Local domain binding
 

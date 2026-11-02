@@ -1,4 +1,9 @@
 //! Declaration formation, independent of any executable or formal profile.
+#[path = "installation.rs"]
+mod installation;
+#[path = "instances.rs"]
+mod instances;
+
 use super::{Result, boolean, list, number, string};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -338,6 +343,32 @@ impl<'a> Catalog<'a> {
                     ),
                     "history successor mismatch",
                 )?,
+                "Succession" => {
+                    // Identity transfer of one resource: the same Slot root on
+                    // both sides, and no other resource port to duplicate or
+                    // drop custody.
+                    let slot = unary_argument(port(f, "stateInput", false, "resource_unit")?)?;
+                    require(
+                        unary_argument(port(f, "stateOutput", true, "resource_unit")?)? == slot,
+                        "succession resource type mismatch",
+                    )?;
+                    let root = scope.get(slot).ok_or("unscoped declaration reference")?;
+                    require(
+                        root["kind"] == "root"
+                            && root["parameter"]["kind"] == "Domain"
+                            && root["parameter"]["sort"] == "Slot",
+                        "succession requires a Slot root",
+                    )?;
+                    for (ports, role) in [(inputs, "stateInput"), (outputs, "stateOutput")] {
+                        let state = number(&f[role])?;
+                        for (i, p) in ports.iter().enumerate() {
+                            require(
+                                i == state || normalize(p)?["constructor"] != "resource_unit",
+                                "succession admits no other resource port",
+                            )?;
+                        }
+                    }
+                }
                 "Observation" => {
                     require(
                         same(
@@ -695,7 +726,9 @@ fn laws(v: &Value) -> Result<()> {
     )
 }
 
-pub(super) fn validate(v: &Value) -> Result<()> {
+/// Check the declaration document and the native installation document
+/// together; the second references the first one way.
+pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
     let sorts = list(&v["sorts"])?
         .iter()
         .map(string)
@@ -750,6 +783,17 @@ pub(super) fn validate(v: &Value) -> Result<()> {
                 || (parameters.len() == 1 && parameters[0].0 == "Domain")
                 || ty["custody"] != "PublicValue",
             "applied types need complete codec model",
+        )?;
+        // A `parameter` element is the value type of the first parameter:
+        // `field` over a Field domain, `group` over a Group domain, or the
+        // Type argument itself.
+        require(
+            ty["collection"]["element"] != "parameter"
+                || matches!(
+                    parameters.first(),
+                    Some(("Domain", "Field" | "Group") | ("Type", _))
+                ),
+            "a parameter collection element needs a Field, Group or Type first parameter",
         )?;
     }
     for cap in catalog.capabilities.values() {
@@ -925,5 +969,7 @@ pub(super) fn validate(v: &Value) -> Result<()> {
     for profile in names(&v["consumerProfiles"])?.values() {
         catalog.consumer_profile(profile)?;
     }
-    Ok(())
+    let instances = instances::Instances::new(v, &catalog)?;
+    installation::validate(installation, &catalog, &instances)
+        .map_err(|error| format!("native installation: {error}"))
 }

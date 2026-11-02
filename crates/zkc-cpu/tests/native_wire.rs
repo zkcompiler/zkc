@@ -3,7 +3,7 @@ mod common;
 use common::ark_backend;
 use zkc_cpu::{CpuBackend, G1, NativeWireError, Policy, Scalar, Value, native_wire_size};
 use zkc_runtime::host::wire::{WireBackend, WireError};
-use zkc_runtime::vm::{DecodeReason, PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, LogicalType, PhysicalType, Value as RuntimeValue};
 
 #[test]
 fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
@@ -689,4 +689,98 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
             nested
         );
     }
+}
+
+#[test]
+fn edwards_frames_have_their_own_tags_and_refuse_aggregate_tags() {
+    use zkc_cpu::EdwardsPrime;
+    let backend = ark_backend(None);
+    let parse = |spelling: &str| LogicalType::parse(spelling).unwrap();
+    let physical = |logical: LogicalType| PhysicalType::default_for(logical).unwrap();
+    let group = physical(parse("group:edwards25519.prime"));
+    let groups = physical(parse("groups:edwards25519.prime"));
+    let indices = physical(parse("indices"));
+    let sequence = physical(LogicalType::sequence(parse("group:edwards25519.prime")).unwrap());
+    // Compressed points are little-endian y with the sign of x in the top bit:
+    // y = 4/5 for the base point and y = 1 for the identity.
+    let base =
+        zkc_test_support::unhex("5866666666666666666666666666666666666666666666666666666666666666");
+    let identity =
+        zkc_test_support::unhex("0100000000000000000000000000000000000000000000000000000000000000");
+    assert_eq!(
+        base,
+        curve25519_dalek::constants::ED25519_BASEPOINT_COMPRESSED.to_bytes()
+    );
+    fn frame(tag: u8, parts: &[&[u8]]) -> Vec<u8> {
+        let mut bytes = b"ZKCV\x00".to_vec();
+        bytes.push(tag);
+        for part in parts {
+            bytes.extend_from_slice(part);
+        }
+        bytes
+    }
+    let decodes = |ty: &PhysicalType, bytes: &[u8]| {
+        let value = backend.decode_native_value(ty, bytes).unwrap();
+        assert_eq!(backend.encode_native_value(&value).unwrap(), bytes);
+        value
+    };
+    // Decoding and Host measurement read the same header.
+    let refuses = |ty: &PhysicalType, bytes: &[u8], reason: DecodeReason| {
+        let error = NativeWireError::Invalid(reason);
+        assert_eq!(backend.decode_native_value(ty, bytes).unwrap_err(), error);
+        assert_eq!(backend.measure_native_wire(ty, bytes).unwrap_err(), error);
+    };
+
+    // One group: tag 81 and 38 bytes. Tag 68 belongs to indices.
+    let point = frame(81, &[&base]);
+    assert!(matches!(decodes(&group, &point),
+        Value::EdwardsGroup(p) if *p == EdwardsPrime::generator()));
+    refuses(&group, &frame(68, &[&base]), DecodeReason::Header);
+    for end in 0..point.len() {
+        refuses(&group, &point[..end], DecodeReason::Length);
+    }
+    refuses(&group, &[&point[..], &[0]].concat(), DecodeReason::Length);
+    refuses(&indices, &point, DecodeReason::Header);
+    // An indices frame is 10 + 8n bytes, never the 38-byte group width.
+    for count in 0..5u32 {
+        let values = frame(68, &[&count.to_le_bytes(), &vec![7; 8 * count as usize]]);
+        decodes(&indices, &values);
+        refuses(&group, &values, DecodeReason::Length);
+    }
+
+    // A group vector: tag 82, a count and 32-byte points. Tag 69 belongs to
+    // sequences.
+    let two = 2u32.to_le_bytes();
+    let points = frame(82, &[&two, &identity, &base]);
+    assert!(matches!(decodes(&groups, &points),
+        Value::EdwardsGroups(v) if v[..] == [EdwardsPrime::identity(), EdwardsPrime::generator()]));
+    refuses(
+        &groups,
+        &frame(69, &[&two, &identity, &base]),
+        DecodeReason::Header,
+    );
+    for end in 0..points.len() {
+        refuses(&groups, &points[..end], DecodeReason::Length);
+    }
+    refuses(&groups, &[&points[..], &[0]].concat(), DecodeReason::Length);
+    let three = 3u32.to_le_bytes();
+    refuses(
+        &groups,
+        &frame(82, &[&three, &identity, &base]),
+        DecodeReason::Length,
+    );
+    refuses(&sequence, &points, DecodeReason::Header);
+
+    // A sequence of groups is not a group vector, including the empty frames
+    // whose ten bytes differ only in the tag.
+    let zero = 0u32.to_le_bytes();
+    assert!(matches!(decodes(&sequence, &frame(69, &[&zero])),
+        Value::Sequence(v) if v.is_empty()));
+    refuses(&groups, &frame(69, &[&zero]), DecodeReason::Header);
+    assert!(matches!(decodes(&groups, &frame(82, &[&zero])),
+        Value::EdwardsGroups(v) if v.is_empty()));
+    refuses(&sequence, &frame(82, &[&zero]), DecodeReason::Header);
+    let one = frame(69, &[&1u32.to_le_bytes(), &38u32.to_le_bytes(), &point]);
+    assert!(matches!(decodes(&sequence, &one), Value::Sequence(v) if v.len() == 1));
+    refuses(&groups, &one, DecodeReason::Header);
 }

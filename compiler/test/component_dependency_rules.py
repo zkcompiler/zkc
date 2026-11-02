@@ -48,6 +48,7 @@ for name in (original_manifest.parent / "ir-generated-files.txt").read_text().sp
 (manifest.parent / "ir-generated-files.txt").write_text("\n".join(generated) + "\n")
 for relative in ("include/zkc/Contracts/Declarations.cpp.inc",
                  "include/zkc/Contracts/Mathematical.inc",
+                 "include/zkc/Contracts/Instances.inc",
                  "generated/Transforms/MathematicalRecipes.inc"):
     target = manifest.parent / relative
     target.parent.mkdir(parents=True, exist_ok=True)

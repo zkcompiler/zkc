@@ -369,6 +369,9 @@ def main():
     contract_mathematics = manifest.parent / "include/zkc/Contracts/Mathematical.inc"
     assert contract_mathematics.is_file(), "missing neutral mathematical declarations"
     assert contract_mathematics not in generated, "neutral mathematics must not belong to IR generation"
+    contract_instances = manifest.parent / "include/zkc/Contracts/Instances.inc"
+    assert contract_instances.is_file(), "missing installed-instance tables"
+    assert contract_instances not in generated, "installed-instance tables must not belong to IR generation"
     mathematical_recipes = manifest.parent / "generated/Transforms/MathematicalRecipes.inc"
     assert mathematical_recipes.is_file(), "missing private mathematical recipes"
     assert mathematical_recipes not in generated, "recipes must not belong to IR generation"
@@ -396,6 +399,7 @@ def main():
             permitted.add(contract_declarations)
         if "ZkcContracts" in closure(name):
             permitted.add(contract_mathematics)
+            permitted.add(contract_instances)
         visited = set()
 
         def visit(path):

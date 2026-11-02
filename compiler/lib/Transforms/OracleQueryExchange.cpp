@@ -87,10 +87,7 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
                        toHex(receiver.role, true), toHex(holder.role, true),
                        json::Array(constructors)};
   };
-  // The exchange's own limit, shared with its response and packet helpers and
-  // their verifiers; it is below the wire's portable descriptor limit.
-  constexpr size_t exchangeConstructorLimit = 32;
-  if (alternatives.size() > exchangeConstructorLimit)
+  if (alternatives.size() > oracleExchangeConstructorLimit)
     return refuse();
   auto *context = receiver.state.front().getContext();
   auto requestIdentity = data::importVariantIdentity(

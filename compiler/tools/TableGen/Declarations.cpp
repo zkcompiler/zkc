@@ -1,5 +1,6 @@
 #include "Declarations.h"
 #include "Contributions.h"
+#include "Instances.h"
 #include "Mathematical.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -109,6 +110,7 @@ struct Model {
     validateMathematicalDeclarations(records);
     validate();
     validateConsumerProfiles();
+    validateInstalledInstances(records);
   }
   void validate();
   void validateOperation(const Record *op, bool consumer = false);
@@ -170,6 +172,29 @@ void Model::validate() {
                                        parameter(ps.front()).first == "Domain");
     require(atomic || custody != "PublicValue", t,
             "applied types require an explicit complete-type codec model");
+    if (const auto *collection = optionalDef(t, "collection")) {
+      const auto rank = collection->getValueAsInt("rank");
+      const auto element = collection->getValueAsString("element");
+      require(rank == 1 || rank == 2, t, "collection rank is 1 or 2");
+      require(element == "parameter" || element == "index" || element == "byte",
+              t, "unknown collection element");
+      // The element is the first parameter's value type: a Field or Group
+      // domain's element, or the Type argument itself.
+      if (element == "parameter")
+        require(!ps.empty() &&
+                    (parameter(ps[0]) == std::make_pair(StringRef("Domain"),
+                                                        StringRef("Field")) ||
+                     parameter(ps[0]) == std::make_pair(StringRef("Domain"),
+                                                        StringRef("Group")) ||
+                     parameter(ps[0]).first == "Type"),
+                t,
+                "parameter collection element requires a Field, Group or Type "
+                "first parameter");
+    }
+    if (!t->isValueUnset("setup"))
+      require(t->getValueAsString("setup") == "prover" ||
+                  t->getValueAsString("setup") == "verifier",
+              t, "unknown setup key");
   }
   std::set<std::tuple<std::string, std::string, std::string>> memberKeys;
   for (const auto *m : members) {
@@ -469,8 +494,9 @@ void Model::validateOperation(const Record *op, bool consumer) {
   }
 }
 std::string facetKind(const Record *r) {
-  for (auto kind : {"History", "Observation", "Sampling", "Diagonal",
-                    "Contraction", "Coset", "DomainValue", "Mathematical"})
+  for (auto kind :
+       {"History", "Succession", "Observation", "Sampling", "Diagonal",
+        "Contraction", "Coset", "DomainValue", "Mathematical"})
     if (r->isSubClassOf((Twine("ZKC_") + kind).str()))
       return kind;
   return r->getName().str();
@@ -510,6 +536,33 @@ void Model::validateFacets(const Record *op) {
       require(
           sameType(port(r, "stateInput", false), port(r, "stateOutput", true)),
           op, "history successor type mismatch");
+    } else if (kind == "Succession") {
+      // The exact resource received at stateInput is returned at stateOutput:
+      // both are resource_unit applications of one Slot root, and no other
+      // port carries a resource unit, so custody is neither duplicated nor
+      // dropped.
+      auto received = port(r, "stateInput", false, "resource_unit")
+                          ->getValueAsListOfDefs("arguments");
+      auto returned = port(r, "stateOutput", true, "resource_unit")
+                          ->getValueAsListOfDefs("arguments");
+      require(received.size() == 1 && received == returned, op,
+              "succession resource types differ");
+      const auto *slot = received.front();
+      require(slot->isSubClassOf("ZKC_Root") &&
+                  is_contained(op->getValueAsListOfDefs("scope"), slot) &&
+                  parameter(slot->getValueAsDef("parameter")) ==
+                      std::make_pair(StringRef("Domain"), StringRef("Slot")),
+              op, "succession requires a Slot root");
+      auto resource = [](const Record *app) {
+        return app->isSubClassOf("ZKC_Apply") &&
+               name(app->getValueAsDef("constructor")) == "resource_unit";
+      };
+      for (auto [i, app] : enumerate(inputs))
+        require(int64_t(i) == r->getValueAsInt("stateInput") || !resource(app),
+                op, "succession operation has another resource unit port");
+      for (auto [i, app] : enumerate(outputs))
+        require(int64_t(i) == r->getValueAsInt("stateOutput") || !resource(app),
+                op, "succession operation has another resource unit port");
     } else if (kind == "Observation") {
       observation = r;
       require(sameType(port(r, "stateInput", false, "transcript"),
@@ -696,6 +749,9 @@ void emitFacets(raw_ostream &os, const Record *op) {
     else if (kind == "History")
       os << "c.history = HistoryContract{" << number(r, "stateInput") << ", "
          << number(r, "stateOutput") << "};\n";
+    else if (kind == "Succession")
+      os << "c.succession = SuccessionContract{" << number(r, "stateInput")
+         << ", " << number(r, "stateOutput") << "};\n";
     else if (kind == "Observation")
       os << "c.observation = ObservationContract{" << number(r, "stateInput")
          << ", " << number(r, "payloadInput") << ", "
@@ -761,8 +817,24 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     }
     os << "}";
     for (auto fact : {"nativeLocal", "mathematical", "participants",
-                      "constructible", "message"})
+                      "constructible", "message", "sourceData"})
       os << ", " << boolean(type->getValueAsBit(fact));
+    if (const auto *collection = optionalDef(type, "collection")) {
+      const auto element = collection->getValueAsString("element");
+      os << ", TypeCollection{" << number(collection, "rank")
+         << ", CollectionElement::"
+         << (element == "parameter" ? "Parameter"
+             : element == "index"   ? "Index"
+                                    : "Byte")
+         << "}";
+    } else
+      os << ", std::nullopt";
+    if (type->isValueUnset("setup"))
+      os << ", std::nullopt";
+    else
+      os << ", SetupKey::"
+         << (type->getValueAsString("setup") == "prover" ? "Prover"
+                                                         : "Verifier");
     os << "},\n";
   }
   os << "}; return values; }\n"
@@ -1065,7 +1137,8 @@ json::Object facetJSON(const Record *facet) {
   };
   if (kind == "Mathematical")
     result["identity"] = name(facet->getValueAsDef("identity"));
-  else if (kind == "History" || kind == "Observation" || kind == "Sampling") {
+  else if (kind == "History" || kind == "Succession" || kind == "Observation" ||
+           kind == "Sampling") {
     integer("stateInput");
     integer("stateOutput");
     if (kind == "Observation")
@@ -1205,7 +1278,7 @@ void Model::validateConsumerProfiles() {
   for (const auto *entry : order.sort("ZKC_ConsumerOperation"))
     require(selectedEntries.count(entry), entry, "unowned consumer operation");
 }
-json::Object inventory(const Model &m) {
+json::Object inventory(const Model &m, const RecordKeeper &records) {
   json::Object result{{"format", "zkc.contract-declarations/0"}};
   json::Array sorts;
   for (const auto *sort : m.sorts)
@@ -1213,7 +1286,14 @@ json::Object inventory(const Model &m) {
   result["sorts"] = std::move(sorts);
   json::Array types, ops, members, rules, capabilities, exports, families,
       associatedTypes, meanings, intrinsics;
-  for (const auto *t : m.types)
+  for (const auto *t : m.types) {
+    json::Value collection = nullptr;
+    if (const auto *c = optionalDef(t, "collection"))
+      collection = json::Object{{"rank", c->getValueAsInt("rank")},
+                                {"element", c->getValueAsString("element")}};
+    json::Value setup = nullptr;
+    if (!t->isValueUnset("setup"))
+      setup = t->getValueAsString("setup");
     types.push_back(
         json::Object{{"name", name(t)},
                      {"parameters", parametersJSON(t)},
@@ -1224,7 +1304,11 @@ json::Object inventory(const Model &m) {
                      {"mathematical", t->getValueAsBit("mathematical")},
                      {"participants", t->getValueAsBit("participants")},
                      {"constructible", t->getValueAsBit("constructible")},
-                     {"message", t->getValueAsBit("message")}});
+                     {"message", t->getValueAsBit("message")},
+                     {"sourceData", t->getValueAsBit("sourceData")},
+                     {"collection", std::move(collection)},
+                     {"setup", std::move(setup)}});
+  }
   for (const auto *c : m.capabilities)
     capabilities.push_back(
         json::Object{{"name", name(c)}, {"parameters", parametersJSON(c)}});
@@ -1346,6 +1430,9 @@ json::Object inventory(const Model &m) {
         {"operations", std::move(entries)}});
   }
   result["consumerProfiles"] = std::move(profiles);
+  // Logical installed-instance tables only; the native installation has its
+  // own inventory action.
+  addInstalledInstanceInventory(result, records);
   return result;
 }
 } // namespace
@@ -1357,6 +1444,6 @@ bool emitContractDeclarations(raw_ostream &os, const RecordKeeper &records) {
   return false;
 }
 bool emitContractInventory(raw_ostream &os, const RecordKeeper &records) {
-  os << formatv("{0:2}\n", json::Value(inventory(Model(records))));
+  os << formatv("{0:2}\n", json::Value(inventory(Model(records), records)));
   return false;
 }

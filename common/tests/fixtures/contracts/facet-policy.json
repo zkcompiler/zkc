@@ -30,6 +30,7 @@
     "DomainValue": "Compiler congruence facts; not a cross-consumer replay or purity claim.",
     "SourceHistory": "Compiler source authoring permission for copyable history; native Runtime independently admits the operation.",
     "ManagedHistory": "Compiler permission to advance an existing affine transcript; root acquisition is separately authorized.",
-    "DeterministicData": "Compiler deterministic data-dependency classification; native signature admission and execution are checked separately, with no equivalent runtime facet API."
+    "DeterministicData": "Compiler deterministic data-dependency classification; native signature admission and execution are checked separately, with no equivalent runtime facet API.",
+    "Succession": "Resource identity transfer read by the compiler's successor analyses; the installed-instances test compares it with the exec root analysis, and no runtime classification API exposes it."
   }
 }

@@ -38,7 +38,8 @@ def instantiate(operation, arguments, declarations, catalog):
         if term["kind"] == "natural":
             values.append(term["value"])
         elif term["kind"] == "project":
-            values.append(domains[values[term["parent"]]]["associated"][term["member"]])
+            # Members are ordered [member, identity] pairs in declared order.
+            values.append(dict(domains[values[term["parent"]]]["members"])[term["member"]])
         elif term["kind"] == "apply":
             values.append(spelling(term["constructor"], [values[i] for i in term["arguments"]]))
         else:

@@ -81,7 +81,7 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Groups, Bn254G1) => (47, 32, std::mem::size_of::<crate::Bn254G1>()),
         (Groups, Bn254G2) => (49, 64, std::mem::size_of::<crate::Bn254G2>()),
         (Groups, Bls12381G2) => (52, 96, std::mem::size_of::<crate::Bls12381G2>()),
-        (Groups, Edwards25519Prime) => (69, 32, std::mem::size_of::<crate::EdwardsPrime>()),
+        (Groups, Edwards25519Prime) => (82, 32, std::mem::size_of::<crate::EdwardsPrime>()),
         (Groups, Ristretto255Group) => (17, 32, std::mem::size_of::<crate::RistrettoPoint>()),
         (Matrix, Bls12381Fr) => (23, 40, 40),
         (Matrix, Bn254Fr) => (45, 40, 40),
@@ -497,7 +497,7 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
         47 => values!(32, crate::Bn254G1::from_bytes, Bn254G1Vector, Group),
         49 => values!(64, crate::Bn254G2::from_bytes, Bn254G2Vector, Group),
         52 => values!(96, crate::Bls12381G2::from_bytes, Bls12381G2Vector, Group),
-        69 => values!(
+        82 => values!(
             32,
             |b: &[u8; 32]| crate::EdwardsPrime::from_bytes(b).ok_or(()),
             EdwardsGroups,

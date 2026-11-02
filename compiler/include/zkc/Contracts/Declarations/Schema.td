@@ -65,6 +65,12 @@ def PublicValue : ZKC_Custody<"PublicValue">;
 def PrivateImmutable : ZKC_Custody<"PrivateImmutable">;
 def Affine : ZKC_Custody<"Affine">;
 class ZKC_TypeHead<string value> : ZKC_Declaration { string name = value; }
+// A source collection view: `rank` is 1 or 2 and `element` is "parameter",
+// "index" or "byte".
+class ZKC_TypeCollection<int r, string e> : ZKC_Declaration {
+  int rank = r;
+  string element = e;
+}
 class ZKC_Type<string value, list<ZKC_Parameter> ps = [],
                ZKC_Custody c = PublicValue, bit copyable = 1,
                bit droppable = 1> : ZKC_TypeHead<value> {
@@ -80,6 +86,12 @@ class ZKC_Type<string value, list<ZKC_Parameter> ps = [],
   // A message frame exists for some complete applications of this head.
   // Actual domain, shape and representation admission remains independent.
   bit message = 0;
+  // Source vocabulary. These columns grant no codec, transport or execution
+  // authority. An unset collection or setup is null; setup is "prover" or
+  // "verifier" for the setup-key constructors.
+  bit sourceData = 0;
+  ZKC_TypeCollection collection = ?;
+  string setup = ?;
 }
 class ZKC_Apply<ZKC_Type head, list<ZKC_Term> args = []>
     : ZKC_Term<TypeParameter> {
@@ -142,6 +154,13 @@ def Conjunction : ZKC_Facet;
 def SourceHistory : ZKC_Facet;
 def ManagedHistory : ZKC_Facet;
 class ZKC_History<int input, int output> : ZKC_Facet {
+  int stateInput = input;
+  int stateOutput = output;
+}
+// Output `stateOutput` is the successor of the exact resource received at
+// input `stateInput`. Identity transfer only: no value equality, purity or
+// reordering, and no operation acquires it from its signature shape.
+class ZKC_Succession<int input, int output> : ZKC_Facet {
   int stateInput = input;
   int stateOutput = output;
 }
@@ -299,6 +318,114 @@ class ZKC_MathematicalIntrinsic<string value, ZKC_MathematicalIdentity meaning,
 }
 class ZKC_Mathematical<ZKC_MathematicalIdentity meaning> : ZKC_Facet {
   ZKC_MathematicalIdentity identity = meaning;
+}
+
+// Installed instances: explicit rows declaring which nominal domains, logical
+// type instances, codecs and frames exist. Identities and cross-row references
+// are declared strings that zkc-tblgen resolves and checks; record names are
+// presentation only. Physical choices live in the separate native installation
+// schema. An unset optional field is a null or absent column.
+class ZKC_ReductionTerm<int e, string c> : ZKC_Declaration {
+  int exponent = e;
+  string coefficient = c;
+}
+// `kind` is "prime" or "extension"; only an extension sets the other fields.
+class ZKC_FieldStructure<string k> : ZKC_Declaration {
+  string kind = k;
+  string over = ?;
+  int degree = ?;
+  list<ZKC_ReductionTerm> reduction = ?;
+}
+class ZKC_TwoAdicConvention<string id, string root, int adicity,
+                            string order> : ZKC_Declaration {
+  string convention = id;
+  string maximalRoot = root;
+  int twoAdicity = adicity;
+  string ordering = order;
+}
+class ZKC_FieldFacts<string c, ZKC_FieldStructure s> : ZKC_Declaration {
+  string characteristic = c;
+  ZKC_FieldStructure structure = s;
+  ZKC_TwoAdicConvention twoAdic = ?;
+}
+class ZKC_TranscriptFacts<string f, string d, bit b> : ZKC_Declaration {
+  string family = f;
+  string hash = ?;
+  string decoder = d;
+  bit bindsSuite = b;
+}
+class ZKC_CommitmentFacts<string s> : ZKC_Declaration {
+  string scheme = s;
+  int digestBytes = ?;
+  string permutation = ?;
+  int digestWordBytes = ?;
+}
+// `members` holds ordered [member, identity] pairs.
+class ZKC_InstalledDomain<string id, string s, list<list<string>> m,
+                          list<string> c> : ZKC_Declaration {
+  string identity = id;
+  string sort = s;
+  list<list<string>> members = m;
+  list<string> capabilities = c;
+  ZKC_FieldFacts fieldFacts = ?;
+  ZKC_TranscriptFacts transcriptFacts = ?;
+  ZKC_CommitmentFacts commitmentFacts = ?;
+}
+class ZKC_LogicalTypeInstance<string k, string d> : ZKC_Declaration {
+  string kind = k;
+  string domain = d;
+}
+class ZKC_SharedFrame<string k, string s> : ZKC_Declaration {
+  string kind = k;
+  string scheme = s;
+}
+class ZKC_FrameTag<int t, string l> : ZKC_Declaration {
+  int tag = t;
+  string layout = l;
+  ZKC_SharedFrame shared = ?;
+}
+class ZKC_CodecFrame<int t> : ZKC_Declaration {
+  int tag = t;
+  int elementBytes = ?;
+  int bytes = ?;
+  int bytesPerArity = ?;
+}
+class ZKC_Codec<string id, string k, string d> : ZKC_Declaration {
+  string identity = id;
+  string kind = k;
+  string domain = d;
+  ZKC_CodecFrame frame = ?;
+}
+class ZKC_AggregateFrame<string c, string d, int t> : ZKC_Declaration {
+  string constructor = c;
+  string domain = d;
+  int tag = t;
+}
+class ZKC_RandomService<string c, string f> : ZKC_Declaration {
+  string contract = c;
+  string fieldDomain = f;
+}
+class ZKC_Limit<string n, int v, string u, string o, string s, string p>
+    : ZKC_Declaration {
+  string name = n;
+  int value = v;
+  string unit = u;
+  string owner = o;
+  string scope = s;
+  string phase = p;
+}
+class ZKC_FiniteDefinition<string id, string m, string o, bit f>
+    : ZKC_Declaration {
+  string identity = id;
+  string mode = m;
+  string operation = o;
+  string collection = ?;
+  bit filtered = f;
+}
+class ZKC_DomainConstructor<string id, string k, int a> : ZKC_Declaration {
+  string identity = id;
+  string kind = k;
+  int axis = a;
 }
 
 #endif

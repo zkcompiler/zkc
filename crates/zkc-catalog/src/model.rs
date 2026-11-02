@@ -201,6 +201,14 @@ pub enum Facet {
         state_input: usize,
         state_output: usize,
     },
+    /// Output `state_output` is the identity successor of the exact resource
+    /// received at input `state_input`: the same `resource_unit` type and Slot,
+    /// neither duplicated nor dropped. Grants no value equality, purity,
+    /// reordering or speculation.
+    Succession {
+        state_input: usize,
+        state_output: usize,
+    },
     Observation {
         state_input: usize,
         payload_input: usize,
