@@ -197,13 +197,17 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
   if (roster.size() != decl.roles.size())
     return types.fail("source.roles", "duplicate participant", decl.span);
-  // A protocol, participant or Entry roster has the protocol role roster
-  // ceiling; a record's role telescope keeps its own bound.
-  const uint64_t rosterLimit = decl.kind == Declaration::Kind::Record
-                                   ? 1024
-                                   : protocol::instances::protocolRoleLimit;
-  if (decl.roles.size() > rosterLimit)
-    return types.fail("source.limit", "participant roster exceeds target limit",
+  // A record's role telescope, or a role-abstract alias of one, and a
+  // protocol roster are separate contracts with their own catalog limits.
+  bool telescope = decl.kind == Declaration::Kind::Record ||
+                   decl.kind == Declaration::Kind::Alias;
+  if (telescope && decl.roles.size() > protocol::instances::recordRoleLimit)
+    return types.fail("source.limit",
+                      "record role telescope exceeds the record.roles limit",
+                      decl.span);
+  if (!telescope && decl.roles.size() > protocol::instances::protocolRoleLimit)
+    return types.fail("source.limit",
+                      "participant roster exceeds the protocol.roles limit",
                       decl.span);
   std::set<std::string> usedShapes;
   if ((decl.resource || decl.sealed) &&

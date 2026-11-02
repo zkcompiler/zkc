@@ -425,6 +425,11 @@ class Documents(unittest.TestCase):
             "name": "protocol.roles", "value": 1024, "unit": "roles", "owner": "IR / Protocol",
             "scope": "Ordered role roster of one protocol, participant or Entry",
             "phase": "admission"})
+        # A record telescope is its own contract, even at an equal value.
+        self.assertEqual(find(catalog["limits"], name="record.roles"), {
+            "name": "record.roles", "value": 1024, "unit": "roles", "owner": "Frontend / Language",
+            "scope": "Role parameters of one distributed record telescope",
+            "phase": "admission"})
 
 
 def literal(tree, name):

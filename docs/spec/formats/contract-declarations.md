@@ -481,6 +481,7 @@ ceiling is an observable refusal, not an implementation detail.
 | Name | Value | Unit | Owner | Scope | Phase |
 |---|---:|---|---|---|---|
 | `protocol.roles` | 1,024 | `roles` | IR / Protocol | Ordered role roster of one protocol, participant or Entry | `admission` |
+| `record.roles` | 1,024 | `roles` | Frontend / Language | Role parameters of one distributed record telescope | `admission` |
 
 ### Source vocabulary
 

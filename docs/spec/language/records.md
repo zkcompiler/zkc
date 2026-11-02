@@ -35,6 +35,14 @@ an explicit ordered role application and has no overriding outer annotation.
 Every application is injective. Declaration-role order is significant; data
 and receiver sets are canonical sets.
 
+A role telescope, of a struct or of a role-abstract alias, has at most 1,024
+role parameters, the catalog limit `record.roles`. Declaration checking refuses
+a longer telescope with `source.limit` ("record role telescope exceeds the
+record.roles limit"), and every interface reader refuses a longer schema
+telescope. This is a separate contract from the protocol roster limit
+`protocol.roles`, which bounds the roles of a protocol, participant or Entry,
+although both are 1,024 today.
+
 An alias can abstract and apply roles independently of ordinary static arguments:
 `type Reversed<T: Type> roles(A, B) = State<T> roles(B, A)`. Alias application
 retains that map and the target's nominal type identity. A plain alias to a

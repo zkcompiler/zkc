@@ -604,7 +604,9 @@ fn nested_empty_ordinary_arrays_retain_participant_and_constructor_policy() {
 
 #[test]
 fn role_telescope_custody_and_metadata_work_limits_include_zero_storage() {
-    for count in [16usize, 17] {
+    // One custody leaf per telescope role: the telescope and the custody
+    // prefix are both bounded at 1,024.
+    for count in [16usize, 17, 1024, 1025] {
         let roles: Vec<_> = (0..count).map(|i| format!("Role{i}")).collect();
         let schema = product("EmptyRoles", json!(roles), json!([]), count as u32);
         let p = product_placement(
@@ -619,12 +621,12 @@ fn role_telescope_custody_and_metadata_work_limits_include_zero_storage() {
             p,
             schema,
         ));
-        d["protocols"][0]["roles"] = json!(roles);
+        d["protocols"][0]["roles"] = json!(roles[..count.min(1024)]);
         d["protocols"][0]["outputs"] = json!([]);
-        if count == 16 {
+        if count <= 1024 {
             read(&d).unwrap();
         } else {
-            assert!(read(&d).is_err());
+            assert_eq!(read(&d).unwrap_err(), InterfaceError::Limit);
         }
     }
     let mut d = recursive_document(recursive_port());
@@ -633,6 +635,79 @@ fn role_telescope_custody_and_metadata_work_limits_include_zero_storage() {
         20_000
     ]);
     assert_eq!(read(&d).unwrap_err(), InterfaceError::Limit);
+}
+
+/// A run over `roles` protocol roles R0.. (at most the roster limit) whose one
+/// input is a distributed record of `roles` parameters A0.. with an index
+/// field at each of its first `fields` parameters. Telescope position i is
+/// applied to protocol role `order[i]`.
+fn telescope(roles: usize, fields: usize, order: &[u32]) -> Value {
+    let parameters: Vec<_> = (0..roles).map(|i| format!("A{i}")).collect();
+    let index = schema("index", "index", json!(["index"]));
+    let declared: Vec<_> = (0..fields)
+        .map(|i| {
+            let placed = data_placement(json!([i]));
+            field(&format!("f{i}"), i as u32, true, placed, index.clone())
+        })
+        .collect();
+    let record = product(
+        &format!("Wide{roles}"),
+        json!(parameters),
+        json!(declared),
+        0,
+    );
+    let applied: Vec<_> = order[..fields]
+        .iter()
+        .map(|role| data_placement(json!([role])))
+        .collect();
+    let p = product_placement(&record, json!(order), json!(applied));
+    let native: Vec<_> = (0..fields).collect();
+    let mut d = run_with(placed_port("w", 0, json!(native), p, record));
+    let participants: Vec<_> = (0..roles.min(1024)).map(|i| format!("R{i}")).collect();
+    d["protocols"][0]["roles"] = json!(participants);
+    d["protocols"][0]["outputs"] = json!([]);
+    d
+}
+#[test]
+fn record_telescopes_have_their_own_catalog_limit() {
+    // The record telescope limit is separate from the protocol roster limit;
+    // both are 1,024 roles.
+    for (roles, accepted) in [(16, true), (17, true), (1024, true), (1025, false)] {
+        let order: Vec<u32> = (0..roles as u32).rev().collect();
+        let d = telescope(roles, 1, &order);
+        if accepted {
+            let view = read(&d).unwrap();
+            let last = format!("R{}", roles - 1);
+            assert_eq!(view.ordinary_input(0, &[0], &last).unwrap().native(), [0]);
+        } else {
+            assert_eq!(read(&d).unwrap_err(), InterfaceError::Limit, "{roles}");
+        }
+    }
+}
+#[test]
+fn permuted_wide_telescopes_place_each_field_at_its_substituted_role() {
+    // Telescope position i is applied to protocol role (i + 16) mod 17, so
+    // the arguments are an ordered substitution, not a sorted set. Each
+    // participant's supply view holds exactly the field placed at the
+    // telescope parameter that names it.
+    let order: Vec<u32> = (0..17).map(|i| (i + 16) % 17).collect();
+    let d = telescope(17, 17, &order);
+    let view = read(&d).unwrap();
+    assert_eq!(
+        view.selected_protocol().inputs[0].placement.describe()["arguments"],
+        json!(order)
+    );
+    let roles = view.roles();
+    for (position, &role) in order.iter().enumerate() {
+        let position = position as u32;
+        let placed: Vec<_> = view
+            .input_ports(&roles[role as usize])
+            .map(|p| (p.index, p.path.to_vec(), p.role))
+            .collect();
+        assert_eq!(placed, [(0, vec![position], role)], "R{role}");
+        let selected = view.ordinary_input(0, &[position], &format!("R{role}"));
+        assert_eq!(selected.unwrap().native(), [position], "R{role}");
+    }
 }
 
 #[test]

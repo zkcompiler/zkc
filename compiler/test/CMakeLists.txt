@@ -343,6 +343,7 @@ add_zkc_test(language_bundle_relations CpuTarget language-bundle-relations)
 add_zkc_test(language_entries Language language-entries)
 add_zkc_test(language_entry_components Compiler language-entry-components)
 add_zkc_test(language_roster_capacity CpuTarget language-roster-capacity)
+add_zkc_test(language_role_bounds Compiler language-role-bounds)
 add_zkc_test(installed_declarations Language installed-declarations)
 add_zkc_test(language_entry_components_interface Compiler language-entry-components-interface)
 target_compile_definitions(zkc-language_entry_components_interface-test PRIVATE

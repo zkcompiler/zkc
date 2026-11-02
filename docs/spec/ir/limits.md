@@ -6,11 +6,14 @@ A ceiling that implementations in more than one language enforce for the same
 contract is a row of the catalog's [limits](../formats/contract-declarations.md#limits)
 table; each compiler reader of the protocol role roster, including the source
 checker, the IR verifier, the language-interface reader and the joint bundle
-producer, uses that row's generated constant.
+producer, uses that row's generated constant. A record role telescope is a
+separate contract with its own row; the source checker and both interface
+readers use it.
 
 | Boundary | Limit |
 |---|---|
 | Declared role roster | 1,024 roles, the catalog limit `protocol.roles` |
+| Record role telescope | 1,024 role parameters, the catalog limit `record.roles` |
 | Helper depth and expanded helper analysis | 64 levels; 100,000 operations |
 | Helper dependency analysis and availability replay | 1,000,000 words/indices within their separate budgets |
 | Mathematical participant projection | 100,000 role-node visits per common body, owned by IR / Mathematical: each mathematical program charges its role count times its SSA nodes, one each for the program, its inputs and results, and its operations, operands, results and block arguments; exhaustion refuses with `mathematical-projection-limit` before any participant body is built |

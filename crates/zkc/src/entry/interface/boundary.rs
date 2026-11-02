@@ -232,29 +232,6 @@ impl Work {
         self.charge(1 + entries.checked_ilog2().unwrap_or(0) as usize)
     }
 }
-/// Whether a placement places `role`, without allocating its role set. Data
-/// roles and oracle receivers are strictly increasing, and so are a
-/// product's arguments except a nominal telescope's, which has at most 16.
-fn places(p: &Placement, role: u32, work: &mut Work) -> Result<bool> {
-    Ok(match p {
-        Placement::Data { roles } => {
-            work.lookup(roles.len())?;
-            roles.binary_search(&role).is_ok()
-        }
-        Placement::Oracle { holder, receivers } => {
-            work.lookup(receivers.len())?;
-            *holder == role || receivers.binary_search(&role).is_ok()
-        }
-        Placement::Product { arguments, .. } if arguments.len() <= 16 => {
-            work.charge(arguments.len())?;
-            arguments.contains(&role)
-        }
-        Placement::Product { arguments, .. } => {
-            work.lookup(arguments.len())?;
-            arguments.binary_search(&role).is_ok()
-        }
-    })
-}
 /// Per-node facts shared by every placed role's walk over one supply plan.
 /// Keys are the addresses of the admitted document's schema and placement
 /// nodes, which outlive the reconstruction.
@@ -262,6 +239,7 @@ fn places(p: &Placement, role: u32, work: &mut Work) -> Result<bool> {
 struct Memo {
     ordinary: BTreeMap<(usize, usize), Option<Vec<u32>>>,
     costs: BTreeMap<usize, usize>,
+    telescopes: BTreeMap<usize, Vec<u32>>,
 }
 impl Memo {
     fn key(s: &Schema, p: &Placement) -> (usize, usize) {
@@ -269,6 +247,47 @@ impl Memo {
             std::ptr::from_ref(s) as usize,
             std::ptr::from_ref(p) as usize,
         )
+    }
+    /// Whether the placement of a value of schema `s` places `role`, without
+    /// allocating its role set. The schema category, not the argument count,
+    /// selects the membership test. Data roles, oracle receivers and the
+    /// arguments of a structural product or an untelescoped logical record are
+    /// strictly increasing sets. A nominal record's arguments are its
+    /// telescope substitution in declaration order, any injective order; each
+    /// such placement gets one sorted membership index and keeps its ordered
+    /// arguments.
+    fn places(&mut self, s: &Schema, p: &Placement, role: u32, work: &mut Work) -> Result<bool> {
+        Ok(match p {
+            Placement::Data { roles } => {
+                work.lookup(roles.len())?;
+                roles.binary_search(&role).is_ok()
+            }
+            Placement::Oracle { holder, receivers } => {
+                work.lookup(receivers.len())?;
+                *holder == role || receivers.binary_search(&role).is_ok()
+            }
+            Placement::Product { arguments, .. }
+                if s.kind == Kind::LogicalRecord && !s.roles.is_empty() =>
+            {
+                work.lookup(self.telescopes.len())?;
+                let members = match self.telescopes.entry(std::ptr::from_ref(p) as usize) {
+                    std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        let sort = 1 + arguments.len().checked_ilog2().unwrap_or(0) as usize;
+                        work.charge(arguments.len().saturating_mul(sort))?;
+                        let mut members = arguments.clone();
+                        members.sort_unstable();
+                        entry.insert(members)
+                    }
+                };
+                work.lookup(members.len())?;
+                members.binary_search(&role).is_ok()
+            }
+            Placement::Product { arguments, .. } => {
+                work.lookup(arguments.len())?;
+                arguments.binary_search(&role).is_ok()
+            }
+        })
     }
     /// Whether `role` can supply every component of this ordinary subtree.
     fn ordinary(&mut self, s: &Schema, p: &Placement, role: u32, work: &mut Work) -> Result<bool> {
@@ -478,7 +497,7 @@ fn walk(
     work: &mut Work,
 ) -> Result<()> {
     work.charge(1 + path.len())?;
-    if !places(p, role, work)? {
+    if !memo.places(s, p, role, work)? {
         return Ok(());
     }
     let cost = memo.cost(s, work)?;
@@ -590,7 +609,7 @@ fn walk(
     for (i, f) in s.fields.iter().enumerate() {
         let cp = child_placement(s, p, i);
         path.push(i as u32);
-        if !f.public && places(cp, role, work)? {
+        if !f.public && memo.places(&f.schema, cp, role, work)? {
             *remaining = remaining
                 .checked_sub(128 + path.len() * 4 + protocol.roles[role as usize].len())
                 .ok_or(E::Limit)?;

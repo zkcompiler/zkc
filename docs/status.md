@@ -962,6 +962,17 @@ No closure claims external supply: the SDK's Entry admission judges it per
 operation and supply mode, so Verify admits a proof whose sealed prover witness
 it never consumes. Source correspondence checks the complete role substitution
 and result mapping. These native checks establish no Lean correspondence.
+Protocol rosters and record role telescopes are separate contracts with
+separate catalog limits, `protocol.roles` and `record.roles`, both 1,024 roles.
+The source checker refuses a longer roster or telescope, including a
+role-abstract alias, with its own `source.limit` diagnostic, and the C++ and
+Rust interface readers each refuse a longer roster or schema telescope by its
+own limit ([role bound controls](../compiler/test/language_role_bounds.cpp)).
+Both readers keep a nominal record's role arguments in telescope order. The
+Rust supply reconstruction decides role membership by schema category, through
+one sorted index of each telescope substitution, so a permuted telescope of any
+length supplies each field at its substituted role. The structured-source
+export and component-declaration participant lists accept 1 to 16 roles.
 Generated Entry families walk their roster once per phase and each port only at
 its placed roles, so a trivial 1,024-role Protocol closes and publishes its
 interface within the 32,000,000-unit phase work ceiling, with work growing

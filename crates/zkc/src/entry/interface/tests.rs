@@ -192,8 +192,9 @@ fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
 }
 #[test]
 fn protocol_rosters_are_not_bounded_by_record_role_telescopes() {
-    // A record has at most 16 role parameters; a protocol roster shares the
-    // joint runtime's 1,024-role ceiling. Boundary reconstruction walks each
+    // A protocol roster has the catalog's `protocol.roles` ceiling, shared
+    // with the joint runtime, separately from a record telescope's
+    // `record.roles`. Boundary reconstruction walks each
     // port only at its placed roles, so admission work grows with ports times
     // placed roles times schema size rather than with the square of the
     // roster: ordinary ports supplied by every participant, in both

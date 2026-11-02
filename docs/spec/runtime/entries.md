@@ -30,8 +30,12 @@ at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
 string tokens have at most six times 256 KiB. Decoded strings retain their owning
 name/type limits. Schema depth is at most 32 and each aggregate has at most 1,024
 leaves. Entry admission accepts protocol rosters of 1 to 1,024 distinct roles,
-the joint runtime ceiling, and role-bearing records with at most 16 role
-parameters. Native leaf parsing retains its own structural bounds.
+the catalog limit `protocol.roles` that the joint runtime shares, and
+role-bearing records whose telescopes have at most 1,024 role parameters, the
+separate catalog limit `record.roles`. A nominal record's role arguments keep
+telescope order; membership of a role is decided by the schema category, never
+by assuming that a long argument list is sorted. Native leaf parsing retains
+its own structural bounds.
 
 The Host policy record selects the interface admission allowances
 (`InterfaceLimits` in `HostLimits::interface`, `ProofOptions::interface` and

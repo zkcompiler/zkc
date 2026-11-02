@@ -137,8 +137,8 @@ binding.
 `custody` is an unsigned bounded JSON integer prefix count, never a Boolean.
 An ordinary explicit wrapper has one custody leaf; a distributed wrapper has
 one per declaration role, in telescope order. `roles` contains declaration-order
-role parameter names only for nominal distributed records; other schemas have
-an empty array. The temporary brace-profile alternative below also has an empty
+role parameter names only for nominal distributed records, at most 1,024, the
+catalog limit `record.roles`; other schemas have an empty array. The temporary brace-profile alternative below also has an empty
 array. These names are definition metadata, not protocol participants.
 `element` is required-nullable and non-null exactly for a fixed array, including
 length zero. Every expanded array field has that complete element schema.

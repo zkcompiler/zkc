@@ -19174,6 +19174,14 @@
       "scope": "Ordered role roster of one protocol, participant or Entry",
       "unit": "roles",
       "value": 1024
+    },
+    {
+      "name": "record.roles",
+      "owner": "Frontend / Language",
+      "phase": "admission",
+      "scope": "Role parameters of one distributed record telescope",
+      "unit": "roles",
+      "value": 1024
     }
   ],
   "finiteDefinitions": [

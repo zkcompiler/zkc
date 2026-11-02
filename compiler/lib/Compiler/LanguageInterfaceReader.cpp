@@ -822,10 +822,17 @@ class Reader {
       return {};
     }
     result->permissions = *caps;
+    if (*custody > limits.aggregateLeaves) {
+      fail("schema custody count exceeds limit");
+      return {};
+    }
+    // A nominal record's telescope is bounded by its own catalog limit, not
+    // by the protocol roster's.
     auto *roleNames = array(*obj, "roles");
-    if (!roleNames || roleNames->size() > 16 ||
-        *custody > limits.aggregateLeaves) {
-      fail("schema role telescope or custody count exceeds limit");
+    if (!roleNames)
+      return {};
+    if (roleNames->size() > protocol::instances::recordRoleLimit) {
+      fail("schema role telescope exceeds the record.roles limit");
       return {};
     }
     std::set<std::string> names;
@@ -2377,8 +2384,10 @@ class Reader {
     current->symbol = symbol->str();
     roleIndices.clear();
     std::set<std::string> usedRoles;
-    if (rs->empty() || rs->size() > protocol::instances::protocolRoleLimit)
-      return fail("invalid role roster size");
+    if (rs->empty())
+      return fail("empty role roster");
+    if (rs->size() > protocol::instances::protocolRoleLimit)
+      return fail("role roster exceeds the protocol.roles limit");
     for (const auto &item : *rs) {
       auto name = item.getAsString();
       if (!name || name->size() > limits.identifierBytes ||

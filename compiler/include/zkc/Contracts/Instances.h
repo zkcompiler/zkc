@@ -178,10 +178,14 @@ constexpr std::optional<uint64_t> limitValue(std::string_view name) {
       return row.value;
   return std::nullopt;
 }
-/// The ordered role roster of one protocol, participant or Entry, and the role
-/// telescope of one distributed record, enforced at admission.
+/// The ordered role roster of one protocol, participant or Entry, enforced at
+/// admission.
 inline constexpr uint64_t protocolRoleLimit =
     limitValue("protocol.roles").value();
+/// The role parameters of one distributed record telescope, including a
+/// role-abstract alias, enforced at declaration checking and by every
+/// interface reader. It is a separate contract from the protocol roster.
+inline constexpr uint64_t recordRoleLimit = limitValue("record.roles").value();
 } // namespace instances
 
 /// Generated native installation tables: available physical choices, in

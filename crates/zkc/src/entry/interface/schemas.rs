@@ -4,6 +4,10 @@ use std::collections::{BTreeMap, BTreeSet};
 mod logical;
 pub(super) use logical::{native_width, row_bound};
 
+/// The catalog's record role telescope ceiling, a separate contract from the
+/// protocol role roster.
+const RECORD_ROLES: usize = zkc_catalog::limit("record.roles") as usize;
+
 pub(in crate::entry) struct Schemas<'a> {
     remaining: usize,
     retained: usize,
@@ -101,7 +105,7 @@ impl<'a> Schemas<'a> {
             schema.kind == Kind::LogicalRecord || schema.roles.is_empty(),
             E::Schema,
         )?;
-        require(schema.roles.len() <= 16, E::Limit)?;
+        require(schema.roles.len() <= RECORD_ROLES, E::Limit)?;
         let mut role_names = BTreeSet::new();
         for role in &schema.roles {
             self.charge(1 + role.len())?;

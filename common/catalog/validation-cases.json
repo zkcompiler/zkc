@@ -2126,6 +2126,29 @@
       }
     },
     {
+      "name": "a record telescope limit renamed to the protocol roster limit",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "record.roles"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "protocol.roles"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate limit",
+        "native": "invalid or duplicate limit",
+        "rust": "limits: duplicate limit protocol.roles"
+      }
+    },
+    {
       "name": "duplicate finite definition",
       "rule": "source vocabulary",
       "edits": [
