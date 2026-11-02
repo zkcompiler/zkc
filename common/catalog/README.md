@@ -82,6 +82,13 @@ python3 common/catalog/generate.py --source common/catalog/declarations.json \
 the data with the independently authored Python oracles of the EVM wire,
 foundation, binomial and hash-chain references without changing them.
 
+`validation-cases.json` is the case list shared by the three validators: edits
+of the two documents that each validator must accept, and edits that each must
+refuse, with the diagnostic each one gives. `validation_cases.py` specifies and
+applies the edits. `test_instances.py` runs them against the generator, the
+compiler's `catalog-source` test against the generator and `zkc-tblgen`, and
+`crates/zkc-catalog/tests/validation_cases.rs` against the Rust build.
+
 `Catalog.td`, `Mathematical.td` and `NativeInstallation.td` are generated
 outputs. The normal compiler configure step runs this projection; the
 `ZkcContractDeclarationsGen` target then regenerates native

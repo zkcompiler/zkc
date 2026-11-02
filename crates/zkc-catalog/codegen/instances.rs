@@ -371,6 +371,13 @@ impl<'a> Instances<'a> {
                 )?;
                 if domain.capabilities.contains("PairingField") {
                     self.pairing(name, domain)?;
+                } else {
+                    require(
+                        !["PairingG1", "PairingG2", "PairingGT"]
+                            .iter()
+                            .any(|member| domain.members.contains_key(member)),
+                        "pairing group members occur only on PairingField rows",
+                    )?;
                 }
             }
             Facts::Transcript(decoder) => {

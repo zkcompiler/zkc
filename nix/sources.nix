@@ -35,6 +35,7 @@ let
     "common/unicode"
     "common/catalog/declarations.json"
     "common/catalog/installation.json"
+    "common/catalog/validation-cases.json"
   ];
   projects = [
     "zkc.workspace.toml"

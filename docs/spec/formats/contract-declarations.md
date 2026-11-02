@@ -79,7 +79,8 @@ The source-vocabulary columns describe how the frontend uses a constructor.
 native data. `collection` is null or `{rank, element}`: `rank` is 1 or 2 and
 `element` is `parameter` (the element is the value type of the first
 parameter: `field` over a Field domain, `group` over a Group domain, or the
-Type argument itself), `index` or `byte`. `setup` is null, `prover` or
+Type argument itself; a constructor whose first parameter is none of these
+has no `parameter` element), `index` or `byte`. `setup` is null, `prover` or
 `verifier` and marks the setup-key constructors. These columns grant no
 codec, transport or execution authority.
 
@@ -269,7 +270,9 @@ from a name, prefix or spelling. Row order is declaration order and is part of
 the published bytes: the [structured-source catalogue](structured-source.md)
 emits domains with their members and capabilities, and random services, in
 this order. Identities use the catalog name rule: 1 to 256 characters, a
-letter or `_` first, then letters, digits, `_`, `.`, `-` or `/`.
+letter or `_` first, then letters, digits, `_`, `.`, `-` or `/`. Counts in
+these tables are JSON integers from 0 to 1,048,576; a limit's `value` has its
+own range.
 
 ```text
 Domain         = {identity, sort, members, capabilities}
@@ -303,8 +306,9 @@ is the row's sort, at most once per row, naming a domain of the member's
 result sort. `capabilities` is an ordered list of unique declared unary
 predicates over the row's sort, closed under `rules`. A `PairingField` row
 names distinct `PairingG1` and `PairingG2` groups, and optionally a distinct
-`PairingGT` group, each holding `ScalarAction` with this field as `Scalar`.
-`PointField` and `EvaluationField` members occur only on `multilinearKzg`
+`PairingGT` group, each holding `ScalarAction` with this field as `Scalar`;
+`PairingG1`, `PairingG2` and `PairingGT` members occur only on `PairingField`
+rows. `PointField` and `EvaluationField` members occur only on `multilinearKzg`
 commitments.
 
 `characteristic` is the field's characteristic as a canonical decimal at most
@@ -444,7 +448,8 @@ installed implementation.
 An aggregate frame row grants a message frame for one constructor: `sequence`
 and `variant` with the empty domain, and `field_array` with the one Field
 domain it names; that field has a `field` codec with a `Scalar` frame, which
-encodes the array's elements. Encoding restrictions stay separate from type formation:
+encodes the array's elements. Each `(constructor, domain)` pair has at most
+one row. Encoding restrictions stay separate from type formation:
 `field_array` over a field without a row is a valid logical type without a
 message frame, and a row is required before any reader admits such a frame.
 

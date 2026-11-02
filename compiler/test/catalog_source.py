@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "common/catalog"))
 from generate import unique, validate, validate_installation  # noqa: E402
 from tablegen import project  # noqa: E402
 from test_deterministic_data import COVERAGE  # noqa: E402
+import validation_cases  # noqa: E402
 
 
 def main():
@@ -66,105 +67,40 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
         assert native(source, physical=installation) == installation
         assert project(source, installation) == project(source, installation)
 
-    def find(rows, **fields):
-        return next(r for r in rows if all(r[k] == v for k, v in fields.items()))
+    # The shared validation cases: the generator and zkc-tblgen each accept the
+    # accepted edits and refuse every refused edit on their own, with their own
+    # diagnostics. The Rust build runs the same cases.
+    def run_native(value, physical, expected=None):
+        """zkc-tblgen over the declarations alone, then with the installation."""
+        if expected is None:
+            assert native(value, check_source=False) == value
+            assert native(value, check_source=False, physical=physical) == physical
+            return
+        try:
+            native(value, check_source=False)
+        except AssertionError:
+            native(value, expected, check_source=False)
+            return
+        native(value, expected, check_source=False, physical=physical)
 
-    # Each forged row breaks one installed-instance, Succession or installation
-    # rule; the generator and zkc-tblgen must each refuse it on their own.
-    for label, mutate, generator_diagnostic, native_diagnostic, physical in [
-        ("duplicate identity",
-         lambda c, i: c["domains"].append(copy.deepcopy(c["domains"][0])),
-         "duplicate domain identity", "duplicate domain identity", False),
-        ("member sort mismatch",
-         lambda c, i: find(c["domains"], identity="edwards25519.prime")["members"].__setitem__(
-             0, ["Scalar", "ristretto255.group"]),
-         "domain member sort mismatch", "domain member sort mismatch", False),
-        ("codec over an unadmitted type",
-         lambda c, i: c["codecs"].append({"identity": "zkcv.point.koala-bear/0", "kind": "point",
-                                          "domain": "koala-bear", "frame": None}),
-         "codec payload is not an admitted logical type",
-         "codec payload is not an admitted logical type", False),
-        ("unshared duplicate tag",
-         lambda c, i: find(c["codecs"], kind="field", domain="baby-bear")["frame"].update(tag=19),
-         "frame tag 19 needs exactly one user", "frame tag 19 needs exactly one user", False),
-        ("shared tag used by an unlisted kind",
-         lambda c, i: find(c["frameTags"], tag=71)["shared"].update(kind="proof"),
-         "shared frame tag 71 users disagree", "shared frame tag 71 users disagree", False),
-        ("codec frame of another layout",
-         lambda c, i: find(c["codecs"], kind="field", domain="koala-bear")["frame"].update(tag=20),
-         "codec kind field fixes its frame layout", "codec kind field fixes its frame layout", False),
-        ("empty extension reduction",
-         lambda c, i: find(c["domains"], identity="koala-bear.ext4-binomial3")["field"]["structure"].update(
-             reduction=[]),
-         "extension reduction is a nonempty list", "extension reduction is a nonempty list", False),
-        ("structure without ExtensionField",
-         lambda c, i: find(c["domains"], identity="koala-bear.ext4-binomial3")["capabilities"].remove(
-             "ExtensionField"),
-         "ExtensionField disagrees with the structure",
-         "ExtensionField disagrees with the structure", False),
-        ("prime structure holding ExtensionField",
-         lambda c, i: find(c["domains"], identity="koala-bear")["capabilities"].append("ExtensionField"),
-         "ExtensionField disagrees with the structure",
-         "ExtensionField disagrees with the structure", False),
-        ("BaseField member over the prime subfield",
-         lambda c, i: find(c["domains"], identity="gf2-64.pentanomial-4-3-1")["members"].append(
-             ["BaseField", "koala-bear"]),
-         "exactly the rows over BaseField have a BaseField member",
-         "exactly the rows over BaseField have a BaseField member", False),
-        ("Succession port outside the signature",
-         lambda c, i: find(c["operations"], name="resource_unit.pass")["facets"][0].update(stateInput=1),
-         "succession port outside signature", "facet port outside signature", False),
-        ("Succession over ordinary values",
-         lambda c, i: find(c["operations"], name="index.add")["facets"].append(
-             {"kind": "Succession", "stateInput": 0, "stateOutput": 0}),
-         "succession ports must be resource units", "facet port constructor mismatch", False),
-        ("canonical representation without a framed codec",
-         lambda c, i: find(i["representations"], identity="arkworks.polynomial/0").update(frame="canonical"),
-         "requires a framed codec for its instance", "requires a framed codec for its instance", True),
-        ("local default of a framed instance",
-         lambda c, i: find(i["representations"], identity="native.bool/0").update(frame="local"),
-         "the default of a framed instance is canonical",
-         "the default of a framed instance is canonical", True),
-        ("canonical applied representation without an aggregate frame",
-         lambda c, i: find(i["appliedRepresentations"], identity="blst/fixed-vector").update(frame="canonical"),
-         "requires its aggregate frame", "requires its aggregate frame", True),
-        ("canonical field array over a field without a frame",
-         lambda c, i: find(i["appliedRepresentations"], identity="arkworks.field-array/0").update(
-             arguments=[["domain", "Field", "koala-bear"], ["natRange", "0", "1048576"]],
-             child={"kind": "field", "domain": "koala-bear", "representation": "plonky3.koala-bear/0"}),
-         "requires its aggregate frame", "requires its aggregate frame", True),
-        ("type pattern that is no logical type instance",
-         lambda c, i: find(i["appliedRepresentations"], identity="blst/fixed-vector")["arguments"].__setitem__(
-             0, ["type", ["apply", "sequence", [["type", ["apply", "bool", []]]]]]),
-         "type pattern is not a logical type instance", "type pattern is not a logical type instance", True),
-        ("slot pattern without a declared domain",
-         lambda c, i: find(i["appliedRepresentations"], identity="logical.resource_unit/0").update(
-             arguments=[["domain", "Slot", "Slot.A"]]),
-         "domain argument disagrees with its parameter",
-         "domain argument disagrees with its parameter", True),
-        ("second field form for one field",
-         lambda c, i: i["fieldForms"].append(copy.deepcopy(i["fieldForms"][0])),
-         "duplicate field form", "duplicate field form", True),
-        ("second default representation",
-         lambda c, i: find(i["representations"], identity="blst/fr", kind="field").update(default=True),
-         "second default representation", "second default representation", True),
-        ("installation row naming an undeclared instance",
-         lambda c, i: i["representations"].append(
-             dict(copy.deepcopy(i["representations"][0]), kind="field", domain="bn254.g1")),
-         "representation names an undeclared logical type instance",
-         "representation names an undeclared logical type instance", True),
-    ]:
-        with case("both native validators refuse " + label):
-            value, other = copy.deepcopy(source), copy.deepcopy(installation)
-            mutate(value, other)
+    cases = validation_cases.load()
+    for shared in cases["accepted"]:
+        with case("both native validators accept " + shared["name"]):
+            value, other = validation_cases.apply(shared["edits"], source, installation)
+            validate(value)
+            validate_installation(other, value)
+            run_native(value, other)
+    for shared in cases["refused"]:
+        with case("both native validators refuse " + shared["name"]):
+            value, other = validation_cases.apply(shared["edits"], source, installation)
             try:
                 validate(value)
                 validate_installation(other, value)
             except ValueError as error:
-                assert generator_diagnostic in str(error), error
+                assert shared["diagnostics"]["generator"] in str(error), error
             else:
-                raise AssertionError("generator accepted " + label)
-            native(value, native_diagnostic, check_source=False, physical=other if physical else None)
+                raise AssertionError("generator accepted " + shared["name"])
+            run_native(value, other, shared["diagnostics"]["native"])
 
     for section, field, replacement, diagnostic in [
         ("frontendAssociations", "signature", "RandomConstructor", "frontend signature identity mismatch"),

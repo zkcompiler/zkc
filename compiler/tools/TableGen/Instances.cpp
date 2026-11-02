@@ -356,6 +356,10 @@ void Logical::checkDomains() {
                 row, "pairing group must act with this field as Scalar");
       }
     }
+    require(held.count("PairingField") ||
+                (!named.count("PairingG1") && !named.count("PairingG2") &&
+                 !named.count("PairingGT")),
+            row, "pairing group members occur only on PairingField rows");
     if (named.count("PointField") || named.count("EvaluationField"))
       require(sort == "Commitment" &&
                   text(row->getValueAsDef("commitmentFacts"), "scheme") ==
@@ -1134,8 +1138,8 @@ void Physical::checkFieldForms() {
       const auto word = montgomery->getValueAsInt("wordBytes");
       const auto radix = montgomery->getValueAsInt("radixBits");
       require(arithmetic, row, "Montgomery words require residue arithmetic");
-      require(word >= 1 && word * 8 == radix, row,
-              "Montgomery radix is the word width");
+      require(word >= 1 && radix <= staticNaturalLimit && word * 8 == radix,
+              row, "Montgomery radix is the word width");
       require(decimalBits(text(logical.facts(domain), "characteristic")) <=
                   uint64_t(radix),
               row, "characteristic exceeds the Montgomery radix");

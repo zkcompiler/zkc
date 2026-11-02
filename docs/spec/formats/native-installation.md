@@ -37,7 +37,7 @@ The root has exactly `format`, `representations`, `appliedRepresentations`,
 `providers`, `providerUnits`, `fieldForms` and `physicalArguments`. The format
 tag is `zkc.native-installation/0`. Unknown fields, duplicate keys and
 unresolved references refuse. Row order is declaration order. Identities use
-the catalog name rule.
+the catalog name rule, and counts are JSON integers from 0 to 1,048,576.
 
 ```text
 Representation        = {identity, kind, domain, default, layout, frame, unit}

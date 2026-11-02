@@ -994,6 +994,10 @@ def validate_domains(view):
                     and view.member(group, "Scalar") == row["identity"],
                     "pairing group must act with this field as Scalar",
                 )
+        require(
+            "PairingField" in capabilities or not {"PairingG1", "PairingG2", "PairingGT"} & set(named),
+            "pairing group members occur only on PairingField rows",
+        )
         if "PointField" in named or "EvaluationField" in named:
             require(
                 sort == "Commitment" and row["commitment"]["scheme"] == "multilinearKzg",

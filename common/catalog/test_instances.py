@@ -14,6 +14,7 @@ import unittest
 
 from generate import unique, validate, validate_installation
 from tablegen import project
+import validation_cases
 
 ROOT = Path(__file__).resolve().parents[2]
 SUPPORT = ROOT / "common/tests/support"
@@ -397,6 +398,24 @@ class Documents(unittest.TestCase):
         for label, mutate, expected in INSTALLATION_MUTATIONS:
             with self.subTest(label):
                 refuses(self, mutate, expected)
+
+    def test_shared_cases(self):
+        # The same cases run against zkc-tblgen (compiler/test/catalog_source.py)
+        # and the Rust build (crates/zkc-catalog/tests/validation_cases.rs).
+        catalog, installation = documents()
+        cases = validation_cases.load()
+        for case in cases["accepted"]:
+            with self.subTest(case["name"]):
+                declarations, physical = validation_cases.apply(case["edits"], catalog, installation)
+                validate(declarations)
+                validate_installation(physical, declarations)
+        for case in cases["refused"]:
+            with self.subTest(case["name"]):
+                declarations, physical = validation_cases.apply(case["edits"], catalog, installation)
+                with self.assertRaises(ValueError) as refusal:
+                    validate(declarations)
+                    validate_installation(physical, declarations)
+                self.assertIn(case["diagnostics"]["generator"], str(refusal.exception))
 
     def test_limits_match_the_specified_table(self):
         catalog, _ = documents()
