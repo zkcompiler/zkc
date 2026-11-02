@@ -134,7 +134,8 @@ impl CompilationCache {
             return Ok(result);
         }
         // Compile exactly this private snapshot, never the mutable paths prescanned
-        // for a key. Names/formats and length-delimited bodies define its closure.
+        // for a key. The source format, names/formats and length-delimited bodies
+        // define its closure.
         let snapshot = Snapshot::capture(request.project)?;
         let identity = compiler.capabilities()?;
         let mut key = snapshot.identity.clone();
@@ -227,6 +228,8 @@ impl Snapshot {
         let mut assets = std::collections::BTreeMap::new();
         let mut identity = Sha256::new();
         frame(&mut identity, b"zkc.compilation-cache/0");
+        // The same bytes read under another grammar are another compilation.
+        frame(&mut identity, project.source_format.as_str().as_bytes());
         let mut total = 0usize;
         let mut diagnostic_paths = Vec::new();
         for (index, flag) in project.flags.iter().enumerate() {
@@ -277,7 +280,7 @@ impl Snapshot {
                 modules.insert(header, path);
             }
         }
-        let project = Project::explicit(modules, assets)?;
+        let project = Project::explicit(project.source_format, modules, assets)?;
         Ok(Self {
             _directory: directory,
             project,
@@ -290,6 +293,7 @@ impl Snapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::project::SourceFormat;
     use std::collections::BTreeMap;
     #[test]
     fn snapshots_are_owned_and_changes_in_every_input_kind_change_identity() {
@@ -299,6 +303,7 @@ mod tests {
         fs::write(&source, "module example;").unwrap();
         fs::write(&asset, "{}").unwrap();
         let project = Project::explicit(
+            SourceFormat::Zkc,
             BTreeMap::from([("example".into(), source.to_str().unwrap().into())]),
             BTreeMap::from([(
                 "relation".into(),
@@ -333,6 +338,105 @@ mod tests {
             identity,
             Snapshot::capture(&project).unwrap().identity.finalize()
         );
+    }
+    #[test]
+    fn the_source_format_is_part_of_the_snapshot_identity() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("main.zkc");
+        fs::write(&source, "module example;").unwrap();
+        let project = |format| {
+            Project::explicit(
+                format,
+                BTreeMap::from([("example".into(), source.to_str().unwrap().into())]),
+                BTreeMap::new(),
+            )
+            .unwrap()
+        };
+        let zkc = Snapshot::capture(&project(SourceFormat::Zkc)).unwrap();
+        let layout = Snapshot::capture(&project(SourceFormat::ZkcLayout)).unwrap();
+        // The private copy compiles under the selection it is keyed by.
+        assert_eq!(zkc.project.source_format, SourceFormat::Zkc);
+        assert_eq!(layout.project.source_format, SourceFormat::ZkcLayout);
+        assert_ne!(zkc.identity.finalize(), layout.identity.finalize());
+    }
+    /// The same sources under another grammar never reuse a cached package.
+    #[cfg(unix)]
+    #[test]
+    fn a_cached_package_is_reused_only_under_its_source_format() {
+        use crate::entry::Package;
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let digest = |bytes: &[u8]| crate::io::bytes::hex(&Sha256::digest(bytes));
+        let schema = serde_json::json!({"kind":"unit","type":"()","identity":digest(b"()"),
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":[]});
+        let interface = serde_json::json!({"format":"zkc.language-interface/0",
+            "capture":digest(b"capture"),"original":digest(b"original"),"toolchain":"test",
+            "entry":"example::Main","selection":{"kind":"function","function":"example::Main"},
+            "functions":[{"symbol":"example::Main","parameters":[],"result":schema}],
+            "protocols":[],"relations":[],"setups":[]});
+        let options = super::super::ResolvedSettings::default().options();
+        let package = serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":"artifact","assets":[],"options":options})
+        .to_string();
+        assert!(
+            Package::capture(
+                package.as_bytes(),
+                &Sha256::digest(package.as_bytes()).into(),
+                Package::MAX_BYTES
+            )
+            .is_ok()
+        );
+        let package_path = root.path().join("package.json");
+        fs::write(&package_path, &package).unwrap();
+        let log = root.path().join("formats.log");
+        let compiler = root.path().join("compiler");
+        fs::write(
+            &compiler,
+            format!(
+                "#!/bin/sh\ncase \"$1\" in\n--capabilities) printf '%s' '{{\"format\":\"zkc.compiler-capabilities/0\"}}';;\n\
+                 language-package) for arg do case \"$arg\" in --source-format=*) printf '%s\\n' \"${{arg#--source-format=}}\" >> '{}';; esac; done; cat '{}';;\n\
+                 *) exit 9;;\nesac\n",
+                log.display(),
+                package_path.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&compiler, fs::Permissions::from_mode(0o700)).unwrap();
+        let compiler = Compiler::new(compiler.to_str().unwrap()).unwrap();
+        let source = root.path().join("main.zkc");
+        fs::write(&source, "module example;").unwrap();
+        let cache = CompilationCache::new(root.path().join("cache"), 1024 * 1024).unwrap();
+        let build = |format| {
+            let project = Project::explicit(
+                format,
+                BTreeMap::from([("example".into(), source.to_str().unwrap().into())]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let result = compiler
+                .build(CompilationRequest {
+                    project: &project,
+                    selection: Default::default(),
+                    options: options.clone(),
+                    observations: None,
+                    cache: Some(&cache),
+                })
+                .unwrap();
+            assert_eq!(result.package.bytes(), package.as_bytes());
+            result.cache.unwrap()
+        };
+        let first = build(SourceFormat::Zkc);
+        assert_eq!(first["status"], "miss");
+        assert_eq!(first["retained"], true);
+        let reused = build(SourceFormat::Zkc);
+        assert_eq!(reused["status"], "hit");
+        assert_eq!(reused["key"], first["key"]);
+        let other = build(SourceFormat::ZkcLayout);
+        assert_eq!(other["status"], "miss");
+        assert_ne!(other["key"], first["key"]);
+        // Only misses invoke the compiler, each with the project's selection.
+        assert_eq!(fs::read_to_string(&log).unwrap(), "zkc\nzkc-layout\n");
     }
     #[test]
     fn publication_evicts_complete_records_and_skips_oversized_results() {
@@ -373,7 +477,7 @@ mod tests {
                 (name, path.to_str().unwrap().to_owned())
             })
             .collect();
-        let project = Project::explicit(modules, BTreeMap::new()).unwrap();
+        let project = Project::explicit(SourceFormat::Zkc, modules, BTreeMap::new()).unwrap();
         let mut snapshot = Snapshot::capture(&project).unwrap();
         let mut error: Error = "source-compilation".into();
         error.diagnostics = Some(

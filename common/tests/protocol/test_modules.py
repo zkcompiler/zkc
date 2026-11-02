@@ -31,6 +31,7 @@ protocol Compute roles(P)(xs:[F;2]@P)->(value:F@P){return Reader::first<F,2>(xs)
 entry fn Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
 ''')
         manifest = '''format="zkc.project/0"
+source-format="zkc"
 [modules]
 main="main.zkc"
 library="library.zkc"

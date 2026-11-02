@@ -1,4 +1,5 @@
 "format" = "zkc.project/0"
+"source-format" = "zkc"
 
 ["modules"]
 "ethereum::eip4844" = "lib.zkc"

@@ -40,7 +40,7 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
                                f'--project={EXAMPLE}/zkc.toml',
                                f'accumulator_machine::{entry}', f'--output={package}', *flags], timeout=600)
         return package, report['package_sha256']
-    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]

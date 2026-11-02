@@ -81,7 +81,7 @@ entry fn Demo(inputs: sigma::{protocol}<G>::Inputs) {{ return sigma::{protocol}<
 ''')
     package = directory / 'fixed.zkpkg'
     entry = kind + 'Interactive'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sigma={library}', f'--module=example={client}',
                              'example::Demo', f'--output={package}'])
     roles = {role: read(PROJECT, role, entry) for role in ('P', 'V')}

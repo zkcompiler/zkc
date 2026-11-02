@@ -827,7 +827,7 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     let manifest = root.join("zkc.toml");
     std::fs::write(
         &manifest,
-        "format = \"zkc.project/0\"\n[modules]\nsample = \"main.zkc\"\n",
+        "format = \"zkc.project/0\"\nsource-format = \"zkc\"\n[modules]\nsample = \"main.zkc\"\n",
     )
     .unwrap();
     let compiler = root.join("compiler");

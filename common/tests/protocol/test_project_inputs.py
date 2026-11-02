@@ -119,7 +119,7 @@ def test_dry_run_checks_inputs_without_executing_or_issuing_resources(toolchain,
     protocol Test roles(P,V)(go:bool@P)->(accepted:bool@V){require go;let r=send P->V(go);return r;}
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
-    options = [f'--compiler={toolchain.compiler}', f'--module=test={source}', '--allow-authored']
+    options = [f'--compiler={toolchain.compiler}', '--source-format=zkc', f'--module=test={source}', '--allow-authored']
     witness = journal.write('witness.json', {'go': False})
     checked = journal.json([toolchain.runtime, '--json', 'prove', '--dry-run', *options, f'--witness={witness}'])
     assert checked['status'] == 'inputs-checked' and 'execution' not in checked
@@ -207,7 +207,7 @@ def test_modes_and_templates_never_guess_or_replace_inputs(toolchain, journal, d
     journal.run([toolchain.runtime, '--json', 'run', *pinned, '--input=missing.json'], refuses='entry-input-document')
     source = directory / 'unit.zkc'
     source.write_text('module u;entry fn Main(u:())->(){return u;}')
-    explicit = [f'--compiler={toolchain.compiler}', f'--module=u={source}']
+    explicit = [f'--compiler={toolchain.compiler}', '--source-format=zkc', f'--module=u={source}']
     generated = journal.json([toolchain.runtime, '--json', 'prepare', *explicit, f'--output={directory / "unit"}'])
     path = Path(generated['files'][0])
     assert json.loads(path.read_text()) == {'u': None}
@@ -223,7 +223,7 @@ def test_dry_run_ignores_proof_and_result_paths_without_publication(toolchain, j
     }
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
-    target = [f'--compiler={toolchain.compiler}', f'--module=test={source}']
+    target = [f'--compiler={toolchain.compiler}', '--source-format=zkc', f'--module=test={source}']
     witness = journal.write('witness.json', {'go': False})
     arguments = journal.write('arguments.json', {'inputs': {'P': {'go': False}, 'V': {}}})
     absent = directory / 'never-created'

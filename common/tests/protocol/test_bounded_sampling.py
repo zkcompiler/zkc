@@ -57,7 +57,7 @@ def test_replaced_service_cannot_hide_queries_inside_nonzero_sampler(toolchain, 
     library = Path(__file__).resolve().parents[3] / 'libraries/core/services/fields.zkc'
     # The private sampler's unlabelled draw is still a query on the selected
     # root. A construction cannot omit it and silently retain managed entropy.
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', f'--module=zkc::sampling::fields={library}',
                   'sample::Demo', f'--output={directory / "proof.zkpkg"}'],
                  refuses='source.construction')
@@ -70,7 +70,7 @@ def test_bounded_word_sampling(toolchain, journal, directory, attempts, flags):
     source.write_text(SOURCE.replace('ATTEMPTS', str(attempts)))
     library = Path(__file__).resolve().parents[3] / 'libraries/core/services/words.zkc'
     package = directory / 'sampling.zkpkg'
-    built = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    built = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                           f'--module=sample={source}', f'--module=zkc::sampling::words={library}',
                           'sample::Demo', f'--output={package}', *flags])
     maximum = (1 << 64) - 1
@@ -137,7 +137,7 @@ def test_non_power_of_two_construction_uses_an_explicit_sampler(toolchain, journ
     library = Path(__file__).resolve().parents[3] / 'libraries/core/services/words.zkc'
     modules = [f'--module=sample={source}', f'--module=zkc::sampling::words={library}']
     package = directory / 'sampling.zkpkg'
-    built = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    built = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                           *modules, 'sample::Demo', f'--output={package}'])
     public = journal.write('public.json', {'expected': str(((1 << 64) - 1) % bound)})
     proof = directory / 'proof.bin'
@@ -146,7 +146,7 @@ def test_non_power_of_two_construction_uses_an_explicit_sampler(toolchain, journ
     journal.json([toolchain.runtime, '--json', 'prove', *args, f'--output={proof}'])
     assert journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'])['status'] == 'accepted'
     # The default native suite still owns its existing power-of-two byte map.
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   *modules, 'sample::Native', f'--output={directory / "native.zkpkg"}'],
                  refuses='native-proof-index-bound')
 
@@ -206,7 +206,7 @@ def test_explicit_transcript_trials_preserve_state_and_charge_work(toolchain, jo
         source = directory / 'main.zkc'
         source.write_text(text.replace('TRIALS', trials if trial else ''))
         package = directory / f'{trial}.zkpkg'
-        built = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+        built = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                               f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
         proof = directory / f'{trial}.bin'
         args = [f'--package={package}', f'--sha256={built["package_sha256"]}', '--allow-authored']

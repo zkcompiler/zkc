@@ -229,7 +229,7 @@ def test_unsupported_encodings_cross_family_embeddings_and_literals_refuse(
         toolchain, journal, directory, field, other, result, body, code):
     path = directory / 'refused.zkc'
     path.write_text(REFUSAL.format(field=field, other=other, result=result, body=body))
-    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                  f'--module=sample={path}', 'sample::Demo',
                  f'--output={directory / "refused.zkpkg"}'], refuses=code)
 
@@ -395,7 +395,7 @@ entry fn Demo(inputs:Run::Inputs) {{ return Run::run(inputs); }}
 '''
         source_path = directory / f'{name}.zkc'
         source_path.write_text(source)
-        journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+        journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                      f'--module=sample={source_path}', f'--asset={name}={kind}={path}',
                      'sample::Demo', f'--output={directory / (name + ".zkpkg")}'],
                     refuses='source.asset-carrier')

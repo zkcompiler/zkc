@@ -66,7 +66,8 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
-The CLI accepts a TOML manifest with `format = "zkc.project/0"`, an optional
+The CLI accepts a TOML manifest with `format = "zkc.project/0"`, a required
+`source-format` (`"zkc"` or `"zkc-layout"`), an optional
 `modules` table mapping logical names to paths, an optional `dependencies` table
 mapping local labels to library directories or workspace selections, and an optional `assets` table
 mapping names to tables with exactly `format` and `path`. Unknown or duplicate
@@ -88,6 +89,21 @@ All participating manifests and mapped files are protected compilation inputs.
 No registry lookup, implicit module discovery or version selection occurs. Each supplied path
 is nonempty, contains no NUL, and is at most 4096 bytes.
 
+`source-format` selects the reader of the package's authored modules and is the
+value of the compiler's `--source-format`. It is distinct from `format`, which
+names the manifest schema, and from `[profile.NAME]`, which selects build
+settings; no profile, build setting or request option reinterprets a package's
+source. Every manifest of a closure states the same value, including a manifest
+with only dependencies, so one compilation reads its authored modules with one
+grammar. A missing or unknown value refuses with `source-project-format`, and a
+closure whose manifests disagree refuses with `source-project-mixed-format`, both
+before any compilation or cache lookup. Assets keep their declared formats, and
+installation sources keep their installed origin. A parse failure never retries
+another grammar. Explicit SDK and CLI module maps carry the same typed selection:
+the CLI requires `--source-format` with `--module` or `--asset` and refuses it
+with a manifest. The selection is framed into the compilation cache key, the
+capture identity and the project graph's package records.
+
 Optional root `[build]` and `[profile.NAME]` tables contain partial Boolean
 implementation settings: `simplify`, `finite-bulk`, `release-storage`,
 `fuse-vector-reductions`, `fuse-collect-fold` and `calculation-batching`.
@@ -106,8 +122,8 @@ Optional root `[test.NAME]` tables describe consumer invocations, with required
 default `success`). At most 256 tests are admitted, with nonempty names of at most
 128 bytes. An Entry name is at most 4096 bytes; there are at most 64 arguments of
 4096 bytes each and an expectation is nonempty and at most 128 bytes. Recipes
-cannot replace source roots, the compiler, pinned packages, profiles, reports or
-compilation caches. File arguments resolve beside the root manifest. Dependency
+cannot replace source roots, source formats, the compiler, pinned packages,
+profiles, reports or compilation caches. File arguments resolve beside the root manifest. Dependency
 recipes are validated but never run implicitly. Tests use ordinary checking and
 Host execution. See [tooling](../../compiler/tooling.md) for defaults and usage.
 

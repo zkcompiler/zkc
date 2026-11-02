@@ -120,7 +120,7 @@ pub operator infixl(60) ⊕=合成;
 pub fn 公開(α:index,β:index)->index{return α⊕β;}
 fn 内部(α:index,β:index)->index{return α⊕β;}
 ''', encoding='utf-8')
-    command = [toolchain.runtime, '--json', 'inspect', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'inspect', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                f'--module=数学={source}', '--view=notations']
     public = journal.json(command)['checked']['notations']
     assert public['format'] == 'zkc.notations/0'

@@ -72,7 +72,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                             f'TableArgument<0,Recurrence,3,{log_size},{queries},8>')
     path = directory / 'main.zkc'
     path.write_text(source)
-    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                f'--module=air_stark_example={path}',
                *library_modules('arguments/stark/single_table/koala_bear_octic', overrides={'stark::octic_table': stark, 'air::table': table}),
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',

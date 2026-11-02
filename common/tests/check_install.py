@@ -41,7 +41,7 @@ def check(binary, compiler, output):
     installed = binary.parent.parent / "share/zkc/zkc.workspace.toml"
     (output / "installed.zkc").write_text("module installed; use schnorr::{Schnorr};\n")
     (output / "installed.toml").write_text(
-        'format="zkc.project/0"\n[modules]\ninstalled="installed.zkc"\n'
+        'format="zkc.project/0"\nsource-format="zkc"\n[modules]\ninstalled="installed.zkc"\n'
         f'[workspace]\npath={json.dumps(str(installed))}\n'
         '[dependencies]\nschnorr={workspace="protocols.sigma.schnorr"}\n')
     external = json.loads(invoke("installed-catalog", "inspect", "--project=installed.toml", "--view=api"))

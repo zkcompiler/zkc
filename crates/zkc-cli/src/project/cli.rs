@@ -20,6 +20,7 @@ pub(crate) struct Source {
 impl Source {
     pub fn load(args: &Arguments<'_>) -> Result<Self> {
         let mut manifest = None;
+        let mut source_format = None;
         let mut modules = BTreeMap::new();
         let mut assets = BTreeMap::new();
         let mut compiler = "zkc-compile";
@@ -50,6 +51,10 @@ impl Source {
                     compiler = value;
                     false
                 }
+                "--source-format" => {
+                    source_format = Some(value);
+                    false
+                }
                 "--module" => {
                     let (name, path) = value.split_once('=').ok_or("source-project-format")?;
                     modules.insert(name.into(), path.into()).is_some()
@@ -74,12 +79,17 @@ impl Source {
             }
         }
         let explicit = !modules.is_empty() || !assets.is_empty();
-        if manifest.is_some() && explicit {
+        // A manifest states its own source format; no request reinterprets it.
+        if (manifest.is_some() && explicit) || (!explicit && source_format.is_some()) {
             return Err("cli-usage".into());
         }
         let project = match manifest {
             Some(path) => Project::load(path)?,
-            None if explicit => Project::explicit(modules, assets)?,
+            None if explicit => Project::explicit(
+                super::SourceFormat::parse(source_format.ok_or("source-format-required")?)?,
+                modules,
+                assets,
+            )?,
             None => Project::discover()?,
         };
         let settings = project.settings(args.value("--profile"), &overrides)?;
@@ -109,7 +119,7 @@ impl Source {
             explicit_selection: args
                 .options
                 .iter()
-                .filter(|(k, _)| matches!(*k, "--module" | "--asset"))
+                .filter(|(k, _)| matches!(*k, "--module" | "--asset" | "--source-format"))
                 .map(|(k, v)| format!("{k}={}", v.unwrap()))
                 .collect(),
             project,
@@ -294,6 +304,7 @@ pub(crate) fn inspect(args: &Arguments<'_>) -> Json {
                 || args.has("--project")
                 || args.has("--module")
                 || args.has("--asset")
+                || args.has("--source-format")
                 || args.has("--profile")
             {
                 return Err("cli-usage".into());
@@ -370,6 +381,7 @@ mod tests {
                         let mut options = vec![
                             ("--compiler", executable.to_str()),
                             ("--module", Some("sample=sample.zkc")),
+                            ("--source-format", Some("zkc")),
                         ];
                         if !finite_bulk {
                             options.push(("--no-finite-bulk", None));
@@ -433,6 +445,7 @@ mod tests {
                 options: vec![
                     ("--compiler", executable.to_str()),
                     ("--module", Some("sample=sample.zkc")),
+                    ("--source-format", Some("zkc")),
                     ("--oracle-realization", Some(&text)),
                 ],
             })
@@ -449,6 +462,53 @@ mod tests {
                 options: vec![("--oracle-realization", Some(invalid))],
             });
             assert_eq!(result.err().unwrap(), "oracle-realization-selection");
+        }
+    }
+    #[test]
+    fn explicit_sources_name_their_format_and_manifests_keep_theirs() {
+        let executable = std::env::current_exe().unwrap();
+        let load = |extra: &[(&'static str, Option<&'static str>)]| {
+            let mut options = vec![("--compiler", executable.to_str())];
+            options.extend_from_slice(extra);
+            Source::load(&Arguments {
+                positional: vec![],
+                options,
+            })
+        };
+        let module = ("--module", Some("sample=sample.zkc"));
+        let asset = ("--asset", Some("relation=air-json=air.json"));
+        for sources in [vec![module], vec![asset], vec![module, asset]] {
+            assert_eq!(
+                load(&sources).err().unwrap(),
+                "source-format-required",
+                "{sources:?}"
+            );
+        }
+        for unknown in ["zkc-legacy", "", "ZKC", "zkc,zkc-layout"] {
+            assert_eq!(
+                load(&[module, ("--source-format", Some(unknown))])
+                    .err()
+                    .unwrap(),
+                "source-project-format",
+                "{unknown}"
+            );
+        }
+        // A manifest owns its selection; a request never reinterprets it.
+        for selection in [vec![("--project", Some("/missing/zkc.toml"))], vec![]] {
+            let mut options = selection;
+            options.push(("--source-format", Some("zkc-layout")));
+            assert_eq!(load(&options).err().unwrap(), "cli-usage");
+        }
+        for format in ["zkc", "zkc-layout"] {
+            let source = load(&[module, ("--source-format", Some(format))]).unwrap();
+            // Prepared commands repeat the complete explicit selection.
+            assert_eq!(
+                source.explicit_selection,
+                [
+                    "--module=sample=sample.zkc".to_owned(),
+                    format!("--source-format={format}")
+                ]
+            );
         }
     }
 }

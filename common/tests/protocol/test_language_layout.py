@@ -148,3 +148,46 @@ entry def Run(inputs: Schnorr::Inputs):
     assert json.loads(outputs.read_text())["value"] == {
         "P": {"result": True}, "V": {"result": False},
     }
+
+
+def test_layout_project_builds_through_its_manifest(toolchain, journal, directory):
+    project = directory / "project"
+    project.mkdir()
+    (project / "schnorr.zkc").write_text(SOURCE.read_text())
+    manifest = project / "zkc.toml"
+    manifest.write_text('format="zkc.project/0"\nsource-format="zkc-layout"\n'
+                        '[modules]\nschnorr="schnorr.zkc"\n')
+    compile_command = [toolchain.runtime, "--json", "compile", f"--compiler={toolchain.compiler}",
+                       "schnorr::Run"]
+    package = directory / "manifest.zkpkg"
+    built = journal.json([*compile_command, f"--project={manifest}", f"--output={package}"])
+    assert built["status"] == "compiled"
+    report, values = run_layout(toolchain, journal, directory, package, built["package_sha256"])
+    assert report["status"] == "executed" and values == {"P": {}, "V": {"result": True}}
+    graph = journal.json([toolchain.runtime, "--json", "inspect", "--view=project",
+                          f"--compiler={toolchain.compiler}", f"--project={manifest}"])
+    assert [p["source_format"] for p in graph["project_graph"]["packages"]] == ["zkc-layout"]
+    # Explicit inputs name the same selection and compile the same package.
+    explicit = [*compile_command, f"--module=schnorr={project / 'schnorr.zkc'}"]
+    same = directory / "explicit.zkpkg"
+    rebuilt = journal.json([*explicit, "--source-format=zkc-layout", f"--output={same}"])
+    assert rebuilt["package_sha256"] == built["package_sha256"]
+    journal.json([*explicit, f"--output={same}"], refuses="source-format-required")
+    journal.json([*compile_command, f"--project={manifest}", "--source-format=zkc",
+                  f"--output={same}"], refuses="cli-usage")
+    # Another selection never falls back to the source's own grammar.
+    journal.json([*explicit, "--source-format=zkc", f"--output={same}"],
+                 refuses="source-compilation")
+    manifest.write_text(manifest.read_text().replace('"zkc-layout"', '"zkc"'))
+    journal.json([*compile_command, f"--project={manifest}", f"--output={same}"],
+                 refuses="source-compilation")
+    # One closure reads its authored modules with one grammar.
+    library = directory / "library"
+    library.mkdir()
+    (library / "lib.zkc").write_text("module library;\n")
+    (library / "zkc.toml").write_text('format="zkc.project/0"\nsource-format="zkc"\n'
+                                      '[modules]\nlibrary="lib.zkc"\n')
+    manifest.write_text('format="zkc.project/0"\nsource-format="zkc-layout"\n'
+                        '[modules]\nschnorr="schnorr.zkc"\n[dependencies]\nlibrary="../library"\n')
+    journal.json([*compile_command, f"--project={manifest}", f"--output={same}"],
+                 refuses="source-project-mixed-format")

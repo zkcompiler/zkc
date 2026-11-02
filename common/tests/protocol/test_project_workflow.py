@@ -1,5 +1,6 @@
 """User workflows through the installed CLI, including implicit path authority."""
 import json
+import tomllib
 import os
 from hashlib import sha256
 from pathlib import Path
@@ -18,7 +19,7 @@ protocol Echo<T:Type> roles(P,V)(value:T@P)->(received:T@V){
   let received=send P->V(value);return received;
 }
 ''')
-    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\nexample="main.zkc"\n')
     assert journal.json(command(toolchain, 'check'), cwd=directory)['entries'] == []
     selectors = ['Echo<bool>', 'Echo<index>', 'Echo<example::F>']
     for selector, value in zip(selectors, [True, '7', '9'], strict=True):
@@ -53,7 +54,7 @@ protocol Echo<T:Type> roles(P,V)(value:T@P)->(received:T@V){
 
 
 def test_generic_selector_qualification_keeps_the_length_bound(toolchain, journal, directory):
-    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\nexample="main.zkc"\n')
     (directory / 'main.zkc').write_text('''module example;
 protocol Count<N:nat> roles(P)()->(out:bool@P){return true;}
 ''')
@@ -74,7 +75,7 @@ protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
   let received=send P->V(value);return received;
 }
 ''')
-    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\nexample="main.zkc"\n')
     checked = journal.json(command(toolchain, 'check'), cwd=directory)
     assert checked['entries'] == [{'name': 'example::Echo', 'kind': 'function'}]
     inspected = journal.json(command(toolchain, 'inspect', 'Echo'), cwd=directory)
@@ -115,6 +116,8 @@ def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, director
     assert (project / 'main.zkc').read_text() == (
         'module example;\n\nentry fn Main(value: index) -> index {\n  return value;\n}\n'
     )
+    # The skeleton names the grammar of the source it writes.
+    assert tomllib.loads((project / 'zkc.toml').read_text())['source-format'] == 'zkc'
     value = project / 'inputs/example.Main/arguments.json'
     assert json.loads(value.read_text()) == {'value': None}
     journal.json(command(toolchain, 'run'), cwd=project, refuses='entry-input-unfilled')
@@ -266,7 +269,7 @@ def test_prepare_all_entries_preserves_data_and_checks_current_shapes(toolchain,
 
 
 def test_unicode_project_paths_and_explicit_role_inputs(toolchain, journal, directory):
-    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\n"数学"="main.zkc"\n')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\n"数学"="main.zkc"\n')
     (directory / 'main.zkc').write_text('''module 数学;
       fn 増加(α:index)->index{return α+1;}
       protocol 実行₂ roles(参加者)(α:index@参加者)->(結果:index@参加者){return 増加(α);}
@@ -301,7 +304,7 @@ def test_unicode_project_paths_and_explicit_role_inputs(toolchain, journal, dire
 
 
 def test_unicode_proof_names_and_service_options(toolchain, journal, directory):
-    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\n"数学"="main.zkc"\n')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\n"数学"="main.zkc"\n')
     (directory / 'main.zkc').write_text('''module 数学;
       domain F=field("bls12-381.fr");
       protocol 計算 roles(証明者,検証者)(秘密:bool@証明者,乱数:Random<F>@証明者)
@@ -328,7 +331,7 @@ def test_unicode_proof_names_and_service_options(toolchain, journal, directory):
 
 
 def test_human_stops_use_source_participant_names(toolchain, journal, directory):
-    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\nexample="main.zkc"\n')
     (directory / 'main.zkc').write_text('''module example;
       protocol Interactive roles(証明者,検証者)(ok:bool@証明者)->(accepted:bool@検証者){
         let received=send 証明者->検証者(ok);require received;return received;
@@ -478,7 +481,7 @@ def test_run_result_policy_and_unserializable_outputs(toolchain, journal, direct
     journal.json(command(toolchain, 'run', '--no-results', '--results=result.json'), cwd=directory,
                  refuses='cli-option')
     # Explicit-module mode also checks output codecs before executing.
-    refused = journal.json([toolchain.runtime, '--json', 'run', f'--module=example={source}',
+    refused = journal.json([toolchain.runtime, '--json', 'run', '--source-format=zkc', f'--module=example={source}',
                             f'--compiler={toolchain.compiler}', '--results=explicit.json'],
                            cwd=directory, refuses='entry-output-codec')
     assert 'execution' not in refused and not (directory / 'explicit.json').exists()

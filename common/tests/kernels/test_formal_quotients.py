@@ -84,7 +84,7 @@ def test_quotient_observations_across_actions(toolchain, journal, directory, fla
 def test_formal_parameter_and_boundary_refusals(toolchain, journal, directory, body, diagnostic):
     path = directory / 'invalid.zkc'
     path.write_text('module sample;use zkc::indices::{Indices};use zkc::quotient_math as ring;' + body)
-    report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=sample={path}', *MODULES], refuses='source-compilation')
     assert report['diagnostics'].startswith(diagnostic), report
 

@@ -443,9 +443,12 @@ The same logical client under ideal, Poseidon2-Merkle and Keccak-Merkle choices
 must retain its protocol meaning; neither matching successful outputs nor a
 single passing implementation establishes cryptographic or resource equivalence.
 
-The runtime owns the SDK source-format cutover. Frontend syntax support does
-not switch production defaults. The source/request connection and host/editor
-consumers must satisfy their owning contracts before that switch.
+Every source-package manifest and every explicit SDK or CLI module map selects
+its [source format](language/definitions.md); the SDK forwards that one selection
+to the compiler and frames it into its cache key, without a default. The runtime
+owns the cutover that retires the `zkc` value. Frontend syntax support does not
+retire it; the source/request connection and host/editor consumers satisfy their
+owning contracts first.
 
 The scalar-selection addition keeps the current `/0` declaration and program
 formats: four exact operation rows (`bool.select`, `index.select`,

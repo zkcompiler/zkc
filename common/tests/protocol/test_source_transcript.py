@@ -53,7 +53,7 @@ def test_source_transcript_vector_and_decode_effect_order(toolchain, journal, di
                'spongefish::bls12_381::schnorr': ROOT / 'libraries/constructions/spongefish/bls12_381/schnorr.zkc'}
     modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                            f'--compiler={toolchain.compiler}',
                            *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                            'sample::Demo', f'--output={package}', *flags])
@@ -142,7 +142,7 @@ def test_raw_format_refuses_non_byte_or_repeated_messages(toolchain, journal, di
     construction ExternalWire for Transfer {{base authored;format RawBytes;}}
     proof Demo=Transfer {{prover P;verifier V;public{{count}};accept ok;construction ExternalWire;}}
     ''')
-    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                  f'--module=sample={source}', 'sample::Demo', f'--output={directory / "bad.zkpkg"}'],
                 refuses='native-proof-format')
 
@@ -192,7 +192,7 @@ def test_private_snapshot_containers_and_byte_relation_metadata(toolchain, journ
     proof Demo=Transfer {prover P;verifier V;public{};accept ok;construction authored;}
     ''')
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                              'sample::Demo', f'--output={package}'])
     args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', '--allow-authored']
@@ -255,7 +255,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 def test_fixed_spongefish_encoding_refuses_another_group(toolchain, journal, directory):
     path = directory / 'wrong-group.zkc'
     path.write_text(SOURCE.replace('bls12-381.g1', 'bls12-381.g2'))
-    report = journal.json([toolchain.runtime, '--json', 'check',
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc',
                            f'--compiler={toolchain.compiler}', f'--module=sample={path}',
                            *library_modules('constructions/spongefish')], refuses='source-compilation')
     assert report['diagnostics'].startswith('source.type:'), report

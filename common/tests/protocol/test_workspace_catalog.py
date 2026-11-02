@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from project import project_arguments, project_text
+from project import project_arguments, project_source_format, project_text
 
 
 def fixture(directory):
@@ -12,7 +12,7 @@ def fixture(directory):
     leaf.mkdir()
     (leaf / 'lib.zkc').write_text('module formula; pub math fn identity(value:bool)->bool{return value;}')
     (leaf / 'zkc.toml').write_text(project_text({
-        'format': 'zkc.project/0', 'modules': {'formula': 'lib.zkc'},
+        'format': 'zkc.project/0', 'source-format': 'zkc', 'modules': {'formula': 'lib.zkc'},
         'assets': {'product': {'format': 'ring-json', 'path': 'unused.json'}}}))
     shutil.copyfile(Path(__file__).resolve().parents[3] /
                     'examples/projects/sumcheck/product/product.ring.json', leaf / 'unused.json')
@@ -23,7 +23,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }''')
     catalog.write_text(project_text({'format': 'zkc.workspace/0',
                                     'packages': {'chosen': 'leaf', 'unselected': 'absent'}}))
     project = directory / 'zkc.toml'
-    project.write_text(project_text({'format': 'zkc.project/0', 'modules': {'main': 'main.zkc'},
+    project.write_text(project_text({'format': 'zkc.project/0', 'source-format': 'zkc', 'modules': {'main': 'main.zkc'},
                                     'workspace': {'path': catalog.name},
                                     'dependencies': {'library': {'workspace': 'chosen'}}}))
     return project, catalog
@@ -33,7 +33,7 @@ def test_catalog_path_and_explicit_inputs_share_identity_after_relocation(toolch
     original = directory / 'original'
     original.mkdir()
     project, _ = fixture(original)
-    explicit = project_arguments(project)
+    explicit = [f'--source-format={project_source_format(project)}', *project_arguments(project)]
     command = [toolchain.runtime, '--json', 'inspect', '--view=api', f'--compiler={toolchain.compiler}']
     checked = journal.json([*command, f'--project={project}'])
     graph = checked.pop('project_graph')
@@ -49,7 +49,7 @@ def test_catalog_path_and_explicit_inputs_share_identity_after_relocation(toolch
     moved = directory / 'moved'
     shutil.copytree(original, moved)
     third = journal.json([*compile, f'--project={moved}/zkc.toml', f'--output={directory}/moved.zkpkg'])
-    config = {'format': 'zkc.project/0', 'modules': {'main': 'main.zkc'}, 'dependencies': {'library': 'leaf'}}
+    config = {'format': 'zkc.project/0', 'source-format': 'zkc', 'modules': {'main': 'main.zkc'}, 'dependencies': {'library': 'leaf'}}
     project.write_text(project_text(config))
     fourth = journal.json([*compile, f'--project={project}', f'--output={directory}/path.zkpkg'])
     assert len({r['package_sha256'] for r in (first, second, third, fourth)}) == 1

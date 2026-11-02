@@ -60,11 +60,13 @@ def test_facade_interface_calls_follow_the_authored_binder(toolchain, journal, d
       pub interface Contract {math fn value()->bool;}
     ''')
     (lower / 'zkc.toml').write_text('''format="zkc.project/0"
+      source-format="zkc"
       [modules]
       lower="lib.zkc"
     ''')
     (facade / 'lib.zkc').write_text('module facade;pub use lower::{Contract};')
     (facade / 'zkc.toml').write_text('''format="zkc.project/0"
+      source-format="zkc"
       [modules]
       facade="lib.zkc"
       [dependencies]
@@ -82,6 +84,7 @@ def test_facade_interface_calls_follow_the_authored_binder(toolchain, journal, d
     ''')
     manifest = client / 'zkc.toml'
     manifest.write_text('''format="zkc.project/0"
+      source-format="zkc"
       [modules]
       client="lib.zkc"
       [dependencies]

@@ -101,7 +101,7 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
     package = where / 'Proof.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            *arguments, FRI_REALIZATION, 'air_stark_example::Proof', f'--output={package}'])
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
                            '--entry=air_stark_example::Proof', *arguments])

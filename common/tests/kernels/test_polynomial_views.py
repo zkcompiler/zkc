@@ -178,7 +178,7 @@ def test_checked_polynomial_views_require_owner_admission(toolchain, journal, di
         return
     path = directory / 'private.zkc'
     path.write_text(source)
-    report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=sample={path}', *MODULES], refuses='source-compilation')
     assert report['diagnostics'].startswith(('source.private' if boundary in ('construct', 'project') else 'source.ingress') + ':')
 

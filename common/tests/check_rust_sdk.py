@@ -44,7 +44,7 @@ def prepare(output, cli, compiler):
                         ('checked', 'Checked'), ('withhold', 'Withhold')]:
         package = output / f'{name}.zkpkg'
         result = json.loads(run([cli, '--json', 'compile', f'application::{entry}',
-                                 f'--module=application={source}', f'--compiler={compiler}',
+                                 f'--module=application={source}', f'--compiler={compiler}', '--source-format=zkc',
                                  f'--output={package}'], cwd=output))
         assert result['status'] == 'compiled', result
         result = json.loads(run([cli, '--json', 'bindings', f'--package={package}',

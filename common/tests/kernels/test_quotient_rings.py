@@ -200,6 +200,6 @@ def test_nominal_ring_identity_and_constructor_authority(toolchain, journal, dir
         }'''
         diagnostic = 'source.ingress'
     path = directory / 'invalid.zkc'; path.write_text(prefix + body)
-    report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=sample={path}', *MODULES], refuses='source-compilation')
     assert report['diagnostics'].startswith(diagnostic), report

@@ -85,7 +85,7 @@ class Case:
         source = directory / 'retained.zkc'
         source.write_text(SOURCE.format(field=field))
         self.package = directory / 'retained.zkpkg'
-        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                                f'--module=sample={source}', 'sample::Demo',
                                f'--output={self.package}'])
         self.pin = report['package_sha256']

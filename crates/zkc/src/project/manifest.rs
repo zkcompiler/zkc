@@ -14,10 +14,38 @@ const DEPTH: usize = 32;
 const CATALOGS: usize = 16;
 const CATALOG_ENTRIES: usize = 256;
 
+/// The grammar of a package's authored sources. It is distinct from the
+/// manifest schema (`format`) and from build settings (`[profile.NAME]`):
+/// no profile or compiler option reinterprets a package's source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SourceFormat {
+    Zkc,
+    ZkcLayout,
+}
+impl SourceFormat {
+    /// The manifest value, which is also the compiler's `--source-format`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Zkc => "zkc",
+            Self::ZkcLayout => "zkc-layout",
+        }
+    }
+    pub fn parse(name: &str) -> Result<Self> {
+        match name {
+            "zkc" => Ok(Self::Zkc),
+            "zkc-layout" => Ok(Self::ZkcLayout),
+            _ => Err("source-project-format".into()),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
     format: String,
+    #[serde(rename = "source-format")]
+    source_format: SourceFormat,
     #[serde(default)]
     modules: BTreeMap<String, String>,
     #[serde(default)]
@@ -72,6 +100,7 @@ pub struct ProjectGraph {
 #[derive(Serialize)]
 pub struct ProjectPackage {
     pub manifest: PathBuf,
+    pub source_format: SourceFormat,
     pub modules: BTreeMap<String, String>,
     pub assets: BTreeMap<String, Asset>,
     pub dependencies: BTreeMap<String, PathBuf>,
@@ -85,7 +114,9 @@ pub struct CatalogDependency {
 
 /// Explicit source paths, made absolute when loaded. Imports are resolved only
 /// from these maps; later changes to the working directory do not retarget them.
+/// One source format reads every authored module of the closure.
 pub struct Project {
+    pub(crate) source_format: SourceFormat,
     pub(crate) flags: Vec<String>,
     pub(crate) paths: Vec<String>,
     pub(crate) manifest: Option<PathBuf>,
@@ -98,18 +129,25 @@ impl Project {
     pub fn discover() -> Result<Self> {
         Self::load(discover()?)
     }
+    /// The manifests select the source format; every one of them states it.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         Self::from_parts(
             Some(path.as_ref().to_owned()),
+            None,
             BTreeMap::new(),
             BTreeMap::new(),
         )
     }
+    /// Explicit inputs have no manifest, so the caller selects their format.
     pub fn explicit(
+        source_format: SourceFormat,
         modules: BTreeMap<String, String>,
         assets: BTreeMap<String, Asset>,
     ) -> Result<Self> {
-        Self::from_parts(None, modules, assets)
+        Self::from_parts(None, Some(source_format), modules, assets)
+    }
+    pub fn source_format(&self) -> SourceFormat {
+        self.source_format
     }
     pub fn manifest(&self) -> Option<&Path> {
         self.manifest.as_deref()
@@ -144,23 +182,33 @@ impl Project {
     }
     fn from_parts(
         manifest: Option<PathBuf>,
+        source_format: Option<SourceFormat>,
         mut modules: BTreeMap<String, String>,
         mut assets: BTreeMap<String, Asset>,
     ) -> Result<Self> {
         let base = std::env::current_dir().map_err(|_| "source-project-io")?;
         let manifest = manifest.map(|path| base.join(path));
+        let mut capture = Capture::default();
+        let root = manifest
+            .as_deref()
+            .map(|path| capture.load(path))
+            .transpose()?;
+        // Exactly one owner selects it: the manifests, or the explicit caller.
+        let source_format = capture
+            .source_format
+            .or(source_format)
+            .expect("the manifests or the caller select the source format");
         let mut result = Self {
+            source_format,
             flags: vec![],
             paths: vec![],
-            manifest: manifest.clone(),
+            manifest,
             graph: None,
             build: Default::default(),
             profiles: BTreeMap::new(),
             tests: BTreeMap::new(),
         };
-        if let Some(path) = manifest {
-            let mut capture = Capture::default();
-            let root = capture.load(&path)?;
+        if let Some(root) = root {
             result.tests = capture.tests;
             result.build = capture.build;
             result.profiles = capture.profiles;
@@ -202,6 +250,7 @@ impl Project {
 /// itself is a symlink. Directory aliases share a context; file aliases may not.
 #[derive(Default)]
 struct Capture {
+    source_format: Option<SourceFormat>,
     modules: BTreeMap<String, String>,
     assets: BTreeMap<String, Asset>,
     manifests: Vec<String>,
@@ -244,6 +293,11 @@ impl Capture {
         {
             return Err("source-project-format".into());
         }
+        // The root's selection reads every authored module of the closure.
+        // Assets keep their own declared formats.
+        if *self.source_format.get_or_insert(project.source_format) != project.source_format {
+            return Err("source-project-mixed-format".into());
+        }
         if project.modules.len() + project.assets.len() > FILES
             || project.dependencies.len() > MANIFESTS
         {
@@ -277,6 +331,7 @@ impl Capture {
             .push(context.to_str().ok_or("source-project-format")?.into());
         let mut package = ProjectPackage {
             manifest: context.clone(),
+            source_format: project.source_format,
             modules: BTreeMap::new(),
             assets: BTreeMap::new(),
             dependencies: BTreeMap::new(),
@@ -505,6 +560,7 @@ entry="main::Main"
     fn explicit_paths_keep_their_loading_directory() {
         let base = std::env::current_dir().unwrap();
         let project = Project::explicit(
+            SourceFormat::ZkcLayout,
             BTreeMap::from([("example".into(), "main.zkc".into())]),
             BTreeMap::from([(
                 "relation".into(),
@@ -519,13 +575,18 @@ entry="main::Main"
             project.paths().map(PathBuf::from).collect::<Vec<_>>(),
             [base.join("main.zkc"), base.join("air.json")]
         );
+        assert_eq!(project.source_format(), SourceFormat::ZkcLayout);
     }
 
     fn manifest(root: &Path, name: &str, body: &str) -> PathBuf {
         let directory = root.join(name);
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join("zkc.toml");
-        std::fs::write(&path, format!("format = \"zkc.project/0\"\n{body}")).unwrap();
+        std::fs::write(
+            &path,
+            format!("format = \"zkc.project/0\"\nsource-format = \"zkc\"\n{body}"),
+        )
+        .unwrap();
         path
     }
 
@@ -912,6 +973,119 @@ entry="main::Main"
         dependencies.push_str(&format!("last='../m{}'\n", MANIFESTS - 1));
         manifest(root, "top", &dependencies);
         assert_eq!(Project::load(&top).err().unwrap(), "source-project-limit");
+    }
+
+    /// Write an exact manifest, without the helper's source-format line.
+    fn authored(root: &Path, name: &str, header: &str, body: &str) -> PathBuf {
+        let directory = root.join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("zkc.toml");
+        std::fs::write(
+            &path,
+            format!("format = \"zkc.project/0\"\n{header}\n{body}"),
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn every_manifest_selects_one_known_source_format_for_its_closure() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        let modules = "[modules]\nshared='lib.zkc'\n";
+        // Missing, unknown, mistyped and misplaced selections refuse.
+        let leaf = authored(root, "leaf", "", modules);
+        assert_eq!(Project::load(&leaf).err().unwrap(), "source-project-format");
+        for value in ["'zkc-legacy'", "''", "'ZKC'", "1", "['zkc']", "{}"] {
+            authored(root, "leaf", &format!("source-format = {value}"), modules);
+            assert_eq!(
+                Project::load(&leaf).err().unwrap(),
+                "source-project-format",
+                "{value}"
+            );
+        }
+        // Neither build settings nor test recipes can reinterpret the source.
+        for misplaced in [
+            "[build]\nsource-format='zkc'\n",
+            "[profile.layout]\nsource-format='zkc-layout'\n",
+        ] {
+            authored(
+                root,
+                "leaf",
+                "source-format = 'zkc'",
+                &(modules.to_owned() + misplaced),
+            );
+            assert_eq!(Project::load(&leaf).err().unwrap(), "source-project-format");
+        }
+        authored(
+            root,
+            "leaf",
+            "source-format = 'zkc'",
+            &format!(
+                "{modules}[test.layout]\nentry='shared::Main'\nargs=['--source-format=zkc-layout']\n"
+            ),
+        );
+        assert_eq!(Project::load(&leaf).err().unwrap(), "source-test-format");
+        for value in ["zkc", "zkc-layout"] {
+            authored(root, "leaf", &format!("source-format = '{value}'"), modules);
+            let project = Project::load(&leaf).unwrap();
+            assert_eq!(project.flags.len(), 1, "{value}");
+            assert_eq!(project.source_format().as_str(), value);
+            assert_eq!(SourceFormat::parse(value), Ok(project.source_format()));
+            let graph = serde_json::to_value(project.graph().unwrap()).unwrap();
+            assert_eq!(graph["packages"][0]["source_format"], value);
+        }
+        for unknown in ["zkc-legacy", "", "ZKC"] {
+            assert_eq!(
+                SourceFormat::parse(unknown).unwrap_err(),
+                "source-project-format"
+            );
+        }
+        // One authored closure has one grammar. A dependency-only manifest
+        // states the selection too, and every manifest must agree with it.
+        let middle = authored(
+            root,
+            "middle",
+            "source-format = 'zkc-layout'",
+            "[dependencies]\nleaf='../leaf'\n",
+        );
+        let top = authored(
+            root,
+            "top",
+            "source-format = 'zkc-layout'",
+            "[modules]\ntop='main.zkc'\n[dependencies]\nmiddle='../middle'\n",
+        );
+        let project = Project::load(&top).unwrap();
+        assert_eq!(project.flags.len(), 2);
+        assert_eq!(project.source_format(), SourceFormat::ZkcLayout);
+        assert!(
+            project
+                .graph()
+                .unwrap()
+                .packages
+                .iter()
+                .all(|package| package.source_format == SourceFormat::ZkcLayout)
+        );
+        authored(root, "leaf", "source-format = 'zkc'", modules);
+        assert_eq!(
+            Project::load(&top).err().unwrap(),
+            "source-project-mixed-format"
+        );
+        authored(root, "leaf", "source-format = 'zkc-layout'", modules);
+        std::fs::write(
+            &middle,
+            "format = \"zkc.project/0\"\n[dependencies]\nleaf='../leaf'\n",
+        )
+        .unwrap();
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-format");
+        // Assets keep their declared formats in either source grammar.
+        authored(
+            root,
+            "middle",
+            "source-format = 'zkc-layout'",
+            "[dependencies]\nleaf='../leaf'\n[assets.r]\nformat='air-json'\npath='r.json'\n",
+        );
+        assert_eq!(Project::load(&top).unwrap().flags.len(), 3);
     }
 
     #[test]

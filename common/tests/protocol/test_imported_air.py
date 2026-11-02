@@ -349,7 +349,7 @@ def test_reference_protocol_refuses_relations_with_additional_obligations(
     else:
         bundle[2].append(['extra', 'field-balance', ['koala-bear'], 'koala-bear'])
     asset = journal.write(f'{extra}.bundle.json', bundle)
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=imported_air={PROJECT}/main.zkc',
         f'--asset=export=ring-json={RECURRENCE}/arena.json',
         f'--asset=recurrence=relation-bundle-json={asset}',
@@ -426,7 +426,7 @@ protocol Check roles(V)(w: Vector @V, c: Vector @V, p: Vector @V, h: index @V)
 }}
 entry fn Run(inputs: Check::Inputs) {{ return Check::run(inputs); }}
 ''')
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=reference={source}',
         f'--asset=recurrence=relation-bundle-json={RECURRENCE}/bundle.json',
         'reference::Run', f'--output={directory}/reference.zkpkg'], refuses=code)

@@ -45,8 +45,8 @@ proof Core=Equality{
 Compile and generate the two bindings beside your application's Rust source:
 
 ```sh
-zkc compile application::Twice --module=application=main.zkc --output=numerical.zkpkg
-zkc compile application::Core --module=application=main.zkc --output=proof.zkpkg
+zkc compile application::Twice --source-format=zkc --module=application=main.zkc --output=numerical.zkpkg
+zkc compile application::Core --source-format=zkc --module=application=main.zkc --output=proof.zkpkg
 # Use each package_sha256 from the trusted compilation report below.
 zkc bindings --package=numerical.zkpkg --sha256=NUMERICAL_SHA256 --output=numerical.rs
 zkc bindings --package=proof.zkpkg --sha256=PROOF_SHA256 --output=proof.rs

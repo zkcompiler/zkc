@@ -21,7 +21,7 @@ def test_total_shape_source_success_and_target_exhaustion(toolchain, journal, di
     assert observed[1] == ['returned', [True, '2', False, True]]
 
     package = directory / 'shape.zkpkg'
-    built = journal.json([toolchain.runtime, '--json', 'compile',
+    built = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
         f'--compiler={toolchain.compiler}', f'--module=sample={fixture}',
         'sample::Demo', f'--output={package}'])
     inputs = input_files(journal, 'shape', arguments={

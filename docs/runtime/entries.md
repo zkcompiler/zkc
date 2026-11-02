@@ -15,8 +15,9 @@ to give a configuration a stable short name or add application logic.
 ## Project workflow
 
 Keep reusable protocols in libraries or `protocol.zkc`, concrete Entries in
-`main.zkc`, and the explicit module/asset map in `zkc.toml`. The language also
-allows protocols and Entries in the same file.
+`main.zkc`, and the explicit module/asset map in `zkc.toml`. The manifest's
+`source-format` names the grammar of its sources; `zkc new` writes `zkc`. The
+language also allows protocols and Entries in the same file.
 
 ```sh
 zkc new my-project
@@ -39,7 +40,10 @@ zkc run
 ```
 
 Commands discover the nearest `zkc.toml`. Use `--project=FILE` to select another
-project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mappings.
+project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mappings
+with `--source-format=zkc|zkc-layout`. Explicit mappings without a source format
+refuse with `source-format-required`. A manifest states its own source format, so
+`--source-format` with a project refuses with `cli-usage`.
 `--compiler=PATH` selects a trusted compiler; otherwise the compiler is resolved
 from absolute directories in trusted `PATH`. Execution compiles in memory and
 reports the resulting package identity. It does not publish an intermediate package.

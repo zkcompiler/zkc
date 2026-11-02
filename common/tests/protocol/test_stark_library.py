@@ -141,7 +141,7 @@ class Package:
         path = directory / f'{name}.zkc'
         path.write_text(source)
         return cls(toolchain, journal, directory,
-                   [f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', *modules, overrides=overrides),
+                   ['--source-format=zkc', f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', *modules, overrides=overrides),
                     *[f'--asset={k}=relation-bundle-json={v}' for k, v in assets.items()],
                     'example::Proof', *flags], name, realization)
 

@@ -11,6 +11,7 @@ const MATERIAL_LIMITS: Opt = Opt::new("--material-limits=LIMITS");
 const THREADS: Opt = Opt::new("--threads=COUNT").unsigned_range(1, 256);
 const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
+const SOURCE_FORMAT: Opt = Opt::new("--source-format=zkc|zkc-layout");
 const INVOCATIONS: Opt = Opt::new("--invocations=FILE");
 const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-authored.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).";
 // Source and pinned package modes share spelling, but cannot be combined.
@@ -20,6 +21,7 @@ macro_rules! entry_options {
             Opt::new("--project=FILE"),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            SOURCE_FORMAT,
             Opt::new("--compiler=PATH"),
             Opt::new("--package=FILE"),
             Opt::new("--sha256=PIN").hex(Some(32)),
@@ -33,6 +35,7 @@ macro_rules! entry_options {
     };
 }
 const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.
+Explicit modules and assets require --source-format; a manifest states its own.
 Generic protocol runs take closed arguments, e.g. 'Schnorr<G>'. Proofs require a proof declaration.
 Pinned execution uses --package and --sha256 together and no source options.
 Project inputs default to inputs/<entry-stem>/. Proofs default to
@@ -59,11 +62,13 @@ const COMMANDS: &[Command] = &[
             Opt::new("--project=FILE"),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            SOURCE_FORMAT,
             Opt::new("--report=DIRECTORY"),
             Opt::new("--compiler=PATH"),
         ],
         description:
             "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
+Explicit modules and assets require --source-format; a manifest states its own.
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
 Select an Entry by unique short name or qualified module::Name, with closed arguments
 for generic runs, e.g. 'Schnorr<G>'. Discovery does not enumerate generic instances.
@@ -85,12 +90,13 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--reuse-sha256=PIN").hex(Some(32)),
             Opt::new("--compiler=PATH"),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            SOURCE_FORMAT,
             Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"),
         ],
-        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
+        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nExplicit modules and assets require --source-format; a manifest states its own.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
 --target=cpu is the default. --target=evm requires --solc and --solc-sha256;
 it publishes a fresh verifier directory, defaulting to build/zkc/<entry-stem>.evm.
 --evm-version=cancun|prague selects the EVM deployment fork (default cancun).

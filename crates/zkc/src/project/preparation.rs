@@ -32,7 +32,7 @@ impl Template {
         [
             (
                 "zkc.toml",
-                "format = \"zkc.project/0\"\n\n[modules]\nexample = \"main.zkc\"\n",
+                "format = \"zkc.project/0\"\nsource-format = \"zkc\"\n\n[modules]\nexample = \"main.zkc\"\n",
             ),
             (
                 "main.zkc",
@@ -109,5 +109,32 @@ impl Compiler {
             plan.entries.push(interface);
         }
         Ok(plan)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_skeletons_select_the_grammar_of_their_source_template() {
+        let directory = tempfile::tempdir().unwrap();
+        let templates = Template::scaffold(directory.path());
+        for template in &templates {
+            std::fs::write(&template.path, &template.contents).unwrap();
+        }
+        let manifest = &templates[0];
+        assert_eq!(manifest.path, directory.path().join("zkc.toml"));
+        assert!(
+            manifest
+                .contents
+                .lines()
+                .any(|line| line == "source-format = \"zkc\""),
+            "{}",
+            manifest.contents
+        );
+        let project = Project::load(&manifest.path).unwrap();
+        assert_eq!(project.flags.len(), 1);
+        assert_eq!(project.source_format(), super::super::SourceFormat::Zkc);
     }
 }

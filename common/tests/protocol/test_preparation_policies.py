@@ -24,7 +24,7 @@ entry fn Produce(inputs:Equality::Inputs,public:Core::Public,witness:Core::Witne
 }
 ''')
     manifest = directory / 'zkc.toml'
-    manifest.write_text('format="zkc.project/0"\n[modules]\napplication="main.zkc"\n')
+    manifest.write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\napplication="main.zkc"\n')
     return manifest
 
 

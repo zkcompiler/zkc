@@ -96,7 +96,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, terminal_log=0,
                                f'--project={EXAMPLE.parent}/zkc.toml',
                                f'example::{entry}', f'--output={package}', realization, *flags])
         return package, report['package_sha256']
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=example={path}', f'--module=fri={library}', *library_modules(*core_packages()),
                            f'example::{entry}', f'--output={package}', realization, *flags])
     return package, report['package_sha256']
@@ -633,7 +633,7 @@ def test_fri_refuses_unsupported_static_profiles(
     source = directory / 'invalid-profile.zkc'
     source.write_text(text.replace(old,
         f'ScalarLowDegree<Direct<E>,{log_size},{terminal_log},{rounds},{queries}>'))
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=example={source}', f'--module=fri={LIBRARY}',
                   *library_modules(*core_packages()), 'example::Proof',
                   f'--output={directory / "invalid.zkpkg"}'], refuses='source-compilation')

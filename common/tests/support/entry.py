@@ -74,7 +74,7 @@ class Entry:
         path.write_text(source)
         self.package = directory / 'kernels.zkpkg'
         report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                               f'--module=sample={path}', f'sample::{entry}',
+                               '--source-format=zkc', f'--module=sample={path}', f'sample::{entry}',
                                f'--output={self.package}', *flags])
         self.pin = report['package_sha256']
 
@@ -103,7 +103,7 @@ class Entry:
 def compile_named_entry(toolchain, journal, directory, entry, source):
     package = directory / f'{entry}.zkpkg'
     args = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-            f'--module=sample={source}',
+            '--source-format=zkc', f'--module=sample={source}',
             f'sample::{entry}', f'--output={package}']
     report = json.loads(journal.run(args))
     assert report['status'] == 'compiled'

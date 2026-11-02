@@ -37,7 +37,7 @@ protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
     collision.write_text('module p;pub struct Outputs {pub flag:bool}')
     shapes_package = shapes_dir / 'Demo.zkpkg'
     shapes_report = json.loads(journal.run([
-        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+        toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=sample={FIXTURES / "host_bindings.zkc"}', f'--module=p={collision}',
         'sample::Demo', f'--output={shapes_package}',
     ]))

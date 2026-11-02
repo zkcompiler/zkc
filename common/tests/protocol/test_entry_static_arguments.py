@@ -30,11 +30,11 @@ def test_native_typed_relation_arguments_reach_rust_entry(toolchain, journal, di
     assert arguments == Counter(json.dumps(value) for value in expected)
     assert [row['static_arguments'] for row in rows if row['definition']['kind'] == 'formula'] == [[]]
 
-    source_view = journal.json([toolchain.runtime, '--json', 'inspect',
+    source_view = journal.json([toolchain.runtime, '--json', 'inspect', '--source-format=zkc',
                                f'--compiler={toolchain.compiler}', module, 'sample::Demo'])
     assert source_view['status'] == 'inspected'
     package = directory / 'typed.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                            f'--compiler={toolchain.compiler}', module,
                            'sample::Demo', f'--output={package}'])
     captured = json.loads(package.read_text())

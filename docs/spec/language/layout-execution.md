@@ -3,9 +3,10 @@
 `CaptureOptions.format = "zkc-layout"` selects the development frontend for
 captured source files. The compiler CLI exposes the same selection through
 `--source-format=zkc-layout`. This format selection participates in the capture
-identity. Installation sources retain their installed syntax. The default
-project/Rust SDK frontend remains `zkc` until production migration; this is a
-migration entry, not a permanent compatibility language.
+identity. Installation sources retain their installed syntax. A project selects
+it with `source-format = "zkc-layout"` in every manifest of its closure, and
+explicit SDK and CLI module maps name it the same way; this is a migration
+entry, not a permanent compatibility language.
 
 The [layout parser](layout-syntax.md) feeds the existing native name, type,
 role, resource, effect and specialization checkers. It does not translate text

@@ -18,7 +18,7 @@ def compile_program(args, output, capture, manifest, case, program):
     source = directory/'main.zkc'
     source.write_text(program.source)
     project = directory/'zkc.toml'
-    text = f'format="zkc.project/0"\n[modules]\n{json.dumps(program.entry.split("::")[0])}="main.zkc"\n[dependencies]\n'
+    text = f'format="zkc.project/0"\nsource-format="zkc"\n[modules]\n{json.dumps(program.entry.split("::")[0])}="main.zkc"\n[dependencies]\n'
     text += ''.join(f'{json.dumps(name)}={{workspace={json.dumps(name)}}}\n' for name in program.dependencies)
     if program.dependencies:
         text += f'\n[workspace]\npath={json.dumps(str(root/"zkc.workspace.toml"))}\n'

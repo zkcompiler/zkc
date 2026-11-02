@@ -11,7 +11,7 @@ def compile_function(toolchain, journal, directory, source, entry='Main', flags=
     path = directory / 'entry.zkc'
     path.write_text(source)
     package = directory / f'{entry}.zkpkg'
-    built = journal.json([toolchain.runtime, '--json', 'compile',
+    built = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                           f'--compiler={toolchain.compiler}', f'--module=example={path}',
                           f'example::{entry}', f'--output={package}', *flags])
     return package, built['package_sha256']

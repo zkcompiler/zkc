@@ -252,7 +252,11 @@ impl Compiler {
         for source in project.paths() {
             crate::io::open_regular(source).map_err(|_| "artifact-io")?;
         }
-        let mut arguments = vec![OsString::from(command), "--source-format=zkc".into()];
+        // The project's own selection; the compiler never chooses a grammar.
+        let mut arguments = vec![
+            OsString::from(command),
+            format!("--source-format={}", project.source_format.as_str()).into(),
+        ];
         if let Some(name) = selection.name {
             if name.is_empty() {
                 return Err("source-entry-selection".into());
@@ -702,6 +706,7 @@ mod tests {
     #[cfg(all(feature = "evm", target_os = "linux"))]
     mod evm {
         use super::super::*;
+        use crate::project::SourceFormat;
         use serde_json::Value;
         use std::{collections::BTreeMap, os::unix::fs::PermissionsExt};
 
@@ -723,6 +728,7 @@ mod tests {
             let module = directory.join("main.zkc");
             std::fs::write(&module, "module example;\n").unwrap();
             let project = Project::explicit(
+                SourceFormat::Zkc,
                 BTreeMap::from([("example".into(), module.to_str().unwrap().into())]),
                 BTreeMap::new(),
             )
@@ -1393,6 +1399,7 @@ proof Proof=Echo{prover P;verifier V;public{value};accept accepted;construction 
             )
             .unwrap();
             let authored = Project::explicit(
+                SourceFormat::Zkc,
                 BTreeMap::from([("authored".into(), authored_path.to_str().unwrap().into())]),
                 BTreeMap::new(),
             )

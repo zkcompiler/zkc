@@ -98,6 +98,7 @@ mod tests {
         std::fs::write(
             &manifest,
             r#"format = "zkc.project/0"
+source-format = "zkc"
 [modules]
 sample = "sample.zkc"
 [build]

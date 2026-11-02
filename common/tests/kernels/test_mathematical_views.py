@@ -141,7 +141,7 @@ def test_view_constructor_authority(toolchain, journal, directory, view, constru
         return
     path = directory / 'private.zkc'
     path.write_text(declarations + body)
-    report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=sample={path}', *MODULES], refuses='source-compilation')
     code = 'source.private' if boundary == 'construct' else 'source.ingress'
     assert report['diagnostics'].startswith(code + ':'), report

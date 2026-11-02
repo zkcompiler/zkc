@@ -27,7 +27,7 @@ def test_field_balance_logup_signed_counts_and_inactive_poles(toolchain, journal
               'height': '4', 'values': base([37, 1, 7, 1, 0, 2, p - 1, 3]),
               'challenges': base([37, 5])}
     request = input_files(journal, 'weighted', arguments={'inputs': {'P': inputs}})
-    arguments = [f'--compiler={toolchain.compiler}',
+    arguments = [f'--compiler={toolchain.compiler}', '--source-format=zkc',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         *library_modules('relations/air')]
     output = directory / 'weighted-results.json'
@@ -58,7 +58,7 @@ def test_mixed_interactions_range_only_natural_counts(toolchain, journal, direct
         'challenges': base([37, 5, 41, 7])}
     request = input_files(journal, 'mixed', arguments={'inputs': {'P': inputs}})
     output = directory / 'mixed-results.json'
-    journal.json([toolchain.runtime, '--json', 'run', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'run', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         *library_modules('relations/air'), 'inspect_reduction::LogUpRun', *request, f'--results={output}'])
     actual = json.loads(output.read_text())['value']['P']
@@ -100,7 +100,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     configuration, instance, witness = machine.carriers(bundle, rows)
     publics = [decode(slot[1], v) for slot, v in zip(bundle[1], instance[2])]
     package = directory / 'reduction.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         *library_modules('relations/air'),
         f'inspect_reduction::{entry}', f'--output={package}'])

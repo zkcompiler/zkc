@@ -96,7 +96,8 @@ and discovery rules.
 The CLI discovers the nearest `zkc.toml` in the current directory or its ancestors.
 An invalid nearer manifest fails instead of selecting a parent. `--project=FILE`
 selects one explicitly. Repeated `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE`
-options disable discovery and cannot be combined with `--project`. SDKs use
+options disable discovery, require `--source-format=zkc|zkc-layout` and cannot be
+combined with `--project`; a manifest states its own `source-format`. SDKs use
 explicit captures. The manifest chooses no Entry, backend, transcript or setup
 policy. See [relation inputs](relations.md) for asset formats.
 
@@ -113,8 +114,8 @@ filename convention; readers check the package format.
 
 `zkc inspect --view=api` also reports `project_graph` when using a manifest. Its
 `zkc.project-graph/0` diagnostic format records the root manifest and packages
-sorted by manifest context. Each package retains its own explicit module and
-asset maps and direct dependencies, mapping dependency labels to manifest
+sorted by manifest context. Each package retains its source format, its own
+explicit module and asset maps and direct dependencies, mapping dependency labels to manifest
 contexts. File symlinks keep their visible parent context; shared directory
 contexts appear once. This metadata is separate from source capture and is
 absent for explicit module/asset maps and SDK captures.

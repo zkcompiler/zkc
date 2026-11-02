@@ -27,6 +27,7 @@ impl Input {
                         "--project"
                             | "--module"
                             | "--asset"
+                            | "--source-format"
                             | "--compiler"
                             | "--profile"
                             | "--cache"
