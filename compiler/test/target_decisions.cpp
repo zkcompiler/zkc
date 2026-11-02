@@ -523,6 +523,24 @@ int main() {
     auto plan = take(proposePhysical(*module));
     refusedMutation(*other, plan, "binding-stale-selection");
   });
+  cases.run("sibling subjects do not stale a nested selection", [&] {
+    // A nested pipeline selects sibling modules concurrently, so a selection
+    // reads its own subject alone.
+    auto fixture = take(executableFixture(arithmetic(), context));
+    OwningOpRef<ModuleOp> outer(ModuleOp::create(fixture->getLoc()));
+    for (unsigned i = 0; i < 3; ++i)
+      outer->getBody()->push_back(fixture->clone());
+    auto modules = to_vector(outer->getOps<ModuleOp>());
+    auto subject = modules[1];
+    auto plan = take(proposePhysical(subject));
+    auto checked = take(validatePhysical(subject, plan));
+    // Both neighbors change their value counts.
+    function(modules[0])->erase();
+    function(modules[2])->erase();
+    (void)take(validatePhysical(subject, plan));
+    accept(materializePhysical(subject, checked));
+    refusedMutation(subject, plan, "binding-stale-selection");
+  });
   cases.run(
       "test provider candidate order, valid installed conversion only", [&] {
         TestCandidates catalog;

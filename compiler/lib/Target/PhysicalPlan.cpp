@@ -40,10 +40,15 @@ using namespace mlir;
 using namespace zkc::protocol;
 namespace zkc::target {
 namespace {
+// The fingerprint reads the subject alone. Printing from an enclosing operation
+// numbers values across sibling modules, which a nested pipeline transforms
+// concurrently on other threads.
 std::string structure(ModuleOp module) {
   std::string result;
   raw_string_ostream out(result);
-  module->print(out, OpPrintingFlags().printGenericOpForm().enableDebugInfo());
+  module->print(
+      out,
+      OpPrintingFlags().printGenericOpForm().enableDebugInfo().useLocalScope());
   return result;
 }
 SmallVector<const void *> identities(ModuleOp module) {
@@ -93,6 +98,8 @@ struct InputSnapshot {
   Error check(ModuleOp module) const {
     // Compare only fresh live IR against opaque saved addresses. Never walk or
     // dereference a saved operation/value, including after erasure/replacement.
+    // Nothing outside the subject is read: sibling subjects may be under
+    // concurrent transformation.
     if (module != subject || identities(module) != addresses ||
         structure(module) != contents)
       return error("binding-stale-selection");
