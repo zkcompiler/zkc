@@ -1,3 +1,4 @@
+#include "../lib/Compiler/LanguageInterface.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -46,6 +47,30 @@ constexpr StringLiteral sourceText = R"(module sample;
   entry fn Twice(x:index)->index{return add(x,x);}
   entry fn Demo(x:index)->index{return Twice(Twice(x));})";
 CompiledEntry compiled() { return take(compileEntry(original(sourceText))); }
+// One input of the shared Entry JSON node-ceiling corpus: a string, or ordered
+// segments, each a string or a repeated item.
+std::string wire(const json::Value &value) {
+  if (auto text = value.getAsString())
+    return text->str();
+  std::string result;
+  for (const auto &segment : *value.getAsArray()) {
+    if (auto text = segment.getAsString()) {
+      result += *text;
+      continue;
+    }
+    const auto &repeat = *segment.getAsObject();
+    auto item = *repeat.getString("repeat");
+    auto separator = *repeat.getString("separator");
+    for (int64_t i = 0, count = *repeat.getInteger("count"); i < count; ++i) {
+      if (i)
+        result += separator;
+      SmallVector<StringRef> parts;
+      item.split(parts, "{i}");
+      result += join(parts, std::to_string(i));
+    }
+  }
+  return result;
+}
 std::string opaqueSource() {
   auto file = MemoryBuffer::getFile(ZKC_OPAQUE_HOST_FIXTURE);
   require(bool(file), "missing opaque Host transport fixture");
@@ -1085,5 +1110,39 @@ entry def Run(inputs: Zero::Inputs) -> Zero::RunResult:
       }
       require(unpacked, "Host artifact lost the source unpack");
     });
+  // Both Entry readers enforce their lexical node ceilings exactly: a case at a
+  // ceiling never refuses for it, and one past it does.
+  cases.run("Entry readers agree on the shared node-ceiling corpus", [] {
+    auto buffer = MemoryBuffer::getFile(ZKC_ENTRY_JSON_NODES_FIXTURE);
+    require(bool(buffer), "missing Entry JSON node fixture");
+    auto corpus = take(json::parse((*buffer)->getBuffer()));
+    require(corpus.getAsObject()->getString("format") ==
+                "zkc.entry-json-node-fixtures/0",
+            "unexpected Entry JSON node fixture format");
+    auto entry = compiled();
+    unsigned checked = 0;
+    for (const auto &value : *corpus.getAsObject()->getArray("cases")) {
+      const auto &item = *value.getAsObject();
+      auto name = *item.getString("name");
+      auto reader = *item.getString("reader");
+      auto bytes = wire(*item.get("wire"));
+      Error refusal = Error::success();
+      if (reader == "interface") {
+        auto parsed = language::detail::parseInterface(bytes, Limits{});
+        if (!parsed)
+          refusal = parsed.takeError();
+      } else {
+        require(reader == "host", "unknown reader in " + name);
+        refusal = checkHostArtifact(bytes, entry.original().interface());
+      }
+      std::string message = refusal ? toString(std::move(refusal)) : "";
+      bool limited = StringRef(message).contains("source.limit") &&
+                     StringRef(message).contains("node limit");
+      require(limited == (*item.getString("expected") == "node-limit"),
+              name + ": unexpected result: " + message);
+      ++checked;
+    }
+    require(checked == 8, "Entry JSON node fixture cases differ");
+  });
   return cases.result();
 }

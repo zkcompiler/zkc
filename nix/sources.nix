@@ -48,6 +48,7 @@ let
   ];
   rustFixtures = [
     "common/tests/fixtures/program/bytes.json"
+    "common/tests/fixtures/entry-json/nodes.json"
     "compiler/test/fixtures/relation/polynomial-chunks.json"
     "compiler/adapters/accumulator-machine/fixtures"
     "compiler/adapters/plonky3/fixtures/recurrence"
@@ -67,6 +68,7 @@ let
         "common/tests/support"
         "common/tests/fixtures/clean/air-control.json"
         "common/tests/fixtures/program/bytes.json"
+        "common/tests/fixtures/entry-json/nodes.json"
       ];
     compilerDomain.paths = compiler ++ [ "compiler/examples/domain" ];
     domainChecks.paths = processSupport ++ [

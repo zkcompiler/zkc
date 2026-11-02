@@ -1,5 +1,6 @@
 #ifndef ZKC_PROGRAM_CODEC_H
 #define ZKC_PROGRAM_CODEC_H
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Program/Model.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/Error.h"
@@ -48,8 +49,9 @@ inline constexpr size_t staticInstructionLimit = 65536;
 /// Bodies nested below a definition body, which is level 0.
 inline constexpr size_t bodyNestingLimit = 64;
 /// A `match` has one arm per alternative of a variant whose type the program
-/// spells within `stringByteLimit`, so it has at most 64 arms.
-inline constexpr size_t matchAlternativeLimit = 64;
+/// spells, so its arms are bounded by the descriptor's alternative ceiling.
+inline constexpr size_t matchAlternativeLimit =
+    protocol::VariantDescriptorAlternatives;
 /// The static maximum of a participant loop count.
 inline constexpr uint64_t loopMaximumLimit = 1048576;
 /// Cumulative descriptor charge units of one program.

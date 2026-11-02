@@ -46,8 +46,8 @@ impl Limits {
     /// Bodies nested below a definition body, which is level 0.
     pub const BLOCK_DEPTH: usize = 64;
     /// A match lists one arm per alternative, within the variant alternatives a
-    /// program can spell.
-    pub const MATCH_ARMS: usize = 64;
+    /// program can spell: the descriptor's alternative ceiling.
+    pub const MATCH_ARMS: usize = super::variant::VARIANT_ALTERNATIVES;
     pub const STACK_DEPTH: usize = 64;
     pub const LOOP_COUNT: u64 = 1_048_576;
     /// Default per-runner instruction budget. A Host may select any budget up

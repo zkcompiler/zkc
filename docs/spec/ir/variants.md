@@ -133,7 +133,9 @@ none promises every combination fits. The alternative limit is the largest power
 of two for which a variant with that many alternatives can still be spelled
 within the program format's 4,096-byte type string; long labels or payloads can
 refuse sooner. Spelling a formed variant with more alternatives refuses with
-`variant-type`. The containing artifact retains its
+`variant-type`. The shared [program byte fixtures](../formats/program-bytes.md#independent-readers)
+spell a descriptor at the alternative ceiling and one past it, and both the C++
+and the Rust readers run them. The containing artifact retains its
 existing byte and structural limits. Ordinary nontype fields retain their own
 limits; a `variant:` prefix in a literal attribute does not enlarge them.
 

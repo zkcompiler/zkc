@@ -612,6 +612,9 @@ is: a Host artifact restates each signature, block-argument and deployment
 schema, so the generated wrapper of a Protocol selection grows by about 235
 nodes per role. Its 1,024-role roster needs about 240,000 nodes with one port,
 and about 369,000 with one port placed at every role.
+The shared [node-ceiling fixtures](../../../common/tests/fixtures/entry-json/README.md)
+give the interface document's and the Host artifact's node ceilings a case at
+the ceiling and one past it, which the compiler's and the SDK's readers both run.
 Scalar tokens have at most ten bytes. Embedded program and package strings
 share the artifact byte ceiling; interface metadata retains its narrower string
 limit. Duplicate decoded keys, invalid Unicode and noncanonical numeric tokens

@@ -767,7 +767,8 @@ mlir_target_link_libraries(zkc-computation_schedule-test PRIVATE MLIRParser MLIR
 add_zkc_test(host_entry CpuTarget host-entry)
 mlir_target_link_libraries(zkc-host_entry-test PRIVATE MLIRParser)
 target_compile_definitions(zkc-host_entry-test PRIVATE
-  ZKC_OPAQUE_HOST_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/opaque.zkc")
+  ZKC_OPAQUE_HOST_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/opaque.zkc"
+  ZKC_ENTRY_JSON_NODES_FIXTURE="${PROJECT_SOURCE_DIR}/../common/tests/fixtures/entry-json/nodes.json")
 
 add_zkc_test(language_entry_functions Language language-entry-functions)
 add_zkc_test(total_index_recipe Transforms total-index-recipe)

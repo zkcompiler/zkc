@@ -8,6 +8,8 @@ user-facing protocol examples live in `examples/projects/`.
   reference models. The current scalar protocol package does not consume them.
 - `contracts/` records the current native conformance probe coverage and
   consumer-specific facet observations; see its README for the scope.
+- [Entry JSON node ceilings](entry-json/README.md) gives the compiler's and the
+  SDK's Entry readers shared cases at and one past each lexical node ceiling.
 - [Bulletproofs+](bulletproofs-plus/README.md) retains independent Monero proofs with recorded test coins. Its [upstream producer](../reference/monero/README.md) also owns the native Edwards map vectors.
 - `kzg-eip4844/` retains the c-kzg-4844 v2.1.8 EIP-4844 vectors (Apache
   License 2.0) and derived cases whose outcomes the pinned c-kzg-4844 reference

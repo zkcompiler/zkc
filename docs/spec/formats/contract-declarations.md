@@ -468,8 +468,11 @@ field's capabilities.
 
 ### Limits
 
-`limits` holds ceilings that independent implementations in more than one
-language enforce for the same contract. `name` follows the catalog name rule
+`limits` holds the installed policy ceilings that independent implementations
+in more than one language enforce for the same contract. A format's own bounds,
+such as an interface document's node ceiling or a program's carrier bounds,
+belong to that format's specification, and shared conformance cases at each
+bound keep its readers in agreement. `name` follows the catalog name rule
 and is unique; `owner` and `scope` are nonempty; `value` is a JSON
 integer from 0 to 2^63 - 1; `unit` is one of `roles`, `bytes`, `elements`, `entries` or `steps`;
 `owner` names the owning component; `scope` states what one count covers; and

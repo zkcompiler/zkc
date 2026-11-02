@@ -5,6 +5,12 @@ use serde_json::Value;
 use std::{collections::BTreeSet, sync::Arc};
 
 type Result<T> = std::result::Result<T, AdmissionError>;
+
+/// The portable descriptor's alternative ceiling (`docs/spec/ir/variants.md`):
+/// the largest power of two for which a variant with that many alternatives
+/// can still be spelled within the program format's 4,096-byte type string.
+pub(super) const VARIANT_ALTERNATIVES: usize = 64;
+
 fn invalid(detail: &str) -> AdmissionError {
     AdmissionError::new(ErrorCode::Type, format!("variant:{detail}"))
 }
@@ -135,7 +141,7 @@ impl VariantDescriptor {
         }
         let arms = root[1]
             .as_array()
-            .filter(|a| !a.is_empty() && a.len() <= 64)
+            .filter(|a| !a.is_empty() && a.len() <= VARIANT_ALTERNATIVES)
             .ok_or_else(|| invalid("alternatives"))?;
         budget.allocate(512 + 4 * spelling.len() + 256 * arms.len())?;
         let mut labels = BTreeSet::new();
