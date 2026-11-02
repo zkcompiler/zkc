@@ -62,13 +62,6 @@ add_zkc_component(Contracts
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
 )
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc" zkc_prelude_source)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc")
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Records.zkc" zkc_records_source)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Records.zkc")
-configure_file(lib/Language/Prelude.inc.in generated/Prelude.inc @ONLY)
 add_zkc_component(Syntax
   lib/Syntax/Syntax.cpp
   lib/Syntax/Lexer.cpp

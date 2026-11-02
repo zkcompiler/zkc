@@ -6,10 +6,11 @@ The artifact retains written syntax for the independently checked source
 correspondence connection. It neither admits an IR nor certifies elaboration.
 
 The parser is a named trust boundary. `capture` binds captured modules and
-assets; `installation` binds installation sources. Each source record contains
-its logical module, origin, UTF-8 byte length and SHA-256. Diagnostic filesystem
-paths are excluded. All captured and installation declarations are present,
-including private ones. This artifact has different consumers from the public
+assets; `installation` binds the installed declaration rows. Installed
+declarations are catalog rows, not written syntax: the artifact contains
+captured sources only. Each source record contains its logical module, origin,
+UTF-8 byte length and SHA-256. Diagnostic filesystem paths are excluded. All
+captured declarations are present, including private ones. This artifact has different consumers from the public
 API inspection graph, whose representation-privacy policy still applies there.
 
 ## Shared contract and producer boundary
@@ -77,7 +78,7 @@ elaboration proposal.
 ## Root and addresses
 
 The root has exactly `format`, `capture`, `installation`, `sources` and
-`declarations`. A source has `module`, `origin` (`captured` or `installation`),
+`declarations`. A source has `module`, `origin` (always `captured`),
 `bytes` and `sha256` (64 lowercase hexadecimal digits, without a prefix). A declaration record has `owner` and `nodes`. `owner` is
 its canonical authored declaration path; no generated declaration is an owner.
 
@@ -298,9 +299,9 @@ Generated syntax can lack a written counterpart. Such records appear in
 `unassociated_locals`, with the same kind/address fields and the containing
 declaration span (`module`, `begin`, `end`); at least one address list is empty. An empty list
 never authorizes a correspondence. An independent consumer determines whether
-the source fragment it checks has complete applicable coverage. Private and
-installation declarations are retained here, including declarations outside the
-selected executable closure.
+the source fragment it checks has complete applicable coverage. Private
+declarations are retained here, including declarations outside the selected
+executable closure.
 
 Retention is charged before storing each resolution record. Inspection shares
 one work counter between structural indexing and proposal construction, rechecks
@@ -309,8 +310,9 @@ publishes no partial proposal.
 
 Each declaration lookup record contains `owner`, `written`, `provider`, `target`,
 `abstract_module`, `source` and `candidates`. Provider and target are separate
-`{name,source}` declaration references; `source` is a module and UTF-8 range.
-An abstract-module term is the resolver's selected binder, or null. Repeated
+`{name,source}` declaration references; `source` is a module and UTF-8 range,
+or null for an installed declaration, which has no written source. An
+abstract-module term is the resolver's selected binder, or null. Repeated
 resolver observations are retained in their original order. Private and
 installation references are not filtered through the public API view.
 

@@ -300,18 +300,23 @@ public:
          WrittenIndex *addresses = nullptr)
       : project(project), work(work), addresses(addresses) {}
   Expected<json::Value> run(const WrittenSources &written) {
+    // Installed declarations are catalog rows, not written syntax.
+    auto installed = [&](Span span) {
+      return project.sources()[span.source.index].origin ==
+             SourceOrigin::Installation;
+    };
     for (const auto &module : written.modules)
-      declaration(module, module.name);
+      if (!installed(module.span))
+        declaration(module, module.name);
     if (error)
       return std::move(error);
     json::Array sources;
     for (const auto &source : project.sources())
-      sources.push_back(json::Object{
-          {"module", source.module},
-          {"origin", source.origin == SourceOrigin::Captured ? "captured"
-                                                             : "installation"},
-          {"bytes", source.text.size()},
-          {"sha256", digest(source.text)}});
+      if (source.origin == SourceOrigin::Captured)
+        sources.push_back(json::Object{{"module", source.module},
+                                       {"origin", "captured"},
+                                       {"bytes", source.text.size()},
+                                       {"sha256", digest(source.text)}});
     return json::Object{{"format", "zkc.source-ast/0"},
                         {"capture", project.capture().identity()},
                         {"installation", project.installationIdentity()},
@@ -1258,8 +1263,13 @@ Expected<json::Value> sourceBindingsData(const CheckedProject &project,
   };
   auto declaration = [&](DeclarationId id) {
     const auto &decl = project.declarations()[id.index];
-    return json::Object{{"name", decl.qualifiedName},
-                        {"source", source(decl.span)}};
+    // An installed declaration has no written source.
+    return json::Object{
+        {"name", decl.qualifiedName},
+        {"source", project.sources()[decl.span.source.index].origin ==
+                           SourceOrigin::Installation
+                       ? json::Value(nullptr)
+                       : json::Value(source(decl.span))}};
   };
   // Preserve resolver observations, including repeated observations of a node.
   // Exact-span candidates help the checker find a written occurrence; they do

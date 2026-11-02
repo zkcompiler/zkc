@@ -344,9 +344,6 @@ add_zkc_test(language_entries Language language-entries)
 add_zkc_test(language_entry_components Compiler language-entry-components)
 add_zkc_test(language_roster_capacity CpuTarget language-roster-capacity)
 add_zkc_test(installed_declarations Language installed-declarations)
-target_compile_definitions(zkc-installed_declarations-test PRIVATE
-  ZKC_INSTALLED_PRELUDE="${PROJECT_SOURCE_DIR}/lib/Language/Prelude.zkc"
-  ZKC_INSTALLED_RECORDS="${PROJECT_SOURCE_DIR}/lib/Language/Records.zkc")
 add_zkc_test(language_entry_components_interface Compiler language-entry-components-interface)
 target_compile_definitions(zkc-language_entry_components_interface-test PRIVATE
   ZKC_ENTRY_COMPONENT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/ordinary.zkc")

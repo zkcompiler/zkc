@@ -1,8 +1,0 @@
-module zkc::records;
-
-// These signature markers are checked against installed catalog rules. The
-// rules compute the exact schema payload; these declarations have no runtime
-// helper implementation or independent constructor authority.
-pub fn unpack<T: Type>(value: T) -> T { stop "uninstalled"; }
-pub fn inspect_record<T: Type>(value: T) -> T { stop "uninstalled"; }
-pub fn repack_record<T: Type, P: Type>(value: T, payload: P) -> T { stop "uninstalled"; }

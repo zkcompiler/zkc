@@ -18,9 +18,7 @@ DeclarationIndex::DeclarationIndex(ArrayRef<Declaration> declarations,
     if (decl.span.source.index >= sources.size() ||
         sources[decl.span.source.index].origin != SourceOrigin::Installation)
       continue;
-    // Rule associations replace a body; primitive declarations keep theirs.
-    if (auto *row = protocol::frontendDeclaration(decl.qualifiedName);
-        row && row->rule) {
+    if (auto *row = protocol::frontendDeclaration(decl.qualifiedName)) {
       associations.emplace(decl.id.index, row);
       if (row->implicit)
         implicitDeclarations.emplace(row->name, decl.id);

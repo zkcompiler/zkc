@@ -37,14 +37,14 @@ with case('observation files cannot replace source or prior evidence'):
         attempted = commands.attempt([compiler, 'language-check', *inputs, f'--{option}=-'])
         assert attempted.returncode > 0 and not attempted.stdout
 
-with case('diagnostic source indices include both checked installation sources'):
+with case('diagnostic source indices include both installed catalog modules'):
     observation = OUT / 'source-indices.json'
     commands.run([compiler, 'language-check', *options, f'--diagnostics={observation}'])
     sources = json.loads(observation.read_text())['sources']
     assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude', 'zkc::records']
     assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation', 'installation']
-    assert [s['path'] for s in sources[-2:]] == ['<installation>/zkc/prelude.zkc',
-                                               '<installation>/zkc/records.zkc']
+    assert [s['path'] for s in sources[-2:]] == ['<installation>/catalog/zkc::prelude',
+                                               '<installation>/catalog/zkc::records']
 
 with case('definition checking never treats empty Entry selection as omission'):
     for args in [

@@ -110,8 +110,10 @@ increase the number of contracts that must agree.
 
 Both source profiles enter the same checked-program API. `zkc` is the installed
 library profile; `zkc-layout` is the development layout profile. A capture selects
-one profile for its supplied modules, with an explicit exception for the installed
-prelude. A layout client cannot silently reinterpret an old-profile dependency.
+one profile for its supplied modules, named by the manifest's `source-format`.
+Installed modules are catalog declaration and notation rows, not source, so they
+carry no source profile. A layout client cannot silently reinterpret an
+old-profile dependency.
 The [layout execution contract](../spec/language/layout-execution.md) records
 the supported projection; accepting a CST does not establish executable support.
 

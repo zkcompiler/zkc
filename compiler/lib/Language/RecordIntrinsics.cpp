@@ -63,8 +63,6 @@ bool Checker::indexDeclarations() {
   output.declarationIndex = std::make_shared<const DeclarationIndex>(
       output.declarations, *output.sources, std::move(namespaces));
   for (const auto &row : protocol::frontendDeclarations()) {
-    if (!row.rule)
-      continue;
     auto id = output.declarationIndex->canonical(row.module + "::" + row.name);
     if (!id || output.declarationIndex->association(*id) != &row)
       return types.fail("source.installation",
@@ -88,6 +86,19 @@ bool checkDeclarationAssociations(Semantics &types,
                         "installed signature differs from its catalog rule",
                         decl.span);
     };
+    // A primitive association keeps the primitive path, whose agreement with
+    // its operation or intrinsic is checked with every primitive declaration.
+    // Checking completes the definition after this check; a checked
+    // declaration must define exactly the associated primitive.
+    if (!row->rule) {
+      if ((decl.primitive && decl.primitive->identity != row->primitive) ||
+          decl.kind != (row->kind == protocol::SourceDeclarationKind::Math
+                            ? Declaration::Kind::Math
+                            : Declaration::Kind::Local) ||
+          !decl.isPublic || decl.abstract)
+        return refuse();
+      continue;
+    }
     if (!decl.isPublic || decl.abstract || decl.primitive ||
         decl.finiteDefinition || !decl.roles.empty() ||
         !decl.services.empty() || !decl.scopedInputs.empty() ||

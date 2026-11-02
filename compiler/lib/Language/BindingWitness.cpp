@@ -547,9 +547,10 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
+  const auto *association =
+      index ? index->association(binding.target.declaration) : nullptr;
   if (binding.installedSignature || binding.lexicalOwner ||
-      binding.intrinsicSource ||
-      (index && index->association(binding.target.declaration)))
+      binding.intrinsicSource || (association && association->rule))
     return index ? checkRecordInvocation(types, declarations, *index, body,
                                          operation)
                  : refuse();

@@ -208,17 +208,22 @@ carry their resolved descriptors, including those introduced privately; their
 targets must still be public. [Notation scope](notation.md#imports-and-lexical-scope)
 defines descriptor conflicts, whole-module visibility and local replacement.
 
-The `zkc` root is reserved. The `zkc::prelude` module belongs to the compiler installation. Its exact
-source is embedded and included in installation identity. Captures cannot supply
-either name or claim an installation origin. Installed sources cannot be linked
-as external children. Its public scalar operator bindings
+The `zkc` root is reserved. The `zkc::prelude` and `zkc::records` modules belong
+to the compiler installation. Their declarations and notations are the
+catalog's [installed declaration rows](../formats/contract-declarations.md#installed-source-declarations),
+read directly into the declaration index; they have no written source text, and
+every row is included in installation identity. Captures cannot supply either
+name or claim an installation origin. Installed modules cannot be linked as
+external children. The prelude's public scalar operator bindings
 are visible by default; its function names require qualification or explicit
 import. The prelude itself has no imports or inherited operator environment.
 There is no runtime source-file lookup. Capture identity and captured file/byte
-limits exclude the prelude; token, declaration, operation and work limits include
-its checking. `Analysis::sources()` and `CheckedProject::sources()` include both
-origins and index all diagnostic spans. `capture().sources()` includes only
-captured inputs.
+limits exclude installed modules; declaration and work limits include reading
+and checking them. `Analysis::sources()` and `CheckedProject::sources()` include
+both origins, an installed module with an empty buffer at
+`<installation>/catalog/<module>`, and index all diagnostic spans; installed
+declarations have empty spans. `capture().sources()` includes only captured
+inputs.
 
 ## Definition checking and Entry closure
 
@@ -264,14 +269,18 @@ completed callable contracts and constructions from captured modules, sorted by 
 Module/interface records report directly declared public member names and any
 implemented contract. The inventory uses canonical declaration paths with public
 owners; it does not enumerate import alias or reexport routes.
-Installation declarations remain accessible through the checked SDK graph. Callable members
+Installation declarations remain accessible through the checked SDK graph. An
+installed declaration with a rule association reports `definition: installed`
+and its `association` identity; an installed primitive keeps `definition:
+primitive`. Callable members
 are visible through their public owner. Members identify that owner and mark
 inherited static parameters; `abstract` distinguishes interface declarations
 from definitions with bodies. Each item reports its kind, static
 parameters and permissions, role roster, data/service argument order, typed
 ports, services, requirements, body effects (or abstract allowance), and captured
-module byte span and source `origin`. `definition` is `body`, `abstract` or
-`primitive`; primitive definitions also report the installed `primitive` identity.
+module byte span and source `origin`. `definition` is `body`, `abstract`,
+`primitive` or `installed`; primitive definitions also report the installed
+`primitive` identity, and installed definitions their catalog `association`.
 Natural/capability bounds retain their inferred flags; explicit
 effect allowances remain separate; abstract Local declarations always include
 their explicit allowance. Effect objects report fixed `stop` and `opaque` flags
@@ -1326,8 +1335,8 @@ bound is a source contract, not inferred from a backend implementation. Formal
 intrinsics called from local code retain the existing realization boundary.
 Retained helper calls, including mapped primitives, count toward the call-depth
 limit; directly emitted primitive operations add no helper edge.
-The prelude is excluded from capture file/byte limits, but its parsing and
-checking count toward token, declaration and work limits for the invocation.
+The prelude is excluded from capture file/byte limits, but reading and checking
+its rows count toward declaration and work limits for the invocation.
 `!`, `&&` and `||` keep their fixed Boolean control/formula semantics and are not
 redefined by library equality bindings.
 

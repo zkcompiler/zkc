@@ -70,8 +70,14 @@ Error Checker::run() {
       return error;
     output.writtenSources = std::move(*written);
   }
+  // Rule associations have catalog contracts; installed primitives infer
+  // theirs like any primitive declaration.
+  auto ruled = [&](const Declaration &decl) {
+    const auto *association = output.declarationIndex->association(decl.id);
+    return association && association->rule;
+  };
   for (auto &decl : output.declarations)
-    if (!decl.abstract && !output.declarationIndex->association(decl.id) &&
+    if (!decl.abstract && !ruled(decl) &&
         !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Oracle ||
          decl.kind == Declaration::Kind::Math ||

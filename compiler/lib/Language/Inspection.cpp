@@ -242,6 +242,9 @@ Expected<json::Object> describe(const CheckedProject &project,
         {"index", slot.index}});
   bool domain = decl.kind == Declaration::Kind::DomainFunction;
   bool ordered = decl.kind != Declaration::Kind::Math && !domain;
+  // A rule association is an installed definition without a body.
+  const auto *association = project.declarationIndex().association(decl.id);
+  const bool installed = association && association->rule;
   auto renderEffects = [](const EffectSummary &summary) {
     json::Array dependencies;
     for (const auto &[slot, ceiling] : summary.dependencies)
@@ -263,7 +266,8 @@ Expected<json::Object> describe(const CheckedProject &project,
   json::Object result{
       {"name", decl.qualifiedName},
       {"abstract", decl.abstract},
-      {"definition", decl.primitive          ? "primitive"
+      {"definition", installed               ? "installed"
+                     : decl.primitive        ? "primitive"
                      : decl.finiteDefinition ? "finite"
                      : decl.abstract         ? "abstract"
                                              : "body"},
@@ -389,6 +393,8 @@ Expected<json::Object> describe(const CheckedProject &project,
   }
   if (decl.primitive)
     result["primitive"] = decl.primitive->identity;
+  if (installed)
+    result["association"] = association->identity;
   if (decl.finiteDefinition)
     result["finite"] = *decl.finiteDefinition;
   if (domain || !decl.domainInputs.empty()) {

@@ -17,7 +17,6 @@
 
 using namespace llvm;
 namespace zkc::language {
-#include "Prelude.inc"
 char DiagnosticError::ID;
 DiagnosticError::DiagnosticError(Diagnostic diagnostic)
     : value(std::move(diagnostic)) {}
@@ -348,12 +347,10 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
       capture, installedCatalogIdentity());
   auto sources = std::make_shared<std::vector<SourceBuffer>>(
       capture.sources().begin(), capture.sources().end());
-  sources->push_back({"zkc::prelude", installedPrelude,
-                      "<installation>/zkc/prelude.zkc",
-                      SourceOrigin::Installation});
-  sources->push_back({"zkc::records", installedRecords,
-                      "<installation>/zkc/records.zkc",
-                      SourceOrigin::Installation});
+  // Installed modules are catalog rows with no written text.
+  for (const auto &module : detail::installedModules())
+    sources->push_back({module, "", "<installation>/catalog/" + module,
+                        SourceOrigin::Installation});
   checked->sources = sources;
   output->sources = sources;
   detail::Work work{limits};
@@ -378,6 +375,14 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
     checked->layoutBodies.resize(sources->size());
     std::vector<detail::SyntaxDeclaration> modules;
     for (unsigned i = 0; i < sources->size(); ++i) {
+      if ((*sources)[i].origin == SourceOrigin::Installation) {
+        auto installed =
+            detail::readInstalledModule((*sources)[i], SourceId{i}, work);
+        if (!installed)
+          return installed.takeError();
+        modules.push_back(std::move(*installed));
+        continue;
+      }
       if (capture.format() == "zkc-layout" &&
           (*sources)[i].origin == SourceOrigin::Captured) {
         auto syntax = detail::parseLayoutHeaders((*sources)[i], SourceId{i},
@@ -927,8 +932,6 @@ std::string installedCatalogIdentity() {
     rows.push_back(std::move(value));
   };
   row({"source-name-profile", sourceNameProfileIdentity()});
-  row({"prelude", "zkc::prelude", detail::digest(installedPrelude)});
-  row({"records", "zkc::records", detail::digest(installedRecords)});
   for (const auto &home : protocol::frontendHomes()) {
     row({"frontend-home", home.constructor, home.module});
     for (const auto &member : home.members)

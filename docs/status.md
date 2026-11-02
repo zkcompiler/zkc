@@ -620,7 +620,7 @@ helper result inference, expression-wide structural type constraints, partial
 static arguments with positional or named binding, named value/service arguments,
 Unicode 17 NFC names, scoped mathematical operators and paired-delimiter calls
 with import activation, explicit fixity and local module bindings, catalog-checked
-primitive definitions and an embedded scalar prelude,
+primitive definitions and a scalar prelude read from catalog declaration rows,
 local short-circuit Boolean operators and total Boolean formulas, inferred usage, catalog
 and natural preconditions with explicit contract checking, derived boundary admission, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
