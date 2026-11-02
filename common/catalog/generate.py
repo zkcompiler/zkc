@@ -428,7 +428,10 @@ def validate(catalog):
             "consumerProfiles": sequence(consumer_profile),
             "members": sequence(row({"name": text, "owner": kind, "result": kind})),
             "rules": sequence(rule),
-            "capabilities": sequence(row({"name": text, "parameters": sequence(kind)})),
+            "capabilities": sequence(row({
+                "name": text, "parameters": sequence(kind),
+                "requires": sequence(text), "permits": sequence(text),
+            })),
             "exports": sequence(export),
             "frontendDeclarations": sequence(row({
                 "identity": text, "owner": text, "name": text, "kind": source_kind,
@@ -1052,6 +1055,23 @@ def validate_domains(view):
     members = {}
     for row in catalog["members"]:
         members.setdefault((row["owner"]["kind"], row["owner"]["sort"], row["name"]), row["result"])
+    # The members a capability names: required ones, then permitted ones. A
+    # member that some capability names belongs to the capabilities naming it.
+    governing = {}
+    for capability in catalog["capabilities"]:
+        named = capability["requires"] + capability["permits"]
+        require(len(named) == len(set(named)), f"{capability['name']} names a member twice")
+        if named:
+            require(
+                len(capability["parameters"]) == 1 and capability["parameters"][0]["kind"] == "Domain",
+                f"{capability['name']} names members but is not a unary domain predicate",
+            )
+        for name in named:
+            require(
+                ("Domain", capability["parameters"][0]["sort"], name) in members,
+                f"{capability['name']} names {name}, which is not a member of its sort",
+            )
+            governing.setdefault(name, set()).add(capability["name"])
     conventions = set()
     for row in view.domains.values():
         sort = row["sort"]
@@ -1079,22 +1099,23 @@ def validate_domains(view):
             )
         for premise, conclusion in catalog["rules"]:
             require(premise not in capabilities or conclusion in capabilities, "capabilities are not closed under rules")
-        if "PairingField" in capabilities:
-            groups = [named.get(m) for m in ("PairingG1", "PairingG2", "PairingGT")]
+        for name in capabilities:
+            for required in view.capabilities[name]["requires"]:
+                require(required in named, f"{name} requires a {required} member")
+        for name in named:
             require(
-                groups[0] is not None and groups[1] is not None and len(set(filter(None, groups))) == len(list(filter(None, groups))),
-                "pairing field requires distinct pairing groups",
+                name not in governing or governing[name] & set(capabilities),
+                f"a {name} member requires one of the capabilities {', '.join(sorted(governing.get(name, ())))}",
             )
-            for group in filter(None, groups):
+        if "PairingField" in capabilities:
+            groups = [named[m] for m in ("PairingG1", "PairingG2", "PairingGT") if m in named]
+            require(len(set(groups)) == len(groups), "pairing field requires distinct pairing groups")
+            for group in groups:
                 require(
                     "ScalarAction" in view.domains[group]["capabilities"]
                     and view.member(group, "Scalar") == row["identity"],
                     "pairing group must act with this field as Scalar",
                 )
-        require(
-            "PairingField" in capabilities or not {"PairingG1", "PairingG2", "PairingGT"} & set(named),
-            "pairing group members occur only on PairingField rows",
-        )
         if "PointField" in named or "EvaluationField" in named:
             require(
                 sort == "Commitment" and row["commitment"]["scheme"] == "multilinearKzg",
@@ -1114,7 +1135,6 @@ def validate_domains(view):
             # Rows over BaseField are exactly the rows holding ExtensionField.
             over_base = not prime and structure["over"] == "BaseField"
             require(("ExtensionField" in capabilities) == over_base, "ExtensionField disagrees with the structure")
-            require(("BaseField" in named) == over_base, "exactly the rows over BaseField have a BaseField member")
             if not prime:
                 require(structure["degree"] >= 2, "extension degree is at least 2")
                 require(bool(structure["reduction"]), "extension reduction is a nonempty list")

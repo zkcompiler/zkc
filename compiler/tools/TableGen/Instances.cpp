@@ -298,6 +298,31 @@ void Logical::checkDomains() {
                 codecRows.emplace(identity.str(), row).second,
             row, "duplicate identity across domains and codecs");
   }
+  // The members a capability names: required ones, then permitted ones. A
+  // member that some capability names belongs to the capabilities naming it.
+  std::map<std::string, std::set<std::string>> governing;
+  for (const auto &[name, capability] : capabilityRows) {
+    auto named = capability->getValueAsListOfStrings("requires");
+    auto permitted = capability->getValueAsListOfStrings("permits");
+    named.insert(named.end(), permitted.begin(), permitted.end());
+    require(std::set<StringRef>(named.begin(), named.end()).size() ==
+                named.size(),
+            capability, Twine(name) + " names a member twice");
+    if (named.empty())
+      continue;
+    auto ps = capability->getValueAsListOfDefs("parameters");
+    require(ps.size() == 1 && parameter(ps[0]).first == "Domain", capability,
+            Twine(name) + " names members but is not a unary domain predicate");
+    for (auto member : named) {
+      require(members.count(std::make_tuple(std::string("Domain"),
+                                            parameter(ps[0]).second.str(),
+                                            member.str())),
+              capability,
+              Twine(name) + " names " + member +
+                  ", which is not a member of its sort");
+      governing[member.str()].insert(name);
+    }
+  }
   std::set<std::string> conventions;
   for (const auto *row : domains) {
     auto sort = text(row, "sort");
@@ -339,14 +364,30 @@ void Logical::checkDomains() {
     for (const auto &[premise, conclusion] : rules)
       require(!held.count(premise) || held.count(conclusion), row,
               "capabilities are not closed under rules");
+    for (auto name : held)
+      for (auto required :
+           capabilityRows.at(name.str())->getValueAsListOfStrings("requires"))
+        require(named.count(required), row,
+                name + " requires a " + required + " member");
+    for (const auto &[name, target] : named) {
+      auto found = governing.find(name.str());
+      require(found == governing.end() ||
+                  any_of(found->second,
+                         [&](const std::string &capability) {
+                           return held.count(capability);
+                         }),
+              row,
+              "a " + name + " member requires one of the capabilities " +
+                  (found == governing.end() ? std::string()
+                                            : join(found->second, ", ")));
+    }
     if (held.count("PairingField")) {
       std::vector<StringRef> groups;
       for (auto name : {"PairingG1", "PairingG2", "PairingGT"})
         if (named.count(name))
           groups.push_back(named.at(name));
-      require(named.count("PairingG1") && named.count("PairingG2") &&
-                  std::set<StringRef>(groups.begin(), groups.end()).size() ==
-                      groups.size(),
+      require(std::set<StringRef>(groups.begin(), groups.end()).size() ==
+                  groups.size(),
               row, "pairing field requires distinct pairing groups");
       for (auto group : groups) {
         const auto *target = domain(group);
@@ -356,10 +397,6 @@ void Logical::checkDomains() {
                 row, "pairing group must act with this field as Scalar");
       }
     }
-    require(held.count("PairingField") ||
-                (!named.count("PairingG1") && !named.count("PairingG2") &&
-                 !named.count("PairingGT")),
-            row, "pairing group members occur only on PairingField rows");
     if (named.count("PointField") || named.count("EvaluationField"))
       require(sort == "Commitment" &&
                   text(row->getValueAsDef("commitmentFacts"), "scheme") ==
@@ -407,8 +444,6 @@ void Logical::checkDomainFacts(const Record *row,
     const bool overBase = !prime && text(shape, "over") == "BaseField";
     require(holds("ExtensionField") == overBase, row,
             "ExtensionField disagrees with the structure");
-    require(member(row, "BaseField").has_value() == overBase, row,
-            "exactly the rows over BaseField have a BaseField member");
     if (!prime) {
       auto over = text(shape, "over");
       require(over == "BaseField" || over == "PrimeSubfield", row,

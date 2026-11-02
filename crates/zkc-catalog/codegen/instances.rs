@@ -388,13 +388,6 @@ impl<'a> Instances<'a> {
                 )?;
                 if domain.capabilities.contains("PairingField") {
                     self.pairing(name, domain)?;
-                } else {
-                    require(
-                        !["PairingG1", "PairingG2", "PairingGT"]
-                            .iter()
-                            .any(|member| domain.members.contains_key(member)),
-                        "pairing group members occur only on PairingField rows",
-                    )?;
                 }
             }
             Facts::Transcript(decoder) => {
@@ -430,16 +423,8 @@ impl<'a> Instances<'a> {
 
     fn pairing(&self, name: &str, domain: &Domain<'a>) -> Result<()> {
         let mut groups = BTreeSet::new();
-        for (member, required) in [
-            ("PairingG1", true),
-            ("PairingG2", true),
-            ("PairingGT", false),
-        ] {
+        for member in ["PairingG1", "PairingG2", "PairingGT"] {
             let Some(&(group, _)) = domain.members.get(member) else {
-                require(
-                    !required,
-                    &format!("a PairingField row names a {member} group"),
-                )?;
                 continue;
             };
             require(groups.insert(group), "pairing groups must be distinct")?;
@@ -795,10 +780,41 @@ fn read_domain<'a>(
             &format!("capabilities are not closed under {premise} => {conclusion}"),
         )?;
     }
+    // A capability's required members are present, and a member that some
+    // capability names occurs only beside a capability that names it.
+    for capability in &capabilities {
+        for required in list(&catalog.capabilities[capability]["requires"])? {
+            let required = string(required)?;
+            require(
+                members.contains_key(required),
+                &format!("{capability} requires a {required} member"),
+            )?;
+        }
+    }
+    for member in members.keys() {
+        let mut governing = Vec::new();
+        for (name, row) in &catalog.capabilities {
+            let names = |field: &str| -> Result<bool> {
+                Ok(list(&row[field])?
+                    .iter()
+                    .any(|named| named.as_str() == Some(*member)))
+            };
+            if names("requires")? || names("permits")? {
+                governing.push(*name);
+            }
+        }
+        require(
+            governing.is_empty() || governing.iter().any(|name| capabilities.contains(name)),
+            &format!(
+                "a {member} member requires one of the capabilities {}",
+                governing.join(", ")
+            ),
+        )?;
+    }
     let holds = |name: &str| capabilities.contains(name);
     let has = |name: &str| members.contains_key(name);
     let facts = match facts {
-        Some("field") => Facts::Field(field(&row["field"], holds, has)?),
+        Some("field") => Facts::Field(field(&row["field"], holds)?),
         Some("transcript") => Facts::Transcript(transcript(&row["transcript"], holds, has)?),
         Some(_) => Facts::Commitment(commitment(&row["commitment"], has)?),
         None => Facts::Plain,
@@ -811,11 +827,7 @@ fn read_domain<'a>(
     })
 }
 
-fn field<'a>(
-    v: &'a Value,
-    holds: impl Fn(&str) -> bool,
-    has: impl Fn(&str) -> bool,
-) -> Result<Field<'a>> {
+fn field<'a>(v: &'a Value, holds: impl Fn(&str) -> bool) -> Result<Field<'a>> {
     object(v, &["characteristic", "structure", "twoAdic"], &[])?;
     let characteristic = Natural::decimal(&v["characteristic"], 1024)?;
     require(
@@ -871,10 +883,6 @@ fn field<'a>(
     require(
         holds("ExtensionField") == over_base,
         "exactly the rows over BaseField hold ExtensionField",
-    )?;
-    require(
-        has("BaseField") == over_base,
-        "exactly the rows over BaseField have a BaseField member",
     )?;
     let two_adic = &v["twoAdic"];
     let convention = if two_adic.is_null() {

@@ -918,7 +918,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
         (
             "capabilities",
             array(&v["capabilities"], |v| {
-                object(v, &["name", "parameters"], &[])?;
+                object(v, &["name", "parameters", "requires", "permits"], &[])?;
                 Ok(record(
                     "Capability",
                     &[

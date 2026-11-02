@@ -164,9 +164,16 @@ class ZKC_Natural<int value> : ZKC_Term<NatParameter> {
   let name = !strconcat("n", !cast<string>(value));
   int number = value;
 }
-class ZKC_Capability<string value, list<ZKC_Parameter> ps> : ZKC_Declaration {
+// A capability may name members of its domain sort: a domain holding it has
+// every `requires` member, and a domain may have a member that some capability
+// names only while holding such a capability.
+class ZKC_Capability<string value, list<ZKC_Parameter> ps,
+                     list<string> required = [], list<string> permitted = []>
+    : ZKC_Declaration {
   string name = value;
   list<ZKC_Parameter> parameters = ps;
+  list<string> requires = required;
+  list<string> permits = permitted;
 }
 class ZKC_Holds<ZKC_Capability cap, list<ZKC_Term> args> : ZKC_Declaration {
   ZKC_Capability capability = cap;

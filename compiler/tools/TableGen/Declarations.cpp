@@ -1483,9 +1483,18 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                      {"collection", std::move(collection)},
                      {"setup", std::move(setup)}});
   }
-  for (const auto *c : m.capabilities)
-    capabilities.push_back(
-        json::Object{{"name", name(c)}, {"parameters", parametersJSON(c)}});
+  for (const auto *c : m.capabilities) {
+    auto names = [&](StringRef field) {
+      json::Array values;
+      for (auto member : c->getValueAsListOfStrings(field))
+        values.push_back(member);
+      return values;
+    };
+    capabilities.push_back(json::Object{{"name", name(c)},
+                                        {"parameters", parametersJSON(c)},
+                                        {"requires", names("requires")},
+                                        {"permits", names("permits")}});
+  }
   for (const auto *member : m.members)
     members.push_back(json::Object{
         {"name", name(member)},

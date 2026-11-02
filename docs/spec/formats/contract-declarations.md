@@ -48,7 +48,7 @@ Kind       = {kind, sort}
 Type       = {name, parameters, copy, drop, custody, nativeLocal,
               mathematical, participants, constructible, message,
               sourceData, collection, setup}
-Capability = {name, parameters}
+Capability = {name, parameters, requires, permits}
 Member     = {name, owner, result}
 Rule       = [premise, conclusion]
 Family     = {family, elementConstructor, resultConstructor}
@@ -310,12 +310,17 @@ declared sort other than `Codec` and `Slot`. `members` is an ordered list of
 `[member, identity]` pairs: each member is a declared Member whose owner sort
 is the row's sort, at most once per row, naming a domain of the member's
 result sort. `capabilities` is an ordered list of unique declared unary
-predicates over the row's sort, closed under `rules`. A `PairingField` row
-names distinct `PairingG1` and `PairingG2` groups, and optionally a distinct
-`PairingGT` group, each holding `ScalarAction` with this field as `Scalar`;
-`PairingG1`, `PairingG2` and `PairingGT` members occur only on `PairingField`
-rows. `PointField` and `EvaluationField` members occur only on `multilinearKzg`
-commitments.
+predicates over the row's sort, closed under `rules`.
+
+A capability's `requires` and `permits` name members of its sort, each at most
+once across both lists; a capability that names a member is a unary domain
+predicate. A row holding a capability has every member that capability
+requires, and a row has a member that some capability names only while holding
+a capability that names it. `PairingField` requires `PairingG1` and `PairingG2`
+and permits `PairingGT`; `ExtensionField` requires `BaseField`. The pairing
+groups of a `PairingField` row are distinct and each holds `ScalarAction` with
+this field as `Scalar`. `PointField` and `EvaluationField` members occur only on
+`multilinearKzg` commitments.
 
 `characteristic` is the field's characteristic as a canonical decimal at most
 1,024 digits long, at least 2; for a prime field it is also the order. It

@@ -145,7 +145,8 @@ def project(catalog, installation):
         )
     caps = {
         c["name"]: emit(
-            f"ZKC_Capability<{q(c['name'])}, {kinds(c['parameters'])}>",
+            f"ZKC_Capability<{q(c['name'])}, {kinds(c['parameters'])}, "
+            f"{seq(q(m) for m in c['requires'])}, {seq(q(m) for m in c['permits'])}>",
             [ordinal(i)],
             symbol("Capability", c["name"]),
         )

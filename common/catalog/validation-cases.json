@@ -267,6 +267,25 @@
           }
         }
       ]
+    },
+    {
+      "name": "a capability that requires a member every row holding it has",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ScalarAction"
+          },
+          "path": [
+            "requires"
+          ],
+          "value": [
+            "Scalar"
+          ]
+        }
+      ]
     }
   ],
   "refused": [
@@ -556,6 +575,132 @@
       }
     },
     {
+      "name": "capability naming an undeclared member",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ScalarAction"
+          },
+          "path": [
+            "requires"
+          ],
+          "value": [
+            "Missing"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ScalarAction names Missing, which is not a member of its sort",
+        "native": "ScalarAction names Missing, which is not a member of its sort",
+        "rust": "ScalarAction names Missing, which is not a member of its sort"
+      }
+    },
+    {
+      "name": "capability naming a member of another sort",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ExtensionField"
+          },
+          "path": [
+            "permits"
+          ],
+          "value": [
+            "Scalar"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ExtensionField names Scalar, which is not a member of its sort",
+        "native": "ExtensionField names Scalar, which is not a member of its sort",
+        "rust": "ExtensionField names Scalar, which is not a member of its sort"
+      }
+    },
+    {
+      "name": "capability naming a member twice",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ExtensionField"
+          },
+          "path": [
+            "permits"
+          ],
+          "value": [
+            "BaseField"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ExtensionField names a member twice",
+        "native": "ExtensionField names a member twice",
+        "rust": "ExtensionField names a member twice"
+      }
+    },
+    {
+      "name": "binary capability naming a member",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "Encodes.field"
+          },
+          "path": [
+            "requires"
+          ],
+          "value": [
+            "BaseField"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "Encodes.field names members but is not a unary domain predicate",
+        "native": "Encodes.field names members but is not a unary domain predicate",
+        "rust": "Encodes.field names members but is not a unary domain predicate"
+      }
+    },
+    {
+      "name": "permitted member on a row without its capability",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "PairingGT",
+            "bn254.gt"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "a PairingGT member requires one of the capabilities PairingField",
+        "native": "a PairingGT member requires one of the capabilities PairingField",
+        "rust": "domains: koala-bear: a PairingGT member requires one of the capabilities PairingField"
+      }
+    },
+    {
       "name": "PairingField without a PairingG2 group",
       "rule": "pairing",
       "edits": [
@@ -576,9 +721,9 @@
         }
       ],
       "diagnostics": {
-        "generator": "pairing field requires distinct pairing groups",
-        "native": "pairing field requires distinct pairing groups",
-        "rust": "domains: bn254.fr: a PairingField row names a PairingG2 group"
+        "generator": "PairingField requires a PairingG2 member",
+        "native": "PairingField requires a PairingG2 member",
+        "rust": "domains: bn254.fr: PairingField requires a PairingG2 member"
       }
     },
     {
@@ -654,9 +799,9 @@
         }
       ],
       "diagnostics": {
-        "generator": "pairing group members occur only on PairingField rows",
-        "native": "pairing group members occur only on PairingField rows",
-        "rust": "domains: bn254.fr: pairing group members occur only on PairingField rows"
+        "generator": "a PairingG1 member requires one of the capabilities PairingField",
+        "native": "a PairingG1 member requires one of the capabilities PairingField",
+        "rust": "domains: bn254.fr: a PairingG1 member requires one of the capabilities PairingField"
       }
     },
     {
@@ -817,6 +962,21 @@
             "capabilities"
           ],
           "value": "ExtensionField"
+        },
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "baby-bear"
+          ]
         }
       ],
       "diagnostics": {
@@ -843,9 +1003,9 @@
         }
       ],
       "diagnostics": {
-        "generator": "ExtensionField disagrees with the structure",
-        "native": "ExtensionField disagrees with the structure",
-        "rust": "domains: koala-bear.ext4-binomial3: exactly the rows over BaseField hold ExtensionField"
+        "generator": "a BaseField member requires one of the capabilities ExtensionField",
+        "native": "a BaseField member requires one of the capabilities ExtensionField",
+        "rust": "domains: koala-bear.ext4-binomial3: a BaseField member requires one of the capabilities ExtensionField"
       }
     },
     {
@@ -869,9 +1029,9 @@
         }
       ],
       "diagnostics": {
-        "generator": "exactly the rows over BaseField have a BaseField member",
-        "native": "exactly the rows over BaseField have a BaseField member",
-        "rust": "domains: gf2-64.pentanomial-4-3-1: exactly the rows over BaseField have a BaseField member"
+        "generator": "a BaseField member requires one of the capabilities ExtensionField",
+        "native": "a BaseField member requires one of the capabilities ExtensionField",
+        "rust": "domains: gf2-64.pentanomial-4-3-1: a BaseField member requires one of the capabilities ExtensionField"
       }
     },
     {
@@ -1122,9 +1282,9 @@
         }
       ],
       "diagnostics": {
-        "generator": "exactly the rows over BaseField have a BaseField member",
+        "generator": "ExtensionField requires a BaseField member",
         "native": "BaseField extension requires its BaseField member",
-        "rust": "domains: koala-bear.ext4-binomial3: exactly the rows over BaseField have a BaseField member"
+        "rust": "domains: koala-bear.ext4-binomial3: ExtensionField requires a BaseField member"
       }
     },
     {

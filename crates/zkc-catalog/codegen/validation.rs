@@ -997,6 +997,32 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
             "invalid or duplicate associated member",
         )?;
     }
+    // The members a capability names: required ones, then permitted ones.
+    for cap in catalog.capabilities.values() {
+        let name = string(&cap["name"])?;
+        let mut named = BTreeSet::new();
+        for member in list(&cap["requires"])?.iter().chain(list(&cap["permits"])?) {
+            require(
+                named.insert(string(member)?),
+                &format!("{name} names a member twice"),
+            )?;
+        }
+        if named.is_empty() {
+            continue;
+        }
+        let parameters = kinds(&cap["parameters"])?;
+        let [("Domain", sort)] = parameters[..] else {
+            return Err(format!(
+                "{name} names members but is not a unary domain predicate"
+            ));
+        };
+        for member in named {
+            require(
+                catalog.members.contains_key(&(("Domain", sort), member)),
+                &format!("{name} names {member}, which is not a member of its sort"),
+            )?;
+        }
+    }
     let mut rules = BTreeSet::new();
     for r in list(&v["rules"])? {
         let from = kinds(&lookup(&catalog.capabilities, &r[0])?["parameters"])?;

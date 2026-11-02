@@ -19,7 +19,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "CommRing",
@@ -28,7 +30,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.bool",
@@ -37,7 +41,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.bytes",
@@ -46,7 +52,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.commitment",
@@ -59,7 +67,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.commitments",
@@ -72,7 +82,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.field",
@@ -85,7 +97,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.group",
@@ -98,7 +112,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.groups",
@@ -111,7 +127,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.index",
@@ -120,7 +138,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.indices",
@@ -129,7 +149,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.matrix",
@@ -142,7 +164,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.point",
@@ -155,7 +179,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.polynomial",
@@ -168,7 +194,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.proof",
@@ -181,7 +209,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.round",
@@ -194,7 +224,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.table",
@@ -207,7 +239,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.vector",
@@ -220,7 +254,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "ExtensionField",
@@ -229,7 +265,11 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [
+        "BaseField"
+      ],
+      "permits": []
     },
     {
       "name": "Field",
@@ -238,7 +278,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "FieldTranscript",
@@ -247,7 +289,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Group",
@@ -256,7 +300,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexRandomness",
@@ -265,7 +311,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexBlockRandomness",
@@ -274,7 +322,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexTranscript",
@@ -283,7 +333,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexBlockTranscript",
@@ -292,7 +344,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "MultiOpening",
@@ -301,7 +355,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "MultilinearOpening",
@@ -310,7 +366,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "PairingField",
@@ -319,6 +377,13 @@
           "kind": "Domain",
           "sort": "Field"
         }
+      ],
+      "requires": [
+        "PairingG1",
+        "PairingG2"
+      ],
+      "permits": [
+        "PairingGT"
       ]
     },
     {
@@ -328,7 +393,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "ScalarAction",
@@ -337,7 +404,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Transcript",
@@ -346,7 +415,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "TwoAdicField",
@@ -355,7 +426,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "VectorCommitment",
@@ -364,7 +437,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     }
   ],
   "exports": [
