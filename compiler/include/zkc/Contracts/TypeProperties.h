@@ -77,6 +77,16 @@ inline bool nativeFieldArrayWire(const BoundType &type, bool physical = false) {
 // codec. The caller must establish nominal formation; this installs no codec
 // and grants no handler.
 bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity);
+// An installation representation row of the instance whose value bytes are the
+// instance's codec frame.
+bool canonicalRepresentation(llvm::StringRef kind, llvm::StringRef identity,
+                             llvm::StringRef representation);
+// The instance's resident representation: its one nondefault installation row
+// whose value bytes are the codec frame, or empty.
+llvm::StringRef residentRepresentation(llvm::StringRef kind,
+                                       llvm::StringRef identity);
+// A commitment domain whose declared scheme requires an authorized setup.
+bool setupCommitment(llvm::StringRef identity);
 inline bool nativeMessageData(const BoundType &type) {
   if (!type.representation.empty()) {
     // The closed installation grants sequence/variant frame families and
@@ -102,14 +112,11 @@ inline bool nativeMessageData(const BoundType &type) {
       llvm::consumeError(selected.takeError());
       return false;
     }
-    // These exact installed resident owners positively supply the existing
-    // canonical field/group frames. Other nondefault layouts remain local.
-    return *selected == type || type.representation == "blst/fr" ||
-           type.representation == "blst/g1" ||
-           type.representation == "blst/g2" ||
-           type.representation == "halo2curves-axiom/bn254.fr" ||
-           type.representation == "halo2curves-axiom/bn254.g1" ||
-           type.representation == "halo2curves-axiom/bn254.g2";
+    // A nondefault representation supplies the canonical frame only where its
+    // installation row says so; other nondefault layouts remain local.
+    return *selected == type ||
+           canonicalRepresentation(type.kind, type.identity,
+                                   type.representation);
   }
   if (type.kind == "sequence")
     return type.arguments.size() == 1 &&
@@ -143,8 +150,7 @@ inline bool nativeDataFrame(const BoundType &type) {
          nativeMessageData(type);
 }
 inline bool nativeSetupType(const BoundType &type) {
-  if (type.kind == "prover_key" || type.kind == "verifier_key" ||
-      type.identity == "multilinear.kzg.bls12-381/0")
+  if (setupKey(type.kind) || setupCommitment(type.identity))
     return true;
   if (type.kind == "variant") {
     auto descriptor = decodeVariant(erasePhysicalType(type).spelling());

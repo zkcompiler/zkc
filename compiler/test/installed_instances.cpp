@@ -462,7 +462,12 @@ std::vector<Table> dump() {
     for (const auto &identity : identities())
       if (implementationProviderSupports(provider, identity))
         relation.push_back(json::Array{provider, identity});
-  json::Array resourceUnits;
+  json::Array resourceUnits, residentConversions;
+  for (const auto &type : catalog.allLogicalTypes())
+    if (auto resident = residentRepresentation(type.kind, type.domain);
+        !resident.empty())
+      residentConversions.push_back(
+          json::Array{type.kind, type.domain, resident});
   for (const auto &operation : executableOperationContracts())
     if (resourceUnitContract(operation.name))
       resourceUnits.push_back(operation.name);
@@ -508,6 +513,7 @@ std::vector<Table> dump() {
   tables.emplace_back("providerRelation", std::move(relation));
   tables.emplace_back("implementations", std::move(implementations));
   tables.emplace_back("resourceUnitContracts", std::move(resourceUnits));
+  tables.emplace_back("residentConversions", std::move(residentConversions));
   return tables;
 }
 // One row per line, so a fixture change reads as a row diff.

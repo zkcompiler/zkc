@@ -74,7 +74,11 @@ frame, and `local` otherwise; a `canonical` row requires a framed codec for its
 instance, and the default of every instance with a framed codec is
 `canonical`. `unit` is the installation unit that owns the storage. The
 default of a unary instance has the unit of its domain's default provider,
-and the default of a nullary instance has unit `independent`.
+and the default of a nullary instance has unit `independent`. A nondefault
+`canonical` row is the instance's resident representation when it is the
+instance's only one: `representation.convert` pairs it with the default, and
+its values transport in the instance's frame. A target reads storage owners
+from these units; whether it compiled a unit's handlers stays its own check.
 
 An applied representation covers a constructor applied to static arguments.
 `constructor` is a declared type with parameters, or `variant`. `arguments`

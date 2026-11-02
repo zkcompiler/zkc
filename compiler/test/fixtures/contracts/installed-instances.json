@@ -1480,5 +1480,19 @@
   "resource_unit.create",
   "resource_unit.pass",
   "resource_unit.consume"
+],
+"residentConversions": [
+  ["field","bls12-381.fr","blst/fr"],
+  ["vector","bls12-381.fr","blst/fr"],
+  ["field","bn254.fr","halo2curves-axiom/bn254.fr"],
+  ["vector","bn254.fr","halo2curves-axiom/bn254.fr"],
+  ["group","bls12-381.g1","blst/g1"],
+  ["groups","bls12-381.g1","blst/g1"],
+  ["group","bls12-381.g2","blst/g2"],
+  ["groups","bls12-381.g2","blst/g2"],
+  ["group","bn254.g1","halo2curves-axiom/bn254.g1"],
+  ["groups","bn254.g1","halo2curves-axiom/bn254.g1"],
+  ["group","bn254.g2","halo2curves-axiom/bn254.g2"],
+  ["groups","bn254.g2","halo2curves-axiom/bn254.g2"]
 ]
 }

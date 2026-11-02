@@ -1,5 +1,6 @@
 #include "BundleInternal.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
@@ -186,15 +187,14 @@ Expected<Presentation> presentation(StringRef field) {
   if (primeField(field))
     return Presentation{field.str(), 1, ""};
   const auto &catalog = protocol::installedDomains();
-  // Reuse the closed mathematical presentations, never provider membership
-  // or a matching coordinate count to authorize an extension lift.
-  const auto *entry = protocol::plonky3Field(field);
-  if (entry && entry->degree > 1 &&
+  // The declared field structure, never provider membership or a matching
+  // coordinate count, authorizes an extension lift.
+  auto extension = protocol::instances::binomialExtension(field);
+  if (extension && extension->degree > 1 &&
       catalog.hasFact("ExtensionField", {field.str()}) &&
-      catalog.associatedIdentity(field, "BaseField") == entry->base &&
-      primeField(entry->base))
-    return Presentation{entry->base.str(), entry->degree,
-                        std::to_string(entry->nonresidue)};
+      primeField(extension->base))
+    return Presentation{extension->base, extension->degree,
+                        extension->nonresidue};
   return zkc::error("bundle-field-presentation", field);
 }
 

@@ -1,4 +1,5 @@
 #include "Field.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Relation/R1CS.h"
 #include "llvm/Support/Endian.h"
 #include <map>
@@ -93,15 +94,11 @@ Expected<R1CS> readR1CS(StringRef bytes) {
   auto prime = header.integer(*width);
   if (!prime)
     return prime.takeError();
+  // The installed prime fields, by their declared structure.
   StringRef field;
-  for (StringRef candidate :
-       {"bls12-381.fr", "ristretto255.scalar", "bn254.fr"})
-    if (Field::primeModulus(candidate) == *prime) {
-      field = candidate;
-      break;
-    }
-  for (const auto &candidate : protocol::plonky3Fields())
-    if (candidate.degree == 1 && candidate.modulus == *prime) {
+  for (const auto &candidate : protocol::instances::domains())
+    if (candidate.field && !candidate.field->extension &&
+        Field::primeModulus(candidate.identity) == *prime) {
       field = candidate.identity;
       break;
     }

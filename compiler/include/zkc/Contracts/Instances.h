@@ -155,6 +155,15 @@ llvm::ArrayRef<Limit> limits();
 const Limit *limit(llvm::StringRef name);
 llvm::ArrayRef<FiniteDefinition> finiteDefinitions();
 llvm::ArrayRef<DomainConstructor> domainConstructors();
+/// A field declared as `B[X]/(X^degree - nonresidue)` over its BaseField
+/// member `B`: an extension over BaseField whose reduction is the single term
+/// `[0, nonresidue]`.
+struct BinomialExtension {
+  std::string base;
+  unsigned degree;
+  std::string nonresidue;
+};
+std::optional<BinomialExtension> binomialExtension(llvm::StringRef field);
 
 /// Shared ceiling values, usable in constant expressions.
 struct LimitValue {

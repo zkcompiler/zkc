@@ -293,25 +293,10 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
     auto ordinary = defaultRepresentation(*logical);
     if (!ordinary)
       return ordinary.takeError();
-    StringRef resident;
-    if ((logical->kind == "field" || logical->kind == "vector") &&
-        logical->identity == "bls12-381.fr")
-      resident = "blst/fr";
-    if (logical->kind == "group" || logical->kind == "groups") {
-      if (logical->identity == "bls12-381.g1")
-        resident = "blst/g1";
-      if (logical->identity == "bls12-381.g2")
-        resident = "blst/g2";
-    }
-    if ((logical->kind == "field" || logical->kind == "vector") &&
-        logical->identity == "bn254.fr")
-      resident = "halo2curves-axiom/bn254.fr";
-    if (logical->kind == "group" || logical->kind == "groups") {
-      if (logical->identity == "bn254.g1")
-        resident = "halo2curves-axiom/bn254.g1";
-      if (logical->identity == "bn254.g2")
-        resident = "halo2curves-axiom/bn254.g2";
-    }
+    // A conversion pairs the default with the instance's resident
+    // representation.
+    StringRef resident =
+        residentRepresentation(logical->kind, logical->identity);
     if (resident.empty() ||
         !((from->representation == ordinary->representation &&
            to->representation == resident) ||

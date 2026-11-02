@@ -26,6 +26,21 @@ const Codec *codec(llvm::StringRef identity) {
       return &row;
   return nullptr;
 }
+std::optional<BinomialExtension> binomialExtension(llvm::StringRef field) {
+  const auto *row = domain(field);
+  if (!row || !row->field || !row->field->extension)
+    return std::nullopt;
+  const auto &extension = *row->field->extension;
+  if (extension.over != ExtensionBase::BaseField ||
+      extension.reduction.size() != 1 ||
+      extension.reduction.front().exponent != 0)
+    return std::nullopt;
+  for (const auto &member : row->members)
+    if (member.member == "BaseField")
+      return BinomialExtension{member.identity, extension.degree,
+                               extension.reduction.front().coefficient};
+  return std::nullopt;
+}
 const Limit *limit(llvm::StringRef name) {
   for (const auto &row : limits())
     if (row.name == name)
@@ -66,6 +81,31 @@ bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity) {
     return result;
   }();
   return atoms.count({kind.str(), identity.str()});
+}
+bool canonicalRepresentation(llvm::StringRef kind, llvm::StringRef identity,
+                             llvm::StringRef representation) {
+  return llvm::any_of(installation::representations(), [&](const auto &row) {
+    return row.kind == kind && row.domain == identity &&
+           row.identity == representation &&
+           row.frame == installation::ValueFrame::Canonical;
+  });
+}
+llvm::StringRef residentRepresentation(llvm::StringRef kind,
+                                       llvm::StringRef identity) {
+  llvm::StringRef resident;
+  for (const auto &row : installation::representations())
+    if (row.kind == kind && row.domain == identity && !row.isDefault &&
+        row.frame == installation::ValueFrame::Canonical) {
+      if (!resident.empty())
+        return {};
+      resident = row.identity;
+    }
+  return resident;
+}
+bool setupCommitment(llvm::StringRef identity) {
+  const auto *row = instances::domain(identity);
+  return row && row->commitment &&
+         row->commitment->scheme == instances::CommitmentScheme::MultilinearKzg;
 }
 bool nativeFieldArrayFrame(llvm::StringRef field) {
   return llvm::any_of(instances::aggregateFrames(), [&](const auto &row) {
