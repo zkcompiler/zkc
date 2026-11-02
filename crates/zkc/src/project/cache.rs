@@ -153,8 +153,12 @@ impl CompilationCache {
         let writer = self.lock(&format!("writer-{}.lock", &key[..2]))?;
         let writing = writer.try_lock().is_ok();
         if let Some(bytes) = self.read(&path)?
-            && let Ok(mut result) =
-                Compiler::captured(&bytes[65..], request.selection, request.options.clone())
+            && let Ok(mut result) = Compiler::captured(
+                &bytes[65..],
+                request.selection,
+                request.options.clone(),
+                request.interface,
+            )
         {
             result.cache = Some(serde_json::json!({"status":"hit","key":key}));
             return Ok(result);
@@ -419,6 +423,7 @@ mod tests {
                     project: &project,
                     selection: Default::default(),
                     options: options.clone(),
+                    interface: crate::entry::InterfaceLimits::DEFAULT,
                     observations: None,
                     cache: Some(&cache),
                 })

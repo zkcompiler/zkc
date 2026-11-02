@@ -63,8 +63,11 @@ fn execute(
         return initialize::project(command, args, report);
     }
     Input::validate(args)?;
+    // One selection reads every interface this command reaches: the Entry's
+    // own, a Function's Host structure and each child deployment's.
+    let interface = crate::files::interface_limits(args, report)?;
     if command == "prepare" {
-        return initialize::prepare(args, report);
+        return initialize::prepare(args, interface, report);
     }
     let checking = args.has("--dry-run");
     if checking {
@@ -84,9 +87,9 @@ fn execute(
     let name = args.positional.first().copied();
     if command == "inspect" {
         report["phase"] = json!("interface");
-        let interface = target.inspect(name, report)?;
-        report["entry"] = json!(interface.entry());
-        report["interface"] = interface.describe();
+        let view = target.inspect(name, interface, report)?;
+        report["entry"] = json!(view.entry());
+        report["interface"] = view.describe();
         report["status"] = json!("inspected");
         report["phase"] = json!("complete");
         return Ok(());
@@ -98,14 +101,14 @@ fn execute(
         operation.map(Operation::kind)
     };
     let package = measured(args, report, "compilation_and_capture", |report| {
-        target.compile(name, kind, report)
+        target.compile(name, kind, interface, report)
     })?;
     if command == "common-inputs" {
         let cpu = cpu.expect("execution command CPU context");
-        return common::produce(package, &target, args, cpu, report);
+        return common::produce(package, &target, args, interface, cpu, report);
     }
     if command == "bindings" {
-        let source = super::bindings::rust(&package)?;
+        let source = super::bindings::rust(&package, interface)?;
         let mut destinations = Outputs::new(&[args.value("--output").unwrap()], &[])?;
         target.protect(&mut destinations)?;
         invocation::protect_options(args, &mut destinations)?;
@@ -121,7 +124,7 @@ fn execute(
     }
     let operation = operation.expect("execution command");
     let cpu = cpu.expect("execution command CPU context");
-    let view = crate::project::CheckedInterface::read(&package)?;
+    let view = crate::project::CheckedInterface::read(&package, interface)?;
     report["entry"] = json!(view.entry());
     report["phase"] = json!("invocation");
     let layout = match &target {
@@ -132,9 +135,18 @@ fn execute(
         invocation::Invocation::resolve(&view, layout.as_ref(), args, operation, checking, report)?;
     let mut destinations = invocation.destinations(&target, args)?;
     if operation == Operation::Run {
-        return function::execute(package, &view, args, invocation, destinations, cpu, report);
+        return function::execute(
+            package,
+            &view,
+            args,
+            interface,
+            invocation,
+            destinations,
+            cpu,
+            report,
+        );
     }
-    let mut options = Options::parse(args)?;
+    let mut options = Options::parse(args, interface)?;
     report["setups"] = json!(
         options
             .setups

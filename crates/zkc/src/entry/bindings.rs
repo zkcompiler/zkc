@@ -436,14 +436,18 @@ impl Generator {
 }
 /// Generate convenience data types and an admission helper pinned to this exact
 /// trusted package. Mathematical leaves use entry::Value and keep native checks;
-/// this is not protocol algorithm generation or a new authority source.
-pub fn rust(package: &Package) -> Result<String> {
+/// this is not protocol algorithm generation or a new authority source. The
+/// interface is read under the Host's selected interface admission
+/// allowances, the selection the generated helper's Entry admits with.
+pub fn rust(package: &Package, limits: crate::entry::InterfaceLimits) -> Result<String> {
+    limits.validate().map_err(|e| e.to_string())?;
     let document: serde_json::Value =
         serde_json::from_str(package.interface()).map_err(|_| "entry-bindings-interface")?;
     if document["selection"]["kind"] == "function" {
-        return function(package);
+        return function(package, limits);
     }
-    let interface = crate::entry::BoundInterface::read(package).map_err(|e| e.to_string())?;
+    let interface =
+        crate::entry::BoundInterface::read(package, limits).map_err(|e| e.to_string())?;
     super::arguments::check_ports(&interface)?;
     let mut generator = Generator {
         names: Names::default(),
@@ -594,8 +598,8 @@ where
     }
 }
 
-fn function(package: &Package) -> Result<String> {
-    let interface = super::FunctionInterface::read(package).map_err(|e| e.to_string())?;
+fn function(package: &Package, limits: crate::entry::InterfaceLimits) -> Result<String> {
+    let interface = super::FunctionInterface::read(package, limits).map_err(|e| e.to_string())?;
     let mut generator = Generator {
         names: Names::default(),
         types: BTreeMap::new(),

@@ -1,4 +1,5 @@
 use super::*;
+use crate::entry::InterfaceLimits;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use zkc_runtime::{host::wire::WireError, vm::*};
@@ -237,6 +238,7 @@ fn independent_backend_executes_authenticated_source_application() {
         &contracts,
         &backend,
         joint::BundleLimits::default(),
+        InterfaceLimits::DEFAULT,
     )
     .unwrap();
     let values = [20, 22]
@@ -410,7 +412,8 @@ fn typed_backend_values_do_not_grant_source_constructor_authority() {
             package,
             &contracts,
             &backend,
-            joint::BundleLimits::default()
+            joint::BundleLimits::default(),
+            InterfaceLimits::DEFAULT,
         )
         .is_err()
     );
@@ -421,7 +424,41 @@ fn another_contract_catalog_cannot_supply_an_installed_handle() {
     let (_, other) = installed();
     let package = package(&backend.ty, true);
     assert!(
-        BackendRun::admit(package, &contracts, &other, joint::BundleLimits::default()).is_err()
+        BackendRun::admit(
+            package,
+            &contracts,
+            &other,
+            joint::BundleLimits::default(),
+            InterfaceLimits::DEFAULT,
+        )
+        .is_err()
+    );
+}
+
+/// Backend admission reads the source interface under the Host's selected
+/// allowances, not the defaults.
+#[test]
+fn backend_admission_reads_the_interface_under_the_selected_allowances() {
+    let (contracts, backend) = installed();
+    let admit = |interface| {
+        BackendRun::admit(
+            package(&backend.ty, true),
+            &contracts,
+            &backend,
+            joint::BundleLimits::default(),
+            interface,
+        )
+        .map(drop)
+    };
+    let work = |work| InterfaceLimits {
+        work,
+        ..InterfaceLimits::DEFAULT
+    };
+    assert_eq!(admit(InterfaceLimits::DEFAULT), Ok(()));
+    assert_eq!(admit(work(64)), Err("entry-interface-work-limit".into()));
+    assert_eq!(
+        admit(work(InterfaceLimits::MAXIMUM.work + 1)),
+        Err("entry-interface-work-limit".into())
     );
 }
 
@@ -482,6 +519,7 @@ fn paired_run() -> (BackendRun, Arithmetic) {
             &contracts,
             &backend,
             joint::BundleLimits::default(),
+            InterfaceLimits::DEFAULT,
         )
         .unwrap(),
         backend,
@@ -674,7 +712,7 @@ fn common_input_binding_does_not_supply_a_service_adapter_or_input_ports() {
         frame["interface"] = json!(interface.to_string());
     });
     assert!(
-        matches!(BackendRun::admit(with_service, &contracts, &backend, joint::BundleLimits::default()), Err(error) if error == "entry-backend-services")
+        matches!(BackendRun::admit(with_service, &contracts, &backend, joint::BundleLimits::default(), InterfaceLimits::DEFAULT), Err(error) if error == "entry-backend-services")
     );
 
     let (run, backend) = paired_run();
@@ -705,6 +743,7 @@ fn execution_rechecks_the_actual_backend_catalog() {
         &contracts,
         &backend,
         joint::BundleLimits::default(),
+        InterfaceLimits::DEFAULT,
     )
     .unwrap();
     let (_, other) = installed();
@@ -760,7 +799,8 @@ fn authenticated_bytes_and_logical_participant_abi_are_independent_checks() {
                 changed,
                 &contracts,
                 &backend,
-                joint::BundleLimits::default()
+                joint::BundleLimits::default(),
+                InterfaceLimits::DEFAULT,
             )
             .is_err(),
             "{change}"
@@ -789,9 +829,9 @@ fn nested_source_constructor_authority_is_required() {
     });
     // The source schema itself is valid; the portable application seam must
     // still refuse constructing its hidden nested field from backend values.
-    assert!(BoundInterface::read(&changed).is_ok());
+    assert!(BoundInterface::read(&changed, InterfaceLimits::DEFAULT).is_ok());
     assert!(matches!(BackendRun::admit(changed, &contracts, &backend,
-        joint::BundleLimits::default()), Err(error) if error == "entry-input-constructor"));
+        joint::BundleLimits::default(), InterfaceLimits::DEFAULT), Err(error) if error == "entry-input-constructor"));
 }
 
 #[test]
@@ -802,6 +842,7 @@ fn independent_codec_backend_reaches_the_same_common_driver_after_bounded_decodi
         &contracts,
         &backend,
         joint::BundleLimits::default(),
+        InterfaceLimits::DEFAULT,
     )
     .unwrap();
     let ty = backend.ty.clone();
@@ -864,9 +905,15 @@ fn independent_backend_cannot_expose_an_opaque_source_output_as_raw_storage() {
         package["interface"] = json!(interface.to_string());
     });
     assert_eq!(
-        BackendRun::admit(package, &contracts, &backend, Default::default())
-            .err()
-            .unwrap(),
+        BackendRun::admit(
+            package,
+            &contracts,
+            &backend,
+            Default::default(),
+            InterfaceLimits::DEFAULT,
+        )
+        .err()
+        .unwrap(),
         "entry-backend-opaque"
     );
 }

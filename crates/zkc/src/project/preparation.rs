@@ -57,14 +57,17 @@ pub struct Preparation {
 impl Compiler {
     /// Without an output override, prepare all project Entries or a named one.
     /// An explicit directory selects exactly one interface, including outside a project.
+    /// Every interface is read under the Host's selected interface admission
+    /// allowances.
     pub fn prepare(
         &self,
         project: &Project,
         name: Option<&str>,
         output: Option<&Path>,
+        limits: crate::entry::InterfaceLimits,
     ) -> Result<Preparation, Error> {
         if let Some(directory) = output {
-            let interface = self.inspect(project, Selection { name, kind: None })?;
+            let interface = self.inspect(project, Selection { name, kind: None }, limits)?;
             return Ok(Preparation {
                 templates: Template::inputs(directory, &interface)?,
                 entries: vec![interface],
@@ -92,6 +95,7 @@ impl Compiler {
                     name: Some(&name),
                     kind: None,
                 },
+                limits,
             )?;
             if interface.kind() == super::EntryKind::Function
                 || interface

@@ -292,7 +292,7 @@ fn indexed_public_selection_charges_bounded_cumulative_work_even_without_native_
                 &view.setups,
                 &mut exhausted
             ),
-            Err(InterfaceError::Limit)
+            Err(InterfaceError::WorkLimit)
         ));
     }
 }

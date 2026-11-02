@@ -114,6 +114,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             kind: Some(EntryKind::Proof),
         },
         project.settings(None, &Default::default())?.options(),
+        zkc::entry::InterfaceLimits::DEFAULT,
     )?;
     let envelope: Json = serde_json::from_str(package.artifact())?;
     let descriptor = &envelope[2];

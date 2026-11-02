@@ -241,7 +241,9 @@ fn legacy_category_requires_a_direct_handle_and_ordinary_metadata() {
 #[test]
 fn actual_fri_retains_internal_state_metadata() {
     for fri in toolchain_parameters(FRI) {
-        fri_internal_state_metadata(&Interface::decode(&fri, None).unwrap());
+        fri_internal_state_metadata(
+            &Interface::decode(&fri, None, InterfaceLimits::DEFAULT).unwrap(),
+        );
     }
 }
 fn fri_internal_state_metadata(view: &Interface) {

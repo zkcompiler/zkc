@@ -476,8 +476,8 @@ maximum refuses without clamping:
 | Sequence work | Three units per examined nested node and call | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::sequence_work`, `ProofOptions::sequence_work` |
 | External work | One unit per hash call, hashed byte, permutation, observe or sample | 16,777,216 | 16,777,216 | Runner (per role) | `HostLimits::external_work`, `ProofOptions::external_work` |
 | Service draws | Draws | 1,000,000 | 1,000,000 | Operation (one managed service or transcript) | Request service budgets and `transcript_budget` |
-| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 2^24 | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::work`); the same selection in `FunctionInterface::deployment_interfaces_with` and `run_deployment_package_with` |
-| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::descriptor_bytes`); the same selection in `FunctionInterface::deployment_interfaces_with` and `run_deployment_package_with` |
+| Interface work | Work units of one interface admission algorithm: schema validation, or supply reconstruction with public selection indexing | 1,000,000 | 2^24 | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::work`); the same selection in every SDK interface read; CLI `--interface-limits` |
+| Interface descriptors | Retained descriptor bytes of the schema summaries, of each reconstructed supply plan and of a Function's native descriptor cache | 16 MiB | 16 MiB | Operation | `HostLimits::interface`, `ProofOptions::interface`, `FunctionOptions::limits.interface` (`InterfaceLimits::descriptor_bytes`); the same selection in every SDK interface read; CLI `--interface-limits` |
 | Dispatches | Joint and Function dispatch occurrences, including repeated loop steps | 32,768 | 32,768 | Invocation | `HostLimits::steps` |
 | Function service draws | Draws reserved for children before their roots are issued | 64,000,000 | 32,768,000,000 | Invocation | `FunctionOptions::service_draws` |
 | Journal events | Retained Function call receipts, including failed calls | 256 | 4,096 | Invocation | `FunctionOptions::journal_events` |
@@ -504,15 +504,30 @@ child deployment that restates it, so a large roster's generated Host needs
 more work there than its own interface or any child interface. The generated
 Host of a trivial 1,024-role Protocol needs 1,303,066 units with one port and
 1,688,737 with one port placed at every role, beyond the default; the maximum
-is about ten times the larger. Static inspection reads the Host structure and
-every child interface under the selection that admits them:
-`FunctionInterface::deployment_interfaces_with` and
-`run_deployment_package_with` take it, while `deployment_interfaces` and
-`run_deployment_package` take the defaults. The CLI selects no interface
-allowance and takes the defaults. A selection above the maximum refuses at
-`Admission` with `entry-interface-limit` before any interface is read; an
-interface that exhausts a selected allowance refuses at `Interface` with the
-same code.
+is about ten times the larger.
+
+Every SDK path that reads an interface takes the selection as an explicit
+argument, and a caller that selects nothing passes `InterfaceLimits::DEFAULT`:
+`BoundInterface::read`, `FunctionInterface::read`, static inspection of the
+Host structure and every child interface as admission reads them
+(`FunctionInterface::deployment_interfaces` and `run_deployment_package`),
+`CheckedInterface::read` and `from_compiler`, the project `Compiler`'s
+`compile`, `build`, `inspect` and `prepare`, `bindings::rust` and
+`BackendRun::admit`.
+
+Each interface allowance has its own code, distinct from
+`entry-interface-limit`, the code of the interface document's own ceilings
+(its bytes, nesting, nodes, name lengths, counts and schema shapes), which no
+selection raises:
+
+| Allowance | Code |
+|---|---|
+| Interface work | `entry-interface-work-limit` |
+| Interface descriptors | `entry-interface-descriptor-bytes-limit` |
+
+A selection above an allowance's maximum refuses at `Admission` with that
+allowance's code before any interface is read; an interface that exhausts a
+selected allowance refuses at `Interface` with the same code.
 
 The material allowances (`MaterialLimits`) bound what an application supplies
 beside its named values: a proof call's public statement, a memory request's
@@ -547,6 +562,24 @@ The record follows the capacity record's rules: all entries are canonical
 decimal strings, the file is at most 4 KiB and has exact arity, and another tag
 refuses with `material-limits-format`. A selection above a maximum refuses with
 that allowance's code. Without the option the CLI takes the defaults.
+
+Every CLI command that reads a Host interface selects the interface allowances
+with `--interface-limits=PATH`: `run`, `prove`, `verify`, `common-inputs`,
+`bindings`, `prepare`, `inspect` with the Entry view, `compile` for the CPU
+target, `init` and `new`. One selection reads every interface the command
+reaches, the Entry's own, a Function's Host structure and each child
+deployment's, and every Entry the command admits takes it. The CLI reports the
+effective record, including defaults:
+
+```text
+["zkc.interface-limits/0", "work", "descriptor_bytes"]
+```
+
+The record follows the same rules, and another tag refuses with
+`interface-limits-format`. A selection above a maximum refuses with that
+allowance's code. Publication never replaces the selection file, and `prepare`
+repeats the option in the commands it reports. Without the option the CLI takes
+the defaults.
 
 The capacity record's live, fresh and logical byte selections bound the root
 that a Run, Proof or Function invocation creates, whether the CLI's

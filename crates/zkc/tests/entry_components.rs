@@ -135,7 +135,8 @@ fn fresh_cpp_packages_execute_complete_component_run_proof_and_host_families() {
     );
 
     let package = compile(&compiler, &source, "Produce");
-    let children = FunctionInterface::deployment_interfaces(&package).unwrap();
+    let children =
+        FunctionInterface::deployment_interfaces(&package, InterfaceLimits::DEFAULT).unwrap();
     let authority = children
         .iter()
         .map(|d| (d.id().to_owned(), Default::default()))
@@ -384,8 +385,8 @@ fn fresh_cpp_full_protocol_roster_is_admitted() {
         assert!(template.contains("\"R0\"") && template.contains("\"R1023\""));
 
         // The default allowance refuses the same wrapper, both in static
-        // inspection and in admission, with the interface allowance's code.
-        let children = FunctionInterface::deployment_interfaces_with(&wrapper, raised).unwrap();
+        // inspection and in admission, with the work allowance's code.
+        let children = FunctionInterface::deployment_interfaces(&wrapper, raised).unwrap();
         let admit = |interface| {
             FunctionEntry::admit(
                 wrapper.clone(),
@@ -394,19 +395,19 @@ fn fresh_cpp_full_protocol_roster_is_admitted() {
             )
         };
         for refused in [
-            FunctionInterface::deployment_interfaces(&wrapper).map(drop),
+            FunctionInterface::deployment_interfaces(&wrapper, InterfaceLimits::DEFAULT).map(drop),
             admit(InterfaceLimits::DEFAULT).map(drop),
         ] {
-            assert_refused(refused, EntryPhase::Interface, "entry-interface-limit");
+            assert_refused(refused, EntryPhase::Interface, "entry-interface-work-limit");
         }
         // A selection above the installed maximum refuses as policy before
         // any interface is read, rather than being clamped to the maximum.
         let above = limits(InterfaceLimits::MAXIMUM.work + 1);
         for refused in [
-            FunctionInterface::deployment_interfaces_with(&wrapper, above).map(drop),
+            FunctionInterface::deployment_interfaces(&wrapper, above).map(drop),
             admit(above).map(drop),
         ] {
-            assert_refused(refused, EntryPhase::Admission, "entry-interface-limit");
+            assert_refused(refused, EntryPhase::Admission, "entry-interface-work-limit");
         }
     }
 }
@@ -456,7 +457,7 @@ fn admit_function_with(
     package: Package,
     interface: InterfaceLimits,
 ) -> Result<FunctionEntry, EntryError> {
-    let children = FunctionInterface::deployment_interfaces_with(&package, interface)?;
+    let children = FunctionInterface::deployment_interfaces(&package, interface)?;
     FunctionEntry::admit(package, function_options(interface), authority(&children))
 }
 
@@ -493,18 +494,19 @@ fn invoke_function(host: &FunctionEntry, arguments: Json) -> entry::FunctionRepo
 }
 
 fn execute_function(host: &FunctionEntry, arguments: entry::NamedValues) -> entry::FunctionReport {
-    let deployments = FunctionInterface::deployment_interfaces(host.package())
-        .unwrap()
-        .iter()
-        .map(|child| {
-            let binding = match child.operation() {
-                "run" => InvocationBinding::Run(RunContext::default()),
-                "prove" | "verify" => InvocationBinding::Proof(ProofContext::default()),
-                operation => panic!("unexpected child operation: {operation}"),
-            };
-            (child.id().to_owned(), binding)
-        })
-        .collect();
+    let deployments =
+        FunctionInterface::deployment_interfaces(host.package(), InterfaceLimits::DEFAULT)
+            .unwrap()
+            .iter()
+            .map(|child| {
+                let binding = match child.operation() {
+                    "run" => InvocationBinding::Run(RunContext::default()),
+                    "prove" | "verify" => InvocationBinding::Proof(ProofContext::default()),
+                    operation => panic!("unexpected child operation: {operation}"),
+                };
+                (child.id().to_owned(), binding)
+            })
+            .collect();
     let result = host
         .prepare(FunctionRequest {
             arguments,
@@ -534,7 +536,8 @@ fn fresh_function_proof_child_completes_on_a_later_attempt() {
         String::from_utf8_lossy(&output.stderr)
     );
     let package = capture(&output.stdout);
-    let children = FunctionInterface::deployment_interfaces(&package).unwrap();
+    let children =
+        FunctionInterface::deployment_interfaces(&package, InterfaceLimits::DEFAULT).unwrap();
     assert_eq!(children.len(), 1);
     let id = children[0].id().to_owned();
     let execute = |attempts: Option<entry::AttemptOptions>| {

@@ -4,6 +4,7 @@ use crate::project::{
     CheckedInterface, EntryKind, Selection,
     cli::{Source, compiler_error},
 };
+use zkc::entry::InterfaceLimits;
 
 pub(super) enum Input {
     Project(Box<Source>),
@@ -66,13 +67,20 @@ impl Input {
             Ok(Self::Project(Box::new(source)))
         }
     }
-    pub fn inspect(&self, name: Option<&str>, report: &mut Json) -> Result<CheckedInterface> {
+    /// Read the selected Entry's interface, and a Function's child
+    /// deployments, under the command's interface selection.
+    pub fn inspect(
+        &self,
+        name: Option<&str>,
+        interface: InterfaceLimits,
+        report: &mut Json,
+    ) -> Result<CheckedInterface> {
         match self {
             Self::Package { package, .. } => {
-                let view = CheckedInterface::read(package)?;
+                let view = CheckedInterface::read(package, interface)?;
                 if matches!(&view, CheckedInterface::Function(_)) {
                     let deployments =
-                        super::super::FunctionInterface::deployment_interfaces(package)?;
+                        super::super::FunctionInterface::deployment_interfaces(package, interface)?;
                     report["invocations"] = json!(
                         deployments
                             .iter()
@@ -84,7 +92,7 @@ impl Input {
             }
             Self::Project(source) => source
                 .compiler
-                .inspect(&source.project, Selection { name, kind: None })
+                .inspect(&source.project, Selection { name, kind: None }, interface)
                 .map_err(|e| compiler_error(report, e)),
         }
     }
@@ -92,13 +100,14 @@ impl Input {
         &self,
         name: Option<&str>,
         kind: Option<EntryKind>,
+        interface: InterfaceLimits,
         report: &mut Json,
     ) -> Result<Package> {
         let package = match self {
             Self::Package { package, .. } => package.as_ref().clone(),
-            Self::Project(source) => source.compile(Selection { name, kind }, report)?,
+            Self::Project(source) => source.compile(Selection { name, kind }, interface, report)?,
         };
-        let view = CheckedInterface::read(&package)?;
+        let view = CheckedInterface::read(&package, interface)?;
         if !(Selection { name, kind }).matches(&view) {
             return Err("source-entry-selection".into());
         }

@@ -145,11 +145,13 @@ fn compact_source_schemas_cannot_exceed_the_native_descriptor_cache_limit() {
         }]);
         let doc = document(parameters, unit(), operations, json!([count]));
         // Source inspection remains independent of native cache layout.
-        FunctionInterface::read(&capture(&doc)).unwrap();
+        FunctionInterface::read(&capture(&doc), crate::entry::InterfaceLimits::DEFAULT).unwrap();
         if count == 6 {
             admit(&doc).unwrap();
         } else {
-            refusal(&doc, "entry-interface-limit");
+            // The cache's retained descriptors exhaust the selected
+            // descriptor allowance, not a ceiling of the document.
+            refusal(&doc, "entry-interface-descriptor-bytes-limit");
         }
     }
 }
@@ -3134,6 +3136,33 @@ fn child_refusals_keep_their_phase_and_schema_path() {
     assert_eq!(diagnostics["failure"]["code"], "native-proof-proof-limit");
 }
 
+/// Bindings generation and checked inspection read a Function interface under
+/// the Host's selected allowances: a lowered selection refuses each path that
+/// the default admits.
+#[test]
+fn function_interface_read_paths_take_the_selected_allowances() {
+    use crate::entry::InterfaceLimits;
+    let package = capture(&joint_document());
+    let lowered = InterfaceLimits {
+        work: 64,
+        ..InterfaceLimits::DEFAULT
+    };
+    let generate = |limits| crate::entry::bindings::rust(&package, limits).map(drop);
+    assert_eq!(generate(InterfaceLimits::DEFAULT), Ok(()));
+    assert_eq!(generate(lowered), Err("entry-interface-work-limit".into()));
+    #[cfg(feature = "project")]
+    {
+        use crate::project::CheckedInterface;
+        let read = |limits| CheckedInterface::read(&package, limits).map(drop);
+        let bytes = package.interface().as_bytes();
+        let compiled = |limits| CheckedInterface::from_compiler(bytes, limits).map(drop);
+        for path in [&read as &dyn Fn(InterfaceLimits) -> _, &compiled] {
+            assert_eq!(path(InterfaceLimits::DEFAULT), Ok(()));
+            assert_eq!(path(lowered), Err("entry-interface-work-limit".into()));
+        }
+    }
+}
+
 /// Static inspection reads the Host structure and every child interface under
 /// the Host's selected interface allowances, as admission does, so each needs
 /// the same least allowances.
@@ -3164,8 +3193,8 @@ fn deployment_inspection_takes_the_selected_interface_allowances() {
         }
         low
     };
-    let inspect = |l| FunctionInterface::deployment_interfaces_with(&package, l);
-    let context = |l| FunctionInterface::run_deployment_package_with(&package, "joint", l);
+    let inspect = |l| FunctionInterface::deployment_interfaces(&package, l);
+    let context = |l| FunctionInterface::run_deployment_package(&package, "joint", l);
     let admit = |l| {
         FunctionEntry::admit(
             package.clone(),
@@ -3193,14 +3222,14 @@ fn deployment_inspection_takes_the_selected_interface_allowances() {
     assert!(least(&descriptors, &|l| context(l).is_ok()) < needed);
     assert_eq!(
         least(&descriptors, &|l| {
-            crate::entry::BoundInterface::read_with(&child, l).is_ok()
+            crate::entry::BoundInterface::read(&child, l).is_ok()
         }),
         needed
     );
 
     let work = least(&limits, &|l| inspect(l).is_ok());
     let refusal = |result: Result<()>| result.map_err(|e| (e.phase, e.code().to_owned()));
-    let limit = |phase| Err((phase, "entry-interface-limit".to_owned()));
+    let limit = |phase| Err((phase, "entry-interface-work-limit".to_owned()));
     for selected in [limits(work - 1), limits(64)] {
         assert_eq!(
             refusal(inspect(selected).map(drop)),

@@ -33,50 +33,32 @@ pub struct FunctionInterface {
         std::collections::BTreeMap<String, crate::entry::interface::syntax::Leaf>,
 }
 impl FunctionInterface {
-    /// Static context requirements. This does not import keys or grant authority.
+    /// Static context requirements, under the Host's selected interface
+    /// admission allowances: the selection its `FunctionEntry` admits with
+    /// (`FunctionOptions::limits.interface`), or `InterfaceLimits::DEFAULT`.
+    /// This does not import keys or grant authority.
     pub fn deployment_interfaces(
-        package: &crate::entry::Package,
-    ) -> super::Result<Vec<DeploymentInterface>> {
-        Self::deployment_interfaces_with(package, crate::entry::InterfaceLimits::DEFAULT)
-    }
-    /// Static context requirements under the Host's selected interface
-    /// admission allowances, the selection its `FunctionEntry` admits with
-    /// (`FunctionOptions::limits.interface`).
-    pub fn deployment_interfaces_with(
         package: &crate::entry::Package,
         limits: crate::entry::InterfaceLimits,
     ) -> super::Result<Vec<DeploymentInterface>> {
         super::admission::interfaces(package, limits)
     }
     /// The authenticated package of one static Run deployment, for producing
-    /// its common-input context. This imports no setup authority.
+    /// its common-input context, under the selection that admits the child.
+    /// This imports no setup authority.
     pub fn run_deployment_package(
-        package: &crate::entry::Package,
-        id: &str,
-    ) -> super::Result<crate::entry::Package> {
-        Self::run_deployment_package_with(package, id, crate::entry::InterfaceLimits::DEFAULT)
-    }
-    /// One Run deployment's package under the Host's selected interface
-    /// admission allowances, the selection that admits the child.
-    pub fn run_deployment_package_with(
         package: &crate::entry::Package,
         id: &str,
         limits: crate::entry::InterfaceLimits,
     ) -> super::Result<crate::entry::Package> {
         super::admission::run_deployment(package, id, limits)
     }
-    pub fn read(package: &crate::entry::Package) -> super::Result<Self> {
-        Self::read_with(package, crate::entry::InterfaceLimits::DEFAULT)
-    }
     /// Read under the Host's selected interface admission allowances.
-    pub fn read_with(
+    pub fn read(
         package: &crate::entry::Package,
         limits: crate::entry::InterfaceLimits,
     ) -> super::Result<Self> {
         use sha2::{Digest, Sha256};
-        limits
-            .validate()
-            .map_err(|e| super::EntryError::new(super::EntryPhase::Admission, e))?;
         let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
         let view = Self::decode(package.interface().as_bytes(), limits)?;
         if view.document.original != original {
@@ -84,10 +66,18 @@ impl FunctionInterface {
         }
         Ok(view)
     }
-    pub(crate) fn from_compiler(bytes: &[u8]) -> super::Result<Self> {
-        Self::decode(bytes, crate::entry::InterfaceLimits::DEFAULT)
+    /// Read compiler output before packaging, under the selected allowances.
+    #[cfg(feature = "project")]
+    pub(crate) fn from_compiler(
+        bytes: &[u8],
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<Self> {
+        Self::decode(bytes, limits)
     }
     fn decode(bytes: &[u8], limits: crate::entry::InterfaceLimits) -> super::Result<Self> {
+        limits
+            .validate()
+            .map_err(|e| super::EntryError::new(super::EntryPhase::Admission, e))?;
         crate::entry::interface::preflight::check(bytes)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
         use crate::entry::EntryCondition as C;

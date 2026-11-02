@@ -47,18 +47,23 @@ schema summaries, the CPU's reconstructed native descriptor cache and each
 reconstructed input/output supply plan each charge their retained descriptors
 and residual requirements, including zero-storage schemas, against the
 descriptor allowance, by default 16 MiB. A Host may lower either allowance and
-raise the work allowance up to its maximum; a
-selection above the installed maximum refuses at `Admission` with
-`entry-interface-limit`, and an interface that exceeds a selected allowance
-refuses at `Interface` with the same code. Reconstruction computes each port's
+raise the work allowance up to its maximum. Each allowance has its own code,
+`entry-interface-work-limit` or `entry-interface-descriptor-bytes-limit`: a
+selection above the installed maximum refuses with it at `Admission`, and an
+interface that exceeds a selected allowance refuses with it at `Interface`.
+A ceiling of the interface document itself, such as its bytes, nesting, nodes
+or schema depth, refuses with `entry-interface-limit` under every selection.
+Reconstruction computes each port's
 placed roles once and walks the port only at those roles; per-node facts are
 computed once per schema node, and roles are indexed by name. Its work therefore
 grows with ports times placed roles times schema size, so a full 1,024-role
 roster fits the default allowance. A Function Host's structure validation checks
 each schema at every signature, block argument and child deployment that
 restates it, so the generated Host of a full roster needs a raised work
-selection, which static inspection takes as admission does
-(`FunctionInterface::deployment_interfaces_with`). A caller may also lower the compiler's phase
+selection. Every reader of an interface takes the selection explicitly, so
+static inspection (`FunctionInterface::deployment_interfaces`), checked
+inspection, bindings generation and backend admission read as admission does,
+and the CLI selects it with `--interface-limits`. A caller may also lower the compiler's phase
 limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
 identities permit descriptor reuse without introducing cyclic schema references.

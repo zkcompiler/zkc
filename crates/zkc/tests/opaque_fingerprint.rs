@@ -4,7 +4,7 @@
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use std::{path::Path, process::Command};
-use zkc::entry::{FunctionInterface, Package};
+use zkc::entry::{FunctionInterface, InterfaceLimits, Package};
 
 fn run(command: &mut Command) -> std::process::Output {
     let output = command.output().unwrap();
@@ -104,7 +104,7 @@ fn generated_bindings_survive_downstream_json_feature_unification() {
             .arg("--entry=m::Fetch"));
         let pin: [u8; 32] = Sha256::digest(&output.stdout).into();
         let package = Package::capture(&output.stdout, &pin, Package::MAX_BYTES).unwrap();
-        let schema = FunctionInterface::read(&package)
+        let schema = FunctionInterface::read(&package, InterfaceLimits::DEFAULT)
             .unwrap()
             .signature()
             .result

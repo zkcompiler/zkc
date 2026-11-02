@@ -111,7 +111,10 @@ fn entry_interface(text: &str) -> Value {
     .expect("inert package serialization");
     let package = Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES)
         .expect("well-formed authenticated test package");
-    observed(zkc::entry::BoundInterface::read(&package).map(|_| ()))
+    observed(
+        zkc::entry::BoundInterface::read(&package, zkc::entry::InterfaceLimits::DEFAULT)
+            .map(|_| ()),
+    )
 }
 
 fn respond(native: &CpuBackend, line: &[u8], resolve: LogicalResolver) -> Option<Value> {

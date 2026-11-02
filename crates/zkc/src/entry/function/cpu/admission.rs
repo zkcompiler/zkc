@@ -21,7 +21,7 @@ pub(super) fn admit(
         Allowances::FUNCTION_SERVICE_DRAWS.admits(options.service_draws),
         "entry-host-service-limit",
     )?;
-    let interface = FunctionInterface::read_with(package, options.limits.interface)?;
+    let interface = FunctionInterface::read(package, options.limits.interface)?;
     let document: Document = decode(
         package.artifact().as_bytes(),
         crate::entry::package::ARTIFACT_BYTES,
@@ -243,7 +243,12 @@ pub(super) fn admit(
             descriptor_bytes = descriptor_bytes
                 .checked_add(ty.descriptor_bytes())
                 .filter(|bytes| *bytes <= options.limits.interface.descriptor_bytes)
-                .ok_or_else(|| EntryError::new(EntryPhase::Interface, "entry-interface-limit"))?;
+                .ok_or_else(|| {
+                    EntryError::new(
+                        EntryPhase::Interface,
+                        crate::entry::InterfaceError::DescriptorLimit,
+                    )
+                })?;
             Ok((spelling, ty))
         })
         .collect::<Result<_>>()?;

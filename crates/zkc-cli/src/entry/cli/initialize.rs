@@ -11,6 +11,8 @@ pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) ->
     let manifest = directory.join("zkc.toml");
     let compiler = Compiler::new(args.value("--compiler").unwrap_or("zkc-compile"))
         .map_err(|e| crate::project::cli::compiler_error(report, e))?;
+    // The selection is read before anything is created.
+    let interface = crate::files::interface_limits(args, report)?;
     if command == "new" {
         std::fs::create_dir(&directory).map_err(|e| {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -34,14 +36,17 @@ pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) ->
     report["project"] = json!(manifest);
     report["mode"] = json!("project");
     report["compiler"] = json!(compiler.path());
-    create(&Template::scaffold(&directory), false, report, |_| Ok(()))?;
+    create(&Template::scaffold(&directory), false, report, |outputs| {
+        crate::files::protect_interface_limits(args, outputs)
+    })?;
     let project = Project::load(&manifest)?;
     report["phase"] = json!("preparation");
     let plan = compiler
-        .prepare(&project, None, None)
+        .prepare(&project, None, None, interface)
         .map_err(|e| crate::project::cli::compiler_error(report, e))?;
     create(&plan.templates, true, report, |outputs| {
-        outputs.protect(project.paths())
+        outputs.protect(project.paths())?;
+        crate::files::protect_interface_limits(args, outputs)
     })?;
     describe_plan(&plan.entries, report);
     report["status"] = json!("initialized");
@@ -49,18 +54,27 @@ pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) ->
     Ok(())
 }
 
-pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
+pub(super) fn prepare(
+    args: &Arguments<'_>,
+    selection: zkc::entry::InterfaceLimits,
+    report: &mut Json,
+) -> Result<()> {
     let target = Input::load(args, report)?;
     let output = args.value("--output").map(std::path::Path::new);
     report["phase"] = json!("preparation");
     let plan = match &target {
         Input::Project(source) => source
             .compiler
-            .prepare(&source.project, args.positional.first().copied(), output)
+            .prepare(
+                &source.project,
+                args.positional.first().copied(),
+                output,
+                selection,
+            )
             .map_err(|e| crate::project::cli::compiler_error(report, e))?,
         Input::Package { .. } => {
             let directory = output.ok_or("source-output-required")?;
-            let interface = target.inspect(None, report)?;
+            let interface = target.inspect(None, selection, report)?;
             Preparation {
                 templates: Template::inputs(directory, &interface)?,
                 entries: vec![interface],
@@ -82,10 +96,16 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
                 Input::Package { .. } => unreachable!(),
             },
         };
-        let commands = commands(&target, interface, &directory)?;
+        let commands = commands(
+            &target,
+            interface,
+            &directory,
+            args.value("--interface-limits"),
+        )?;
         if interface.kind() == EntryKind::Function {
             if let Input::Package { package, .. } = &target {
-                let deployments = crate::entry::FunctionInterface::deployment_interfaces(package)?;
+                let deployments =
+                    crate::entry::FunctionInterface::deployment_interfaces(package, selection)?;
                 entry["requirements"] = deployment_requirements(&deployments);
             }
             let mut check = commands[0].as_array().unwrap().clone();
@@ -95,7 +115,8 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
         entry["commands"] = commands;
     }
     create(&plan.templates, true, report, |outputs| {
-        target.protect(outputs)
+        target.protect(outputs)?;
+        crate::files::protect_interface_limits(args, outputs)
     })?;
     report["status"] = json!("prepared");
     report["phase"] = json!("complete");
@@ -139,15 +160,18 @@ fn deployment_requirements(deployments: &[crate::entry::DeploymentInterface]) ->
         })).collect::<Vec<_>>(),
     })
 }
+/// The commands that run the prepared Entry, under the interface selection
+/// that read it.
 fn commands(
     target: &Input,
     interface: &CheckedInterface,
     directory: &std::path::Path,
+    selection: Option<&str>,
 ) -> Result<Json> {
     let project_defaults =
         matches!(target, Input::Project(source) if source.project.layout().is_some());
     let groups = interface.input_groups();
-    let selection: Vec<String> = match target {
+    let mut entry: Vec<String> = match target {
         Input::Project(source) => {
             let mut v = vec![
                 interface.entry().into(),
@@ -164,6 +188,7 @@ fn commands(
             vec![format!("--package={path}"), format!("--sha256={pin}")]
         }
     };
+    entry.extend(selection.map(|path| format!("--interface-limits={path}")));
     let file = |name: &str| -> Result<String> {
         Ok(format!(
             "--{}={}",
@@ -178,7 +203,7 @@ fn commands(
         vec!["run"]
     } {
         let mut args = vec!["zkc".to_owned(), command.into()];
-        args.extend(selection.clone());
+        args.extend(entry.clone());
         if interface.kind() == EntryKind::Proof {
             if !groups[0].is_empty() {
                 args.push(file("public")?);

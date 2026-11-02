@@ -561,8 +561,9 @@ fn main() {
             zkc::entry::Package::MAX_BYTES,
         )
         .unwrap();
-        let interface = zkc::entry::BoundInterface::read(&package)
-            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let interface =
+            zkc::entry::BoundInterface::read(&package, zkc::entry::InterfaceLimits::DEFAULT)
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         if !interface.is_proof() && interface.setup_names().len() == 0 {
             let artifact = package.artifact().as_bytes();
             let host = RunHost::admit(

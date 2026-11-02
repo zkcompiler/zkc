@@ -465,7 +465,7 @@ pub(super) fn run_deployment(
     id: &str,
     limits: crate::entry::InterfaceLimits,
 ) -> Result<Package> {
-    let interface = FunctionInterface::read_with(package, limits)?;
+    let interface = FunctionInterface::read(package, limits)?;
     let document: Document = decode(
         package.artifact().as_bytes(),
         crate::entry::package::ARTIFACT_BYTES,
@@ -495,7 +495,7 @@ pub(super) fn interfaces(
     package: &Package,
     limits: crate::entry::InterfaceLimits,
 ) -> Result<Vec<super::DeploymentInterface>> {
-    let interface = FunctionInterface::read_with(package, limits)?;
+    let interface = FunctionInterface::read(package, limits)?;
     let document: Document = decode(
         package.artifact().as_bytes(),
         crate::entry::package::ARTIFACT_BYTES,
@@ -514,7 +514,7 @@ pub(super) fn interfaces(
         }
         let pin = Sha256::digest(d.package.as_bytes()).into();
         let child = Package::capture(d.package.as_bytes(), &pin, Package::MAX_BYTES)?;
-        let view = crate::entry::BoundInterface::read_with(&child, limits)
+        let view = crate::entry::BoundInterface::read(&child, limits)
             .map_err(|e| EntryError::new(EntryPhase::Interface, e))?;
         super::deployment::check_interface(d, &view, &mut families)?;
         result.push(super::DeploymentInterface {

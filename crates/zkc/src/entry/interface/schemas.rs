@@ -32,7 +32,7 @@ impl<'a> Schemas<'a> {
         }
     }
     pub(super) fn charge(&mut self, count: usize) -> Result<()> {
-        self.remaining = self.remaining.checked_sub(count).ok_or(E::Limit)?;
+        self.remaining = self.remaining.checked_sub(count).ok_or(E::WorkLimit)?;
         Ok(())
     }
     pub(super) fn setup_properties(&self, spelling: &str) -> Result<(&'static str, bool)> {
@@ -65,8 +65,8 @@ impl<'a> Schemas<'a> {
                             })
                             .sum::<usize>(),
                 )
-                .ok_or(E::Limit)?;
-            require(self.retained <= self.retained_limit, E::Limit)?;
+                .ok_or(E::DescriptorLimit)?;
+            require(self.retained <= self.retained_limit, E::DescriptorLimit)?;
             self.leaves.insert(spelling, leaf);
         }
         Ok(&self.leaves[spelling])

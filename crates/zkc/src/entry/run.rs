@@ -87,7 +87,7 @@ impl RunEntry {
             .interface
             .validate()
             .map_err(|e| E::new(P::Admission, e))?;
-        let interface = crate::entry::BoundInterface::read_with(&package, limits.interface)
+        let interface = crate::entry::BoundInterface::read(&package, limits.interface)
             .map_err(|e| E::new(P::Interface, e))?;
         if interface.is_proof() {
             return Err(E::new(P::Admission, "entry-job-kind"));

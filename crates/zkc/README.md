@@ -128,9 +128,9 @@ material does not retain invocation authority or reservations.
 
 An automatic protocol Entry or a closed generic selector such as `Echo<index>`
 also generates function bindings. For functions with child deployments, inspect
-`FunctionInterface::deployment_interfaces(&package)`, or
-`deployment_interfaces_with(&package, limits)` under the interface allowances
-the Host selects in `FunctionOptions::limits.interface`, supply a `SetupAuthority`
+`FunctionInterface::deployment_interfaces(&package, limits)` under the interface
+allowances the Host selects in `FunctionOptions::limits.interface`
+(`InterfaceLimits::DEFAULT` without a selection), supply a `SetupAuthority`
 for each exact child ID at admission, and supply matching `InvocationBinding`
 values in `InvocationContext` when preparing. Ordinary source arguments cannot
 replace setup authority or child policies. `RunContext` defaults to a fresh
@@ -383,11 +383,14 @@ fn compile(project_path: &std::path::Path, executable: &str)
     let options = project.settings(None, &Default::default())?.options();
     let package = compiler.compile(
         &project, Selection { name: Some("Twice"), kind: None }, options,
+        zkc::entry::InterfaceLimits::DEFAULT,
     )?;
     Ok(package)
 }
 ```
 
+`Compiler::compile`, `inspect` and `prepare` read the interfaces they return
+under the interface allowances the caller selects, as admission does.
 `Compiler::prepare` returns checked interfaces and template plans without writing
 files. `Compiler::build` adds optional observations, diagnostics and explicit
 bounded compilation caching. These operations require the compiler; execution

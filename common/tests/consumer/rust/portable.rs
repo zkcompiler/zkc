@@ -1,5 +1,5 @@
 //! Independent consumer of the SDK's portable package and project surface.
-use zkc::entry::{BoundInterface, FunctionInterface, Package};
+use zkc::entry::{BoundInterface, FunctionInterface, InterfaceLimits, Package};
 include!("pins.rs");
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,16 +16,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "entry-package-identity"
         );
         if name == "proof" {
-            let view = BoundInterface::read(&package)?;
+            let view = BoundInterface::read(&package, InterfaceLimits::DEFAULT)?;
             assert!(view.is_proof());
             assert_eq!(view.input_groups()[0].name(), "public");
             assert!(!view.describe().is_null());
         } else {
-            let view = FunctionInterface::read(&package)?;
+            let view = FunctionInterface::read(&package, InterfaceLimits::DEFAULT)?;
             assert!(!view.signature().symbol.is_empty());
             assert!(!view.describe().is_null());
             assert!(view.input_group().template().is_object());
-            let children = FunctionInterface::deployment_interfaces(&package)?;
+            let children =
+                FunctionInterface::deployment_interfaces(&package, InterfaceLimits::DEFAULT)?;
             for child in children {
                 assert!(!child.describe().is_null());
             }
@@ -41,10 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "project")]
 fn project() -> Result<(), Box<dyn std::error::Error>> {
-    use zkc::project::{CheckedInterface, Compiler, Project, Selection};
+    use zkc::project::{CheckedInterface, Compiler, Project, Selection, SourceFormat};
     for (_, bytes, pin) in PACKAGES {
         let package = Package::capture(bytes, pin, Package::MAX_BYTES)?;
-        let view = CheckedInterface::read(&package)?;
+        let view = CheckedInterface::read(&package, InterfaceLimits::DEFAULT)?;
         assert!(!view.input_groups().is_empty());
     }
     // Preparation supplies an explicit compiler to exercise check/inspect/build
@@ -52,8 +53,11 @@ fn project() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(path) = std::env::var_os("ZKC_PORTABLE_COMPILER") {
         let compiler = Compiler::new(path.to_str().ok_or("compiler path")?)?;
         let source = std::env::var("ZKC_PORTABLE_SOURCE")?;
-        let project =
-            Project::explicit([("application".into(), source)].into(), Default::default())?;
+        let project = Project::explicit(
+            SourceFormat::Zkc,
+            [("application".into(), source)].into(),
+            Default::default(),
+        )?;
         let checked = compiler.check(&project, None, Default::default())?;
         assert!(
             checked
@@ -75,13 +79,17 @@ fn project() -> Result<(), Box<dyn std::error::Error>> {
                 name: Some(&name),
                 kind: None,
             };
-            let view = compiler.inspect(&project, selection)?;
+            let view = compiler.inspect(&project, selection, InterfaceLimits::DEFAULT)?;
             let package = compiler.compile(
                 &project,
                 selection,
                 Package::capture(expected_bytes, expected_pin, Package::MAX_BYTES)?.options(),
+                InterfaceLimits::DEFAULT,
             )?;
-            assert_eq!(CheckedInterface::read(&package)?.entry(), view.entry());
+            assert_eq!(
+                CheckedInterface::read(&package, InterfaceLimits::DEFAULT)?.entry(),
+                view.entry()
+            );
             assert_eq!(
                 package.bytes(),
                 *expected_bytes,

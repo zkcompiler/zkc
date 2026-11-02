@@ -430,9 +430,12 @@ mod tests {
     }
 
     fn read_interface(document: &Json) -> Interface {
-        BoundInterface::read(&package(document, "metadata only"))
-            .unwrap()
-            .into_view()
+        BoundInterface::read(
+            &package(document, "metadata only"),
+            zkc::entry::InterfaceLimits::DEFAULT,
+        )
+        .unwrap()
+        .into_view()
     }
 
     fn decode(group: &InputGroup<'_>, input: &Json) -> NamedValues {

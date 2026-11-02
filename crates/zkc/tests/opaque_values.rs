@@ -262,7 +262,7 @@ fn generated_bindings_keep_storage_private_and_compile_public_getters() {
         ],
     );
     let mixed_package = package(&mixed, false);
-    let generated = entry::bindings::rust(&mixed_package).unwrap();
+    let generated = entry::bindings::rust(&mixed_package, entry::InterfaceLimits::DEFAULT).unwrap();
     assert!(!generated.contains("pub r#hidden:") && !generated.contains("pub r#value:"));
     let dir = zkc_test_support::evidence(module_path!());
     let path = dir.path().join("package.json");
@@ -327,7 +327,8 @@ fn main() {{
     let mut sealed = record("Sealed", vec![("public", true, index())]);
     sealed["sealed"] = json!(true);
     sealed["constructible"] = json!(false);
-    let code = entry::bindings::rust(&package(&sealed, false)).unwrap();
+    let code =
+        entry::bindings::rust(&package(&sealed, false), entry::InterfaceLimits::DEFAULT).unwrap();
     compile_rust(
         dir.path(),
         "sealed_getter",
@@ -371,7 +372,7 @@ fn fresh_source_private_outputs_are_opaque_and_reusable() {
         );
         let package = capture(&output.stdout);
         std::fs::write(dir.path().join(format!("{name}.json")), package.bytes()).unwrap();
-        let generated = entry::bindings::rust(&package).unwrap();
+        let generated = entry::bindings::rust(&package, entry::InterfaceLimits::DEFAULT).unwrap();
         let package_path = dir.path().join(format!("{name}.json"));
         let consumer = format!(
             r#"#[allow(dead_code)] mod generated {{{generated}}}

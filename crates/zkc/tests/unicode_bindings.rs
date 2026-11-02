@@ -2,7 +2,7 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, process::Command};
-use zkc::entry::{Package, bindings};
+use zkc::entry::{InterfaceLimits, Package, bindings};
 
 fn digest(s: &str) -> String {
     zkc_test_support::hex(&Sha256::digest(s.as_bytes()))
@@ -142,7 +142,7 @@ fn extern_library(deps: &Path) -> std::path::PathBuf {
 
 #[test]
 fn escaped_members_variants_and_colliding_types_compile_and_preserve_source_keys() {
-    let code = bindings::rust(&package()).unwrap();
+    let code = bindings::rust(&package(), InterfaceLimits::DEFAULT).unwrap();
     assert!(
         code.contains("pub struct r#Record2"),
         "generated type allocator resolves duplicate preferred names"
@@ -252,7 +252,7 @@ fn zero_array_bindings_use_the_retained_element_type() {
     )
     .unwrap();
     assert!(
-        bindings::rust(&package)
+        bindings::rust(&package, InterfaceLimits::DEFAULT)
             .unwrap()
             .contains("[::core::primitive::bool;0]")
     );

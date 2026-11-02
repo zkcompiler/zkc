@@ -731,7 +731,7 @@ fn prepared_public_data_uses_the_named_entry_schema_and_fresh_invocations() {
 #[test]
 fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices() {
     let (doc, artifact) = proof_fixture();
-    let code = entry::bindings::rust(&package(&doc, &artifact)).unwrap();
+    let code = entry::bindings::rust(&package(&doc, &artifact), InterfaceLimits::DEFAULT).unwrap();
     assert!(code.contains("PROVER: &::core::primitive::str = \"証明者\""));
     assert!(code.contains("VERIFIER: &::core::primitive::str = \"検証者\""));
     let options = ProofOptions {
@@ -1634,6 +1634,32 @@ fn full_roster_run_with_one_ordinary_port_is_admitted_and_runs() {
         ));
     }
 }
+/// Bindings generation and checked inspection read a proof interface under
+/// the Host's selected allowances: a lowered selection refuses each path that
+/// the default admits.
+#[test]
+fn proof_interface_read_paths_take_the_selected_allowances() {
+    let (doc, artifact) = proof_fixture();
+    let proof = package(&doc, &artifact);
+    let lowered = InterfaceLimits {
+        work: 64,
+        ..InterfaceLimits::DEFAULT
+    };
+    let generate = |limits| entry::bindings::rust(&proof, limits).map(drop);
+    assert_eq!(generate(InterfaceLimits::DEFAULT), Ok(()));
+    assert_eq!(generate(lowered), Err("entry-interface-work-limit".into()));
+    #[cfg(feature = "project")]
+    {
+        use crate::project::CheckedInterface;
+        let read = |limits| CheckedInterface::read(&proof, limits).map(drop);
+        let bytes = doc.to_string();
+        let compiled = |limits| CheckedInterface::from_compiler(bytes.as_bytes(), limits).map(drop);
+        for path in [&read as &dyn Fn(InterfaceLimits) -> _, &compiled] {
+            assert_eq!(path(InterfaceLimits::DEFAULT), Ok(()));
+            assert_eq!(path(lowered), Err("entry-interface-work-limit".into()));
+        }
+    }
+}
 #[test]
 fn interface_admission_allowances_are_host_policy() {
     let ty = schema("boolean", "bool", json!(["bool"]));
@@ -1664,21 +1690,30 @@ fn interface_admission_allowances_are_host_policy() {
         .map(drop)
         .map_err(|e| (e.phase, e.code().to_owned()))
     };
-    let limit = |phase| Err((phase, "entry-interface-limit".to_owned()));
+    let refused = |phase, code: &str| Err((phase, code.to_owned()));
+    let work = "entry-interface-work-limit";
+    let descriptors = "entry-interface-descriptor-bytes-limit";
     for admit in [&run as &dyn Fn(InterfaceLimits) -> _, &proof] {
         assert_eq!(admit(InterfaceLimits::DEFAULT), Ok(()));
-        // A lowered allowance refuses the same interface while reading it.
-        for lowered in [
-            InterfaceLimits {
-                work: 64,
-                ..InterfaceLimits::DEFAULT
-            },
-            InterfaceLimits {
-                descriptor_bytes: 64,
-                ..InterfaceLimits::DEFAULT
-            },
+        // A lowered allowance refuses the same interface while reading it,
+        // with the code of the allowance it exhausts.
+        for (lowered, code) in [
+            (
+                InterfaceLimits {
+                    work: 64,
+                    ..InterfaceLimits::DEFAULT
+                },
+                work,
+            ),
+            (
+                InterfaceLimits {
+                    descriptor_bytes: 64,
+                    ..InterfaceLimits::DEFAULT
+                },
+                descriptors,
+            ),
         ] {
-            assert_eq!(admit(lowered), limit(EntryPhase::Interface));
+            assert_eq!(admit(lowered), refused(EntryPhase::Interface, code));
         }
         // The work allowance can be raised above its default, up to the
         // installed maximum.
@@ -1694,18 +1729,46 @@ fn interface_admission_allowances_are_host_policy() {
                 Ok(())
             );
         }
-        // A selection above the installed maximum is refused as policy.
-        for raised in [
-            InterfaceLimits {
-                work: InterfaceLimits::MAXIMUM.work + 1,
-                ..InterfaceLimits::DEFAULT
-            },
-            InterfaceLimits {
-                descriptor_bytes: InterfaceLimits::MAXIMUM.descriptor_bytes + 1,
-                ..InterfaceLimits::DEFAULT
-            },
+        // A selection above an installed maximum is refused as policy, with
+        // that allowance's code.
+        for (raised, code) in [
+            (
+                InterfaceLimits {
+                    work: InterfaceLimits::MAXIMUM.work + 1,
+                    ..InterfaceLimits::DEFAULT
+                },
+                work,
+            ),
+            (
+                InterfaceLimits {
+                    descriptor_bytes: InterfaceLimits::MAXIMUM.descriptor_bytes + 1,
+                    ..InterfaceLimits::DEFAULT
+                },
+                descriptors,
+            ),
         ] {
-            assert_eq!(admit(raised), limit(EntryPhase::Admission));
+            assert_eq!(admit(raised), refused(EntryPhase::Admission, code));
         }
+    }
+    // A ceiling of the interface document keeps its own code, which no
+    // allowance selection changes: a protocol symbol above 4,096 bytes.
+    let mut long = doc.clone();
+    let symbol = "p".repeat(4097);
+    long["protocol"] = json!(symbol);
+    long["protocols"][0]["symbol"] = json!(symbol);
+    for interface in [InterfaceLimits::DEFAULT, InterfaceLimits::MAXIMUM] {
+        assert_eq!(
+            RunEntry::admit(
+                package(&long, &artifact),
+                HostLimits {
+                    interface,
+                    ..HostLimits::default()
+                },
+                SetupAuthority::default(),
+            )
+            .map(drop)
+            .map_err(|e| (e.phase, e.code().to_owned())),
+            refused(EntryPhase::Interface, "entry-interface-limit")
+        );
     }
 }

@@ -138,7 +138,8 @@ fn read_text(interface: &str) -> Result<Interface> {
         Package::MAX_BYTES,
     )
     .unwrap();
-    crate::entry::BoundInterface::read(&package).map(|view| view.into_view())
+    crate::entry::BoundInterface::read(&package, InterfaceLimits::DEFAULT)
+        .map(|view| view.into_view())
 }
 fn read(value: &Value) -> Result<Interface> {
     read_text(&value.to_string())

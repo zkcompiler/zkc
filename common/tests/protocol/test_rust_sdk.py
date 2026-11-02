@@ -87,7 +87,7 @@ use zkc::entry::{RoleInputs,ProofRequest,FunctionEntry,FunctionInterface,
     InvocationContext,InvocationBinding,RunContext,Package,SetupAuthority};
 fn authority(bytes:&[u8],pin:&[u8;32])->std::collections::BTreeMap<String,SetupAuthority> {
     let package=Package::capture(bytes,pin,Package::MAX_BYTES).unwrap();
-    let children=FunctionInterface::deployment_interfaces(&package).unwrap();
+    let children=FunctionInterface::deployment_interfaces(&package,zkc::entry::InterfaceLimits::DEFAULT).unwrap();
     children.iter().map(|child|{
         assert_eq!(child.operation(),"run");
         assert_eq!(child.interface().setup_names().len(),0);

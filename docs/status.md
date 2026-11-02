@@ -986,9 +986,9 @@ roster (about 240,000 nodes with one port, 369,000 with one port placed at
 every role). Its Host structure validation needs 1,303,066 interface work
 units with one port and 1,688,737 with one port placed at every role, beyond
 the 1,000,000-unit default, so a Rust Host admits it by raising its interface
-work selection within the 2^24 maximum
-([Host allowances](spec/runtime/capacity.md#host-allowances)). The CLI selects
-no interface allowance and refuses it with `entry-interface-limit`. A distributed record's fields are expanded once per instance and
+work selection within the 2^24 maximum, and the CLI by `--interface-limits`
+([Host allowances](spec/runtime/capacity.md#host-allowances)); under the
+default it refuses with `entry-interface-work-limit`. A distributed record's fields are expanded once per instance and
 each placed role visits only the fields placed at it, so a 1,024-role record
 with one field per role checks in about 16.9 million units, growing linearly
 with its fields. Mathematical participant projection separately bounds roles

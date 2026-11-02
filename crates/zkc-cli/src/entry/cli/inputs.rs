@@ -50,7 +50,9 @@ pub(super) struct Options {
     pub transcript_budget: Option<u64>,
 }
 impl Options {
-    pub fn parse(args: &Arguments<'_>) -> Result<Self> {
+    /// `interface` is the command's one interface selection, which every
+    /// Entry it admits takes.
+    pub fn parse(args: &Arguments<'_>, interface: zkc::entry::InterfaceLimits) -> Result<Self> {
         let mut options = Self {
             setups: Default::default(),
             proof: Default::default(),
@@ -61,6 +63,8 @@ impl Options {
             context: vec![],
             transcript_budget: None,
         };
+        options.proof.interface = interface;
+        options.run.interface = interface;
         if let Some(file) = args.value("--capacity") {
             let capacity = crate::execution::Capacity::parse(&read(file, 4096)?)?;
             options.proof.capacity = capacity;

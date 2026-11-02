@@ -40,7 +40,11 @@ fn compile(compiler: &Path, source: &Path, entry: &str, format: &str) -> Package
     if artifact["format"] == "zkc.host/0" {
         // Default Protocol Entries are Host wrappers. Retain/check the actual
         // child package; do not invent inputs on the container function.
-        let deployments = entry::FunctionInterface::deployment_interfaces(&package).unwrap();
+        let deployments = entry::FunctionInterface::deployment_interfaces(
+            &package,
+            entry::InterfaceLimits::DEFAULT,
+        )
+        .unwrap();
         assert!(!deployments.is_empty());
         capture(
             artifact["deployments"][0]["package"]

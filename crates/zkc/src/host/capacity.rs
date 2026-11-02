@@ -311,6 +311,39 @@ impl Default for MaterialLimits {
     }
 }
 
+/// The application's selection file for the interface admission allowances
+/// ([`Allowances::INTERFACE_WORK`], [`Allowances::INTERFACE_DESCRIPTORS`]).
+impl crate::entry::InterfaceLimits {
+    /// Stable report record, in the format [`Self::parse`] reads, so a
+    /// reported selection can be supplied again.
+    pub fn record(&self) -> Json {
+        json!([
+            "zkc.interface-limits/0",
+            self.work.to_string(),
+            self.descriptor_bytes.to_string()
+        ])
+    }
+    /// Parse the application's bounded selection file. Unknown fields are
+    /// refused, and a selection above a maximum refuses with that allowance's
+    /// code, never clamped.
+    pub fn parse(bytes: &[u8]) -> Result<Self> {
+        let value = parse(bytes, 4096)?;
+        let row = array(&value, 3)?;
+        if text(&row[0])? != "zkc.interface-limits/0" {
+            return Err("interface-limits-format".into());
+        }
+        // A count beyond the address space exceeds every maximum, so it
+        // reaches validation as such and refuses with its allowance's code.
+        let size = |v| natural(v).map(|n| usize::try_from(n).unwrap_or(usize::MAX));
+        let result = Self {
+            work: size(&row[1])?,
+            descriptor_bytes: size(&row[2])?,
+        };
+        result.validate().map_err(|e| e.to_string())?;
+        Ok(result)
+    }
+}
+
 /// The refusal codes of one kind of Host work and storage that an invocation
 /// root charges. Each charge is all or nothing
 /// ([`reserve_root`](zkc_runtime::host::wire::reserve_root)): its logical
@@ -794,6 +827,69 @@ mod tests {
         }
         assert_eq!(
             MaterialLimits::parse(&[b' '; 4097]).unwrap_err(),
+            "artifact-byte-limit"
+        );
+    }
+    #[test]
+    fn interface_limit_records_read_back_and_refuse_above_their_maxima() {
+        use crate::entry::InterfaceLimits;
+        let parse = |record: &Json| InterfaceLimits::parse(record.to_string().as_bytes());
+        // A reported record reads back as the selection it reports, defaults
+        // included.
+        let raised = InterfaceLimits {
+            work: InterfaceLimits::MAXIMUM.work,
+            ..InterfaceLimits::DEFAULT
+        };
+        assert_eq!(
+            raised.record(),
+            json!(["zkc.interface-limits/0", "16777216", "16777216"])
+        );
+        assert_eq!(
+            InterfaceLimits::DEFAULT.record(),
+            json!(["zkc.interface-limits/0", "1000000", "16777216"])
+        );
+        for selection in [
+            InterfaceLimits::DEFAULT,
+            raised,
+            InterfaceLimits::MAXIMUM,
+            InterfaceLimits {
+                work: 1,
+                descriptor_bytes: 0,
+            },
+        ] {
+            assert_eq!(parse(&selection.record()).unwrap(), selection);
+        }
+        // One above a maximum refuses with that allowance's own code, as
+        // does a count beyond every maximum.
+        for (field, code) in [
+            (1, "entry-interface-work-limit"),
+            (2, "entry-interface-descriptor-bytes-limit"),
+        ] {
+            let mut record = InterfaceLimits::MAXIMUM.record();
+            let selected: u64 = record[field].as_str().unwrap().parse().unwrap();
+            record[field] = json!((selected + 1).to_string());
+            assert_eq!(parse(&record).unwrap_err(), code);
+            record[field] = json!(u64::MAX.to_string());
+            assert_eq!(parse(&record).unwrap_err(), code);
+        }
+        // Another record, a missing or extra field and a number that is not
+        // a canonical decimal string refuse before any selection applies.
+        let mut other = InterfaceLimits::DEFAULT.record();
+        other[0] = json!("zkc.material-limits/0");
+        assert_eq!(parse(&other).unwrap_err(), "interface-limits-format");
+        let mut short = InterfaceLimits::DEFAULT.record();
+        short.as_array_mut().unwrap().pop();
+        assert_eq!(parse(&short).unwrap_err(), "artifact-record");
+        let mut long = InterfaceLimits::DEFAULT.record();
+        long.as_array_mut().unwrap().push(json!("0"));
+        assert_eq!(parse(&long).unwrap_err(), "artifact-record");
+        for spelling in [json!(1000000), json!("01000000"), json!("-1"), json!("")] {
+            let mut record = InterfaceLimits::DEFAULT.record();
+            record[1] = spelling;
+            assert!(parse(&record).is_err());
+        }
+        assert_eq!(
+            InterfaceLimits::parse(&[b' '; 4097]).unwrap_err(),
             "artifact-byte-limit"
         );
     }

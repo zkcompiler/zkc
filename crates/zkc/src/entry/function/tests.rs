@@ -30,7 +30,7 @@ fn read(document: Value) -> Result<FunctionInterface> {
         &Sha256::digest(bytes.as_bytes()).into(),
         Package::MAX_BYTES,
     )?;
-    FunctionInterface::read(&package)
+    FunctionInterface::read(&package, crate::entry::InterfaceLimits::DEFAULT)
 }
 
 #[test]

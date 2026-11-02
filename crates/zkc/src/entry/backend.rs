@@ -28,13 +28,16 @@ pub struct BackendRun {
     bundle: joint::Bundle,
 }
 impl BackendRun {
+    /// Admit under the bundle structure limits and the Host's selected
+    /// interface admission allowances.
     pub fn admit<B: WireBackend>(
         package: Package,
         contracts: &Contracts,
         backend: &B,
         limits: joint::BundleLimits,
+        interface: super::InterfaceLimits,
     ) -> Result<Self, String> {
-        let interface = BoundInterface::read(&package).map_err(|e| e.to_string())?;
+        let interface = BoundInterface::read(&package, interface).map_err(|e| e.to_string())?;
         if interface.is_proof() {
             return Err("entry-job-kind".into());
         }

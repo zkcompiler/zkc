@@ -1,31 +1,38 @@
 //! Checked logical metadata shared by source and pinned-package consumers.
-use crate::entry::{FunctionInterface, Interface, Package, inputs::InputGroup};
+use crate::entry::{FunctionInterface, Interface, InterfaceLimits, Package, inputs::InputGroup};
 
 pub enum CheckedInterface {
     Function(Box<FunctionInterface>),
     Proof(Box<Interface>),
 }
 impl CheckedInterface {
-    pub fn from_compiler(bytes: &[u8]) -> Result<Self, String> {
+    /// Read compiler output under the Host's selected interface admission
+    /// allowances, as a package of it would be read.
+    pub fn from_compiler(bytes: &[u8], limits: InterfaceLimits) -> Result<Self, String> {
+        limits.validate().map_err(|e| e.to_string())?;
         if is_function(bytes)? {
-            FunctionInterface::from_compiler(bytes)
+            FunctionInterface::from_compiler(bytes, limits)
                 .map(|v| Self::Function(Box::new(v)))
                 .map_err(|e| e.to_string())
         } else {
-            let view = Interface::from_compiler(bytes).map_err(|e| e.to_string())?;
+            let view = Interface::from_compiler(bytes, limits).map_err(|e| e.to_string())?;
             if !view.is_proof() {
                 return Err("source-entry-selection".into());
             }
             Ok(Self::Proof(Box::new(view)))
         }
     }
-    pub fn read(package: &Package) -> Result<Self, String> {
+    /// Read a package under the Host's selected interface admission
+    /// allowances, the selection its Entry admits with.
+    pub fn read(package: &Package, limits: InterfaceLimits) -> Result<Self, String> {
+        limits.validate().map_err(|e| e.to_string())?;
         if is_function(package.interface().as_bytes())? {
-            FunctionInterface::read(package)
+            FunctionInterface::read(package, limits)
                 .map(|v| Self::Function(Box::new(v)))
                 .map_err(|e| e.to_string())
         } else {
-            let view = crate::entry::BoundInterface::read(package).map_err(|e| e.to_string())?;
+            let view =
+                crate::entry::BoundInterface::read(package, limits).map_err(|e| e.to_string())?;
             if !view.is_proof() {
                 return Err("source-entry-selection".into());
             }

@@ -103,8 +103,11 @@ pub fn run(
     let (package, capture_ns) = capture(path, sha256)?;
     let start = Instant::now();
     // This inventory is checked by the common Host owner, before executable
-    // admission. Setup authority is never inferred from a child package.
-    let children = FunctionInterface::deployment_interfaces(&package).map_err(|e| e.to_string())?;
+    // admission, under the interface selection that admits the Entry. Setup
+    // authority is never inferred from a child package.
+    let options = FunctionOptions::default();
+    let children = FunctionInterface::deployment_interfaces(&package, options.limits.interface)
+        .map_err(|e| e.to_string())?;
     let mut authority = BTreeMap::new();
     for child in children {
         if child.operation() != "run" || child.interface().setup_names().len() != 0 {
@@ -112,7 +115,6 @@ pub fn run(
         }
         authority.insert(child.id().into(), Default::default());
     }
-    let options = FunctionOptions::default();
     let capacity = options.limits.capacity;
     let entry = FunctionEntry::admit_with_cpu(package, options, authority, job.cpu()?.clone())
         .map_err(|e| e.to_string())?;

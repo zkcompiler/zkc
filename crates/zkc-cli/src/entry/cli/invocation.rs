@@ -133,9 +133,8 @@ impl Invocation {
 pub(super) fn protect_options(args: &Arguments<'_>, outputs: &mut Outputs) -> Result<()> {
     for &(key, value) in &args.options {
         match key {
-            "--setups" | "--capacity" | "--material-limits" | "--limits" | "--invocations" => {
-                outputs.protect([value.unwrap()])?
-            }
+            "--setups" | "--capacity" | "--material-limits" | "--interface-limits" | "--limits"
+            | "--invocations" => outputs.protect([value.unwrap()])?,
             "--key" => outputs.protect([inputs::assignment(value.unwrap())?.1])?,
             _ => (),
         }

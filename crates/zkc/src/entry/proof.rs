@@ -286,7 +286,7 @@ impl ProofEntry {
             .interface
             .validate()
             .map_err(|e| E::new(P::Admission, e))?;
-        let interface = crate::entry::BoundInterface::read_with(&package, options.interface)
+        let interface = crate::entry::BoundInterface::read(&package, options.interface)
             .map_err(|e| E::new(P::Interface, e))?;
         let proof = interface
             .proof()

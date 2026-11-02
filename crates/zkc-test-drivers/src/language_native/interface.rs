@@ -50,7 +50,8 @@ pub(super) fn controls(
                 interface["protocol"] = json!("other_protocol");
             }
         });
-        let view = zkc::entry::BoundInterface::read(&changed).unwrap();
+        let view = zkc::entry::BoundInterface::read(&changed, zkc::entry::InterfaceLimits::DEFAULT)
+            .unwrap();
         assert_eq!(check(&view), Err(InterfaceError::NativeBinding));
     }
 }

@@ -358,7 +358,7 @@ fn compiler_emitted_custody_inventory_selects_the_ordinary_data_facet() {
         "/../../compiler/test/fixtures/common-inputs/custody-fields.json"
     ));
     for fixture in toolchain_parameters(bytes) {
-        let view = Interface::decode(&fixture, None).unwrap();
+        let view = Interface::decode(&fixture, None, InterfaceLimits::DEFAULT).unwrap();
         let protocol = &view.document.protocols[0];
         let requirements =
             super::super::common::check(protocol, &mut schemas::Schemas::new()).unwrap();
@@ -383,5 +383,5 @@ fn compiler_emitted_custody_inventory_selects_the_ordinary_data_facet() {
         r#"{"path":[0],"leaf":0,"role":0,"facet":"data","native":2}"#,
         r#"{"path":[0],"leaf":0,"role":0,"facet":"data","native":0}"#,
     );
-    assert!(Interface::decode(&moved, None).is_err());
+    assert!(Interface::decode(&moved, None, InterfaceLimits::DEFAULT).is_err());
 }

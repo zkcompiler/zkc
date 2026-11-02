@@ -65,15 +65,19 @@ The `harness`, `sdk` and `integration` selections are disjoint. `checks.project`
 
 ### Fresh compiler pairing
 
-Five ignored Cargo tests pair the SDK with a freshly built compiler. They
+Seven ignored Cargo tests pair the SDK with a freshly built compiler. They
 compile real sources through `language-package`, then admit and execute the
 actual packages: published common-input inventories and the contexts the SDK
 produces for them, collection extents, Entry component families, typed Host
-children and a Function's proof child completing on a later attempt.
+children, a Function's proof child completing on a later attempt and the
+generated Host of a full 1,024-role roster under a raised interface selection.
+One more pairs the CLI with the compiler: it compiles, inspects, prepares and
+runs that Host under `--interface-limits`.
 Hand-built SDK fixtures cannot satisfy them. Build the compiler first, then run them explicitly:
 
 ```sh
 ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc --features cpu,files --test common_inventory_compiler --test entry_components -- --ignored
+ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc-cli -- --ignored
 ```
 
 ### Compiler-produced interface fixtures

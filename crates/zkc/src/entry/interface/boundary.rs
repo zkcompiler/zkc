@@ -225,7 +225,7 @@ impl Work {
         }
     }
     pub fn charge(&mut self, count: usize) -> Result<()> {
-        self.remaining = self.remaining.checked_sub(count).ok_or(E::Limit)?;
+        self.remaining = self.remaining.checked_sub(count).ok_or(E::WorkLimit)?;
         Ok(())
     }
     pub(super) fn lookup(&mut self, entries: usize) -> Result<()> {
@@ -504,7 +504,7 @@ fn walk(
     let mut refuse = |reason| -> Result<()> {
         *remaining = remaining
             .checked_sub(128 + path.len() * 4 + protocol.roles[role as usize].len())
-            .ok_or(E::Limit)?;
+            .ok_or(E::DescriptorLimit)?;
         residual.push(BoundaryRequirement {
             port: port.index,
             path: path.clone(),
@@ -570,7 +570,7 @@ fn walk(
         // Charge retained descriptors before cloning, including empty schemas.
         *remaining = remaining
             .checked_sub(cost + name.len() + 128 + path.len() * 4)
-            .ok_or(E::Limit)?;
+            .ok_or(E::DescriptorLimit)?;
         result.push(View {
             path: path.clone(),
             role,
@@ -612,7 +612,7 @@ fn walk(
         if !f.public && memo.places(&f.schema, cp, role, work)? {
             *remaining = remaining
                 .checked_sub(128 + path.len() * 4 + protocol.roles[role as usize].len())
-                .ok_or(E::Limit)?;
+                .ok_or(E::DescriptorLimit)?;
             residual.push(BoundaryRequirement {
                 port: port.index,
                 path: path.clone(),

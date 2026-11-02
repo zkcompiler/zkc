@@ -583,7 +583,12 @@ fn retained_recursive_fixture_matches_the_reviewed_schema_and_component_coordina
     let fixture: Value =
         serde_json::from_slice(include_bytes!("fixtures/recursive-interface.json")).unwrap();
     assert_eq!(fixture, recursive_document(recursive_port()));
-    Interface::decode(include_bytes!("fixtures/recursive-interface.json"), None).unwrap();
+    Interface::decode(
+        include_bytes!("fixtures/recursive-interface.json"),
+        None,
+        InterfaceLimits::DEFAULT,
+    )
+    .unwrap();
 }
 
 #[test]

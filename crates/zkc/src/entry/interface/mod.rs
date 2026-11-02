@@ -33,7 +33,15 @@ type Result<T> = std::result::Result<T, InterfaceError>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InterfaceError {
     Format,
+    /// A ceiling of the interface document itself: its bytes, nesting, nodes,
+    /// name lengths, counts or schema shapes. No allowance selection raises it.
     Limit,
+    /// The Host's selected interface work allowance: exhausted while reading,
+    /// or a selection above its installed maximum.
+    WorkLimit,
+    /// The Host's selected interface descriptor allowance: exhausted while
+    /// reading, or a selection above its installed maximum.
+    DescriptorLimit,
     Identity,
     Schema,
     Selection,
@@ -44,6 +52,8 @@ impl std::fmt::Display for InterfaceError {
         f.write_str(match self {
             Self::Format => super::EntryCondition::InterfaceFormat.code(),
             Self::Limit => "entry-interface-limit",
+            Self::WorkLimit => "entry-interface-work-limit",
+            Self::DescriptorLimit => "entry-interface-descriptor-bytes-limit",
             Self::Identity => super::EntryCondition::InterfaceIdentity.code(),
             Self::Schema => "entry-interface-schema",
             Self::Selection => "entry-interface-selection",
@@ -82,12 +92,13 @@ impl InterfaceLimits {
         work: 1 << 24,
         ..Self::DEFAULT
     };
-    /// Refuse a selection above the installed maximum without clamping it.
+    /// Refuse a selection above an installed maximum with that allowance's
+    /// code, without clamping it.
     pub fn validate(&self) -> Result<()> {
+        require(self.work <= Self::MAXIMUM.work, InterfaceError::WorkLimit)?;
         require(
-            self.work <= Self::MAXIMUM.work
-                && self.descriptor_bytes <= Self::MAXIMUM.descriptor_bytes,
-            InterfaceError::Limit,
+            self.descriptor_bytes <= Self::MAXIMUM.descriptor_bytes,
+            InterfaceError::DescriptorLimit,
         )
     }
 }
@@ -126,14 +137,11 @@ impl std::ops::Deref for BoundInterface {
     }
 }
 impl BoundInterface {
-    pub fn read(package: &Package) -> Result<Self> {
-        Self::read_with(package, InterfaceLimits::DEFAULT)
-    }
-    /// Read under the Host's selected interface admission allowances.
-    pub fn read_with(package: &Package, limits: InterfaceLimits) -> Result<Self> {
-        limits.validate()?;
+    /// Read under the Host's selected interface admission allowances; a caller
+    /// that selects nothing passes `InterfaceLimits::DEFAULT`.
+    pub fn read(package: &Package, limits: InterfaceLimits) -> Result<Self> {
         let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
-        let view = Interface::decode_with(package.interface().as_bytes(), Some(&original), limits)?;
+        let view = Interface::decode(package.interface().as_bytes(), Some(&original), limits)?;
         Ok(Self {
             view,
             #[cfg(feature = "cpu")]
@@ -171,14 +179,14 @@ impl Interface {
     pub fn outstanding_requirements(&self) -> &[BoundaryRequirement] {
         &self.ports.residual
     }
+    /// Read compiler output before packaging, under the selected allowances.
     #[cfg(feature = "project")]
-    pub(crate) fn from_compiler(bytes: &[u8]) -> Result<Self> {
-        Self::decode(bytes, None)
+    pub(crate) fn from_compiler(bytes: &[u8], limits: InterfaceLimits) -> Result<Self> {
+        Self::decode(bytes, None, limits)
     }
-    fn decode(bytes: &[u8], original: Option<&str>) -> Result<Self> {
-        Self::decode_with(bytes, original, InterfaceLimits::DEFAULT)
-    }
-    fn decode_with(bytes: &[u8], original: Option<&str>, limits: InterfaceLimits) -> Result<Self> {
+    /// A selection above an installed maximum refuses before any byte is read.
+    fn decode(bytes: &[u8], original: Option<&str>, limits: InterfaceLimits) -> Result<Self> {
+        limits.validate()?;
         preflight::check(bytes)?;
         let mut decoder = serde_json::Deserializer::from_slice(bytes);
         decoder.disable_recursion_limit();

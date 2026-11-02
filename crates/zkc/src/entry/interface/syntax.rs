@@ -39,8 +39,9 @@ impl Leaf {
         }
     }
 }
+/// Leaf parsing draws on its caller's interface work allowance.
 fn charge(remaining: &mut usize, amount: usize) -> Result<()> {
-    *remaining = remaining.checked_sub(amount).ok_or(E::Limit)?;
+    *remaining = remaining.checked_sub(amount).ok_or(E::WorkLimit)?;
     Ok(())
 }
 fn parse(spelling: &str, depth: usize, remaining: &mut usize) -> Result<Leaf> {
@@ -327,7 +328,7 @@ mod tests {
         ] {
             assert!(Leaf::parse(spelling, &mut 200_000).is_err(), "{spelling}");
         }
-        assert_eq!(Leaf::parse("bool", &mut 0).unwrap_err(), E::Limit);
+        assert_eq!(Leaf::parse("bool", &mut 0).unwrap_err(), E::WorkLimit);
         let deep = "sequence<".repeat(9) + "bool" + &">".repeat(9);
         assert!(Leaf::parse(&deep, &mut 200_000).is_err());
     }
@@ -341,7 +342,7 @@ mod tests {
             !leaf.copy && leaf.drop && !leaf.participants && !leaf.constructible && !leaf.message
         );
         assert_eq!(leaf.alternatives[1].1, ["resource_unit:Slot"]);
-        assert_eq!(Leaf::parse(&spelling, &mut 1).unwrap_err(), E::Limit);
+        assert_eq!(Leaf::parse(&spelling, &mut 1).unwrap_err(), E::WorkLimit);
         let duplicate =
             zkc_format::types::variant_spelling(&json!(["local", [["A", []], ["A", []]]])).unwrap();
         assert!(Leaf::parse(&duplicate, &mut 200_000).is_err());

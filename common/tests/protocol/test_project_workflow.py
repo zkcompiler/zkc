@@ -109,7 +109,8 @@ def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, director
     created = journal.json(command(toolchain, 'new', project))
     assert created['status'] == 'initialized'
     assert set(created) == {'format', 'status', 'phase', 'project', 'mode', 'compiler',
-                            'files', 'preserved', 'publication', 'entries'}
+                            'interface_limits', 'files', 'preserved', 'publication', 'entries'}
+    assert created['interface_limits'] == ['zkc.interface-limits/0', '1000000', '16777216']
     assert created['publication']['published'] == created['files']
     assert created['publication']['requested'] == created['files']
     assert len(created['files']) == 3

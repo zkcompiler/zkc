@@ -657,5 +657,5 @@ fn semantic_supply_descriptors_are_bounded_even_without_native_storage() {
     )]);
     d["protocols"][0]["outputs"] = json!([]);
     d["protocols"][0]["clauses"] = json!([]);
-    assert_eq!(read(&d).unwrap_err(), InterfaceError::Limit);
+    assert_eq!(read(&d).unwrap_err(), InterfaceError::DescriptorLimit);
 }

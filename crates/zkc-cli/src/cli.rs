@@ -8,6 +8,7 @@ pub use render::human;
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
 const MATERIAL_LIMITS: Opt = Opt::new("--material-limits=LIMITS");
+const INTERFACE_LIMITS: Opt = Opt::new("--interface-limits=LIMITS");
 const THREADS: Opt = Opt::new("--threads=COUNT").unsigned_range(1, 256);
 const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
@@ -25,6 +26,7 @@ macro_rules! entry_options {
             Opt::new("--compiler=PATH"),
             Opt::new("--package=FILE"),
             Opt::new("--sha256=PIN").hex(Some(32)),
+            INTERFACE_LIMITS,
             $($extra),*
         ]
     };
@@ -47,6 +49,8 @@ uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip 
 --threads=COUNT selects 1..=256 shared CPU workers (default: 1), including with --dry-run.
 --capacity=LIMITS selects the native capacity record. --material-limits=LIMITS selects the
 material allowances; setup material may be raised from 64 MiB up to 256 MiB.
+--interface-limits=LIMITS selects the interface admission allowances; interface work may be
+raised from 1,000,000 up to 2^24 units, as the Host of a large role roster needs.
 Dry-run validates inputs without executing numerical work.";
 const COMMANDS: &[Command] = &[
     Command {
@@ -95,6 +99,7 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--release-storage"),
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"),
+            INTERFACE_LIMITS,
         ],
         description: concat!(
             "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nExplicit modules and assets require --source-format; a manifest states its own.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
@@ -110,23 +115,26 @@ The report supplies the manifest SHA-256 for independent artifact authentication
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 CPU project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
 Named Entry stems replace :: with dots; generic runs append a full selector digest.
-Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat."
+Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.
+--interface-limits=LIMITS selects the allowances under which a CPU package's interface is read."
         ),
     },
     Command {
         name: "new",
         summary: "Create a project in a new directory",
         positional: "DIRECTORY",
-        options: &[Opt::new("--compiler=PATH")],
-        description: "Create a minimal source project and its input templates. The directory must not exist.",
+        options: &[Opt::new("--compiler=PATH"), INTERFACE_LIMITS],
+        description: "Create a minimal source project and its input templates. The directory must not exist.
+--interface-limits=LIMITS selects the allowances under which Entry interfaces are read.",
     },
     Command {
         name: "init",
         summary: "Initialize a project in an existing directory",
         positional: "[DIRECTORY]",
-        options: &[Opt::new("--compiler=PATH")],
+        options: &[Opt::new("--compiler=PATH"), INTERFACE_LIMITS],
         description: "Initialize the current or selected directory with source and input templates.
-Existing projects and conflicting files refuse; use prepare for an existing project.",
+Existing projects and conflicting files refuse; use prepare for an existing project.
+--interface-limits=LIMITS selects the allowances under which Entry interfaces are read.",
     },
     Command {
         name: "prepare",
@@ -137,7 +145,8 @@ Existing projects and conflicting files refuse; use prepare for an existing proj
 Generic protocols require an explicit selector with closed arguments, e.g. 'Schnorr<G>'.
 Package and explicit-module modes require --output. Existing regular files are preserved.
 Values, dynamic lengths and variant cases must be filled by the user.
-Use run, prove or verify --dry-run to validate inputs without protocol execution.",
+Use run, prove or verify --dry-run to validate inputs without protocol execution.
+--interface-limits=LIMITS selects the allowances under which Entry interfaces are read.",
     },
     Command {
         name: "inspect",
@@ -148,7 +157,8 @@ Use run, prove or verify --dry-run to validate inputs without protocol execution
 placement, notation or toolchain metadata. Notation visibility options require --view=notations.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 Source inventories check definitions and optionally a selected Entry; they do not execute it.
-Pinned packages support only the Entry view.",
+Pinned packages support only the Entry view. --interface-limits=LIMITS selects the allowances
+under which the Entry view reads interfaces, including a Function's child deployments.",
     },
     Command {
         name: "run",
@@ -363,6 +373,12 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
         return serde_json::json!({"format":"zkc.tool-inspection/0", "status":"refused",
             "phase":"arguments", "code":"cli-option",
             "message":"notation visibility options require --view=notations"});
+    }
+    // Only the Entry view reads a Host interface.
+    if args.has("--interface-limits") && args.value("--view").is_some_and(|view| view != "entry") {
+        return serde_json::json!({"format":"zkc.tool-inspection/0", "status":"refused",
+            "phase":"arguments", "code":"cli-option",
+            "message":"--interface-limits applies to the Entry view"});
     }
     if args.has("--dry-run") && args.has("--instrument") {
         return serde_json::json!({"status":"refused", "phase":"arguments", "code":"cli-option",

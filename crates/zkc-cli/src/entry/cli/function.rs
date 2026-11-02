@@ -3,10 +3,12 @@ use super::*;
 use crate::entry::{FunctionEntry, FunctionOptions, FunctionRequest};
 use crate::project::CheckedInterface;
 
+#[allow(clippy::too_many_arguments)] // The command's one interface selection stays explicit.
 pub(super) fn execute(
     package: Package,
     interface: &CheckedInterface,
     args: &Arguments<'_>,
+    selection: zkc::entry::InterfaceLimits,
     invocation: invocation::Invocation,
     mut destinations: Outputs,
     cpu: &CpuExecution,
@@ -16,7 +18,7 @@ pub(super) fn execute(
     let CheckedInterface::Function(interface) = interface else {
         return Err("source-entry-selection".into());
     };
-    let options = Options::parse(args)?;
+    let options = Options::parse(args, selection)?;
     let capacity = options.run.capacity;
     report["capacity"] = capacity.record();
     report["material_limits"] = options.run.material.record();
@@ -29,10 +31,8 @@ pub(super) fn execute(
     )?;
     bindings.protect(&mut destinations)?;
     // Children are read under the same interface selection that admits them.
-    let deployments = crate::entry::FunctionInterface::deployment_interfaces_with(
-        &package,
-        options.run.interface,
-    )?;
+    let deployments =
+        crate::entry::FunctionInterface::deployment_interfaces(&package, options.run.interface)?;
     let requirements = json!(
         deployments
             .iter()

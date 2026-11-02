@@ -127,9 +127,12 @@ impl Source {
             compiler_argument: compiler.into(),
         })
     }
+    /// Compile and read the package's interface under the command's
+    /// interface selection.
     pub fn compile(
         &self,
         selection: Selection<'_>,
+        interface: zkc::entry::InterfaceLimits,
         report: &mut Json,
     ) -> Result<crate::entry::Package> {
         let started = std::time::Instant::now();
@@ -139,6 +142,7 @@ impl Source {
                 project: &self.project,
                 selection,
                 options: self.settings.options(),
+                interface,
                 observations: self.observations.as_ref(),
                 cache: self.cache.as_ref(),
             })
@@ -210,6 +214,10 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         {
             return Err("cli-usage".into());
         }
+        // An EVM verifier build reads no Host interface.
+        if target == "evm" && args.has("--interface-limits") {
+            return Err("cli-usage".into());
+        }
         let source = Source::load(args)?;
         source.describe(&mut report);
         if !checking && target == "evm" {
@@ -222,6 +230,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         }
         let mut destinations = Outputs::new(&output.into_iter().collect::<Vec<_>>(), &[])?;
         source.protect(&mut destinations)?;
+        crate::files::protect_interface_limits(args, &mut destinations)?;
         source.describe(&mut report);
         report["phase"] = json!("compilation");
         if checking {
@@ -241,14 +250,16 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             });
             report["status"] = json!("checked");
         } else {
+            let interface = crate::files::interface_limits(args, &mut report)?;
             let package = source.compile(
                 Selection {
                     name: entry,
                     kind: None,
                 },
+                interface,
                 &mut report,
             )?;
-            let view = super::CheckedInterface::read(&package)?;
+            let view = super::CheckedInterface::read(&package, interface)?;
             report["entry"] = json!(view.entry());
             report["toolchain"] = json!(view.toolchain());
             report["package_sha256"] = json!(hex(package.identity()));
@@ -267,6 +278,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             };
             destinations = Outputs::new(&[&path], &[])?;
             source.protect(&mut destinations)?;
+            crate::files::protect_interface_limits(args, &mut destinations)?;
             report["output"] = json!(path);
             report["phase"] = json!("publication");
             crate::files::publication(

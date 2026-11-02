@@ -220,6 +220,10 @@ selects the [material allowances](../spec/runtime/capacity.md#host-allowances)
 for the public statement, named references, setup material and retained
 imports. Setup material, including key files read with `--key`, defaults to
 64 MiB and may be raised up to 256 MiB; a selection above a maximum refuses.
+`--interface-limits=FILE` selects the
+[interface admission allowances](../spec/runtime/capacity.md#host-allowances)
+under which every command that reads an Entry interface reads it, including
+`inspect`, `prepare`, `bindings`, `compile`, `init` and `new`.
 Entry functions also accept `--limits=FILE` for
 [work limits](../spec/runtime/joint.md).
 `prove` accepts services of the selected prover; `verify` accepts services of the
@@ -347,6 +351,18 @@ every signature, block argument and child deployment, so validating it can need
 more than the default
 [interface work allowance](../spec/runtime/capacity.md#host-allowances); the
 Host of a full 1,024-role roster does. A Rust application raises
-`FunctionOptions::limits.interface`, up to the installed maximum, and inspects
-child deployments with `FunctionInterface::deployment_interfaces_with` under
-the same selection. The CLI takes the default allowance.
+`FunctionOptions::limits.interface`, up to the installed maximum, and passes
+the same selection to every interface read, including
+`FunctionInterface::deployment_interfaces` for its child deployments. The CLI
+raises it with `--interface-limits=FILE`, a `zkc.interface-limits/0` record
+(work, then descriptor bytes) that the report repeats:
+
+```sh
+echo '["zkc.interface-limits/0", "4194304", "16777216"]' > interface-limits.json
+zkc run --package=host.zkpkg --sha256=EXPECTED_SHA256 \
+  --interface-limits=interface-limits.json --input=arguments.json
+```
+
+Exhausting the selected work refuses with `entry-interface-work-limit`, which
+a larger selection remedies; an interface beyond the document's own ceilings
+refuses with `entry-interface-limit`, which no selection does.

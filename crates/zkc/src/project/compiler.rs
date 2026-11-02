@@ -1,5 +1,5 @@
 use super::{CheckedInterface, Project, selection};
-use crate::entry::{CompileOptions, Package};
+use crate::entry::{CompileOptions, InterfaceLimits, Package};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -417,26 +417,37 @@ impl Compiler {
         }
         serde_json::from_value(report).map_err(|_| "source-check-format".into())
     }
-    /// A checked logical view, obtained before executable lowering. It cannot bind a Host.
-    pub fn inspect(&self, project: &Project, selection: Selection<'_>) -> Result<CheckedInterface> {
+    /// A checked logical view, obtained before executable lowering, read
+    /// under the Host's selected interface admission allowances. It cannot
+    /// bind a Host.
+    pub fn inspect(
+        &self,
+        project: &Project,
+        selection: Selection<'_>,
+        interface: InterfaceLimits,
+    ) -> Result<CheckedInterface> {
         let bytes = self.invoke(project, "language-interface", selection, &[])?;
-        let view = CheckedInterface::from_compiler(&bytes)?;
+        let view = CheckedInterface::from_compiler(&bytes, interface)?;
         if !selection.matches(&view) {
             return Err("source-entry-selection".into());
         }
         Ok(view)
     }
-    /// Captures exactly the locally compiled bytes. Trust rests on source and compiler.
+    /// Captures exactly the locally compiled bytes, whose interface is read
+    /// under the Host's selected interface admission allowances. Trust rests
+    /// on source and compiler.
     pub fn compile(
         &self,
         project: &Project,
         selection: Selection<'_>,
         options: CompileOptions,
+        interface: InterfaceLimits,
     ) -> Result<Package> {
         self.build(CompilationRequest {
             project,
             selection,
             options,
+            interface,
             observations: None,
             cache: None,
         })
@@ -450,6 +461,7 @@ impl Compiler {
             project,
             selection,
             options,
+            interface,
             observations,
             ..
         } = request;
@@ -457,7 +469,7 @@ impl Compiler {
         let flags: Vec<_> = flags.iter().map(String::as_str).collect();
         let invocation =
             self.invoke_observed(project, "language-package", selection, &flags, observations)?;
-        let mut result = Self::captured(&invocation.bytes, selection, options)?;
+        let mut result = Self::captured(&invocation.bytes, selection, options, interface)?;
         result.observation = invocation.observation;
         result.diagnostics = invocation.diagnostics;
         result.diagnostics_truncated = invocation.diagnostics_truncated;
@@ -467,11 +479,12 @@ impl Compiler {
         bytes: &[u8],
         selection: Selection<'_>,
         options: CompileOptions,
+        interface: InterfaceLimits,
     ) -> Result<CompilationResult> {
         let pin = Sha256::digest(bytes).into();
         let package =
             Package::capture(bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
-        let view = CheckedInterface::read(&package)?;
+        let view = CheckedInterface::read(&package, interface)?;
         if !selection.matches(&view) || package.options() != options {
             return Err("source-entry-selection".into());
         }
@@ -565,6 +578,9 @@ pub struct CompilationRequest<'a> {
     pub project: &'a Project,
     pub selection: Selection<'a>,
     pub options: CompileOptions,
+    /// The Host's selected interface admission allowances, under which the
+    /// compiled package's interface is read.
+    pub interface: InterfaceLimits,
     pub observations: Option<&'a ObservationRequest>,
     pub cache: Option<&'a super::CompilationCache>,
 }

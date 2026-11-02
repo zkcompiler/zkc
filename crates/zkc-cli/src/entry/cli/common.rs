@@ -8,6 +8,7 @@ pub(super) fn produce(
     package: Package,
     target: &Input,
     args: &Arguments<'_>,
+    interface: zkc::entry::InterfaceLimits,
     cpu: &CpuExecution,
     report: &mut Json,
 ) -> Result<()> {
@@ -22,11 +23,10 @@ pub(super) fn produce(
             }
         }
     }
-    let options = Options::parse(args)?;
+    let options = Options::parse(args, interface)?;
     report["deployment"] = json!(id);
     report["phase"] = json!("admission");
-    let child =
-        FunctionInterface::run_deployment_package_with(&package, id, options.run.interface)?;
+    let child = FunctionInterface::run_deployment_package(&package, id, options.run.interface)?;
     let run = RunEntry::admit_with_cpu(child, options.run.clone(), options.setups, cpu.clone())?;
     report["capacity"] = options.run.capacity.record();
     report["material_limits"] = options.run.material.record();
