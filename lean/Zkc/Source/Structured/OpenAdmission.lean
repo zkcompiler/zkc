@@ -19,7 +19,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     (context : List Ty) (origins : List (Option Nat)) (facts : Facts) (identities : List Nat)
     (descriptor : Descriptor) (operands : List Nat) (results : List Ty) (site : String) :
     LowerM ProtocolOp := do
-  if !validRefs operands || !validTypes results || results.any Ty.isHandle then
+  if !validRefs operands || !validTypes results || results.any Ty.isForeignHandle then
     throw "structured-protocol-signature"
   if !site.isEmpty && !validProtocolIdentifier site then throw "structured-site"
   let arguments ← typesAt context operands
@@ -203,6 +203,7 @@ def checkProtocol (snapshot : Snapshot) (domains : List DomainSpec)
     (headers : List ProtocolSignature := []) : Except String CheckedProtocol := do
   let signature ← resolveProtocolSignature function
   let raw ← lowerProtocol snapshot domains summaries headers function signature
+  if !raw.custodyAffine function.inputs [] then throw "structured-custody-use"
   formProtocol signature raw
 
 /-- Generic source association includes resolved scopes and the actual lowering equation. -/
@@ -220,7 +221,8 @@ theorem checkProtocol_exact {snapshot : Snapshot} {domains : List DomainSpec}
     | error error => simp [signatureEq, rawEq, Except.bind, bind] at accepted
     | ok raw =>
       have exactForm : formProtocol signature raw = .ok checked := by
-        simpa only [signatureEq, rawEq, Except.bind, bind] using accepted
+        cases affine : raw.custodyAffine function.inputs [] <;>
+          simp_all [Except.bind, bind, throw, throwThe, MonadExceptOf.throw]
       rcases formProtocol_exact exactForm with ⟨sameSignature, sameRaw⟩
       constructor
       · simp only [sameSignature]
@@ -458,7 +460,7 @@ theorem resolveProtocolOp_application {snapshot : Snapshot} {domains : List Doma
           function.inputs[input]? = some type ∧
           (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
           scopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
-  by_cases badSignature : (!validRefs operands || !validTypes results || results.any Ty.isHandle) = true
+  by_cases badSignature : (!validRefs operands || !validTypes results || results.any Ty.isForeignHandle) = true
   · simp [resolveProtocolOp, badSignature, StateT.run, bind, StateT.bind, pure,
       throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind] at accepted
   by_cases badSite : (!sourceSite.isEmpty && !validProtocolIdentifier sourceSite) = true

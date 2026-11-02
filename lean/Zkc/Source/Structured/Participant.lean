@@ -80,9 +80,8 @@ theorem Op.calculationRegions_translate {Value : Ty → Type} {I J : PIR.Signatu
   all_goals cases allowed
 
 theorem observedSites_forgetSites {F G : Type} :
-    SiteObservations.Interprets forgetSites (observedSites F G) (.silent (participantInterface F G)) := by
-  intro site
-  rfl
+    SiteObservations.Interprets forgetSites (observedSites F G) (.silent (participantInterface F G)) :=
+  ⟨fun _ => rfl, fun _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
 
 theorem observeAction_forgetSites {F G : Type} (action : (participantInterface F G).Op) :
     (observeAction action).interpret forgetSites = participantActions F G action := by
@@ -230,7 +229,7 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
     change ((leftSites.mark (qualifyProtocolSite context.applicationPrefix site)).bind
       (fun _ => .done (Values.nil : Values (Component (assignment F G)) []))).interpret operations =
       (rightSites.mark (qualifyProtocolSite context.applicationPrefix site)).bind (fun _ => .done Values.nil)
-    simp only [PIR.Process.interpret_bind, sites (qualifyProtocolSite context.applicationPrefix site), PIR.Process.interpret]
+    simp only [PIR.Process.interpret_bind, sites.mark (qualifyProtocolSite context.applicationPrefix site), PIR.Process.interpret]
   | protocolApply signature roles site =>
     cases callbacks
     change (if (context.enter site roles).contains signature self then

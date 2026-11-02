@@ -336,6 +336,7 @@ import Zkc.Relation.AIR
 import Zkc.Semantics.AdaptiveTape
 import Zkc.Semantics.Boundary
 import Zkc.Semantics.Continuation
+import Zkc.Semantics.Custody
 import Zkc.Semantics.ExactRefinement
 import Zkc.Semantics.Execution
 import Zkc.Semantics.ExecutionPath
@@ -431,6 +432,8 @@ import Zkc.Source.Structured.ContractInstantiation
 import Zkc.Source.Structured.ContractMeaning
 import Zkc.Source.Structured.ContractObligations
 import Zkc.Source.Structured.CursorFold
+import Zkc.Source.Structured.CustodyAdmission
+import Zkc.Source.Structured.CustodySoundness
 import Zkc.Source.Structured.DerivationRules
 import Zkc.Source.Structured.DeterministicFold
 import Zkc.Source.Structured.DomainComponent
@@ -811,6 +814,7 @@ import Tests.StructuredContractAuthority
 import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
 import Tests.StructuredContracts
+import Tests.StructuredCustody
 import Tests.StructuredDomainModels
 import Tests.StructuredFormation
 import Tests.StructuredFoundationFormat

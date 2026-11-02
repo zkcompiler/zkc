@@ -325,7 +325,7 @@ def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Val
   | .group _, _ => none
   | .service _, _ => none
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
-  | .sequence _, _ | .product .., _ => none
+  | .sequence _, _ | .product .., _ | .resourceUnit _, _ => none
 
 /-- The arguments a law covers: each argument pinned to an input is that
 input's present value, and each argument pinned to a literal is that literal. A

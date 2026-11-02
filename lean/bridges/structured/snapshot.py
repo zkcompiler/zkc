@@ -30,6 +30,9 @@ def interpreted_ty(value, depth=0):
         raise ValueError("invalid structured type")
     if value == ["indices"]:
         return ".indices"
+    if value[0] == "resource_unit":
+        _, slot = record(value, 2)
+        return f".resourceUnit {text(schema.domain_identity(slot, slot=True))}"
     if value[0] == "groups":
         _, domain = record(value, 2)
         return f".groups {text(domain)}"
@@ -321,11 +324,20 @@ def protocol_contract(value):
     return f"⟨{text(owner)}, {seq(clauses, contract_clause)}⟩"
 
 
-# Independently selected interpreter vocabulary; catalog membership is data only.
-SOURCE_PRIMITIVES = frozenset((
-    "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
-    "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
-    "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"))
+def source_primitives():
+    """The operations of the catalog's structured-source consumer profile.
+
+    This only stops the renderer from refusing ahead of Lean: the closed
+    primitive inventory of `Zkc.Source.Structured` admits or refuses.
+    """
+    profiles = [profile for profile in schema.declarations()["consumerProfiles"]
+                if profile["name"] == "structured-source-primitives"]
+    if len(profiles) != 1:
+        raise ValueError("missing structured-source consumer profile")
+    return frozenset(entry["operation"] for entry in profiles[0]["operations"])
+
+
+SOURCE_PRIMITIVES = source_primitives()
 
 
 def render_parameter(value):
@@ -360,8 +372,9 @@ def primitive_binding(value, rows=None):
         domain = nominals.get(arguments[0][2])
         if domain is None or requirement["capability"] not in domain[4]:
             raise ValueError("missing binding capability")
-    # The installed source primitives have only Field roots. The neutral tree
-    # and supplied ports were checked above before this semantic projection.
+    # The installed source primitives have Field roots, or one exact Slot root
+    # for a custody transfer. The neutral tree and supplied ports were checked
+    # above before this semantic projection.
     arguments = [argument[2] for argument in actual[1]]
     return (f"⟨{text(value[1])}, {text(actual[0])}, {seq(arguments, text)}, "
             f"{text(actual[2])}, some ⟨{seq(actual[1], binding_argument)}, "

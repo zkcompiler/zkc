@@ -59,6 +59,14 @@ def noHandles (types : List Ty) : Analysis Unit := do
   if types.any Ty.isHandle then
     throw "structured-availability-handle"
 
+/-- Custody permissions move between Local frames and protocol ports with one
+holder; every other handle still refuses. -/
+def noForeignHandles (types : List Ty) : Analysis Unit := do
+  if types.any Ty.isService then
+    throw "structured-availability-service"
+  if types.any Ty.isForeignHandle then
+    throw "structured-availability-handle"
+
 /-- Charge each membership search and copied prefix before constructing a union.
 Repeated operands preserve set semantics, without identifying unknown values. -/
 def union (left right : Footprint) : Analysis Footprint :=
@@ -198,8 +206,8 @@ mutual
     | .letOp (.mark _) _ _ next => localRegion summaries next
     | .letOp op _ bodies next => do
       visit
-      noHandles op.arguments
-      noHandles op.results
+      noForeignHandles op.arguments
+      noForeignHandles op.results
       for helper in op.helpers do
         reference (← findSummary summaries helper)
       localRegions summaries bodies
@@ -219,8 +227,8 @@ end
 
 def summarize (summaries : List DependencySummary) (definition : CheckedDefinition) :
     Analysis DependencySummary := do
-  noHandles definition.inputs
-  noHandles definition.outputs
+  noForeignHandles definition.inputs
+  noForeignHandles definition.outputs
   if summaries.any (·.helper.name == definition.name) then
     throw "structured-availability-helper-duplicate"
   chargeDependencies (2 * definition.inputs.length)
@@ -314,7 +322,7 @@ def repeatInputs (roles : Nat) (spec : RepeatSpec) (arguments : List Footprint) 
   if arguments.length != 1 + spec.state.length + spec.captures.length ||
       spec.stateScopes.length != spec.state.length then
     throw "structured-availability-port-scopes"
-  noHandles spec.state
+  noForeignHandles spec.state
   let count :: remaining := arguments | throw "structured-availability-operand"
   if !(← subset spec.roles count) then throw "structured-repeat-count-scope"
   for (scope, supplied) in spec.stateScopes.zip (remaining.take spec.state.length) do
@@ -359,8 +367,8 @@ def operation (summaries : List DependencySummary) (roster : List String)
     chargeReplay (signature.outputs.length + 1)
     return signature.outputScopes.map (List.map (fun role => indices[role]?.getD 0))
   | .localCall helper _ owner _ =>
-    noHandles helper.inputs
-    noHandles helper.outputs
+    noForeignHandles helper.inputs
+    noForeignHandles helper.outputs
     let summary ← findSummary summaries helper
     if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
     owned roles owner arguments
@@ -442,7 +450,7 @@ def checkRoot (summaries : List DependencySummary) (root : CheckedProtocol) : An
     throw "structured-availability-port-scopes"
   for scope in root.inputScopes do validScope root.roles.length scope
   for scope in root.outputScopes do validScope root.roles.length scope
-  noHandles root.outputs
+  noForeignHandles root.outputs
   chargeReplay root.inputScopes.length
   let results ← protocolRegion summaries root.roles root.body (extendEnvironment #[] root.inputScopes)
   if results.length != root.outputScopes.length then throw "structured-availability-port-scopes"

@@ -43,7 +43,8 @@ mutual
     | .group domain, _, value => .scalar (.group domain value)
     | .groups domain, _, values => .vector (values.map (.group domain))
     | .indices, _, values => .sequence (PublicValues.ofList (values.map .count))
-    | .service _, data, _ | .oracle _, data, _ | .oracleSequence .., data, _ => nomatch data
+    | .service _, data, _ | .oracle _, data, _ | .oracleSequence .., data, _
+    | .resourceUnit _, data, _ => nomatch data
     | .sequence element, data, values =>
       .sequence (PublicValues.ofList (values.map (publicValue element data)))
     | .product identity constructor fields, data, value =>
@@ -75,7 +76,7 @@ mutual
         exact (List.map_inj_right (fun _ _ equal => PublicValue.count.inj equal)).mp
           (PublicValues.ofList_injective same)
     | .service _, data, _, _, _ | .oracle _, data, _, _, _
-    | .oracleSequence .., data, _, _, _ => nomatch data
+    | .oracleSequence .., data, _, _, _ | .resourceUnit _, data, _, _, _ => nomatch data
     | .sequence element, data, _, _, same => by
         simp only [publicValue, PublicValue.sequence.injEq] at same
         exact (List.map_inj_right (fun _ _ equal => publicValue_injective element data equal)).mp

@@ -77,7 +77,7 @@ instance sampleRaw (event : Event model.toCarriers) : SampleableType (Raw event)
           cases sort with
           | field domain => change SampleableType Scalar; infer_instance
           | boolean | index | vector _ | group _ | groups _ | indices
-          | service _ | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ =>
+          | service _ | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ | resourceUnit _ =>
               change SampleableType Unit; infer_instance
   | message => exact inferInstanceAs (SampleableType Unit)
   | publicBinding => exact inferInstanceAs (SampleableType Unit)
@@ -130,7 +130,7 @@ def tableOracle : Oracle Id model.toCarriers Unit := by
           cases sort with
           | field domain => exact (.returned (0 : Scalar), state)
           | boolean | index | vector _ | group _ | groups _ | indices
-          | service _ | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ =>
+          | service _ | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ | resourceUnit _ =>
               exact (.returned (), state)
   | message => exact (.returned (), state)
   | publicBinding => exact (.returned (), state)

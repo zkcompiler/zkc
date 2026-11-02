@@ -123,6 +123,7 @@ theorem Resolved.apply_evaluate (context : Context) (challenge : History F G →
   | compute operation =>
       simp only [Resolved.apply, Resolved.evaluate]
       cases operation.apply arguments <;> rfl
+  | custody => rfl
 
 
 section Bodies

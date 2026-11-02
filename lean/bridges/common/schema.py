@@ -232,6 +232,19 @@ def oracle_kind(value, depth=0, budget=None):
     return value
 
 
+def custody_slot(value):
+    """The exact slot of a custody type, or None for every other type.
+
+    A resource unit is a nominal, role-local custody permission: never an
+    ordinary payload and never a handle with data. Its admission belongs to the
+    Lean interpretation; decoding only preserves the exact slot.
+    """
+    logical_type(value)
+    if value[0] == "apply" and value[1] == "resource_unit":
+        return domain_identity(value[2][0][2], slot=True)
+    return None
+
+
 def is_handle(value):
     logical_type(value)
     if value[0] in ("oracle", "oracle_sequence", "service"):
@@ -260,6 +273,8 @@ def interpreted_type(value, payload=False):
         return ["product", interpreted_identity(value[1]), name,
                 [interpreted_type(child, payload) for child in fields]]
     _, name, arguments = value
+    if name == "resource_unit":
+        return ["resource_unit", custody_slot(value)]
     if name in ("bool", "index", "indices"):
         return [name]
     if name in ("field", "vector", "group", "groups"):

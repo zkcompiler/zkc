@@ -119,13 +119,21 @@ instruction budget.
 must be the framing magic and the expected invocation binding, the run must
 return normally with the selected Boolean true, and every proof byte must be
 read. `installed` is the vocabulary of the native BLS12-381 deployments: the
-arkworks scalar-field, G1, scalar-vector and numerical expression kernels, the
-native index kernels and the Merlin transcript kernels of
-`merlin3.bls12-381.fr64be/0`.
+arkworks scalar-field, G1, scalar-vector, Boolean and numerical expression
+kernels, the native index kernels, the Merlin transcript kernels of
+`merlin3.bls12-381.fr64be/0` and the logical custody rows.
 Its observation rows require the exact arkworks field or group specialization;
 an absent, different or additional physical argument has no installed meaning.
 Other installed rows require an empty specialization list. Native implementation
 correctness remains an assumption; matching a row is not a proof of a kernel.
+
+The custody rows `logical/resource_unit.create`, `pass` and `consume` take the
+slot as their one static argument, any valid slot identity, and the custody sort
+of a valid slot is admitted at `logical.resource_unit/0`
+(`Vocabulary.custodyRepresentations`). They select logical bookkeeping whose
+meaning is the custody ledger (`PIR.Custody`), not a kernel. The constructed
+instruction profile has no custody transfer: reading a program that executes
+one refuses with `unsupported "resource_unit"`.
 
 `evalSteps` is the unbounded meaning of a local body that applies no transcript
 operation: the values it hands back, or the cause it stops for, after the

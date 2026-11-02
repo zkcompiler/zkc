@@ -13,9 +13,11 @@ on. The modulus of a field row is its characteristic, so it is prime, whatever
 the field's degree; a `CharacteristicNotTwo` row's modulus is not two. A
 catalogue is justified when every row's facts hold, and the environment
 catalogue of the structured importer is proved justified here: the BLS12-381
-scalar modulus is prime by a Lucas certificate evaluated in the kernel.
-Presentations of extension fields (defining polynomials, bases) are not yet
-catalogue data, so their irreducibility is not part of this predicate. -/
+scalar modulus and the KoalaBear characteristic are prime by Lucas certificates
+evaluated in the kernel. Presentations of extension fields (defining
+polynomials, bases) are not catalogue data, so their irreducibility, the
+extension's field laws and any concrete realization are not part of this
+predicate; a model that interprets an extension row assumes them explicitly. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.Structured
@@ -76,6 +78,24 @@ theorem blsModulus_prime : blsModulus.Prime := by
     (by decide +kernel) (by decide +kernel)
   simp only [List.mem_cons, List.not_mem_nil, or_false]
   rintro factor (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl) <;> norm_num
+
+/-- The KoalaBear characteristic `2^31 - 2^24 + 1` is prime. -/
+theorem koalaBearModulus_prime : (2130706433 : ℕ).Prime := by
+  refine prime_of_certificate 2130706433 3 [(2, 24), (127, 1)]
+    (by decide +kernel) (by decide +kernel) ?_ (by decide +kernel) (by decide +kernel)
+  simp only [List.mem_cons, List.not_mem_nil, or_false]
+  rintro factor (rfl | rfl) <;> norm_num
+
+/-- The quartic extension row states its characteristic, which is prime and not
+two. This says nothing about the extension's presentation or field laws. -/
+theorem koalaBearQuarticCatalogue_justified : koalaBearQuarticCatalogue.Justified := by
+  intro row member
+  simp only [koalaBearQuarticCatalogue, List.mem_cons, List.not_mem_nil, or_false] at member
+  subst member
+  refine ⟨fun modulus same _ => ?_, fun _ same => ?_⟩
+  · cases same
+    exact koalaBearModulus_prime
+  · cases same
 
 /-- The environment catalogue of the structured importer is justified. -/
 theorem blsCatalogue_justified : blsCatalogue.Justified := by

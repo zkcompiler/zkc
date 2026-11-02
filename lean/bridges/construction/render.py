@@ -41,6 +41,10 @@ def sort(value):
         return f".transcript {text(suite)}", ("transcript", suite)
     if value == ["apply", "indices", []]:
         return ".indices", ("indices", None)
+    slot = schema.custody_slot(value)
+    if slot is not None:
+        # A custody permission: a sort of its own, never an ordinary payload.
+        return f".data (.resourceUnit {text(slot)})", ("custody", slot)
     data = data_type(value)
     if data[0] in ("bool", "index"):
         tag = "boolean" if data[0] == "bool" else "index"

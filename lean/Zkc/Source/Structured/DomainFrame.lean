@@ -70,11 +70,11 @@ theorem operationOn_table_congr (left right : HelperTable model.Value interface)
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | fieldEmbed | vectorLength =>
+  | fieldEmbed | vectorLength | passUnit | consumeUnit =>
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark =>
+  | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark | createUnit =>
     funext arguments callbacks
     cases arguments
     cases callbacks

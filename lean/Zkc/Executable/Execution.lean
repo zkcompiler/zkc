@@ -62,14 +62,23 @@ inductive Computation where
   | vectorSubtract (domain : String)
   | vectorScale (domain : String)
   | require
+  /-- Boolean negation. -/
+  | booleanNot
   | numerical (reduction : Numerical.Reduction) (domain : String) (mask : List Bool)
       (expression : Zkc.Algebra.RingExpression.Expr Nat Nat)
+  deriving DecidableEq, Repr
+
+/-- A custody transfer of one slot (`PIR.Custody`): create a fresh occurrence,
+pass the current one to its successor, or consume it. -/
+inductive CustodyTransfer where
+  | create | pass | consume
   deriving DecidableEq, Repr
 
 /-- The meaning assumed for an installed operation. Constants take their value
 from the operation's single canonical decimal parameter. A numerical row takes
 the operand mask as its last static argument and the expression as its single
-parameter; `characteristic` is its field's. -/
+parameter; `characteristic` is its field's. A custody row takes its slot as its
+one static argument. -/
 inductive Kernel where
   | indicesEmpty
   | indicesAppend
@@ -80,6 +89,7 @@ inductive Kernel where
   | fieldConstant (domain : String)
   | compute (operation : Computation)
   | numerical (reduction : Numerical.Reduction) (domain : String) (characteristic : Nat)
+  | custody (transfer : CustodyTransfer)
   deriving DecidableEq, Repr
 
 /-- One installed operation: a binding's contract, logical arguments,
@@ -92,10 +102,12 @@ structure Installed where
   physicalArguments : List PhysicalType
   deriving DecidableEq, Repr
 
-/-- Installed operations and the representations admitted for value sorts. -/
+/-- Installed operations, the representations admitted for value sorts, and the
+representations admitted for the custody sort of every valid slot. -/
 structure Vocabulary where
   operations : List Installed
   representations : List (ValueSort × String)
+  custodyRepresentations : List String := []
   deriving DecidableEq, Repr
 
 /-- An operation with its meaning, its decoded occurrence template and its
@@ -107,6 +119,7 @@ inductive Resolved where
   | challenge (suite field : String) (template : Template)
   | calculate (calculation : Calculation)
   | compute (operation : Computation)
+  | custody (transfer : CustodyTransfer) (slot : String)
   deriving DecidableEq, Repr
 
 /-- The value of a canonical decimal spelling: one or more digits, without a
@@ -122,6 +135,10 @@ a numerical row, its own followed by the operand mask. -/
 def Installed.takes (row : Installed) (arguments : List String) : Bool :=
   match row.kernel with
   | .numerical _ _ _ => arguments.length == row.arguments.length + 1 && arguments.dropLast == row.arguments
+  | .custody _ =>
+    match arguments with
+    | [slot] => Source.LogicalFormat.slotIdentityValid slot
+    | _ => false
   | _ => arguments == row.arguments
 
 def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option Installed :=
@@ -153,6 +170,7 @@ def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
           (binding.arguments.getLast? >>= Numerical.mask?).bind fun mask =>
             (Numerical.decode domain characteristic mask.length body).toOption.map fun expression =>
               .compute (.numerical reduction domain mask expression)
+      | .custody transfer, [] => binding.arguments.head?.map (.custody transfer ·)
       | _, _ => none
   | none => none
 
@@ -370,6 +388,7 @@ def Computation.apply : Computation → List (Value F G) → PIR.Outcome (List (
       if first = domain ∧ second = domain then .returned [.vector domain (xs.map (· * scalar))]
       else .stopped .refused
   | .require, [.data (.boolean true)] => .returned []
+  | .booleanNot, [.data (.boolean value)] => .returned [.data (.boolean !value)]
   | .numerical reduction domain mask expression, .index rows :: operands =>
       match Numerical.slots domain rows mask operands with
       | some slots =>

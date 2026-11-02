@@ -71,14 +71,20 @@ theorem HelperTable.Interprets.cons {Value : Ty → Type}
       invoke_cons_other right ⟨helper, rightBody⟩ called name]
     exact tables called args
 
-def SiteObservations.Interprets (operations : PIR.OperationInterpretation I J)
-    (left : SiteObservations I) (right : SiteObservations J) : Prop :=
-  ∀ site, (left.mark site).interpret operations = right.mark site
+/-- Interpretation of every configurable effect: site marks and the three
+custody transfers. -/
+structure SiteObservations.Interprets (operations : PIR.OperationInterpretation I J)
+    (left : SiteObservations I) (right : SiteObservations J) : Prop where
+  mark : ∀ site, (left.mark site).interpret operations = right.mark site
+  createUnit : ∀ slot, (left.createUnit slot).interpret operations = right.createUnit slot
+  passUnit : ∀ slot token,
+    (left.passUnit slot token).interpret operations = right.passUnit slot token
+  consumeUnit : ∀ slot token,
+    (left.consumeUnit slot token).interpret operations = right.consumeUnit slot token
 
 theorem SiteObservations.silent_interpret (operations : PIR.OperationInterpretation I J) :
-    SiteObservations.Interprets operations (.silent I) (.silent J) := by
-  intro site
-  rfl
+    SiteObservations.Interprets operations (.silent I) (.silent J) :=
+  ⟨fun _ => rfl, fun _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
 
 /-- Closed processes have no operations to expand. Their values and stops remain. -/
 def closedLift : PIR.OperationInterpretation closedInterface I := fun impossible => nomatch impossible
@@ -241,7 +247,29 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     cases args; cases bodies
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values (assignment F G) []))).interpret operations =
       (rightSites.mark site).bind (fun _ => .done Values.nil)
-    simp only [PIR.Process.interpret_bind, sites site, PIR.Process.interpret]
+    simp only [PIR.Process.interpret_bind, sites.mark site, PIR.Process.interpret]
+  | createUnit slot =>
+    cases args; cases bodies
+    change ((leftSites.createUnit slot).bind (fun token =>
+        .done (Values.cons token Values.nil : Values (assignment F G) [.resourceUnit slot]))).interpret operations =
+      (rightSites.createUnit slot).bind (fun token => .done (.cons token .nil))
+    simp only [PIR.Process.interpret_bind, sites.createUnit slot, PIR.Process.interpret]
+  | passUnit slot =>
+    cases args with
+    | cons token rest =>
+      cases rest; cases bodies
+      change ((leftSites.passUnit slot token).bind (fun next =>
+          .done (Values.cons next Values.nil : Values (assignment F G) [.resourceUnit slot]))).interpret operations =
+        (rightSites.passUnit slot token).bind (fun next => .done (.cons next .nil))
+      simp only [PIR.Process.interpret_bind, sites.passUnit slot token, PIR.Process.interpret]
+  | consumeUnit slot =>
+    cases args with
+    | cons token rest =>
+      cases rest; cases bodies
+      change ((leftSites.consumeUnit slot token).bind (fun _ =>
+          .done (Values.nil : Values (assignment F G) []))).interpret operations =
+        (rightSites.consumeUnit slot token).bind (fun _ => .done .nil)
+      simp only [PIR.Process.interpret_bind, sites.consumeUnit slot token, PIR.Process.interpret]
   | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with

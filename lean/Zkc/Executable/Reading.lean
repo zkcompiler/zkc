@@ -21,7 +21,12 @@ structure Reading where
   deriving DecidableEq, Repr
 
 def Vocabulary.admits (vocabulary : Vocabulary) (type : PhysicalType) : Bool :=
-  vocabulary.representations.contains (type.sort, type.representation)
+  vocabulary.representations.contains (type.sort, type.representation) ||
+    match type.sort with
+    | .data (.resourceUnit slot) =>
+      Source.LogicalFormat.slotIdentityValid slot &&
+        vocabulary.custodyRepresentations.contains type.representation
+    | _ => false
 
 /-- The constructed instruction an installed operation denotes, its result
 sorts and whether it produces the next live transcript. -/
@@ -46,6 +51,8 @@ def readOperation (sorts : List ValueSort) (current : Nat) (site : String) :
       if operands.map (sorts[·]?) = calculation.op.arguments.map (some ∘ .data) then
         .ok (.calculate calculation, calculation.op.results.map .data, false)
       else .error (.operation site)
+  -- Custody transfers have no constructed instruction in this profile.
+  | .custody .., _ => .error (.unsupported "resource_unit")
   | _, _ => .error (.operation site)
 
 def lookupName (scope : List (String × Nat)) (name : String) : Except Refusal Nat :=

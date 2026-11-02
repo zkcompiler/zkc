@@ -32,9 +32,10 @@ end
 
 mutual
   /-- Logical handles cannot acquire ordinary Math, message or codec rights
-  through a type added to the wire vocabulary. -/
+  through a type added to the wire vocabulary. A custody permission is not a
+  payload either: it is never selected, packed, transmitted or encoded. -/
   def Ty.isHandle : Ty → Bool
-    | .service _ | .oracle _ | .oracleSequence .. => true
+    | .service _ | .oracle _ | .oracleSequence .. | .resourceUnit _ => true
     | .sequence element => element.isHandle
     | .product _ _ fields => fields.hasHandle
     | _ => false
@@ -42,6 +43,14 @@ mutual
     | .nil => false
     | .cons type rest => type.isHandle || rest.hasHandle
 end
+
+/-- A custody permission: a nominal resource unit of one exact slot. -/
+def Ty.isCustody : Ty → Bool
+  | .resourceUnit _ => true
+  | _ => false
+
+/-- A logical handle other than a custody permission. -/
+def Ty.isForeignHandle (ty : Ty) : Bool := ty.isHandle && !ty.isCustody
 
 -- Materialize the mutual equations in their defining module. Lazy generation
 -- in independent clients can produce different stored proofs for the same
@@ -76,6 +85,9 @@ mutual
   def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
     | .boolean | .index | .indices => pure ()
     | .oracle _ | .oracleSequence .. => throw "structured-oracle-profile"
+    -- A slot is an exact nominal custody identity, independent of the catalogue.
+    | .resourceUnit slot =>
+      unless LogicalFormat.slotIdentityValid slot do throw "structured-slot-identity"
     | .field d => do
       discard <| exported.expect d .field
       if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
@@ -240,7 +252,9 @@ def Definition.headerValid (definition : Definition) : Bool :=
       | .protocol, some _ => f.visibility == .publicDef && validProtocolIdentifier f.name
       | .math, none | .local, none => true
       | _, _ => false) &&
-    (f.kind == .protocol || !(f.inputs ++ f.outputs).any Ty.isHandle) &&
+    -- Local frames may move custody permissions; Math never mentions one.
+    (f.kind == .protocol ||
+      !(f.inputs ++ f.outputs).any (if f.kind == .local then Ty.isForeignHandle else Ty.isHandle)) &&
     !f.outputs.any Ty.isService &&
     (f.kind != .math || f.visibility == .privateDef) &&
     (f.kind == .math || f.preconditions.isEmpty) &&
@@ -407,6 +421,12 @@ def resolvePrimitive (snapshot : Snapshot) (operation name : String)
     let [text] := parameters | throw "structured-primitive-parameters"
     return .exec (.indexConstant (← Format.indexDecimal text))
   if !parameters.isEmpty then throw "structured-primitive-parameters"
+  -- The custody transfers are effects, not pure primitives (`SiteObservations`).
+  match binding.contract with
+  | "resource_unit.create" => return .createUnit root
+  | "resource_unit.pass" => return .passUnit root
+  | "resource_unit.consume" => return .consumeUnit root
+  | _ => pure ()
   let primitive ← match binding.contract with
     | "index.equal" => pure Primitive.indexEqual
     | "index.less" => pure Primitive.indexLess

@@ -71,11 +71,11 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | fieldEmbed | vectorLength =>
+  | fieldEmbed | vectorLength | passUnit | consumeUnit =>
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark =>
+  | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark | createUnit =>
     funext arguments callbacks
     cases arguments
     cases callbacks

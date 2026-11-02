@@ -28,6 +28,7 @@ def zeroInput : Ty → Except String String
   | .service _ => pure "none"
   | .sequence _ | .product .. | .groups _ | .indices => throw "sigma-completeness-aggregate-type"
   | .oracle _ | .oracleSequence .. => throw "sigma-completeness-oracle-type"
+  | .resourceUnit _ => throw "sigma-completeness-custody-type"
 
 def source (input : Input) : Except String String := do
   let metadata := input.metadata

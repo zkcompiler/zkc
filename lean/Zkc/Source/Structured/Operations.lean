@@ -174,6 +174,10 @@ inductive Op where
   | loop (state captures : List Ty)
   | loopCondition (state captures : List Ty)
   | guard
+  /-- The custody transfers of one exact slot: create a fresh occurrence, pass
+  the current occurrence to its successor, or consume it without a successor.
+  Their meaning is a configurable effect (`SiteObservations`). -/
+  | createUnit (slot : String) | passUnit (slot : String) | consumeUnit (slot : String)
   /-- Internal observation only; erased by the ordinary closed interpretation. -/
   | mark (site : String)
 
@@ -201,6 +205,8 @@ def Op.arguments : Op → List Ty
   | .branch captures _ => .boolean :: captures
   | .loop state captures | .loopCondition state captures => .index :: .index :: (state ++ captures)
   | .guard => [.boolean]
+  | .createUnit _ => []
+  | .passUnit slot | .consumeUnit slot => [.resourceUnit slot]
 
 def Op.results : Op → List Ty
   | .exec primitive => primitive.results
@@ -223,7 +229,8 @@ def Op.results : Op → List Ty
   | .map spec => [.vector spec.field]
   | .branch _ outputs => outputs
   | .loop state _ | .loopCondition state _ => state
-  | .guard | .mark _ => []
+  | .createUnit slot | .passUnit slot => [.resourceUnit slot]
+  | .guard | .mark _ | .consumeUnit _ => []
 
 def Op.regions : Op → List (List Ty × List Ty)
   | .branch captures outputs => [(captures, outputs), (captures, outputs)]
@@ -247,7 +254,8 @@ def Op.helpers : Op → List Helper
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .makeProduct .. | .getProduct .. |
     .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |
-    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => []
+    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. |
+    .createUnit .. | .passUnit .. | .consumeUnit .. => []
 
 abbrev dialect : Dialect := ⟨Ty, Op, Op.arguments, Op.results, Op.regions⟩
 

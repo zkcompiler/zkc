@@ -97,6 +97,7 @@ def operationKind : Structured.Op → String
   | .loopCondition .. => "loop-condition"
   | .guard => "guard"
   | .mark _ => "mark"
+  | .createUnit _ | .passUnit _ | .consumeUnit _ => "custody"
 
 /-- Whether an installed operation implements a structured operation without
 nested regions: on arguments that encode the structured arguments, it returns

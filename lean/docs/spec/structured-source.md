@@ -313,10 +313,17 @@ characteristic-two prime field and an extension field without `PrimeField` are
 well-formed rows.
 
 `Catalogue.agrees` requires every exported row to equal the installed row for
-its identity. `admittedCatalogue` combines `blsCatalogue` and
-`koalaBearCatalogue`: BLS12-381 scalar/group/service rows, KoalaBear, and its
-`koala-bear.ext8-binomial3` extension and random service. The installed instances
-include BLS scalar/vector/G1 and KoalaBear base/extension scalar/vector types.
+its identity. `admittedCatalogue` combines `blsCatalogue`, `koalaBearCatalogue`
+and `koalaBearQuarticCatalogue`: BLS12-381 scalar/group/service rows, KoalaBear,
+its `koala-bear.ext8-binomial3` extension and random service, and its
+`koala-bear.ext4-binomial3` extension row with its capabilities and `BaseField`
+association. The installed instances include BLS scalar/vector/G1 and KoalaBear
+base/octic/quartic scalar/vector types. Admitting the quartic row recognizes its
+exact nominal identity only: its characteristic is proved prime
+(`koalaBearQuarticCatalogue_justified`), while its extension presentation, field
+laws and any concrete realization remain explicit premises of the model that
+interprets it. It shares the octic row's characteristic, not its cardinality or
+representation, and its random service is not an admitted row.
 Every stored type, including dormant signatures and region results, must name
 an exported row of its sort and an installed instance. Installing a row does
 not prove its arithmetic, sampler or native implementation correct.
@@ -490,6 +497,66 @@ resource premise. It is a total calculation in preparation, optional-component
 and normal-form semantics. Relations separately require the table shape and
 prefix-length bounds. These equations establish source-model meaning;
 they do not establish compiler or native-provider correspondence.
+
+## Custody permissions
+
+`Ty.resourceUnit slot` is the nominal, role-local affine permission of the
+[native value contract](../../../docs/spec/domains/values.md#logical-resource-units):
+no payload, codec, algebraic meaning or transcript encoding. The reader lowers
+`["apply", "resource_unit", [["domain", "Slot", slot]]]` with the portable slot
+grammar (`LogicalFormat.slotIdentityValid`), and distinct slots are distinct
+types. `Ty.isHandle` holds for it, so it is never selected, packed into a
+product, placed in a sequence, transmitted, restricted, assembled, used as a
+statement or relation input, or carried as a construction payload.
+
+The three custody transfers are binding contracts with one `Slot` root and no
+parameters: `resource_unit.create` `[] → [U]`, `resource_unit.pass` `[U] → [U]`
+and `resource_unit.consume` `[U] → []`, with `U` the exact slot type. A slot root
+is an exact nominal identity, never a catalogue domain; a field contract with a
+slot root, or a custody contract with a field root, refuses. Admission resolves
+them to `Op.createUnit`, `Op.passUnit` and `Op.consumeUnit`, which are effects,
+not pure primitives: their meaning is configured by `SiteObservations`. Its
+defaults are the payload-erased meaning every existing consumer uses (every
+token is zero and nothing is checked); `custodyObservations holder` issues the
+requests of the custody ledger `PIR.Custody` instead.
+
+The ledger (`Zkc.Semantics.Custody`) is ghost ownership state: live entries with
+exact slot, holder, lineage and owning frame. `create` adds a fresh entry that
+starts its own lineage; `pass` consumes the current entry and adds its successor
+in the same lineage; `consume` removes it. A request on an entry that is not
+live (stale or already used), of another slot, of another holder or of another
+frame refuses and records the refusal. `consume` followed by `create` starts a
+new lineage, never a successor (`consume_create_new_lineage`). A frame owns the
+entries it receives (`enter`) and creates; `exit` keeps exactly the returned
+entries, now the caller's, and `stop` retires every entry of the frame; entries
+of enclosing frames are untouched (`returnFrame_live`, `stop_live`).
+
+Static admission keeps every permission to one use:
+
+- A Local helper that mentions custody is a custody frame
+  (`Region.custodyFrame`): custody transfers, site marks, calls of custody-free
+  helpers on data and helper-free operations on data, whose callbacks are
+  custody-free; no custody variable is used twice. Its header may carry custody
+  ports. A custody-free helper mentions no custody port, transfer or operand and
+  calls only custody-free helpers. Math never mentions custody.
+- A protocol body uses each custody value at most once
+  (`RawRegion.custodyAffine`, refusal `structured-custody-use`). A custody port
+  and a custody repeat state have exactly one holder; a repeat never captures a
+  permission; local calls and applications carry permissions at their holder.
+
+Three theorems justify the erasure on admitted bodies
+(`Zkc.Source.Structured.CustodySoundness`). `custody_erasure`: the erased
+meaning is the checked meaning with its custody requests interpreted away
+(`PIR.Custody.forget`). `Region.custodySound`: on a custody frame whose
+available custody inputs are distinct live entries of the holder, the checked
+run never refuses, preserves every entry it does not hold, returns distinct
+live entries for its custody results and agrees with the erased run on every
+data position and every stop. `custody_frames_sound` lifts this to every
+custody frame of an admitted helper table, whose custody-free helpers make no
+custody request. Frame entry, return and stop are applied at the call
+boundary, where the holder and frame are known; protocol-level custody is
+admitted statically, and its composition with participant execution belongs to
+the connection laws.
 
 ## Checked primitives and index values
 
@@ -1182,6 +1249,24 @@ source layout fragment in the [shared wire specification](../../../docs/spec/for
 It does not infer linearity from a Boolean/field carrier or invent missing
 source/static declarations. `Import.checkUnitHeaders` runs this check before
 body admission. Old ten-slot snapshots have no compatibility reader.
+
+`SourceDeclarations.leaves` reconstructs each port's ordered leaves: what each
+holds (data of an exact type, or the custody permission of a closed resource
+record), and its path of field names, array positions and tuple positions. A
+record's fields expand in declaration order; a zero-length array contributes no
+leaf but still requires its element's declarations. `checkPorts` compares every
+leaf with the exact native type at its offset and every leaf's placement with
+the native scope; an ordinary record places every leaf, private fields
+included, at the port's roles. A custody leaf is a native `resource_unit` of one
+holder. The custody slots the ports exhibit must form one association between
+closed resource records and slots (`checkSlots`): one slot per record, distinct
+slots for distinct records, and every custody type the unit stores belongs to
+one. The slot spelling is the producer's digest of the closed type; the reader
+verifies the association it induces and does not recompute the digest.
+Distributed records refuse (`component-declaration-distributed`): the retained
+record row carries neither their role telescope nor per-field placements.
+That a linear claim port has one holder is a separate rule of the claim
+association (`checkLinearHolders`), not of layout admission.
 
 Resource restriction and sealing are independent facts, as in the native
 format. A record's resource tag is exactly `ordinary`, `affine` or `linear`;

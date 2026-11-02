@@ -293,12 +293,27 @@ def koalaBearCatalogue : Catalogue where
   types := [("field", "koala-bear"), ("vector", "koala-bear"),
     ("field", "koala-bear.ext8-binomial3"), ("vector", "koala-bear.ext8-binomial3")]
 
+/-- The installed KoalaBear quartic extension row, with its capabilities in
+native order and its base-field association. Admission recognizes this exact
+nominal identity; the field laws of its carrier, its extension presentation and
+any concrete realization remain explicit premises of the model that interprets
+it. It shares the characteristic of the octic extension but neither its
+cardinality nor its representation. -/
+def koalaBearQuarticCatalogue : Catalogue where
+  nominals := [
+    { identity := "koala-bear.ext4-binomial3", sort := .field,
+      members := [("BaseField", "koala-bear")],
+      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
+        "ExtensionField", "IndexRandomness", "IndexBlockRandomness"], modulus := some 2130706433 }]
+  services := []
+  types := [("field", "koala-bear.ext4-binomial3"), ("vector", "koala-bear.ext4-binomial3")]
+
 /-- The installed rows understood by the structured importer. Admission of a
 row or type is separate from operation support and mathematical law evidence. -/
 def admittedCatalogue : Catalogue where
-  nominals := blsCatalogue.nominals ++ koalaBearCatalogue.nominals
-  services := blsCatalogue.services ++ koalaBearCatalogue.services
-  types := blsCatalogue.types ++ koalaBearCatalogue.types
+  nominals := blsCatalogue.nominals ++ koalaBearCatalogue.nominals ++ koalaBearQuarticCatalogue.nominals
+  services := blsCatalogue.services ++ koalaBearCatalogue.services ++ koalaBearQuarticCatalogue.services
+  types := blsCatalogue.types ++ koalaBearCatalogue.types ++ koalaBearQuarticCatalogue.types
 
 /-- The rows a unit over this environment exports when it lists every row:
 the environment's nominal and service rows, without its admitted instances. -/

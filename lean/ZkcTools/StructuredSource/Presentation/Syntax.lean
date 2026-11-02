@@ -68,6 +68,7 @@ mutual
     | .groups d => app ".groups" [quoted d]
     | .oracle kind => app ".oracle" [oracleKindText kind]
     | .oracleSequence kind maximum => app ".oracleSequence" [oracleKindText kind, toString maximum]
+    | .resourceUnit slot => app ".resourceUnit" [quoted slot]
     | .sequence element => app ".sequence" [tyText element]
     | .product identity constructor fields =>
       app ".product" [quoted identity, quoted constructor, fieldsText fields]
@@ -164,6 +165,9 @@ def opText : Op → String
   | .loop state captures => app ".loop" [typesText state, typesText captures]
   | .loopCondition state captures => app ".loopCondition" [typesText state, typesText captures]
   | .guard => ".guard" | .mark site => app ".mark" [quoted site]
+  | .createUnit slot => app ".createUnit" [quoted slot]
+  | .passUnit slot => app ".passUnit" [quoted slot]
+  | .consumeUnit slot => app ".consumeUnit" [quoted slot]
 
 def protocolOpText : ProtocolOp → String
   | .calculate op _ => app ".calculate" [opText op, "rfl"]

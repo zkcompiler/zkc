@@ -20,7 +20,17 @@ operations have the meanings of the structured primitives
 and the requirement have the meanings of `Zkc.Executable.Computation.apply`.
 The total word operations on indices (wrapping addition and subtraction,
 bitwise conjunction and logical right shift) have the meanings of their
-structured calculations (`Zkc.Source.Structured.IndexWords`).
+structured calculations (`Zkc.Source.Structured.IndexWords`). Checked index
+addition has the meaning of the structured primitive, which refuses on
+overflow; Boolean conjunction and disjunction are the structured calculations
+and negation is `Zkc.Executable.Computation.apply`.
+
+The three logical custody rows (`logical/resource_unit.*`) take the slot as
+their one static argument and admit the custody sort of a valid slot at
+`logical.resource_unit/0`. They select logical bookkeeping, not an external
+backend: their meaning is the custody ledger (`PIR.Custody`). The constructed
+instruction profile has no custody transfer, so reading a program that executes
+one refuses explicitly.
 
 The arkworks numerical kernels (`numerical.map`, `numerical.sum` and
 `numerical.product` over the scalar field) are one row each, whatever their
@@ -84,6 +94,13 @@ def installed : Vocabulary where
     ⟨"index.bit_and", [], "native/index.bit_and", .calculate .indexBitAnd, []⟩,
     ⟨"index.logical_shift_right", [], "native/index.logical_shift_right",
       .calculate .indexLogicalShiftRight, []⟩,
+    ⟨"index.add", [], "native/index.add", .compute (.primitive .indexAdd), []⟩,
+    ⟨"bool.and", [], "arkworks/bool.and", .calculate .booleanAnd, []⟩,
+    ⟨"bool.or", [], "arkworks/bool.or", .calculate .booleanOr, []⟩,
+    ⟨"bool.not", [], "arkworks/bool.not", .compute .booleanNot, []⟩,
+    ⟨"resource_unit.create", [], "logical/resource_unit.create", .custody .create, []⟩,
+    ⟨"resource_unit.pass", [], "logical/resource_unit.pass", .custody .pass, []⟩,
+    ⟨"resource_unit.consume", [], "logical/resource_unit.consume", .custody .consume, []⟩,
     ⟨"vector.empty", [scalarField], "arkworks/vector.empty", .compute (.primitive (.vectorEmpty scalarField)), []⟩,
     ⟨"vector.append", [scalarField], "arkworks/vector.append",
       .compute (.primitive (.vectorAppend scalarField)), []⟩,
@@ -109,5 +126,6 @@ def installed : Vocabulary where
     (.data .index, "native.index/0"),
     (.data .boolean, "native.bool/0"),
     (.transcript nativeSuite, "host.resource/0")]
+  custodyRepresentations := ["logical.resource_unit/0"]
 
 end Zkc.Executable

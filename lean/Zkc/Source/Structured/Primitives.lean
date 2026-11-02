@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Vocabulary
+public import Zkc.Source.LogicalFormat
 
 @[expose] public section
 
@@ -35,9 +36,15 @@ def Primitive.results : Primitive → List Ty
   | .vectorSum d => [.field d]
   | .vectorSplit d => [.vector d, .vector d]
 
-/-- The primitive families: the capability their one field root needs, or no
-root. No prefix matching or default domain inference; the root is a catalogue
-identity resolved by admission. -/
+/-- The custody transfers of one exact slot. Their one static root is a `Slot`
+identity: an exact nominal custody identity, never a catalogue domain. -/
+def custodyContract : String → Bool
+  | "resource_unit.create" | "resource_unit.pass" | "resource_unit.consume" => true
+  | _ => false
+
+/-- The primitive families: the capability their one field root needs, the
+`Slot` root of a custody transfer, or no root. No prefix matching or default
+domain inference; a field root is a catalogue identity resolved by admission. -/
 def bindingRoot : String → Option (Option String)
   | "index.constant" | "index.equal" | "index.less" | "index.add" |
     "index.mul" | "index.sub" | "index.div" | "index.mod" => some none
@@ -45,7 +52,12 @@ def bindingRoot : String → Option (Option String)
     "vector.append" | "field.equal" => some (some "Field")
   | "field.embed" => some (some "ExtensionField")
   | "vector.equal" => some (some "CommRing")
+  | "resource_unit.create" | "resource_unit.pass" | "resource_unit.consume" => some (some "Slot")
   | _ => none
+
+/-- The sort of a binding's static root. -/
+def bindingRootSort (contract : String) : String :=
+  if custodyContract contract then "Slot" else "Field"
 
 def Binding.nameValid (name : String) : Bool :=
   name.utf8ByteSize ≤ 256 && match name.toList with
@@ -63,7 +75,8 @@ def Binding.valid (binding : Binding) : Bool :=
     | none => false) &&
     (match binding.schema with
     | none => true
-    | some schema => schema.arguments == binding.arguments.map (BindingArgument.domain "Field"))
+    | some schema => schema.arguments ==
+        binding.arguments.map (BindingArgument.domain (bindingRootSort binding.contract)))
 
 /-- Independently fixed ordered logical signatures. These are the existing
 formal meanings, not signatures selected from a candidate's catalogue. The
@@ -71,6 +84,9 @@ base of an embedding is resolved from the actual nominal row before use. -/
 def bindingSignature (contract root : String) (base : String := "") :
     Except String (List Ty × List Ty) := do
   if contract == "field.embed" then return ([.field base], [.field root])
+  if contract == "resource_unit.create" then return ([], [.resourceUnit root])
+  if contract == "resource_unit.pass" then return ([.resourceUnit root], [.resourceUnit root])
+  if contract == "resource_unit.consume" then return ([.resourceUnit root], [])
   let primitive ← match contract with
     | "index.constant" => pure (Primitive.indexConstant 0)
     | "index.add" => pure Primitive.indexAdd
@@ -107,6 +123,11 @@ def Binding.resolveRoot (catalogue : Catalogue) (binding : Binding) : Except Str
     binding.checkSignature "" ""
     return ""
   | some (some capability), [root] => do
+    if custodyContract binding.contract then
+      -- An exact nominal slot: no catalogue row is consulted or required.
+      unless LogicalFormat.slotIdentityValid root do throw "structured-slot-identity"
+      binding.checkSignature root ""
+      return root
     catalogue.require root .field capability
     let base ← if binding.contract == "field.embed" then do
       let nominal ← catalogue.expect root .field

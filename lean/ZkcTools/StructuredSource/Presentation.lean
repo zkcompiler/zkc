@@ -37,7 +37,7 @@ def Carriers.value : Carriers → String
   | .domain model => paren model ++ ".Value" | .uniform f g => app "assignment" [f, g]
 def Carriers.valueType (carriers : Carriers) (ty : Ty) : String :=
   match carriers, ty with
-  | _, .index | _, .service _ => "Nat" | _, .boolean => "Bool"
+  | _, .index | _, .service _ | _, .resourceUnit _ => "Nat" | _, .boolean => "Bool"
   | .uniform f _, .field _ => f | .uniform f _, .vector _ => app "List" [f]
   | .uniform _ g, .group _ => g
   | .domain model, .field d => paren model ++ ".Field " ++ quoted d

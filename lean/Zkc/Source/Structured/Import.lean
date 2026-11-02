@@ -111,6 +111,7 @@ def checkUnitHelpers (snapshot : Snapshot) (domains : List DomainSpec)
     (checkDefinition snapshot domains summaries)
   let ordered ← orderDefinitions definitions.length definitions []
   let definitions := ordered.map (·.definition)
+  checkCustodyFrames definitions []
   checkPreparationRoots snapshot.definitions
     (computationHelpers definitions) (fun field => mapHelpers field definitions)
   return ordered

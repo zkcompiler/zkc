@@ -29,6 +29,11 @@ abbrev uniformCarriers (F G : Type) : Carriers where
   Field := fun _ => F
   Group := fun _ => G
 
+/-- The ghost identity of one custody occurrence. A custody value has no data
+payload: the token only names the occurrence for the custody ledger
+(`Zkc.Semantics.Custody`). The payload-erased meaning uses token zero. -/
+abbrev CustodyToken := Nat
+
 /- Products and sequences retain the domain interpretation of each member.
 Services are values only at admitted direct ports; aggregate admission refuses
 nested service handles. -/
@@ -46,6 +51,7 @@ mutual
     | .service _ => Nat
     | .sequence element => List (carriers.Value element)
     | .product _ _ fields => carriers.ProductValue fields
+    | .resourceUnit _ => CustodyToken
   @[reducible] def Carriers.ProductValue (carriers : Carriers) : ProductFields → Type
     | .nil => Unit
     | .cons type rest => carriers.Value type × carriers.ProductValue rest
@@ -93,9 +99,22 @@ def Collection.values {carriers : Carriers} : (collection : Collection) →
   | .sequence _, values => values
 
 /-- Site observations are the only configurable effects of mathematical bodies.
-Group operations themselves use the lawful module instances directly. -/
+Group operations themselves use the lawful module instances directly.
+
+The three custody transfers of a slot are configurable in the same way. Their
+defaults are the payload-erased meaning: every token is zero and nothing is
+checked. The custody ledger (`Zkc.Source.Structured.CustodySoundness`) supplies
+the checked meaning, with fresh tokens and refusal of stale or duplicate use,
+and proves that on admitted bodies the erased meaning is the checked one with
+its custody requests interpreted away. -/
 structure SiteObservations (interface : PIR.Signature) where
   mark : String → PIR.Process interface Unit
+  /-- Create a fresh occurrence of a slot. -/
+  createUnit : String → PIR.Process interface CustodyToken := fun _ => .done 0
+  /-- Consume the current occurrence and transfer its successor. -/
+  passUnit : String → CustodyToken → PIR.Process interface CustodyToken := fun _ _ => .done 0
+  /-- Consume the occurrence without a successor. -/
+  consumeUnit : String → CustodyToken → PIR.Process interface Unit := fun _ _ => .done ()
 
 /-- Ignore site labels while retaining the chosen effect interface. -/
 def SiteObservations.silent (interface : PIR.Signature) : SiteObservations interface where

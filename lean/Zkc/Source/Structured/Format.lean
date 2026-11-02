@@ -64,6 +64,9 @@ mutual
       return .group (← group name)
     | [.str "apply", .str "groups", .arr #[.arr #[.str "domain", .str "Group", name]]] =>
       return .groups (← group name)
+    | [.str "apply", .str "resource_unit", .arr #[.arr #[.str "domain", .str "Slot", .str slot]]] =>
+      unless LogicalFormat.slotIdentityValid slot do throw "structured-slot-identity"
+      return .resourceUnit slot
     | [.str "oracle", .str "table", arguments] =>
       return .oracle (← oracleKindAt depth (.arr #[.str "table", arguments]))
     | [.str "oracle_sequence", .str "table", arguments, maximum] =>
@@ -407,8 +410,9 @@ def binding (json : Json) : Except String Binding := do
   match ← array json with
   | [.str "binding", name, contract, arguments, implementation, inputs, outputs] =>
     let arguments ← (← array arguments 16).mapM bindingArgument
+    let sort := bindingRootSort (← string contract)
     let roots ← arguments.mapM fun argument => match argument with
-      | .domain "Field" root => pure root
+      | .domain actual root => if actual == sort then pure root else throw "structured-binding-argument"
       | _ => throw "structured-binding-argument"
     let schema : BindingSchema := ⟨arguments, ← types inputs, ← types outputs⟩
     let value : Binding := ⟨← string name, ← string contract, roots,

@@ -22,7 +22,7 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render, policy as native_policy  # noqa: E402
+from bridges.common import lean_render, policy as native_policy, schema  # noqa: E402
 from bridges.common.lean_render import Refused, origin, record, require, seq, text  # noqa: E402
 
 PROGRAM = "zkc.program/0"
@@ -53,6 +53,10 @@ def physical(value):
         sort = f".data (.{kind} {string(domain)})"
     elif re.fullmatch(r"transcript:[A-Za-z0-9_.:/-]+", logical):
         sort = f".transcript {string(logical.split(':', 1)[1])}"
+    elif re.fullmatch(r"resource_unit:[A-Za-z][A-Za-z0-9_.-]*", logical):
+        # A custody permission of one exact slot; admission belongs to Lean.
+        slot = logical.split(":", 1)[1]
+        sort = f".data (.resourceUnit {string(schema.domain_identity(slot, slot=True))})"
     else:
         raise Refused(f"unsupported physical type {value!r}")
     term = f"⟨{sort}, {string(representation)}⟩"

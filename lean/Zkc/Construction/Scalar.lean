@@ -52,7 +52,7 @@ def encode : (ty : Structured.Ty) → Structured.assignment F G ty → Value F G
   | .vector domain, values => .vector domain values
   | .service _, handle => .index handle
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
-  | .sequence _, _ | .product .., _ => .unsupported
+  | .sequence _, _ | .product .., _ | .resourceUnit _, _ => .unsupported
 
 /-- Read an exported value at a structured type; services never decode. -/
 def decode : (ty : Structured.Ty) → Value F G → Option (Structured.assignment F G ty)

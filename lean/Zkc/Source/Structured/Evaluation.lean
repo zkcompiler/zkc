@@ -136,6 +136,12 @@ def operation {F G : Type} {interface : PIR.Signature}
       let (initial, captured) := rest.split state
       denoteConditionalLoop state captures body lower upper initial captured
   | .guard, .cons condition .nil, .nil => if condition then .done .nil else .halt .reject
+  | .createUnit slot, .nil, .nil =>
+      (observations.createUnit slot).bind fun token => .done (.cons token .nil)
+  | .passUnit slot, .cons token .nil, .nil =>
+      (observations.passUnit slot token).bind fun next => .done (.cons next .nil)
+  | .consumeUnit slot, .cons token .nil, .nil =>
+      (observations.consumeUnit slot token).bind fun _ => .done .nil
 
 -- Generate the dependent equation lemmas in their defining module. Otherwise
 -- separate public clients can export competing lazily generated declarations.

@@ -150,6 +150,17 @@ def constructorKinds : String → Option (List ArgumentKind)
   | "field_array" => some [.domain "Field", .natural]
   | _ => none
 
+/-- The portable custody slot spelling: 1–128 ASCII bytes, a letter, then
+letters, digits, `_`, `-` or `.`. Slots are exact nominal identities, never
+algebraic domains. -/
+def slotIdentityValid (name : String) : Bool :=
+  let letter := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z')
+  match name.toList with
+  | [] => false
+  | first :: rest =>
+    name.utf8ByteSize ≤ 128 && letter first && rest.all (fun c => letter c ||
+      ('0' ≤ c && c ≤ '9') || c == '_' || c == '-' || c == '.')
+
 def domain (json : Json) : Except String (String × String) := do
   let [.str "domain", sort, name] ← array json | throw "logical-domain"
   let sort ← text sort
@@ -157,13 +168,10 @@ def domain (json : Json) : Except String (String × String) := do
     throw "logical-domain-sort"
   let name ← text name
   let letter := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z')
-  let valid := match name.toList with
+  let valid := if sort == "Slot" then slotIdentityValid name else match name.toList with
     | [] => false
     | first :: rest =>
-      if sort == "Slot" then
-        name.utf8ByteSize ≤ 128 && letter first && rest.all (fun c => letter c ||
-          ('0' ≤ c && c ≤ '9') || c == '_' || c == '-' || c == '.')
-      else name.utf8ByteSize ≤ 256 && (letter first || first == '_') && rest.all (fun c =>
+      name.utf8ByteSize ≤ 256 && (letter first || first == '_') && rest.all (fun c =>
         letter c || ('0' ≤ c && c ≤ '9') || c == '_' || c == '-' || c == '.' || c == '/')
   unless valid do throw "logical-domain-identity"
   return (sort, name)
