@@ -1,6 +1,7 @@
 """The public reference checker covers both owners and excludes private material."""
 
 import hashlib
+import json
 import os
 
 import pytest
@@ -131,3 +132,22 @@ def test_fixture_digest_tables_refuse_incomplete_records(reference):
     assert [SAMPLE_GUIDE, "../other.json", "fixture outside the guide's directory"] in errors
     assert [SAMPLE_GUIDE, 11, "malformed fixture digest row"] in errors
     assert ["crates/example/README.md", 3, "fixture digest table has no rows"] in errors
+
+
+def test_catalog_limits_table_equals_the_catalog_rows(reference):
+    checker, write = reference
+    row = {"name": "protocol.roles", "value": 1024, "unit": "roles", "owner": "IR / Protocol",
+           "scope": "Ordered role roster", "phase": "admission"}
+    write("common/catalog/declarations.json", json.dumps({"limits": [row]}))
+    table = ("| Name | Value | Unit | Owner | Scope | Phase |\n|---|---:|---|---|---|---|\n"
+             "| `protocol.roles` | {} | `roles` | IR / Protocol | Ordered role roster | `admission` |\n")
+    page = "docs/spec/formats/contract-declarations.md"
+    write("docs/README.md", "# Native\n\n[Declarations](spec/formats/contract-declarations.md)\n")
+    write(page, "# Declarations\n\n### Limits\n\n" + table.format("1,024"))
+    assert checker.check()["status"] == "pass"
+    write(page, "# Declarations\n\n### Limits\n\n" + table.format("1,025"))
+    errors = checker.check()["errors"]
+    assert [page, "`protocol.roles`", "limit row differs from the catalog"] in errors
+    assert [page, "`protocol.roles`", "catalog limit row not stated"] in errors
+    write(page, "# Declarations\n\n### Limits\n\nNo table.\n")
+    assert [page, "`protocol.roles`", "catalog limit row not stated"] in checker.check()["errors"]

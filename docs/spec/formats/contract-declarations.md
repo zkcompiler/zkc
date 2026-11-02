@@ -476,7 +476,8 @@ integer from 0 to 2^63 - 1; `unit` is one of `roles`, `bytes`, `elements`, `entr
 `phase` is `formation`, `admission`, `publication` or `execution`. A shared
 value does not merge two contracts: native, export, message and target
 ceilings keep separate rows or owners even when numerically equal. A reached
-ceiling is an observable refusal, not an implementation detail.
+ceiling is an observable refusal, not an implementation detail. The table below
+states the rows; the documentation check compares it with the catalog.
 
 | Name | Value | Unit | Owner | Scope | Phase |
 |---|---:|---|---|---|---|

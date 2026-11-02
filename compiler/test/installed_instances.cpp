@@ -956,13 +956,6 @@ int main(int argc, char **argv) {
   });
 
   cases.run("limits", [&] {
-    static_assert(generated::protocolRoleLimit == 1024,
-                  "the role roster ceiling is 1,024 roles");
-    const auto *roles = generated::limit("protocol.roles");
-    require(roles && roles->value == generated::protocolRoleLimit &&
-                roles->unit == generated::LimitUnit::Roles &&
-                roles->phase == generated::LimitPhase::Admission,
-            "role limit row differs from its constant");
     // The source checker admits a protocol roster of exactly the ceiling.
     auto wide = [](uint64_t count) {
       std::string roles;

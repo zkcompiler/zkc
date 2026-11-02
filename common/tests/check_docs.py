@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Check this reference's local Markdown links, heading fragments and reachability.
 
-This checks the inline-link/ATX-heading syntax used by these pages and the
-fixture digest tables of fixture guides. It does not fetch external links or
-check mathematical truth.
+This checks the inline-link/ATX-heading syntax used by these pages, the
+fixture digest tables of fixture guides and the specification's catalog limits
+table against the catalog rows. It does not fetch external links or check
+mathematical truth.
 """
 
 import argparse
@@ -99,6 +100,47 @@ def fixture_digest_errors(page, label, public_path):
                     errors.append([label, name, "fixture digest differs"])
             seen.add(name)
     return errors, checked
+
+
+# The declaration specification states the catalog's limits table. The catalog
+# rows own the values; the stated table must equal them row for row.
+LIMITS_PAGE = "docs/spec/formats/contract-declarations.md"
+LIMITS_HEADING = "Limits"
+LIMITS_SOURCE = "common/catalog/declarations.json"
+
+
+def stated_limits(lines):
+    """The data rows of the table under the limits heading, as cell lists."""
+    rows, inside = [], False
+    for line in unfenced(lines):
+        heading = re.match(r"^#{1,6}\s+(.*?)\s*#*$", line)
+        if heading:
+            inside = heading[1] == LIMITS_HEADING
+        elif inside and line.startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if cells[0] != "Name" and not all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+                rows.append(cells)
+    return rows
+
+
+def catalog_limit_errors():
+    page = ROOT / LIMITS_PAGE
+    if not page.exists():
+        return []
+    try:
+        catalog = json.loads((ROOT / LIMITS_SOURCE).read_text())["limits"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return [[LIMITS_PAGE, LIMITS_SOURCE, "catalog limits unreadable"]]
+    expected = [[f"`{row['name']}`", f"{row['value']:,}", f"`{row['unit']}`", row["owner"],
+                 row["scope"], f"`{row['phase']}`"] for row in catalog]
+    stated = stated_limits(page.read_text().splitlines())
+    errors = [[LIMITS_PAGE, row[0], "limit row differs from the catalog"]
+              for row in stated if row not in expected]
+    errors += [[LIMITS_PAGE, row[0], "catalog limit row not stated"]
+               for row in expected if row not in stated]
+    if not errors and stated != expected:
+        errors.append([LIMITS_PAGE, LIMITS_HEADING, "limit rows not in catalog order"])
+    return errors
 
 
 def anchors(path):
@@ -225,6 +267,7 @@ def check(include_components=False):
                     frontier.append(target)
         for page in sorted(p for p in reference if p.resolve() not in reached):
             errors.append([str(page.relative_to(ROOT)), f"unreachable from {index_name}"])
+    errors += catalog_limit_errors()
     home = (ROOT / "docs" / "rationale").resolve()
     for page in sorted(home.glob("*.md")):
         if page.name != "README.md":
@@ -239,7 +282,7 @@ def check(include_components=False):
         "page_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                         for p in pages},
         "scope": ("reference and component guides" if include_components else "reference and root/formal guides")
-                 + "; local inline links, ATX heading fragments, native/formal reachability, public boundaries, whitespace, rationale rules and fixture digest tables",
+                 + "; local inline links, ATX heading fragments, native/formal reachability, public boundaries, whitespace, rationale rules, fixture digest tables and the catalog limits table",
     }
 
 

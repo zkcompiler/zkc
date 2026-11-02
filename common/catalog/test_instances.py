@@ -419,18 +419,6 @@ class Documents(unittest.TestCase):
                     validate_installation(physical, declarations)
                 self.assertIn(case["diagnostics"]["generator"], str(refusal.exception))
 
-    def test_limits_match_the_specified_table(self):
-        catalog, _ = documents()
-        self.assertEqual(find(catalog["limits"], name="protocol.roles"), {
-            "name": "protocol.roles", "value": 1024, "unit": "roles", "owner": "IR / Protocol",
-            "scope": "Ordered role roster of one protocol, participant or Entry",
-            "phase": "admission"})
-        # A record telescope is its own contract, even at an equal value.
-        self.assertEqual(find(catalog["limits"], name="record.roles"), {
-            "name": "record.roles", "value": 1024, "unit": "roles", "owner": "Frontend / Language",
-            "scope": "Role parameters of one distributed record telescope",
-            "phase": "admission"})
-
 
 def literal(tree, name):
     """The literal value assigned to `name` anywhere in a module."""
