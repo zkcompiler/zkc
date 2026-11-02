@@ -278,6 +278,21 @@ int main() {
               "Unicode metadata was normalized or replaced by native labels");
         }
       });
+  cases.run("affine builtin state is not an interface leaf", [] {
+    auto project = take(analyze(take(capture({{"m", R"(module m;
+domain H=transcript("merlin3.bls12-381.fr64be/0");
+type T=builtin("transcript",H);
+protocol Run roles(P)(t:T@P)->(t:T@P){return(t=t);}
+)",
+                                               "transcript.zkc"}})))
+                            .checkedProject());
+    auto published = prepareOriginal(take(closeSubject(project, "m::Run")));
+    require(!published, "affine builtin state was published as a leaf");
+    auto message = toString(published.takeError());
+    require(StringRef(message).contains("source.interface") &&
+                StringRef(message).contains("not ordinary Copy and Drop data"),
+            message);
+  });
   cases.run("source names resembling native ordinals remain independent", [] {
     auto value = document();
     renameRoles(value, "role00000001", "role00000000");

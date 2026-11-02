@@ -576,6 +576,49 @@ int main(int argc, char **argv) {
                                join(found, "; "));
   });
 
+  cases.run("constructor-wide default representations", [&] {
+    // A constructor-wide default row names the only representation of its
+    // constructor, whatever its arguments.
+    std::vector<std::string> found;
+    unsigned rows = 0;
+    for (const auto &row : physical::appliedRepresentations()) {
+      if (!row.isDefault || row.child ||
+          !llvm::all_of(row.arguments, [](const auto &pattern) {
+            return pattern.kind == physical::ArgumentPattern::Kind::Any;
+          }))
+        continue;
+      ++rows;
+      BoundType logical;
+      if (row.constructor == "variant")
+        logical = take(parseBoundType(
+            *encodeVariant({"Choice", {{"left", {}}, {"right", {"bool"}}}}),
+            false));
+      else {
+        std::vector<std::string> arguments;
+        for (const auto &parameter :
+             typeDeclaration(row.constructor)->parameters)
+          arguments.push_back(parameter.kind == StaticKind::Type ? "bool"
+                                                                 : "Slot.A");
+        logical = take(applyBoundType(row.constructor, arguments));
+      }
+      auto physical = defaultRepresentation(logical);
+      if (!physical) {
+        consumeError(physical.takeError());
+        found.push_back("default " + row.identity);
+      } else if (physical->representation != row.identity)
+        found.push_back("default " + row.identity);
+      std::vector<BoundType> children;
+      for (const auto &child : take(logicalChildren(logical)))
+        children.push_back(take(defaultRepresentation(child)));
+      auto other = physicalType(logical, row.identity + "x", children);
+      if (other || !StringRef(toString(other.takeError()))
+                        .contains("binding-representation"))
+        found.push_back("refusal " + row.identity);
+      take(physicalType(logical, row.identity, std::move(children)));
+    }
+    agree("constructor-wide defaults", found, {});
+    require(rows == 3, "constructor-wide default rows differ");
+  });
   cases.run("resident canonical-frame representations", [&] {
     std::vector<std::string> found;
     for (const auto &row : physical::representations()) {
@@ -802,6 +845,15 @@ int main(int argc, char **argv) {
       bool gated = StringRef(refusal).contains("not an admitted native data");
       if (type.sourceData == gated || (type.sourceData && !refusal.empty()))
         found.push_back("sourceData " + type.name);
+      // Interface builtin leaves are exactly the builtin source-data rows
+      // whose permissions are Copy and Drop.
+      const auto *permissions = typePermissions(type.name);
+      bool ordinary = type.sourceData && type.name != "bool" &&
+                      type.name != "index" && type.name != "field" &&
+                      type.name != "group" && permissions &&
+                      permissions->copy && permissions->drop;
+      if (language::isOrdinaryBuiltinData(type.name) != ordinary)
+        found.push_back("interface leaf " + type.name);
       if (!type.sourceData || !formed)
         continue;
       // Collection rank against the source axis view. A byte element gives an
@@ -844,6 +896,10 @@ int main(int argc, char **argv) {
       if (nativeSetupType(type) != (declared->setup.has_value() || authorized))
         found.push_back("setup " + instance.kind + " " + instance.domain);
     }
+    // Affine managed state is source data but never an interface leaf.
+    if (!language::isBuiltinDataConstructor("transcript") ||
+        language::isOrdinaryBuiltinData("transcript"))
+      found.push_back("interface leaf transcript");
     agree("type columns", found, {});
   });
 

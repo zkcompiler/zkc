@@ -7,6 +7,13 @@ namespace zkc::language {
 /// Library-facing native data types. Constructor formation is catalog-owned;
 /// source nominals and managed service roots cannot be erased through this API.
 bool isNativeData(const Type &);
+/// A catalog source-data type constructor with its own builtin source kind:
+/// every source-data row except bool, index, field and group.
+bool isBuiltinDataConstructor(llvm::StringRef constructor);
+/// A builtin data constructor whose catalog permissions are Copy and Drop.
+/// Only these are leaves of interface builtin schemas; affine managed state,
+/// such as a transcript, never crosses an interface.
+bool isOrdinaryBuiltinData(llvm::StringRef constructor);
 bool isDomainSort(llvm::StringRef);
 bool matchesStaticSort(const Type &, llvm::StringRef);
 /// Only sequence contracts adapt source products at native Type ports.

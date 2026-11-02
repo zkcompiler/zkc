@@ -664,23 +664,17 @@ class Reader {
     if (value.leaves.size() != 1)
       return fail("scalar schema requires exactly one leaf");
     auto leafKind = protocol::typeKind(value.leaves[0]);
-    bool matched =
-        value.kind == K::Boolean ? leafKind == "bool"
-        : value.kind == K::Index ? leafKind == "index"
-        : value.kind == K::Field ? leafKind == "field"
-        : value.kind == K::Group
-            ? leafKind == "group"
-            : value.kind == K::Builtin &&
-                  (leafKind == "vector" || leafKind == "matrix" ||
-                   leafKind == "groups" || leafKind == "indices" ||
-                   leafKind == "bytes" || leafKind == "shake128_state" ||
-                   leafKind == "quotient_matrix" || leafKind == "polynomial" ||
-                   leafKind == "table" || leafKind == "point" ||
-                   leafKind == "round" || leafKind == "sequence" ||
-                   leafKind == "field_array" || leafKind == "commitment" ||
-                   leafKind == "commitments" || leafKind == "proof" ||
-                   leafKind == "prover_key" || leafKind == "verifier_key" ||
-                   leafKind == "opening_state" || leafKind == "opening_states");
+    if (value.kind == K::Builtin)
+      return !isBuiltinDataConstructor(leafKind)
+                 ? fail("logical kind differs from native leaf kind")
+             : !isOrdinaryBuiltinData(leafKind)
+                 ? fail("builtin leaf is not ordinary Copy and Drop data")
+                 : true;
+    bool matched = value.kind == K::Boolean ? leafKind == "bool"
+                   : value.kind == K::Index ? leafKind == "index"
+                   : value.kind == K::Field
+                       ? leafKind == "field"
+                       : value.kind == K::Group && leafKind == "group";
     return matched || fail("logical kind differs from native leaf kind");
   }
   std::optional<uint64_t> unsignedText(const json::Value &value) {

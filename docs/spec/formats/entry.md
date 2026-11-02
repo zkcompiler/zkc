@@ -430,7 +430,12 @@ labels/payloads, custody prefixes and managed-service contracts. Logical types
 with the same identity must have consistent kind, label and schema. Kinds are
 `boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `logical_record`, `variant`,
 `associated`, `builtin`, `oracle` and `oracle_sequence`. Ordinary scalars have
-their matching single native leaf; unit has none. Tuples/arrays have positional
+their matching single native leaf; unit has none. A `builtin` schema's single
+leaf is a catalog source-data type constructor without its own source kind
+(every source-data row except `bool`, `index`, `field` and `group`) whose catalog
+permissions are Copy and Drop. Interface leaves carry ordinary data, so affine
+managed state, such as a transcript, is never a leaf and refuses with
+`source.interface`. Tuples/arrays have positional
 fields, with one common element identity
 including the zero-length element template. Records have identifier fields; associated representations
 have exactly one `value` field. Only variants have alternatives. An empty product

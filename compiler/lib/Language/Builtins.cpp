@@ -17,6 +17,15 @@ bool dataConstructor(const protocol::TypeDeclaration &declared) {
          declared.name != "group";
 }
 } // namespace
+bool isBuiltinDataConstructor(StringRef constructor) {
+  const auto *declared = protocol::typeDeclaration(constructor);
+  return declared && dataConstructor(*declared);
+}
+bool isOrdinaryBuiltinData(StringRef constructor) {
+  const auto *permissions = protocol::typePermissions(constructor);
+  return isBuiltinDataConstructor(constructor) && permissions &&
+         permissions->copy && permissions->drop;
+}
 bool isDomainSort(StringRef sort) {
   return llvm::is_contained(protocol::domainSorts(), sort);
 }
