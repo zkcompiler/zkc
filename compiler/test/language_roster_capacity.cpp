@@ -1,5 +1,7 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeLanguage.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -29,6 +31,31 @@ std::string many(unsigned count, Shape shape) {
                std::to_string(i * count / 8);
   return "module m;protocol Many roles(" + roles(count) + ")(" + ports +
          ")->(r:bool@R1){let r@R1=true;return(r=r);}";
+}
+/// A Protocol over `count` roles with `inputs` Boolean inputs placed at every
+/// role, each observed by its own branch: one common class per input, with
+/// one component per role.
+std::string branches(unsigned count, unsigned inputs) {
+  std::string ports, body;
+  for (unsigned k = 0; k < inputs; ++k) {
+    auto name = std::to_string(k);
+    ports += (k ? ",f" : "f") + name + ":bool@(" + roles(count) + ")";
+    body += "let a" + name + "=if f" + name + " {true}else{false};";
+  }
+  return "module m;protocol Many roles(" + roles(count) + ")(" + ports +
+         ")->(r:bool@(" + roles(count) + ")){" + body + "return(r=a0);}";
+}
+/// One input and one output at each of `count` roles.
+std::string perRole(unsigned count) {
+  std::string inputs, outputs, results;
+  for (unsigned i = 0; i < count; ++i) {
+    auto at = std::to_string(i);
+    inputs += (i ? ",x" : "x") + at + ":index@R" + at;
+    outputs += (i ? ",y" : "y") + at + ":index@R" + at;
+    results += (i ? ",y" : "y") + at + "=x" + at;
+  }
+  return "module m;protocol Many roles(" + roles(count) + ")(" + inputs +
+         ")->(" + outputs + "){return(" + results + ");}";
 }
 CheckedProject check(StringRef source, bool layout = false) {
   CaptureOptions options;
@@ -177,6 +204,31 @@ int main() {
     require(checked == 17, "generated participant members are missing");
     auto closed = take(closeEntry(project, "m::Many"));
     take(prepareOriginal(closed));
+  });
+  cases.run("the common-input inventory profile at its stated bounds", [] {
+    // Source publication bounds a Protocol's inventory at 1,024 classes
+    // before mathematical admission's separate common-control allowance.
+    auto published = take(prepareOriginal(
+        take(closeNativeRun(check(branches(2, 209)), "m::Many"))));
+    auto view =
+        take(readInterface(published.bytes(), published.interfaceJson()));
+    require(view.selectedProtocol().commonInputRequirements.size() == 209,
+            "each observed input is one common class");
+    auto refused = prepareOriginal(
+        take(closeNativeRun(check(branches(2, 1025)), "m::Many")));
+    require(!refused, "1,025 common classes were published");
+    auto message = toString(refused.takeError());
+    require(StringRef(message).contains(
+                "source.limit: common inventory limit exceeded"),
+            "unexpected inventory refusal: " + message);
+    // One input and one output per role derive no common class, so the full
+    // roster publishes and reads an empty inventory.
+    auto direct = take(
+        prepareOriginal(take(closeNativeRun(check(perRole(1024)), "m::Many"))));
+    auto read = take(readInterface(direct.bytes(), direct.interfaceJson()));
+    require(read.selectedProtocol().roles.size() == 1024 &&
+                read.selectedProtocol().commonInputRequirements.empty(),
+            "per-role ports derived a common class");
   });
   return cases.result();
 }

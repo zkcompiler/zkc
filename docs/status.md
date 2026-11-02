@@ -994,7 +994,16 @@ with one field per role checks in about 16.9 million units, growing linearly
 with its fields. Mathematical participant projection separately bounds roles
 times SSA nodes at 100,000 per common body ([limits](spec/ir/limits.md)): with
 one port per role it refuses from 312 roles, and a 1,024-role Protocol admits
-at most 97 nodes in its mathematical programs.
+at most 97 nodes in its mathematical programs. The common-input inventory has
+its own frontend-owned bounds of 1,024 classes, 32,768 components and 32 path
+steps per Protocol, refused with `source.limit` "common inventory limit
+exceeded" ([Entry carrier](spec/formats/entry.md)). One input and one output
+per role derive no class, so a 1,024-role Protocol publishes and reads an empty
+inventory. A Boolean input at every role observed by a branch is one class;
+mathematical admission's separate 1,000,000-unit common-control allowance
+refuses that shape first, from 407 roles with one such input and from 210 such
+inputs at two roles, while 1,025 inputs at two roles refuse at source
+publication with the inventory limit.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Layout role assembly explicitly selects existing components of ordinary shared

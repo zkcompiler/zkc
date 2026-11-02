@@ -115,6 +115,16 @@ nested semantic queries and canonicalization debit that same allowance,
 including work performed before an error. A per-Protocol observer cannot
 restart or independently spend the enclosing allowance.
 
+These inventory bounds are owned by Frontend / Language. Their units are
+classes and components per Protocol, path steps per component, and work units
+of the enclosing allowance, which is the invocation's `Limits::work` (by
+default 32,000,000) shared with the rest of publication, comparison or
+reading. The compiler's source publication, source comparison and independent
+reader refuse each bound, including exhaustion of the enclosing allowance
+during the inventory step, with `source.limit` "common inventory limit
+exceeded". The SDK reader enforces the class, component and path bounds and
+refuses with `entry-interface-limit`.
+
 The source producer derives from each immutable closed concrete Protocol and its
 actual helper closure. Independent C++ reading derives the original native
 requirements through native common-control analysis and compares the exact
