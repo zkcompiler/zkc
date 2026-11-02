@@ -23,6 +23,7 @@ import sys
 
 from native_entry import native_subject
 from structured import render, entry
+from bridges.common import source_format
 from bridges.common.schema import interpreted_type
 from bridges.common.replacement import replace_exactly_once
 from contracts import check_contract_forms
@@ -434,8 +435,9 @@ def main():
             binaries[name] = {'path': str(original), 'sha256': hashlib.sha256(target.read_bytes()).hexdigest()}
             setattr(args, name, target)
         suite=Suite(args,temporary)
-        flags=['--source-format=zkc','--module=example=examples/projects/schnorr/main.zkc',
-               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--subject=schnorr::Schnorr<example::G>']
+        flags=source_format.with_option(['--module=example=examples/projects/schnorr/main.zkc',
+                                         '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc',
+                                         '--subject=schnorr::Schnorr<example::G>'])
         text, interface_text, interface = native_subject(execute, args.compiler, flags)
         if not (interface['original']==hashlib.sha256(text.encode()).hexdigest()):
             raise AssertionError("bridges/common/check.py:336: interface['original']==hashlib.sha256(text.encode()).hexdigest()")
@@ -449,9 +451,8 @@ def main():
             raise AssertionError("bridges/common/check.py:342: expected==(fixture.parent.parent/'SchnorrData.lean').read_text()")
         fixture_text=(ROOT/'compiler/test/fixtures/mathematical/schnorr-services.mlir').read_text()
         suite.exercise(fixture_text)
-        sumcheck_flags=['--source-format=zkc',
-                        '--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
-                        '--subject=scalar_sumcheck::Sumcheck']
+        sumcheck_flags=source_format.with_option(['--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
+                                                  '--subject=scalar_sumcheck::Sumcheck'])
         sumcheck_text, interface_text, sumcheck_interface = native_subject(execute, args.compiler, sumcheck_flags)
         if not (sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()):
             raise AssertionError("bridges/common/check.py:349: sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()")
@@ -468,9 +469,8 @@ def main():
         factor_controls=check_factor_forms(suite,ROOT,execute)
         algebra_sources=[]
         for entry in ('WithHelper', 'Inline', 'Residual'):
-            flags=['--source-format=zkc',
-                   '--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
-                   '--subject=scalar_algebra::'+entry]
+            flags=source_format.with_option(['--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
+                                             '--subject=scalar_algebra::'+entry])
             algebra_text, interface_text, algebra_interface = native_subject(execute, args.compiler, flags)
             algebra_symbol = algebra_interface['protocol']
             suite.exercise(algebra_text,algebra_symbol)

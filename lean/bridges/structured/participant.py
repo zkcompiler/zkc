@@ -19,6 +19,7 @@ import sys
 
 
 import check as structured
+from bridges.common import source_format
 from bridges.common.native_entry import native_subject
 from bridges.common.replacement import replace_exactly_once
 from bridges.common.schema import interpreted_type
@@ -249,9 +250,10 @@ class Suite(structured.Suite):
     def subject(self, name, source=None, root="main"):
         folder = self.directory / name; folder.mkdir()
         if source is None:
-            flags = ["--source-format=zkc", "--subject=schnorr::Schnorr<example::G>",
-                     f"--module=example={ROOT}/examples/projects/schnorr/main.zkc",
-                     f"--module=schnorr={ROOT}/libraries/protocols/sigma/schnorr/lib.zkc"]
+            flags = source_format.with_option([
+                "--subject=schnorr::Schnorr<example::G>",
+                f"--module=example={ROOT}/examples/projects/schnorr/main.zkc",
+                f"--module=schnorr={ROOT}/libraries/protocols/sigma/schnorr/lib.zkc"])
             source, interface_text, interface = native_subject(
                 lambda command: self.command(name+":frontend", command), self.tools["compiler"], flags)
             (folder / "interface.json").write_text(interface_text, encoding="utf-8"); root = interface["protocol"]

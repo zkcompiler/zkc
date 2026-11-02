@@ -18,7 +18,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[3]
 LEAN = ROOT / "lean"
 sys.path.insert(0, str(LEAN))
-from bridges.common import interface as language_interface, policy as native_policy  # noqa: E402
+from bridges.common import interface as language_interface, policy as native_policy, source_format  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 from support.packages import module_package  # noqa: E402
@@ -242,9 +242,9 @@ class Generation:
         name = root["name"]
         directory = self.directory / name
         directory.mkdir(exist_ok=True)
-        flags = ["--source-format=zkc", "--entry=" + root["entry"],
-                 "--module=example=" + root["source"],
-                 *["--module=" + key + "=" + value for key, value in root["modules"].items()]]
+        flags = source_format.with_option([
+            "--entry=" + root["entry"], "--module=example=" + root["source"],
+            *["--module=" + key + "=" + value for key, value in root["modules"].items()]])
         def native(*args):
             return self.execute([self.args.compiler, *args])
         original = native("language-emit", *flags)

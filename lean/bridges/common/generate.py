@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from native_entry import native_subject
+from bridges.common import source_format
 from structured import views
 from verify import read_json, render_client
 
@@ -58,9 +59,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='zkc-scalar-generation-') as temporary:
         directory = Path(temporary)
         for stem, name, modules, subject in subjects():
-            flags = ['--source-format=zkc',
-                     *['--module=' + key + '=' + str(ROOT / path) for key, path in modules.items()],
-                     '--subject=' + subject]
+            flags = source_format.with_option([
+                *['--module=' + key + '=' + str(ROOT / path) for key, path in modules.items()],
+                '--subject=' + subject])
             source, _, interface = native_subject(execute, compiler, flags)
             mlir = directory / (stem + '.mlir')
             mlir.write_text(source)

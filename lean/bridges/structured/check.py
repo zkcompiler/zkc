@@ -21,6 +21,7 @@ import tomllib
 from uuid import uuid4
 
 import snapshot as constructors
+from bridges.common import source_format
 from bridges.common.native_entry import native_subject
 from bridges.common.replacement import replace_exactly_once
 from bridges.common.schema import interpreted_type
@@ -288,8 +289,7 @@ class Suite:
 
     def frontend(self, entry):
         source = Path(__file__).parent / "fixtures/accumulate.zkc"
-        flags = ["--source-format=zkc", "--module=structured=" + str(source),
-                 "--subject=structured::" + entry]
+        flags = source_format.with_option(["--module=structured=" + str(source), "--subject=structured::" + entry])
         text, interface_text, interface = native_subject(
             lambda command: self.command(entry + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export("frontend-" + entry, text, interface["protocol"])

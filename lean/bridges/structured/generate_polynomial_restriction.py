@@ -14,6 +14,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
+from bridges.common import source_format  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
 
 NAMESPACE = "ZkcExamples.Structured.PolynomialRestriction"
@@ -39,9 +40,10 @@ def main():
         else:
             path.write_text(text)
 
-    flags = ["--source-format=zkc", "--subject=polynomial_restriction::Restriction",
-             "--module=polynomial_restriction=examples/projects/polynomial-restriction/main.zkc",
-             "--module=zkc::bilinear_restriction=libraries/core/polynomial/bilinear_restriction.zkc"]
+    flags = source_format.with_option([
+        "--subject=polynomial_restriction::Restriction",
+        "--module=polynomial_restriction=examples/projects/polynomial-restriction/main.zkc",
+        "--module=zkc::bilinear_restriction=libraries/core/polynomial/bilinear_restriction.zkc"])
     original = output / "original.mlir"
     original.write_text(run([compiler, "language-emit", *flags]))
     interface = json.loads(run([compiler, "language-interface", *flags]))

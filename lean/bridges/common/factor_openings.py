@@ -5,6 +5,7 @@ import json
 
 from contracts import label
 from native_entry import native_subject
+from bridges.common import source_format
 
 from structured import render
 from verify import read_json, render_client
@@ -50,9 +51,8 @@ def transcript(left, right, first, second, attack='honest'):
 def check_factor_forms(suite, root, execute):
     sources, fixtures = {}, []
     for form in ('Expanded', 'Horner', 'WrongPoint', 'WrongResidual'):
-        flags = ['--source-format=zkc',
-                 '--module=factor_openings=lean/bridges/common/fixtures/factor-openings.zkc',
-                 '--subject=factor_openings::' + form + 'Protocol']
+        flags = source_format.with_option(['--module=factor_openings=lean/bridges/common/fixtures/factor-openings.zkc',
+                                           '--subject=factor_openings::' + form + 'Protocol'])
         text, interface_text, interface = native_subject(execute, suite.args.compiler, flags)
         if not (interface['original'] == hashlib.sha256(text.encode()).hexdigest()):
             raise AssertionError("bridges/common/factor_openings.py:54: interface['original'] == hashlib.sha256(text.encode()).hexdigest()")

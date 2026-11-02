@@ -7,6 +7,7 @@ import hashlib
 import json
 
 from native_entry import native_subject
+from bridges.common import source_format
 
 from structured import render
 
@@ -27,9 +28,9 @@ def check_contract_forms(suite, root, execute, originals):
     for family, forms in catalog.items():
         module = family.lower() + '_forms'
         for form in forms:
-            flags = ['--source-format=zkc',
-                     f'--module={module}=lean/bridges/common/fixtures/{family.lower()}-forms.zkc',
-                     f'--subject={module}::{form}Protocol']
+            flags = source_format.with_option([
+                f'--module={module}=lean/bridges/common/fixtures/{family.lower()}-forms.zkc',
+                f'--subject={module}::{form}Protocol'])
             text, interface_text, interface = native_subject(execute, suite.args.compiler, flags)
             if not (interface['original'] == hashlib.sha256(text.encode()).hexdigest()):
                 raise AssertionError("bridges/common/contracts.py:31: interface['original'] == hashlib.sha256(text.encode()).hexdigest()")

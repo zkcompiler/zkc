@@ -14,6 +14,7 @@ from pathlib import Path
 import sys
 
 from check import FIELD, MODULUS, ROOT, Suite, definition, fixture, write_json
+from bridges.common import source_format
 from bridges.common.native_entry import native_subject
 from bridges.common.replacement import replace_exactly_once
 import snapshot as constructors
@@ -63,8 +64,8 @@ class OpenSuite(Suite):
             raise AssertionError({"formal": formal, "expected": expected})
 
     def authored(self, label, selected_subject, modules, retained=None):
-        flags = ["--source-format=zkc", "--subject=" + selected_subject,
-                 *[f"--module={name}={source}" for name, source in modules.items()]]
+        flags = source_format.with_option(["--subject=" + selected_subject,
+                                           *[f"--module={name}={source}" for name, source in modules.items()]])
         source, interface_text, interface = native_subject(
             lambda command: self.command(label + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export(label, source, interface["protocol"])

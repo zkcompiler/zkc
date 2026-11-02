@@ -12,6 +12,7 @@ from native_entry import native_subject
 from contracts import label
 from verify import verify, read_json
 from structured import entry
+from bridges.common import source_format
 from bridges.common.replacement import replace_exactly_once
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -60,7 +61,8 @@ def main():
     # reordered public inputs, helper functions and Horner arithmetic. It keeps
     # the module header, the math helpers and the Horner protocol only, so each
     # renaming names exactly one occurrence.
-    native = (HERE / 'fixtures/factor-openings.zkc').read_text()
+    template = HERE / 'fixtures/factor-openings.zkc'
+    native = template.read_text()
     native = (native[:native.index('protocol ExpandedProtocol')]
               + native[native.index('protocol HornerProtocol'):native.index('entry fn Horner(')])
     for old, new in [('module factor_openings;', 'module alternative;'),
@@ -71,7 +73,9 @@ def main():
         native = replace_exactly_once(native, old, new)
     source = args.output / 'alternative.zkc'
     source.write_text(native)
-    flags = ['--source-format=zkc', f'--module=alternative={source}', '--subject=alternative::EvaluationVerifier']
+    # The renamed source keeps the grammar of the fixture it is derived from.
+    flags = [source_format.option([template]), f'--module=alternative={source}',
+             '--subject=alternative::EvaluationVerifier']
     def execute(command):
         return subprocess.check_output(list(map(str, command)), cwd=ROOT, text=True, timeout=30)
     mlir, interface_text, interface = native_subject(execute, args.compiler, flags)

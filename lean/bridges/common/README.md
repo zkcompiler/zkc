@@ -66,7 +66,10 @@ python3 lean/bridges/common/verify.py \
 ```
 
 `--module NAME=PATH --subject MODULE::PROTOCOL` obtains a fresh native Structured
-export instead. The versioned request selects a registered mathematical
+export instead. The modules' source format comes from the package manifests
+that list them or from the fixture declarations in `fixture-formats.toml`;
+`--source-format` states it explicitly for sources neither declares, such as an
+edited copy (`source_format.py`). The versioned request selects a registered mathematical
 contract, its exact properties and experiment, verifier role, nominal domains,
 input availability and wiring. Unknown or unsupported requests stay unresolved.
 

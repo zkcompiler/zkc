@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import interface as language_interface, policy as native_policy  # noqa: E402
+from bridges.common import interface as language_interface, policy as native_policy, source_format  # noqa: E402
 from bridges.common.lean_render import ROOT, digest  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
 from bridges.construction import pair  # noqa: E402
@@ -23,8 +23,8 @@ from bridges.pipeline import source_claims  # noqa: E402
 
 
 def options(subject, entry, extra=(), *, protocol=False):
-    return ["--source-format=zkc", f"--{'subject' if protocol else 'entry'}={entry}", *subject.module_arguments(),
-            *subject.compiler_options, *extra]
+    return [source_format.option(subject.modules.values()), f"--{'subject' if protocol else 'entry'}={entry}",
+            *subject.module_arguments(), *subject.compiler_options, *extra]
 
 
 def proof_artifacts(runner, subject, compiler, directory, executable=False):

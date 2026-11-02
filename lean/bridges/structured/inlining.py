@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
+from bridges.common import source_format
 from bridges.common.native_entry import native_subject
 from bridges.common.replacement import replace_exactly_once
 import snapshot
@@ -51,7 +52,7 @@ def regenerate_subject(suite, stem, module, proof):
     """The owning native generation path, independent of execution/proof checks."""
     source = FIXTURES / f"{stem}.zkc"
     suite.sources.append({"authored": str(source.relative_to(ROOT)), "sha256": digest(source)})
-    flags = ["--source-format=zkc", f"--module={module}={source}", f"--subject={fixture_table()[stem]['subject']}"]
+    flags = source_format.with_option([f"--module={module}={source}", f"--subject={fixture_table()[stem]['subject']}"])
     original_text, interface_text, interface = native_subject(
         lambda command: suite.command(f"{stem}:frontend", command), suite.tools["compiler"], flags)
     (suite.directory / f"{stem}-interface.json").write_text(interface_text, encoding="utf-8")

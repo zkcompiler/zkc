@@ -9,6 +9,7 @@ import sys
 
 import intent
 from verify import read_json, verify
+from bridges.common import source_format
 from bridges.common.replacement import replace_exactly_once
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -24,7 +25,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     compiler = args.compiler.resolve()
     spec = read_json(HERE / 'requests/schnorr-dsl.json')
-    original = (ROOT / 'libraries/protocols/sigma/schnorr/lib.zkc').read_text()
+    library = ROOT / 'libraries/protocols/sigma/schnorr/lib.zkc'
+    original = library.read_text()
+    # Each case compiles an edited copy of the library, in the library's grammar.
+    selection = source_format.option([library])
     rows = []
 
     def invoke(name, request, source, expected):
@@ -34,7 +38,7 @@ def main():
         (directory / 'library.zkc').write_text(source)
         command = [sys.executable, str(HERE / 'verify.py'), '--spec', str(directory / 'spec.json'),
             '--module=example=' + str(ROOT / 'examples/projects/schnorr/main.zkc'),
-            '--module=schnorr=' + str(directory / 'library.zkc'), '--subject=schnorr::Schnorr<example::G>',
+            '--module=schnorr=' + str(directory / 'library.zkc'), '--subject=schnorr::Schnorr<example::G>', selection,
             '--compiler', str(compiler), '--output', str(directory)]
         run = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
         (directory / 'driver.log').write_text(run.stdout)

@@ -13,7 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
 sys.path.insert(0, str(ROOT / "common/tests"))
-from bridges.common import interface as language_interface  # noqa: E402
+from bridges.common import interface as language_interface, source_format  # noqa: E402
 from bridges.common.lean_render import Runner, digest  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
@@ -76,7 +76,7 @@ def main():
                 continue
             directory = args.output / name
             directory.mkdir(exist_ok=True)
-            flags = ["--source-format=zkc", "--subject=" + subject, *modules]
+            flags = source_format.with_option(["--subject=" + subject, *modules])
 
             def run(mode, *arguments):
                 return runner.run([args.compiler, mode, *arguments], name=name + ":" + mode).stdout

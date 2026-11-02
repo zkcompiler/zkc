@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import (  # noqa: E402
     ROOT, CheckFailed, Runner, axioms_allowed, printed_axioms, regenerate,
 )
+from bridges.common import source_format  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
 from bridges.common.replacement import replace_exactly_once  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
@@ -59,7 +60,8 @@ def lean(runner, path, *, output=None):
 
 def export(runner, compiler, directory, source):
     directory.mkdir(parents=True, exist_ok=True)
-    flags = ["--source-format=zkc", "--subject=composite::Third", f"--module=composite={source}"]
+    # The source is the fixture or a mutation of it, written in the fixture's format.
+    flags = [source_format.option([FIXTURE]), "--subject=composite::Third", f"--module=composite={source}"]
     original, interface_text, interface = native_subject(
         lambda command: runner.run(command).stdout, compiler, flags)
     original_path = directory / "original.mlir"
@@ -84,7 +86,7 @@ def refusal(runner, compiler, directory, name, source):
     source_path.write_text(source)
     if name == "wrong-role":
         result = runner.run([
-            compiler, "language-emit", "--source-format=zkc", "--subject=composite::Third",
+            compiler, "language-emit", source_format.option([FIXTURE]), "--subject=composite::Third",
             f"--module=composite={source_path}",
         ], expect=None)
         runner.check(name, result.returncode != 0 and "source.roles:" in result.stderr)

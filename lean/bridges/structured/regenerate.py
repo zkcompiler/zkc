@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 from check import ROOT, fixture, fixture_stems
+from bridges.common import source_format
 from bridges.common.lean_render import Runner, digest
 from bridges.common.native_entry import native_subject
 import snapshot
@@ -31,8 +32,8 @@ def retain(path, content, write):
 
 def authored(runner, compiler, stem):
     selected, modules, (_, module) = fixture(stem)
-    flags = ["--source-format=zkc", f"--subject={selected}",
-             *[f"--module={name}={path}" for name, path in modules.items()]]
+    flags = source_format.with_option([f"--subject={selected}",
+                                       *[f"--module={name}={path}" for name, path in modules.items()]])
     source, _, interface = native_subject(
         lambda command: runner.run(command).stdout, compiler, flags)
     return source, interface["protocol"], module

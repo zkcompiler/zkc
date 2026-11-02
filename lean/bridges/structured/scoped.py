@@ -12,6 +12,7 @@ import re
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, typed_value, write_json
+from bridges.common import source_format
 from bridges.common.replacement import replace_exactly_once
 
 
@@ -22,8 +23,8 @@ class ScopedSuite(Suite):
     def subject(self, name):
         fixture = ROOT / 'compiler/test/fixtures/structured-source/scoped-control.zkc'
         original = self.command(name + ':emit', [
-            self.tools['compiler'], 'language-emit', '--source-format=zkc',
-            f'--module=scoped_control={fixture}', '--subject=scoped_control::' + name])
+            self.tools['compiler'], 'language-emit',
+            *source_format.with_option([f'--module=scoped_control={fixture}', '--subject=scoped_control::' + name])])
         symbol = re.search(r'"protocol.func"[^\n]*sym_name = "([^"]+)"', original)[1]
         return self.export(name, original, symbol)
 

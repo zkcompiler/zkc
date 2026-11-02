@@ -16,7 +16,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 LEAN = ROOT / "lean"
 sys.path.insert(0, str(LEAN))
-from bridges.common import lean_render  # noqa: E402
+from bridges.common import lean_render, source_format  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 
@@ -65,8 +65,9 @@ def main():
         ("LocalRepeated", "service_control::LocalRepeatProof", "service_control",
          "compiler/test/fixtures/constructed-services/borrowed.zkc"),
     ]:
-        flags = ["--source-format=zkc", "--entry=" + entry, f"--module={module}={ROOT / path}",
-                 "--module=schnorr=" + str(ROOT / "libraries/protocols/sigma/schnorr/lib.zkc")]
+        flags = source_format.with_option([
+            "--entry=" + entry, f"--module={module}={ROOT / path}",
+            "--module=schnorr=" + str(ROOT / "libraries/protocols/sigma/schnorr/lib.zkc")])
         source = output / (name + ".mlir")
         source.write_text(run([compiler, "language-emit", *flags]))
         deployment = json.loads(run([compiler, "language-bundle", *flags]))

@@ -10,11 +10,12 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import interface as language_interface  # noqa: E402
+from bridges.common import interface as language_interface, source_format  # noqa: E402
 
 
 def native_subject(execute, compiler, flags):
     """Return original bytes, exact CLI interface bytes, and its decoded view."""
+    source_format.require_option(flags)
     if sum(flag.startswith('--subject=') for flag in flags) != 1 or any(
             flag.startswith(('--entry=', '--entry-kind=')) for flag in flags):
         raise ValueError('a protocol bridge requires one explicit --subject')
