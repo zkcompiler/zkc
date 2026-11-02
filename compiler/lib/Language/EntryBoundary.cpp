@@ -3,6 +3,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
+#include <numeric>
 #include <set>
 using namespace llvm;
 namespace zkc::language {
@@ -222,8 +223,16 @@ Semantics::entryFields(const Declaration &protocol, const Declaration *entry,
       }
       return true;
     };
-    for (unsigned role = 0; role < protocol.roles.size(); ++role)
-      if (!visit(*type, *placed, port.name, 1, role))
+    // Only the roles a port is placed at can supply its fields.
+    auto placedRoles = placementRoles(*placed);
+    llvm::sort(placedRoles);
+    placedRoles.erase(std::unique(placedRoles.begin(), placedRoles.end()),
+                      placedRoles.end());
+    if (!charge(placedRoles.size(), port.span))
+      return {};
+    for (auto role : placedRoles)
+      if (role < protocol.roles.size() &&
+          !visit(*type, *placed, port.name, 1, role))
         return {};
   }
   llvm::sort(result, [](const auto &a, const auto &b) {
@@ -239,71 +248,121 @@ Semantics::entryFamilyFields(const Declaration &generated,
     fail("source.host-api", "generated Entry owner is absent", span);
     return {};
   }
-  auto owner = declarations[generated.generated->target.index];
-  auto bindings = substitution(generated, arguments);
-  bool proof = owner.kind == Declaration::Kind::Entry;
-  auto protocol = proof ? declarations[owner.target->index] : owner;
-  if (proof) {
-    for (auto &argument : owner.staticArguments) {
-      auto actual = substitute(argument, bindings, span);
-      if (!actual)
-        return {};
-      argument = std::move(*actual);
-    }
-  } else {
-    for (auto *ports : {&protocol.inputs, &protocol.outputs})
-      for (auto &port : *ports) {
-        auto actual = substitutePlaced({port.type, port.placement}, bindings,
-                                       protocol.roles.size(), span);
-        if (!actual)
-          return {};
-        port.type = std::move(actual->type);
-        port.placement = std::move(actual->placement);
-      }
+  const auto target = generated.generated->target;
+  const auto &declared = declarations[target.index];
+  bool proof = declared.kind == Declaration::Kind::Entry;
+  if (proof &&
+      (!declared.target || declared.target->index >= declarations.size())) {
+    fail("source.host-api", "generated Entry owner is absent", span);
+    return {};
   }
+  const auto walked = proof ? *declared.target : target;
   StringRef member = generated.generated->member;
   bool inputs = member.starts_with("Inputs:") || member == "Public" ||
                 member == "Witness";
+  auto bindings = substitution(generated, arguments);
+  // One family walk serves every member: the roster depends only on these.
+  std::string key;
+  frame(key, std::to_string(target.index));
+  frame(key, std::to_string(walked.index));
+  frame(key, inputs ? "inputs" : "outputs");
+  for (const auto &[atom, type] : bindings) {
+    frame(key, atom);
+    frame(key, typeIdentity(type));
+  }
+  if (!charge(key.size(), span))
+    return {};
+  auto cached = familyRosters.find(key);
+  if (cached == familyRosters.end()) {
+    auto owner = declared;
+    auto protocol = declarations[walked.index];
+    if (proof) {
+      for (auto &argument : owner.staticArguments) {
+        auto actual = substitute(argument, bindings, span);
+        if (!actual)
+          return {};
+        argument = std::move(*actual);
+      }
+    } else {
+      for (auto *ports : {&protocol.inputs, &protocol.outputs})
+        for (auto &port : *ports) {
+          auto actual = substitutePlaced({port.type, port.placement}, bindings,
+                                         protocol.roles.size(), span);
+          if (!actual)
+            return {};
+          port.type = std::move(actual->type);
+          port.placement = std::move(actual->placement);
+        }
+    }
+    auto fields = entryFields(protocol, proof ? &owner : &protocol, inputs);
+    if (!fields)
+      return {};
+    FamilyRoster roster;
+    roster.byRole.resize(protocol.roles.size());
+    for (unsigned role = 0; role < protocol.roles.size(); ++role)
+      if (!roster.roles.emplace(protocol.roles[role], role).second) {
+        fail("source.host-api", "generated participant is repeated", span);
+        return {};
+      }
+    for (auto &field : *fields) {
+      bool isPublic =
+          proof &&
+          llvm::any_of(
+              owner.proof()->publicInputs, [&](const EntryInputSelection &p) {
+                return entryPathContains(p.port, p.path, field.selection.port,
+                                         field.selection.path);
+              });
+      auto authority = setupAuthority(field.type, span);
+      if (!authority)
+        return {};
+      if (field.selection.role >= roster.byRole.size()) {
+        fail("source.host-api", "generated participant is absent", span);
+        return {};
+      }
+      roster.byRole[field.selection.role].push_back(roster.fields.size());
+      roster.facts.emplace_back(isPublic, *authority);
+      roster.fields.push_back(std::move(field));
+    }
+    cached = familyRosters.emplace(std::move(key), std::move(roster)).first;
+  }
+  const auto &roster = cached->second;
   std::optional<unsigned> role;
   if (member.contains(':')) {
-    auto name = member.split(':').second;
-    auto found = llvm::find(protocol.roles, name);
-    if (found == protocol.roles.end()) {
+    auto found = roster.roles.find(member.split(':').second.str());
+    if (found == roster.roles.end()) {
       fail("source.host-api", "generated participant is absent", span);
       return {};
     }
-    role = found - protocol.roles.begin();
+    role = found->second;
   } else if (proof)
     role = member == "Public" || member == "VerifierOutputs"
-               ? owner.proof()->verifier
-               : owner.proof()->prover;
-  auto fields = entryFields(protocol, proof ? &owner : &protocol, inputs);
-  if (!fields)
+               ? declared.proof()->verifier
+               : declared.proof()->prover;
+  std::vector<unsigned> all;
+  if (!role) {
+    all.resize(roster.fields.size());
+    std::iota(all.begin(), all.end(), 0u);
+  } else if (*role >= roster.byRole.size()) {
+    fail("source.host-api", "generated participant is absent", span);
+    return {};
+  }
+  const auto &selected = role ? roster.byRole[*role] : all;
+  if (!charge(selected.size() + 1, span))
     return {};
   std::vector<EntryField> result;
   std::vector<EntryInputSelection> coordinates;
   std::vector<std::string> names;
-  for (auto &field : *fields) {
-    if (role && field.selection.role != *role)
-      continue;
-    bool isPublic =
-        proof && llvm::any_of(owner.proof()->publicInputs,
-                              [&](const EntryInputSelection &p) {
-                                return entryPathContains(p.port, p.path,
-                                                         field.selection.port,
-                                                         field.selection.path);
-                              });
+  for (auto index : selected) {
+    const auto &field = roster.fields[index];
+    auto [isPublic, authority] = roster.facts[index];
     if (inputs && (field.initialized || (member == "Public" && !isPublic) ||
                    (member == "Witness" && isPublic)))
       continue;
-    auto authority = setupAuthority(field.type, span);
-    if (!authority)
-      return {};
-    if (inputs && *authority)
+    if (inputs && authority)
       continue;
     coordinates.push_back(field.selection);
     names.push_back(field.name);
-    result.push_back(std::move(field));
+    result.push_back(field);
   }
   const auto before = work.remaining();
   auto remaining = before;

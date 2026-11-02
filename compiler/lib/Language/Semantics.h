@@ -195,6 +195,19 @@ private:
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
   std::set<std::string> checkedLogicalRecords;
+  /// One generated Entry family's ordinary roster, walked once. Fields keep
+  /// selection order; each role lists its own fields in that order. Roles are
+  /// indexed by name separately; the telescope order is never sorted.
+  struct FamilyRoster {
+    std::vector<EntryField> fields;
+    /// Per field: verifier public selection, and setup authority.
+    std::vector<std::pair<bool, bool>> facts;
+    std::vector<std::vector<unsigned>> byRole;
+    std::map<std::string, unsigned> roles;
+  };
+  /// Keyed by the family target, the walked Protocol, the direction and the
+  /// exact static substitution. Valid for this view's declarations.
+  std::map<std::string, FamilyRoster> familyRosters;
 };
 llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
                        Work &, DeclarationId,

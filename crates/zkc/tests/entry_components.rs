@@ -319,6 +319,46 @@ fn fresh_cpp_supply_is_judged_per_operation_at_admission() {
     );
 }
 
+/// The protocol roster ceiling is reachable from source: a trivial 1,024-role
+/// Protocol and its generated Entry families close within the default compiler
+/// work ceiling, and the SDK admits its run package with every participant.
+#[test]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
+fn fresh_cpp_full_protocol_roster_is_admitted() {
+    let roles: Vec<String> = (0..1024).map(|role| format!("R{role}")).collect();
+    let source = Path::new(env!("CARGO_TARGET_TMPDIR")).join("full_protocol_roster.zkc");
+    std::fs::write(
+        &source,
+        format!(
+            "module m;protocol Many roles({})(x:index@R0)->(r:bool@R1){{let r@R1=true;return(r=r);}}",
+            roles.join(",")
+        ),
+    )
+    .unwrap();
+    let compile = |command: &str, selection: &str| {
+        let output = Command::new(compiler())
+            .arg(command)
+            .arg("--source-format=zkc")
+            .arg(format!("--module=m={}", source.display()))
+            .arg(selection)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    };
+    // Selecting the Protocol publishes its generated per-role families.
+    compile("language-interface", "--entry=m::Many");
+    let output = compile("language-package", "--subject=m::Many");
+    let run = RunEntry::admit(capture(&output), Default::default(), Default::default()).unwrap();
+    let groups = run.interface().input_groups();
+    assert_eq!(groups.len(), 1024);
+    assert!(groups.iter().map(|group| group.name()).eq(roles.iter()));
+}
+
 fn admit_proof(
     package: Package,
     operation: Option<ProofOperation>,

@@ -953,6 +953,16 @@ No closure claims external supply: the SDK's Entry admission judges it per
 operation and supply mode, so Verify admits a proof whose sealed prover witness
 it never consumes. Source correspondence checks the complete role substitution
 and result mapping. These native checks establish no Lean correspondence.
+Generated Entry families walk their roster once per phase and each port only at
+its placed roles, so a trivial 1,024-role Protocol closes and publishes its
+interface within the 32,000,000-unit phase work ceiling, with work growing
+linearly in roles ([roster capacity controls](../compiler/test/language_roster_capacity.cpp)).
+Work limits and output-size limits are separate: an admitted roster size does
+not guarantee that every program of that size fits every output budget. The
+generated Host package of a direct Protocol selection grows by about 220 Entry
+JSON nodes per role and exceeds the 200,000-node ceiling beyond about 900 roles,
+while the Protocol's own package admits all 1,024 roles. Participant projection
+separately bounds roles times operations and ports at 100,000.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Layout role assembly explicitly selects existing components of ordinary shared
