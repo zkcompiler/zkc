@@ -14,7 +14,7 @@ using namespace zkc::protocol;
 int main() {
   const auto &catalog = installedDomains();
   json::Array domains, codecs, types, representations, appliedRepresentations;
-  json::Array fields, services, cosets, widths;
+  json::Array services, cosets, widths;
   for (const auto &domain : catalog.allDomains()) {
     // Declared order is part of the published catalogue bytes, so members
     // are ordered pairs rather than an object.
@@ -42,14 +42,6 @@ int main() {
       widths.push_back(
           json::Object{{"field", domain.identity}, {"width", width}});
   }
-  for (const auto &field : plonky3Fields())
-    fields.push_back(json::Object{{"identity", field.identity},
-                                  {"base", field.base},
-                                  {"modulus", field.modulus},
-                                  {"degree", field.degree},
-                                  {"nonresidue", field.nonresidue},
-                                  {"coordinateBytes", field.coordinateBytes},
-                                  {"montgomery32", field.montgomery32}});
   for (const auto &service : randomServices())
     services.push_back(
         json::Object{{"contract", service.contract}, {"field", service.field}});
@@ -93,7 +85,6 @@ int main() {
                 {"logical_types", std::move(types)},
                 {"atomic_representations", std::move(representations)},
                 {"applied_representations", std::move(appliedRepresentations)},
-                {"plonky3_fields", std::move(fields)},
                 {"random_services", std::move(services)},
                 {"coset_conventions", std::move(cosets)},
                 {"bit_pattern_widths", std::move(widths)}})

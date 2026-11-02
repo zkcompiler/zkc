@@ -354,15 +354,6 @@ std::vector<Table> dump() {
   for (const auto &row : catalog.allRepresentations())
     representations.push_back(json::Array{row.identity, row.kind, row.domain,
                                           row.isDefault, row.layout});
-  json::Array fields;
-  for (const auto &field : plonky3Fields())
-    fields.push_back(json::Object{{"identity", field.identity},
-                                  {"base", field.base},
-                                  {"modulus", field.modulus},
-                                  {"degree", field.degree},
-                                  {"nonresidue", field.nonresidue},
-                                  {"coordinateBytes", field.coordinateBytes},
-                                  {"montgomery32", field.montgomery32}});
   json::Array services;
   for (const auto &service : randomServices())
     services.push_back(json::Array{service.contract, service.field});
@@ -499,7 +490,6 @@ std::vector<Table> dump() {
   tables.emplace_back("logicalTypes", std::move(types));
   tables.emplace_back("codecs", std::move(codecs));
   tables.emplace_back("representations", std::move(representations));
-  tables.emplace_back("plonky3Fields", std::move(fields));
   tables.emplace_back("randomServices", std::move(services));
   tables.emplace_back("appliedRepresentations", std::move(applied));
   tables.emplace_back("constructorDefaults", std::move(defaults));

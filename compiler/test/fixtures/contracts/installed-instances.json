@@ -470,15 +470,6 @@
   ["plonky3.merkle-digests/0","commitments","rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",true,""],
   ["plonky3.merkle-trees/0","opening_states","rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",true,""]
 ],
-"plonky3Fields": [
-  {"base":"koala-bear","coordinateBytes":4,"degree":1,"identity":"koala-bear","modulus":"2130706433","montgomery32":true,"nonresidue":0},
-  {"base":"koala-bear","coordinateBytes":4,"degree":8,"identity":"koala-bear.ext8-binomial3","modulus":"2130706433","montgomery32":true,"nonresidue":3},
-  {"base":"koala-bear","coordinateBytes":4,"degree":4,"identity":"koala-bear.ext4-binomial3","modulus":"2130706433","montgomery32":true,"nonresidue":3},
-  {"base":"baby-bear","coordinateBytes":4,"degree":1,"identity":"baby-bear","modulus":"2013265921","montgomery32":true,"nonresidue":0},
-  {"base":"baby-bear","coordinateBytes":4,"degree":4,"identity":"baby-bear.ext4-binomial11","modulus":"2013265921","montgomery32":true,"nonresidue":11},
-  {"base":"goldilocks","coordinateBytes":8,"degree":1,"identity":"goldilocks","modulus":"18446744069414584321","montgomery32":false,"nonresidue":0},
-  {"base":"goldilocks","coordinateBytes":8,"degree":2,"identity":"goldilocks.ext2-binomial7","modulus":"18446744069414584321","montgomery32":false,"nonresidue":7}
-],
 "randomServices": [
   ["random.bls12-381.fr/0","bls12-381.fr"],
   ["random.bn254.fr/0","bn254.fr"],

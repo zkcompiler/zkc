@@ -298,69 +298,7 @@ namespace physical = installation;
   report_fatal_error(Twine("invalid installed domain catalog: ") + reason,
                      false);
 }
-StringRef memberOf(const generated::Domain &row, StringRef name) {
-  for (const auto &member : row.members)
-    if (member.member == name)
-      return member.identity;
-  return {};
-}
-// A field row's facts; the generated tables are checked, so a named row exists.
-const generated::Domain &fieldRow(StringRef identity) {
-  const auto *row = generated::domain(identity);
-  if (!row || !row->field)
-    invalidInstallation(identity + " is not a Field domain");
-  return *row;
-}
 } // namespace
-
-ArrayRef<Plonky3Field> plonky3Fields() {
-  // The residue fields are the field forms with residue arithmetic, in their
-  // declared order: a prime field, or a binomial extension
-  // `B[X]/(X^degree - nonresidue)` over its prime BaseField. Coordinates take
-  // the prime base's codec width.
-  static const std::vector<Plonky3Field> fields = [] {
-    std::vector<Plonky3Field> result;
-    for (const auto &form : physical::fieldForms()) {
-      if (!form.arithmetic)
-        continue;
-      const auto &row = fieldRow(form.field);
-      const auto &facts = *row.field;
-      StringRef base = row.identity;
-      unsigned degree = 1, nonresidue = 0;
-      if (facts.extension) {
-        const auto &extension = *facts.extension;
-        base = memberOf(row, "BaseField");
-        if (extension.over != generated::ExtensionBase::BaseField ||
-            fieldRow(base).field->extension ||
-            extension.reduction.size() != 1 ||
-            extension.reduction.front().exponent != 0 ||
-            StringRef(extension.reduction.front().coefficient)
-                .getAsInteger(10, nonresidue))
-          invalidInstallation(row.identity +
-                              " has residue arithmetic without a binomial "
-                              "extension over a prime field");
-        degree = extension.degree;
-      }
-      const generated::Codec *codec = nullptr;
-      for (const auto &candidate : generated::codecs())
-        if (candidate.kind == "field" && candidate.domain == base)
-          codec = &candidate;
-      if (!codec || !codec->frame || !codec->frame->elementBytes)
-        invalidInstallation(base + " has no framed field codec");
-      result.push_back({row.identity, base, facts.characteristic, degree,
-                        nonresidue, *codec->frame->elementBytes,
-                        form.montgomery && form.montgomery->radixBits == 32});
-    }
-    return result;
-  }();
-  return fields;
-}
-const Plonky3Field *plonky3Field(StringRef identity) {
-  for (const auto &field : plonky3Fields())
-    if (field.identity == identity)
-      return &field;
-  return nullptr;
-}
 
 const DomainCatalog &installedDomains() {
   // Built from the generated installed-instance and installation tables in

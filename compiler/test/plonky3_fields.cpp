@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
@@ -32,6 +33,21 @@ constexpr Field fields[] = {
     {"goldilocks.ext2-binomial7", "goldilocks", "18446744069414584321",
      "1753635133440165772", "18446744069414584320", 2, 7, 8, 32, false}};
 
+// The installed residue fields: the field forms with residue arithmetic, in
+// declared order.
+std::vector<StringRef> residueFields() {
+  std::vector<StringRef> result;
+  for (const auto &form : installation::fieldForms())
+    if (form.arithmetic)
+      result.push_back(form.field);
+  return result;
+}
+// The framed codec of a field's default scalar codec.
+const instances::Codec *fieldCodec(StringRef field) {
+  const auto *named = installedDomains().defaultCodec("field", field);
+  return named ? instances::codec(named->identity) : nullptr;
+}
+
 Expected<BoundOperation> nativeBinding(BindingApplication binding) {
   auto implementation = defaultImplementation(binding);
   if (!implementation)
@@ -40,15 +56,21 @@ Expected<BoundOperation> nativeBinding(BindingApplication binding) {
   return resolveBinding(binding, true);
 }
 
-void installation(const Field &field) {
+void installedField(const Field &field) {
   const auto &catalog = installedDomains();
-  const auto *entry = plonky3Field(field.identity);
-  require(entry && entry->base == field.base &&
-              entry->modulus == field.modulus &&
-              entry->degree == field.degree &&
-              entry->nonresidue == field.nonresidue &&
-              entry->coordinateBytes == field.bytes &&
-              entry->montgomery32 == field.montgomery,
+  // The declared field structure and the installed residue form.
+  const auto *form = installation::fieldForm(field.identity);
+  auto extension = instances::binomialExtension(field.identity);
+  const auto *codec = fieldCodec(field.base);
+  require(form && form->arithmetic && bool(extension) == (field.degree > 1) &&
+              (!extension ||
+               (extension->base == field.base &&
+                extension->degree == field.degree &&
+                extension->nonresidue == std::to_string(field.nonresidue))) &&
+              codec && codec->frame &&
+              codec->frame->elementBytes == field.bytes &&
+              (form->montgomery && form->montgomery->radixBits == 32) ==
+                  field.montgomery,
           "registered presentation");
   require(catalog.hasFact("Field", {field.identity.str()}) &&
               catalog.hasFact("CommRing", {field.identity.str()}) &&
@@ -178,15 +200,33 @@ void roots(const Field &field) {
 int main() {
   zkc::test::Cases cases;
   for (const auto &field : fields) {
-    cases.run(field.identity + " installation", [&] { installation(field); });
+    cases.run(field.identity + " installation", [&] { installedField(field); });
     cases.run(field.identity + " cosets", [&] { roots(field); });
   }
   cases.run("closed family", [] {
-    require(plonky3Fields().size() == 7 &&
-                !plonky3Field("baby-bear.ext4-binomial3") &&
-                !plonky3Field("gf2-64.pentanomial-4-3-1") &&
-                !cosetConvention("gf2-64.pentanomial-4-3-1"),
-            "unknown presentations stay closed");
+    // Residue arithmetic is installed on prime fields and on binomial
+    // extensions of a prime base, and coordinates take the base codec's frame.
+    auto residue = residueFields();
+    require(residue.size() == 7, "unknown presentations stay closed");
+    for (StringRef identity : residue) {
+      const auto *row = instances::domain(identity);
+      auto extension = instances::binomialExtension(identity);
+      StringRef base = extension ? StringRef(extension->base) : identity;
+      const auto *baseRow = instances::domain(base);
+      const auto *codec = fieldCodec(base);
+      require(row && row->field &&
+                  bool(row->field->extension) == bool(extension) && baseRow &&
+                  baseRow->field && !baseRow->field->extension && codec &&
+                  codec->frame && codec->frame->elementBytes,
+              identity + " is not a prime field or its binomial extension");
+    }
+    for (StringRef identity :
+         {"baby-bear.ext4-binomial3", "gf2-64.pentanomial-4-3-1"}) {
+      const auto *form = installation::fieldForm(identity);
+      require(!form || !form->arithmetic, "unknown presentations stay closed");
+    }
+    require(!cosetConvention("gf2-64.pentanomial-4-3-1"),
+            "binary fields have no coset convention");
     refuses(parseBoundType("field:goldilocks@plonky3.baby-bear/0", true),
             "binding-representation");
     refuses(parseBoundType("field:baby-bear.ext4-binomial11@plonky3.koala-bear."

@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -72,16 +73,21 @@ int main() {
         require(first == take(layouts.field(base)),
                 "cache invalidated descriptor address");
       });
-  for (auto facts : protocol::plonky3Fields())
-    cases.run("ascending-binomial facts: " + facts.identity, [&] {
-      const auto *value = take(layouts.field(field(facts.identity)));
-      require(value->degree == facts.degree &&
-                  value->base == field(facts.base) &&
-                  value->coefficientBytes() == uint64_t(facts.degree) * 32,
-              "extension basis facts were lost");
-      require(value->beta == APInt(256, facts.nonresidue),
-              "wrong binomial reduction");
-    });
+  // Every residue field: a prime field, or a binomial extension of one.
+  for (const auto &form : protocol::installation::fieldForms())
+    if (form.arithmetic)
+      cases.run("ascending-binomial facts: " + form.field, [&] {
+        auto extension = protocol::instances::binomialExtension(form.field);
+        unsigned degree = extension ? extension->degree : 1;
+        auto baseField = field(extension ? extension->base : form.field);
+        std::string nonresidue = extension ? extension->nonresidue : "0";
+        const auto *value = take(layouts.field(field(form.field)));
+        require(value->degree == degree && value->base == baseField &&
+                    value->coefficientBytes() == uint64_t(degree) * 32,
+                "extension basis facts were lost");
+        require(value->beta == APInt(256, nonresidue, 10),
+                "wrong binomial reduction");
+      });
   for (StringRef name :
        {"gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"})
     cases.run("characteristic two is not a residue prime: " + name, [&] {
