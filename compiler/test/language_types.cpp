@@ -995,6 +995,18 @@ void bounds() {
   require(StringRef(toString(oversizedNominal.takeError()))
               .contains("source.limit"),
           "nominal expansion escaped its byte bound");
+  // Every runtime variant is laid out through its portable descriptor, so a
+  // source variant has at most the descriptor's 64 alternatives.
+  auto variant = [](unsigned count) {
+    std::string arms;
+    for (unsigned i = 0; i < count; ++i)
+      arms += (i ? ",A" : "A") + std::to_string(i) + "()";
+    return "module m;enum Wide{" + arms + "}";
+  };
+  auto wideProject = check(variant(64));
+  Layouts wideLayouts(wideProject);
+  must(wideLayouts.get(Type(Type::Kind::Variant, "m::Wide")));
+  refuses(variant(65), "source.limit");
   Limits termLimits;
   termLimits.typeNodes = 2;
   check("module m;type A=bool;type B=bool;type C=bool;type D=bool;",

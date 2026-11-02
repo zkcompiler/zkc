@@ -787,12 +787,12 @@ int main() {
                               "binding-representation");
 #endif
       });
-  cases.run("native formation shares the alternative ceiling", [&] {
+  cases.run("native formation retains its wider variant shape allowance", [&] {
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
     auto identity = data::importVariantIdentity(&context, "BoundaryWidth");
     auto boolean = IntegerType::get(&context, 1);
-    for (unsigned count : {unsigned(VariantAlternativeCeiling),
-                           unsigned(VariantAlternativeCeiling + 1)}) {
+    // Formation admits 512 alternatives; the portable spelling admits 64.
+    for (unsigned count : {64u, 65u, 512u, 513u}) {
       SmallVector<data::AlternativeAttr> arms;
       for (unsigned i = 0; i < count; ++i)
         arms.push_back(data::AlternativeAttr::get(
@@ -802,13 +802,16 @@ int main() {
                                       [](Diagnostic &) { return success(); });
       auto native = data::VariantType::getChecked(
           emit, &context, identity, ArrayRef<data::AlternativeAttr>(arms));
-      if (count > VariantAlternativeCeiling) {
-        require(!native, "native formation exceeded the alternative ceiling");
+      if (count > 512) {
+        require(!native, "native formation exceeded 512 alternatives");
         continue;
       }
       require(native && succeeded(verifyLogicalType(emit, native)),
-              "native formation refused the alternative ceiling");
-      roundTrip(context, take(encodeBoundType(native, false)), false);
+              "wire width limit leaked into native formation");
+      if (count <= 64)
+        roundTrip(context, take(encodeBoundType(native, false)), false);
+      else
+        refuses(encodeBoundType(native, false), "variant-type");
     }
     // Native formation keeps its wider payload allowance.
     for (unsigned count : {128u, 129u}) {

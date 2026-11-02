@@ -600,6 +600,12 @@ mlir_target_link_libraries(zkc-algebra_formation-test PRIVATE MLIRParser)
 add_zkc_test(representations Contracts representation-domains)
 add_zkc_test(properties IR registered-properties)
 add_zkc_test(declared_attributes IR declared-attributes)
+add_zkc_test(semantic_fields IR)
+add_test(NAME semantic-fields COMMAND zkc-semantic_fields-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/semantic-fields/inventory.txt")
+set_tests_properties(semantic-fields PROPERTIES LABELS native)
+add_zkc_test(role_consumers Compiler role-consumers)
+mlir_target_link_libraries(zkc-role_consumers-test PRIVATE MLIRParser)
 
 add_zkc_test(diagnostics IR ir-diagnostics)
 add_zkc_test(dialect_registration IR dialect-registration)

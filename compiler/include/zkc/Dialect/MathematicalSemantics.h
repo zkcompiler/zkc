@@ -30,9 +30,9 @@ bool isLogicalOracleOperation(mlir::Operation *operation);
 // representation.
 mlir::FailureOr<llvm::SmallVector<unsigned>>
 operandDependencies(mlir::Operation *operation, unsigned result);
-// Check the attribute vocabulary too: the registered operation's ODS inherent
-// attributes. Discardable attributes cannot grant assumptions or new semantic
-// options in this profile.
+// Check the attribute vocabulary too: the operation's decided semantic fields.
+// Discardable attributes cannot grant assumptions or new semantic options in
+// this profile.
 mlir::LogicalResult verifyOperation(mlir::Operation *operation,
                                     Context context);
 } // namespace zkc::mathematical

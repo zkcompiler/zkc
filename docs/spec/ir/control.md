@@ -120,6 +120,22 @@ conditions. Local variant admission independently forbids specified history
 operations inside matches. Neither structural control admission nor a local
 Boolean result proves public transcript schedule safety.
 
+Native proof construction, reverse request planning, native codec construction
+and oracle realization admit an entry whose static closure contains no selected
+region, and refuse one whose closure does, with
+`native-proof-control-profile`, `native-request-control-profile`,
+`native-codec-control-profile` and `oracle-realization-control-profile`
+respectively, before any candidate mutation. The closure starts at the selected
+entry, its projected participants or the selected construction. It contains
+every nested operation of a reached definition, including dormant arms, and
+the definitions that the reached symbol references name, transitively:
+applications, helper and local calls, and oracle and relation declarations.
+Reachability is static: no selector is evaluated and no arm is pruned. A
+declaration outside the closure, such as an uncalled helper with a Math
+selection or an uncalled protocol with a Protocol selection, does not change
+the judgment. One allowance of 100,000 operations and symbol uses bounds the
+traversal, and exhausting it refuses with the same code.
+
 ## Formal interpretation and assurance boundary
 
 `Zkc.Source.Region` provides typed operations with explicit callback inputs and
@@ -155,8 +171,10 @@ an `alternatives` string array, and one closed single-block arm per alternative.
 An `i1` selector has exactly `["then", "else"]`; an ordinary `!data.variant`
 selector has exactly its declared labels in declaration order. Unknown,
 repeated, missing or reordered alternatives refuse. No default arm is admitted.
-A selected region has at most as many arms as the
-[variant alternative ceiling](variants.md#type-and-value) admits.
+A selected region has at most 512 arms, which equals the Data type language's
+[formation profile](variants.md#type-and-value), so every variant that forms can
+be selected over. A region with more alternatives or arms refuses with
+`selected-control-limit` before its selector is read.
 
 An arm receives its alternative's exact ordered payload types followed by all
 capture types. Boolean arms have no payload. The selector itself is evaluated

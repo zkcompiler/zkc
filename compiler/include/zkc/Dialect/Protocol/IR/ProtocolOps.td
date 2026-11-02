@@ -46,7 +46,7 @@ def ApplyOp : Op<ProtocolDialect, "apply",
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
-    ProtocolRoleSet<StrArrayAttr>:$roles, StrAttr:$site);
+    ProtocolRoleNames<StrArrayAttr>:$roles, StrAttr:$site);
   let results = (outs Variadic<AnyType>:$outputs);
   let assemblyFormat = "$callee `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs)";
 }
@@ -60,7 +60,7 @@ def ConstructionStartOp : Op<ProtocolDialect, "construction_start",
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp",
                   "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs,
-    ProtocolRoleSet<StrArrayAttr>:$roles, StrAttr:$site);
+    ProtocolRoleNames<StrArrayAttr>:$roles, StrAttr:$site);
   let assemblyFormat = "`(` $inputs `)` attr-dict `:` type($inputs)";
 }
 
@@ -223,7 +223,7 @@ def AssembleRolesOp : Op<ProtocolDialect, "assemble_roles",
     [Pure, SameOperandsAndResultType,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs,
-    ProtocolRoleSet<StrArrayAttr>:$roles);
+    ProtocolRoleNames<StrArrayAttr>:$roles);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
   let extraClassDeclaration = [{

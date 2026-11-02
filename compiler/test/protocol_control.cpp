@@ -880,5 +880,86 @@ int main() {
             zkc::detail::constructNativeCodec(*target, policy, plan, {}, {}),
             "native-codec-control-profile");
       });
+  // Selected control outside the selected entry's static closure does not
+  // gate the entry; selected control the entry reaches still refuses.
+  {
+    auto schnorr = [] {
+      auto buffer =
+          MemoryBuffer::getFile(std::string(ZKC_CONTROL_FIXTURES) +
+                                "/../mathematical/schnorr-services.mlir");
+      require(bool(buffer), "cannot read the Schnorr fixture");
+      return (*buffer)->getBuffer().str();
+    }();
+    const std::string helper =
+        R"mlir(func.func private @choose(%c: i1, %a: !algebra.field<"bls12-381.fr">, %b: !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr"> {
+  %r = "data.branch"(%c, %a, %b) ({
+  ^then(%x: !algebra.field<"bls12-381.fr">, %y: !algebra.field<"bls12-381.fr">):
+    "data.yield"(%x) : (!algebra.field<"bls12-381.fr">) -> ()
+  }, {
+  ^else(%x: !algebra.field<"bls12-381.fr">, %y: !algebra.field<"bls12-381.fr">):
+    "data.yield"(%y) : (!algebra.field<"bls12-381.fr">) -> ()
+  }) {alternatives=["then","else"]} : (i1, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
+  return %r : !algebra.field<"bls12-381.fr">
+}
+)mlir";
+    // A dormant helper: no definition calls it.
+    auto dormant =
+        replaceText(schnorr, "relation.declare", helper + "relation.declare");
+    // An uncalled protocol with a Protocol selection.
+    auto branch = fixture("branch");
+    auto begin = branch.find("\"protocol.func\"");
+    auto end = branch.find("}) {profile");
+    require(begin != std::string::npos && end != std::string::npos,
+            "missing branch protocol");
+    auto uncalled =
+        replaceText(schnorr, "relation.declare",
+                    replaceText(branch.substr(begin, end - begin),
+                                "sym_name=\"main\"", "sym_name=\"unused\"") +
+                        "relation.declare");
+    // The entry reaches the helper's selection through a call.
+    auto reached = replaceText(
+        dormant,
+        R"mlir(%z = algebra.field_add %k, %cx : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">)mlir",
+        R"mlir(%t = arith.constant true
+%z = func.call @choose(%t, %k, %cx) : (i1, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">)mlir");
+    auto policy = take(parseNativeProofPolicy(
+        R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", ["4"], ["0", "2"], [["draw_challenge", "challenge"]], "zkc.framed/0", "", []])"));
+    for (const auto &[name, text] :
+         {std::pair<StringRef, StringRef>{"a dormant selected helper", dormant},
+          {"an uncalled selected protocol", uncalled}}) {
+      StringRef subject = text;
+      cases.run(Twine("an entry beside ") + name + " proves", [&] {
+        auto source = admitted(context, subject);
+        auto built = take(constructNativeProof(*source, policy));
+        if (auto e = checkNativeProof(*source, *built.module, policy))
+          throw std::runtime_error(toString(std::move(e)));
+        // The projected unit retains the unrelated selection; the projected
+        // stages start from the entry's participants and do not reach it.
+        auto target = projected(*source);
+        bool retained = false;
+        target->walk([&](Operation *op) { retained |= isSelectedControl(op); });
+        require(retained, "projection dropped the unrelated selection");
+        auto requests =
+            zkc::detail::planNativeRequests(unit(*target), policy, {});
+        if (!requests)
+          require(!namesIdentifier(toString(requests.takeError()),
+                                   "native-request-control-profile"),
+                  "native requests read an unrelated declaration");
+        if (auto e = requireUnconditionalProtocolControl(
+                {SymbolTable::lookupSymbolIn(unit(*target), "main")},
+                "native-codec-control-profile"))
+          throw std::runtime_error(toString(std::move(e)));
+        take(protocol::oracleRequirements(*source, "main", {}));
+      });
+    }
+    cases.run("an entry that calls a selected helper still refuses", [&] {
+      auto source = admitted(context, reached);
+      refuses(constructNativeProof(*source, policy),
+              "native-proof-control-profile");
+      // Oracle planning follows the call into the helper as well.
+      refuses(protocol::oracleRequirements(*source, "main", {}),
+              "oracle-realization-control-profile");
+    });
+  }
   return cases.result();
 }

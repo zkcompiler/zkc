@@ -11,7 +11,6 @@
 #include <vector>
 
 using namespace llvm;
-namespace {
 // The role shape a constraint declares, looking through wrappers such as
 // OptionalAttr that keep the wrapped constraint as their base attribute.
 const Record *roleConstraint(const Record *constraint) {
@@ -26,7 +25,6 @@ const Record *roleConstraint(const Record *constraint) {
   }
   return nullptr;
 }
-} // namespace
 
 bool emitRoleAttributes(raw_ostream &os, const RecordKeeper &records) {
   // Operation name -> (attribute, shape) in ODS argument order.
@@ -40,9 +38,9 @@ bool emitRoleAttributes(raw_ostream &os, const RecordKeeper &records) {
       if (!declared)
         continue;
       StringRef shape = declared->getValueAsString("roleShape");
-      if (!is_contained(
-              ArrayRef<StringRef>{"Role", "RoleSet", "SlotRoleSets", "Roster"},
-              shape))
+      if (!is_contained(ArrayRef<StringRef>{"Role", "RoleNames", "RoleSet",
+                                            "SlotRoleSets", "Roster"},
+                        shape))
         PrintFatalError(op, "unknown role attribute shape '" + shape + "'");
       StringRef attribute = arguments->getArgNameStr(index);
       if (attribute.empty())

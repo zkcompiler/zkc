@@ -9,6 +9,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/Variant.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/SelectedControl.h"
@@ -199,45 +200,77 @@ int main() {
         });
         require(failed(verify(*module)), "malformed branch segments accepted");
       });
-  // Formation, selected regions and the portable descriptor share one
-  // alternative ceiling; one more alternative refuses at each of them.
-  cases.run("variant alternative ceiling", [&] {
-    auto descriptor = [](size_t count) {
-      protocol::VariantDescriptor result{llvm::json::Value("Wide"), {}};
-      for (size_t i = 0; i < count; ++i)
-        result.alternatives.push_back({"a" + std::to_string(i), {}});
-      return result;
-    };
-    const auto ceiling = protocol::VariantAlternativeCeiling;
-    auto spelling = protocol::encodeVariant(descriptor(ceiling));
+  // Formation, selected regions and the portable descriptor each own an
+  // alternative limit and refuse one alternative beyond it.
+  auto descriptor = [](size_t count) {
+    protocol::VariantDescriptor result{llvm::json::Value("Wide"), {}};
+    for (size_t i = 0; i < count; ++i)
+      result.alternatives.push_back({"a" + std::to_string(i), {}});
+    return result;
+  };
+  cases.run("variant formation admits 512 alternatives", [&] {
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(bool(data::importVariantType(&context, descriptor(512))),
+            "variant formation refused 512 alternatives");
+    require(!data::importVariantType(&context, descriptor(513)),
+            "variant formation admitted 513 alternatives");
+  });
+  cases.run("the portable descriptor spells at most 64 alternatives", [&] {
+    auto spelling = protocol::encodeVariant(descriptor(64));
     require(spelling && protocol::decodeVariant(*spelling),
-            "the portable descriptor refused the ceiling");
-    require(!protocol::encodeVariant(descriptor(ceiling + 1)),
-            "the portable descriptor exceeded the ceiling");
-    require(!data::importVariantType(&context, descriptor(ceiling + 1)),
-            "variant formation exceeded the ceiling");
-    auto type = data::importVariantType(&context, descriptor(ceiling));
-    require(bool(type), "variant formation refused the ceiling");
+            "the portable descriptor refused 64 alternatives");
+    require(!protocol::encodeVariant(descriptor(65)),
+            "the portable descriptor spelled 65 alternatives");
+    // A variant wider than the descriptor still forms.
+    require(bool(data::importVariantType(&context, descriptor(65))),
+            "formation was narrowed to the descriptor limit");
+  });
+  auto region = [&](OpBuilder &builder, Value selector, ArrayAttr labels,
+                    unsigned arms) {
+    auto branch =
+        data::BranchOp::create(builder, builder.getUnknownLoc(), TypeRange{},
+                               ValueRange{selector}, labels, arms);
+    for (auto &arm : branch.getArms()) {
+      OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToEnd(&arm.emplaceBlock());
+      data::YieldOp::create(builder, builder.getUnknownLoc(), ValueRange{});
+    }
+    return branch;
+  };
+  cases.run("a selected region has at most 512 arms", [&] {
+    auto type = data::importVariantType(&context, descriptor(512));
+    require(bool(type), "variant formation refused 512 alternatives");
     OpBuilder builder(&context);
     auto location = builder.getUnknownLoc();
     OwningOpRef<ModuleOp> module = ModuleOp::create(location);
     builder.setInsertionPointToEnd(module->getBody());
-    auto function = func::FuncOp::create(builder, location, "select",
-                                         builder.getFunctionType({type}, {}));
+    auto function = func::FuncOp::create(
+        builder, location, "select",
+        builder.getFunctionType({type, builder.getI1Type()}, {}));
     auto *entry = function.addEntryBlock();
     builder.setInsertionPointToEnd(entry);
     SmallVector<Attribute> labels;
     for (auto alternative : type.getAlternatives())
       labels.push_back(alternative.getLabel());
-    auto branch = data::BranchOp::create(
-        builder, location, TypeRange{}, ValueRange{entry->getArgument(0)},
-        builder.getArrayAttr(labels), labels.size());
-    for (auto &arm : branch.getArms()) {
-      builder.setInsertionPointToEnd(&arm.emplaceBlock());
-      data::YieldOp::create(builder, location, ValueRange{});
-    }
-    require(succeeded(verifySelectedControl(branch)),
-            "a selected region refused the ceiling");
+    auto widest = region(builder, entry->getArgument(0),
+                         builder.getArrayAttr(labels), labels.size());
+    require(succeeded(verifySelectedControl(widest)),
+            "a selected region refused 512 arms");
+    // No variant forms with 513 alternatives, so a region with one more arm
+    // than the limit refuses at the limit before its selector is read.
+    labels.push_back(builder.getStringAttr("extra"));
+    auto wider = region(builder, entry->getArgument(1),
+                        builder.getArrayAttr(labels), labels.size());
+    std::string codes;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : diagnostics::refusals(diagnostic))
+        codes += refusal.code + " ";
+      return success();
+    });
+    require(failed(verifySelectedControl(wider)) &&
+                StringRef(codes).contains("selected-control-limit"),
+            "a selected region admitted 513 arms: " + codes);
   });
   return cases.result();
 }

@@ -44,14 +44,15 @@ namespace {
 constexpr RoleAttribute roleAttributes[] = {
 #include "zkc/Dialect/Protocol/IR/protocolRoleAttributes.cpp.inc"
 };
-ArrayAttr renameRoleSet(ArrayAttr set, RoleMap map) {
+// Maps each element in place, keeping order and multiplicity.
+ArrayAttr renameElements(ArrayAttr names, RoleMap map) {
   SmallVector<Attribute> renamed;
-  renamed.reserve(set.size());
-  for (Attribute role : set) {
+  renamed.reserve(names.size());
+  for (Attribute role : names) {
     auto name = dyn_cast_if_present<StringAttr>(role);
     renamed.push_back(name ? Attribute(map(name)) : role);
   }
-  return ArrayAttr::get(set.getContext(), renamed);
+  return ArrayAttr::get(names.getContext(), renamed);
 }
 } // namespace
 
@@ -78,11 +79,25 @@ SmallVector<RoleUse, 4> getRoleUses(Operation *op) {
   return uses;
 }
 
+bool declaresRoster(StringRef operation) {
+  return llvm::any_of(getRoleAttributes(operation), [](const auto &declared) {
+    return declared.shape == RoleShape::Roster;
+  });
+}
+
 StringAttr getSoleRole(Operation *op) {
   auto uses = getRoleUses(op);
   if (uses.size() != 1 || uses.front().shape != RoleShape::Role)
     return {};
   return dyn_cast<StringAttr>(uses.front().value);
+}
+
+StringAttr getActionOwner(Operation *op) {
+  return llvm::TypeSwitch<Operation *, StringAttr>(op)
+      .Case<GuardOp, FinishIfOp, QueryOp>(
+          [](auto action) { return action.getOwnerAttr(); })
+      .Case<LocalCallOp>([](LocalCallOp call) { return call.getRoleAttr(); })
+      .Default([](Operation *) { return StringAttr(); });
 }
 
 Attribute renameRoles(Attribute value, RoleShape shape, RoleMap map) {
@@ -91,9 +106,10 @@ Attribute renameRoles(Attribute value, RoleShape shape, RoleMap map) {
     if (auto role = dyn_cast_if_present<StringAttr>(value))
       return map(role);
     return value;
+  case RoleShape::RoleNames:
   case RoleShape::RoleSet:
-    if (auto set = dyn_cast_if_present<ArrayAttr>(value))
-      return renameRoleSet(set, map);
+    if (auto names = dyn_cast_if_present<ArrayAttr>(value))
+      return renameElements(names, map);
     return value;
   case RoleShape::SlotRoleSets:
     if (auto slots = dyn_cast_if_present<ArrayAttr>(value)) {
@@ -101,7 +117,7 @@ Attribute renameRoles(Attribute value, RoleShape shape, RoleMap map) {
       renamed.reserve(slots.size());
       for (Attribute slot : slots) {
         auto set = dyn_cast_if_present<ArrayAttr>(slot);
-        renamed.push_back(set ? Attribute(renameRoleSet(set, map)) : slot);
+        renamed.push_back(set ? Attribute(renameElements(set, map)) : slot);
       }
       return ArrayAttr::get(slots.getContext(), renamed);
     }
@@ -114,6 +130,9 @@ Attribute renameRoles(Attribute value, RoleShape shape, RoleMap map) {
 
 void renameRoleUses(StringRef operation, NamedAttrList &attributes,
                     RoleMap map) {
+  // A roster declaration opens its own scope.
+  if (declaresRoster(operation))
+    return;
   for (const auto &declared : getRoleAttributes(operation))
     if (declared.shape != RoleShape::Roster)
       if (auto value = attributes.get(declared.attribute))
@@ -122,6 +141,8 @@ void renameRoleUses(StringRef operation, NamedAttrList &attributes,
 }
 
 void renameRoleUses(Operation *op, RoleMap map) {
+  if (declaresRoster(op))
+    return;
   for (const auto &use : getRoleUses(op))
     op->setAttr(use.attribute, renameRoles(use.value, use.shape, map));
 }

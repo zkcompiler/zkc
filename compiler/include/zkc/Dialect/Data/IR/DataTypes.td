@@ -13,6 +13,12 @@ def Variant : TypeDef<DataDialect, "Variant"> {
     ArrayRefParameter<"::zkc::data::AlternativeAttr">:$alternatives);
   let assemblyFormat = "`<` $identity `,` `[` $alternatives `]` `>`";
   let genVerifyDecl = 1;
+  let extraClassDeclaration = [{
+    /// The formation profile of the Data type language: a variant has at most
+    /// this many alternatives. A boundary that carries variants states its own
+    /// stricter limit and refuses there; formation is not narrowed to it.
+    static constexpr size_t maximumAlternatives = 512;
+  }];
 }
 def Bytes : TypeDef<DataDialect, "Bytes",
     [DeclareTypeInterfaceMethods<CollectionTypeInterface>]> {

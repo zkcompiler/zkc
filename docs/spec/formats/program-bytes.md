@@ -202,10 +202,15 @@ and zero-trip bodies. In particular:
 | Ports, captures and carried/output name lists | 1,024 |
 | Operation attributes | 16,384 |
 | Static instructions across all definitions and nested bodies | 65,536 |
-| Match alternatives | The [variant alternative ceiling](../ir/variants.md#type-and-value) |
+| Match alternatives | 64 |
 
 JSON nesting counts the record and list arrays, not just control constructs.
 Consequently the 64-level body bound does not authorize 64 nested `if` records.
+A `match` has one arm per alternative of a variant whose type the program spells
+in a 4,096-byte type string, which bounds it at 64 arms. A longer arm list
+refuses with `local-match-shape` or `interactive-match-shape`. MLIR
+[formation](../ir/variants.md#type-and-value) admits wider variants; they have no
+Program `match`.
 Type spelling, descriptor-work, static-argument, message, entry and runtime
 resource limits also apply through their owning contracts. This table does not
 replace those checks or raise a runtime execution allowance.
@@ -238,7 +243,7 @@ The shared [byte fixtures](../../../common/tests/fixtures/program/bytes.json)
 provide exact UTF-8 inputs and expected static-admission decisions. Both the
 compiler codec test and Rust reader consume this same corpus. It includes
 alternate JSON whitespace/escapes, explicit stops, local and participant loops,
-conditional completion, a match at the variant alternative ceiling and one
-beyond it, and malformed or unresolved records in dormant work.
+conditional completion, a match with 64 alternatives and one with 65, and
+malformed or unresolved records in dormant work.
 An independent formal reader can consume these fixtures without invoking the
 compiler. Their agreement is bounded evidence, not a proof of either reader.

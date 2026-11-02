@@ -1,4 +1,3 @@
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 
@@ -173,9 +172,9 @@ class Decoder {
       if (fields(6, participant ? "interactive-match-shape"
                                 : "local-match-shape")) {
         auto arms = [&] {
-          // One arm per alternative, within the variant alternative ceiling.
+          // One arm per alternative, within the program's match limit.
           const auto *items = (*r)[4].getAsArray();
-          if (items && items->size() > protocol::VariantAlternativeCeiling) {
+          if (items && items->size() > matchAlternativeLimit) {
             fail(participant ? "interactive-match-shape" : "local-match-shape");
             return std::vector<MatchArm>{};
           }

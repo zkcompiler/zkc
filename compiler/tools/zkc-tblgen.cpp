@@ -1,4 +1,5 @@
 #include "TableGen/Declarations.h"
+#include "TableGen/Fields.h"
 #include "TableGen/Mathematical.h"
 #include "TableGen/Recipes.h"
 #include "TableGen/Roles.h"
@@ -25,7 +26,8 @@ enum class Action {
   TypeBindings,
   Mathematics,
   Recipes,
-  RoleAttributes
+  RoleAttributes,
+  FieldInventory
 };
 cl::opt<Action> action(
     cl::desc("Generation action (required):"), cl::Required,
@@ -34,6 +36,8 @@ cl::opt<Action> action(
                    "Generate checked private realization recipes"),
         clEnumValN(Action::RoleAttributes, "gen-role-attributes",
                    "Generate the Protocol role attribute table"),
+        clEnumValN(Action::FieldInventory, "gen-field-inventory",
+                   "Generate the zkc operation field inventory"),
         clEnumValN(Action::Mathematics, "gen-mathematical-declarations",
                    "Generate mathematical identities, intrinsics and laws"),
         clEnumValN(Action::TypeBindings, "gen-type-bindings",
@@ -48,6 +52,8 @@ bool generate(raw_ostream &os, const RecordKeeper &records) {
     return emitMathematicalRecipes(os, records);
   case Action::RoleAttributes:
     return emitRoleAttributes(os, records);
+  case Action::FieldInventory:
+    return emitFieldInventory(os, records);
   case Action::Mathematics:
     return emitMathematicalDeclarations(os, records);
   case Action::TypeBindings:

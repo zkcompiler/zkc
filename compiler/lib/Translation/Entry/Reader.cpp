@@ -4,7 +4,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/InherentAttributes.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -35,11 +35,10 @@ class Reader {
     metadata -= amount;
     return true;
   }
-  // Inherent attributes come from the operation's ODS definition; this
-  // reader names no discardable attribute or call metadata.
-  static bool bare(mlir::Operation *op) {
-    return op && hasOnlyInherentAttributes(op);
-  }
+  // The operation's decided semantic fields are admitted, and the typed reads
+  // below restrict them; this reader names no discardable attribute or call
+  // metadata.
+  static bool bare(mlir::Operation *op) { return op && admitsFields(op); }
   Expected<json::Value> schema(data::LayoutAttr layout, unsigned depth = 0) {
     if (!layout || depth > limits.typeDepth || !charge())
       return fail("Host layout exceeds bounded structural export");

@@ -179,7 +179,7 @@ class Projector {
                        dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
           if (is_contained(start.getRoles(), role))
             operation = protocol_ir::ConstructionStartOp::getOperationName();
-        } else if (protocol_ir::getSoleRole(&op) == role) {
+        } else if (protocol_ir::getActionOwner(&op) == role) {
           // A single-owner action projects to its owner's participant action.
           operation = isa<zkc::protocol_ir::LocalCallOp>(op)
                           ? zkc::protocol_ir::LocalCallOp::getOperationName()

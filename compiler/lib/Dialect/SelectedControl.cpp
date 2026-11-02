@@ -1,4 +1,5 @@
 #include "zkc/Dialect/SelectedControl.h"
+#include "mlir/IR/SymbolTable.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/Variant.h"
@@ -7,6 +8,7 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
 
 using namespace mlir;
@@ -16,20 +18,42 @@ bool isSelectedControl(Operation *op) {
   return isa_and_nonnull<protocol_ir::BranchOp,
                          protocol_ir::ParticipantBranchOp, data::BranchOp>(op);
 }
-Error requireUnconditionalProtocolControl(Operation *root,
+Error requireUnconditionalProtocolControl(ArrayRef<Operation *> roots,
                                           StringRef diagnostic) {
-  if (!root)
+  if (roots.empty() || is_contained(roots, nullptr))
     return error(diagnostic);
+  // One allowance covers visited operations and followed symbol uses.
   unsigned remaining = 100000;
-  SmallVector<std::pair<Operation *, unsigned>> pending{{root, 0}};
-  while (!pending.empty()) {
-    auto [op, depth] = pending.pop_back_val();
-    if (!remaining-- || depth > 132 || isSelectedControl(op))
+  SymbolTableCollection symbols;
+  llvm::DenseSet<Operation *> reached(roots.begin(), roots.end());
+  SmallVector<Operation *> definitions(roots.begin(), roots.end());
+  while (!definitions.empty()) {
+    Operation *definition = definitions.pop_back_val();
+    // Every arm and nested region of a reached definition is reached, whether
+    // or not a selector can take it.
+    SmallVector<Operation *> pending{definition};
+    while (!pending.empty()) {
+      Operation *op = pending.pop_back_val();
+      if (!remaining-- || isSelectedControl(op))
+        return error(diagnostic);
+      for (Region &region : op->getRegions())
+        for (Block &block : region)
+          for (Operation &child : block)
+            pending.push_back(&child);
+    }
+    // Applications, helper and local calls, oracle and relation declarations
+    // and every other static reference extend the closure.
+    auto uses = SymbolTable::getSymbolUses(definition);
+    if (!uses)
       return error(diagnostic);
-    for (Region &region : op->getRegions())
-      for (Block &block : region)
-        for (Operation &child : block)
-          pending.emplace_back(&child, depth + 1);
+    for (const SymbolTable::SymbolUse &use : *uses) {
+      if (!remaining--)
+        return error(diagnostic);
+      Operation *callee =
+          symbols.lookupNearestSymbolFrom(use.getUser(), use.getSymbolRef());
+      if (callee && reached.insert(callee).second)
+        definitions.push_back(callee);
+    }
   }
   return Error::success();
 }
@@ -71,10 +95,14 @@ LogicalResult verifySelectedControl(Operation *op) {
                              detail);
   };
   auto alternatives = op->getAttrOfType<ArrayAttr>("alternatives");
+  if (alternatives && (alternatives.size() > selectedRegionArmLimit ||
+                       op->getNumRegions() > selectedRegionArmLimit))
+    return diagnostics::emit(op->emitOpError(), "selected-control-limit",
+                             "selected region exceeds " +
+                                 Twine(uint64_t(selectedRegionArmLimit)) +
+                                 " arms");
   if (!isSelectedControl(op) || !op->getNumOperands() || !alternatives ||
-      alternatives.empty() ||
-      alternatives.size() > protocol::VariantAlternativeCeiling ||
-      alternatives.size() != op->getNumRegions())
+      alternatives.empty() || alternatives.size() != op->getNumRegions())
     return refuse("expected selector and exactly one region per alternative");
   Type type = op->getOperand(0).getType();
   if (auto represented = dyn_cast<runtime::RepresentedType>(type))

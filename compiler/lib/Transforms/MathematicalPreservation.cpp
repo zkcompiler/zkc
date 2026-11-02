@@ -441,7 +441,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
             continue;
           auto operation = target.getAs<StringAttr>("operation").getValue();
           // An exchange projects to the sender's send and the receiver's
-          // receive. Every other projected action has one owning role use.
+          // receive. Every other projected action has one owner.
           StringAttr owner;
           auto exchange = dyn_cast<protocol_ir::ExchangeOp>(action);
           if (operation == protocol_ir::EmitOp::getOperationName())
@@ -449,7 +449,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
           else if (operation == protocol_ir::AwaitOp::getOperationName())
             owner = exchange ? exchange.getReceiverAttr() : StringAttr();
           else if (!exchange)
-            owner = protocol_ir::getSoleRole(action);
+            owner = protocol_ir::getActionOwner(action);
           if (!owner || participant.getRoleAttr() != owner)
             return refuse(result, "role projection changed an action owner");
         }

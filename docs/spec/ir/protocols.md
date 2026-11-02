@@ -42,15 +42,27 @@ declared role. A restriction selects a nonempty subset of an existing value's
 components. It neither communicates nor changes their values.
 
 Every role-valued inherent attribute of a Protocol operation is declared once,
-with its shape: one role, a role set, one role set per input, result or carried
-slot, or a roster declaration. A definition's `roles` and a participant's `role`
+with its shape: one role; an ordered list of role names whose positions carry
+meaning; a role set; one role set per input, result or carried slot; or a
+roster declaration. The ordered lists are an application's actual roles, which
+bind to the callee's roster by position, a selected construction start's copy
+of them, and an assembly's role per operand; their order and multiplicity are
+part of the value. A role set names the roles that are available to, or take
+part in, an action or region. A definition's `roles` and a participant's `role`
 are roster declarations; they bind roles, and every other role-valued attribute
 uses them. A role substitution, such as application expansion or a
 correspondence under an application's role mapping, renames exactly the role
-uses; roster declarations and every other attribute are unchanged. Statement
-selectors name entry roles but are never substituted, because an applied
-definition cannot contain a statement. Inside selected or repeated control,
-every role use names a participating role.
+uses, each name in place, never sorting or merging names; roster declarations
+and every other attribute are unchanged. A roster declaration opens its own
+binding scope: a substitution from an enclosing scope changes none of its
+attributes and does not enter it. Statement selectors name entry roles but are
+never substituted, because an applied definition cannot contain a statement.
+Inside selected or repeated control, every role use names a participating role.
+
+The role that executes an action is a property of the typed operation, not of
+the attribute that happens to hold its only role name: a guard, conditional
+completion or query is executed by its `owner` and a local call by its `role`,
+while a participant send or receive names its counterparty as `peer`.
 
 `protocol.assemble_roles` is the pointwise counterpart of restriction. It has
 one ordinary total, shared, non-affine input per distinct named role, all of the

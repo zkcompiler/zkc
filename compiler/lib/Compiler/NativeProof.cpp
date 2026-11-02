@@ -1722,8 +1722,21 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   auto original = unit(source);
   if (!original || original.getProfile() != pir::Profile::Protocol)
     return error("native-proof-source");
+  // The selected entry and construction execute; unrelated declarations,
+  // such as an uncalled helper or protocol, do not take part in this check.
+  auto entry = dyn_cast_or_null<pir::MathematicalOp>(
+      SymbolTable::lookupSymbolIn(original, policy.entry));
+  if (!entry)
+    return error("native-proof-entry");
+  SmallVector<Operation *> selected{entry};
+  if (!policy.construction.empty()) {
+    auto *record = SymbolTable::lookupSymbolIn(original, policy.construction);
+    if (!isa_and_nonnull<pir::ConstructionOp>(record))
+      return error("native-proof-construction-selection");
+    selected.push_back(record);
+  }
   if (auto e = requireUnconditionalProtocolControl(
-          original, "native-proof-control-profile"))
+          selected, "native-proof-control-profile"))
     return std::move(e);
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
@@ -1755,9 +1768,6 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   } else if (!records.empty())
     return error("native-proof-construction-selection");
   SymbolTable originalSymbols(original);
-  auto entry = originalSymbols.lookup<pir::MathematicalOp>(policy.entry);
-  if (!entry)
-    return error("native-proof-entry");
   auto occurrenceMap = origins(entry, originalSymbols, invocations);
   if (!occurrenceMap)
     return occurrenceMap.takeError();

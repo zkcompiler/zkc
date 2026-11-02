@@ -11,18 +11,22 @@
 #include <memory>
 #include <string>
 
-// Declared attribute facts. Protocol operations declare their role-valued
-// attributes once, in ODS; every reader enumerates and renames role uses
-// through the generated table (the application expander renames copies in
-// place; correspondence, value correspondence and application-map comparison
-// rename attribute dictionaries; the active-role check, the action-owner
-// lookups and expansion costs enumerate uses). This test applies a role
-// renaming to every registered Protocol operation through each of those entry
-// points and requires exactly the declared role uses to change.
+// Mechanics of the declared role attribute table. Protocol operations declare
+// their role-valued attributes once, in ODS, and the generated table
+// enumerates and renames role uses. These cases check the table against the
+// registered operations and exercise its own entry points: role use
+// enumeration, the structural sole-role query, renaming of a dictionary and of
+// an operation in place, the binding-scope rule for roster declarations, and
+// the typed action owners. Their expectations derive from the same table, so
+// they cannot detect a missing ODS declaration; independently authored
+// fixtures run through the actual consumers in role_consumers.cpp.
 //
-// Mathematical formation admits the inherent attributes that the registered
-// operation's ODS definition declares and refuses discardable ones and
-// upstream call metadata (argument and result dictionaries and inlining).
+// Mathematical formation admits an attribute because the semantic field
+// inventory decides it, not because the operation registers it: a zkc
+// operation's inventoried fields and an upstream adapter's interpreted fields.
+// It refuses discardable attributes and upstream call metadata (argument and
+// result dictionaries and inlining). semantic_fields.cpp checks the inventory
+// and the adapters against the registered definitions.
 
 using namespace mlir;
 using namespace zkc;
@@ -36,6 +40,9 @@ Attribute shaped(Builder &builder, RoleShape shape, StringRef first,
   switch (shape) {
   case RoleShape::Role:
     return builder.getStringAttr(first);
+  case RoleShape::RoleNames:
+    // Positions and repetition are part of an ordered value.
+    return builder.getStrArrayAttr({second, first, second});
   case RoleShape::RoleSet:
   case RoleShape::Roster:
     return builder.getStrArrayAttr({first, second});
@@ -185,6 +192,14 @@ int main() {
           expected.size() == 1 && expected[0].shape == RoleShape::Role;
       require(single ? sole && sole.getValue() == "A" : !sole,
               "sole role differs from the declared uses");
+      // A roster declaration opens its own scope: a substitution from an
+      // enclosing scope changes none of its attributes.
+      bool binder = protocol_ir::declaresRoster(op);
+      require(binder == llvm::any_of(protocol_ir::getRoleAttributes(name),
+                                     [](const auto &row) {
+                                       return row.shape == RoleShape::Roster;
+                                     }),
+              "roster declaration differs from the table");
       // The renamed value of each attribute, independently of the table.
       auto check = [&](DictionaryAttr after) {
         require(after.size() == before.size(), "attribute inventory changed");
@@ -193,7 +208,7 @@ int main() {
             return row.attribute == attribute.getName().getValue();
           });
           auto value = after.get(attribute.getName());
-          if (row == expected.end()) {
+          if (row == expected.end() || binder) {
             require(value == attribute.getValue(),
                     "'" + attribute.getName().getValue() +
                         "' is not a role use but changed");
@@ -209,11 +224,49 @@ int main() {
       check(attributes.getDictionary(&context));
       protocol_ir::renameRoleUses(op, rename);
       check(op->getAttrDictionary());
-      renamed += expected.size();
-      untouched += before.size() - expected.size();
+      renamed += binder ? 0 : expected.size();
+      untouched += before.size() - (binder ? 0 : expected.size());
     });
   }
 
+  cases.run("the sole role is structural, not an action owner", [&] {
+    auto build = [&](StringRef name,
+                     ArrayRef<std::pair<StringRef, Attribute>> attributes) {
+      OperationState state(builder.getUnknownLoc(), name);
+      for (auto [attribute, value] : attributes)
+        state.addAttribute(attribute, value);
+      return Operation::create(state);
+    };
+    auto a = builder.getStringAttr("A"), b = builder.getStringAttr("B");
+    // A participant send or receive names its counterparty.
+    for (StringRef name : {"protocol.send", "protocol.receive"}) {
+      auto *op = build(name, {{"site", builder.getStringAttr("s")},
+                              {"schema", builder.getStringAttr("m")},
+                              {"peer", b}});
+      require(protocol_ir::getSoleRole(op) == b, name + ": sole role differs");
+      require(!protocol_ir::getActionOwner(op),
+              name + ": a counterparty became an owner");
+      op->destroy();
+    }
+    for (auto [name, attribute] :
+         {std::pair<StringRef, StringRef>{"protocol.guard", "owner"},
+          {"protocol.finish_if", "owner"},
+          {"protocol.query", "owner"},
+          {"protocol.local_call", "role"}}) {
+      auto *op =
+          build(name, {{"site", builder.getStringAttr("s")}, {attribute, a}});
+      require(protocol_ir::getActionOwner(op) == a,
+              name + ": the typed owner differs");
+      op->destroy();
+    }
+    // An exchange has an owner per side; an oracle query is not a projected
+    // single-owner action.
+    for (StringRef name : {"protocol.exchange", "protocol.oracle_query"}) {
+      auto *op = build(name, {{"sender", a}, {"receiver", b}, {"owner", a}});
+      require(!protocol_ir::getActionOwner(op), name + ": invented an owner");
+      op->destroy();
+    }
+  });
   cases.run("values outside the declared shape are left unchanged", [&] {
     auto mixed = builder.getArrayAttr(
         {builder.getStringAttr("A"), builder.getI64IntegerAttr(1)});
@@ -264,7 +317,7 @@ int main() {
     ++admitted;
     auto contextBit = meaning->contexts & (~meaning->contexts + 1);
     auto formation = static_cast<mathematical::Context>(contextBit);
-    cases.run(name.getStringRef() + " admits its ODS attributes only", [&] {
+    cases.run(name.getStringRef() + " admits its decided fields only", [&] {
       fill(builder, owned.op, {});
       std::string diagnostic;
       ScopedDiagnosticHandler capture(&context, [&](Diagnostic &d) {
@@ -274,7 +327,7 @@ int main() {
       // Without operands, results or regions, only attribute admission can
       // refuse an instance in an admitted context.
       require(succeeded(mathematical::verifyOperation(owned.op, formation)),
-              "an ODS attribute was refused: " + diagnostic);
+              "a decided field was refused: " + diagnostic);
       diagnostic.clear();
       owned.op->setDiscardableAttr("unexpected", builder.getUnitAttr());
       require(failed(mathematical::verifyOperation(owned.op, formation)) &&

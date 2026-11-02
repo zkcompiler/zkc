@@ -4,7 +4,6 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Services.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -128,7 +127,7 @@ struct TypeCodec {
               variant.getIdentity().getTerm())) ||
           variant.getAlternatives().empty() ||
           variant.getAlternatives().size() >
-              protocol::VariantAlternativeCeiling)
+              data::VariantType::maximumAlternatives)
         return refuse();
       json::Array alternatives;
       llvm::StringSet<> labels;
@@ -274,7 +273,7 @@ struct TypeCodec {
       auto array = dyn_cast<ArrayAttr>(*term);
       auto arms = (*row)[2].getAsArray();
       if (!array || !arms || arms->empty() ||
-          arms->size() > protocol::VariantAlternativeCeiling)
+          arms->size() > data::VariantType::maximumAlternatives)
         return refuse();
       auto identity = data::IdentityAttr::getChecked(emit, context, array);
       if (!identity)

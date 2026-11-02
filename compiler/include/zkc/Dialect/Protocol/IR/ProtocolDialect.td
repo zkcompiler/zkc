@@ -28,12 +28,17 @@ class ProtocolRoleAttr<Attr attr, string shape> : ConfinedAttr<attr, []> {
 }
 // One role name.
 class ProtocolRole<Attr attr> : ProtocolRoleAttr<attr, "Role">;
-// A set of role names.
+// An ordered list of role names whose positions carry meaning, such as an
+// application's actual roles in its callee roster's order. Order and
+// multiplicity are part of the value.
+class ProtocolRoleNames<Attr attr> : ProtocolRoleAttr<attr, "RoleNames">;
+// The roles available to, or taking part in, an action or region.
 class ProtocolRoleSet<Attr attr> : ProtocolRoleAttr<attr, "RoleSet">;
 // One role set per input, result or carried slot.
 class ProtocolSlotRoleSets<Attr attr> : ProtocolRoleAttr<attr, "SlotRoleSets">;
-// A roster declaration binds the role names that other attributes use, rather
-// than using them. Renaming role uses never changes it.
+// A roster declaration binds the role names that the declaring operation's
+// other attributes and the operations nested in it use, rather than using
+// them. A substitution from an enclosing scope changes none of them.
 class ProtocolRoster<Attr attr> : ProtocolRoleAttr<attr, "Roster">;
 
 #endif

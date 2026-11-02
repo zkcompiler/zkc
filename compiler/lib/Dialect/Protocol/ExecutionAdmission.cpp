@@ -4,11 +4,11 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
-#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -58,11 +58,10 @@ class ExecutionAdmission {
     remaining -= amount;
     return true;
   }
-  // Inherent attributes come from the operation's ODS definition; a
-  // discardable attribute or call metadata is admitted only when named here.
+  // The operation's decided semantic fields are admitted; a discardable
+  // attribute or call metadata is admitted only when named here.
   bool attributes(Operation *op, ArrayRef<StringRef> named = {}) {
-    return hasOnlyInherentAttributes(op, named) ||
-           fail(op, "interactive-unknown-attribute");
+    return admitsFields(op, named) || fail(op, "interactive-unknown-attribute");
   }
   bool type(Operation *op, Type type) {
     if (!charge(op))

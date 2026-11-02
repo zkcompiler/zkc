@@ -104,7 +104,7 @@ struct TypeExport {
           return error("binding-type");
     if (depth >= 8 ||
         variant.getAlternatives().size() >
-            protocol::VariantAlternativeCeiling ||
+            protocol::VariantDescriptorAlternatives ||
         (account && !budget.consume()))
       return error("variant-type");
     json::Array alternatives;

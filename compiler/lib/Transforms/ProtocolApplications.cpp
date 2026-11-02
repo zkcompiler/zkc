@@ -110,6 +110,10 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
         auto *copy = builder.clone(op, values);
         auto renamed =
             copy->walk<WalkOrder::PreOrder>([&](Operation *copy) -> WalkResult {
+              // A roster declaration opens its own scope, which this
+              // substitution does not enter.
+              if (protocol_ir::declaresRoster(copy))
+                return WalkResult::skip();
               copy->setLoc(CallSiteLoc::get(copy->getLoc(), call.getLoc()));
               // Every declared role use, and nothing else, takes the caller
               // role.

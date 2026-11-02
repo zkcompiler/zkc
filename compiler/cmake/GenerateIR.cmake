@@ -70,7 +70,11 @@ mlir_tablegen(include/zkc/Dialect/Protocol/IR/protocolAttrs.cpp.inc -gen-attrdef
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Protocol/IR/ProtocolOps.td)
 tablegen(ZKC include/zkc/Dialect/Protocol/IR/protocolRoleAttributes.cpp.inc
   -gen-role-attributes EXTRA_INCLUDES ${zkc_tablegen_includes})
+# Every zkc operation and its inherent fields, for semantic field admission and
+# its coverage test. Only the admission implementation and that test include it.
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
+tablegen(ZKC include/zkc/Dialect/fieldInventory.cpp.inc -gen-field-inventory
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Data/IR/DataAttrs.td)
 list(APPEND zkc_generated_headers include/zkc/Dialect/Data/IR/dataAttrs.h.inc)
 mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.h.inc -gen-attrdef-decls

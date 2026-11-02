@@ -3,9 +3,9 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -91,9 +91,9 @@ LogicalResult verifyOperation(Operation *op, Context context) {
     return diagnostics::emit(
         op->emitOpError(), "mathematical-formation",
         "operation has no admitted meaning in this context");
-  // The registered operation's ODS definition declares its inherent
-  // attributes; no discardable attribute or call metadata is admitted.
-  if (!hasOnlyInherentAttributes(op))
+  // Admit only the decided fields of the closed semantic profile; no
+  // discardable attribute or call metadata is admitted.
+  if (!admitsFields(op))
     return diagnostics::emit(op->emitOpError(), "mathematical-formation",
                              "unsupported mathematical operation attribute");
   if (meaning->category == Category::Total)

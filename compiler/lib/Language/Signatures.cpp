@@ -2,6 +2,7 @@
 #include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
@@ -482,10 +483,19 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
     decl.alternatives.push_back(std::move(alt));
   }
-  if (decl.kind == Declaration::Kind::Variant &&
-      (decl.alternatives.empty() || decl.alternatives.size() > 32))
-    return types.fail("source.type", "variant requires one to 32 alternatives",
+  if (decl.kind == Declaration::Kind::Variant && decl.alternatives.empty())
+    return types.fail("source.type", "variant requires an alternative",
                       decl.span);
+  // Emission forms every runtime variant from its portable descriptor, so a
+  // source variant has at most the descriptor's alternatives.
+  if (decl.kind == Declaration::Kind::Variant &&
+      decl.alternatives.size() > protocol::VariantDescriptorAlternatives)
+    return types.fail(
+        "source.limit",
+        "variant exceeds " +
+            Twine(uint64_t(protocol::VariantDescriptorAlternatives)) +
+            " alternatives",
+        decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
       decl.kind == Declaration::Kind::EntryFunction ||

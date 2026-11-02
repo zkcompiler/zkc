@@ -102,18 +102,37 @@ uses, and external interfaces when adding analysis behavior to standard
 operations. Add an interface for a real shared consumer, with semantic
 preconditions; a trait name cannot manufacture totality or erasability.
 
-ODS is the one record of an operation's attributes. Readers admit the
-registered operation's inherent attributes without restating them, refuse
-discardable attributes they do not name, and compare an optional inherent
-attribute wherever its presence changes the compared form. Upstream call
-metadata (argument and result attribute dictionaries and the inlining
-directive) is inherent but, like a discardable attribute, admitted only where a
-reader names it. Protocol operations
-declare each role-valued attribute through a shape constraint (one role, a role
-set, per-slot role sets or a roster declaration). `zkc-tblgen` generates one
+ODS is the one record of an operation's structure; it does not by itself admit
+a field into any reader's semantic profile. Semantic readers admit an
+attribute through one decision table over a closed operation profile
+(`zkc/Dialect/SemanticFields.h`). `zkc-tblgen` generates its rows for every
+zkc operation: each inherent attribute is interpreted, segment sizes are
+structure, and call metadata that ODS marks with `CallMetadataAttr` is
+refused. Upstream operations that readers dispatch on have explicit adapters
+that decide every registered field: interpreted, restricted to a neutral value
+(such as `arith.addi` without overflow assumptions), structure, or refused
+(such as upstream call metadata). An upstream operation without an adapter is
+outside the profile. A reader admits a refused field or a discardable attribute
+only where it names it, and still reads each interpreted field through the typed
+accessor, restricts its value or refuses the operation; it compares an optional
+field wherever its presence changes the compared form. The
+`semantic-fields` test checks the generated rows and the adapters against the
+registered definitions, including properties that are not attributes, and
+compares every decision with a reviewed copy, so a new or changed field fails
+until its readers have been checked and the decision recorded.
+
+Protocol operations declare each role-valued attribute through a shape
+constraint: one role, an ordered list of role names whose positions carry
+meaning (an application's actual roles, in its callee roster's order), a role
+set, per-slot role sets, or a roster declaration. `zkc-tblgen` generates one
 role attribute table from those declarations, and application expansion,
-correspondence, application-map comparison, availability checking, projection
-owners and expansion cost enumerate or rename role uses only through it.
+correspondence, application-map comparison, availability checking and
+expansion cost enumerate or rename role uses only through it. Renaming maps
+each name in place, keeping order and multiplicity. A roster declaration opens
+its own binding scope, so a substitution from an enclosing scope changes none
+of its attributes and does not enter it. The table's sole-role query is
+structural; the role that executes an action comes from the typed operations,
+since a participant send or receive names its counterparty as `peer`.
 Mandatory profile admission and reusable actual-body interpretation belong to
 IR. Transformation-specific comparisons may stay beside a transformation with
 separate implementation and checked dependencies on its semantic readers. Producers,

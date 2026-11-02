@@ -32,10 +32,10 @@ StringRef symbol(mlir::Operation *op, StringRef attribute = "callee") {
   auto value = op->getAttrOfType<mlir::FlatSymbolRefAttr>(attribute);
   return value ? value.getValue() : StringRef();
 }
-// The owning role of a single-owner action, such as a guard, query or local
-// call; empty for every other operation.
+// The owner of a single-owner action: a guard, a query or a local call; empty
+// for every other operation.
 StringRef role(mlir::Operation *op) {
-  auto value = protocol_ir::getSoleRole(op);
+  auto value = protocol_ir::getActionOwner(op);
   return value ? value.getValue() : StringRef();
 }
 std::vector<std::string> roleNames(mlir::ArrayAttr values) {

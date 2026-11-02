@@ -472,17 +472,25 @@ int main() {
         auto physical = take(defaultPlanType(logical));
         accept(empty.checkType(physical));
         refuses(encodeBoundType(physical, true), "variant-type");
-        // Alternative counts share one ceiling: a variant that forms also
-        // has a portable spelling.
+        // The portable spelling admits fewer alternatives than formation: a
+        // variant one beyond the descriptor limit forms and is available, but
+        // has no portable spelling.
         SmallVector<data::AlternativeAttr> alternatives;
-        for (unsigned i = 0; i < VariantAlternativeCeiling; ++i)
+        for (unsigned i = 0; i < 64; ++i)
           alternatives.push_back(data::AlternativeAttr::get(
               &context, StringAttr::get(&context, "arm" + std::to_string(i)),
               ArrayRef<Type>{flag}));
+        auto spelled = take(defaultPlanType(
+            data::VariantType::get(&context, identity, alternatives)));
+        accept(empty.checkType(spelled));
+        take(encodeBoundType(spelled, true));
+        alternatives.push_back(data::AlternativeAttr::get(
+            &context, StringAttr::get(&context, "beyond"),
+            ArrayRef<Type>{flag}));
         auto wide = take(defaultPlanType(
             data::VariantType::get(&context, identity, alternatives)));
         accept(empty.checkType(wide));
-        take(encodeBoundType(wide, true));
+        refuses(encodeBoundType(wide, true), "variant-type");
       });
   cases.run(
       "native bindings retain provider and hidden numerical dependencies", [&] {

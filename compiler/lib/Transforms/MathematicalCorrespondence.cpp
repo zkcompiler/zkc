@@ -43,6 +43,12 @@ class Correspondence {
           values, protocol_ir::RoleShape::RoleSet,
           [&](StringAttr value) { return role(value); }));
     }
+    // Ordered role names keep their positions and multiplicity.
+    ArrayAttr names(ArrayAttr values) const {
+      return cast<ArrayAttr>(protocol_ir::renameRoles(
+          values, protocol_ir::RoleShape::RoleNames,
+          [&](StringAttr value) { return role(value); }));
+    }
     DictionaryAttr attributes(Operation *op) const {
       NamedAttrList result(op->getAttrDictionary());
       protocol_ir::renameRoleUses(
@@ -221,7 +227,7 @@ class Correspondence {
           if (!start || !terms.charge(selected->second->inputs.size()) ||
               start->getAttrs().size() != 2 ||
               start.getSite() != nested.prefix ||
-              start.getRoles() != substitution.set(application.getRoles()) ||
+              start.getRoles() != substitution.names(application.getRoles()) ||
               callee.getRoles().size() != 2 ||
               start.getNumOperands() != selected->second->inputs.size() ||
               !reachedStarts.insert(selected->first).second)

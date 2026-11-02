@@ -22,11 +22,11 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -100,13 +100,13 @@ Expected<runtime::BindingOp> primitiveBinding(Operation *op,
 unsigned siteLimit(StructuredSourceProfile profile) {
   return profile == StructuredSourceProfile::Prepared ? 4096 : 512;
 }
-// The operation's ODS definition owns its inherent attributes; a discardable
-// attribute or call metadata is admitted only when the caller names it. Every
-// admitted attribute is then bounded for the wire.
+// The operation's decided semantic fields are admitted; a discardable attribute
+// or call metadata is admitted only when the caller names it. Every admitted
+// attribute is then bounded for the wire.
 Error checkAttributes(Operation &op, ArrayRef<StringRef> named,
                       StructuredSourceProfile profile) {
   for (NamedAttribute attr : op.getAttrs()) {
-    if (!admitsAttribute(&op, attr.getName(), named))
+    if (!admitsField(&op, attr, named))
       return error("structured-source-attribute", attr.getName().getValue());
     // Protocol origin has a separate bounded tree validator; only its
     // template path can exceed the ordinary string limit.
@@ -876,7 +876,7 @@ class Exporter {
   }
 
   Expected<json::Value> descriptor(Operation &op, StringRef owner) {
-    // Each branch represents its operation's ODS inherent attributes; no
+    // Each branch represents its operation's decided semantic fields; no
     // descriptor admits a discardable attribute or call metadata.
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
@@ -1662,8 +1662,8 @@ class Exporter {
     auto scoped = dyn_cast<func::FuncOp>(op);
     if (scoped && !isScopedExecutionFunction(scoped))
       scoped = {};
-    // Each owner's function operation declares its inherent attributes in
-    // ODS. Only these discardable attributes and call metadata are admitted.
+    // Each owner's function operation admits its decided semantic fields and
+    // only these discardable attributes and call metadata.
     SmallVector<StringRef, 3> named;
     if (owner == "math")
       named = {"data.preconditions"};

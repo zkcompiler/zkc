@@ -12,7 +12,6 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -23,6 +22,7 @@
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
@@ -43,14 +43,13 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 using Values = SmallVector<mlir::Value>;
-// The operation's ODS definition owns its inherent attributes; an optional one
-// that changes the compared form is compared with that form. A discardable
-// attribute or call metadata is admitted only when named, and each named one is
-// present.
+// The operation's decided semantic fields are admitted; an optional one that
+// changes the compared form is compared with that form. A discardable attribute
+// or call metadata is admitted only when named, and each named one is present.
 bool attributes(mlir::Operation &op, ArrayRef<StringRef> named = {}) {
-  return hasOnlyInherentAttributes(&op, named) &&
-         llvm::all_of(named,
-                      [&](StringRef name) { return bool(op.getAttr(name)); });
+  return admitsFields(&op, named) && llvm::all_of(named, [&](StringRef name) {
+           return bool(op.getAttr(name));
+         });
 }
 bool string(mlir::Operation &op, StringRef name, StringRef expected) {
   auto value = op.getAttrOfType<mlir::StringAttr>(name);

@@ -1233,21 +1233,27 @@ int main(int argc, char **argv) {
         {"Outer",
          {{"none", {}}, {"nested", {inner, "sequence<field:koala-bear>"}}}});
     auto logical = zkc::test::variantType(&context, outer);
-    // Native default formation and the byte contract share one alternative
-    // ceiling, so the widest variant that forms keeps its portable spelling.
+    // Native default formation does not inherit the byte contract's
+    // alternative limit: a variant at that limit keeps its portable spelling,
+    // and one beyond it still forms without one.
     SmallVector<data::AlternativeAttr> wideArms;
-    for (unsigned i = 0; i < VariantAlternativeCeiling; ++i)
+    for (unsigned i = 0; i < 65; ++i)
       wideArms.push_back(data::AlternativeAttr::get(
           &context, StringAttr::get(&context, "arm" + std::to_string(i)),
           ArrayRef<Type>{}));
-    auto wide = data::VariantType::get(
-        &context,
-        data::importVariantIdentity(&context, json::Value("WideChoice")),
-        wideArms);
-    auto widePhysical = take(defaultPlanType(wide));
-    require(logicalValueType(widePhysical) == wide,
-            "native default formation changed a variant at the ceiling");
-    take(encodeBoundType(widePhysical, true));
+    for (size_t count : {size_t(64), size_t(65)}) {
+      auto wide = data::VariantType::get(
+          &context,
+          data::importVariantIdentity(&context, json::Value("WideChoice")),
+          ArrayRef<data::AlternativeAttr>(wideArms).take_front(count));
+      auto widePhysical = take(defaultPlanType(wide));
+      require(logicalValueType(widePhysical) == wide,
+              "native default formation inherited byte alternative limits");
+      if (count <= 64)
+        take(encodeBoundType(widePhysical, true));
+      else
+        refuses(encodeBoundType(widePhysical, true), "variant-type");
+    }
     auto native = take(defaultPlanType(logical));
     auto expected =
         take(defaultRepresentation(take(parseBoundType(outer, false))));

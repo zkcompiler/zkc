@@ -330,7 +330,11 @@ is a singleton tuple; `(T)` is grouping. A record's identity includes its declar
 and every static argument, including phantom arguments. Variant identity includes
 its declaration and static arguments, not only its payload layout. Aliases expand
 without creating a nominal identity. Variant payloads are positional; a variant
-has one to 32 distinct alternatives. Formal mathematical types have a separate
+has one to 64 distinct alternatives. The source language lays out every runtime
+variant through its [portable descriptor](../ir/variants.md#portable-representation),
+from which emission forms the native type, so the source bound is that
+descriptor's 64 rather than the 512 of native formation. A wider declaration
+refuses with `source.limit`. Formal mathematical types have a separate
 [authoring contract](#formal-mathematics).
 
 Domain declarations require an installed identity of the declared catalog sort:

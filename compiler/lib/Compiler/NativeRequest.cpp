@@ -565,8 +565,10 @@ planNativeRequests(pir::ProtocolModuleOp projected,
                    const NativeProofPolicy &policy,
                    ArrayRef<NativeTranscriptEvent> events,
                    const mathematical::RealizedProtocol *realization) {
+  // Only the selected entry's participants and what they reference take part.
   if (auto e = requireUnconditionalProtocolControl(
-          projected, "native-request-control-profile"))
+          {SymbolTable::lookupSymbolIn(projected, policy.entry)},
+          "native-request-control-profile"))
     return std::move(e);
   SmallVector<NativeRequestCountPair> counts;
   if (realization &&

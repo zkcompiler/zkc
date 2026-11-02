@@ -11,6 +11,9 @@ inline constexpr size_t artifactNodeLimit = 400000;
 inline constexpr size_t staticInstructionLimit = 65536;
 inline constexpr size_t stringByteLimit = 4096;
 inline constexpr size_t parameterByteLimit = 16384;
+/// A `match` has one arm per alternative of a variant whose type the program
+/// spells within `stringByteLimit`, so it has at most 64 arms.
+inline constexpr size_t matchAlternativeLimit = 64;
 /// Parse under the Program byte ceiling, then decode the current carrier.
 llvm::Expected<Participants> parse(llvm::StringRef);
 /// Read only zkc.program/0 physical programs. Structural decoding does not

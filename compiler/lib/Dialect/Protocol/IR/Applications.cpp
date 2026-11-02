@@ -14,15 +14,22 @@ LogicalResult refuse(Operation *op, StringRef reason) {
 // The role names in one role use, each of which expansion copies and renames.
 uint64_t roleNames(const protocol_ir::RoleUse &use) {
   auto values = dyn_cast<ArrayAttr>(use.value);
-  if (use.shape == protocol_ir::RoleShape::Role || !values)
+  switch (use.shape) {
+  case protocol_ir::RoleShape::Role:
+  case protocol_ir::RoleShape::Roster:
     return 1;
-  if (use.shape == protocol_ir::RoleShape::RoleSet)
-    return values.size();
-  uint64_t names = 0;
-  for (Attribute slot : values)
-    if (auto set = dyn_cast<ArrayAttr>(slot))
-      names += set.size();
-  return names;
+  case protocol_ir::RoleShape::RoleNames:
+  case protocol_ir::RoleShape::RoleSet:
+    return values ? values.size() : 1;
+  case protocol_ir::RoleShape::SlotRoleSets: {
+    uint64_t names = values ? 0 : 1;
+    if (values)
+      for (Attribute slot : values)
+        names += isa<ArrayAttr>(slot) ? cast<ArrayAttr>(slot).size() : 1;
+    return names;
+  }
+  }
+  llvm_unreachable("unknown role attribute shape");
 }
 } // namespace
 LogicalResult

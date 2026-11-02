@@ -1,8 +1,8 @@
 // Exact expressions and contextual actions shared by mathematical owners:
 // each admitted operation's category and contexts. This is not a dialect-wide
 // grant. Interfaces supply dependencies only after an exact registered
-// operation has matched this list. Admitted attributes are the operation's ODS
-// inherent attributes, so they are not restated here.
+// operation has matched this list. Admitted attributes are the operation's
+// decided semantic fields, so they are not restated here.
 ZKC_MATH_OPERATION(data::SequenceEmptyOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(data::SequenceAppendOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(data::SequenceLengthOp, Total, Context::Protocol | Context::Participant | Context::Helper)

@@ -4,7 +4,6 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeRepresentations.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -149,7 +148,7 @@ struct Formation {
         return refuse("invalid nominal variant identity");
       auto alternatives = variant.getAlternatives();
       if (alternatives.empty() ||
-          alternatives.size() > protocol::VariantAlternativeCeiling)
+          alternatives.size() > data::VariantType::maximumAlternatives)
         return refuse("invalid variant alternative count");
       llvm::SmallDenseSet<StringAttr, 8> labels;
       for (auto arm : alternatives) {

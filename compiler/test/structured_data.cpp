@@ -80,6 +80,20 @@ int main() {
     cases.run("logical reader refuses " + text, [&] {
       refuses(importLogicalTypeData(&context, read(text)), "structured-data");
     });
+  cases.run("logical variants keep the 512-alternative formation profile", [&] {
+    auto wide = [](unsigned count) {
+      json::Array arms;
+      for (unsigned i = 0; i < count; ++i)
+        arms.push_back(json::Array{"a" + std::to_string(i), json::Array{}});
+      return json::Value(
+          json::Array{"variant", json::Array{"atom", "Wide"}, std::move(arms)});
+    };
+    auto widest = wide(512);
+    auto type = take(importLogicalTypeData(&context, widest));
+    require(equalNaturalJson(take(exportLogicalTypeData(type)), widest),
+            "512 alternatives did not round trip");
+    refuses(importLogicalTypeData(&context, wide(513)), "structured-data");
+  });
   cases.run("variant identity, alternative and payload order are semantic", [&] {
     auto expected = read(
         R"(["variant",["tuple",[["atom","R"],["atom","F"]]],[["first",[["apply","bool",[]],["apply","index",[]]]],["second",[]]]])");

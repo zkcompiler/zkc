@@ -14,14 +14,21 @@ identity. Equal physical layouts do not identify distinct nominal variants.
 Generic instantiation retains every static actual, including a phantom actual
 that does not occur in a payload.
 
-A variant has at most 64 alternatives. This alternative ceiling belongs to the
-Data type language. MLIR formation, selected regions, the portable descriptor
-below, logical type records and Program `match` all apply it, in the compiler
-and in every independent reader, so a variant that forms can be selected over,
-spelled and matched. It is the largest power of two for which a variant with
-that many alternatives still fits the program format's 4096-byte type string;
-the spelling bound applies separately, so long labels or payloads can refuse
-sooner. A boundary with a stricter bound states it and refuses there.
+Formation in the Data type language admits at most 512 alternatives, and
+[logical type data](../formats/logical-types.md) carries the same profile.
+Every other layer states its own limit in its owning contract and refuses at its
+own boundary; none narrows formation:
+
+| Layer | Alternatives | Refusal |
+| --- | --- | --- |
+| MLIR formation and logical type data | 512 | Type verification; `structured-data` |
+| [Selected regions](control.md#selected-protocol-and-mathematical-regions) | 512 arms | `selected-control-limit` |
+| [Portable descriptor](#portable-representation) | 64 | `variant-type` when a formed variant is spelled |
+| [Program `match`](../formats/program-bytes.md#bounds-and-admission) | 64 arms | `local-match-shape`, `interactive-match-shape` |
+| [Source variants](../language/definitions.md#types-and-static-terms) | 64 | `source.limit` |
+
+A variant that forms with more than 64 alternatives can therefore be selected
+over in MLIR, but has no portable spelling and no Program `match`.
 
 A value contains exactly one alternative label and that alternative's payload.
 An inactive payload does not exist. Nested variants obey the same rule. Copy and
@@ -114,8 +121,12 @@ length. This bounds expansion work proportionally to input size, including
 modules with many distinct small graphs; it is not a wall-clock guarantee. A string counts as one node and its compact JSON byte length; an array
 counts as one plus its children's node counts, and two bracket bytes plus child
 byte lengths and separating commas. Variant nesting remains at most eight,
-alternatives within the ceiling above, and immediate payload entries 128. Bounds are simultaneous;
-none promises every combination fits. The containing artifact retains its
+alternatives 64, and immediate payload entries 128. Bounds are simultaneous;
+none promises every combination fits. The alternative limit is the largest power
+of two for which a variant with that many alternatives can still be spelled
+within the program format's 4,096-byte type string; long labels or payloads can
+refuse sooner. Spelling a formed variant with more alternatives refuses with
+`variant-type`. The containing artifact retains its
 existing byte and structural limits. Ordinary nontype fields retain their own
 limits; a `variant:` prefix in a literal attribute does not enlarge them.
 

@@ -1585,7 +1585,7 @@ oracleRequirements(ModuleOp source, StringRef entry,
   if (!program)
     return error("oracle-common-interface");
   if (auto e = requireUnconditionalProtocolControl(
-          program, "oracle-realization-control-profile"))
+          {program}, "oracle-realization-control-profile"))
     return std::move(e);
   std::map<std::vector<unsigned>, const OracleTableRealization *> selected;
   for (const auto &item : selections)

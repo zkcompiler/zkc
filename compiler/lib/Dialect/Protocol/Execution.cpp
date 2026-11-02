@@ -6,10 +6,10 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
-#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Json.h"
@@ -33,10 +33,10 @@ class ExecutionModelReader {
     if (problem.empty())
       problem = why.str();
   }
-  // Inherent attributes come from the operation's ODS definition; a
-  // discardable attribute or call metadata is admitted only when named here.
+  // The operation's decided semantic fields are admitted; a discardable
+  // attribute or call metadata is admitted only when named here.
   bool attributes(Operation *op, ArrayRef<StringRef> named = {}) {
-    if (hasOnlyInherentAttributes(op, named))
+    if (admitsFields(op, named))
       return true;
     fail("interactive-unknown-attribute");
     return false;

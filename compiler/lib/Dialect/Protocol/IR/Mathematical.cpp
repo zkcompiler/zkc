@@ -20,6 +20,7 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/SelectedControl.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -149,6 +150,19 @@ public:
             int r = owner ? role(owner) : -1;
             if (r < 0 || !active->test(r))
               return refuse(op, "action owner does not participate in control");
+            continue;
+          }
+          if (use.shape == protocol_ir::RoleShape::RoleNames) {
+            // Positions carry meaning, so this is not a set: the operation's
+            // own verifier decides whether a name may repeat.
+            auto names = dyn_cast<ArrayAttr>(use.value);
+            if (!names)
+              return refuse(op, "action adds a nonparticipating role");
+            for (Attribute name : names) {
+              int r = role(name);
+              if (r < 0 || !active->test(r))
+                return refuse(op, "action adds a nonparticipating role");
+            }
             continue;
           }
           SmallVector<Attribute, 1> sets{use.value};
@@ -656,9 +670,8 @@ public:
     return refuse(block.getParentOp(), "missing mathematical return");
   }
   LogicalResult run(Availability &env) {
-    for (auto attr : program->getAttrs())
-      if (!is_contained(program.getAttributeNames(), attr.getName().getValue()))
-        return refuse(program, "unsupported mathematical protocol attribute");
+    if (!admitsFields(program))
+      return refuse(program, "unsupported mathematical protocol attribute");
     if (auto origin = program->getAttr("origin")) {
       auto decoded = protocol_ir::readProtocolOrigin(origin);
       if (!decoded) {
@@ -769,11 +782,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       // The owning verifiers check every retained declaration, including
       // dormant computation units and polynomial realizations.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
-      for (auto attr : declaration->getAttrs())
-        if (!is_contained(declaration.getAttributeNames(),
-                          attr.getName().getValue()))
-          return refuse(declaration,
-                        "unsupported relation declaration attribute");
+      if (!admitsFields(declaration))
+        return refuse(declaration,
+                      "unsupported relation declaration attribute");
     } else {
       return diagnostics::emit(
           op.emitOpError(), "mathematical-module",

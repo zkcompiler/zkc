@@ -2,7 +2,7 @@
 add_executable(zkc-tblgen tools/zkc-tblgen.cpp tools/TableGen/Declarations.cpp
   tools/TableGen/Contributions.cpp tools/TableGen/TypeBindings.cpp
   tools/TableGen/Mathematical.cpp tools/TableGen/Recipes.cpp
-  tools/TableGen/Roles.cpp)
+  tools/TableGen/Roles.cpp tools/TableGen/Fields.cpp)
 target_include_directories(zkc-tblgen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 separate_arguments(zkc_tablegen_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 target_compile_options(zkc-tblgen PRIVATE ${zkc_tablegen_definitions}
