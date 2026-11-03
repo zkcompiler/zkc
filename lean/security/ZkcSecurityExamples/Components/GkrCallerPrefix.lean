@@ -90,7 +90,7 @@ theorem caller_equation (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1
       (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service) =
     .call (outputQuery ctx service) (fun (rho : F) =>
       .call (outputDelivery ctx rho) (fun _ =>
-        (protocol0Role1Process (leftContext ctx) none none none none (some [])
+        (protocol0Role1Process (leftContext ctx) none none none none (some 0) (some [])
           (some ((1 - rho) * a + rho * b)) (some 1) (some service)).bind
           (continuation ctx [a, b] rho ((1 - rho) * a + rho * b) service))) := by
   rw [protocol2Role1_split, prefix_equation ctx distinct]

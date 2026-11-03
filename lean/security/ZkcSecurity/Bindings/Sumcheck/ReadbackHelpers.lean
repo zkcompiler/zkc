@@ -23,7 +23,8 @@ theorem terminal (program : Structured.Program) (bodies : ZkcExamples.Structured
     (original : state.original = raw) (bounded : raw.length < indexLimit)
     (honest : state.scalar = state.entries.sum) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
-      [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" state.point),
+      [.data (.vector "bls12-381.fr" raw),
+         .custody ZkcExamples.Structured.SumcheckPendingBodies.custodySlot 0, .data (.vector "bls12-381.fr" state.point),
         .data (.field "bls12-381.fr" state.scalar)] = .returned [.data (.boolean true)] := by
   have truth := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.terminal_condition raw state original bounded honest
   have law := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check (G := G) program bodies.terminal raw state.point state.scalar bounded

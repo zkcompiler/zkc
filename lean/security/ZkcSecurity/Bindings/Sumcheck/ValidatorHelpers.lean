@@ -43,7 +43,8 @@ actual Max guard plus successful loop output, never by a receipt premise. -/
 theorem terminal_all (program : Structured.Program) (bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program)
     (raw point : List F) (claim : F) (pointSmall : point.length < 64) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
-      [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" point),
+      [.data (.vector "bls12-381.fr" raw),
+         .custody ZkcExamples.Structured.SumcheckPendingBodies.custodySlot 0, .data (.vector "bls12-381.fr" point),
         .data (.field "bls12-381.fr" claim)] =
       if raw.length < indexLimit then
         .returned [.data (.boolean (decide (HasShape raw point.length 1 ∧
@@ -54,7 +55,7 @@ theorem terminal_all (program : Structured.Program) (bodies : ZkcExamples.Struct
     exact ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check program bodies.terminal
       raw point claim bounded (pointSmall.trans (by decide +kernel))
   · rw [ite_eq_right bounded]
-    apply call_exhausted program checkHelper (checkInputs raw point claim) _ rfl
+    apply call_exhausted program checkHelper (terminalInputs raw 0 point claim) _ rfl
     rw [bodies.check.invoke program.payload.linked]
     exact check_vector_exhausted_generic_body _
       (lessAll_bounded _ (SumcheckUnitContracts.first_laws program.payload.linked bodies.sumcheck).less)

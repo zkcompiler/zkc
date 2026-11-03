@@ -25,7 +25,7 @@ example (ctx : ProtocolContext) (rho : ℚ) :
     GkrCallerSetup.setup (G := ℚ) ctx rho = .done
       (.cons (some (raw rho).add) (.cons (some (raw rho).mul)
         (.cons (some (raw rho).left) (.cons (some (raw rho).right)
-          (.cons none (.cons none (.cons (some 1) (.cons none .nil)))))))) :=
+          (.cons none (.cons none (.cons none (.cons (some 1) (.cons none .nil))))))))) :=
   GkrCallerSetup.setup_input ctx rho
 
 example : (firstLeftContext {}).applicationPrefix ≠
@@ -68,7 +68,7 @@ theorem delivery_stop : (caller.run stopDelivery ()).outcome = .stopped .exhaust
 example (rho : ℚ) (output : leftReturn (F := ℚ) (G := ℚ))
     (residual : GkrRoundsResidual.NoReturn (n := 1) 83
       (GkrRoundsBinding.initial (raw rho) (reference rho) (wrongClaim rho)) output) :
-    ∃ point scalar, output = GkrRoundsBinding.runtime (G := ℚ) point scalar ∧ point.length = 1 :=
+    ∃ point scalar, output = GkrRoundsBinding.returned (G := ℚ) point scalar ∧ point.length = 1 :=
   GkrRoundsResidual.noReturn_exact_point 83 (raw rho) (reference rho) (wrongClaim rho) output residual
 
 #print axioms GkrCallerSetup.setup_input

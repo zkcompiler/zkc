@@ -48,10 +48,11 @@ theorem source_invocation (ctx : ProtocolContext) (distinct : RosterDistinct ctx
 /-- The original generated process uses the installed callback template.
 This bridge reuses the source normalizer rather than its generated readable view. -/
 theorem source_process (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (count service : Option Nat) :
-    protocol0Role1Process (F := F) (G := G) ctx a m l r point claim count service =
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (count service : Option Nat) :
+    protocol0Role1Process (F := F) (G := G) ctx a m l r token point claim count service =
       ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.process payload.definitions 4
-        ctx a m l r point claim count service := by
+        ctx a m l r token point claim count service := by
   have callback : (Runs.uniform (helpers payload) (payload.plainProtocolTable F G)
       ctx (ctx.roles 1)).callback spec
       Zkc.Protocols.Gkr.Source.HelperBodies.roundsCallbackBody =
@@ -62,53 +63,56 @@ theorem source_process (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 
       payload.definitions (payload.plainProtocolTable F G) ctx distinct input
   dsimp only [Zkc.Protocols.Gkr.Source.HelperBodies.roundsCallbackBody, spec, repeatSpec] at callback
   unfold protocol0Role1Process
-  rw [callback]
+  erw [callback]
   rfl
 
 /-- Direct imported whole-Process equation. Mathematical representation facts
 are intentionally absent: this binding is shared by both property consumers. -/
 theorem verifier_binding (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r : Option (List F)) (claim : F) (service count : Nat) (bounded : count ≤ 4)
+    (a m l r : Option (List F)) (token : Nat) (claim : F) (service count : Nat) (bounded : count ≤ 4)
     {n : Nat} (raw : RawState F) (reference : GkrRoundsReference.State F (n + count)) :
-    protocol0Role1Process (F := F) (G := G) ctx a m l r (some []) (some claim) (some count) (some service) =
+    protocol0Role1Process (F := F) (G := G) ctx a m l r (some token) (some []) (some claim) (some count) (some service) =
       ((program service).remaining count ctx (initial raw reference claim)).bind
-        (fun final => .done (carried (G := G) final)) := by
+        (fun final => .done (returnedState (G := G) final)) := by
   rw [source_process ctx distinct]
   exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.verifier_binding
-    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r claim service count bounded raw reference
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r token claim service count bounded raw reference
 
 /-- Missing or excessive source counts stop before any receive or query. -/
 theorem missing_count (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat) :
-    protocol0Role1Process (F := F) (G := G) ctx a m l r point claim none service = .halt .incomplete := by
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (service : Option Nat) :
+    protocol0Role1Process (F := F) (G := G) ctx a m l r token point claim none service = .halt .incomplete := by
   rw [source_process ctx distinct]
   exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.missing_count
-    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r point claim service
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r token point claim service
 
 theorem above_maximum (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat)
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (service : Option Nat)
     (count : Nat) (large : 4 < count) :
-    protocol0Role1Process (F := F) (G := G) ctx a m l r point claim (some count) service =
-      match point, claim with
-      | some _, some _ => .halt .refused
-      | _, _ => .halt .incomplete := by
+    protocol0Role1Process (F := F) (G := G) ctx a m l r token point claim (some count) service =
+      match token, point, claim with
+      | some _, some _, some _ => .halt .refused
+      | _, _, _ => .halt .incomplete := by
   rw [source_process ctx distinct]
   exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.above_maximum
-    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r point claim service count large
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r token point claim service count large
 
-/-- Zero rounds retains the complete Pending input and does not demand a
-service handle. Missing Pending components still stop at the linear boundary.
+/-- Zero rounds consumes and recreates the complete Pending value without
+demanding a service handle. Missing Pending components still stop at the linear boundary.
 All private output slots are masked even for present local private inputs. -/
 theorem zero (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat) :
-    protocol0Role1Process (F := F) (G := G) ctx a m l r point claim (some 0) service =
-      match point, claim with
-      | some point, some claim =>
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (service : Option Nat) :
+    protocol0Role1Process (F := F) (G := G) ctx a m l r token point claim (some 0) service =
+      match token, point, claim with
+      | some _, some point, some claim =>
         .done (.cons none (.cons none (.cons none (.cons none (.cons none
-          (.cons (some point) (.cons (some claim) .nil)))))))
-      | _, _ => .halt .incomplete := by
+          (.cons (some 0) (.cons (some point) (.cons (some claim) .nil))))))))
+      | _, _, _ => .halt .incomplete := by
   rw [source_process ctx distinct]
   exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.zero
-    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r point claim service
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r token point claim service
 
 end ZkcSecurity.Examples.Components.GkrRoundsBinding

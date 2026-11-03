@@ -63,10 +63,10 @@ theorem sums_all (raw : List F) (dimension columns : Nat) :
 including false claims and malformed representable raw vectors. -/
 theorem check_equation (raw point : List F) (claim : F)
     (rawBound : raw.length < indexLimit) (pointBound : point.length < indexLimit) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs raw point claim) =
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs raw 0 point claim) =
       .done (boolResult (decide (HasShape raw point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim))) :=
-  (source_bodies.check.invoke TwoSumsInputs.unit.linked (checkInputs raw point claim)).trans
+  (source_bodies.check.invoke TwoSumsInputs.unit.linked (terminalInputs raw 0 point claim)).trans
     (check_generic_body _ prefix_laws
       (fun raw point claim => (by bind_structured_bodies : BodyIn TwoSumsInputs.unit.definitions
         checkTableHelper (checkTableBody OriginalSumcheckInstances.Two.prefixBindings)).invoke TwoSumsInputs.unit.linked

@@ -75,21 +75,27 @@ example : GkrSourceAdmission.participant (F := ℚ) (G := ℚ)
 
 example : invokeProtocol (GkrSourceViews.unit.plainProtocolTable ℚ ℚ)
     GkrSourceBodies.inputSignature {} 0
-    (.cons none (.cons (some []) (.cons (some 3) .nil))) = .halt .incomplete := by
+    (.cons none (.cons (some 0) (.cons (some []) (.cons (some 3) .nil)))) = .halt .incomplete := by
   simpa only [Generated.Presentations.Gkr.Input.verifierProcess, id_eq] using
-    GkrInputInvocation.invoke (F := ℚ) (G := ℚ) {} none (some []) (some 3)
+    GkrInputInvocation.invoke (F := ℚ) (G := ℚ) {} none (some 0) (some []) (some 3)
 
 example : invokeProtocol (GkrSourceViews.unit.plainProtocolTable ℚ ℚ)
     GkrSourceBodies.inputSignature {} 0
-    (.cons (some [3]) (.cons none (.cons (some 3) .nil))) = .halt .incomplete := by
+    (.cons (some [3]) (.cons (some 0) (.cons none (.cons (some 3) .nil)))) = .halt .incomplete := by
   simpa only [Generated.Presentations.Gkr.Input.verifierProcess, id_eq] using
-    GkrInputInvocation.invoke (F := ℚ) (G := ℚ) {} (some [3]) none (some 3)
+    GkrInputInvocation.invoke (F := ℚ) (G := ℚ) {} (some [3]) (some 0) none (some 3)
 
 example : invokeProtocol (GkrSourceViews.unit.plainProtocolTable ℚ ℚ)
     GkrSourceBodies.inputSignature {} 0
-    (.cons (some [3]) (.cons (some []) (.cons none .nil))) = .halt .incomplete := by
+    (.cons (some [3]) (.cons (some 0) (.cons (some []) (.cons none .nil)))) = .halt .incomplete := by
   simpa only [Generated.Presentations.Gkr.Input.verifierProcess, id_eq] using
-    GkrInputInvocation.invoke (F := ℚ) (G := ℚ) {} (some [3]) (some []) none
+    GkrInputInvocation.invoke (F := ℚ) (G := ℚ) {} (some [3]) (some 0) (some []) none
+
+example : invokeProtocol (GkrSourceViews.unit.plainProtocolTable ℚ ℚ)
+    GkrSourceBodies.inputSignature {} 0
+    (.cons (some [3]) (.cons none (.cons (some []) (.cons (some 3) .nil)))) =
+      .halt .incomplete :=
+  GkrInputInvocation.missing_custody {} [3] [] 3
 
 #print axioms GkrSourceGuards.index_add_all
 #print axioms GkrSourceGuards.shape_all

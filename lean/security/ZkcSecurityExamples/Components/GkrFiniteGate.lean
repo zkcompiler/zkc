@@ -33,20 +33,21 @@ def terminalValue (raw : RawState F) : F :=
 
 /-- The terminal algorithm has no ghost reference argument. -/
 def finish (count : Nat) (raw : RawState F)
-    (output : Values (Component (assignment F G)) GkrRoundsBinding.spec.state) :
+    (output : Values (Component (assignment F G)) definition0.outputs) :
     PIR.Process (participantInterface F G) Bool :=
   match output.get (.there (.there (.there (.there (.there .here))))),
-      output.get (.there (.there (.there (.there (.there (.there .here)))))) with
-  | some point, some claim =>
+      output.get (.there (.there (.there (.there (.there (.there .here)))))),
+      output.get (.there (.there (.there (.there (.there (.there (.there .here))))))) with
+  | some _, some point, some claim =>
     if point.length = count then .done (decide (claim = terminalValue (restrictList raw point)))
     else .halt .refused
-  | _, _ => .halt .incomplete
+  | _, _, _ => .halt .incomplete
 
 /-- The selected scope is the entire imported Rounds process and this terminal
 algorithm. The multilayer caller's remaining continuation is outside it. -/
 def verifier (count : Nat) (ctx : ProtocolContext) (service : Nat)
     (raw : RawState F) (claim : F) : PIR.Process (participantInterface F G) Bool :=
-  (protocol0Role1Process ctx none none none none (some []) (some claim) (some count) (some service)).bind
+  (protocol0Role1Process ctx none none none none (some 0) (some []) (some claim) (some count) (some service)).bind
     (finish count raw)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -80,12 +81,12 @@ theorem finish_prefix {count : Nat} (raw : RawState F)
     (reference : GkrRoundsReference.State F (0 + count)) (claim : F)
     (represented : Represents raw reference) (s : GkrRoundsBinding.State F 0)
     (reachedPrefix : Prefix (GkrRoundsBinding.initial raw reference claim) s) :
-    finish count raw (GkrRoundsBinding.carried (G := G) s) =
+    finish count raw (GkrRoundsBinding.returnedState (G := G) s) =
       .done (decide (s.claim = GkrRoundsReference.total s.reference)) := by
   have length := prefix_length (GkrRoundsBinding.initial raw reference claim) s reachedPrefix
   have decoded := prefix_representation _ s represented reachedPrefix
   simp only [GkrRoundsBinding.initial, List.length_nil, zero_add, Nat.add_zero] at length
-  simp only [finish, GkrRoundsBinding.carried, GkrRoundsBinding.runtime, Values.get,
+  simp only [finish, GkrRoundsBinding.returnedState, GkrRoundsBinding.returned, Values.get,
     length, ite_true]
   rw [← prefix_raw raw reference claim s reachedPrefix, terminal_value s.raw s.reference decoded.1]
 
@@ -100,7 +101,7 @@ theorem binding (count : Nat) (bounded : count ≤ 4) (ctx : ProtocolContext)
         (GkrRoundsBinding.initial raw reference claim)).bind
         (fun s => .done (decide (s.claim = GkrRoundsReference.total s.reference))) := by
   unfold verifier
-  rw [GkrRoundsBinding.verifier_binding ctx distinct none none none none claim service count bounded
+  rw [GkrRoundsBinding.verifier_binding ctx distinct none none none none 0 claim service count bounded
     (n := 0) raw reference, PIR.Process.bind_assoc]
   exact PIR.Boundary.bind_congr_returns interaction _ _ ()
     (returns_prefix service ctx interaction (GkrRoundsBinding.initial raw reference claim) count

@@ -4,6 +4,7 @@ public import ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation
 public import ZkcSecurity.Bindings.Gkr.RoundsRealization
 public import ZkcSecurity.Families.Sumcheck.Composition
 public import Zkc.Source.Structured.RepeatLaws
+public import Zkc.Protocols.Gkr.Source.HelperBodies
 
 @[expose] public section
 noncomputable section
@@ -29,7 +30,7 @@ abbrev vector := Ty.vector field
 abbrev scalar := Ty.field field
 
 abbrev repeatSpec (maximum : Nat) : RepeatSpec :=
-  ⟨[vector, vector, vector, vector, vector, vector, scalar],
+  ⟨Zkc.Protocols.Gkr.Source.HelperBodies.roundsState,
     [.service "random.bls12-381.fr/0"], [0, 1], [[0], [0], [0], [0], [0], [1], [1]], maximum⟩
 
 abbrev spec : RepeatSpec := repeatSpec 4
@@ -48,6 +49,16 @@ def runtime (point : List F) (claim : F) :
 
 def carried {n : Nat} (s : State F n) : Values (Component (assignment F G)) spec.state :=
   runtime s.point s.claim
+
+/-- The completed protocol returns the new Pending custody coordinate in
+addition to the repeat state. Zero is the closed createUnit interpretation. -/
+def returned (point : List F) (claim : F) :
+    Values (Component (assignment F G))
+      (Zkc.Protocols.Gkr.Source.HelperBodies.roundsProtocolSignature "").outputs :=
+  .cons none (.cons none (.cons none (.cons none (.cons none
+    (.cons (some 0) (.cons (some point) (.cons (some claim) .nil)))))))
+
+def returnedState {n : Nat} (s : State F n) := returned (G := G) s.point s.claim
 
 def advance {n : Nat} (s : State F (n + 1)) (m : F × F × F) (r : F) : State F n :=
   ⟨GkrRoundsReference.restrict s.reference r, s.raw.restrict r,

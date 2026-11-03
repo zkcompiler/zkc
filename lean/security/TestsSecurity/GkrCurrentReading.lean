@@ -14,7 +14,7 @@ open ZkcExamples.Structured
 /-- Zero rounds preserve the complete pending prefix without any interaction. -/
 theorem zero_rounds (a b claim : ℚ) :
     Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := ℚ) (G := ℚ) {}
-      (some [a, b]) (some claim) (some 0) (some 0) =
+      (some 0) (some [a, b]) (some claim) (some 0) (some 0) =
       .done (GkrRoundsReading.roundsResults ([a, b], claim)) := by kernel_rfl
 
 /-- The source's empty pending-point case is a successful split, not a refusal. -/

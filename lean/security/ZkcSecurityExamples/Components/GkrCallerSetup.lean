@@ -22,7 +22,7 @@ variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
 left call's full arguments. No source AST or tuple positions are authored here.
 The absent verifier claim/service match role 0's actual private scopes. -/
 def setup (ctx : ProtocolContext) (rho : F) :=
-  (protocol2Role0Callback1Setup (F := F) (G := G) ctx (some 0) (some [rho]) none none
+  (protocol2Role0Callback1Setup (F := F) (G := G) ctx (some 0) (some [rho]) none none none
     (some inputs) (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) none).bind
       (fun frame => .done (protocol2Role0Callback1SetupInput frame))
 
@@ -32,7 +32,7 @@ theorem setup_input (ctx : ProtocolContext) (rho : F) :
     setup (G := G) ctx rho = .done
       (.cons (some (raw rho).add) (.cons (some (raw rho).mul)
         (.cons (some (raw rho).left) (.cons (some (raw rho).right)
-          (.cons none (.cons none (.cons (some 1) (.cons none .nil)))))))) := by
+          (.cons none (.cons none (.cons none (.cons (some 1) (.cons none .nil))))))))) := by
   unfold setup protocol2Role0Callback1Setup
   conv_lhs =>
     arg 1; arg 1

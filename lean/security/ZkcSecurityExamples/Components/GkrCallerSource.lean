@@ -77,13 +77,11 @@ theorem evaluate_pair (a b rho : F) : invoke (table (G := G)) evaluateHelper
 /-- The actual root's LayerClaim constructor. Its association with the
 emitted prefix is checked by the whole-prefix equation in GkrCallerPrefix. -/
 def layerClaimHelper : Helper :=
-  ⟨"zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17", .local,
-    [.vector "bls12-381.fr", .field "bls12-381.fr"],
-    [.vector "bls12-381.fr", .field "bls12-381.fr"]⟩
+  (⟨"zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_84874222ecf7f94a29e4d960d17e95c115b500b340a8129508b38a0c8d153eea"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper)
 
 theorem layer_claim (point : List F) (claim : F) :
     invoke (table (G := G)) layerClaimHelper (.cons point (.cons claim .nil)) =
-      .done (.cons point (.cons claim .nil)) := by
+      .done (.cons 0 (.cons point (.cons claim .nil))) := by
   kernel_rfl
 
 /-- Closed setup equations lift to the exact silent participant helper table;
@@ -120,7 +118,7 @@ theorem owned_evaluate_pair (self : Nat) (a b rho : F) :
 theorem owned_layer_claim (self : Nat) (point : List F) (claim : F) :
     Participant.owned self self (invoke (helpers (F := F) (G := G) payload).toOn.closed layerClaimHelper)
       (.cons (some point) (.cons (some claim) .nil)) =
-      .done (.cons (some point) (.cons (some claim) .nil)) := by
+      .done (.cons (some 0) (.cons (some point) (.cons (some claim) .nil))) := by
   exact owned_equation self layerClaimHelper _ _ (layer_claim (G := G) point claim)
 
 /-- The source setup's selected block/restriction/replicate/tile pipeline,

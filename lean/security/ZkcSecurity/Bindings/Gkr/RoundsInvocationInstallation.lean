@@ -58,11 +58,13 @@ variable {definitions : List CheckedDefinition}
 /-- Full operational body presentation, before the selected declaration's
 input/output masks. No optional input or private result is discarded. -/
 def process (definitions : List CheckedDefinition) (maximum : Nat) (ctx : ProtocolContext)
-    (a m l r point : Option (List F)) (claim : Option F) (count service : Option Nat) :
-    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) spec.state) :=
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (count service : Option Nat) :
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G))
+      (Zkc.Protocols.Gkr.Source.HelperBodies.roundsProtocolSignature "").outputs) :=
   (Participant.owned (ctx.roles 1) (ctx.roles 1)
     (invoke (RoundsBoundaryInstallation.helpers definitions) roundsOpenHelper)
-    (.cons point (.cons claim .nil))).bind fun opened =>
+    (.cons token (.cons point (.cons claim .nil)))).bind fun opened =>
   (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count
     (.cons a (.cons m (.cons l (.cons r (.cons none
       (.cons (opened.get .here) (.cons (opened.get (.there .here)) .nil)))))))
@@ -75,18 +77,19 @@ def process (definitions : List CheckedDefinition) (maximum : Nat) (ctx : Protoc
     (.cons (repeated.get .here) (.cons (repeated.get (.there .here))
       (.cons (repeated.get (.there (.there .here)))
         (.cons (repeated.get (.there (.there (.there .here))))
-          (.cons (closed.get .here) (.cons (closed.get (.there .here)) .nil)))))))
+          (.cons (closed.get .here) (.cons (closed.get (.there .here))
+            (.cons (closed.get (.there (.there .here))) .nil))))))))
 
 /-- Direct imported whole-Process equation. Mathematical representation facts
 are intentionally absent: this binding is shared by both property consumers. -/
 theorem verifier_binding (linked : DeclarationsLinked [] definitions)
     (bodies : RoundsBoundaryInstallation.Bodies definitions) (maximum : Nat)
     (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r : Option (List F)) (claim : F) (service count : Nat) (bounded : count ≤ maximum)
+    (a m l r : Option (List F)) (token : Nat) (claim : F) (service count : Nat) (bounded : count ≤ maximum)
     {n : Nat} (raw : RawState F) (reference : GkrRoundsReference.State F (n + count)) :
-    process (F := F) (G := G) definitions maximum ctx a m l r (some []) (some claim) (some count) (some service) =
+    process (F := F) (G := G) definitions maximum ctx a m l r (some token) (some []) (some claim) (some count) (some service) =
       ((program service).remaining count ctx (initial raw reference claim)).bind
-        (fun final => .done (carried (G := G) final)) := by
+        (fun final => .done (returnedState (G := G) final)) := by
   unfold process
   rw [RoundsBoundaryInstallation.owned_rounds_open linked bodies]
   simp only [PIR.Process.bind, Values.get]
@@ -96,52 +99,55 @@ theorem verifier_binding (linked : DeclarationsLinked [] definitions)
     (RoundsVerifierInstallation.callbackBody (G := G) definitions ctx) 0 count
     (carried (initial raw reference claim))).bind _ = _
   rw [RoundsVerifierInstallation.remaining_binding_for linked bodies]
-  simp only [PIR.Process.bind_assoc, GkrRoundsBinding.carried, runtime, PIR.Process.bind, Values.get,
+  simp only [PIR.Process.bind_assoc, GkrRoundsBinding.carried, runtime, returnedState, returned, PIR.Process.bind, Values.get,
     RoundsBoundaryInstallation.owned_rounds_close linked bodies]
 
 /-- Missing or excessive source counts stop before any receive or query. -/
 theorem missing_count (linked : DeclarationsLinked [] definitions)
     (bodies : RoundsBoundaryInstallation.Bodies definitions) (maximum : Nat)
     (ctx : ProtocolContext) (_distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat) :
-    process (F := F) (G := G) definitions maximum ctx a m l r point claim none service = .halt .incomplete := by
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (service : Option Nat) :
+    process (F := F) (G := G) definitions maximum ctx a m l r token point claim none service = .halt .incomplete := by
   unfold process
   rw [RoundsBoundaryInstallation.owned_rounds_open linked bodies]
-  cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
+  cases token <;> cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
   rw [repeat_missing_count (repeatSpec maximum) ctx (ctx.roles 1) _ _ _ (inside ctx)]
   rfl
 
 theorem above_maximum (linked : DeclarationsLinked [] definitions)
     (bodies : RoundsBoundaryInstallation.Bodies definitions) (maximum : Nat)
     (ctx : ProtocolContext) (_distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat)
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (service : Option Nat)
     (count : Nat) (large : maximum < count) :
-    process (F := F) (G := G) definitions maximum ctx a m l r point claim (some count) service =
-      match point, claim with
-      | some _, some _ => .halt .refused
-      | _, _ => .halt .incomplete := by
+    process (F := F) (G := G) definitions maximum ctx a m l r token point claim (some count) service =
+      match token, point, claim with
+      | some _, some _, some _ => .halt .refused
+      | _, _, _ => .halt .incomplete := by
   unfold process
   rw [RoundsBoundaryInstallation.owned_rounds_open linked bodies]
-  cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
+  cases token <;> cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
   rw [repeat_above_maximum (repeatSpec maximum) ctx (ctx.roles 1) _ _ _ count (inside ctx) large]
   rfl
 
-/-- Zero rounds retains the complete Pending input and does not demand a
-service handle. Missing Pending components still stop at the linear boundary.
+/-- Zero rounds consumes and recreates the complete Pending value without
+demanding a service handle. Missing Pending components still stop at the linear boundary.
 All private output slots are masked even for present local private inputs. -/
 theorem zero (linked : DeclarationsLinked [] definitions)
     (bodies : RoundsBoundaryInstallation.Bodies definitions) (maximum : Nat)
     (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat) :
-    process (F := F) (G := G) definitions maximum ctx a m l r point claim (some 0) service =
-      match point, claim with
-      | some point, some claim =>
+    (a m l r : Option (List F)) (token : Option Nat) (point : Option (List F))
+    (claim : Option F) (service : Option Nat) :
+    process (F := F) (G := G) definitions maximum ctx a m l r token point claim (some 0) service =
+      match token, point, claim with
+      | some _, some point, some claim =>
         .done (.cons none (.cons none (.cons none (.cons none (.cons none
-          (.cons (some point) (.cons (some claim) .nil)))))))
-      | _, _ => .halt .incomplete := by
+          (.cons (some 0) (.cons (some point) (.cons (some claim) .nil))))))))
+      | _, _, _ => .halt .incomplete := by
   unfold process
   rw [RoundsBoundaryInstallation.owned_rounds_open linked bodies]
-  cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
+  cases token <;> cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
   rw [repeat_zero (repeatSpec maximum) ctx (ctx.roles 1) _ _ _ (inside ctx), mask_entry ctx distinct]
   simp only [Values.get, RoundsBoundaryInstallation.owned_rounds_close linked bodies, PIR.Process.bind]
 
