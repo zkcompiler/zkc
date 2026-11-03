@@ -48,15 +48,29 @@ challenge field and no transcript helpers. External services, curve
 operations, Merkle authentication and full FRI/STARK deployment require further
 target support.
 
-Legalized target MLIR uses standard Func, SCF and Arith operations with explicit
-EVM word operations and ordered checked operations. Vector values become bounded
-memory slices. One shared layout owner defines logical signatures, scalar lanes,
-coefficient strides and aggregate lane cells for conversion, operation checking,
-arithmetic and wire handling. The final conversion rejects all residual
-unsupported operations and types. Index overflow, division by zero and invalid
-shifts retain their failure behavior. Runtime scope and transcript tickets preserve the selected
-closure's ownership checks. Yul emission follows these operations; it does not
-recognize protocol names.
+Target MLIR combines exact standard Func, SCF and Arith operations with
+separate ODS-defined EVM operations for checked arithmetic, collections, wire
+access, scope, transfer and transcript transitions. Each operation checks its
+operand and result lanes, logical type and applicable attributes. A string
+opcode is not an operation contract. Fallible or ordered operations retain
+observable effects even when their results are unused.
+
+Preparation resolves the reachable symbols, callback contracts and supported
+control flow. It does not build a second SSA instruction stream. MLIR dialect
+conversion then rewrites the original executable regions, expanding logical
+values into physical lanes through one type converter. One shared layout owner
+defines logical signatures, scalar lanes, coefficient strides and aggregate
+lane cells for conversion, operation checking, arithmetic and wire handling.
+Full conversion and the final positive legality check reject residual
+unsupported operations and types before Yul export. Index overflow, division by
+zero and invalid shifts retain their failure behavior. Runtime scope and
+transcript tickets preserve the selected closure's ownership checks. Yul
+emission follows the typed operations; it does not recognize protocol names.
+
+Transcript operations carry the shared typed native origin, including its
+source occurrence, path and event. Export projects its existing native byte
+encoding; it defines no target-local occurrence grammar. Unsupported origin
+forms refuse compilation rather than losing their coordinates.
 
 Prime scalars use one canonical word; extensions use immutable coefficient
 buffers. Field vectors store coefficients inline, while sequences store their
@@ -101,7 +115,10 @@ identity.
 | `limits` | Per deployment ceiling: `name`, `minimum` and `maximum` |
 | `reverts` | Per revert class: `class` and its four-byte ASCII `tag` |
 
-The declared forks are `cancun` and `prague`; the default is `cancun`. Each
+The declared forks are `cancun`, `prague` and `osaka`; the default is `osaka`.
+Osaka enforces the EIP-7825 transaction gas cap of 16,777,216 and the EIP-7883
+ModExp pricing. The validation runner checks these fork facts against its pinned
+engine; the target declaration owns the selected profile. Each
 validator requires exactly these fields at every level and rejects repeated
 keys, fractional numbers and non-ASCII bytes. Fork names, solc `evmVersion`
 values and hardforks are unique, fork names are lowercase, and the default

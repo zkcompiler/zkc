@@ -21,6 +21,16 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
+// Build malformed concrete ODS operations without bypassing MLIR verification.
+Operation *physicalFixture(OpBuilder &builder, Location loc, TypeRange results,
+                           StringRef mnemonic, ValueRange operands,
+                           ArrayRef<NamedAttribute> attributes = {}) {
+  OperationState state(loc, ("evm." + mnemonic).str());
+  state.addOperands(operands);
+  state.addTypes(results);
+  state.addAttributes(attributes);
+  return builder.create(state);
+}
 data::VariantType variant(MLIRContext &context, StringRef name,
                           ArrayRef<SmallVector<Type>> payloads) {
   SmallVector<data::AlternativeAttr> alternatives;
@@ -130,17 +140,16 @@ void emitStore(MLIRContext &context, unsigned ceiling) {
   builder.setInsertionPointToEnd(&body);
   auto attribute = builder.getNamedAttr(
       "value_type", TypeAttr::get(fixture(context, "sequence:index")));
-  auto allocation =
-      evm::CheckedOp::create(builder, loc, {builder.getI64Type()},
-                             "sequence.alloc", {count}, {attribute});
-  auto store = evm::CheckedOp::create(
-      builder, loc, {}, "sequence.set",
-      {allocation.getResult(0), count, index, value}, {attribute});
-  auto get = evm::CheckedOp::create(
-      builder, loc, {builder.getI64Type()}, "sequence.get",
-      {allocation.getResult(0), count, index}, {attribute});
-  require(succeeded(allocation.verify()) && succeeded(store.verify()) &&
-              succeeded(get.verify()),
+  auto allocation = physicalFixture(builder, loc, {builder.getI64Type()},
+                                    "sequence.alloc", {count}, {attribute});
+  auto store = physicalFixture(builder, loc, {}, "sequence.set",
+                               {allocation->getResult(0), count, index, value},
+                               {attribute});
+  auto get =
+      physicalFixture(builder, loc, {builder.getI64Type()}, "sequence.get",
+                      {allocation->getResult(0), count, index}, {attribute});
+  require(succeeded(verify(allocation)) && succeeded(verify(store)) &&
+              succeeded(verify(get)),
           "invalid exact fresh-buffer store fixture");
   auto allocate = take(wire.operation(allocation));
   auto set = take(wire.operation(store));
@@ -173,11 +182,11 @@ void emitAppend(MLIRContext &context) {
   builder.setInsertionPointToEnd(&body);
   auto attribute = builder.getNamedAttr(
       "value_type", TypeAttr::get(fixture(context, "bytes")));
-  auto append = evm::CheckedOp::create(
-      builder, builder.getUnknownLoc(),
-      {builder.getI64Type(), builder.getI64Type()}, "bytes.append",
-      {pointer, count, value}, {attribute});
-  require(succeeded(append.verify()), "invalid byte append fixture");
+  auto append =
+      physicalFixture(builder, builder.getUnknownLoc(),
+                      {builder.getI64Type(), builder.getI64Type()},
+                      "bytes.append", {pointer, count, value}, {attribute});
+  require(succeeded(verify(append)), "invalid byte append fixture");
   auto helper = take(wire.operation(append));
   outs() << "object \"Append\" { code { datacopy(0, dataoffset(\"Runtime\"), "
             "datasize(\"Runtime\")) return(0, datasize(\"Runtime\")) }\n"
@@ -424,20 +433,20 @@ int main(int argc, char **argv) {
       Block body;
       builder.setInsertionPointToEnd(&body);
       auto attribute = builder.getNamedAttr("value_type", TypeAttr::get(type));
-      auto correct = evm::CheckedOp::create(builder, builder.getUnknownLoc(),
-                                            layout->lanes, "proof.receive", {},
-                                            {attribute});
-      require(succeeded(correct.verify()), "exact receive signature refused");
+      auto correct =
+          physicalFixture(builder, builder.getUnknownLoc(), layout->lanes,
+                          "proof.receive", {}, {attribute});
+      require(succeeded(verify(correct)), "exact receive signature refused");
       ScopedDiagnosticHandler handler(&context,
                                       [](Diagnostic &) { return success(); });
-      auto wrong = evm::CheckedOp::create(builder, builder.getUnknownLoc(),
-                                          {builder.getIntegerType(256),
-                                           builder.getIntegerType(256),
-                                           builder.getIntegerType(256)},
-                                          "proof.receive", {}, {attribute});
-      require(failed(wrong.verify()), "wrong receive lanes admitted");
+      auto wrong = physicalFixture(builder, builder.getUnknownLoc(),
+                                   {builder.getIntegerType(256),
+                                    builder.getIntegerType(256),
+                                    builder.getIntegerType(256)},
+                                   "proof.receive", {}, {attribute});
+      require(failed(verify(wrong)), "wrong receive lanes admitted");
       correct->removeAttr("value_type");
-      require(failed(correct.verify()), "untyped receive admitted");
+      require(failed(verify(correct)), "untyped receive admitted");
     });
   }
   cases.run(
@@ -465,15 +474,15 @@ int main(int argc, char **argv) {
           if (code == "variant.get")
             attributes.push_back(builder.getNamedAttr(
                 "payload", builder.getI32IntegerAttr(payload)));
-          auto op = evm::CheckedOp::create(
-              builder, loc,
-              {code == "variant.get" ? builder.getI1Type()
-                                     : builder.getI64Type()},
-              code,
-              code == "variant.make" ? ValueRange{flag, flag}
-                                     : ValueRange{pointer},
-              attributes);
-          require(succeeded(op.verify()), "invalid structural helper fixture");
+          auto op =
+              physicalFixture(builder, loc,
+                              {code == "variant.get" ? builder.getI1Type()
+                                                     : builder.getI64Type()},
+                              code,
+                              code == "variant.make" ? ValueRange{flag, flag}
+                                                     : ValueRange{pointer},
+                              attributes);
+          require(succeeded(verify(op)), "invalid structural helper fixture");
           return take(wire.operation(op));
         };
         auto get = helper("variant.get", first);
@@ -638,18 +647,18 @@ int main(int argc, char **argv) {
     auto loc = builder.getUnknownLoc();
     auto type = fixture(context, "sequence:bool");
     auto attribute = builder.getNamedAttr("value_type", TypeAttr::get(type));
-    auto empty = evm::CheckedOp::create(
-        builder, loc, {builder.getI64Type(), builder.getI64Type()},
-        "sequence.empty", {}, {attribute});
+    auto empty = physicalFixture(builder, loc,
+                                 {builder.getI64Type(), builder.getI64Type()},
+                                 "sequence.empty", {}, {attribute});
     auto flag = arith::ConstantIntOp::create(builder, loc, 1, 1);
-    SmallVector<Value> arguments(empty.getResults());
+    SmallVector<Value> arguments(empty->getResults());
     arguments.push_back(flag);
-    evm::CheckedOp::create(builder, loc, empty.getResultTypes(),
-                           "sequence.append", arguments, {attribute});
-    evm::CheckedOp::create(builder, loc, {builder.getI64Type()},
-                           "sequence.length", empty.getResults(), {attribute});
-    evm::CheckedOp::create(builder, loc, empty.getResultTypes(),
-                           "sequence.append", arguments, {attribute});
+    physicalFixture(builder, loc, empty->getResultTypes(), "sequence.append",
+                    arguments, {attribute});
+    physicalFixture(builder, loc, {builder.getI64Type()}, "sequence.length",
+                    empty->getResults(), {attribute});
+    physicalFixture(builder, loc, empty->getResultTypes(), "sequence.append",
+                    arguments, {attribute});
     auto yul = take(exportBoundary(*target, boundaryPolicy(false)));
     StringRef text(yul);
     require(text.count("function evm_structure_") == 3 &&

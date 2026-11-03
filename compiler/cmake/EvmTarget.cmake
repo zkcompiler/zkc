@@ -18,3 +18,15 @@ if(NOT zkc_evm_target_result EQUAL 0)
   message(FATAL_ERROR "EVM target declaration projection failed: ${zkc_evm_target_error}")
 endif()
 list(APPEND zkc_generated_headers include/zkc/Target/Evm/Declaration.h.inc)
+
+# The physical EVM dialect is target-owned and independent of the logical
+# catalog's dialect generator.
+set(TABLEGEN_OUTPUT)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Evm")
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Evm/Ops.td)
+mlir_tablegen(include/zkc/Dialect/Evm/Ops.h.inc -gen-op-decls
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Evm/Ops.cpp.inc -gen-op-defs
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+add_public_tablegen_target(ZkcEvmIRGen)
+list(APPEND zkc_generated_headers include/zkc/Dialect/Evm/Ops.h.inc)

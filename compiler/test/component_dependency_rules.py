@@ -50,6 +50,8 @@ for relative in ("include/zkc/Contracts/Declarations.cpp.inc",
                  "include/zkc/Contracts/Mathematical.inc",
                  "include/zkc/Contracts/Instances.inc",
                  "include/zkc/Target/Evm/Declaration.h.inc",
+                 "include/zkc/Dialect/Evm/Ops.h.inc",
+                 "include/zkc/Dialect/Evm/Ops.cpp.inc",
                  "generated/Transforms/MathematicalRecipes.inc"):
     target = manifest.parent / relative
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -75,6 +77,11 @@ def rejects(name, path, transform, message):
 
 with case("the actual component graph passes in an isolated tree"):
     check()
+for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp",
+               "include/zkc/Dialect/Evm/Evm.h"):
+    rejects(f"typed EVM definitions stay in the EVM target: {source}", root / source,
+            lambda text: '#include "zkc/Dialect/Evm/Ops.cpp.inc"\n' + text,
+            "generated implementation outside its owner")
 for source in ("lib/Contracts/Mathematical.cpp",
                "lib/Analysis/Computation.cpp", "include/zkc/Transforms/Finite.h"):
     rejects(f"mathematical recipes stay private to selection: {source}",

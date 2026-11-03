@@ -6,7 +6,6 @@
 #include <memory>
 
 namespace zkc::evm {
-class CheckedOp;
 
 /// Complete native wire permission and concrete expected-type codec admission.
 /// This is independent of local copyable representation. Checks every child,
@@ -21,7 +20,7 @@ public:
   ~WireGenerator();
   llvm::Expected<std::string> decoder(mlir::Type);
   llvm::Expected<std::string> encoder(mlir::Type);
-  llvm::Expected<std::string> operation(CheckedOp);
+  llvm::Expected<std::string> operation(mlir::Operation *);
   std::string definitions() const;
 
 private:

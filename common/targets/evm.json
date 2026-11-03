@@ -21,7 +21,7 @@
     "version": "0.8.38+commit.1835d247",
     "optimizer": {"enabled": true, "details": {"yul": true, "yulDetails": {"optimizerSteps": ":"}}}
   },
-  "default_fork": "cancun",
+  "default_fork": "osaka",
   "forks": [
     {
       "name": "cancun",
@@ -40,6 +40,15 @@
       "runtime_code_bytes": 24576,
       "initcode_bytes": 49152,
       "rules": ["EIP-170", "EIP-2565", "EIP-3860", "EIP-5656", "EIP-7623"]
+    },
+    {
+      "name": "osaka",
+      "solc": "osaka",
+      "hardfork": "Osaka",
+      "transaction_gas_cap": 16777216,
+      "runtime_code_bytes": 24576,
+      "initcode_bytes": 49152,
+      "rules": ["EIP-170", "EIP-2565", "EIP-3860", "EIP-5656", "EIP-7623", "EIP-7823", "EIP-7825", "EIP-7883"]
     }
   ],
   "validation_gas": 20000000,

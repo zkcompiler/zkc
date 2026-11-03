@@ -22,7 +22,7 @@
     {"name": "zero transaction gas cap", "rule": "fork",
      "edits": [{"op": "set", "path": ["forks", 0, "transaction_gas_cap"], "value": 0}]},
     {"name": "missing default fork", "rule": "default-fork",
-     "edits": [{"op": "set", "path": ["default_fork"], "value": "osaka"}]},
+     "edits": [{"op": "set", "path": ["default_fork"], "value": "unknown"}]},
     {"name": "fork without MCOPY", "rule": "rules",
      "edits": [{"op": "set", "path": ["forks", 0, "rules"], "value": ["EIP-170", "EIP-2565", "EIP-3860"]}]},
     {"name": "repeated fork rule", "rule": "rules",

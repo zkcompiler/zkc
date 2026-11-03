@@ -499,6 +499,7 @@ add_zkc_component(EvmTarget
   lib/Target/Evm/Wire.cpp
   lib/Target/Evm/Yul.cpp
 )
+add_dependencies(ZkcEvmTarget ZkcEvmIRGen)
 target_link_libraries(ZkcEvmTarget PUBLIC ZkcCompiler)
 mlir_target_link_libraries(ZkcEvmTarget PUBLIC MLIRControlFlowToSCF)
 add_zkc_component(Driver

@@ -375,6 +375,12 @@ def main():
     evm_target_declaration = manifest.parent / "include/zkc/Target/Evm/Declaration.h.inc"
     assert evm_target_declaration.is_file(), "missing EVM target declaration tables"
     assert evm_target_declaration not in generated, "the EVM target declaration must not belong to IR generation"
+    evm_operations = {
+        manifest.parent / f"include/zkc/Dialect/Evm/Ops.{suffix}.inc"
+        for suffix in ("h", "cpp")
+    }
+    assert all(path.is_file() for path in evm_operations), "missing typed EVM operation outputs"
+    assert not evm_operations & generated, "EVM operations must not belong to common IR generation"
     mathematical_recipes = manifest.parent / "generated/Transforms/MathematicalRecipes.inc"
     assert mathematical_recipes.is_file(), "missing private mathematical recipes"
     assert mathematical_recipes not in generated, "recipes must not belong to IR generation"
@@ -405,6 +411,7 @@ def main():
             permitted.add(contract_instances)
         if "ZkcEvmTarget" in closure(name):
             permitted.add(evm_target_declaration)
+            permitted.update(evm_operations)
         visited = set()
 
         def visit(path):
@@ -444,7 +451,10 @@ def main():
                     implementation_owner = owners.get(path)
                     if generated_owner:
                         assert extra.packages.get(path) == extra.packages[contribution], f"cross-package generated definitions: {path} -> {include}"
-                    allowed = (implementation_owner == generated_owner if generated_owner else implementation_owner == "ZkcIR")
+                    if include == "zkc/Dialect/Evm/Ops.cpp.inc":
+                        allowed = implementation_owner == "ZkcEvmTarget"
+                    else:
+                        allowed = (implementation_owner == generated_owner if generated_owner else implementation_owner == "ZkcIR")
                     assert neutral or (allowed and path.suffix == ".cpp"), f"generated implementation outside its owner: {path} -> {include}"
                 if include.startswith("zkc/"):
                     if path in supported_public:

@@ -18,6 +18,18 @@ using namespace mlir;
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::test;
+namespace {
+// Deliberately bypass builders for malformed concrete ODS verifier fixtures.
+Operation *physicalFixture(OpBuilder &builder, Location loc, TypeRange results,
+                           StringRef mnemonic, ValueRange operands,
+                           ArrayRef<NamedAttribute> attributes = {}) {
+  OperationState state(loc, ("evm." + mnemonic).str());
+  state.addOperands(operands);
+  state.addTypes(results);
+  state.addAttributes(attributes);
+  return builder.create(state);
+}
+} // namespace
 int main() {
   Cases cases;
   DialectRegistry registry;
@@ -217,8 +229,8 @@ int main() {
     if (type)
       attributes.push_back(
           builder.getNamedAttr("value_type", TypeAttr::get(type)));
-    auto result = evm::CheckedOp::create(builder, loc, outputs, code, arguments,
-                                         attributes);
+    auto result =
+        physicalFixture(builder, loc, outputs, code, arguments, attributes);
     return std::make_pair(std::move(module), result);
   };
   cases.run(
@@ -226,18 +238,18 @@ int main() {
       "signature",
       [&] {
         auto missing = operation("field.mul", {}, {i256, i256}, {i256});
-        require(failed(missing.second.verify()),
+        require(failed(verify(missing.second)),
                 "width-only admission accepted missing type");
         auto wrong = operation("field.mul", extension, {i256, i256}, {i256});
-        require(failed(wrong.second.verify()),
+        require(failed(verify(wrong.second)),
                 "extension accepted prime signature");
         auto correct = operation("field.mul", extension, {i64, i64}, {i64});
-        require(succeeded(correct.second.verify()),
+        require(succeeded(verify(correct.second)),
                 "exact extension signature refused");
         auto stray = operation(
             "field.mul", base, {i256, i256}, {i256},
             {builder.getNamedAttr("parameters", builder.getArrayAttr({}))});
-        require(failed(stray.second.verify()),
+        require(failed(verify(stray.second)),
                 "uninterpreted invocation attributes admitted");
       });
   cases.run("wrong nominal constant and static selectors refuse", [&] {
@@ -247,36 +259,36 @@ int main() {
             IntegerType::get(&context, 31, IntegerType::Unsigned), 1));
     auto wrong = operation("field.constant", extension, {}, {i64},
                            {builder.getNamedAttr("value", literal)});
-    require(failed(wrong.second.verify()),
+    require(failed(verify(wrong.second)),
             "wrong nominal field literal admitted");
     auto value = variant({alternative("empty", {})});
     auto selector = operation(
         "variant.make", value, {}, {i64},
         {builder.getNamedAttr("alternative", builder.getI32IntegerAttr(1))});
-    require(failed(selector.second.verify()),
+    require(failed(verify(selector.second)),
             "out-of-range inactive selector admitted");
   });
   cases.run("construction stores refuse borrowed or mismatched buffers", [&] {
     auto vector = data::FieldVectorType::get(&context, base.getDomain());
     auto borrowed = operation("vector.set", vector, {i64, i64, i64, i256}, {});
-    require(failed(borrowed.second.verify()),
+    require(failed(verify(borrowed.second)),
             "borrowed immutable vector gained a store");
     auto sequence = data::SequenceType::get(&context, builder.getI1Type());
     auto borrowedSequence = operation("sequence.set", sequence,
                                       {i64, i64, i64, builder.getI1Type()}, {});
-    require(failed(borrowedSequence.second.verify()),
+    require(failed(verify(borrowedSequence.second)),
             "borrowed sequence gained a store");
     auto module = std::move(borrowed.first);
     builder.setInsertionPoint(borrowed.second);
-    auto count = borrowed.second.getOperand(1);
+    auto count = borrowed.second->getOperand(1);
     auto attr = builder.getNamedAttr("value_type", TypeAttr::get(vector));
-    auto allocation = evm::CheckedOp::create(builder, loc, {i64},
-                                             "vector.alloc", {count}, {attr});
+    auto allocation =
+        physicalFixture(builder, loc, {i64}, "vector.alloc", {count}, {attr});
     borrowed.second->setOperand(0, allocation->getResult(0));
-    require(succeeded(borrowed.second.verify()),
+    require(succeeded(verify(borrowed.second)),
             "fresh exact construction buffer refused");
-    borrowed.second->setOperand(1, borrowed.second.getOperand(2));
-    require(failed(borrowed.second.verify()),
+    borrowed.second->setOperand(1, borrowed.second->getOperand(2));
+    require(failed(verify(borrowed.second)),
             "mismatched construction count admitted");
   });
   cases.run(

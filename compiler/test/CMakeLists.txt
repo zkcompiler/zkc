@@ -829,7 +829,7 @@ mlir_target_link_libraries(zkc-endpoint_closure-test PRIVATE MLIRParser MLIRPass
 
 # The EVM owner supplies these consumers; neither links the CPU target.
 add_zkc_test(evm_legality EvmTarget evm-legality)
-mlir_target_link_libraries(zkc-evm_legality-test PRIVATE MLIRParser MLIRPass)
+mlir_target_link_libraries(zkc-evm_legality-test PRIVATE MLIRParser MLIRPass MLIRTransforms)
 add_zkc_test(evm_target EvmTarget)
 mlir_target_link_libraries(zkc-evm_target-test PRIVATE MLIRParser)
 add_zkc_test(evm_layout EvmTarget evm-layout)

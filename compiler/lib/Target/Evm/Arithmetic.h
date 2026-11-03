@@ -5,13 +5,14 @@
 #include "zkc/Target/Evm/Layout.h"
 #include <memory>
 namespace zkc::evm::detail {
-/// Layout-sensitive field/vector helpers. Calls use the expanded checked-op
-/// operands and results. Private identities derive from exact layouts.
+/// Layout-sensitive field/vector helpers. Calls use the expanded typed
+/// operation operands and results. Private identities derive from exact
+/// layouts.
 class Arithmetic {
 public:
   Arithmetic(NativeLayouts &, const EvmLimits &);
   ~Arithmetic();
-  llvm::Expected<std::string> helper(CheckedOp);
+  llvm::Expected<std::string> helper(mlir::Operation *);
   std::string helpers() const;
 
 private:
