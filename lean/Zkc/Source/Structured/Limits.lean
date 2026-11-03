@@ -15,6 +15,12 @@ namespace Zkc.Source.Structured.Limits
 bindings and definitions, and the decoded protocol-contract list. -/
 abbrev tableEntries : Nat := 128
 
+/-- Protocol roster and role-set capacity, independent of record telescopes. -/
+abbrev protocolRoles : Nat := 1024
+
+/-- Roles in a distributed record's ordered telescope. -/
+abbrev recordRoles : Nat := 1024
+
 /-- Bytes of a native preparation identifier. -/
 abbrev preparationNameBytes : Nat := 128
 

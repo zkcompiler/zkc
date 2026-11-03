@@ -10,9 +10,8 @@ selection is validated. Every selection goes through
 option itself. An undeclared source and a mixed invocation refuse before the
 compiler runs, and without the SDK a package's selection refuses.
 
-Controls that inspect packages need the SDK executable (`ZKC_NATIVE_BIN`) and a
-compiler executable (`ZKC_COMPILER_BIN`); without them they are skipped and
-name the build to run.
+Controls that inspect packages need the SDK executable (`ZKC_NATIVE_BIN`) and
+no compiler; without the SDK they are skipped and name the build to run.
 """
 import os
 from pathlib import Path
@@ -35,8 +34,7 @@ from toolchain import Missing, Toolchain  # noqa: E402
 def missing_sdk():
     """Why the SDK's project inspection cannot run here, or None."""
     try:
-        tools = Toolchain()
-        tools.runtime, tools.compiler
+        Toolchain().runtime
     except Missing as error:
         return f"the SDK's project inspection is unavailable: {error}"
     return None
@@ -139,8 +137,17 @@ class Refusals(unittest.TestCase):
         (source,) = self.package("unbuilt", "zkc")
         empty = self.root / "no-tools"
         empty.mkdir()
-        with mock.patch.dict(os.environ, {"ZKC_NATIVE_BIN": str(empty), "ZKC_COMPILER_BIN": str(empty)}):
+        with mock.patch.dict(os.environ, {"ZKC_NATIVE_BIN": str(empty)}):
             self.refuses("the SDK's project inspection selects its source format", [source])
+
+    @requires_sdk
+    def test_package_route_needs_no_compiler(self):
+        (source,) = self.package("compiler-free", "zkc-layout")
+        empty = self.root / "no-compiler"
+        empty.mkdir()
+        with mock.patch.dict(os.environ, {"ZKC_COMPILER_BIN": str(empty)}):
+            self.assertEqual(source_format.of_sources([source], root=self.root, declarations={}), "zkc-layout")
+            self.assertEqual(source_format.of_project(self.root / "compiler-free/zkc.toml"), "zkc-layout")
 
     def test_undeclared_source_refuses(self):
         loose = self.root / "loose.zkc"

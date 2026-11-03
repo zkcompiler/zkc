@@ -131,11 +131,13 @@ holder of the record. The resource tag and sealing are given independently. -/
 def declaredTotal (resource : String) (sealed : Bool) : Snapshot :=
   let pending : OriginTerm := .nominal .record "example::Pending" []
   { total with sourceDeclarations := {
-      records := [⟨pending, resource, sealed, [("value", .field scalarDomain)]⟩]
+      records := [⟨pending, resource, sealed, .fields [⟨"value", .field scalarDomain, none⟩], [],
+        if resource == "ordinary" then none else some "zkl_resource_pending"⟩]
       protocols := [⟨"main",
-        [⟨"xs", .builtin "vector" [.field scalarDomain], ["P"], 0, 1⟩,
-         ⟨"a", .field scalarDomain, ["P"], 1, 1⟩, ⟨"b", .field scalarDomain, ["P"], 2, 1⟩],
-        [⟨"pending", pending, ["P"], 0, 1⟩, ⟨"b", .field scalarDomain, ["P"], 1, 1⟩]⟩] } }
+        [⟨"xs", .builtin "vector" [.field scalarDomain], ["P"], 0, 1, .data ["P"]⟩,
+         ⟨"a", .field scalarDomain, ["P"], 1, 1, .data ["P"]⟩, ⟨"b", .field scalarDomain, ["P"], 2, 1, .data ["P"]⟩],
+        [⟨"pending", pending, ["P"], 0, 1, .data ["P"]⟩, ⟨"b", .field scalarDomain, ["P"], 1, 1, .data ["P"]⟩]⟩]
+      authorities := [("example::Pending", none)] } }
 
 /-- A protocol for two participants that both hold its value, returned as a
 retained record declared for `holders`. -/
@@ -144,9 +146,11 @@ def sharedRecord (resource : String) (sealed : Bool) (holders : List String) : S
     some ⟨["P", "V"], [["P", "V"]], [["P", "V"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩
   let pending : OriginTerm := .nominal .record "example::Pending" []
   { snapshot [root] with sourceDeclarations := {
-      records := [⟨pending, resource, sealed, [("value", .field scalarDomain)]⟩]
-      protocols := [⟨"main", [⟨"a", .field scalarDomain, ["P", "V"], 0, 1⟩],
-        [⟨"pending", pending, holders, 0, 1⟩]⟩] } }
+      records := [⟨pending, resource, sealed, .fields [⟨"value", .field scalarDomain, none⟩], [],
+        if resource == "ordinary" then none else some "zkl_resource_pending"⟩]
+      protocols := [⟨"main", [⟨"a", .field scalarDomain, ["P", "V"], 0, 1, .data ["P", "V"]⟩],
+        [⟨"pending", pending, holders, 0, 1, .data holders⟩]⟩]
+      authorities := [("example::Pending", none)] } }
 
 def forwardedBound (direct wrong : Bool) : Snapshot := snapshot [
   function "echo" .math [vector, vector, .index] [vector, .index, vector]
@@ -504,19 +508,16 @@ def run : IO Unit := do
   test "numeric-token-limit" (!(Structured.Format.parse
     ("[" ++ String.ofList (List.replicate 1025 '1') ++ "]")).isOk)
   test "snapshot-byte-limit" (!(Structured.Format.parse (String.ofList (List.replicate (1024 * 1024 + 1) ' '))).isOk)
-  -- Sealing and the resource tag are independent facts of a retained record.
-  for resource in ["ordinary", "affine", "linear"] do
-    for sealed in [false, true] do
-      test s!"declared-{resource}-sealed-{sealed}" (check (declaredTotal resource sealed)).isOk
-  test "declared-resource-tag-refused" (refused (declaredTotal "consumable" true) "component-declaration")
-  -- Sealing grants no resource authority: an unsealed linear record stays
-  -- linear, with one holder, and its holders are the value's actual roles.
+  -- A resource record must carry its declared custody prefix, sealed or not.
   for sealed in [false, true] do
+    test s!"declared-ordinary-sealed-{sealed}" (check (declaredTotal "ordinary" sealed)).isOk
     test s!"declared-shared-ordinary-sealed-{sealed}" (check (sharedRecord "ordinary" sealed ["P", "V"])).isOk
-    test s!"declared-linear-sealed-{sealed}-one-holder"
-      (refused (sharedRecord "linear" sealed ["P", "V"]) "component-claim-role")
-    test s!"declared-linear-sealed-{sealed}-other-holder"
-      (refused (sharedRecord "linear" sealed ["V"]) "component-declaration-role")
+    for resource in ["affine", "linear"] do
+      test s!"declared-{resource}-sealed-{sealed}-without-custody"
+        (refused (declaredTotal resource sealed) "component-declaration-type")
+      test s!"declared-shared-{resource}-sealed-{sealed}-without-custody"
+        (refused (sharedRecord resource sealed ["P", "V"]) "component-declaration-type")
+  test "declared-resource-tag-refused" (refused (declaredTotal "consumable" true) "component-declaration")
   let failures ← failures.get
   unless failures.isEmpty do throw (IO.userError s!"structured failures: {failures.reverse}")
   IO.println s!"structured-source: {← count.get} focused checks passed"

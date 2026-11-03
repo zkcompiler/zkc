@@ -18,10 +18,10 @@ directory in `fixture-formats.toml`. The sources of one invocation must agree.
 An undeclared source and a mixed invocation refuse before the compiler runs.
 Nothing here reads source text to infer a grammar.
 
-The SDK executable is the native build's `zkc` (`ZKC_NATIVE_BIN`), and its
-project inspection names the compiler build's `zkc-compile`
-(`ZKC_COMPILER_BIN`), which that view does not run. Without them a package's
-selection refuses rather than falling back to another reading of its manifest.
+The SDK executable is the native build's `zkc` (`ZKC_NATIVE_BIN`). Its project
+inspection reads only the project and its settings, so it needs no compiler.
+Without the SDK a package's selection refuses rather than falling back to
+another reading of its manifest.
 """
 
 from functools import lru_cache
@@ -49,14 +49,12 @@ def selected(value, origin):
 @lru_cache(maxsize=None)
 def _graph(manifest):
     """The SDK's project graph of a package manifest; the SDK's refusal code refuses."""
-    # Only the package route runs the SDK, so only it resolves the build tools.
+    # Only the package route runs the SDK, so only it resolves the SDK executable.
     if str(ROOT / "common/tests/support") not in sys.path:
         sys.path.append(str(ROOT / "common/tests/support"))
     from toolchain import Missing, Toolchain
     try:
-        tools = Toolchain()
-        command = [tools.runtime, "--json", "inspect", "--view=project", f"--project={manifest}",
-                   f"--compiler={tools.compiler}"]
+        command = [Toolchain().runtime, "--json", "inspect", "--view=project", f"--project={manifest}"]
     except Missing as error:
         raise Refused(f"{manifest}: the SDK's project inspection selects its source format: {error}") from None
     result = subprocess.run(command, capture_output=True, text=True, timeout=120)

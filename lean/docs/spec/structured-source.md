@@ -1264,23 +1264,34 @@ protocol headers and their retained contracts. It reconstructs only the bounded
 source layout fragment in the [shared wire specification](../../../docs/spec/formats/structured-source.md#retained-source-declarations).
 It does not infer linearity from a Boolean/field carrier or invent missing
 source/static declarations. `Import.checkUnitHeaders` runs this check before
-body admission. Old ten-slot snapshots have no compatibility reader.
+body admission. `DeclarationFormat.decode` reads only the current three-table
+carrier `[records, protocols, authorities]`; the former two-table carrier and
+old ten-slot snapshots have no compatibility reader. `checkShape` also checks
+directly constructed data: exact nominal coverage (including phantom and
+zero-length children), ordered unique authority rows, revision spelling, record
+role telescopes, member placements and custody-slot presence. Authority values
+are not recomputed from source bytes; frontend correspondence remains a named
+trust boundary. Protocol rosters and record telescopes have separate limits,
+currently 1,024 each; the roster bound also applies in semantic admission.
 
 `SourceDeclarations.leaves` reconstructs each port's ordered leaves: what each
 holds (data of an exact type, or the custody permission of a closed resource
 record), and its path of field names, array positions and tuple positions. A
-record's fields expand in declaration order; a zero-length array contributes no
-leaf but still requires its element's declarations. `checkPorts` compares every
+record's fields expand in declaration order after its custody prefix when it is
+linear or affine. Nested resource prefixes retain their own offsets; a
+zero-length array contributes no leaf but still requires its element's declarations. `checkPorts` compares every
 leaf with the exact native type at its offset and every leaf's placement with
 the native scope; an ordinary record places every leaf, private fields
 included, at the port's roles. A custody leaf is a native `resource_unit` of one
-holder. The custody slots the ports exhibit must form one association between
-closed resource records and slots (`checkSlots`): one slot per record, distinct
-slots for distinct records, and every custody type the unit stores belongs to
-one. The slot spelling is the producer's digest of the closed type; the reader
-verifies the association it induces and does not recompute the digest.
-Distributed records refuse (`component-declaration-distributed`): the retained
-record row carries neither their role telescope nor per-field placements.
+holder, with the slot named by that record's retained row. Those declared slots
+form one association between closed resource records and native custody types
+(`checkSlots`): one slot per record, distinct slots for distinct records, and
+every custody type the unit stores belongs to one. Helper-local resources need
+not first appear at an external port. The slot spelling is the producer's digest
+of the closed type; the reader checks its association without recomputing it.
+Distributed records and variants retain their metadata but semantic admission
+refuses them (`component-declaration-distributed`, `component-declaration-variant`).
+Reading a telescope, placement tree or alternative does not supply its semantics.
 That a linear claim port has one holder is a separate rule of the claim
 association (`checkLinearHolders`), not of layout admission.
 

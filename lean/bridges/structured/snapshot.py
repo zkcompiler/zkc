@@ -104,7 +104,7 @@ def oracle_descriptor(tag, args):
         extra = ""
         if tag == "oracle_input":
             extra = " " + oracle_shape(sort[1:3], args[3])
-        return (f".oracle (.{tag.removeprefix('oracle_')} {text(holder)} {seq(receivers, text, 16)} "
+        return (f".oracle (.{tag.removeprefix('oracle_')} {text(holder)} {seq(receivers, text, 1024)} "
                 f"({rendered}){extra})")
     if tag in ("oracle_send", "oracle_virtual"):
         size = {"oracle_send": 5, "oracle_virtual": 4}[tag]
@@ -117,7 +117,7 @@ def oracle_descriptor(tag, args):
                 raise ValueError("invalid oracle dimensions")
             extra = f" {seq(args[3], text, 16)} {oracle_shape(kind, args[4])}"
         constructor = tag.removeprefix("oracle_")
-        return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 16)} "
+        return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 1024)} "
                 f"({oracle_kind(kind)}){extra})")
     if tag in ("oracle_query", "oracle_contents"):
         owner, kind = record(args, 2)
@@ -136,7 +136,7 @@ def oracle_descriptor(tag, args):
     if tag in names:
         record(args, 3 if tag in ("oracle_sequence_append", "oracle_sequence_at") else 2)
         kind, maximum = args[:2]
-        roles = " " + seq(args[2], text, 16) if len(args) == 3 else ""
+        roles = " " + seq(args[2], text, 1024) if len(args) == 3 else ""
         return f".oracle (.{names[tag]} ({oracle_kind(kind)}) {lean_render.decimal(maximum, 2**64)}{roles})"
     raise ValueError("unknown oracle descriptor")
 
@@ -197,13 +197,13 @@ def descriptor(value):
     if tag == "protocol_repeat":
         carried, maximum, roles, scopes = record(args, 4)
         return (f".protocolRepeat {nat(carried, 512)} {nat(maximum, 1048576)} "
-                f"{seq(roles, text)} {seq(scopes, lambda scope: seq(scope, text))}")
+                f"{seq(roles, text, 1024)} {seq(scopes, lambda scope: seq(scope, text, 1024))}")
     if tag == "protocol_apply":
         callee, roles = record(args, 2)
-        return f".protocolApply {text(callee)} {seq(roles, text)}"
+        return f".protocolApply {text(callee)} {seq(roles, text, 1024)}"
     if tag in ("restrict", "assemble"):
         record(args, 1)
-        return f".{tag} {seq(args[0], text, 16)}"
+        return f".{tag} {seq(args[0], text, 1024)}"
     if tag == "statement":
         relation_name, selectors, acceptance, target = record(args, 4)
         return (f".statement {text(relation_name)} {seq(selectors, text)} "
@@ -279,7 +279,7 @@ def protocol_interface(value):
     tag, roles, inputs, outputs = record(value, 4)
     if tag != "protocol":
         raise ValueError("invalid protocol interface")
-    return f"some ⟨{seq(roles, text)}, {seq(inputs, lambda x: seq(x, text))}, {seq(outputs, lambda x: seq(x, text))}⟩"
+    return f"some ⟨{seq(roles, text, 1024)}, {seq(inputs, lambda x: seq(x, text, 1024))}, {seq(outputs, lambda x: seq(x, text, 1024))}⟩"
 
 
 def relation(value):
@@ -505,23 +505,49 @@ def definition(value):
             f"{seq(outputs, ty)}, {protocol_interface(interface)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
 
 
+def source_placement(value, depth=0):
+    if depth >= 64:
+        raise ValueError("component-declaration-limit")
+    node = record(value)
+    if not node:
+        raise ValueError("component-declaration-placement")
+    if node[0] == "data":
+        _, roles = record(node, 2)
+        return f".data {seq(roles, text, 1024)}"
+    if node[0] == "oracle":
+        _, holder, receivers = record(node, 3)
+        return f".oracle {text(holder)} {seq(receivers, text, 1024)}"
+    if node[0] == "product":
+        _, arguments, fields = record(node, 3)
+        return (f".product {seq(arguments, text, 1024)} "
+                f"{seq(fields, lambda field: source_placement(field, depth + 1))}")
+    raise ValueError("component-declaration-placement")
+
+
+def source_field(value):
+    name, type_, placement = record(value, 3)
+    return f"⟨{text(name)}, {origin_term(type_)}, ({optional(placement, source_placement)})⟩"
+
+
 def source_record(value):
-    type_, resource, sealed, fields = record(value, 4)
+    type_, resource, sealed, fields, roles, slot = record(value, 6)
     if resource not in ("ordinary", "affine", "linear") or type(sealed) is not bool:
         raise ValueError("invalid source record")
-
-    def field(value):
-        name, type_ = record(value, 2)
-        return f"({text(name)}, {origin_term(type_)})"
-
+    if isinstance(type_, list) and type_[:2] == ["nominal", "variant"]:
+        def alternative(value):
+            name, fields = record(value, 2)
+            return f"({text(name)}, {seq(fields, source_field)})"
+        members = f".alternatives {seq(fields, alternative)}"
+    else:
+        members = f".fields {seq(fields, source_field)}"
     return (f"⟨{origin_term(type_)}, {text(resource)}, {str(sealed).lower()}, "
-            f"{seq(fields, field)}⟩")
+            f"({members}), {seq(roles, text, 1024)}, ({optional(slot, text)})⟩")
 
 
 def source_port(value):
-    name, type_, roles, offset, count = record(value, 5)
-    return (f"⟨{text(name)}, {origin_term(type_)}, {seq(roles, text, limit=16)}, "
-            f"{nat(offset)}, {nat(count, 512)}⟩")
+    name, type_, roles, offset, count, placement = record(value, 6)
+    return (f"⟨{text(name)}, {origin_term(type_)}, {seq(roles, text, 1024)}, "
+            f"{nat(offset)}, {nat(count, 512)}, ({source_placement(placement)})⟩")
 
 
 def source_protocol(value):
@@ -530,14 +556,16 @@ def source_protocol(value):
 
 
 def source_declarations(value):
-    """Render the two-table carrier `[records, protocols]`. The three-table
-    carrier `[records, protocols, authorities]` is refused by name, so an
-    unsupported carrier stays distinct from a malformed one."""
-    if isinstance(value, list) and len(value) == 3 and all(isinstance(table, list) for table in value):
-        raise lean_render.Refused("structured-declarations-unsupported")
-    records, protocols = record(value, 2)
+    """Render only the current carrier. Lean independently checks its associations."""
+    records, protocols, authorities = record(value, 3)
+
+    def authority(value):
+        path, revision = record(value, 2)
+        return f"({text(path)}, {optional(revision, text)})"
+
     return (f"{{ records := {seq(records, source_record)}, "
-            f"protocols := {seq(protocols, source_protocol)} }}")
+            f"protocols := {seq(protocols, source_protocol)}, "
+            f"authorities := {seq(authorities, authority, limit=1048576)} }}")
 
 
 def render(data, namespace):

@@ -17,7 +17,7 @@ def resolveScope (roles scope : List String) : Except String (List Nat) := do
 
 def ProtocolInterface.resolve (interface : ProtocolInterface) (inputs outputs : List Ty) :
     Except String (List (List Nat) × List (List Nat)) := do
-  if interface.roles.isEmpty || interface.roles.length > 16 ||
+  if interface.roles.isEmpty || interface.roles.length > Limits.protocolRoles ||
       !interface.roles.all validProtocolIdentifier ||
       interface.roles.eraseDups.length != interface.roles.length then throw "structured-roster"
   if interface.inputScopes.length != inputs.length ||

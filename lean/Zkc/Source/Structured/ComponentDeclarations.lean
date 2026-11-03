@@ -33,11 +33,9 @@ structure Leaf where
   path : List String
   deriving BEq, Repr
 
-/-- Reconstruct the ordered leaves of a closed source type: a record's fields in
-declaration order, each expanded in place. A zero-length array contributes no
-leaf, but its element type is still checked. Only the advertised fragment is
-reconstructed; distributed records refuse, because their retained row carries
-neither the role telescope nor per-field placements. -/
+/-- Reconstruct ordered leaves with each resource record's custody prefix.
+Zero-length arrays retain their element's declaration obligations. Distributed
+and variant semantics require separate admission beyond reading their metadata. -/
 def leaves (source : SourceDeclarations) : Nat → OriginTerm → List String → Except String (List Leaf)
   | 0, _, _ => .error "component-declaration-depth"
   | depth + 1, term, path => do
@@ -61,8 +59,10 @@ def leaves (source : SourceDeclarations) : Nat → OriginTerm → List String �
       return [⟨.data (.vector name), path⟩]
     | .nominal .record _ _ =>
       let record ← requireSome (source.record? term) "component-declaration-record"
-      return (← record.fields.mapM fun (name, field) =>
-        leaves source depth field (path ++ [name])).flatten
+      let .fields fields := record.members | throw "component-declaration-record"
+      let custody := if record.slot.isSome then [⟨LeafKind.custody term, path⟩] else []
+      return custody ++ (← fields.mapM fun field =>
+        leaves source depth field.type (path ++ [field.name])).flatten
     | .nominal .logicalRecord _ _ => throw "component-declaration-distributed"
     | _ => throw "component-declaration-type"
 
@@ -78,6 +78,9 @@ def checkPorts (source : SourceDeclarations) (signature : ProtocolSignature)
   if names.eraseDups.length != names.length then throw "component-declaration-duplicate"
   for port in ports do
     if port.offset != offset then throw "component-declaration-port"
+    let .data placed := port.placement | throw "component-declaration-distributed"
+    if placed != port.roles || signature.roles.filter port.roles.contains != port.roles then
+      throw "component-declaration-placement"
     let described ← source.leaves Limits.nesting port.type [port.name]
     if described.length != port.count then throw "component-declaration-type"
     let roles ← port.roles.mapM (resolveRole signature.roles)
@@ -88,6 +91,8 @@ def checkPorts (source : SourceDeclarations) (signature : ProtocolSignature)
       | .data type => if native != type then throw "component-declaration-type"
       | .custody owner =>
         let .resourceUnit slot := native | throw "component-declaration-custody"
+        let record ← requireSome (source.record? owner) "component-declaration-record"
+        if record.slot != some slot then throw "component-declaration-custody-identity"
         if roles.length != 1 then throw "component-declaration-custody-holder"
         slots := (owner, slot) :: slots
       if scopes[offset + index]? != some roles then throw "component-declaration-role"
@@ -97,11 +102,9 @@ def checkPorts (source : SourceDeclarations) (signature : ProtocolSignature)
   else if offset != types.length then throw "component-declaration-port"
   return slots
 
-/-- The custody slots the ports exhibit are one association between closed
-resource records and slots: one slot per record, distinct slots for distinct
-records, and every custody type the unit stores belongs to one. The slot
-spelling itself is the producer's digest of the closed type; this check
-verifies the association it must induce, it does not recompute the digest. -/
+/-- Declared custody slots associate closed resource records with native types.
+Every stored custody type must belong to a row, including helper-local values
+that never reach an external port. Slot digests are not recomputed here. -/
 def checkSlots (snapshot : Snapshot) (slots : List (OriginTerm × String)) : Except String Unit := do
   for (owner, slot) in slots do
     for (other, otherSlot) in slots do
@@ -133,6 +136,7 @@ linear inputs or residual outputs. Concrete Entry target and acceptance
 selection are separate obligations; these declarations only associate ports. -/
 def check (source : SourceDeclarations) (snapshot : Snapshot)
     (headers : List ProtocolSignature) : Except String Unit := do
+  source.checkShape
   if source.records.isEmpty && source.protocols.isEmpty then return
   if source.records.length > Limits.tableEntries || source.protocols.length > Limits.tableEntries then
     throw "component-declaration-limit"
@@ -142,21 +146,22 @@ def check (source : SourceDeclarations) (snapshot : Snapshot)
     match record.type with
     | .nominal .record _ _ => pure ()
     | .nominal .logicalRecord _ _ => throw "component-declaration-distributed"
+    | .nominal .variant _ _ => throw "component-declaration-variant"
     | _ => throw "component-declaration-record"
     -- Sealing restricts source access; it is independent of the resource tag.
     unless ["ordinary", "affine", "linear"].contains record.resource do throw "component-declaration"
-    let names := record.fields.map Prod.fst
+    let names := record.members.allFields.map (·.name)
     if names.eraseDups.length != names.length then throw "component-declaration-duplicate"
     let _ ← source.leaves Limits.nesting record.type []
   let owners := source.protocols.map (·.name)
   if owners.eraseDups.length != owners.length || owners.length != headers.length then
     throw "component-declaration-owner"
   let mut meanings : List (OriginTerm × String) := []
-  let mut slots : List (OriginTerm × String) := []
+  let slots := source.records.filterMap fun record => record.slot.map (record.type, ·)
   for protocol in source.protocols do
     let header ← requireSome (headers.find? (·.name == protocol.name)) "component-declaration-owner"
-    slots := (← source.checkPorts header protocol.inputs header.inputs header.inputScopes true) ++ slots
-    slots := (← source.checkPorts header protocol.outputs header.outputs header.outputScopes false) ++ slots
+    discard <| source.checkPorts header protocol.inputs header.inputs header.inputScopes true
+    discard <| source.checkPorts header protocol.outputs header.outputs header.outputScopes false
     source.checkLinearHolders protocol.inputs
     source.checkLinearHolders protocol.outputs
     let contract ← requireSome (snapshot.contracts.find? (·.owner == protocol.name)) "component-declaration-owner"

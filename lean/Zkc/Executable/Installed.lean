@@ -36,8 +36,9 @@ The arkworks numerical kernels (`numerical.map`, `numerical.sum` and
 `numerical.product` over the scalar field) are one row each, whatever their
 operand mask: the row takes the mask as the binding's last static argument. Their
 assumed meaning is that, within the runtime's row bound
-(`Zkc.Executable.Numerical.rowLimit`), the kernel evaluates the `zkc.ring/0`
-expression its parameter carries, as `Zkc.Executable.Numerical.decode` reads it,
+(`Zkc.Executable.Numerical.rowLimit`), the kernel evaluates the expression of the
+`zkc.numerical-plan/0` plan its parameter carries, as
+`Zkc.Executable.Numerical.decode` reads it,
 at every row with the operands the mask selects, and returns the vector of the
 values, their sum or their product (`Zkc.Executable.Computation.apply`); a payload
 the decoder refuses has no meaning, as the runtime's program admission refuses

@@ -160,8 +160,8 @@ def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option
 
 /-- Resolve a binding and its parameters: transcript operations carry exactly
 one occurrence, constants exactly one canonical decimal below `2 ^ 64`, a
-numerical call exactly one expression that `Numerical.decode` admits for its
-mask (`Numerical.mask?`), and other operations none. -/
+numerical call exactly one plan that `Numerical.decode` admits for its mask
+(`Numerical.mask?`), and other operations none. -/
 def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
     (parameters : List Parameter) : Option Resolved :=
   match vocabulary.installed? binding with
@@ -180,7 +180,7 @@ def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
       | .compute operation, [] => some (.compute operation)
       | .numerical reduction domain characteristic, [.text body] =>
           (binding.arguments.getLast? >>= Numerical.mask?).bind fun mask =>
-            (Numerical.decode domain characteristic mask.length body).toOption.map fun expression =>
+            (Numerical.decode domain characteristic mask body).toOption.map fun expression =>
               .compute (.numerical reduction domain mask expression)
       | .custody transfer, [] => binding.arguments.head?.map (.custody transfer ·)
       | _, _ => none

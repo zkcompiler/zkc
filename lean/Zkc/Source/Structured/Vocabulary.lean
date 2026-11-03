@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.Addresses
 public import Zkc.Source.Structured.CatalogueEnvironment
-public import Zkc.Source.Structured.Origin
+public import Zkc.Source.Structured.SourceDeclarations
 
 @[expose] public section
 
@@ -361,34 +361,6 @@ structure ProtocolContract where
   owner : String
   clauses : List ContractClause
   deriving DecidableEq, Repr
-
-/-- Source records retain their declared usage attribute and closed field types.
-No resource property is inferred from a flattened native carrier. -/
-structure SourceRecord where
-  type : OriginTerm
-  resource : String
-  sealed : Bool
-  fields : List (String × OriginTerm)
-  deriving BEq, Repr
-
-structure SourcePort where
-  name : String
-  type : OriginTerm
-  roles : List String
-  offset : Nat
-  count : Nat
-  deriving BEq, Repr
-
-structure SourceProtocol where
-  name : String
-  inputs : List SourcePort
-  outputs : List SourcePort
-  deriving BEq, Repr
-
-structure SourceDeclarations where
-  records : List SourceRecord := []
-  protocols : List SourceProtocol := []
-  deriving BEq, Repr
 
 structure Snapshot where
   source : String

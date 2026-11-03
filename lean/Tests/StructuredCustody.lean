@@ -351,17 +351,16 @@ def records (records : List SourceRecord) : SourceDeclarations := { records := r
 def ticket : OriginTerm := .nominal .record "probe::Ticket" []
 def holder : OriginTerm := .nominal .record "probe::Holder" []
 
--- Distributed records refuse: their retained row carries no role telescope and
--- no per-field placements.
+-- Reading distributed metadata does not yet admit its layout semantics.
 #guard errorOf ((records []).leaves 8 (.nominal .logicalRecord "probe::State" []) []) ==
   some "component-declaration-distributed"
 -- Nested records expand in place with their paths; a zero-length array of a
 -- record contributes no leaf but still requires the record.
-#guard match (records [⟨ticket, "ordinary", false, [("value", .field "f")]⟩,
-    ⟨holder, "ordinary", true, [("inner", ticket), ("count", .index)]⟩]).leaves 8 holder ["port"] with
+#guard match (records [⟨ticket, "ordinary", false, .fields [⟨"value", .field "f", none⟩], [], none⟩,
+    ⟨holder, "ordinary", true, .fields [⟨"inner", ticket, none⟩, ⟨"count", .index, none⟩], [], none⟩]).leaves 8 holder ["port"] with
   | .ok leaves => leaves.map (·.path) == [["port", "inner", "value"], ["port", "count"]]
   | .error _ => false
-#guard match (records [⟨ticket, "ordinary", false, [("value", .field "f")]⟩]).leaves 8
+#guard match (records [⟨ticket, "ordinary", false, .fields [⟨"value", .field "f", none⟩], [], none⟩]).leaves 8
     (.array ticket "0") [] with
   | .ok leaves => leaves.isEmpty
   | .error _ => false
@@ -380,9 +379,9 @@ def otherSlot : String := "zkl_resource_fedcba9876543210"
   some "component-declaration-custody-association"
 -- A linear port has exactly one claim holder, checked apart from layout and
 -- placement admission.
-def linearTicket : SourceDeclarations := records [⟨ticket, "linear", false, [("value", .field "f")]⟩]
-#guard errorOf (linearTicket.checkLinearHolders [⟨"ticket", ticket, ["P", "V"], 0, 1⟩]) ==
+def linearTicket : SourceDeclarations := records [⟨ticket, "linear", false, .fields [⟨"value", .field "f", none⟩], [], some slot⟩]
+#guard errorOf (linearTicket.checkLinearHolders [⟨"ticket", ticket, ["P", "V"], 0, 1, .data ["P", "V"]⟩]) ==
   some "component-claim-role"
-#guard (linearTicket.checkLinearHolders [⟨"ticket", ticket, ["V"], 0, 1⟩]).isOk
+#guard (linearTicket.checkLinearHolders [⟨"ticket", ticket, ["V"], 0, 1, .data ["V"]⟩]).isOk
 
 end StructuredCustodyTests

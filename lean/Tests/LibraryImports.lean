@@ -820,6 +820,7 @@ import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
 import Tests.StructuredContracts
 import Tests.StructuredCustody
+import Tests.StructuredDeclarations
 import Tests.StructuredDomainModels
 import Tests.StructuredFormation
 import Tests.StructuredFoundationFormat

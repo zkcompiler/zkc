@@ -4,32 +4,41 @@ public import Zkc.Algebra.RingExpression.Basic
 
 @[expose] public section
 
-/-! The expression payload of a native numerical call.
+/-! The physical plan payload of a native numerical call.
 
 The compiler-generated `numerical.map`, `numerical.sum` and `numerical.product`
 operations execute one pure field expression over a row domain
 (`docs/spec/runtime/numerical.md`). Each binding names its field and an operand
-mask of `0` (a scalar) and `1` (a vector) positions; each operation carries the
-expression as its single text parameter, a `zkc.ring/0` arena
+mask of `0` (a scalar) and `1` (a vector) positions; each operation carries a
+physical plan as its single text parameter
+(`docs/spec/runtime/numerical-plans.md`):
+
+    ["zkc.numerical-plan/0", expression, lanes, slots, locations]
+
+where `expression` is the nested `zkc.ring/0` arena
 (`docs/spec/domains/ring-expressions.md`).
 
 `decode` reads that text into a `Zkc.Algebra.RingExpression.Expr` whose
 constants are natural literals and whose inputs are operand slots. It accepts
-exactly the payloads the runtime's program admission accepts for a call over a
-field with the given characteristic and number of slots, and refuses every other
+exactly the plans the runtime's program admission accepts for a call over a
+field with the given characteristic and operand mask, and refuses every other
 payload with a named reason (`Refusal`):
 
-- the body has at most 4096 bytes of UTF-8;
-- it is the canonical encoding of an arena: the compact array form with
-  canonical natural numbers and no escapes, `["zkc.ring/0", inputs, nodes,
-  outputs]`, since the runtime refuses a body that differs from the canonical
-  encoding of what it parses;
-- every declared input and every constant is in the call's field, a constant
-  is a canonical decimal below the characteristic, and an embedding is refused;
+- the plan has at most 16384 bytes of UTF-8 and its expression at most 4096;
+- it is the canonical encoding of a plan: the compact array form with canonical
+  natural numbers and no escapes, since the runtime refuses a payload that
+  differs from the canonical encoding of what it parses; a bare arena is not a
+  plan;
+- every declared input and every constant of the expression is in the call's
+  field, a constant is a canonical decimal below the characteristic, and an
+  embedding is refused;
 - an input node names a declared input, and every operand points strictly
   backward;
 - there are exactly as many declared inputs as mask positions and exactly one
-  output, and the output reaches every node.
+  output, and the output reaches every node;
+- `lanes` is from 1 through 256, `slots` from 1 through the node count, and
+  `locations` names one slot below `slots` for every node, using every slot;
+- the slot schedule is valid (`scheduled`).
 
 The arena's other formation limits (65 536 nodes and inputs, 4096 outputs and
 depth 1024) cannot be reached within 4096 bytes. `mask?` reads the mask
@@ -37,6 +46,11 @@ argument: at most 1023 positions, each `0` or `1`. These are the static checks
 of program admission. The runtime's bound on a call's rows (`rowLimit`) is a
 capacity limit of the native call, as the element limit of every vector a native
 kernel produces is; the executable meaning does not stop on it.
+
+The plan's lanes and slot locations are a storage proposal. A valid plan
+computes the expression it carries at every row, so its meaning is that
+expression's; the schedule check refuses a proposal that would read a slot
+another node has overwritten.
 
 The tree an arena denotes repeats a shared node at each of its uses; it has the
 meaning of the arena, which evaluates each node once.
@@ -55,8 +69,17 @@ inductive Reduction where
   | product
   deriving DecidableEq, Repr
 
-/-- The largest expression body, in bytes. -/
+/-- The largest plan, in bytes. -/
+def planLimit : Nat := 16384
+
+/-- The largest expression of a plan, in bytes. -/
 def bodyLimit : Nat := 4096
+
+/-- The most rows a native call evaluates at once. -/
+def laneLimit : Nat := 256
+
+/-- The most nodes of an arena, and so the most storage slots of a plan. -/
+def nodeLimit : Nat := 65536
 
 /-- The most operand slots of one call. -/
 def slotLimit : Nat := 1023
@@ -65,11 +88,11 @@ def slotLimit : Nat := 1023
 which the executable meaning does not model. -/
 def rowLimit : Nat := 1048576
 
-/-- Why an expression payload is refused. -/
+/-- Why a plan payload is refused. -/
 inductive Refusal where
-  /-- The body has more than 4096 bytes. -/
+  /-- The plan has more than 16384 bytes, or its expression more than 4096. -/
   | bytes
-  /-- The body is not the canonical encoding of an arena. -/
+  /-- The payload is not the canonical encoding of a plan. -/
   | syntax
   /-- A declared input or a constant is not in the call's field. -/
   | field
@@ -87,6 +110,11 @@ inductive Refusal where
   | outputs
   /-- A node does not contribute to the output. -/
   | unreachable
+  /-- The lanes, slot count or locations are out of range, or a slot is unused. -/
+  | shape
+  /-- A node reads a slot that does not hold its operand, overwrites a value
+  needed across chunks, or the output's slot does not keep the output. -/
+  | schedule
   deriving DecidableEq, Repr
 
 /-! ## Lexical form -/
@@ -138,6 +166,22 @@ def lexWith : Nat → List Char → Except Refusal (List Token)
 
 def lex (characters : List Char) : Except Refusal (List Token) :=
   lexWith characters.length characters
+
+/-- The UTF-8 length of a text. -/
+def byteLength (characters : List Char) : Nat :=
+  characters.foldl (fun total character => total + character.utf8Size) 0
+
+/-- The number of decimal digits of a natural number. -/
+def digitCount (value : Nat) : Nat :=
+  (Nat.toDigits 10 value).length
+
+/-- The UTF-8 length of the canonical text the tokens were read from: the
+compact form has no whitespace and no escapes. -/
+def tokenBytes : List Token → Nat
+  | [] => 0
+  | .text characters :: rest => byteLength characters + 2 + tokenBytes rest
+  | .natural value :: rest => digitCount value + tokenBytes rest
+  | _ :: rest => 1 + tokenBytes rest
 
 /-! ## The arena -/
 
@@ -208,9 +252,10 @@ def comma : List Token → Except Refusal (List Token)
   | .comma :: rest => pure rest
   | _ => throw .syntax
 
-/-- The arena `["zkc.ring/0", inputs, nodes, outputs]`: the declared input
-fields, the nodes and the outputs. -/
-def arena (tokens : List Token) : Except Refusal (List (List Char) × List Node × List Nat) :=
+/-- The arena `["zkc.ring/0", inputs, nodes, outputs]` at the front of the
+tokens: the declared input fields, the nodes, the outputs and what follows. -/
+def arena (tokens : List Token) :
+    Except Refusal ((List (List Char) × List Node × List Nat) × List Token) :=
   match tokens with
   | .left :: .text tag :: .comma :: rest => do
       unless tag = "zkc.ring/0".toList do throw .syntax
@@ -218,7 +263,25 @@ def arena (tokens : List Token) : Except Refusal (List (List Char) × List Node 
       let (nodes, rest) ← array node tokens.length (← comma rest)
       let (outputs, rest) ← array naturalItem tokens.length (← comma rest)
       match rest with
-      | [.right] => pure (inputs, nodes, outputs)
+      | .right :: after => pure ((inputs, nodes, outputs), after)
+      | _ => throw .syntax
+  | _ => throw .syntax
+
+/-- The plan `["zkc.numerical-plan/0", expression, lanes, slots, locations]`:
+the expression's arena and its encoded size, the lanes, the slot count and the
+locations. -/
+def plan (tokens : List Token) :
+    Except Refusal ((List (List Char) × List Node × List Nat) × Nat × Nat × Nat × List Nat) :=
+  match tokens with
+  | .left :: .text tag :: .comma :: rest => do
+      unless tag = "zkc.numerical-plan/0".toList do throw .syntax
+      let (expression, after) ← arena rest
+      let size := tokenBytes (rest.take (rest.length - after.length))
+      let (lanes, after) ← naturalItem (← comma after)
+      let (slots, after) ← naturalItem (← comma after)
+      let (locations, after) ← array naturalItem tokens.length (← comma after)
+      match after with
+      | [.right] => pure (expression, size, lanes, slots, locations)
       | _ => throw .syntax
   | _ => throw .syntax
 
@@ -263,27 +326,293 @@ def reached (nodes : List Node) (output : Nat) : List Bool :=
       else marks)
     ((List.range nodes.length).map (· == output))
 
-/-- The UTF-8 length of a text. -/
-def byteLength (characters : List Char) : Nat :=
-  characters.foldl (fun total character => total + character.utf8Size) 0
+/-! ## The slot schedule -/
 
-/-- The expression a numerical call over the field `field`, of the given
-characteristic, with `slots` operand slots carries as its text parameter. -/
-def decode (field : String) (characteristic slots : Nat) (body : String) :
-    Except Refusal (Expr Nat Nat) := do
+/-- Whether each node varies with the row: an input whose mask position is a
+vector, or a node with a varying operand. Constants are invariant. -/
+def varying (mask : List Bool) (nodes : List Node) : List Bool :=
+  nodes.foldl (fun marks node =>
+    marks ++ [match node with
+      | .input slot => mask.getD slot false
+      | _ => node.operands.any (marks.getD · false)]) []
+
+/-- Whether each node's value is needed across chunks: the output when it is
+invariant, and every invariant operand of a varying node. -/
+def persistent (nodes : List Node) (varies : List Bool) (output : Nat) : List Bool :=
+  nodes.zipIdx.foldl (fun marks (node, index) =>
+    if varies.getD index false then
+      node.operands.foldl (fun marks operand =>
+        if varies.getD operand false then marks else marks.set operand true) marks
+    else marks)
+    ((List.range nodes.length).map fun index => index == output && !varies.getD index false)
+
+/-- Whether each operand of a node is the owner of its slot. -/
+def readsOwners (locations : List Nat) (contents : List (Option Nat)) (node : Node) : Bool :=
+  node.operands.all fun operand => contents.getD (locations.getD operand 0) none == some operand
+
+/-- Whether a slot's owner may be overwritten: an empty slot, or a value not
+needed across chunks. -/
+def replaceable (persists : List Bool) : Option Nat → Bool
+  | some owner => !persists.getD owner false
+  | none => true
+
+/-- The owners of the slots after one phase: the selected nodes run in arena
+order, and each must find its operands in their slots and may not overwrite a
+persistent value. `none` when a node fails either condition. -/
+def phase (locations : List Nat) (persists : List Bool) (selected : List Bool) :
+    List (Node × Nat) → List (Option Nat) → Option (List (Option Nat))
+  | [], contents => some contents
+  | (node, index) :: rest, contents =>
+      if selected.getD index false then
+        if readsOwners locations contents node && replaceable persists (contents.getD (locations.getD index 0) none) then
+          phase locations persists selected rest (contents.set (locations.getD index 0) (some index))
+        else none
+      else phase locations persists selected rest contents
+
+/-- The slot owners with every varying value forgotten: what a later chunk may
+rely on from an earlier one. -/
+def forget (varies : List Bool) (contents : List (Option Nat)) : List (Option Nat) :=
+  contents.map fun owner => owner.bind fun index => if varies.getD index false then none else some index
+
+/-- A slot schedule the plan contract admits. Invariant nodes run once, then the
+varying nodes run for each chunk. Every read finds its operand, no write
+replaces a persistent value, and the output keeps its slot after the first
+chunk; the varying phase run again from what persists between chunks reaches
+the same owners, so every later chunk does too. -/
+structure Schedule where
+  nodes : List Node
+  mask : List Bool
+  output : Nat
+  slots : Nat
+  locations : List Nat
+  first : List (Option Nat)
+  chunk : List (Option Nat)
+  invariantPhase : phase locations (persistent nodes (varying mask nodes) output)
+    ((varying mask nodes).map (!·)) nodes.zipIdx (List.replicate slots none) = some first
+  varyingPhase : phase locations (persistent nodes (varying mask nodes) output)
+    (varying mask nodes) nodes.zipIdx first = some chunk
+  repeatedPhase : phase locations (persistent nodes (varying mask nodes) output)
+    (varying mask nodes) nodes.zipIdx (forget (varying mask nodes) chunk) = some chunk
+  outputKept : chunk.getD (locations.getD output 0) none = some output
+
+/-- The schedule of a plan, when the plan contract admits it. -/
+def schedule (mask : List Bool) (nodes : List Node) (slots output : Nat) (locations : List Nat) :
+    Option Schedule :=
+  match first : phase locations (persistent nodes (varying mask nodes) output)
+      ((varying mask nodes).map (!·)) nodes.zipIdx (List.replicate slots none) with
+  | none => none
+  | some contents =>
+      match chunk : phase locations (persistent nodes (varying mask nodes) output)
+          (varying mask nodes) nodes.zipIdx contents with
+      | none => none
+      | some after =>
+          if repeated : phase locations (persistent nodes (varying mask nodes) output)
+              (varying mask nodes) nodes.zipIdx (forget (varying mask nodes) after) = some after then
+            if kept : after.getD (locations.getD output 0) none = some output then
+              some ⟨nodes, mask, output, slots, locations, contents, after, first, chunk, repeated, kept⟩
+            else none
+          else none
+
+/-! ## Schedule correctness
+
+The values are abstract: `step` computes one node from its operands' values,
+so this is the slot bookkeeping of a plan, not a second expression semantics.
+A value is any type, for example one row's field element or a chunk's lanes. -/
+
+/-- One phase executed on values: each selected node, in arena order, reads its
+operands from their slots and writes its result to its own slot. A read of an
+empty slot fails. -/
+def execute {α : Type} (step : Node → List α → α) (locations : List Nat) (selected : List Bool) :
+    List (Node × Nat) → List (Option α) → Option (List (Option α))
+  | [], contents => some contents
+  | (node, index) :: rest, contents =>
+      if selected.getD index false then
+        (node.operands.mapM fun operand => contents.getD (locations.getD operand 0) none).bind fun operands =>
+          execute step locations selected rest (contents.set (locations.getD index 0) (some (step node operands)))
+      else execute step locations selected rest contents
+
+/-- Concrete slots hold the values of their symbolic owners. -/
+def Holds {α : Type} (value : Nat → α) (concrete : List (Option α)) (owners : List (Option Nat)) : Prop :=
+  ∀ slot index, owners.getD slot none = some index → concrete.getD slot none = some (value index)
+
+theorem holds_set {α : Type} {value : Nat → α} {concrete : List (Option α)} {owners : List (Option Nat)}
+    (holds : Holds value concrete owners) (length : concrete.length = owners.length) (slot index : Nat) :
+    Holds value (concrete.set slot (some (value index))) (owners.set slot (some index)) := by
+  intro target owner found
+  rw [List.getD_eq_getElem?_getD, List.getElem?_set] at found ⊢
+  by_cases same : slot = target
+  · subst same
+    by_cases inside : slot < owners.length
+    · have : owner = index := by simpa [inside] using found.symm
+      subst this
+      simp [length, inside]
+    · simp [inside] at found
+  · simp only [same, ite_false] at found ⊢
+    exact holds target owner (by rw [List.getD_eq_getElem?_getD]; exact found)
+
+theorem mapM_reads {α : Type} (read : Nat → Option α) (value : Nat → α) :
+    ∀ operands : List Nat, (∀ operand ∈ operands, read operand = some (value operand)) →
+      operands.mapM read = some (operands.map value)
+  | [], _ => rfl
+  | operand :: rest, found => by
+      rw [List.mapM_cons, found operand List.mem_cons_self,
+        mapM_reads read value rest fun other member => found other (List.mem_cons_of_mem _ member)]
+      rfl
+
+/-- Every read of an admitted phase sees its operand's value, and afterwards
+every slot holds the value of its owner. -/
+theorem execute_phase {α : Type} (step : Node → List α → α) (value : Nat → α) (locations : List Nat)
+    (persists selected : List Bool) :
+    ∀ (nodes : List (Node × Nat)) (owners after : List (Option Nat)) (concrete : List (Option α)),
+      (∀ node index, (node, index) ∈ nodes → selected.getD index false = true →
+        value index = step node (node.operands.map value)) →
+      phase locations persists selected nodes owners = some after →
+      Holds value concrete owners → concrete.length = owners.length →
+      ∃ result, execute step locations selected nodes concrete = some result ∧
+        Holds value result after ∧ result.length = after.length
+  | [], owners, after, concrete, _, admitted, holds, length => by
+      simp only [phase, Option.some.injEq] at admitted
+      subst admitted
+      exact ⟨concrete, rfl, holds, length⟩
+  | (node, index) :: rest, owners, after, concrete, equations, admitted, holds, length => by
+      have tail : ∀ node index, (node, index) ∈ rest → selected.getD index false = true →
+          value index = step node (node.operands.map value) :=
+        fun node index member => equations node index (List.mem_cons_of_mem _ member)
+      cases chosen : selected.getD index false with
+      | false =>
+        simp only [phase, chosen, Bool.false_eq_true, ite_false] at admitted
+        obtain ⟨result, executed, holdsResult, lengthResult⟩ :=
+          execute_phase step value locations persists selected rest owners after concrete tail admitted holds length
+        exact ⟨result, by simp only [execute, chosen, Bool.false_eq_true, ite_false]; exact executed,
+          holdsResult, lengthResult⟩
+      | true =>
+        simp only [phase, chosen, ite_true] at admitted
+        cases ok : (readsOwners locations owners node &&
+            replaceable persists (owners.getD (locations.getD index 0) none)) with
+        | false => simp only [ok, Bool.false_eq_true, ite_false, reduceCtorEq] at admitted
+        | true =>
+          simp only [ok, ite_true] at admitted
+          simp only [Bool.and_eq_true, readsOwners, List.all_eq_true, beq_iff_eq] at ok
+          have reads : (node.operands.mapM fun operand => concrete.getD (locations.getD operand 0) none) =
+              some (node.operands.map value) :=
+            mapM_reads _ value _ fun operand member => holds _ operand (ok.1 operand member)
+          obtain ⟨result, executed, holdsResult, lengthResult⟩ := execute_phase step value locations persists
+            selected rest _ after _ tail admitted
+            (holds_set holds length (locations.getD index 0) index)
+            (by simp only [List.length_set, length])
+          refine ⟨result, ?_, holdsResult, lengthResult⟩
+          simp only [execute, chosen, ite_true, reads, Option.bind_some]
+          rw [← equations node index List.mem_cons_self chosen]
+          exact executed
+
+/-- Execution of a schedule over chunks: the invariant phase and the first
+chunk, then one varying phase for each further chunk. `steps k` computes nodes
+from chunk `k`'s operands; an empty domain runs neither phase. -/
+def Schedule.run {α : Type} (schedule : Schedule) (steps : Nat → Node → List α → α) :
+    Nat → Option (List (Option α))
+  | 0 =>
+      (execute (steps 0) schedule.locations ((varying schedule.mask schedule.nodes).map (!·))
+        schedule.nodes.zipIdx (List.replicate schedule.slots none)).bind fun start =>
+      execute (steps 0) schedule.locations (varying schedule.mask schedule.nodes) schedule.nodes.zipIdx start
+  | chunk + 1 =>
+      (schedule.run steps chunk).bind fun before =>
+      execute (steps (chunk + 1)) schedule.locations (varying schedule.mask schedule.nodes)
+        schedule.nodes.zipIdx before
+
+/-- An admitted schedule computes the plan's values. Let `values k` be the
+nodes' values in chunk `k`: each node's value is its step applied to its
+operands' values, and an invariant node has one value in every chunk. Then
+every chunk runs, each read sees its operand's value, persistent invariant
+values survive every later chunk, and the output's slot holds the output's
+value of the last chunk run. -/
+theorem Schedule.run_correct {α : Type} (schedule : Schedule) (steps : Nat → Node → List α → α)
+    (values : Nat → Nat → α)
+    (equations : ∀ chunk node index, (node, index) ∈ schedule.nodes.zipIdx →
+      values chunk index = steps chunk node (node.operands.map (values chunk)))
+    (invariant : ∀ chunk index, (varying schedule.mask schedule.nodes).getD index false = false →
+      values chunk index = values 0 index) :
+    ∀ chunk, ∃ result, schedule.run steps chunk = some result ∧
+      Holds (values chunk) result schedule.chunk ∧ result.length = schedule.chunk.length ∧
+      result.getD (schedule.locations.getD schedule.output 0) none = some (values chunk schedule.output)
+  | 0 => by
+      have empty : Holds (values 0) (List.replicate schedule.slots none) (List.replicate schedule.slots none) := by
+        intro slot index found
+        simp only [List.getD_eq_getElem?_getD, List.getElem?_replicate] at found
+        split at found <;> cases found
+      obtain ⟨start, started, holdsStart, lengthStart⟩ := execute_phase (steps 0) (values 0)
+        schedule.locations _ _ _ _ _ _ (fun node index member _ => equations 0 node index member)
+        schedule.invariantPhase empty (by simp only [List.length_replicate])
+      obtain ⟨result, ran, holdsResult, lengthResult⟩ := execute_phase (steps 0) (values 0)
+        schedule.locations _ _ _ _ _ _ (fun node index member _ => equations 0 node index member)
+        schedule.varyingPhase holdsStart lengthStart
+      exact ⟨result, by simp only [Schedule.run, started, Option.bind_some, ran], holdsResult, lengthResult,
+        holdsResult _ _ schedule.outputKept⟩
+  | chunk + 1 => by
+      obtain ⟨before, ran, holdsBefore, lengthBefore, _⟩ :=
+        Schedule.run_correct schedule steps values equations invariant chunk
+      -- Only invariant owners persist between chunks, and their values do not change.
+      have persisted : Holds (values (chunk + 1)) before
+          (forget (varying schedule.mask schedule.nodes) schedule.chunk) := by
+        intro slot index found
+        rw [forget, List.getD_eq_getElem?_getD, List.getElem?_map] at found
+        rcases owner : schedule.chunk[slot]? with _ | held
+        · simp [owner] at found
+        · rcases held with _ | held
+          · simp [owner] at found
+          · cases fixed : (varying schedule.mask schedule.nodes).getD held false
+            · have read := fixed
+              rw [List.getD_eq_getElem?_getD] at read
+              have same : held = index := by simpa [owner, read] using found
+              subst same
+              have holdsSlot := holdsBefore slot held (by rw [List.getD_eq_getElem?_getD, owner]; rfl)
+              rw [invariant (chunk + 1) held fixed, ← invariant chunk held fixed]
+              exact holdsSlot
+            · have read := fixed
+              rw [List.getD_eq_getElem?_getD] at read
+              simp [owner, read] at found
+      obtain ⟨result, executed, holdsResult, lengthResult⟩ := execute_phase (steps (chunk + 1))
+        (values (chunk + 1)) schedule.locations _ _ _ _ _ _
+        (fun node index member _ => equations (chunk + 1) node index member) schedule.repeatedPhase persisted
+        (by simp only [forget, List.length_map, lengthBefore])
+      exact ⟨result, by simp only [Schedule.run, ran, Option.bind_some]; exact executed, holdsResult,
+        lengthResult, holdsResult _ _ schedule.outputKept⟩
+
+/-! ## The plan -/
+
+/-- A checked plan: its expression and the admitted schedule of its arena. -/
+structure Plan where
+  expression : Expr Nat Nat
+  lanes : Nat
+  schedule : Schedule
+
+/-- The plan of a numerical call over the field `field`, of the given
+characteristic and operand mask, read from its text parameter. -/
+def plan? (field : String) (characteristic : Nat) (mask : List Bool) (body : String) :
+    Except Refusal Plan := do
   let characters := body.toList
-  if bodyLimit < byteLength characters then throw .bytes
-  let (inputs, nodes, outputs) ← arena (← lex characters)
+  if planLimit < byteLength characters then throw .bytes
+  let ((inputs, nodes, outputs), size, lanes, slots, locations) ← plan (← lex characters)
+  if bodyLimit < size then throw .bytes
+  unless 1 ≤ lanes ∧ lanes ≤ laneLimit ∧ 1 ≤ slots ∧ slots ≤ nodeLimit do throw .shape
   unless inputs.all (· = field.toList) do throw .field
   let built ← build field.toList characteristic inputs.length nodes []
-  unless inputs.length = slots do throw .slots
+  unless inputs.length = mask.length do throw .slots
   let output ← match outputs with
     | [output] => pure output
     | _ => throw .outputs
-  match built[output]? with
-  | some tree =>
-      if (reached nodes output).all id then pure tree else throw .unreachable
-  | none => throw .edge
+  let tree ← match built[output]? with
+    | some tree => if (reached nodes output).all id then pure tree else throw .unreachable
+    | none => throw .edge
+  unless slots ≤ nodes.length ∧ locations.length = nodes.length ∧ locations.all (· < slots) ∧
+      (List.range slots).all (locations.contains ·) do throw .shape
+  match schedule mask nodes slots output locations with
+  | some admitted => pure ⟨tree, lanes, admitted⟩
+  | none => throw .schedule
+
+/-- The expression a numerical call carries in its plan parameter. -/
+def decode (field : String) (characteristic : Nat) (mask : List Bool) (body : String) :
+    Except Refusal (Expr Nat Nat) :=
+  (plan? field characteristic mask body).map (·.expression)
 
 /-- The operand mask of a numerical binding: at most 1023 positions, `false`
 for a scalar and `true` for a vector. -/
