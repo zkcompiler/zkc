@@ -35,9 +35,17 @@ and statement boundary.
 ## Derived admission obligations
 
 `zkc/Language/CommonControl.h` owns the immutable source API.
-`deriveCommonControlRequirements` recomputes from a checked declaration or
-closed Entry and the actual helper closure. It returns requirements, not
-agreement certificates. A component is an input ordinal, role ordinal and a
+`deriveCommonControlRequirements` derives from a checked declaration and its
+actual helper closure. Closing an Entry derives each retained concrete Protocol's
+inventory once and stores it with that immutable closed environment.
+`ClosedEntry::commonInputs` borrows that inventory by local declaration identity;
+non-Protocol, open, and absent targets refuse with `source.common-provenance`.
+It returns requirements, not agreement certificates. Borrowing is not source
+re-admission under a different allowance. Derivation pays the closure's current
+source limits; publication and comparison pay their own current projection,
+layout, normalization and capacity limits. They never reconstruct source bodies.
+Native analysis independently derives candidate obligations and compares the
+complete inventory; retention does not authenticate a native candidate. A component is an input ordinal, role ordinal and a
 sequence of typed `Field`, `Alternative`, `Payload` steps. Variant alternative
 and payload steps occur in pairs. Root identities and full paths survive
 projection, actual helper arguments and ordered role substitutions.

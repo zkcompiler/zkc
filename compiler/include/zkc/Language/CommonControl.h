@@ -44,16 +44,5 @@ bool isClosedConcreteProtocol(const Declaration &);
 llvm::Expected<std::vector<CommonControlRequirement>>
 deriveCommonControlRequirements(const CheckedProject &, DeclarationId,
                                 const Limits & = {});
-llvm::Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &, const Limits & = {});
-/// Derive for one closed concrete Protocol using this closed call closure.
-/// Explicit Limits preserves existing (entry, {}) root calls.
-llvm::Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &, DeclarationId,
-                                const Limits &);
-/// Share a cumulative allowance when deriving several retained declarations.
-llvm::Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &, DeclarationId,
-                                const Limits &, uint64_t &remaining);
 } // namespace zkc::language
 #endif

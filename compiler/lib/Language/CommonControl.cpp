@@ -1528,13 +1528,26 @@ Error checkCommonControlRequirements(
   }
   return Error::success();
 }
-Error checkCommonControlRequirements(const ClosedEntry &entry, Work &work) {
-  if (!entry.protocolOrNull())
-    return Error::success();
+Error retainCommonControlRequirements(const ClosedEntry &entry,
+                                      ClosedStorage &storage, Work &work) {
   const auto &declarations = detail::DeclarationAccess::get(entry);
-  auto requirements = deriveRequirements(declarations, entry.project().assets(),
-                                         work, entry.protocol().id);
-  return requirements ? Error::success() : requirements.takeError();
+  std::optional<Requirements> derivation;
+  for (const auto &decl : declarations) {
+    if (auto error = work.charge(1, decl.span))
+      return error;
+    if (!isClosedConcreteProtocol(decl))
+      continue;
+    if (!derivation) {
+      if (auto error = chargeSemanticIndex(declarations, work))
+        return error;
+      derivation.emplace(declarations, entry.project().assets(), work);
+    }
+    auto requirements = derivation->run(decl.id);
+    if (!requirements)
+      return requirements.takeError();
+    storage.commonInputs.emplace(decl.id.index, std::move(*requirements));
+  }
+  return Error::success();
 }
 } // namespace detail
 Expected<std::vector<CommonControlRequirement>>
@@ -1550,40 +1563,6 @@ bool isClosedConcreteProtocol(const Declaration &decl) {
   return decl.kind == Declaration::Kind::Protocol && decl.body &&
          !decl.abstract && decl.parameters.empty() &&
          decl.scopedInputs.empty() && decl.domainInputs.empty();
-}
-Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &entry,
-                                const Limits &limits) {
-  if (auto error = checkLimits(limits))
-    return error;
-  if (!entry.protocolOrNull())
-    return detail::failure(
-        "source.common-provenance",
-        "Host entry requires its selected Protocol invocation");
-  return deriveCommonControlRequirements(entry, entry.protocol().id, limits);
-}
-Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &entry, DeclarationId target,
-                                const Limits &limits) {
-  uint64_t remaining = limits.work;
-  return deriveCommonControlRequirements(entry, target, limits, remaining);
-}
-Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &entry, DeclarationId target,
-                                const Limits &limits, uint64_t &remaining) {
-  if (auto error = checkLimits(limits))
-    return error;
-  Limits bounded = limits;
-  bounded.work = std::min(remaining, limits.work);
-  if (target.index >= entry.declarations().size() ||
-      !isClosedConcreteProtocol(entry.declarations()[target.index]))
-    return detail::failure("source.common-provenance",
-                           "common target is not a closed concrete Protocol");
-  const auto &declarations = detail::DeclarationAccess::get(entry);
-  detail::Work work{bounded};
-  work.allowance = &remaining;
-  return deriveRequirements(declarations, entry.project().assets(), work,
-                            target);
 }
 
 } // namespace zkc::language

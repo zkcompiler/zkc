@@ -106,10 +106,11 @@ int main(int argc, char **argv) {
            << " cumulative inventory work\n";
   });
   cases.run(
-      "retained Protocol inventories debit derivation and layouts cumulatively",
+      "retained Protocol inventories debit projection and layouts cumulatively",
       [] {
-        // Make index setup dominate the small fixed Boolean canonicalization;
-        // otherwise normalization charges could hide an uncharged observer.
+        // A retained inventory belongs to the whole closed environment. Its
+        // consumers charge their actual layout and projection work, without
+        // rebuilding common-control provenance for each retained Protocol.
         std::string source = "module m;";
         for (unsigned i = 0; i < 64; ++i)
           source += "struct InventoryPadding" + std::to_string(i) +
@@ -131,9 +132,10 @@ protocol Run roles(P,V)(s:State@(P,V))->(r:bool@(P,V)){
           if (!isClosedConcreteProtocol(decl))
             continue;
           protocols.push_back(decl.id);
-          uint64_t derivedRemaining = limits.work;
-          auto derived = take(deriveCommonControlRequirements(
-              entry, decl.id, limits, derivedRemaining));
+          auto derived = take(entry.commonInputs(decl.id));
+          auto borrowedAgain = take(entry.commonInputs(decl.id));
+          require(derived.data() == borrowedAgain.data(),
+                  "closed inventory was rebuilt instead of borrowed");
           uint64_t layoutRemaining = limits.work;
           Layouts layouts(entry, limits, layoutRemaining);
           for (const auto &requirement : derived)
@@ -144,8 +146,7 @@ protocol Run roles(P,V)(s:State@(P,V))->(r:bool@(P,V)){
           require(inventory.size() == 1,
                   "retained Protocol lost its inventory");
           auto spent = limits.work - sourceRemaining;
-          require(spent >= (limits.work - derivedRemaining) +
-                               (limits.work - layoutRemaining),
+          require(spent > limits.work - layoutRemaining,
                   "source inventory did not debit its layout observer");
           total += spent;
         }
@@ -372,9 +373,7 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
     const auto &entry = original.entry();
     Limits limits;
     uint64_t remaining = limits.work;
-    auto source = take(deriveCommonControlRequirements(
-        entry, entry.protocol().id, limits, remaining));
-    auto derivationCost = limits.work - remaining;
+    auto source = take(entry.commonInputs(entry.protocol().id));
     remaining = limits.work;
     Layouts requirements(entry, limits, remaining);
     for (const auto &requirement : source)
@@ -384,8 +383,7 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
     auto inventory = take(zkc::language::detail::sourceCommonRequirements(
         entry, entry.protocol(), remaining, limits));
     auto sourceCost = limits.work - remaining;
-    require(!inventory.empty() &&
-                sourceCost >= derivationCost + requiredLayoutCost,
+    require(!inventory.empty() && sourceCost > requiredLayoutCost,
             "natural source inventory omitted its observation work");
     remaining = sourceCost;
     take(zkc::language::detail::sourceCommonRequirements(
@@ -398,38 +396,39 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
     require(remaining < sourceCost - 1,
             "failed source inventory refunded work");
   });
-  cases.run("source derivation and layouts share one inventory allowance", [] {
-    auto original = compile(booleanSource);
-    const auto &entry = original.entry();
-    Limits limits;
-    uint64_t remaining = limits.work;
-    auto source = take(deriveCommonControlRequirements(
-        entry, entry.protocol().id, limits, remaining));
-    auto derivationCost = limits.work - remaining;
-    remaining = limits.work;
-    Layouts layouts(entry, limits, remaining);
-    for (const auto &port : entry.protocol().inputs)
-      take(layouts.protocolPort(port));
-    for (const auto &requirement : source)
-      take(layouts.get(requirement.type));
-    auto layoutCost = limits.work - remaining;
-    remaining = limits.work;
-    require(take(zkc::language::detail::sourceCommonRequirements(
-                     entry, entry.protocol(), remaining, limits))
-                    .size() == 2,
-            "positive inventory changed");
-    limits.work = std::max(derivationCost, layoutCost);
-    take(deriveCommonControlRequirements(entry, entry.protocol().id, limits));
-    Layouts independent(entry, limits);
-    for (const auto &port : entry.protocol().inputs)
-      take(independent.protocolPort(port));
-    remaining = limits.work;
-    refuses(zkc::language::detail::sourceCommonRequirements(
-                entry, entry.protocol(), remaining, limits),
-            "source.limit");
-  });
   cases.run(
-      "irrelevant declaration metadata is bounded before index setup", [] {
+      "retained projection and layouts share one capped inventory allowance",
+      [] {
+        auto original = compile(booleanSource);
+        const auto &entry = original.entry();
+        Limits limits;
+        uint64_t remaining = limits.work;
+        auto source = take(entry.commonInputs(entry.protocol().id));
+        remaining = limits.work;
+        Layouts layouts(entry, limits, remaining);
+        for (const auto &requirement : source)
+          take(layouts.get(requirement.type));
+        auto layoutCost = limits.work - remaining;
+        remaining = limits.work;
+        require(take(zkc::language::detail::sourceCommonRequirements(
+                         entry, entry.protocol(), remaining, limits))
+                        .size() == 2,
+                "positive inventory changed");
+        auto inventoryCost = limits.work - remaining;
+        require(inventoryCost > layoutCost,
+                "inventory projection was not charged beyond layout work");
+        limits.work = inventoryCost - 1;
+        // A larger enclosing allowance cannot bypass this consumer's own cap.
+        remaining = Limits{}.work;
+        refuses(zkc::language::detail::sourceCommonRequirements(
+                    entry, entry.protocol(), remaining, limits),
+                "source.limit");
+        require(remaining < Limits{}.work,
+                "failed capped projection refunded prior work");
+      });
+  cases.run(
+      "closure retention avoids unrelated source indexing during publication",
+      [] {
         std::string source = "module m;";
         for (unsigned i = 0; i < 128; ++i) {
           source += "struct Irrelevant" + std::to_string(i) +
@@ -446,11 +445,10 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
         auto entry = take(closeNativeRun(project, "m::Run"));
         require(entry.declarations().size() >= 128,
                 "closed test environment omitted irrelevant declarations");
-        // The old root traversal fit this allowance while copying and indexing
-        // the complete, deeply populated declaration environment before
-        // charging.
+        // Fresh source derivation must charge the complete semantic index.
+        // Borrowing an already checked empty inventory needs no such rebuild.
         Limits limits;
-        limits.work = entry.declarations().size() + 100;
+        limits.work = 1024;
         DeclarationId checkedTarget{};
         bool found = false;
         for (const auto &decl : project.declarations())
@@ -461,28 +459,49 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
         require(found, "missing checked root Protocol");
         refuses(deriveCommonControlRequirements(project, checkedTarget, limits),
                 "source.limit");
-        refuses(deriveCommonControlRequirements(entry, limits), "source.limit");
+        require(take(entry.commonInputs(entry.protocol().id)).empty(),
+                "empty protocol acquired source requirements");
         uint64_t inventoryRemaining = limits.work;
-        refuses(zkc::language::detail::sourceCommonRequirements(
-                    entry, entry.protocol(), inventoryRemaining, limits),
-                "source.limit");
+        require(take(zkc::language::detail::sourceCommonRequirements(
+                         entry, entry.protocol(), inventoryRemaining, limits))
+                    .empty(),
+                "empty retained inventory changed during publication");
+        require(inventoryRemaining < limits.work,
+                "retained inventory projection was uncharged");
         limits.work = 1;
         refuses(deriveCommonControlRequirements(project, checkedTarget, limits),
                 "source.limit");
         uint64_t remaining = 1;
-        refuses(deriveCommonControlRequirements(entry, entry.protocol().id,
-                                                limits, remaining),
-                "source.limit");
-        remaining = 1;
         refuses(zkc::language::detail::sourceCommonRequirements(
                     entry, entry.protocol(), remaining, limits),
                 "source.limit");
       });
+  cases.run("retained publication cost is independent of helper body size", [] {
+    auto cost = [](unsigned operations) {
+      std::string source = "module m;fn gate(x:bool)->bool{";
+      for (unsigned i = 0; i < operations; ++i)
+        source += "let unused" + std::to_string(i) + "=if x{true}else{false};";
+      source += R"(return x;}
+protocol Run roles(P,V)(flag:bool@(P,V))->(r:bool@(P,V)){
+ let result=if gate(flag){true}else{false};return(r=result);
+})";
+      auto original = compile(source);
+      const auto &entry = original.entry();
+      Limits limits;
+      uint64_t remaining = limits.work;
+      auto inventory = take(zkc::language::detail::sourceCommonRequirements(
+          entry, entry.protocol(), remaining, limits));
+      require(inventory.size() == 1, "helper changed its retained requirement");
+      return limits.work - remaining;
+    };
+    require(cost(40) == cost(400),
+            "publication revisited a retained helper's source body");
+  });
   cases.run("actual Boolean inventory and exact source comparison", [] {
     auto original = compile(booleanSource);
-    require(
-        take(deriveCommonControlRequirements(original.entry(), {})).size() == 2,
-        "existing braced root Limits call changed meaning");
+    require(take(original.entry().commonInputs(original.entry().protocol().id))
+                    .size() == 2,
+            "retained root inventory changed meaning");
     auto view = take(readInterface(original.bytes(), original.interfaceJson()));
     require(view.selectedProtocol().commonInputRequirements.size() == 2,
             "dormant selector requirement was omitted");
@@ -636,10 +655,9 @@ protocol Run roles(P,V)(xs:[bool;2]@(P,V))->(r:bool@(P,V)){
         for (const auto &decl : entry.declarations()) {
           if (isClosedConcreteProtocol(decl)) {
             concrete.insert(decl.symbol);
-            take(deriveCommonControlRequirements(entry, decl.id, {}));
+            take(entry.commonInputs(decl.id));
           } else if (decl.kind == Declaration::Kind::Protocol)
-            refuses(deriveCommonControlRequirements(entry, decl.id, {}),
-                    "source.common-provenance");
+            refuses(entry.commonInputs(decl.id), "source.common-provenance");
         }
         require(concrete.size() == 2, "closure lost a concrete instance");
         auto original = take(prepareOriginal(entry));

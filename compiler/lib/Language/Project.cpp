@@ -829,7 +829,8 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
   if (auto error = validateClosedData(entry, limits, work))
     return error;
   phase.enter(SourceWorkPhase::CommonInputs);
-  if (auto error = detail::checkCommonControlRequirements(entry, work))
+  if (auto error =
+          detail::retainCommonControlRequirements(entry, *storage, work))
     return error;
   phase.enter(SourceWorkPhase::HostChildren);
   std::set<std::string> invoked;
@@ -954,7 +955,8 @@ Expected<ClosedEntry> ClosedEntry::closeProtocol(
   if (auto e = validateClosedData(child, limits, work))
     return e;
   phase.enter(SourceWorkPhase::CommonInputs);
-  if (auto error = detail::checkCommonControlRequirements(child, work))
+  if (auto error =
+          detail::retainCommonControlRequirements(child, *storage, work))
     return error;
   storage->work = work.used;
   storage->workObservation.charged = work.ledger;
@@ -1012,6 +1014,14 @@ ArrayRef<ClosedInvocation> ClosedEntry::invocations() const {
 ArrayRef<Asset> ClosedEntry::assets() const { return storage->assets; }
 ArrayRef<Declaration> ClosedEntry::declarations() const {
   return storage->declarations;
+}
+Expected<ArrayRef<CommonControlRequirement>>
+ClosedEntry::commonInputs(DeclarationId target) const {
+  auto found = storage->commonInputs.find(target.index);
+  if (found == storage->commonInputs.end())
+    return detail::failure("source.common-provenance",
+                           "common target is not a closed concrete Protocol");
+  return ArrayRef<CommonControlRequirement>(found->second);
 }
 
 std::string installedCatalogIdentity() {

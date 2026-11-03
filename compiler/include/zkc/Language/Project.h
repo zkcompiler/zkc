@@ -1176,6 +1176,7 @@ private:
                           source::Cancellation);
 };
 struct ClosedInvocation;
+struct CommonControlRequirement;
 class ClosedEntry {
 public:
   const CheckedProject &project() const { return checked; }
@@ -1196,6 +1197,12 @@ public:
   /// Original type declarations and the selected Entry's closed instances.
   /// Only the reachable instances have bodies; declaration IDs remain local.
   llvm::ArrayRef<Declaration> declarations() const;
+  /// Borrow the source obligations retained when this exact closure was
+  /// checked. The target must be a closed concrete Protocol in this entry. This
+  /// is a stored fact, not a new source derivation under caller-supplied
+  /// limits.
+  llvm::Expected<llvm::ArrayRef<CommonControlRequirement>>
+      commonInputs(DeclarationId) const;
 
 private:
   friend class Layouts;

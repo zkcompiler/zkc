@@ -3,6 +3,7 @@
 #include "APIRecords.h"
 #include "LexicalRecords.h"
 #include "NotationRecords.h"
+#include "zkc/Language/CommonControl.h"
 #include "zkc/Language/DeclarationIndex.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Syntax/Syntax.h"
@@ -95,6 +96,8 @@ struct ClosedStorage {
   std::optional<DeclarationId> protocol;
   std::vector<ClosedInvocation> invocations;
   std::optional<HostInvocation::Kind> invocationKind;
+  /// Complete source-derived obligations, frozen with this exact closure.
+  std::map<uint32_t, std::vector<CommonControlRequirement>> commonInputs;
   uint64_t work = 0;
   SourceWorkObservation workObservation;
 };

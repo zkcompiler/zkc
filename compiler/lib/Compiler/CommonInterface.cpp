@@ -5,6 +5,7 @@
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
 #include <map>
 #include <numeric>
@@ -308,9 +309,15 @@ mapRequirements(const InterfaceProtocol &p, uint64_t &remaining,
 
 Expected<std::vector<InterfaceCommonRequirement>>
 sourceCommonRequirements(const ClosedEntry &entry, const Declaration &decl,
-                         uint64_t &remaining, const Limits &limits) {
-  auto derived =
-      deriveCommonControlRequirements(entry, decl.id, limits, remaining);
+                         uint64_t &enclosing, const Limits &limits) {
+  if (auto error = checkLimits(limits))
+    return error;
+  const uint64_t initial = std::min(enclosing, limits.work);
+  uint64_t remaining = initial;
+  auto debit = llvm::make_scope_exit([&] { enclosing -= initial - remaining; });
+  if (!charge(remaining, 1))
+    return capacity();
+  auto derived = entry.commonInputs(decl.id);
   if (!derived)
     return derived.takeError();
   if (derived->size() > MaxComponents)
