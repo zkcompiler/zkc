@@ -6,6 +6,28 @@
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
+namespace {
+bool ordinaryAvailable(Semantics &types, const ValuePlacement &placement,
+                       unsigned role, Span span, unsigned depth = 0) {
+  if (depth > types.work.limits.typeDepth)
+    return types.fail("source.limit", "ordinary availability depth exceeded",
+                      span);
+  if (!types.charge(1, span))
+    return false;
+  if (const auto *data = std::get_if<DataPlacement>(&placement.value))
+    return types.charge(data->roles.size(), span) &&
+           llvm::is_contained(data->roles, role);
+  if (const auto *product = std::get_if<ProductPlacement>(&placement.value)) {
+    if (product->fields.empty())
+      return false;
+    for (const auto &field : product->fields)
+      if (!ordinaryAvailable(types, field, role, span, depth + 1))
+        return false;
+    return true;
+  }
+  return false;
+}
+} // namespace
 bool Semantics::relationData(const Declaration &scope, const Type &type,
                              Span span, unsigned depth) {
   if (depth > work.limits.typeDepth)
@@ -33,8 +55,7 @@ bool Semantics::relationData(const Declaration &scope, const Type &type,
     if (!native)
       return accept(native.takeError(), span);
     protocol::TypeParseBudget budget;
-    budget.remaining =
-        std::min<uint64_t>(budget.remaining, work.limits.work - work.used);
+    budget.remaining = std::min<uint64_t>(budget.remaining, work.remaining());
     auto before = budget.remaining;
     auto result = protocol::logicalRelationData(*native, budget);
     if (!charge(before - budget.remaining, span))
@@ -77,6 +98,52 @@ Semantics::selectedType(const Declaration &decl,
       fail("source.limit", "selector path depth exceeded", value.span);
     return {};
   }
+  if (value.port < ports.size() && ports[value.port].placement) {
+    const auto &port = ports[value.port];
+    if (!oraclePort(port))
+      return {};
+    Type selected = port.type;
+    for (auto ordinal : value.path) {
+      if (selected.kind == Type::Kind::Array) {
+        auto element = projectedType(decl, selected, {ordinal}, value.span);
+        if (!element)
+          return {};
+        selected = std::move(*element);
+        continue;
+      }
+      auto schema = fields(selected, value.span);
+      if (!schema || ordinal >= schema->size()) {
+        if (!diagnostic)
+          fail("source.specification", "invalid placed selector path",
+               value.span);
+        return {};
+      }
+      if (!fieldIndex(decl, selected, (*schema)[ordinal].name, value.span,
+                      true))
+        return {};
+      selected = (*schema)[ordinal].type;
+    }
+    auto component =
+        projectedPlacement(port.type, *port.placement, value.path, value.span);
+    if (!component)
+      return {};
+    if (value.anchor) {
+      if (selected.kind != Type::Kind::Oracle ||
+          !std::holds_alternative<OraclePlacement>(component->value)) {
+        fail("source.specification",
+             "anchor requires an exact singleton oracle field", value.span);
+        return {};
+      }
+      return associated(selected.arguments.front(), "Data", value.span);
+    }
+    if (isLogicalValue(selected) ||
+        !ordinaryAvailable(*this, *component, value.role, value.span)) {
+      fail("source.specification", "selected field is unavailable at this role",
+           value.span);
+      return {};
+    }
+    return selected;
+  }
   if (value.anchor) {
     if (value.port >= ports.size() || value.role != 0 ||
         (ports[value.port].type.kind != Type::Kind::Oracle &&
@@ -118,10 +185,7 @@ Semantics::selectedType(const Declaration &decl,
     if (symbolic(port.type) ||
         (port.oracle->maximumRows && symbolic(*port.oracle->maximumRows)))
       return associated(selected->arguments.front(), "Data", value.span);
-    auto limits = work.limits;
-    limits.work -= work.used;
-    Layouts layouts(declarations, limits);
-    auto observed = layouts.protocolPort(port);
+    auto observed = nativePortLayout(port);
     if (!observed) {
       accept(observed.takeError(), value.span);
       return {};
@@ -172,40 +236,35 @@ bool Semantics::checkProofEntry(const Declaration &entry,
       value.verifier >= protocol.roles.size() || value.prover == value.verifier)
     return fail("source.entry",
                 "proof Entry requires two distinct participants", value.span);
-  std::vector<unsigned> required;
-  for (unsigned i = 0; i < protocol.inputs.size(); ++i)
-    if (is_contained(protocol.inputs[i].roles, value.verifier))
-      required.push_back(i);
-  if (required != value.publicInputs) {
-    std::string expected = "public {";
-    for (auto index : required) {
-      if (expected.back() != '{')
-        expected += ", ";
-      expected += protocol.inputs[index].name;
-    }
-    expected += "};";
-    return fail(
-        "source.entry",
-        "public inputs must exactly authorize verifier data ports; expected " +
-            expected,
-        value.span);
-  }
+  if (!checkEntryPublic(entry, protocol))
+    return false;
   auto bindings = substitution(protocol, entry.staticArguments);
   auto booleanOutput = [&](const SpecificationSelector &selected, unsigned role,
                            StringRef keyword) {
     if (!charge(selected.path.size() + 1, selected.span))
       return false;
     if (!selected.output || selected.role != role ||
-        selected.port >= protocol.outputs.size() ||
-        !is_contained(protocol.outputs[selected.port].roles, role))
+        selected.port >= protocol.outputs.size())
       return fail("source.entry",
                   (keyword + " result is unavailable at its participant").str(),
                   selected.span);
-    auto type = substitute(protocol.outputs[selected.port].type, bindings,
-                           selected.span);
-    if (!type)
+    const auto &port = protocol.outputs[selected.port];
+    auto root = substitutePlaced({port.type, port.placement}, bindings,
+                                 protocol.roles.size(), selected.span);
+    if (!root)
       return false;
-    type = projectedType(entry, std::move(*type), selected.path, selected.span);
+    auto where = root->placement
+                     ? projectedPlacement(root->type, *root->placement,
+                                          selected.path, selected.span)
+                     : std::optional<ValuePlacement>(DataPlacement{port.roles});
+    if (!where)
+      return false;
+    auto *data = std::get_if<DataPlacement>(&where->value);
+    if (!data || !is_contained(data->roles, role))
+      return fail("source.entry",
+                  "Boolean result is unavailable at its participant",
+                  selected.span);
+    auto type = projectedType(entry, root->type, selected.path, selected.span);
     if (!type)
       return false;
     return type->kind == Type::Kind::Boolean ||
@@ -268,9 +327,26 @@ bool Semantics::checkProofEntry(const Declaration &entry,
                     "native statement export requires entry inputs",
                     operand.span);
       const auto &port = protocol.inputs[operand.port];
-      bool visible = operand.anchor
-                         ? port.oracle && port.oracle->holder == value.verifier
-                         : is_contained(port.roles, value.verifier);
+      bool visible = false;
+      if (port.placement) {
+        auto root = substitutePlaced({port.type, port.placement}, bindings,
+                                     protocol.roles.size(), operand.span);
+        if (!root)
+          return false;
+        auto where = projectedPlacement(root->type, *root->placement,
+                                        operand.path, operand.span);
+        if (!where)
+          return false;
+        if (operand.anchor) {
+          if (const auto *oracle = std::get_if<OraclePlacement>(&where->value))
+            visible = oracle->holder == value.verifier;
+        } else
+          visible =
+              ordinaryAvailable(*this, *where, value.verifier, operand.span);
+      } else
+        visible = operand.anchor
+                      ? port.oracle && port.oracle->holder == value.verifier
+                      : is_contained(port.roles, value.verifier);
       if ((purpose == RelationPurpose::Witness) == visible)
         return fail("source.entry",
                     "target purpose disagrees with verifier input availability",

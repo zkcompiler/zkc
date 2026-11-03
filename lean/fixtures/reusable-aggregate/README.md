@@ -13,7 +13,8 @@ whole mathematical reference for optional inputs and arbitrary typed replies.
 Its controls keep both batches when the first decision is false and distinguish
 the receive prefixes of missing first and second inputs.
 
-Reproduce the snapshot and typed root from the repository root:
+Reproduce the snapshot, typed root and both compiled-role connections, and
+check the connections from the repository root:
 
 ```sh
 python3 lean/bridges/construction/plain.py --compiler PATH_TO_ZKC_COMPILE \
@@ -26,8 +27,9 @@ snapshot. The source installation checks this complete generated root together
 with the reusable helper family. There is no authored slot layout or root-body
 interpreter proof for this instance.
 
-Print both compiled-role connections with the common generator, then check the
-complete source reference and its missing-input controls:
+The bridge uses the common generator below. To print only the compiled-role
+connections, then check the complete source reference and its missing-input
+controls:
 
 ```sh
 cd lean

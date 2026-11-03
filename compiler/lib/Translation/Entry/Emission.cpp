@@ -39,7 +39,8 @@ class Emitter {
         if (!nested)
           return nested.takeError();
         result.push_back(data::LayoutFieldAttr::get(
-            context, builder.getStringAttr(field.name), field.offset, *nested));
+            context, builder.getStringAttr(field.name), field.offset, *nested,
+            field.isPublic));
       }
       return result;
     };
@@ -68,17 +69,25 @@ class Emitter {
         return error("entry.value", "Host leaf has no native owner");
       leaves.push_back(native);
     }
-    auto identity = toHex(
-        SHA256::hash(arrayRefFromStringRef(typeIdentity(source.type))), true);
+    data::LayoutAttr element;
+    if (source.element) {
+      auto nested = layout(*source.element);
+      if (!nested)
+        return nested.takeError();
+      element = *nested;
+    }
     auto native = data::LayoutAttr::getChecked(
         location, context,
         builder.getStringAttr(typeKindName(source.type.kind)),
-        builder.getStringAttr(identity),
+        builder.getStringAttr(source.identity.digest),
         builder.getStringAttr(spelling(source.type)), source.custody,
-        source.constructible, source.permissions.copy, source.permissions.drop,
-        ArrayRef<data::LayoutFieldAttr>(*members),
+        source.sealed, source.constructible, source.permissions.copy,
+        source.permissions.drop, ArrayRef<data::LayoutFieldAttr>(*members),
         ArrayRef<data::LayoutAlternativeAttr>(alternatives),
-        ArrayRef<mlir::Type>(leaves));
+        ArrayRef<mlir::Type>(leaves), element,
+        source.generatedIdentity.empty()
+            ? mlir::StringAttr{}
+            : builder.getStringAttr(source.generatedIdentity));
     if (!native)
       return error("entry.value", "Host native layout failed formation");
     nativeLayouts.emplace(&source, native);
@@ -273,7 +282,12 @@ class Emitter {
           }
         }
       } else {
-        if (auto *construct = std::get_if<Construct>(&operation.action)) {
+        auto numericalConstruction =
+            requiresNumericalConstruction(source, operation, layouts);
+        if (!numericalConstruction)
+          return numericalConstruction.takeError();
+        if (auto *construct = std::get_if<Construct>(&operation.action);
+            construct && !*numericalConstruction) {
           name = construct->kind == Construct::Kind::Unpack ? "data.unpack"
                                                             : "data.construct";
           inputIds = construct->operands;
@@ -335,7 +349,28 @@ class Emitter {
         auto inputs = operands(inputIds, env);
         if (!inputs)
           return inputs.takeError();
-        if (name.starts_with("data."))
+        if (name == "data.unpack" && inputIds.size() == 1 &&
+            source.values[inputIds.front().index].type.kind !=
+                Type::Kind::Associated) {
+          // A source unpack returns the record's fields as one tuple. Native
+          // elimination yields one value per field; rebuild the tuple. An
+          // associated value's unpack is its single field itself.
+          auto record =
+              inputs->size() == 1
+                  ? dyn_cast<data::ValueType>(inputs->front().getType())
+                  : data::ValueType();
+          if (!record || outputTypes->size() != 1)
+            return error("entry.construct", "Host unpack needs one record");
+          SmallVector<mlir::Type> fields;
+          for (auto field : record.getLayout().getFields())
+            fields.push_back(data::valueType(field.getLayout()));
+          auto *unpack = make(name, fields, *inputs);
+          append_range(
+              values, make("data.construct", *outputTypes, unpack->getResults(),
+                           {builder.getNamedAttr("alternative",
+                                                 builder.getStringAttr(""))})
+                          ->getResults());
+        } else if (name.starts_with("data."))
           append_range(values,
                        make(name, *outputTypes, *inputs, attrs)->getResults());
         else

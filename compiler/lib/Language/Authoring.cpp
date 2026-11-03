@@ -80,7 +80,7 @@ void visitValues(const Body &body, const Declaration &decl,
   for (const auto &value : body.values)
     visit(value, body.mode);
   for (const auto &operation : body.operations) {
-    if (auto *control = std::get_if<LocalControl>(&operation.action))
+    if (auto *control = std::get_if<Control>(&operation.action))
       for (const auto &region : control->regions)
         visitValues(*region, decl, visit);
     if (auto *repeat = std::get_if<ProtocolRepeat>(&operation.action))

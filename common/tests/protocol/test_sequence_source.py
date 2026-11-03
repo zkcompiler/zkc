@@ -95,7 +95,7 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
             '8192', {'first': '0', 'second': '0'}, {'first': '8191', 'second': '8191'}]
         report = json.loads(journal.last.stdout)
         capacity = report['capacity']
-        used = report['execution']['usage']['fresh_bytes']
+        used = report['execution']['invocation']['total_value_bytes']
         assert 0 < used <= int(capacity[6][1])
         capacity[6][1] = str(used // 2)
         # Tighten the actual shared allocation allowance, rather than assuming
@@ -106,8 +106,8 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
                             refuses='entry-host-run-failed')
         execution = refused['execution']
         assert not execution['completed']
-        assert execution['usage']['fresh_bytes'] <= int(capacity[6][1])
-        assert 0 < execution['usage']['iterations'] < 8192
+        assert execution['invocation']['total_value_bytes'] <= int(capacity[6][1])
+        assert 0 < execution['invocation']['iterations'] < 8192
         call, = execution['calls']
         stopped = call['native']['failure_role']['after']
         assert stopped[0] == 'stopped' and stopped[1]['cause'] == ['limit']

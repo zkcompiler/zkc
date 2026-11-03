@@ -191,3 +191,41 @@ def test_pair_artifacts_require_construction(tmp_path):
     path.write_text(subject.path.read_text().replace("construction = true", "construction = false"))
     with pytest.raises(loader.Refused, match="generated.pair requires the construction profile"):
         loader.load(path)
+
+
+@pytest.mark.parametrize("replacement", [
+    'admission = "views"',
+    'admission = "external"\nviews = "ZkcExamples.Structured.OldGkrViews"',
+])
+def test_generated_views_must_be_the_consumed_admission(tmp_path, replacement):
+    loader = manifests()
+    subject = loader.load_all(["gkr"])[0]
+    source = subject.path.read_text().replace(
+        'admission = "external"\nviews = "ZkcExamples.Structured.GkrSourceViews"', replacement)
+    path = tmp_path / "gkr.toml"
+    path.write_text(source)
+    with pytest.raises(loader.Refused, match="must be the construction admission module"):
+        loader.load(path)
+
+
+def test_generated_views_requires_bodies():
+    loader = manifests()
+    with pytest.raises(loader.Refused, match="requires generated.bodies"):
+        loader._validate({"schema": loader.SCHEMA, "name": "test",
+                          "generated": {"views": "lean/ZkcExamples/Views.lean"}}, "test.toml")
+
+
+@pytest.mark.parametrize("replacement,diagnostic", [
+    ('', 'must be supplied together'),
+    ('library = "bad-name"', 'must be a Lean name'),
+    ('library = "Example.bundle"\nrule = "construction"', 'requires the compiled construction profile'),
+])
+def test_explicit_connection_library_is_checked(tmp_path, replacement, diagnostic):
+    loader = manifests()
+    subject = loader.load_all(["gkr"])[0]
+    source = subject.path.read_text().replace(
+        'library = "ZkcExamples.Structured.Generated.Connections.Gkr.sourceLibrary"', replacement)
+    path = tmp_path / "gkr.toml"
+    path.write_text(source)
+    with pytest.raises(loader.Refused, match=diagnostic):
+        loader.load(path)

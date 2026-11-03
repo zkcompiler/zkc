@@ -13,17 +13,24 @@ use std::{fmt, path::Path};
 
 use crate::io::document;
 
-pub const SOLC_VERSION: &str = "0.8.38+commit.1835d247";
+/// The pinned solc release and commit, from the installed target declaration.
+pub const SOLC_VERSION: &str = crate::evm_target::SOLC_VERSION;
 pub const FORMAT: &str = "zkc.evm-artifact/0";
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 
-/// Exact deployment fork. Only these typed values can reach solc settings.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum EvmFork {
-    #[default]
-    Cancun,
-    Prague,
+/// Exact deployment fork: a fork of the installed target declaration
+/// (`zkc::evm_target`). Only these typed values can reach solc settings. It is
+/// spelled by its declared lowercase name and defaults to the declared default.
+pub use crate::evm_target::Fork as EvmFork;
+impl Default for EvmFork {
+    fn default() -> Self {
+        crate::evm_target::DEFAULT_FORK
+    }
+}
+impl serde::Serialize for EvmFork {
+    fn serialize<S: serde::Serializer>(&self, encoder: S) -> std::result::Result<S::Ok, S::Error> {
+        encoder.serialize_str(self.as_str())
+    }
 }
 impl<'de> serde::Deserialize<'de> for EvmFork {
     fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self, D::Error> {
@@ -33,20 +40,13 @@ impl<'de> serde::Deserialize<'de> for EvmFork {
 }
 impl EvmFork {
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Cancun => "cancun",
-            Self::Prague => "prague",
-        }
+        self.row().name
     }
 }
 impl std::str::FromStr for EvmFork {
     type Err = Error;
     fn from_str(value: &str) -> Result<Self> {
-        match value {
-            "cancun" => Ok(Self::Cancun),
-            "prague" => Ok(Self::Prague),
-            _ => Err("evm-fork".into()),
-        }
+        Self::from_name(value).ok_or_else(|| "evm-fork".into())
     }
 }
 
@@ -113,64 +113,64 @@ fn exact_object(value: &Value, fields: &[&str], code: &'static str) -> Result<()
 }
 
 fn source_limits(value: &Value) -> Result<()> {
-    // Keep these ceilings aligned with EvmLimits and validateLimits in the
-    // compiler. Lower positive ceilings are part of the current contract.
-    let ceilings = [
-        ("rounds", 10),
-        ("public_elements", 1024),
-        ("frame_bytes", 65536),
-        ("public_bytes", 131072),
-        ("context_bytes", 4096),
-        ("proof_bytes", 65536),
-        ("calldata_bytes", 262144),
-        ("root_bytes", 262144),
-        ("memory_bytes", 2097152),
-        ("transcript_transitions", 64),
-        ("practical_gas", 20000000),
-    ];
-    exact_object(value, &ceilings.map(|(key, _)| key), "evm-source-limits")?;
-    if ceilings
-        .iter()
-        .any(|(key, ceiling)| value[key].as_u64().is_none_or(|n| n == 0 || n > *ceiling))
-        || value["memory_bytes"].as_u64().unwrap() < 4096
-    {
+    // Every declared ceiling, each within its declared range. A compilation may
+    // lower a ceiling, never raise it.
+    let limits = &crate::evm_target::LIMITS;
+    let names: Vec<_> = limits.iter().map(|limit| limit.name).collect();
+    exact_object(value, &names, "evm-source-limits")?;
+    if limits.iter().any(|limit| {
+        value[limit.name]
+            .as_u64()
+            .is_none_or(|n| n < limit.minimum || n > limit.maximum)
+    }) {
         return Err("evm-source-limits".into());
     }
     Ok(())
 }
 
+/// The effective common-stage options: exactly the shared list a CPU Entry
+/// package publishes, without CPU storage release.
 fn source_options(value: &Value) -> Result<crate::entry::CompileOptions> {
-    let mut options = value.clone();
-    exact_object(
-        &options,
-        &[
-            "simplify",
-            "release_storage",
-            "finite_bulk",
-            "fuse_vector_reductions",
-            "fuse_collect_fold",
-            "calculation_batching",
-            "oracle_realization",
-            "numerical_expressions",
-        ],
-        "evm-source-options",
-    )?;
-    if !matches!(
-        options["numerical_expressions"].as_str(),
-        Some("prefer-native" | "vector-only")
-    ) {
-        return Err("evm-source-options".into());
-    }
-    options
-        .as_object_mut()
-        .unwrap()
-        .remove("numerical_expressions");
     let options: crate::entry::CompileOptions =
-        serde_json::from_value(options).map_err(|_| "evm-source-options")?;
+        serde_json::from_value(value.clone()).map_err(|_| "evm-source-options")?;
     if options.release_storage {
         return Err("evm-source-options".into());
     }
     Ok(options)
+}
+
+/// Whether the target realizes a managed construction over `suite`, selected
+/// by the installed suite's transcript facts and never by its spelling: the
+/// `hash-chain` family over `keccak256`, binding the suite identity, with the
+/// `fr64be` decoder over a prime challenge field below 2^256
+/// (`docs/spec/targets/evm.md`).
+fn realized_suite(suite: &str) -> bool {
+    use zkc_catalog::{ByteHash, ChallengeDecoder, DomainFacts, FieldStructure, TranscriptFamily};
+    // 2^256 in decimal.
+    const BOUND: &str =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+    let Some(row) = zkc_catalog::DomainIdentity::parse(suite).map(zkc_catalog::installed_domain)
+    else {
+        return false;
+    };
+    let DomainFacts::Transcript(facts) = row.facts else {
+        return false;
+    };
+    let realized = facts.family == TranscriptFamily::HashChain
+        && facts.hash == Some(ByteHash::Keccak256)
+        && facts.binds_suite
+        && facts.decoder == ChallengeDecoder::Fr64Be;
+    let challenge = row
+        .members
+        .iter()
+        .find(|(member, _)| *member == "ChallengeField")
+        .map(|(_, field)| zkc_catalog::installed_domain(*field).facts);
+    realized
+        && matches!(challenge, Some(DomainFacts::Field(field))
+            if field.structure == FieldStructure::Prime
+                && (field.characteristic.len() < BOUND.len()
+                    || (field.characteristic.len() == BOUND.len()
+                        && field.characteristic < BOUND)))
 }
 
 fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) -> Result<()> {
@@ -203,10 +203,9 @@ fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) 
         || (1..=3).any(|i| !name(&policy[i]))
         || policy[2] == policy[3]
         || natural(&policy[4]).is_none_or(|n| n >= 1024)
-        || !matches!(
-            policy[5].as_str(),
-            Some("" | "hash-chain.keccak256.bls12-381.fr64be/0")
-        )
+        || !policy[5]
+            .as_str()
+            .is_some_and(|suite| suite.is_empty() || realized_suite(suite))
         || policy[9] != "zkc.framed/0"
         || policy[10] != ""
         || descriptor[6] != serde_json::json!([])
@@ -300,8 +299,6 @@ fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) 
             .iter()
             .zip(ports)
             .any(|(row, port)| row[0] != policy[3] || row[1] != *port)
-        || record["manifest"]["producer"] != policy[2]
-        || record["manifest"]["validator"] != policy[3]
     {
         return Err("evm-source-identity".into());
     }
@@ -310,8 +307,10 @@ fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) 
     Ok(())
 }
 
-/// Exact compiler-owned source response. Capture is transport validation, not
-/// independent authentication of the selected source or compiler.
+/// Exact compiler-owned source response, `zkc.evm-source/0`. Capture is
+/// transport validation, not independent authentication of the selected source
+/// or compiler. The SDK owns the tool facts: the solc release and settings and
+/// the verifier ABI come from the installed target declaration.
 #[derive(Clone, Debug)]
 pub struct Source {
     bytes: Vec<u8>,
@@ -329,85 +328,44 @@ impl Source {
             &record,
             &[
                 "format",
-                "target",
+                "declaration",
                 "fork",
                 "options",
-                "yul",
-                "abi",
-                "descriptor",
-                "policy",
                 "limits",
-                "source_sha256",
-                "manifest",
                 "entry",
                 "capture",
                 "installation",
                 "original",
-            ],
-            "evm-source-format",
-        )?;
-        let manifest = &record["manifest"];
-        exact_object(
-            manifest,
-            &[
-                "format",
-                "target",
-                "fork",
-                "options",
-                "source_sha256",
                 "source_format",
-                "entry",
-                "producer",
-                "validator",
                 "compiler",
-                "yul_sha256",
-                "limits",
-                "solc_version",
-                "optimizer_steps",
-                "release_validation",
-                "capture",
-                "installation",
-                "original",
+                "policy",
+                "descriptor",
+                "yul",
             ],
             "evm-source-format",
         )?;
         if record["format"] != "zkc.evm-source/0"
-            || record["target"] != "evm"
+            || record["source_format"] != "zkc.original-mlir/0"
             || record["yul"].as_str().is_none_or(str::is_empty)
             || record["entry"].as_str().is_none_or(str::is_empty)
-            || record["abi"] != calldata::abi()
-            || manifest["format"] != "zkc.evm-source-manifest/0"
-            || manifest["source_format"] != "zkc.original-mlir/0"
-            || manifest["solc_version"] != "0.8.38"
-            || manifest["optimizer_steps"] != ":"
-            || manifest["release_validation"] != "pending-deployment-and-dynamic-trace"
         {
             return Err("evm-source-format".into());
         }
+        // The response names the compiler's installed target declaration; a
+        // different one states other forks, ceilings or tool settings.
+        if record["declaration"] != crate::evm_target::IDENTITY {
+            return Err("evm-target-declaration".into());
+        }
         let fork = record["fork"].as_str().ok_or("evm-fork")?.parse()?;
         let options = source_options(&record["options"])?;
-        source_options(&manifest["options"])?;
         source_limits(&record["limits"])?;
-        source_limits(&manifest["limits"])?;
-        for key in ["capture", "installation", "original", "source_sha256"] {
+        for key in ["capture", "installation", "original", "compiler"] {
             if record[key]
                 .as_str()
                 .is_none_or(|value| crate::io::bytes::digest(value).is_err())
-                || record["manifest"][key] != record[key]
             {
                 return Err("evm-source-identity".into());
             }
-        }
-        if ["entry", "target", "fork", "options", "limits"]
-            .iter()
-            .any(|key| manifest[key] != record[key])
-            || record["original"] != record["source_sha256"]
-            || manifest["compiler"]
-                .as_str()
-                .is_none_or(|value| crate::io::bytes::digest(value).is_err())
-            || manifest["yul_sha256"] != hash(record["yul"].as_str().unwrap().as_bytes())
-        {
-            return Err("evm-source-identity".into());
         }
         source_descriptor(&record, &options.oracle_realization)?;
         Ok(Self {
@@ -423,8 +381,9 @@ impl Source {
     pub fn yul(&self) -> &str {
         self.record["yul"].as_str().expect("captured source")
     }
-    pub fn abi(&self) -> &Value {
-        &self.record["abi"]
+    /// The verifier ABI of the installed target declaration.
+    pub fn abi(&self) -> &'static Value {
+        &calldata::ABI
     }
     pub fn entry(&self) -> &str {
         self.record["entry"].as_str().expect("captured entry")

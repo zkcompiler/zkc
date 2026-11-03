@@ -2,7 +2,8 @@
 use super::*;
 use zkc_format::binding;
 
-const CONTEXT_LIMIT: usize = 4096;
+use super::MAX_CONTEXT_BYTES as CONTEXT_LIMIT;
+use crate::host::capacity::RootCharge;
 use crate::host::request::RESOURCE_BUDGET_LIMIT;
 
 /// Values follow the admitted public, role-input and service order. Public
@@ -214,9 +215,10 @@ pub(super) fn prepare(
         }
     }
     let policy = host.capacity.backend();
-    let mut admission = Admission::new(host.capacity.loading())?
+    // Loading, its file reads and setup cache hits charge the invocation root.
+    let mut admission = Admission::new(host.loading())?
         .with_material(imports.material())
-        .with_shared_ledger(host.shared_ledger.clone())
+        .with_shared_ledger(host.host_ledger().cloned())
         .with_retained_inputs(host.retained_inputs);
     for ((input, port), ty) in request
         .public
@@ -239,8 +241,10 @@ pub(super) fn prepare(
             )?;
         }
     }
-    let _root_tree = zkc_runtime::host::wire::reserve_allocation(
-        host.shared_ledger.as_ref(),
+    // The binding root, its public encodings and its retained encoding charge
+    // the invocation root; a refusal names the root allowance that refused.
+    let _root_tree = RootCharge::BINDING.reserve_bytes(
+        host.host_ledger(),
         host.binding_metadata_bytes
             .saturating_add(request.context.len() * 2),
     )?;
@@ -441,7 +445,7 @@ pub(super) fn prepare(
             budget: request.transcript_budget,
         })?;
     }
-    let (loaded, loading) = if let Some(ledger) = &host.shared_ledger {
+    let (loaded, loading) = if let Some(ledger) = host.host_ledger() {
         let (values, guard) = admission.load_shared(&backend, &policy, ledger, 0)?;
         (values, Some(guard))
     } else {
@@ -466,8 +470,8 @@ pub(super) fn prepare(
     let mut encoding_retained = Vec::new();
     for (port, input) in host.public.iter().zip(&request.public) {
         if input.wire_bytes().is_none() {
-            encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
-                host.shared_ledger.as_ref(),
+            encoding_retained.extend(RootCharge::BINDING.reserve_bytes(
+                host.host_ledger(),
                 zkc_cpu::native_encoding_bound(&loaded[public_ids[&port.original]]),
             )?);
         }
@@ -488,8 +492,8 @@ pub(super) fn prepare(
     }
     for (original, id, input) in shared {
         let _live = if input.wire_bytes().is_none() {
-            zkc_runtime::host::wire::reserve_allocation(
-                host.shared_ledger.as_ref(),
+            RootCharge::BINDING.reserve_bytes(
+                host.host_ledger(),
                 zkc_cpu::native_encoding_bound(&loaded[id]),
             )?
         } else {
@@ -532,22 +536,14 @@ pub(super) fn prepare(
     if retain_root {
         host.capacity.check_wire(encoding.size())?;
     }
-    encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
-        host.shared_ledger.as_ref(),
-        if retain_root { encoding.size() } else { 0 },
+    // Encoding the root reads every byte it writes; a retained encoding is
+    // also a fresh allocation the call holds. One charge covers both.
+    let retained = if retain_root { encoding.size() } else { 0 };
+    encoding_retained.extend(RootCharge::BINDING.reserve(
+        host.host_ledger(),
+        (encoding.size() as u64).saturating_add(retained as u64),
+        retained,
     )?);
-    if let Some(ledger) = &host.shared_ledger {
-        ledger
-            .charge(
-                zkc_runtime::vm::WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: encoding.size() as u64,
-                },
-                0,
-            )
-            .map_err(|e| e.to_string())?;
-    }
     let (root, binding) =
         binding::encode_binding(&encoding, retain_root).map_err(|e| e.to_string())?;
     Ok(Prepared {

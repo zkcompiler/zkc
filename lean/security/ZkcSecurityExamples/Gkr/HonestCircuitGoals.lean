@@ -18,13 +18,13 @@ open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 
 set_option maxRecDepth 20000
 
-helper_callback layerCallback from GkrSourceBodies.helper33Body
+helper_callback layerCallback from GkrSourceBodies.helper64Body
 helper_presentation Step inputs [position, values, addWeights, mulWeights, width, left, right]
   outputs [values, addWeights, mulWeights, width, left, right] := layerCallback
 helper_presentation Layer inputs [addWeights, mulWeights, below, width]
-  outputs [values] := GkrSourceBodies.helper33Body
+  outputs [values] := GkrSourceBodies.helper64Body
 helper_presentation Traversal inputs [addWeights, mulWeights, inputValues, layers, selector, width, layerIndex]
-  outputs [values] := GkrSourceBodies.helper34Body
+  outputs [values] := GkrSourceBodies.helper65Body
 
 named_values LayerState [values] := layerCallback_selection.callback.state
 named_values LayerCaptures [addWeights, mulWeights, width, left, right] :=
@@ -32,17 +32,17 @@ named_values LayerCaptures [addWeights, mulWeights, width, left, right] :=
 
 named_values BlockArguments [source, position, width] := GkrSourceBodies.selectBlockHelper.inputs
 named_values BlockResult [values] := GkrSourceBodies.selectBlockHelper.outputs
-named_values PowerResult [count] := GkrSourceBodies.helper18Helper.outputs
-named_values RepeatResult [values] := GkrSourceBodies.helper25Helper.outputs
-named_values PowerArguments [width] := GkrSourceBodies.helper18Helper.inputs
-named_values RepeatArguments [source, count] := GkrSourceBodies.helper25Helper.inputs
+named_values PowerResult [count] := GkrSourceBodies.helper4Helper.outputs
+named_values RepeatResult [values] := GkrSourceBodies.helper60Helper.outputs
+named_values PowerArguments [width] := GkrSourceBodies.helper4Helper.inputs
+named_values RepeatArguments [source, count] := GkrSourceBodies.helper60Helper.inputs
 
 source_reference stepProcess from_equation Step.equation using [Step.run]
 source_reference layerProcess from_equation Layer.equation using [Layer.run]
 source_reference valuesProcess from_equation Traversal.equation using [Traversal.run]
 
 structure Bodies (definitions : List CheckedDefinition) : Prop where
-  layer : BodyIn definitions GkrSourceBodies.helper33Helper Layer.body
-  values : BodyIn definitions GkrSourceBodies.helper34Helper Traversal.body
+  layer : BodyIn definitions GkrSourceBodies.helper64Helper Layer.body
+  values : BodyIn definitions GkrSourceBodies.helper65Helper Traversal.body
 
 end ZkcSecurity.Realizations.Gkr.HonestCircuit.Goals

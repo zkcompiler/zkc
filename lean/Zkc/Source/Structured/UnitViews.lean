@@ -565,18 +565,30 @@ meta def synchronously (action : CommandElabM Unit) : CommandElabM Unit := do
     emit naming (← `(theorem $(theoremIdent helper "_member") :
         $(definitionIdent helper) ∈ ($program).payload.definitions := by structured_mem))
 
-@[command_elab structuredAssociations] meta def elabStructuredAssociations : CommandElab := fun stx => do
+@[command_elab structuredAssociations] meta def elabStructuredAssociations : CommandElab :=
+    fun stx => synchronously do
   let views := stx[1].getId
   let unit := mkIdent (views ++ `unit)
+  let naming : Naming := { command := "structured_associations" }
   for entry in ← stx[3].getSepArgs.mapM (parseEntry "Helper") do
-    let definition := mkIdent (views ++ suffixed entry.name "Definition")
+    -- Presentation names do not identify definitions. Locate the unique actual
+    -- symbol, then prove membership, the complete ABI and the raw body below.
+    let position ← liftTermElabM do
+      let selected ← normalizeTerm (← `(List.filterMap
+        (fun (item : CheckedDefinition × Nat) =>
+          if item.1.name == ($(entry.signature)).name then some item.2 else none)
+        (List.zipIdx ($unit).definitions)))
+      let [position] ← listValues selected
+        | throwError "structured_associations: no unique definition for {entry.name}"
+      return Syntax.mkNumLit (toString (← natValue position))
+    let definition ← `(($unit).definitions[$position]'(by decide +kernel))
     let member := theoremIdent entry "_member"
     let signature := theoremIdent entry "_signature"
     let raw := theoremIdent entry "_shared_raw"
-    elabCommand (← `(theorem $member : $definition ∈ ($unit).definitions := by structured_mem))
-    elabCommand (← `(theorem $signature : ($definition).helper = $(entry.signature) := rfl))
-    elabCommand (← `(theorem $raw : ($definition).raw = ($(entry.body)).erase := rfl))
-    elabCommand (← `(theorem $(theoremIdent entry "_association") :
+    emit naming (← `(theorem $member : $definition ∈ ($unit).definitions := by structured_mem))
+    emit naming (← `(theorem $signature : ($definition).helper = $(entry.signature) := rfl))
+    emit naming (← `(theorem $raw : ($definition).raw = ($(entry.body)).erase := rfl))
+    emit naming (← `(theorem $(theoremIdent entry "_association") :
         BodyIn ($unit).definitions $(entry.signature) $(entry.body) := BodyIn.of_mem $member $signature $raw))
 
 end UnitViews

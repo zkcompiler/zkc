@@ -5,11 +5,13 @@ impl Schema {
     pub fn describe(&self) -> Value {
         let fields = |fs: &[crate::entry::interface::raw::Field]| {
             fs.iter()
-                .map(|f| json!({"name":f.name,"offset":f.offset,"schema":f.schema.describe()}))
+                .map(|f| json!({"name":f.name,"offset":f.offset,"public":f.public,
+                    "placement":f.placement.as_ref().map(|p|p.describe()),"schema":f.schema.describe()}))
                 .collect::<Vec<_>>()
         };
         json!({"kind":format!("{:?}",self.kind).to_lowercase(),"identity":self.identity,
-            "type":self.display_type,"custody":self.custody,"constructible":self.constructible,
+            "type":self.display_type,"generated":self.generated,"custody":self.custody,"sealed":self.sealed,"roles":self.roles,
+            "element":self.element.as_ref().map(|e| e.describe()),"constructible":self.constructible,
             "permissions":self.permissions.iter().map(|p|format!("{p:?}")).collect::<Vec<_>>(),
             "fields":fields(&self.fields),"alternatives":self.alternatives.iter().map(|a|
                 json!({"name":a.name,"fields":fields(&a.fields)})).collect::<Vec<_>>(),"leaves":self.leaves})
@@ -31,25 +33,62 @@ pub struct FunctionInterface {
         std::collections::BTreeMap<String, crate::entry::interface::syntax::Leaf>,
 }
 impl FunctionInterface {
-    /// Static context requirements. This does not import keys or grant authority.
+    /// Static context requirements, under the Host's selected interface
+    /// admission allowances: the selection its `FunctionEntry` admits with
+    /// (`FunctionOptions::limits.interface`), or `InterfaceLimits::DEFAULT`.
+    /// This does not import keys or grant authority.
     pub fn deployment_interfaces(
         package: &crate::entry::Package,
+        limits: crate::entry::InterfaceLimits,
     ) -> super::Result<Vec<DeploymentInterface>> {
-        super::admission::interfaces(package)
+        super::admission::interfaces(package, limits)
     }
-    pub fn read(package: &crate::entry::Package) -> super::Result<Self> {
+    /// The authenticated package of one static Run deployment, for producing
+    /// its common-input context, under the selection that admits the child.
+    /// This imports no setup authority.
+    pub fn run_deployment_package(
+        package: &crate::entry::Package,
+        id: &str,
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<crate::entry::Package> {
+        super::admission::run_deployment(package, id, limits)
+    }
+    /// Read under the Host's selected interface admission allowances.
+    pub fn read(
+        package: &crate::entry::Package,
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<Self> {
         use sha2::{Digest, Sha256};
         let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
-        let view = Self::from_compiler(package.interface().as_bytes())?;
-        super::require(view.document.original == original, "entry-host-identity")?;
+        let view = Self::decode(package.interface().as_bytes(), limits)?;
+        if view.document.original != original {
+            return Err(crate::entry::EntryCondition::InterfaceIdentity.into());
+        }
         Ok(view)
     }
-    pub(crate) fn from_compiler(bytes: &[u8]) -> super::Result<Self> {
+    /// Read compiler output before packaging, under the selected allowances.
+    #[cfg(feature = "project")]
+    pub(crate) fn from_compiler(
+        bytes: &[u8],
+        limits: crate::entry::InterfaceLimits,
+    ) -> super::Result<Self> {
+        Self::decode(bytes, limits)
+    }
+    fn decode(bytes: &[u8], limits: crate::entry::InterfaceLimits) -> super::Result<Self> {
+        limits
+            .validate()
+            .map_err(|e| super::EntryError::new(super::EntryPhase::Admission, e))?;
         crate::entry::interface::preflight::check(bytes)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
-        let document: super::carrier::Interface = super::admission::decode(bytes, 4 * 1024 * 1024)?;
+        use crate::entry::EntryCondition as C;
+        let document: super::carrier::Interface =
+            super::admission::decode(bytes, crate::entry::package::INTERFACE_BYTES)
+                .map_err(|_| C::InterfaceFormat)?;
+        if document.format != "zkc.language-interface/0" {
+            return Err(C::InterfaceFormat.into());
+        }
         super::require(
-            document.format == "zkc.language-interface/0" && document.selection.kind == "function",
+            document.selection.kind == "function",
             "entry-host-selection",
         )?;
         super::require(
@@ -58,14 +97,14 @@ impl FunctionInterface {
                 && document.setups.is_empty(),
             "entry-host-stage",
         )?;
-        super::require(
-            crate::io::bytes::digest(&document.capture).is_ok()
-                && !document.toolchain.is_empty()
-                && document.toolchain.len() <= 256 * 1024
-                && crate::source_names::canonical_name(&document.entry),
-            "entry-host-identity",
-        )?;
-        let mut schemas = crate::entry::interface::schemas::Schemas::new();
+        if crate::io::bytes::digest(&document.capture).is_err()
+            || document.toolchain.is_empty()
+            || document.toolchain.len() > 256 * 1024
+            || !crate::source_names::canonical_name(&document.entry)
+        {
+            return Err(C::InterfaceIdentity.into());
+        }
+        let mut schemas = crate::entry::interface::schemas::Schemas::with_limits(limits);
         let mut symbols = std::collections::BTreeSet::new();
         for f in &document.functions {
             super::require(
@@ -83,19 +122,18 @@ impl FunctionInterface {
                 schemas
                     .check(&p.schema, 0)
                     .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
-                super::require(!p.schema.kind.is_logical(), "entry-host-schema")?;
+                super::require(!p.schema.is_logical(), "entry-host-schema")?;
             }
             schemas
                 .check(&f.result, 0)
                 .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
-            super::require(!f.result.kind.is_logical(), "entry-host-schema")?;
+            super::require(!f.result.is_logical(), "entry-host-schema")?;
         }
         super::require(
             document.functions.len() <= 4096 && symbols.contains(&document.selection.function),
             "entry-host-selection",
         )?;
-        crate::io::bytes::digest(&document.original)
-            .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
+        crate::io::bytes::digest(&document.original).map_err(|_| C::InterfaceIdentity)?;
         let types = schemas.finish();
         Ok(Self { document, types })
     }
@@ -128,9 +166,7 @@ impl FunctionInterface {
         crate::entry::interface::schemas::check_import(s)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Request, e))?;
         super::require(
-            s.leaves
-                .iter()
-                .all(|s| self.types.get(s).is_some_and(|t| t.message)),
+            crate::entry::interface::schemas::message_data(&self.types, s),
             "entry-input-codec",
         )
     }

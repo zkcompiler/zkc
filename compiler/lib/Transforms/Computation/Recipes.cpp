@@ -26,6 +26,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -173,6 +174,7 @@ class Recipes {
   bool valid = true;
   std::optional<RealizationSubject> activeSubject;
   unsigned nextChild = 0;
+  llvm::DenseMap<Operation *, RealizationSubject> sourceSubjects;
 
   bool reserve(uint64_t amount) {
     if (!valid)
@@ -704,6 +706,71 @@ public:
              ValueRange consumerInputs = {}) {
     if (!valid)
       return failure();
+    if (auto branch = dyn_cast<data::BranchOp>(source)) {
+      SmallVector<Operation *> temporarySubjects;
+      auto restoreSubjects = llvm::scope_exit([&] {
+        for (Operation *op : temporarySubjects)
+          sourceSubjects.erase(op);
+      });
+      auto site = branch->getAttrOfType<StringAttr>("site");
+      if (!site || !reserve(96 + 16 * (inputs.size() + branch.getNumResults())))
+        return failure();
+      auto outline = [&](unsigned index) -> func::FuncOp {
+        auto &arm = branch.getArms()[index].front();
+        auto function = region(arm.getArgumentTypes(), branch.getResultTypes());
+        if (!function) {
+          valid = false;
+          return {};
+        }
+        // Each arm uses the same recipe reader/emitter as the entry. Its
+        // instructions stay inside its selected scope, including dead work.
+        unsigned ordinal = 0;
+        for (auto &op : arm.without_terminator()) {
+          if (!reserve(1 + op.getNumOperands() + op.getNumResults()))
+            return {};
+          if (finite::isComputation(&op) &&
+              sourceSubjects.try_emplace(&op, realizationSubject(&op)).second)
+            temporarySubjects.push_back(&op);
+          auto childSite =
+              protocol::algorithmSite({},
+                                      (site.getValue() + "_recipe_arm_" +
+                                       Twine(index) + "_" + Twine(ordinal++))
+                                          .str(),
+                                      budget.siteBytes);
+          if (!childSite) {
+            consumeError(childSite.takeError());
+            budget.capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes};
+            valid = false;
+            return {};
+          }
+          op.setAttr("site", rewriter.getStringAttr(*childSite));
+        }
+        if (failed(body(arm, function, true))) {
+          valid = false;
+          return {};
+        }
+        return function;
+      };
+      control.setLocation(source->getLoc());
+      auto captures = inputs.drop_front();
+      SmallVector<Value> outputs;
+      if (inputs.front().getType().isSignlessInteger(1))
+        outputs = control.conditional(inputs.front(), captures,
+                                      branch.getResultTypes(), site.getValue(),
+                                      outline);
+      else {
+        SmallVector<std::string> alternatives;
+        for (auto alternative : branch.getAlternatives())
+          alternatives.push_back(
+              cast<StringAttr>(alternative).getValue().str());
+        outputs =
+            control.match(inputs.front(), captures, branch.getResultTypes(),
+                          alternatives, site.getValue(), outline);
+      }
+      if (!valid || outputs.size() != branch.getNumResults())
+        return failure();
+      return outputs;
+    }
     if (!finite::isComputation(source)) {
       SmallVector<Value> values;
       if (failed(scalar(source, SmallVector<Value>(inputs), control, values)) ||
@@ -758,17 +825,39 @@ public:
              .getAnalysis<MathematicalFactAnalysis>());
   }
 
-  LogicalResult body(func::FuncOp source, func::FuncOp target,
-                     ArrayRef<RealizationSubject> subjects) {
+  LogicalResult associate(func::FuncOp working, func::FuncOp original) {
+    SmallVector<Operation *> before;
+    if (original
+            .walk<WalkOrder::PreOrder>([&](Operation *op) {
+              if (!reserve(1 + op->getNumOperands() + op->getNumResults()))
+                return WalkResult::interrupt();
+              before.push_back(op);
+              return WalkResult::advance();
+            })
+            .wasInterrupted())
+      return failure();
+    unsigned index = 0;
+    auto walk = working.walk<WalkOrder::PreOrder>([&](Operation *op) {
+      if (index >= before.size() || !reserve(1))
+        return WalkResult::interrupt();
+      auto *source = before[index++];
+      if (finite::isComputation(source))
+        sourceSubjects[op] = realizationSubject(source);
+      return WalkResult::advance();
+    });
+    return success(!walk.wasInterrupted() && index == before.size());
+  }
+  LogicalResult body(Block &source, func::FuncOp target, bool arm = false) {
     IRMapping mapping;
     mapping.map(source.getArguments(), target.getArguments().drop_front());
     rewriter.setInsertionPointToEnd(&target.front());
     exec::ScopedExecutionBuilder control(
         rewriter, target, exec::ScopedExecutionBuilder::LoopForm::Structured);
     Operation *consumed = nullptr;
-    unsigned ordinal = 0;
-    for (auto &op : source.front().without_terminator()) {
-      auto subject = subjects[ordinal++];
+    for (auto &op : source.without_terminator()) {
+      auto subject = sourceSubjects.lookup(&op);
+      if (finite::isComputation(&op) && subject.operation.empty())
+        subject = realizationSubject(&op);
       if (&op == consumed)
         continue;
       SmallVector<Value> inputs;
@@ -823,7 +912,7 @@ public:
       mapping.map(results, *values);
     }
     SmallVector<Value> results;
-    for (Value operand : source.front().back().getOperands()) {
+    for (Value operand : source.back().getOperands()) {
       auto value = mapping.lookupOrNull(operand);
       if (!value)
         return failure();
@@ -831,7 +920,10 @@ public:
     }
     if (!reserve(16 + 4 * results.size()))
       return failure();
-    control.returned(results);
+    if (arm)
+      control.complete(results);
+    else
+      control.returned(results);
     return success();
   }
 };
@@ -860,8 +952,8 @@ recipeCandidate(mlir::ModuleOp source, StringRef callSite,
   SymbolTable(*candidate).insert(function, candidate->getBody()->end());
   unsigned ordinal = 0;
   for (auto &op : function.front().without_terminator()) {
-    if (!isTotal(&op) || op.getNumRegions() || isa<func::CallOp>(op) ||
-        poly::isPolynomialNormalizationOperation(&op))
+    if (!isTotal(&op) || (op.getNumRegions() && !isa<data::BranchOp>(op)) ||
+        isa<func::CallOp>(op) || poly::isPolynomialNormalizationOperation(&op))
       return {};
     auto site =
         protocol::algorithmSite({{callSite.str(), "kernel"}},
@@ -880,8 +972,7 @@ scheduledCandidate(mlir::ModuleOp mathematical, func::FuncOp working,
                    func::FuncOp source, MathematicalSelectionPolicy policy,
                    RealizationWork &work, RealizationTrace *trace,
                    NumericalSelection *selection,
-                   finite::ScopedEmissionBudget &budget, bool orderedRetry,
-                   ArrayRef<RealizationSubject> subjects) {
+                   finite::ScopedEmissionBudget &budget, bool orderedRetry) {
   uint64_t envelope = 48 +
                       8 * (source.getNumArguments() + source.getNumResults()) +
                       source.getSymName().size();
@@ -913,7 +1004,8 @@ scheduledCandidate(mlir::ModuleOp mathematical, func::FuncOp working,
   output.addEntryBlock();
   Recipes recipes(mathematical, owner, builder, policy, work, trace, selection,
                   budget, orderedRetry);
-  if (failed(recipes.body(working, output, subjects)))
+  if (failed(recipes.associate(working, source)) ||
+      failed(recipes.body(working.front(), output)))
     return {};
   return candidate;
 }
@@ -946,13 +1038,9 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
   // reserve before copying. Its selected debit is settled into the caller's
   // quotas; optional verification failure instead debits that reserve.
   scope.propose(policy);
-  SmallVector<RealizationSubject> subjects;
   if (!finite::consumeComputationWork(available.selectionBookkeeping,
                                       entry.front().getOperations().size()))
     return {};
-  for (auto &op : entry.front().without_terminator())
-    subjects.push_back(finite::isComputation(&op) ? realizationSubject(&op)
-                                                  : RealizationSubject{});
   NumericalSelection localSelection(&available);
   if (!selection) {
     localSelection.remainingCopy = remaining;
@@ -1057,7 +1145,7 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
                                           constructionCapacity};
     auto schedule =
         scheduledCandidate(*candidate, function, entry, policy, attemptWork,
-                           trace, selection, emission, orderedRetry, subjects);
+                           trace, selection, emission, orderedRetry);
     available.numericalSelection = nullptr;
     available.numericalOccurrence.reset();
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,

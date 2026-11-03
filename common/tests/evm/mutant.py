@@ -45,7 +45,7 @@ def main():
     for name in ("solc", "solc-input", "runner", "fixture", "creation", "runtime", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--bytecode-format", choices=["binary", "hex"], default="binary")
-    parser.add_argument("--gas", type=int, default=20_000_000)
+    parser.add_argument("--gas", type=int, help="call gas; defaults to the fork's declared budget")
     args = parser.parse_args()
     version = check_solc(args.solc)
     fixture = json.loads(args.fixture.read_text())

@@ -14,13 +14,15 @@ from pathlib import Path
 import sys
 
 from check import FIELD, MODULUS, ROOT, Suite, definition, fixture, write_json
+from bridges.common import source_format
 from bridges.common.native_entry import native_subject
+from bridges.common.replacement import replace_exactly_once
 import snapshot as constructors
 
 GROUP = "bls12-381.g1"
 SERVICE = "random.bls12-381.fr/0"
-FIELD_TYPE = ["field", FIELD]
-GROUP_TYPE = ["group", GROUP]
+FIELD_TYPE = ["apply", "field", [["domain", "Field", FIELD]]]
+GROUP_TYPE = ["apply", "group", [["domain", "Group", GROUP]]]
 FIXTURES = ROOT / "compiler/test/fixtures"
 
 
@@ -61,9 +63,10 @@ class OpenSuite(Suite):
         if not (formal == expected):
             raise AssertionError({"formal": formal, "expected": expected})
 
-    def authored(self, label, selected_subject, modules, retained=None):
-        flags = ["--source-format=zkc", "--subject=" + selected_subject,
-                 *[f"--module={name}={source}" for name, source in modules.items()]]
+    def authored(self, label, selected_subject, modules, retained=None, *, source_selection=None):
+        flags = source_format.with_option(["--subject=" + selected_subject,
+                                           *[f"--module={name}={source}" for name, source in modules.items()]],
+                                          selection=source_selection)
         source, interface_text, interface = native_subject(
             lambda command: self.command(label + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export(label, source, interface["protocol"])
@@ -109,8 +112,8 @@ def component_cases(suite):
       %result = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<>
       func.return %result : !exec.outcome<>
     }'''
-    local = source.replace("  func.func private @first", helper + "\n  func.func private @first", 1)
-    local = local.replace("%a = func.call @nested",
+    local = replace_exactly_once(source, "  func.func private @first", helper + "\n  func.func private @first")
+    local = replace_exactly_once(local, "%a = func.call @nested",
         '"protocol.local_call"(%x,%x) {callee=@halt,role="P",site="call"} : (!F,!F)->()\n%a = func.call @nested')
     local_subject = suite.export("owned-local-zero-results", local)
     suite.case("owner-zero-results-stop", lambda: suite.compare_open(
@@ -195,7 +198,7 @@ def group_cases(suite):
 
 
 def vector_receive_cases(suite):
-    source = '''!V = !algebra.field_vector<"bls12-381.fr">
+    source = '''!V = !data.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
   "protocol.func"() ({
   ^entry(%x:!V):
@@ -206,7 +209,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
     subject = suite.export("vector-receive", source)
-    action = ["receive", "vector", "P", "V", ["vector", FIELD]]
+    action = ["receive", "vector", "P", "V", ["apply", "vector", [["domain", "Field", FIELD]]]]
     maximum = ["0"] * 4096
     script = [reply(action, maximum)]
     suite.case("vector-receive-at-capacity", lambda: suite.compare_open(

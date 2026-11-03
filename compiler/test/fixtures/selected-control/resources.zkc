@@ -1,0 +1,14 @@
+#[linear]
+struct Ticket:
+    pub value: bool
+local def make() -> Ticket:
+    ticket <- Ticket{value = false}
+    return ticket
+pub protocol Run roles(P)(flag: bool @P, count: index @P) -> Ticket @P:
+    mut ticket <- make()
+    for i in 0..count roles(P) max 4:
+        if flag roles(P):
+            ticket := ticket
+        else:
+            ticket := ticket
+    return ticket

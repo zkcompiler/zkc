@@ -32,6 +32,8 @@ abbrev service : Ty := .service randomService
 abbrev program := KoalaBearSumcheckGenerated.Inputs.program
 abbrev definition := KoalaBearSumcheckGenerated.RoundVerifier.definition
 abbrev declaration := definition.signature
+/-- The local resource sort is read from the admitted declaration. -/
+abbrev custody : Ty := declaration.outputs.head!
 abbrev signature := KoalaBearSumcheckGenerated.RoundVerifier.signature
 abbrev tables := KoalaBearSumcheckGenerated.RoundVerifier.helperTables model
 abbrev verifierTemplate := KoalaBearSumcheckGenerated.RoundVerifier.template
@@ -92,8 +94,8 @@ theorem producer_binding (ctx : ProtocolContext) (distinct : RosterDistinct ctx 
 
 
 def rawVerifier (priorPoint : List Octic) (claim : Octic) (handle : Nat) :=
-  source 1 roundContext (.cons none (.cons none (.cons (some priorPoint)
-    (.cons (some claim) (.cons (some handle) .nil)))))
+  source 1 roundContext (.cons none (.cons none (.cons (some 0) (.cons (some priorPoint)
+    (.cons (some claim) (.cons (some handle) .nil))))))
 
 def verifier (priorPoint : List Octic) (claim : Octic) (handle : Nat) :
     PIR.Process (Interface model) (Values (Component model.Value) [extension, extension]) :=
@@ -117,7 +119,7 @@ def rawVerifierView (priorPoint : List Octic) (claim : Octic) (handle : Nat) :
   if low + high = claim then
     .call (.query (site "label_6368616c6c656e6765") octicIdentity (.cons handle .nil)) fun (r : Octic) =>
     .call (.send (ty := extension) (site "label_64656c6976657279_0") 0 r) fun _ =>
-    .done (.cons (some (priorPoint ++ [r])) (.cons (some (low + (high - low) * r)) .nil))
+    .done (.cons (some 0) (.cons (some (priorPoint ++ [r])) (.cons (some (low + (high - low) * r)) .nil)))
   else .halt .reject
 
 theorem rawVerifier_equation (priorPoint : List Octic) (claim : Octic) (handle : Nat) :
@@ -154,19 +156,19 @@ theorem verifier_equation (priorPoint : List Octic) (claim : Octic) (handle : Na
     intro challenge
     apply PIR.Process.call_congr
     intro delivered
-    exact decodeEvaluation_complete priorPoint challenge _
+    exact decodeEvaluation_complete priorPoint challenge _ 0
   · rfl
 
 def producer (a b : Base) :
     PIR.Process (Interface model) (Values (Component model.Value) declaration.outputs) :=
-  source 0 roundContext (.cons (some a) (.cons (some b) (.cons none (.cons none (.cons none .nil)))))
+  source 0 roundContext (.cons (some a) (.cons (some b) (.cons none (.cons none (.cons none (.cons none .nil))))))
 
 def producerView (a b : Base) :
     PIR.Process (Interface model) (Values (Component model.Value) declaration.outputs) :=
   .call (.send (ty := extension) (site "label_6c6f77_0") 1 (ZkcSecurity.Domains.KoalaBear.embed a)) fun _ =>
   .call (.send (ty := extension) (site "label_68696768_0") 1 (ZkcSecurity.Domains.KoalaBear.embed b)) fun _ =>
   .call (.receive extension (site "label_64656c6976657279_0") 1) fun _ =>
-  .done (.cons none (.cons none .nil))
+  .done (.cons none (.cons none (.cons none .nil)))
 
 theorem producer_equation (a b : Base) : producer a b = producerView a b := by
   exact (producer_binding roundContext (round_distinct _ (by decide)) _).trans (by kernel_rfl)

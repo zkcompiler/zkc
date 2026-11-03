@@ -18,6 +18,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[3]
 LEAN = ROOT / "lean"
 sys.path.insert(0, str(LEAN))
+from bridges.common import interface as language_interface, policy as native_policy, source_format  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 from support.packages import module_package  # noqa: E402
@@ -241,15 +242,15 @@ class Generation:
         name = root["name"]
         directory = self.directory / name
         directory.mkdir(exist_ok=True)
-        flags = ["--source-format=zkc", "--entry=" + root["entry"],
-                 "--module=example=" + root["source"],
-                 *["--module=" + key + "=" + value for key, value in root["modules"].items()]]
+        flags = source_format.with_option([
+            "--entry=" + root["entry"], "--module=example=" + root["source"],
+            *["--module=" + key + "=" + value for key, value in root["modules"].items()]])
         def native(*args):
             return self.execute([self.args.compiler, *args])
         original = native("language-emit", *flags)
         (directory / "original.mlir").write_text(original)
         interface_text = native("language-interface", *flags)
-        interface = json.loads(interface_text)
+        interface = language_interface.loads(interface_text)
         (directory / "interface.json").write_text(interface_text)
         bundle_text = native("language-bundle", *flags)
         bundle = json.loads(bundle_text)
@@ -274,7 +275,8 @@ class Generation:
             individual[role] = text
             (directory / (role + ".json")).write_text(text)
             (directory / (role + ".identity")).write_text(text)
-        source = native("protocol-structured", directory / "original.mlir", "--symbol=" + policy[1])
+        source = native("protocol-structured", directory / "original.mlir",
+                        "--symbol=" + native_policy.decode(policy).entry)
         (directory / "source.json").write_text(source)
         for module, text in [
                 (f"ZkcExamples.Structured.Generated.Bindings.{name}Data",

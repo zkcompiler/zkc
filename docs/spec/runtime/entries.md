@@ -7,7 +7,7 @@ for source rules and the [runtime reference](../../runtime/README.md) for usage.
 
 The native Host reads `zkc.language-interface/0`. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
-validation preserves kind, exact logical identity, usage permissions, constructor authority, custody, field
+validation preserves kind, exact logical identity, usage permissions, constructor authority, required sealing metadata, custody, field
 slices and nominal alternatives. Every logical port remains present, including
 zero-leaf values. Selectors and Entry choices must agree with those schemas.
 Source names use the [Unicode source profile](../language/lexical.md), retaining
@@ -28,12 +28,44 @@ Compiler publication and both readers bound interface bytes at 4 MiB, JSON
 nesting at 256 and lexical nodes
 at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
 string tokens have at most six times 256 KiB. Decoded strings retain their owning
-name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
-leaves, and validation has a cumulative work allowance of 1,000,000. Native leaf
-parsing retains its own structural bounds. Portable schema summaries and the CPU's
-reconstructed native descriptor cache each have a 16 MiB total retained charge.
-Work bounds apply independently to each admission
-algorithm; a caller may also lower the compiler's phase limits. Unknown and
+name/type limits. Schema depth is at most 32 and each aggregate has at most 1,024
+leaves. Entry admission accepts protocol rosters of 1 to 1,024 distinct roles,
+the catalog limit `protocol.roles` that the joint runtime shares, and
+role-bearing records whose telescopes have at most 1,024 role parameters, the
+separate catalog limit `record.roles`. A nominal record's role arguments keep
+telescope order; membership of a role is decided by the schema category, never
+by assuming that a long argument list is sorted. Native leaf parsing retains
+its own structural bounds.
+
+The Host policy record selects the interface admission allowances
+(`InterfaceLimits` in `HostLimits::interface`, `ProofOptions::interface` and
+`FunctionOptions::limits.interface`;
+[Host allowances](capacity.md#host-allowances)). Validation has a cumulative
+work allowance, by default 1,000,000 and at most 2^24. Supply reconstruction and public
+selection indexing share another, independent of native storage width. Portable
+schema summaries, the CPU's reconstructed native descriptor cache and each
+reconstructed input/output supply plan each charge their retained descriptors
+and residual requirements, including zero-storage schemas, against the
+descriptor allowance, by default 16 MiB. A Host may lower either allowance and
+raise the work allowance up to its maximum. Each allowance has its own code,
+`entry-interface-work-limit` or `entry-interface-descriptor-bytes-limit`: a
+selection above the installed maximum refuses with it at `Admission`, and an
+interface that exceeds a selected allowance refuses with it at `Interface`.
+A ceiling of the interface document itself, such as its bytes, nesting, nodes
+or schema depth, refuses with `entry-interface-limit` under every selection.
+Reconstruction computes each port's
+placed roles once and walks the port only at those roles; per-node facts are
+computed once per schema node, and roles are indexed by name. Its work therefore
+grows with ports times placed roles times schema size, so a full 1,024-role
+roster fits the default allowance. A Function Host's structure validation checks
+each schema at every signature, block argument and child deployment that
+restates it, so the generated Host of a full roster needs a raised work
+selection. Every reader of an interface takes the selection explicitly, so
+static inspection (`FunctionInterface::deployment_interfaces`), checked
+inspection, bindings generation and backend admission read as admission does,
+the CLI selects it with `--interface-limits` and the browser adapter with its
+`interface_limits` option. A caller may also lower the compiler's phase
+limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
 identities permit descriptor reuse without introducing cyclic schema references.
 
@@ -66,11 +98,32 @@ records role order, public/private inputs, setup-key ports, selected outputs and
 external services. Generated bindings, file requests and native ABI comparison
 use that plan. Native artifact facts are read independently during comparison.
 
+The plan retains exact source `(port, path, role)` associations and semantic empty
+values independently of physical storage. Complete transparent distributed roots
+of ordinary data admit through selected ordinary views. Ancestor sealing, hidden
+fields, ancestor constructor restrictions, custody and logical origins remain
+structural obligations; `Interface::outstanding_requirements` reports their
+coordinates. Recursive constructors for an ordinary selected value are checked
+separately at external ingress, preserving typed whole-value transport. Ordinary
+bytes cannot supply an oracle handle or anchor. The ordinary `Value` decoder does not
+accept a distributed root.
+
+Proof public entries use the strict `{port, path, role}` shape. They are ordered,
+disjoint verifier selections and cover every verifier ordinary input, including
+zero-storage values. Whole ordinary selections remain legal; whole logical public
+selections refuse. Run supply stays participant-specific. Proof public data is
+supplied once and routed to the corresponding native coordinates. Argument and
+setup assembly use increasing original native indices filtered for each role,
+then the existing service order. Public classification and availability establish
+no shared-control agreement; independently derived common-input requirements and
+trusted binding remain separate admission obligations.
+
+
 `RunRequest::setups` and `ProofRequest::setups` supply verifier-key bytes for every
 slot exactly. The Host authenticates and imports them through its existing bounded
-setup loader. Whole verifier-key inputs are initialized automatically: applications
+setup loader. Selected verifier-key slices, including nested keys, are initialized automatically: applications
 omit them from both named role inputs and named public values. Supplying a second
-value under that port name refuses. Prover-key inputs remain explicit named
+value under that selection alias refuses. Prover-key inputs remain explicit named
 `Value::Leaf` values containing authenticated `ProverMaterial`, a `ProverKeyFile`
 path, or a descriptor-backed `ProverKeyInput`. Both file forms require an
 independently expected material fingerprint. Other
@@ -149,14 +202,52 @@ registry constructors keep their explicit registry route for direct native
 programs. Asset admission establishes content identity and static reference
 coverage; it is not a judgment about an arena's meaning in the protocol.
 
+## External supply
+
+Source closure publishes exact schemas, permissions, sealing, custody, setup
+associations and component maps. It never decides external supply, because a
+closed selection names no operation
+([language rule](../language/entries.md#entry-functions)). This shared Entry admission and
+preparation layer, which `RunEntry`, `ProofEntry` and `FunctionEntry` implement
+and every adapter uses, including the CLI and the browser adapter, is the only
+owner of the external-supply judgment; adapters do not restate it. It is not
+the only refusal layer: source legality, construction legality, setup
+dependencies, schema/native consistency, backend capability, runtime carrier
+readers and EVM calldata validation keep their own owners.
+
+The judgment covers exactly the inputs that the selected operation consumes,
+each in one of four supply modes:
+
+| Supply mode | Requires | Never grants |
+|---|---|---|
+| Fresh external decoding | Recursive constructor authority: `constructible`, public fields, no sealing, custody or logical handle, including inactive alternatives and zero-extent element templates; a message codec for every native leaf | Anything beyond the decoded value |
+| Retained whole-value transport | An admitted output owner (`OpaqueValue`) whose complete schema equals the target's, with Copy and Drop and no custody | Fresh construction, field projection, setup authority or handle ingress |
+| Checked typed operand | A Host call's already typed value with its checked component association, and export permissions | An external constructor, or the import of an arbitrary native value |
+| Authorized setup and services | A setup pin through `SetupAuthority` and the key initializer; setup-bearing context values with recursive constructor checks; declared service allowances | Setup or service authority assembled from ordinary fields |
+
+| Operation | Consumed inputs | Supply modes | Refusal before issuance or execution |
+|---|---|---|---|
+| Run (`RunEntry::admit`) | Every participant's declared input ports | Fresh decoding; setup and services | `Interface`: `entry-input-constructor` (constructor, private field, sealing or element template), `entry-interface-native-binding` (handle or custody), `entry-input-codec`; then `Authority` for setups |
+| Prove (`ProofEntry::admit_operation`) | The prover's inputs and the public binding inputs | Fresh decoding; setup and services | As Run |
+| Verify (`ProofEntry::admit_operation`) | The verifier's inputs, the public binding inputs and the candidate proof; never a prover witness | Fresh decoding; setup and services | As Run |
+| Whole proof artifact (`ProofEntry::admit`) | Both participants' inputs | As Prove and Verify | As Run |
+| Function parameter (`FunctionEntry`) | Each authored parameter | Retained transport; fresh decoding of a hand-built value | `Interface`: `entry-input-custody` without Copy and Drop. `Preparation`: `entry-input-constructor` for a fresh value without authority, `entry-value-schema` for a retained value of another schema |
+| Function child deployment | Each static child, admitted with the Function | Checked typed operands; setup and services | The child's own admission, at `Interface` for its ports |
+
+A retained value never authorizes fresh construction, so a Function parameter
+whose schema withholds a constructor stays admissible and refuses only a fresh
+value at preparation. Direct Run and proof calls use the fresh route; their
+retained-value transport needs a typed binding codec that the current interface
+does not declare.
+
 ## Named run calls
 
 Rust `entry::RunEntry::admit` retains an authenticated package, validates its
 interface and admits the exact run artifact through `RunHost`. Proof jobs use a
 separate API. Before accepting a run, every logical output must be copyable and
 have no affine custody; unsupported custody returns `entry-output-custody`.
-Every ordinary input must have source external construction authority or admission
-returns `entry-input-constructor`. Its native leaves must also have message codecs,
+Every external ordinary input must have source construction authority or
+admission returns `entry-input-constructor`. Its native leaves must also have message codecs,
 otherwise admission returns `entry-input-codec`. Whole builtin key ports instead use the explicit
 setup route above. These checks precede native bundle admission, which precedes
 asset admission.
@@ -207,11 +298,89 @@ run does not imply a protocol acceptance predicate: the caller must inspect its
 explicit result values. No source evaluation or protocol-specific execution loop
 is added.
 
+Each preparation creates the run's [invocation root](capacity.md#invocation-ledgers),
+which the admitted capacity record's byte selections bound
+(`HostLimits::capacity`). Request conversion, setup imports, loading and
+`InputBoundRunEntry::prepare`'s common-input inspection and canonical encoding
+of every role charge it before execution; wire transport, report storage and
+every participant's bytes charge it during execution, while each participant
+keeps its own instruction and iteration fuel.
+When they finish, the returned values the report retains keep their live hold
+in the root, and reconstruction holds the named results' live bytes; `RunReport::encode_results`
+charges each `zkc.entry-outputs/0` buffer, which keeps its live allowance until
+it is dropped. `HostLimits` selects the run's external, Ring and sequence work
+and the loading work of each input loading; `with_ring_work_limit` sets the
+same Ring allowance.
+
+Retained Host calls transport already typed ordinary values from admitted
+outputs or calculations without repeating external constructor checks. They
+still check exact schemas, Copy/Drop permissions and custody. A whole sealed ordinary
+value may pass under its export policy, including as a child input; this grants
+no external byte constructor or public SDK field projection. Public SDK selection
+and input assembly through a sealed or inaccessible ancestor remain forbidden. Logical values, handles and
+custody cannot be supplied by assembling ordinary Host fields. Public source
+values still require canonical binding codecs. Setup-bearing context values
+arrive through external context maps and retain recursive constructor checks;
+the explicit builtin key initializer supplies keys separately.
+
+The native SDK represents inaccessible ordinary subtrees as
+`Value::Opaque(OpaqueValue)`. Its private storage originates only in admitted
+output reconstruction; public schema metadata cannot mint an owner. Whole-value
+input transport compares the complete admitted schema, including nominal
+identity, permissions, sealing, field visibility and zero-storage element
+metadata. Mismatch returns `entry-value-schema`. The encapsulation unit is the
+defining source authority that the
+[nominal identity](../language/definitions.md#nominal-authority) binds: an
+opaque value of a library type keeps passing between programs whose clients
+differ, while a homonymous or structurally equal type from other source bytes,
+a changed private dependency of the library, or a comment edit in its defining
+closure has a different identity and refuses. The SDK compares published
+identities and computes no revision; transport authorizes no construction. Hand-built transparent values
+retain external constructor checks. Native reports remove raw returned values
+after named reconstruction, including on failure, so they do not provide a
+second projection route.
+
+`OpaqueValue::field` and `variant_field` check the current unsealed ancestor and
+public child before returning a separately protected value. Unknown or private
+fields and sealed/associated projections return `entry-value-projection`; a
+wrong active alternative returns `entry-value-alternative`. An unsealed variant
+may expose its alternative name. `leaf` opens only an admitted native scalar or
+builtin kind, never a record or associated representation. Debug prints opaque
+type metadata without storage. These are source encapsulation rules; schema
+metadata and artifact bytes are public, and this makes no cryptographic hiding
+claim.
+
+Generated Rust bindings retain one opaque owner for such types, with checked
+public getters and no public representation fields or external constructor.
+Their conversion fingerprint is SHA-256 of the compact UTF-8 JSON encoding of
+the existing ordinary schema description, with every object's keys recursively
+sorted in ascending UTF-8 string order; arrays retain their declared order.
+The entire description participates, including authority metadata, nested fields,
+alternative payloads and zero-length element templates. Downstream JSON
+map-storage features do not change these bytes. Transport independently checks
+complete schema equality. Transparent bindings retain ordinary public fields. Neither generated metadata nor a matching layout
+grants source construction authority.
+
+Readable JSON export checks public visibility and sealing recursively, including
+inactive variant alternatives and zero-length element templates. Construction
+permission alone does not control output inspection: an entirely accessible
+nonconstructible result can export through its public fields and existing native
+leaf codecs. An inaccessible aggregate returns `entry-output-opaque` before
+encoding. No source whole-record opaque codec is declared by the current
+interface, and a native leaf codec cannot authorize opening its containing
+record. Input JSON remains external construction and cannot recreate retained
+owners. The low-level `BackendRun` adapter has no source opaque result owner and
+refuses inaccessible output schemas with `entry-backend-opaque` before native
+execution; the generic Runtime backend API retains its physical contract.
+
 ## Named proof calls
 
 `entry::ProofEntry::admit` authenticates the same package/interface boundary and
-binds the exact deployment through `NativeDeployment`. Inputs retain the source
-constructor requirement and outputs must be copyable without affine custody.
+binds the exact deployment through `NativeDeployment`. External inputs retain the
+recursive source constructor requirement; outputs must be copyable without affine custody. Operation-specific admission checks
+only the selected participant's consumed inputs and outputs, together with its
+public binding inputs. An unconsumed prover witness does not require a verifier
+constructor or input codec. Whole-artifact admission checks both participants.
 `prove` and `verify` take separate `ProofRequest` values; the verifier receives
 only its own inputs and the candidate proof. Neither method needs a live peer.
 The SDK supplies public values once through `ProofRequest::public`; `private`
@@ -219,23 +388,38 @@ contains only nonpublic inputs and external service budgets. The source adapter
 assembles shared operands from these public values. Private overrides refuse;
 native admission still checks canonical agreement. Setup imports may reuse
 identical canonical bytes under the same authorized pin within an invocation;
-each native operand retains its usual resource charge.
+each native operand retains its usual resource charge. Each call has one
+[invocation root](capacity.md#invocation-ledgers), which the byte selections
+of `ProofOptions::capacity` bound, created at its preflight or at `prove`,
+`verify` or `prove_attempts`. It charges decoded request documents,
+output-setup imports, conversion, loading, the binding root, every attempt's
+proof buffer, the returned values the call retains, reconstruction, every
+result encoding and every rendering of the report's diagnostics. The selected
+role's runner, and each attempt's runner, charge their bytes to it and keep
+their own fuel.
 
 `preflight_document_call` owns common request assembly: requested output codecs
 are checked before loading documents, public data precedes the witness, and
 the selected role's services are checked before ordinary call preflight.
 `preflight_memory_call` and `files::Documents::preflight_call` use this path with
 the same schema decoder. Memory references resolve only explicit named bytes;
-they confer no filesystem access. Candidate proof bytes enter `ProofCall::execute`
+they confer no filesystem access. Each is one wire frame, and together they are
+bounded by the named-reference allowance (`ProofOptions::material`), not by a
+runner's capacity; more refuses with `entry-request-limit`. Candidate proof bytes enter `ProofCall::execute`
 after document preflight. `ProofCall::check_inputs` validates the assembled
 request without executing or issuing resources.
 
 An admitted CPU proof Entry can retain immutable numerical imports across calls,
-bounded by the smaller admitted live/total value-byte ceiling. Reuse requires
+bounded by its retained-import allowance (`ProofOptions::material`,
+[Host allowances](capacity.md#host-allowances)), not by a runner's capacity.
+Reuse requires
 exact bytes, independent pins, fixed bounds and installation; prover imports also
 match the selected verifier snapshot and material fingerprint. Replacement
-invalidates affected imports before validation. Adapters replacing named input
-bytes call `invalidate_prover_inputs`; setup replacement uses `invalidate_setup`.
+invalidates affected imports before validation. A prover import from a named
+input records that source with the setup pin it feeds; an adapter replacing a
+named input's bytes calls `invalidate_input(name)`, which clears exactly the pins
+that input fed and keeps every other slot's import. Setup replacement uses
+`invalidate_setup`.
 Eviction or disabled retention never grants authority or changes a valid import's
 meaning. Every invocation retains its own charges and reservations.
 
@@ -267,8 +451,13 @@ and cleanup details.
 `ProofResult::encode_results` returns a borrowed `EncodedResults` envelope;
 `encode_results_owned` on an `Arc<ProofResult>` returns `OwnedEncodedResults`.
 Both retain the original result's custody and charged encoded storage through
-publication or transport copying. Encoding failure publishes no partial buffer.
-Callers check the execution report separately from encoding and delivery.
+publication or transport copying. Each encoding charges its new buffer to the
+call's invocation root, and nothing else. Encoding failure publishes no partial
+buffer. `ProofResult::copy_bytes`, `copy_proof` and `OwnedEncodedResults::copy`
+take copies for readers outside the call, and `retain_bytes` holds storage a
+reader keeps with the result, such as rendered diagnostics; each charges the
+same root. Callers check the execution report separately from encoding and
+delivery.
 
 ## Attempts and operational defaults
 
@@ -283,10 +472,13 @@ otherwise it refuses with `entry-attempt-completion`. The adapter resolves that
 logical selector to its checked original native output and delegates to the
 existing attempt controller. `AttemptOptions` supplies count (default one) and
 per-attempt proof-byte ceiling (default the native proof limit). The admitted
-`ProofOptions::capacity` supplies cumulative interpreter work and payload limits;
-external work keeps its existing Host ceiling. Native policy admission checks all
-limits before loading resources. No raw native port policy is needed in the
-source API; direct IR callers retain the native API.
+`ProofOptions::capacity` supplies the runner's instruction and iteration fuel,
+cumulative across the attempts, and its invocation root bounds every attempt's
+bytes; external, Ring and sequence work keep their [Host allowances](capacity.md#host-allowances).
+Native policy admission checks all limits before loading resources. No raw native
+port policy is needed in the source API; direct IR callers retain the native API.
+A producing proof child of a Function takes the same explicit authorization from
+`FunctionOptions::attempts`, keyed by its static deployment.
 
 The authenticated Entry interface and independent source comparison own the
 completion selection. It is an application policy, so the native artifact does
@@ -302,7 +494,8 @@ RNG input/successor pairs. Extending that ingress needs its own custody mapping.
 Neither the final proof nor the policy digest establishes the retry distribution.
 
 An omitted declared service budget uses `entry::DEFAULT_DRAW_BUDGET` (1,000,000),
-the current native admission ceiling. `ProofRequest::transcript_budget` is optional:
+the default and maximum of the [service-draw allowance](capacity.md#host-allowances).
+`ProofRequest::transcript_budget` is optional:
 omission uses that allowance for derived construction and zero for authored jobs.
 Explicit values, including zero, override defaults. A nonzero explicit transcript
 budget for an authored job still refuses. Unknown service names and attempts to
@@ -338,12 +531,15 @@ Only small inline scalar parameters key records; public collections can feed
 ordinary computations without being retained as keys.
 
 Reuse requires the exact admitted executable, identical backend policy and
-remaining runtime/backend capacities that dominate the original initial
-allowances. Native checkpoints also require the same immutable catalog and
-execution-authorization view, including exact timing grants. An authorization
-change prevents replay even when numerical policy and capacities are unchanged.
-Reuse replays cumulative work and allocation charges, advances frame
-IDs, and installs returned backing through the ordinary live-storage ledger.
+remaining runtime/backend capacities, including the invocation root's byte
+allowances, that dominate the original initial allowances. Native checkpoints
+also require the same immutable catalog and execution-authorization view,
+including exact timing grants. An authorization change prevents replay even when
+numerical policy and capacities are unchanged. Reuse replays cumulative work and
+allocation charges into the runner and, as the original evaluation charged
+them, into the invocation root, advances frame IDs, and installs returned
+backing through the ordinary live-storage ledger. A runner whose root pools
+fuel, as a Function's children do, reuses nothing.
 Otherwise execution follows the original body, including failure location,
 partial usage and cleanup. Failed evaluations are never retained. Reaching a
 store ceiling merely prevents another record. A successful fallback replaces
@@ -381,13 +577,21 @@ performs native admission, key import, resource issuance or execution.
 Source compilation accepts `--no-simplify`, `--release-storage`,
 `--no-finite-bulk`, `--fuse-vector-reductions`, `--fuse-collect-fold` and
 `--no-calculation-batching` for
-`compile`, `run`, `prove`, `verify` and `bindings`, including dry runs.
+`compile`, `run`, `prove`, `verify`, `bindings` and `common-inputs`, including dry runs.
 The resulting package records all six choices. These
 options are refused by `check`, `inspect`, `prepare` and pinned-package
 invocations. Vector reduction fusion defaults to false and follows the
 [preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).
 Collect–fold fusion defaults to false and follows the
 [numerical realization contract](../ir/computation.md#collectfold-composition).
+
+`common-inputs` selects a Function Entry and one of its static Run deployments
+(`--deployment=ID`), decodes one named input document per role
+(`--input=ROLE=FILE`), prepares that Run without issuing resources and writes
+the [common-input context](../formats/input-bindings.md#production) those inputs
+determine to `--output`. Its report gives the context SHA-256; the application
+distributes that pin through its own trusted context. Disagreeing participants
+refuse with `input-binding-Value` and publish nothing.
 
 `zkc.entry-inspection/0` reports Entry/protocol/toolchain, role ports, services,
 setup names, proof selections and input group schemas. Input schemas are derived
@@ -472,8 +676,7 @@ though they have no native leaves. Unknown fields refuse. Verification rejects
 
 Booleans use JSON Boolean values; unit uses null; tuples and arrays use arrays;
 records use exact field-name objects. Variants contain exactly `case` and `fields`,
-with numeric names for positional fields. Associated representations are
-transparent. Fields and indices use canonical unsigned decimal strings: zero is
+with numeric names for positional fields. Associated representations have no public structural decoder or projection. Fields and indices use canonical unsigned decimal strings: zero is
 `"0"`, other values have no leading zeros. Signs, fractions, exponents, numeric
 JSON and out-of-range values refuse; there is no modular reduction. A
 [binary-field](../domains/values.md#binary-fields) element is never a decimal:
@@ -515,6 +718,10 @@ Diagnostics name a logical input path when
 readable decoding or reference resolution fails, without printing input values.
 
 For proof commands, whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
+One call's key files, like the setup files of all deployments in an
+`--invocations` document, are together bounded by the setup material
+allowance; a file the remaining allowance cannot hold refuses with
+`entry-setup-limit`.
 Independent authority comes from `--setups=FILE`, containing exactly
 `format: "zkc.entry-setups/0"` and a `keys` map of expected setup identities.
 Service overrides use `--service=ROLE.NAME=COUNT`; context and transcript budget
@@ -618,6 +825,29 @@ fails at `Assets`, and an invalid native context or resource budget fails at
 `Preparation`. Native preparation can also reject malformed input values.
 Execution failures and cleanup remain in the report.
 
+Conditions that more than one Entry kind can meet have one code and one phase
+in run, proof and Function entries alike (`EntryCondition`):
+
+| Condition | Code | Phase |
+|---|---|---|
+| The interface document is malformed | `entry-interface-format` | `Interface` |
+| The interface does not identify the package original | `entry-interface-identity` | `Interface` |
+| An input or Function parameter type has custody or cannot be copied | `entry-input-custody` | `Interface` |
+| A request or invocation context names an unknown role | `entry-input-roles` | `Request` |
+| Named inputs, Function arguments or context inputs do not cover their ports exactly | `entry-input-names` | `Request` |
+| A prover-key port receives a value that is not a prover key | `entry-input-key` | `Request` |
+| A service allowance names an unknown service | `entry-service-names` | `Request` |
+| A service or selected transcript draw allowance exceeds the installed maximum | `entry-service-budget` | `Preparation` |
+
+Request-shape conditions are checked before draw allowances in every kind, so
+a request with both defects reports its shape. Function preparation checks
+every deployment's invocation context with the same conditions and phases as
+the child Entry would. A condition only one kind can meet keeps that kind's
+code, such as `entry-host-context` for a Function context that does not cover
+the static deployments. When a reached child refuses, the Function failure keeps
+the child's code and its `EntryError`, with phase and schema path, in
+`FunctionFailure::entry`.
+
 ## Function execution
 
 `FunctionEntry` admits an authenticated `zkc.host/0` package and its entire static
@@ -629,23 +859,59 @@ while native result constructors and service/setup authority remain restricted.
 
 `PreparedFunction` executes only reached Host control and calls. Numerical work
 uses `LocalRunner`; native joint/proof work uses its existing Host. One shared
-`ExecutionLedger` charges work and conservative retained payload reservations
-before effects across the outer invocation and child VM instances. Parent values
-remain reserved while children run. Native wire/proof, sequence, Ring and external
-work retain their native owners and invocation-wide remaining allowances. This
-is payload/work policy, not a process RSS guarantee.
+`ExecutionLedger`, the invocation root that `FunctionOptions::limits.capacity`
+bounds, charges work and conservative retained payload reservations before effects
+across the outer invocation and child VM instances. Parent values remain
+reserved while children run. This is payload/work policy, not a process RSS
+guarantee. `FunctionReport::invocation_ledger` exposes the ledger, and
+`FunctionResultEncoder::encode_report` charges result encoding to it.
 
-The selected live-byte limit covers the whole Entry invocation. Before starting
-one native child, the Host subtracts live parent reservations and assigns half
-of the remainder to child runners, divided equally across a joint roster. The
-other half remains available for bounded native transport and result transfer.
-Each runner reserves its entire assigned allowance until its results and native
-report are released. Numerical results acquire a parent reservation before the
-child releases its own. This conservative policy can refuse a nested computation
-that fits a standalone runner under the same capacity record; element ceilings
-are not completion guarantees. A smaller result does not increase the child's
-working allowance. [Shared execution policy](capacity.md#shared-invocation-execution-policy)
-defines ownership and cumulative charges. Dynamic repartitioning is not performed.
+The interpreter and every reached child runner charge their instructions and
+loop iterations to one cumulative meter in that root, an invocation-scope
+[allowance](capacity.md#host-allowances) that the capacity record's
+`instructions` and `iterations` select: by default 1,000,000 instructions and
+100,000 iterations, at most 2^32 of each. The interpreter charges one
+instruction per call and operation and one iteration per loop step. A Function
+invocation's aggregate work must be bounded across its children, so its
+runners pool their fuel there: a reached child's runners charge the meter and
+keep no fuel of their own, so the meter is their only fuel limit, and a child
+it stops stops with its own limit stop. A standalone run or proof instead gives
+each runner its own fuel from the same record fields, and its root meters no
+instruction. When the interpreter's own charge finds a meter exhausted, the
+failure names it: `entry-host-instruction-limit` or
+`entry-host-iteration-limit`. The
+Function's own storage and work in the root refuse with
+`entry-host-bytes-limit` or `entry-host-work-limit`
+([root refusals](capacity.md#root-refusals)).
+
+`FunctionOptions::limits` is the same Host policy record a standalone run
+admits. Each reached child receives what remains of its dispatch, wire, external,
+Ring and sequence allowances after earlier children, divided equally across a
+joint roster; its fuel is the pooled meter. A producing proof child applies the explicit attempt authorization
+that `FunctionOptions::attempts` names for its deployment, exactly as
+`ProofEntry::prove_attempts` does; admission refuses an authorization for an
+unknown deployment (`entry-host-attempts`), a verifying deployment
+(`entry-attempt-operation`) or a proof without a completion choice
+(`entry-attempt-completion`). Proof children retain and reuse the deployment's
+admitted setup material across calls under the standalone proof Entry's rules,
+and observe setup replacement the same way.
+
+Preparation validates every deployment's context, including deployments the
+call never reaches. The validation decodes and imports real material, so it
+charges the invocation root; a reached child's loading is a second real
+allocation and charges the root again.
+
+The record's live, fresh and logical selections (`FunctionOptions::limits.capacity`)
+cover the whole Entry invocation, children included. Every child runner charges
+its bytes to the Function's root as it executes, beside the parent's
+reservations, native transport and the other runners of a joint roster, so a
+nested computation can reach the limit that the same computation alone would
+not. Numerical results move to the parent with the live hold of their bytes,
+and the parent charges their new metadata; a proof or run child's results stay
+reserved until the parent holds its own checked typed result. Element ceilings
+are not completion guarantees.
+[Shared execution policy](capacity.md#shared-invocation-execution-policy)
+defines ownership and cumulative charges.
 
 `FunctionOptions::service_draws` bounds the sum of child service allowances
 reserved before issuance. Its default is 64,000,000 (64 native default
@@ -655,8 +921,12 @@ is not refunded; `service_allowances` and actual `service_draws` are separate
 reported quantities.
 
 A terminal report separates its successful typed source value from failure,
-cumulative usage and a bounded payload-free call journal. A child failure
-retains the reached call path and native stop/cleanup evidence. Successful
+cumulative usage and a bounded payload-free call journal. Its rendering reports
+the root's usage as `invocation` ([reported usage](capacity.md#reported-usage)),
+including the pooled meter, and the Function's own dispatch, wire, proof,
+external, Ring, sequence and service counters as `usage`. Each call receipt
+keeps its child's own usage and the root's usage when the child ended. A child
+failure retains the reached call path and native stop/cleanup evidence. Successful
 intermediate values are not publication roots. No implicit retries, parallel
 calls or caching change source order. Semantic verification rejection returns
 Rejected without verifier outputs; framing, stop, input and cleanup failures

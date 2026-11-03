@@ -12,6 +12,8 @@ import re
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, typed_value, write_json
+from bridges.common import source_format
+from bridges.common.replacement import replace_exactly_once
 
 
 class ScopedSuite(Suite):
@@ -21,8 +23,8 @@ class ScopedSuite(Suite):
     def subject(self, name):
         fixture = ROOT / 'compiler/test/fixtures/structured-source/scoped-control.zkc'
         original = self.command(name + ':emit', [
-            self.tools['compiler'], 'language-emit', '--source-format=zkc',
-            f'--module=scoped_control={fixture}', '--subject=scoped_control::' + name])
+            self.tools['compiler'], 'language-emit',
+            *source_format.with_option([f'--module=scoped_control={fixture}', '--subject=scoped_control::' + name])])
         symbol = re.search(r'"protocol.func"[^\n]*sym_name = "([^"]+)"', original)[1]
         return self.export(name, original, symbol)
 
@@ -51,7 +53,9 @@ def domain_cases(suite):
     fixtures = ROOT / 'compiler/test/fixtures/structured-source'
     source = (fixtures / 'tuple-domains.mlir').read_text()
     for kind in ('product', 'zip'):
-        subject = suite.export('domain-' + kind, source.replace('domain_product', 'domain_' + kind))
+        domain_source = source if kind == 'product' else replace_exactly_once(
+            source, 'domain_product', 'domain_zip')
+        subject = suite.export('domain-' + kind, domain_source)
         for index, (left, right) in enumerate([([], []), ([], [3]), ([2, 7], [1, 4]), ([2], [1, 4])]):
             expected = ['stopped', 'refused']
             if kind == 'product' or len(left) == len(right):
@@ -74,7 +78,7 @@ def domain_cases(suite):
                 if output.strip() or 'structured-reference-capacity' not in diagnostic:
                     raise AssertionError({'output': output, 'diagnostic': diagnostic})
             suite.case('product-capacity-is-diagnostic', capacity_refusal)
-    unused = source.replace('    %pairs =',
+    unused = replace_exactly_once(source, '    %pairs =',
         '    %unused = "data.domain_zip"(%left,%right) : (!data.domain<!F>,!data.domain<!F>)->!data.domain<!F,!F>\n    %pairs =')
     subject = suite.export('unused-domain-admission', unused)
     suite.case('unused-domain-admission', lambda: suite.compare(subject, 'unused-domain-admission',
@@ -88,9 +92,9 @@ def domain_cases(suite):
 
 def reference_depth_cases(suite):
     fixtures = ROOT / 'compiler/test/fixtures/structured-source'
-    for kind, stem, ty, base in [
-        ('collection', 'map-declarations', '!F', 6),
-        ('computation', 'realization-projection', '!V', 4),
+    for kind, stem, ty, base, marker in [
+        ('collection', 'map-declarations', '!F', 6, ' func.func private @square('),
+        ('computation', 'realization-projection', '!V', 4, ' func.func private @value('),
     ]:
         original = (fixtures / (stem + '.mlir')).read_text()
         for reverse in (False, True):
@@ -106,14 +110,11 @@ func.return %r : {ty} }}''')
                 if reverse:
                     helpers.reverse()
                 if kind == 'collection':
-                    source = original.replace('func.call @square', f'func.call @h{last}')
+                    source = replace_exactly_once(original, 'func.call @square', f'func.call @h{last}')
                 else:
-                    source = original.replace('   func.return %xs',
+                    source = replace_exactly_once(original, '   func.return %xs',
                         f'   %r = func.call @h{last}(%xs) : (!V)->!V\n   func.return %r')
-                marker = ' func.func private'
-                if marker not in source or source == original:
-                    raise AssertionError('reference-depth fixture did not change')
-                source = source.replace(marker, '\n'.join(helpers) + '\n' + marker, 1)
+                source = replace_exactly_once(source, marker, '\n'.join(helpers) + '\n' + marker)
                 label = f'{kind}-wire-depth-{edges}-reverse-{reverse}'
                 if edges <= 64:
                     suite.case(label, lambda n=label, s=source: suite.export(n, s))
@@ -153,9 +154,9 @@ def run_cases(suite):
     helpers = re.findall(r'"func.call"[^\n]*callee = @([^}>]+)', source)
     if len(helpers) != 2 or helpers[0] == helpers[1]:
         raise AssertionError('expected two distinct branch callbacks')
-    redirected = source.replace('callee = @' + helpers[0], 'callee = @temporary_swap', 1)
-    redirected = redirected.replace('callee = @' + helpers[1], 'callee = @' + helpers[0], 1)
-    redirected = redirected.replace('callee = @temporary_swap', 'callee = @' + helpers[1], 1)
+    redirected = replace_exactly_once(source, 'callee = @' + helpers[0], 'callee = @temporary_swap')
+    redirected = replace_exactly_once(redirected, 'callee = @' + helpers[1], 'callee = @' + helpers[0])
+    redirected = replace_exactly_once(redirected, 'callee = @temporary_swap', 'callee = @' + helpers[1])
     for label, changed in [('swapped-entry-operands', swapped), ('retargeted-branch', redirected)]:
         subject = suite.export(label, changed, subjects['Choose'][2][3])
         suite.case(label, lambda s=subject, n=label: suite.evaluate(s, n, ['7', '11', True], 11))
@@ -168,7 +169,7 @@ def run_cases(suite):
       func.return %value : !algebra.field<"bn254.fr">
     }
 '''
-    dormant = source.replace(marker, helper + marker, 1)
+    dormant = replace_exactly_once(source, marker, helper + marker)
     path = suite.directory / 'dormant-instruction.mlir'
     path.write_text(dormant)
     request = suite.directory / 'dormant-inputs.json'

@@ -3,7 +3,6 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
@@ -14,10 +13,10 @@
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
@@ -29,20 +28,21 @@ struct StaticData {
 };
 class Exporter {
 public:
-  Exporter(ModuleOp module, StringRef original, const json::Value &descriptor,
+  Exporter(ModuleOp module, const EvmEndpoint &endpoint,
            const NativeProofPolicy &policy, const EvmLimits &limits)
-      : module(module), original(original), descriptor(descriptor),
-        policy(policy), limits(limits), layouts(*module.getContext()),
-        arithmetic(layouts, limits), wire(layouts, limits), out(text) {}
+      : module(module), endpoint(endpoint), policy(policy), limits(limits),
+        layouts(*module.getContext()), arithmetic(layouts, limits),
+        wire(layouts, limits), out(text) {}
   Expected<std::string> run();
 
 private:
   ModuleOp module;
-  StringRef original;
-  const json::Value &descriptor;
+  const EvmEndpoint &endpoint;
   const NativeProofPolicy &policy;
   const EvmLimits &limits;
   NativeLayouts layouts;
+  /// The realized transcript suite of the checked policy, when it has one.
+  std::optional<TranscriptRealization> realizedSuite;
   detail::Arithmetic arithmetic;
   WireGenerator wire;
   std::string text;
@@ -147,6 +147,10 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   json::Array steps;
   unsigned depth = 0;
   for (const auto &step : origin->path) {
+    // A branch step carries its alternative; the EVM transcript has no
+    // selected-control occurrence encoding, so it must not become an apply.
+    if (step.kind == protocol::NativeOriginStep::Kind::Branch)
+      return refuse(op, "unsupported selected-control transcript origin");
     bool repeat = step.kind == protocol::NativeOriginStep::Kind::Repeat;
     depth += repeat;
     steps.push_back(
@@ -169,8 +173,10 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   } else {
     return refuse(op, "unsupported transcript occurrence kind");
   }
-  auto prefix = encodeLogicalTree(
-      json::Array{"zkc.native-origin/0", origin->entry, std::move(steps)});
+  // The five-element origin: the coordinates and the event follow the three
+  // static elements.
+  auto prefix = encodeLogicalTreePrefix(
+      json::Array{"zkc.native-origin/0", origin->entry, std::move(steps)}, 5);
   auto suffix = encodeLogicalTree(std::move(event));
   if (!prefix || !suffix) {
     if (!prefix)
@@ -182,7 +188,6 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   if (prefix->size() + suffix->size() + 9 + depth * 29 > 4096)
     return refuse(op,
                   "origin template exceeds the bounded transition workspace");
-  (*prefix)[1] = 5; // Five-slot origin, first three fields encoded here.
   unsigned coordinates = op.getNumOperands() - 2;
   Value coordinateData = op.getOperand(coordinates);
   Value coordinateLength = op.getOperand(coordinates + 1);
@@ -508,126 +513,42 @@ LogicalResult Exporter::function(func::FuncOp function) {
 
 LogicalResult Exporter::outer(func::FuncOp function) {
   const bool hasTranscript = !policy.suite.empty();
-  if ((hasTranscript &&
-       policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0") ||
-      !policy.construction.empty() ||
+  if (endpoint.transcript != hasTranscript)
+    return refuse(function, "endpoint differs from managed transcript policy");
+  if (hasTranscript) {
+    auto realized =
+        realizeTranscript(layouts, *module.getContext(), policy.suite);
+    if (!realized)
+      return refuse(function, "unsupported checked construction policy: " +
+                                  toString(realized.takeError()));
+    realizedSuite = *realized;
+  }
+  if (!policy.construction.empty() ||
       (!hasTranscript && (!policy.services.empty() || !policy.draws.empty() ||
                           !policy.gates.empty())) ||
       policy.format != protocol::ProofFormat::Native)
     return refuse(function, "unsupported checked construction policy");
-  const auto *descriptorRows = descriptor.getAsArray();
-  const auto *rows = descriptorRows && descriptorRows->size() == 9
-                         ? (*descriptorRows)[4].getAsArray()
-                         : nullptr;
-  if (!rows ||
-      (*descriptorRows)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
-      (*descriptorRows)[1] != encodeNativeProofPolicy(policy))
-    return refuse(function,
-                  "invalid descriptor or checked construction policy");
-  auto logicalAttr = function->getAttrOfType<TypeAttr>("evm.logical_type");
-  auto logical = logicalAttr ? dyn_cast<FunctionType>(logicalAttr.getValue())
-                             : FunctionType();
-  auto ports = function->getAttrOfType<ArrayAttr>("evm.output_ports");
-  if (!logical || !ports)
-    return refuse(function, "missing checked endpoint interface");
-  auto transcriptType = [&](Type type) {
-    auto capability = dyn_cast<runtime::CapabilityType>(type);
-    return capability &&
-           capability.getKind() == runtime::CapabilityKind::Transcript &&
-           capability.getIdentity() ==
-               "hash-chain.keccak256.bls12-381.fr64be/0" &&
-           capability.getIdentity() == policy.suite;
-  };
-  // Descriptors are a neutral publication boundary. Compare the complete
-  // checked source public rows (role, original port, nominal type and codec),
-  // then compare native endpoint types through the same export adapter.
-  auto originalModule =
-      parseSourceString<ModuleOp>(original, module.getContext());
-  if (!originalModule)
-    return refuse(function, "invalid original source at descriptor boundary");
-  protocol_ir::MathematicalOp originalEntry;
-  originalModule->walk([&](protocol_ir::MathematicalOp candidate) {
-    if (candidate.getSymName() == policy.entry)
-      originalEntry = candidate;
-  });
-  if (!originalEntry)
-    return refuse(function, "descriptor entry is absent from original source");
-  json::Array expectedRows;
-  for (auto [port, type] :
-       enumerate(originalEntry.getFunctionType().getInputs())) {
-    auto roles = cast<ArrayAttr>(originalEntry.getInputRoles()[port]);
-    bool publicPort = llvm::any_of(roles, [&](Attribute role) {
-      return cast<StringAttr>(role).getValue() == policy.validator;
-    });
-    if (!publicPort || isa<protocol_ir::ServiceReferenceType>(type))
-      continue;
-    auto neutral = protocol::encodeBoundType(type, false);
-    if (!neutral) {
-      consumeError(neutral.takeError());
-      return refuse(function, "cannot export complete source public type");
-    }
-    auto codec =
-        protocol::nativeDataFrame(*neutral) ? StringRef("zkc.native-data/0")
-        : neutral->kind == "field_array" ? StringRef("zkc.native-field-array/0")
-                                         : protocol::defaultCodec(*neutral);
-    expectedRows.push_back(json::Array{policy.validator, std::to_string(port),
-                                       neutral->spelling(), codec});
-  }
-  if (expectedRows != *rows)
-    return refuse(function,
-                  "public rows differ from complete original source interface");
-  if (logical.getNumInputs() != rows->size() + unsigned(hasTranscript) ||
-      logical.getNumResults() != ports.size() + unsigned(hasTranscript))
-    return refuse(function, "unconsumed endpoint inputs or affine results");
-  if (hasTranscript && (!transcriptType(logical.getInputs().back()) ||
-                        !transcriptType(logical.getResults().back())))
-    return refuse(function, "endpoint differs from managed transcript policy");
+  // The endpoint's checked schemas, expanded to the target's lanes.
   SmallVector<Type> inputs, outputs;
-  for (auto [i, row] : enumerate(*rows)) {
-    auto *port = row.getAsArray();
-    Type type = logical.getInput(i);
-    auto layout = layouts.get(type);
+  for (const auto &input : endpoint.publicInputs) {
+    auto layout = layouts.get(input.type);
     if (!layout) {
       consumeError(layout.takeError());
       return refuse(function, "unsupported public layout");
     }
-    auto neutral = protocol::encodeBoundType(type, false);
-    if (!neutral) {
-      consumeError(neutral.takeError());
-      return refuse(function, "cannot export complete endpoint public type");
-    }
-    if (!port || port->size() != 4 ||
-        (*port)[2].getAsString() != neutral->spelling())
-      return refuse(function, "public schema differs from endpoint signature");
     append_range(inputs, (*layout)->lanes);
   }
-  std::optional<unsigned> acceptance;
-  for (auto [i, port] : enumerate(ports)) {
-    auto source = dyn_cast<IntegerAttr>(port);
-    if (!source || source.getInt() < 0)
-      return refuse(function, "invalid checked output projection");
-    if (source.getUInt() >= originalEntry.getFunctionType().getNumResults() ||
-        originalEntry.getFunctionType().getResult(source.getUInt()) !=
-            logical.getResult(i))
-      return refuse(function,
-                    "output projection differs from original source types");
-    if (i && cast<IntegerAttr>(ports[i - 1]).getUInt() >= source.getUInt())
-      return refuse(function,
-                    "output projection is not in canonical source order");
-    if (source.getUInt() == policy.acceptance) {
-      if (acceptance || !logical.getResult(i).isSignlessInteger(1))
-        return refuse(function, "selected acceptance is not one Boolean");
-      acceptance = outputs.size();
-    }
-    auto layout = layouts.get(logical.getResult(i));
+  unsigned acceptance = 0;
+  for (auto [i, type] : enumerate(endpoint.results)) {
+    auto layout = layouts.get(type);
     if (!layout) {
       consumeError(layout.takeError());
       return refuse(function, "unsupported or affine data result");
     }
+    if (i == endpoint.acceptance)
+      acceptance = outputs.size();
     append_range(outputs, (*layout)->lanes);
   }
-  if (!acceptance)
-    return refuse(function, "selected acceptance is absent from endpoint");
   unsigned generation = outputs.size();
   if (hasTranscript) {
     inputs.push_back(IntegerType::get(module.getContext(), 64));
@@ -637,20 +558,7 @@ LogicalResult Exporter::outer(func::FuncOp function) {
       function.getResultTypes() != ArrayRef<Type>(outputs))
     return refuse(function,
                   "expanded endpoint signature differs from logical lanes");
-  json::Array root{"zkc.native-proof-binding/0",
-                   "sha256",
-                   (*descriptorRows)[2],
-                   toHex(SHA256::hash(arrayRefFromStringRef(original)), true),
-                   policy.entry,
-                   policy.producer,
-                   policy.validator,
-                   descriptor};
-  auto prefix = encodeLogicalTree(std::move(root));
-  if (!prefix) {
-    consumeError(prefix.takeError());
-    return failure();
-  }
-  (*prefix)[1] = 10;
+  const std::string *prefix = &endpoint.rootPrefix;
   if (prefix->size() + 18 > limits.rootBytes)
     return refuse(
         function,
@@ -663,7 +571,8 @@ LogicalResult Exporter::outer(func::FuncOp function) {
          "evm_decode(7) }\n"
       << "if iszero(eq(calldataload(4), 96)) { evm_decode(8) }\n"
       << "let count := calldataload(100)\n"
-      << "if iszero(eq(count, " << rows->size() << ")) { evm_decode(9) }\n"
+      << "if iszero(eq(count, " << endpoint.publicInputs.size()
+      << ")) { evm_decode(9) }\n"
       << "evm_calldata(132, mul(count, 32))\n"
       << "let root := evm_alloc(" << limits.rootBytes << ")\n";
   copyStatic(*prefix, "root");
@@ -672,11 +581,8 @@ LogicalResult Exporter::outer(func::FuncOp function) {
       << "let next := add(132, mul(count, 32))\nlet publicBytes := 0\n";
   SmallVector<std::string> arguments;
   unsigned index = 0;
-  for (const json::Value &value : *rows) {
-    auto *row = value.getAsArray();
-    if (!row || row->size() != 4 || !(*row)[2].getAsString())
-      return refuse(function, "invalid public row");
-    Type type = logical.getInput(index);
+  for (const auto &input : endpoint.publicInputs) {
+    Type type = input.type;
     auto decoder = wire.decoder(type);
     if (!decoder) {
       auto reason = toString(decoder.takeError());
@@ -687,13 +593,7 @@ LogicalResult Exporter::outer(func::FuncOp function) {
       consumeError(layout.takeError());
       return refuse(function, "unsupported public layout");
     }
-    auto rowPrefix =
-        encodeLogicalTree(json::Array{(*row)[0], (*row)[1], (*row)[2]});
-    if (!rowPrefix) {
-      consumeError(rowPrefix.takeError());
-      return failure();
-    }
-    (*rowPrefix)[1] = 4;
+    const std::string *rowPrefix = &input.rowPrefix;
     // Each dynamic element head is relative to the element-head base 132.
     out << "if iszero(eq(calldataload(" << 132 + 32 * index
         << "), sub(next, 132))) { evm_decode(8) }\n"
@@ -803,7 +703,7 @@ LogicalResult Exporter::outer(func::FuncOp function) {
   if (hasTranscript)
     out << "if iszero(eq(mload(0xa0), rootScope)) { evm_fault(5) }\n";
   out << "if iszero(eq(mload(0x80), rootScope)) { evm_fault(5) }\n"
-      << "mstore(0, " << results[*acceptance] << ") return(0, 32)\n";
+      << "mstore(0, " << results[acceptance] << ") return(0, 32)\n";
   return success();
 }
 
@@ -830,7 +730,8 @@ Expected<std::string> Exporter::run() {
     return zkc::error("evm.yul",
                       "could not emit canonical invocation boundary");
   out << "}\n";
-  out << detail::runtimeHelpers(limits);
+  out << detail::runtimeHelpers(
+      limits, realizedSuite ? &realizedSuite->challenge->modulus : nullptr);
   for (auto function : module.getOps<func::FuncOp>())
     if (failed(this->function(function)))
       return zkc::error("evm.yul", "could not emit target function");
@@ -840,20 +741,170 @@ Expected<std::string> Exporter::run() {
     out << "data \"" << item.name << "\" hex\"" << toHex(item.bytes, true)
         << "\"\n";
   out << "}\n}\n";
-  // Ethereum selector uses Keccak, calculated from the fixed public signature.
-  // This constant is independently checked by the ABI conformance test.
+  // The installed target declaration states the selector, and its validators
+  // check it against the Keccak-256 of the declared signature.
   const std::string marker = "@SELECTOR@";
   size_t at = text.find(marker);
   if (at != std::string::npos)
-    text.replace(at, marker.size(), "a488e1e4");
+    text.replace(at, marker.size(), evm_target::abiSelector);
   return std::move(text);
 }
 } // namespace
 
-Expected<std::string> exportYul(ModuleOp module, StringRef original,
-                                const json::Value &descriptor,
+Expected<EvmEndpoint>
+describeEndpoint(FunctionType logical, ArrayRef<uint64_t> inputPorts,
+                 ArrayRef<uint64_t> outputPorts, const json::Value &descriptor,
+                 const NativeProofPolicy &policy, StringRef originalSha256) {
+  auto refuse = [](const Twine &reason) {
+    return zkc::error("evm.endpoint", reason);
+  };
+  const auto *descriptorRows = descriptor.getAsArray();
+  const auto *rows = descriptorRows && descriptorRows->size() == 9
+                         ? (*descriptorRows)[4].getAsArray()
+                         : nullptr;
+  if (!logical || !rows ||
+      (*descriptorRows)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
+      (*descriptorRows)[1] != encodeNativeProofPolicy(policy))
+    return refuse("invalid descriptor or checked construction policy");
+  EvmEndpoint endpoint;
+  endpoint.transcript = !policy.suite.empty();
+  const unsigned capabilities = endpoint.transcript;
+  if (inputPorts.size() != rows->size() ||
+      logical.getNumInputs() != rows->size() + capabilities ||
+      logical.getNumResults() != outputPorts.size() + capabilities)
+    return refuse("unconsumed endpoint inputs or affine results");
+  auto transcriptType = [&](Type type) {
+    auto capability = dyn_cast<runtime::CapabilityType>(type);
+    return capability &&
+           capability.getKind() == runtime::CapabilityKind::Transcript &&
+           capability.getIdentity() == policy.suite;
+  };
+  if (endpoint.transcript && (!transcriptType(logical.getInputs().back()) ||
+                              !transcriptType(logical.getResults().back())))
+    return refuse("endpoint differs from managed transcript policy");
+  NativeLayouts layouts(*logical.getContext());
+  // Each checked row names the validator, the projected original port and
+  // the endpoint input's nominal type; its codec is the construction's.
+  for (auto [i, value] : enumerate(*rows)) {
+    Type type = logical.getInput(i);
+    if (auto layout = layouts.get(type); !layout)
+      return layout.takeError();
+    auto neutral = protocol::encodeBoundType(type, false);
+    if (!neutral) {
+      consumeError(neutral.takeError());
+      return refuse("cannot export complete endpoint public type");
+    }
+    auto *row = value.getAsArray();
+    if (!row || row->size() != 4 ||
+        (*row)[0].getAsString() != StringRef(policy.validator) ||
+        (*row)[1].getAsString() != StringRef(std::to_string(inputPorts[i])) ||
+        (*row)[2].getAsString() != StringRef(neutral->spelling()) ||
+        !(*row)[3].getAsString())
+      return refuse("public row differs from the endpoint's checked port");
+    // The four-element public row: the value bytes follow.
+    auto prefix = encodeLogicalTreePrefix(
+        json::Array{(*row)[0], (*row)[1], (*row)[2]}, 4);
+    if (!prefix)
+      return prefix.takeError();
+    endpoint.publicInputs.push_back({type, std::move(*prefix)});
+  }
+  std::optional<unsigned> acceptance;
+  for (auto [i, port] : enumerate(outputPorts)) {
+    if (i && outputPorts[i - 1] >= port)
+      return refuse("output projection is not in canonical source order");
+    Type type = logical.getResult(i);
+    if (port == policy.acceptance) {
+      if (acceptance || !type.isSignlessInteger(1))
+        return refuse("selected acceptance is not one Boolean");
+      acceptance = i;
+    }
+    if (auto layout = layouts.get(type); !layout) {
+      consumeError(layout.takeError());
+      return refuse("unsupported or affine data result");
+    }
+    endpoint.outputs.push_back(port);
+    endpoint.results.push_back(type);
+  }
+  if (!acceptance)
+    return refuse("selected acceptance is absent from endpoint");
+  endpoint.acceptance = *acceptance;
+  json::Array root{"zkc.native-proof-binding/0",
+                   "sha256",
+                   (*descriptorRows)[2],
+                   originalSha256,
+                   policy.entry,
+                   policy.producer,
+                   policy.validator,
+                   descriptor};
+  // The ten-element root: the public rows and the context follow the eight
+  // static elements.
+  auto prefix = encodeLogicalTreePrefix(root, 10);
+  if (!prefix)
+    return prefix.takeError();
+  endpoint.rootPrefix = std::move(*prefix);
+  return endpoint;
+}
+
+Expected<EvmEndpoint> describeEndpoint(const CheckedEndpoint &checked,
+                                       const json::Value &descriptor,
+                                       const NativeProofPolicy &policy,
+                                       StringRef originalSha256) {
+  auto refuse = [](const Twine &reason) {
+    return zkc::error("evm.endpoint", reason);
+  };
+  auto source = checked.sourceSnapshot();
+  auto candidate = checked.candidateSnapshot();
+  SmallVector<protocol_ir::ParticipantOp> participants;
+  candidate->walk(
+      [&](protocol_ir::ParticipantOp op) { participants.push_back(op); });
+  if (participants.size() != 1 ||
+      participants.front().getRole() != policy.validator)
+    return refuse("expected exactly one selected validator endpoint");
+  auto participant = participants.front();
+  // The checked projection record assigns one participant to each role of
+  // the participant's instance; its ports are the validator's original ports.
+  auto ports = [](DictionaryAttr record,
+                  StringRef key) -> std::optional<SmallVector<uint64_t>> {
+    auto values = record.getAs<ArrayAttr>(key);
+    if (!values)
+      return std::nullopt;
+    SmallVector<uint64_t> result;
+    for (Attribute value : values) {
+      auto port = dyn_cast<IntegerAttr>(value);
+      if (!port || port.getInt() < 0)
+        return std::nullopt;
+      result.push_back(port.getUInt());
+    }
+    return result;
+  };
+  unsigned matches = 0;
+  std::optional<SmallVector<uint64_t>> inputs, outputs;
+  source->walk([&](protocol_ir::ProjectionOp record) {
+    for (Attribute item : record.getInterfaces()) {
+      auto interface = dyn_cast<DictionaryAttr>(item);
+      auto roles =
+          interface ? interface.getAs<ArrayAttr>("participants") : ArrayAttr();
+      if (!roles || interface.get("source") != participant.getInstanceAttr())
+        continue;
+      for (Attribute role : roles) {
+        auto mapping = dyn_cast<DictionaryAttr>(role);
+        if (!mapping || mapping.get("role") != participant.getRoleAttr())
+          continue;
+        ++matches;
+        inputs = ports(mapping, "inputs");
+        outputs = ports(mapping, "outputs");
+      }
+    }
+  });
+  if (matches != 1 || !inputs || !outputs)
+    return refuse("no checked projection of the selected endpoint");
+  return describeEndpoint(participant.getFunctionType(), *inputs, *outputs,
+                          descriptor, policy, originalSha256);
+}
+
+Expected<std::string> exportYul(ModuleOp module, const EvmEndpoint &endpoint,
                                 const NativeProofPolicy &policy,
                                 const EvmLimits &limits) {
-  return Exporter(module, original, descriptor, policy, limits).run();
+  return Exporter(module, endpoint, policy, limits).run();
 }
 } // namespace zkc::evm

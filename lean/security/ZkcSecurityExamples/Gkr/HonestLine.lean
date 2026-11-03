@@ -116,7 +116,7 @@ theorem line_coefficients (values start finish : List F) (width : Nat)
     (shape : values.length = 2 ^ width)
     (capacity : 2 ^ width * (width + 1) < indexLimit)
     (startBound : start.length < indexLimit) (finishBound : finish.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper69Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper102Helper
       (Goals.Line.Inputs.pack (Value := assignment F G) { values, start, finish, width }) =
       .done (Goals.Line.encode (ringModel F G) ⟨pack (width + 1) (stage values start finish width)⟩) := by
   have countBound : width + 1 < indexLimit :=
@@ -159,7 +159,7 @@ theorem coefficients_correspond (width : Nat) (values start finish : List F)
     (table : Table F width) (decoded : ofList? width values = some table)
     (startSize : start.length = width) (finishSize : finish.length = width)
     (capacity : 2 ^ width * (width + 1) < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper69Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper102Helper
       (Goals.Line.Inputs.pack (Value := assignment F G) { values, start, finish, width }) =
       .done (Goals.Line.encode (ringModel F G) ⟨row (width + 1)
         (linePolynomial width table (coordinates width start) (coordinates width finish))⟩) := by

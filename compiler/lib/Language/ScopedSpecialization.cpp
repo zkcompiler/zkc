@@ -271,7 +271,8 @@ class SpecializationCheck {
       const auto &op = original.operations[i];
       const auto &out = actual.operations[i];
       if (!same(op.span, out.span) || op.statement != out.statement ||
-          op.site != out.site || !same(out.results, mapped(op.results)))
+          op.site != out.site || op.expression != out.expression ||
+          !same(out.results, mapped(op.results)))
         return refuse(op.span, "operation occurrence differs");
       if (bool(op.binding) != bool(out.binding))
         return refuse(op.span, "call witness coverage differs");
@@ -283,7 +284,13 @@ class SpecializationCheck {
             a.target.declaration.index != b.target.declaration.index ||
             !same(b.operands, mapped(a.operands)) || a.symbol != b.symbol ||
             a.family != b.family || a.scopedSource != b.scopedSource ||
-            a.argumentOrder != b.argumentOrder ||
+            a.argumentOrder != b.argumentOrder || a.roles != b.roles ||
+            a.services.size() != b.services.size() ||
+            a.installedSignature != b.installedSignature ||
+            a.intrinsicSource != b.intrinsicSource ||
+            bool(a.lexicalOwner) != bool(b.lexicalOwner) ||
+            (a.lexicalOwner &&
+             a.lexicalOwner->index != b.lexicalOwner->index) ||
             a.scopedArguments != b.scopedArguments ||
             a.domainArguments != b.domainArguments ||
             bool(a.target.module) != bool(b.target.module) ||
@@ -292,6 +299,9 @@ class SpecializationCheck {
             bool(a.origin) != bool(b.origin) ||
             (a.origin && !same(*a.origin, *b.origin)))
           return refuse(op.span, "call evidence differs");
+        for (unsigned i = 0; i < a.services.size(); ++i)
+          if (a.services[i].index != b.services[i].index)
+            return refuse(op.span, "invocation service roots differ");
         if (a.target.module &&
             !typeEqual(*a.target.module, *b.target.module, subst, op.span))
           return false;
@@ -698,8 +708,15 @@ class SpecializationCheck {
               return map(action.condition).index == value.condition.index &&
                      action.owner == value.owner &&
                      same(value.values, mapped(action.values));
-            else if constexpr (std::is_same_v<T, LocalControl>) {
-              if (action.kind != value.kind ||
+            else if constexpr (std::is_same_v<T, Control>) {
+              if (action.roles != value.roles ||
+                  action.services.size() != value.services.size() ||
+                  !std::equal(action.services.begin(), action.services.end(),
+                              value.services.begin(),
+                              [](ServiceId a, ServiceId b) {
+                                return a.index == b.index;
+                              }) ||
+                  action.kind != value.kind ||
                   action.carried != value.carried ||
                   action.alternatives != value.alternatives ||
                   action.regions.size() != value.regions.size() ||
@@ -725,7 +742,7 @@ class SpecializationCheck {
                 selectedDomains.push_back(
                     {value.domainShapes[j], std::move(*bound)});
               }
-              const bool loop = action.kind == LocalControl::Kind::For;
+              const bool loop = action.kind == Control::Kind::For;
               unsigned header = loop ? 2 : 1;
               auto operands = mapped(action.operands);
               if (operands.size() < header)
@@ -755,7 +772,18 @@ class SpecializationCheck {
                   if (!(*inputs)[k] || k >= closed.values.size() ||
                       closed.values[k].type !=
                           actual.values[(*inputs)[k]->index].type ||
-                      !closed.values[k].components.empty())
+                      (original.mode == Body::Mode::Local &&
+                       !closed.values[k].components.empty()) ||
+                      (original.mode == Body::Mode::Math &&
+                       closed.values[k].components !=
+                           std::vector<unsigned>{k}) ||
+                      (original.mode == Body::Mode::Protocol &&
+                       (closed.values[k].components !=
+                            actual.values[(*inputs)[k]->index].components ||
+                        closed.values[k].placement !=
+                            actual.values[(*inputs)[k]->index].placement ||
+                        closed.values[k].oracleHolder !=
+                            actual.values[(*inputs)[k]->index].oracleHolder)))
                     return false;
                 auto expectedOperands = operands;
                 for (auto input : ArrayRef(*inputs).drop_front(region.inputs)) {
@@ -1276,6 +1304,8 @@ namespace zkc::language {
 llvm::Error checkScopedSpecialization(const ClosedEntry &entry,
                                       const Limits &limits) {
   if (auto error = checkLimits(limits))
+    return error;
+  if (auto error = checkScopedElaboration(entry.project(), limits))
     return error;
   detail::Work work{limits};
   return detail::SpecializationCheck(entry, work).run();

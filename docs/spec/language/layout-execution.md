@@ -3,9 +3,10 @@
 `CaptureOptions.format = "zkc-layout"` selects the development frontend for
 captured source files. The compiler CLI exposes the same selection through
 `--source-format=zkc-layout`. This format selection participates in the capture
-identity. Installation sources retain their installed syntax. The default
-project/Rust SDK frontend remains `zkc` until production migration; this is a
-migration entry, not a permanent compatibility language.
+identity. Installation sources retain their installed syntax. A project selects
+it with `source-format = "zkc-layout"` in every manifest of its closure, and
+explicit SDK and CLI module maps name it the same way; this is a migration
+entry, not a permanent compatibility language.
 
 The [layout parser](layout-syntax.md) feeds the existing native name, type,
 role, resource, effect and specialization checkers. It does not translate text
@@ -22,6 +23,10 @@ The development entry supports:
   and group domains.
 - Mathematical `def`, ordered `local def`, and Host `entry def`; named/static
   arguments, ordinary structural inference, and mathematical final expressions.
+- Canonical home-module methods on nominal receivers, including generic aliases;
+  see [method binding](definitions.md#arguments-and-inference). The existing
+  direct logical-family profile admits protocol methods only when the receiver
+  uniquely determines every declared role.
 - Oracle custody ports, ordered query and delivery, dynamic shape bounds,
   holder and shape views, and bounded oracle sequences; see the
   [oracle source profile](oracles.md) for exact coverage.
@@ -39,8 +44,9 @@ The development entry supports:
   imports fix the syntax environment before body parsing; type resolution does
   not select a parse.
 - Pure bindings and mutable updates, ordered calls, reached guards,
-  single-recipient sends, local branches/matches/loops, and bounded protocol
-  repetition with checked participants and a bounded maximum.
+  single-recipient sends, selected Math/Protocol branches and matches, Local
+  control, and bounded Protocol repetition with checked participants and a
+  bounded maximum.
 
 The maintained [Schnorr source](../../../compiler/test/fixtures/layout/schnorr.zkc)
 exercises the real compiler and Rust Host through
@@ -179,9 +185,13 @@ multiple-recipient sends, scoped lambdas/reductions, and local notation declarat
 currently group declarations; imports and notation belong to their enclosing
 module. A standalone bodyless protocol is rejected.
 
-The existing mathematical IR has no ordered regions. Total mathematical
-branches/loops and participant-owned protocol branches therefore still need
-their selected lowering; they are not reclassified as local computation.
-Local structured control and bounded protocol repetition use the existing
-checked operations. Completing these projections, formal integration, and
-migrating current source consumers are prerequisites for production cutover.
+[Selected control](selected-control.md) retains Math and Protocol if/match
+as registered closed regions with exact captures, placements and yields.
+Source checking, common-input derivation and independent original comparison
+are distinct from installed executable lowering. The native selected-region
+implementation is a dependency of emission; a missing registration refuses
+explicitly. Total finite loops use admitted finite consumers, while Local
+structured control and bounded Protocol repetition retain their existing
+operations. Executable Math scope adapters, input binding, selected
+oracle/security profiles and independent formal consumers remain separate
+production-cutover gates.

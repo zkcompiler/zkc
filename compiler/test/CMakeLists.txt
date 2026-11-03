@@ -35,6 +35,27 @@ endfunction()
 add_zkc_test(representation_formation IR representation-formation)
 mlir_target_link_libraries(zkc-representation_formation-test PRIVATE MLIRAsmParser)
 add_zkc_test(role_assembly CpuTarget role-assembly)
+add_zkc_test(language_value_placement Language language-value-placement)
+add_zkc_test(language_invocation_provenance Language language-invocation-provenance)
+add_zkc_test(language_selected_control Compiler language-selected-control)
+add_zkc_test(language_common_recurrence Compiler language-common-recurrence)
+mlir_target_link_libraries(zkc-language_common_recurrence-test PRIVATE MLIRParser)
+zkc_source_project(zkc-language_common_recurrence-test
+  "${PROJECT_SOURCE_DIR}/../libraries/core/algebra/zkc.toml")
+add_zkc_test(language_selected_native Compiler language-selected-native)
+mlir_target_link_libraries(zkc-language_selected_native-test PRIVATE MLIRParser MLIRPass)
+set_tests_properties(language-selected-native PROPERTIES SKIP_RETURN_CODE 77)
+foreach(target zkc-language_selected_control-test zkc-language_selected_native-test)
+  target_compile_definitions(${target} PRIVATE
+    ZKC_SELECTED_CONTROL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/selected-control")
+endforeach()
+add_zkc_test(language_record_transport Language language-record-transport)
+add_zkc_test(language_record_native_transport Translation language-record-native-transport)
+mlir_target_link_libraries(zkc-language_record_native_transport-test PRIVATE MLIRParser MLIRAsmParser)
+add_zkc_test(language_placed_records Language language-placed-records)
+add_zkc_test(language_record_source_transport Compiler language-record-source-transport)
+mlir_target_link_libraries(zkc-language_record_source_transport-test PRIVATE MLIRParser MLIRAsmParser)
+add_zkc_test(language_record_inference Language language-record-inference)
 add_zkc_test(algebra_constants IR algebra-constants)
 mlir_target_link_libraries(zkc-algebra_constants-test PRIVATE MLIRParser MLIRTransformUtils MLIRTensorDialect)
 add_zkc_test(data_constants IR data-constants)
@@ -49,8 +70,10 @@ mlir_target_link_libraries(zkc-oracle_virtual-test PRIVATE MLIRParser)
 add_zkc_test(oracle_protocol Transforms oracle-protocol)
 mlir_target_link_libraries(zkc-oracle_protocol-test PRIVATE MLIRParser MLIRPass MLIRTransforms)
 add_zkc_test(structured_data IR structured-data)
-add_zkc_test(structured_declarations Translation structured-declarations)
+add_zkc_test(structured_declarations Compiler structured-declarations)
 mlir_target_link_libraries(zkc-structured_declarations-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-structured_declarations-test PRIVATE
+  ZKC_RECURSIVE_RECORDS="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language-interface/recursive-records.zkc")
 add_zkc_test(service_signatures IR service-signatures)
 mlir_target_link_libraries(zkc-service_signatures-test PRIVATE MLIRAsmParser)
 add_zkc_test(oracle_kinds IR oracle-kinds)
@@ -108,6 +131,8 @@ mlir_target_link_libraries(zkc-language_role_assembly-test PRIVATE MLIRParser)
 add_zkc_test(source_requests Source source-requests)
 target_compile_definitions(zkc-source_correspondence-test PRIVATE
   ZKC_CORRESPONDENCE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")
+zkc_source_project(zkc-source_correspondence-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/structured-source/map-callers.toml")
 add_zkc_test(structured_associations Compiler structured-associations)
 target_compile_definitions(zkc-structured_associations-test PRIVATE
   ZKC_ASSOCIATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
@@ -295,6 +320,20 @@ mlir_target_link_libraries(zkc-late_maps-test PRIVATE MLIRParser)
 add_zkc_test(language_package CpuTarget language-package)
 add_zkc_test(asset_sharing Compiler asset-sharing)
 add_zkc_test(language_interface CpuTarget language-interface)
+add_zkc_test(common_interface CpuTarget common-interface)
+zkc_source_project(zkc-common_interface-test
+  "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
+add_zkc_test(language_record_custody CpuTarget language-record-custody)
+mlir_target_link_libraries(zkc-language_record_custody-test PRIVATE MLIRParser MLIRTransforms)
+add_zkc_test(language_distributed_succession CpuTarget language-distributed-succession)
+target_compile_definitions(zkc-language_distributed_succession-test PRIVATE
+  ZKC_SUCCESSION_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/distributed-succession.zkc")
+mlir_target_link_libraries(zkc-language_distributed_succession-test PRIVATE MLIRParser)
+add_zkc_test(language_recursive_interface CpuTarget language-recursive-interface)
+mlir_target_link_libraries(zkc-language_recursive_interface-test PRIVATE MLIRParser)
+add_test(NAME language-record-interface-source COMMAND zkc-language_recursive_interface-test
+  --source "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language-interface/recursive-records.zkc")
+set_tests_properties(language-record-interface-source PROPERTIES LABELS native)
 add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_expression_assets Language language-expression-assets)
 zkc_source_project(zkc-language_expression_assets-test
@@ -306,6 +345,17 @@ mlir_target_link_libraries(zkc-language_asset_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_specifications Language language-specifications)
 add_zkc_test(language_bundle_relations CpuTarget language-bundle-relations)
 add_zkc_test(language_entries Language language-entries)
+add_zkc_test(language_entry_components Compiler language-entry-components)
+add_zkc_test(language_roster_capacity CpuTarget language-roster-capacity)
+add_zkc_test(language_role_bounds Compiler language-role-bounds)
+add_zkc_test(installed_declarations Language installed-declarations)
+add_zkc_test(language_entry_components_interface Compiler language-entry-components-interface)
+target_compile_definitions(zkc-language_entry_components_interface-test PRIVATE
+  ZKC_ENTRY_COMPONENT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/ordinary.zkc")
+add_zkc_test(language_entry_components_translation Translation language-entry-components-translation)
+mlir_target_link_libraries(zkc-language_entry_components_translation-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-language_entry_components_translation-test PRIVATE
+  ZKC_ENTRY_COMPONENT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/ordinary.zkc")
 add_zkc_test(language_sites CpuTarget language-sites)
 add_zkc_test(construction_binding Compiler construction-binding)
 target_compile_definitions(zkc-construction_binding-test PRIVATE
@@ -328,6 +378,7 @@ set_tests_properties(language-entry-ir PROPERTIES LABELS native)
 add_zkc_test(language_specification_ir CpuTarget language-specification-ir)
 mlir_target_link_libraries(zkc-language_specification_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_natural Language language-natural)
+add_zkc_test(language_semantic_budget Language language-semantic-budget)
 add_zkc_test(language_names Language language-names)
 target_link_libraries(zkc-language_names-test PRIVATE utf8proc::utf8proc)
 target_compile_definitions(zkc-language_names-test PRIVATE
@@ -386,8 +437,25 @@ zkc_source_project(zkc-source_instances-test
 add_zkc_test(source_bindings Language source-bindings)
 zkc_source_project(zkc-source_bindings-test
   "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
+# Source authorities are cross-checked over every maintained package and
+# compiler source fixture.
+add_zkc_test(source_authority Language source-authority)
+file(GLOB_RECURSE source_authority_inputs CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/../libraries/zkc.toml"
+  "${PROJECT_SOURCE_DIR}/../examples/projects/zkc.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/*.zkc")
+set(source_authority_packages "${CMAKE_CURRENT_BINARY_DIR}/source-authority-packages.json")
+execute_process(COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/support/source_packages.py" "${source_authority_packages}"
+  COMMAND_ERROR_IS_FATAL ANY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${source_authority_inputs} "${CMAKE_CURRENT_SOURCE_DIR}/support/source_packages.py")
+target_compile_definitions(zkc-source_authority-test PRIVATE
+  ZKC_SOURCE_PACKAGES="${source_authority_packages}")
 add_zkc_test(notation_semantics Language notation-semantics)
 add_zkc_test(language_arguments CpuTarget language-arguments)
+add_zkc_test(language_methods CpuTarget language-methods)
+mlir_target_link_libraries(zkc-language_methods-test PRIVATE MLIRParser)
 add_zkc_test(language_logic CpuTarget language-logic)
 add_zkc_test(language_presentation Language language-presentation)
 add_zkc_test(language_lexical CpuTarget language-lexical)
@@ -396,7 +464,7 @@ add_zkc_test(language_admission CpuTarget language-admission)
 add_zkc_test(language_placement CpuTarget language-placement)
 add_zkc_test(language_types CpuTarget language-types)
 add_zkc_test(language_oracle_types Language language-oracle-types)
-add_zkc_test(language_logical_records Compiler language-logical-records)
+add_zkc_test(language_logical_records Language language-logical-records)
 add_zkc_test(language_logical_record_layout CpuTarget language-logical-record-layout)
 add_zkc_test(language_logical_record_contracts Compiler language-logical-record-contracts)
 add_zkc_test(language_oracle_ports Compiler language-oracle-ports)
@@ -410,6 +478,8 @@ mlir_target_link_libraries(zkc-language-test PRIVATE MLIRParser)
 target_compile_definitions(zkc-language-test PRIVATE
   ZKC_LANGUAGE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language")
 add_zkc_test(run CpuTarget run-api)
+target_compile_definitions(zkc-run-test PRIVATE
+  ZKC_CONTROL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/control")
 add_zkc_test(run_preservation CpuTarget run-preservation)
 mlir_target_link_libraries(zkc-run_preservation-test PRIVATE MLIRParser)
 add_zkc_test(public_coin CpuTarget public-coin-api)
@@ -472,6 +542,14 @@ target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE
   ${MLIR_INCLUDE_DIRS} ${PROJECT_BINARY_DIR}/include)
 mlir_target_link_libraries(zkc-type_adapter_ambiguity-test PRIVATE MLIRIR)
 add_zkc_test(contract_inventory Contracts)
+# The owners built from the generated installed-instance and native
+# installation tables, and the CPU target, EVM wire and source checker
+# behavior over their rows.
+add_zkc_test(installed_instances EvmTarget installed-instances)
+target_link_libraries(zkc-installed_instances-test PRIVATE ZkcCpuTarget)
+target_compile_definitions(zkc-installed_instances-test PRIVATE
+  ZKC_INSTALLED_INSTANCES_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contracts/installed-instances.json")
+mlir_target_link_libraries(zkc-installed_instances-test PRIVATE MLIRAsmParser)
 add_zkc_test(contract_conformance Contracts)
 add_test(NAME contract-declarations-generation
   COMMAND ${CMAKE_COMMAND}
@@ -551,6 +629,13 @@ add_zkc_test(algebra_formation IR algebra-formation)
 mlir_target_link_libraries(zkc-algebra_formation-test PRIVATE MLIRParser)
 add_zkc_test(representations Contracts representation-domains)
 add_zkc_test(properties IR registered-properties)
+add_zkc_test(declared_attributes IR declared-attributes)
+add_zkc_test(semantic_fields IR)
+add_test(NAME semantic-fields COMMAND zkc-semantic_fields-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/semantic-fields/inventory.txt")
+set_tests_properties(semantic-fields PROPERTIES LABELS native)
+add_zkc_test(role_consumers Compiler role-consumers)
+mlir_target_link_libraries(zkc-role_consumers-test PRIVATE MLIRParser)
 
 add_zkc_test(diagnostics IR ir-diagnostics)
 add_zkc_test(dialect_registration IR dialect-registration)
@@ -683,6 +768,9 @@ mlir_target_link_libraries(zkc-computation_schedule-test PRIVATE MLIRParser MLIR
 
 add_zkc_test(host_entry CpuTarget host-entry)
 mlir_target_link_libraries(zkc-host_entry-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-host_entry-test PRIVATE
+  ZKC_OPAQUE_HOST_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/opaque.zkc"
+  ZKC_ENTRY_JSON_NODES_FIXTURE="${PROJECT_SOURCE_DIR}/../common/tests/fixtures/entry-json/nodes.json")
 
 add_zkc_test(language_entry_functions Language language-entry-functions)
 add_zkc_test(total_index_recipe Transforms total-index-recipe)
@@ -749,4 +837,16 @@ mlir_target_link_libraries(zkc-evm_layout-test PRIVATE MLIRParser)
 add_zkc_test(evm_wire EvmTarget evm-wire)
 mlir_target_link_libraries(zkc-evm_wire-test PRIVATE MLIRParser)
 
+add_zkc_test(protocol_control Compiler protocol-control)
+target_compile_definitions(zkc-protocol_control-test PRIVATE
+  ZKC_CONTROL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/control")
+mlir_target_link_libraries(zkc-protocol_control-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(common_control_recurrence IR common-control-recurrence)
+mlir_target_link_libraries(zkc-common_control_recurrence-test PRIVATE MLIRParser)
+
+add_zkc_test(selected_math Transforms selected-math)
+target_compile_definitions(zkc-selected_math-test PRIVATE
+  ZKC_CONTROL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/control")
+mlir_target_link_libraries(zkc-selected_math-test PRIVATE MLIRParser MLIRPass)
 add_zkc_test(represented_numerical CpuTarget represented-numerical)

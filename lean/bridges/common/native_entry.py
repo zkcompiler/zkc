@@ -6,19 +6,23 @@ execution count is inferred from a deployment inventory.
 """
 
 import hashlib
-import json
+from pathlib import Path
+import sys
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common import interface as language_interface, source_format  # noqa: E402
 
 
 def native_subject(execute, compiler, flags):
-    """Return original bytes, exact CLI interface bytes, and its parsed view."""
+    """Return original bytes, exact CLI interface bytes, and its decoded view."""
+    source_format.require_option(flags)
     if sum(flag.startswith('--subject=') for flag in flags) != 1 or any(
             flag.startswith(('--entry=', '--entry-kind=')) for flag in flags):
         raise ValueError('a protocol bridge requires one explicit --subject')
     source = execute([compiler, 'language-emit', *flags])
     interface_text = execute([compiler, 'language-interface', *flags])
-    interface = json.loads(interface_text)
-    if (interface.get('format') != 'zkc.language-interface/0'
-            or interface.get('job', {}).get('kind') != 'run'):
+    interface = language_interface.loads(interface_text)
+    if interface['job']['kind'] != 'run':
         raise ValueError('the selected subject is not an interactive protocol')
     if interface['original'] != hashlib.sha256(source.encode()).hexdigest():
         raise ValueError('subject source and interface identities disagree')

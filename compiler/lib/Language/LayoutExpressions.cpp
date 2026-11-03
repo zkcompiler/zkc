@@ -279,6 +279,7 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
     result.text = target.name;
     result.arguments = std::move(target.arguments);
     result.staticLabels = std::move(target.labels);
+    result.roles = std::move(target.roles);
     for (auto field : children(pair[1])) {
       if (auto error = runtimeArgument(field))
         return error;
@@ -358,11 +359,18 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
       if (auto error = region(loop.back()))
         return error;
     } else {
-      auto projected50 = parts(id, 2, 3);
+      auto projected50 = parts(id, 2, 4);
       if (!projected50)
         return projected50.takeError();
       auto control = std::move(*projected50);
-      if (auto error = append(control[0]))
+      if (kind(control[1]) == K::Roles) {
+        auto roster = roles(control[1]);
+        if (!roster)
+          return roster.takeError();
+        result.roles = std::move(*roster);
+        control = control.drop_front();
+      }
+      if (auto error = append(children(id)[0]))
         return error;
       if (kind(id) == K::If) {
         if (auto error = region(control[1]))

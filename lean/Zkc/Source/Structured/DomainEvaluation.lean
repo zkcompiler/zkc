@@ -181,6 +181,10 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
   | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .indexWrappingAdd, .cons a (.cons b .nil), .nil => .done (.cons (wrappingAdd a b) .nil)
+  | .indexWrappingSubtract, .cons a (.cons b .nil), .nil => .done (.cons (wrappingSubtract a b) .nil)
+  | .indexBitAnd, .cons a (.cons b .nil), .nil => .done (.cons (bitAnd a b) .nil)
+  | .indexLogicalShiftRight, .cons a (.cons b .nil), .nil => .done (.cons (logicalShiftRight a b) .nil)
   | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
       .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
@@ -225,6 +229,12 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
       let (initial, captured) := rest.split state
       denoteConditionalLoopOn state captures body lower upper initial captured
   | .guard, .cons condition .nil, .nil => if condition then .done .nil else .halt .reject
+  | .createUnit slot, .nil, .nil =>
+      (observations.createUnit slot).bind fun token => .done (.cons token .nil)
+  | .passUnit slot, .cons token .nil, .nil =>
+      (observations.passUnit slot token).bind fun next => .done (.cons next .nil)
+  | .consumeUnit slot, .cons token .nil, .nil =>
+      (observations.consumeUnit slot token).bind fun _ => .done .nil
 
 -- Generate the dependent equation lemmas in their defining module. Otherwise
 -- separate public clients can export competing lazily generated declarations.

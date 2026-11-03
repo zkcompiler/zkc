@@ -1,6 +1,7 @@
 """Check the neutral catalog's exact schema and independent ABI witnesses."""
 import json
 from pathlib import Path
+import re
 import subprocess
 
 from cases import case, counted
@@ -15,12 +16,68 @@ def main():
                              root / "zkc/Contracts/Declarations.td"],
                             text=True, capture_output=True, check=True)
     catalog = json.loads(result.stdout)
+    physical_keys = {"representations", "appliedRepresentations", "providers",
+                     "providerUnits", "fieldForms", "physicalArguments"}
     with case("exact current envelope at development version zero"):
         assert catalog.keys() == {"format", "sorts", "types", "operations", "members", "rules",
                                   "capabilities", "exports", "families", "associatedTypes",
-                                  "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles"}
+                                  "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles",
+                                  "frontendDeclarations", "frontendRules", "frontendNotations",
+                                  "frontendConstructors", "frontendHomes", "serviceSignatures",
+                                  "serviceMethods",
+                                  "domains", "logicalTypes", "frameTags", "codecs", "aggregateFrames",
+                                  "randomServices", "limits", "finiteDefinitions", "domainConstructors"}
         assert catalog["format"] == "zkc.contract-declarations/0"
         assert '"commonGeneric"' not in result.stdout
+    with case("the declaration inventory holds no physical installation table"):
+        assert not physical_keys & catalog.keys()
+        assert not any(key in row for row in catalog["domains"] + catalog["codecs"]
+                       for key in ("unit", "representation", "provider"))
+    native = subprocess.run([generator, "--dump-native-installation", "-I", root,
+                             "-I", generator.parent / "include",
+                             generator.parent / "include/zkc/Contracts/CompleteInstallation.td"],
+                            text=True, capture_output=True, check=True)
+    installation = json.loads(native.stdout)
+    combined = subprocess.run([generator, "--dump-contract-declarations", "-I", root,
+                               "-I", generator.parent / "include",
+                               generator.parent / "include/zkc/Contracts/CompleteInstallation.td"],
+                              text=True, capture_output=True, check=True)
+    with case("loaded physical records never enter the declaration inventory"):
+        assert json.loads(combined.stdout) == catalog
+    with case("the native installation inventory has its own exact envelope"):
+        assert installation.keys() == {"format"} | physical_keys
+        assert installation["format"] == "zkc.native-installation/0"
+        assert not (catalog.keys() - {"format"}) & installation.keys()
+        for row in installation["representations"]:
+            assert row.keys() == {"identity", "kind", "domain", "default", "layout", "frame", "unit"}
+        for row in installation["appliedRepresentations"]:
+            assert row.keys() == {"constructor", "arguments", "identity", "default", "child", "frame",
+                                  "provider", "unit", "vectorPort"}
+    with case("every dense container declares its calling convention"):
+        dense = [row for row in installation["appliedRepresentations"] if row["child"] is not None]
+        assert dense and all(row["provider"] and row["vectorPort"] for row in dense)
+        assert all(row["provider"] is None and row["vectorPort"] is None
+                   for row in installation["appliedRepresentations"] if row["child"] is None)
+    with case("the native installation names only declared instances"):
+        instances = {(row["kind"], row["domain"]) for row in catalog["logicalTypes"]}
+        assert {(row["kind"], row["domain"]) for row in installation["representations"]} == instances
+        assert {row["domain"] for row in installation["providers"]} == {
+            row["identity"] for row in catalog["domains"]}
+    with case("type rows carry exactly the source-vocabulary columns"):
+        for row in catalog["types"]:
+            assert {"sourceData", "collection", "setup"} <= row.keys()
+            assert row["collection"] is None or row["collection"].keys() == {"rank", "element"}
+        assert {row["name"] for row in catalog["types"] if row["setup"]} == {"prover_key", "verifier_key"}
+    with case("every library finite and domain declaration names a catalog row"):
+        libraries = Path(__file__).resolve().parents[2] / "libraries"
+        named = {"finite": set(), "domain": set()}
+        for source in libraries.rglob("*.zkc"):
+            text = source.read_text()
+            for kind in named:
+                named[kind] |= set(re.findall(kind + r'\("([^"]+)"\)', text))
+        assert named["finite"] and named["domain"]
+        assert named["finite"] <= {row["identity"] for row in catalog["finiteDefinitions"]}
+        assert named["domain"] <= {row["identity"] for row in catalog["domainConstructors"]}
     types = {t["name"]: t for t in catalog["types"]}
     operations = {o["name"]: o for o in catalog["operations"]}
     with case("structured primitive profile preserves its independent consumer ABI"):
@@ -29,17 +86,18 @@ def main():
         assert profile.keys() == {"name", "implementation", "typeConstructors", "parameterValidators", "operations"}
         assert profile["name"] == "structured-source-primitives"
         assert profile["implementation"] == "unselected"
-        assert profile["typeConstructors"] == ["index", "bool", "field", "vector"]
+        assert profile["typeConstructors"] == ["index", "bool", "field", "vector", "resource_unit"]
         assert profile["parameterValidators"] == ["None", "Natural"]
         assert [m["operation"] for m in profile["operations"]] == [
             "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
             "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
-            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"]
+            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed",
+            "resource_unit.create", "resource_unit.pass", "resource_unit.consume"]
         for member in profile["operations"]:
             assert member.keys() == {"operation", "scope", "stage", "parameters", "signature", "requirements"}
             assert all(member[k] == operations[member["operation"]][k] for k in member if k != "operation")
             roots = [t["parameter"] for t in member["scope"] if t["kind"] == "root"]
-            assert roots == ([] if member["operation"].startswith("index.") else [{"kind": "Domain", "sort": "Field"}])
+            assert roots == ([] if member["operation"].startswith("index.") else [{"kind": "Domain", "sort": "Slot" if member["operation"].startswith("resource_unit.") else "Field"}])
         assert operations["field.embed"]["scope"][1] == {"kind": "project", "parent": 0, "member": "BaseField"}
         assert operations["vector.equal"]["requirements"] == [{"capability": "CommRing", "arguments": [0]}]
     meanings = {m["name"]: m for m in catalog["mathematicalIdentities"]}
@@ -89,6 +147,11 @@ def main():
                                     "parameter": {"kind": "Domain", "sort": "Slot"}}]
             port = {"constructor": "resource_unit", "arguments": [0]}
             assert op["signature"] == {"kind": "fixed", "inputs": [port] * ins, "outputs": [port] * outs}
+    with case("only pass declares resource identity succession"):
+        succession = [(op["name"], facet) for op in catalog["operations"]
+                      for facet in op["facets"] if facet["kind"] == "Succession"]
+        assert succession == [("resource_unit.pass",
+                               {"kind": "Succession", "stateInput": 0, "stateOutput": 0})]
     with case("mathematical data retains meanings and independent law obligations"):
         assert meanings["FieldAdd"]["laws"]["associative"] is True
         assert all(intrinsic["identity"] in meanings for intrinsic in catalog["mathematicalIntrinsics"])

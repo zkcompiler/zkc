@@ -173,7 +173,7 @@ def repackedRequest (remaining count : Nat) (table : Table F (remaining + count)
 /-- The observation on the repacked root's own return order. -/
 def repackedObservation (remaining count : Nat) (table : Table F (remaining + count))
     (outputs : Values (Component (assignment F G)) SumcheckRepackedBodies.runSignature.outputs) : Prop :=
-  match outputs.get .here, outputs.get (.there .here) with
+  match outputs.get (.there .here), outputs.get (.there (.there .here)) with
   | some point, some claim => Causal.residualTerminal remaining count table point claim
   | _, _ => False
 

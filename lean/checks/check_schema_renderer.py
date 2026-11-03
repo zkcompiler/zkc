@@ -23,11 +23,14 @@ KIND = ["table", [["type", FIELD], ["nat", "16"]]]
 ORACLE = ["oracle", *KIND]
 NOMINAL = ["tuple", [["atom", "example.Record"], ["atom", "phantom.F"]]]
 PRODUCT = ["variant", NOMINAL, [["make", [BOOLEAN, FIELD]]]]
+# The exported row of the transcript suite the participant controls name.
+SUITE_ROWS = [[["nominal", "merlin3.bls12-381.fr64be/0", "Transcript", [["ChallengeField", "bls12-381.fr"]],
+                ["FieldTranscript", "Transcript"], None]], []]
 
 
 def source(bindings, definitions=None):
     return ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-            "main", [], [], bindings, definitions or [], [], [[], []], [[], []]]
+            "main", [], [], bindings, definitions or [], [], [[], []], [[], [], []]]
 
 
 class NeutralSchema(unittest.TestCase):
@@ -182,7 +185,7 @@ class NeutralSchema(unittest.TestCase):
                     FIELD, ["apply", "indices", []]], [
                     ["apply", "transcript", [["domain", "Transcript", "merlin3.bls12-381.fr64be/0"]]]]],
             [("transcript", "merlin3.bls12-381.fr64be/0"), ("field", "example.F"), ("indices", None)],
-            [("transcript", "merlin3.bls12-381.fr64be/0")]))
+            [("transcript", "merlin3.bls12-381.fr64be/0")], SUITE_ROWS))
         schema.origin_hex(["origin", tree])
         suite = "merlin3.bls12-381.fr64be/0"
         transcript = ["apply", "transcript", [["domain", "Transcript", suite]]]
@@ -196,7 +199,8 @@ class NeutralSchema(unittest.TestCase):
                 ["parameters", ["array", [["parameter", ["origin", origin_tree]]]]],
                 ["site", ["string", "draw"]]])
             return participant.operation("exec.apply", attrs, binding,
-                [("transcript", suite), ("indices", None)], [("field", "bls12-381.fr"), ("transcript", suite)])
+                [("transcript", suite), ("indices", None)], [("field", "bls12-381.fr"), ("transcript", suite)],
+                SUITE_ROWS)
         self.assertIn(".challenge", challenge(tree))
         wrong_method = deepcopy(tree)
         wrong_method[4][5] = "index"
@@ -404,7 +408,7 @@ class MutationControls(unittest.TestCase):
         policy = ["zkc.native-proof-policy/0", "main", "P", "V", "0", suite,
                   ["1"], ["0"], [["query", "delivery"]], "zkc.framed/0", "", []]
         return [participant.FORMAT, "sha256:" + "0" * 64, "sha256:" + "1" * 64, policy,
-                "verifier", [field, transcript], [BOOLEAN, transcript], instructions, [8, 7], []]
+                "verifier", [field, transcript], [BOOLEAN, transcript], instructions, [8, 7], [], SUITE_ROWS]
 
     def test_transcript_controls_remain_applicable_and_readable(self):
         data = self.fixture()
@@ -498,7 +502,7 @@ class MutationControls(unittest.TestCase):
         selection = SimpleNamespace(
             name="fixture", construction_namespace="Fixture.Construction",
             module_name=lambda key: "Fixture." + key.title(),
-            get=lambda _section, _key, default: default)
+            get=lambda _section, _key, default=None: default)
         driver = object.__new__(subject.Driver)
         with patch.object(driver, "lean", capture), self.assertRaises(RenderedOnly):
             driver.construction_rule(selection, {"exported": exported, "original": source([])}, {})

@@ -75,8 +75,8 @@ theorem component_calculation_closed (model : DomainModel) {I : PIR.Signature}
 Both type checks are finite properties of the declared signature. -/
 theorem calculate_encoded (model : DomainModel) (calculation : Calculation)
     (arguments : Values model.Value calculation.op.arguments)
-    (inputData : calculation.op.arguments.all Domain.dataType = true)
-    (outputData : calculation.op.results.all Domain.dataType = true) :
+    (inputData : calculation.op.arguments.all Domain.localType = true)
+    (outputData : calculation.op.results.all Domain.localType = true) :
     Domain.calculate model calculation (Original.encodeHelperResult arguments) =
       (match Domain.closedOutcome (closedCalculation model calculation arguments) with
       | .returned results => .returned (Original.encodeHelperResult results)
@@ -104,8 +104,8 @@ Only the local physical readback remains; the finite check below supplies it.
 -/
 theorem view_calculation (model : DomainModel) (calculation : Calculation)
     (arguments : Values model.Value calculation.op.arguments)
-    (inputData : calculation.op.arguments.all Domain.dataType = true)
-    (outputData : calculation.op.results.all Domain.dataType = true)
+    (inputData : calculation.op.arguments.all Domain.localType = true)
+    (outputData : calculation.op.results.all Domain.localType = true)
     (environment : Domain.Environment model.toCarriers) (references : List Nat)
     (read : Domain.read environment references = Domain.encodeValues arguments) :
     Domain.View.calculation model calculation references (calculation.op.results.map ValueSort.data)
@@ -126,8 +126,8 @@ theorem view_calculation (model : DomainModel) (calculation : Calculation)
 /-- Totality is the existing operation predicate, not an assumed success law. -/
 theorem view_calculation_total (model : DomainModel) (calculation : Calculation)
     (total : calculation.op.total = true) (arguments : Values model.Value calculation.op.arguments)
-    (inputData : calculation.op.arguments.all Domain.dataType = true)
-    (outputData : calculation.op.results.all Domain.dataType = true)
+    (inputData : calculation.op.arguments.all Domain.localType = true)
+    (outputData : calculation.op.results.all Domain.localType = true)
     (environment : Domain.Environment model.toCarriers) (references : List Nat)
     (read : Domain.read environment references = Domain.encodeValues arguments) :
     Domain.View.calculation model calculation references (calculation.op.results.map ValueSort.data)
@@ -143,8 +143,8 @@ not a mathematical formula. Lookup uses admission's actual captured closure.
 theorem view_helper (model : DomainModel) (program : Program) (helper : Helper)
     (present : helper ∈ program.payload.definitions.map CheckedDefinition.helper)
     (arguments : Values model.Value helper.inputs)
-    (inputData : helper.inputs.all Domain.dataType = true)
-    (outputData : helper.outputs.all Domain.dataType = true)
+    (inputData : helper.inputs.all Domain.localType = true)
+    (outputData : helper.outputs.all Domain.localType = true)
     (environment : Domain.Environment model.toCarriers) (references : List Nat)
     (read : Domain.read environment references = Domain.encodeValues arguments) :
     Domain.View.helper model program helper.name references (helper.outputs.map ValueSort.data)
@@ -257,8 +257,8 @@ theorem view_calculation_of_operands (model : DomainModel) (calculation : Calcul
     {environment : Domain.Environment model.toCarriers} {locations : List Original.Location}
     {references : List Nat} (checked : operandReferences locations operands = some references)
     (related : Original.ValuesHolds environment locations values)
-    (inputData : calculation.op.arguments.all Domain.dataType = true)
-    (outputData : calculation.op.results.all Domain.dataType = true) :
+    (inputData : calculation.op.arguments.all Domain.localType = true)
+    (outputData : calculation.op.results.all Domain.localType = true) :
     ∃ arguments : Values model.Value calculation.op.arguments,
       operands.eval values.get = arguments.present ∧
       Domain.View.calculation model calculation references (calculation.op.results.map ValueSort.data)
@@ -278,8 +278,8 @@ theorem view_helper_of_operands (model : DomainModel) (program : Program) (helpe
     {environment : Domain.Environment model.toCarriers} {locations : List Original.Location}
     {references : List Nat} (checked : operandReferences locations operands = some references)
     (related : Original.ValuesHolds environment locations values)
-    (inputData : helper.inputs.all Domain.dataType = true)
-    (outputData : helper.outputs.all Domain.dataType = true) :
+    (inputData : helper.inputs.all Domain.localType = true)
+    (outputData : helper.outputs.all Domain.localType = true) :
     ∃ arguments : Values model.Value helper.inputs,
       operands.eval values.get = arguments.present ∧
       Domain.View.helper model program helper.name references (helper.outputs.map ValueSort.data)
@@ -386,8 +386,8 @@ All encoding and sort laws come from the signature, without a Simulation input.
 -/
 noncomputable def Simulation.closedCalculationOn (model : DomainModel) (routing : Routing)
     (calculation : Calculation) (arguments : Values model.Value calculation.op.arguments)
-    (inputData : calculation.op.arguments.all Domain.dataType = true)
-    (outputData : calculation.op.results.all Domain.dataType = true)
+    (inputData : calculation.op.arguments.all Domain.localType = true)
+    (outputData : calculation.op.results.all Domain.localType = true)
     (state : State model.toCarriers) (environment : Domain.Environment model.toCarriers)
     (references : List Nat) (read : Domain.read environment references = Domain.encodeValues arguments) :
     Simulation (HelperReturns encodeHelperResult state environment) (fun _ frame => frame = environment)

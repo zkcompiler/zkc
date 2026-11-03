@@ -18,7 +18,7 @@ open Tests.StructuredSumcheckVerifierExecution
 theorem zero_reduction_without_service :
     SumcheckReduceViews.program.participant (ZMod 5) (ZMod 5) 1
       (SumcheckReduceVerifier.reduceRootInputs none none (some 0) (some 0) none) =
-        .done (.cons none (.cons none (.cons (some []) (.cons (some 0) .nil)))) := by
+        .done (.cons none (.cons none (.cons (some 0) (.cons (some []) (.cons (some 0) .nil))))) := by
   rw [SumcheckReduceVerifier.verifier_optional]
   rfl
 

@@ -19,7 +19,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "CommRing",
@@ -28,7 +30,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.bool",
@@ -37,7 +41,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.bytes",
@@ -46,7 +52,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.commitment",
@@ -59,7 +67,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.commitments",
@@ -72,7 +82,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.field",
@@ -85,7 +97,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.group",
@@ -98,7 +112,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.groups",
@@ -111,7 +127,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.index",
@@ -120,7 +138,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.indices",
@@ -129,7 +149,9 @@
           "kind": "Domain",
           "sort": "Codec"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.matrix",
@@ -142,7 +164,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.point",
@@ -155,7 +179,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.polynomial",
@@ -168,7 +194,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.proof",
@@ -181,7 +209,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.round",
@@ -194,7 +224,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.table",
@@ -207,7 +239,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Encodes.vector",
@@ -220,7 +254,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "ExtensionField",
@@ -229,7 +265,11 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [
+        "BaseField"
+      ],
+      "permits": []
     },
     {
       "name": "Field",
@@ -238,7 +278,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "FieldTranscript",
@@ -247,7 +289,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Group",
@@ -256,7 +300,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexRandomness",
@@ -265,7 +311,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexBlockRandomness",
@@ -274,7 +322,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexTranscript",
@@ -283,7 +333,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "IndexBlockTranscript",
@@ -292,7 +344,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "MultiOpening",
@@ -301,7 +355,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "MultilinearOpening",
@@ -310,7 +366,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "PairingField",
@@ -319,6 +377,13 @@
           "kind": "Domain",
           "sort": "Field"
         }
+      ],
+      "requires": [
+        "PairingG1",
+        "PairingG2"
+      ],
+      "permits": [
+        "PairingGT"
       ]
     },
     {
@@ -328,7 +393,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "ScalarAction",
@@ -337,7 +404,9 @@
           "kind": "Domain",
           "sort": "Group"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "Transcript",
@@ -346,7 +415,9 @@
           "kind": "Domain",
           "sort": "Transcript"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "TwoAdicField",
@@ -355,7 +426,9 @@
           "kind": "Domain",
           "sort": "Field"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     },
     {
       "name": "VectorCommitment",
@@ -364,7 +437,9 @@
           "kind": "Domain",
           "sort": "Commitment"
         }
-      ]
+      ],
+      "requires": [],
+      "permits": []
     }
   ],
   "exports": [
@@ -4562,7 +4637,13 @@
       "stage": "CompilerGenerated"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "Succession",
+          "stateInput": 0,
+          "stateOutput": 0
+        }
+      ],
       "name": "resource_unit.pass",
       "parameters": {
         "maximum": 0,
@@ -14341,6 +14422,10 @@
   ],
   "types": [
     {
+      "collection": {
+        "element": "parameter",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14359,9 +14444,15 @@
           "sort": ""
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": {
+        "element": "parameter",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14380,9 +14471,12 @@
           "sort": ""
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": false
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14392,9 +14486,15 @@
       "name": "quotient_matrix",
       "nativeLocal": true,
       "parameters": [],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": {
+        "element": "parameter",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14409,9 +14509,12 @@
           "sort": ""
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14421,9 +14524,12 @@
       "name": "bool",
       "nativeLocal": true,
       "parameters": [],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14433,9 +14539,15 @@
       "name": "index",
       "nativeLocal": true,
       "parameters": [],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": {
+        "element": "index",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14445,9 +14557,12 @@
       "name": "indices",
       "nativeLocal": true,
       "parameters": [],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14462,9 +14577,15 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": {
+        "element": "parameter",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14479,9 +14600,15 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": {
+        "element": "parameter",
+        "rank": 2
+      },
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14496,9 +14623,12 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14513,9 +14643,12 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14530,9 +14663,12 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14547,9 +14683,12 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14564,9 +14703,12 @@
           "sort": "Field"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": false,
       "custody": "Affine",
@@ -14581,9 +14723,12 @@
           "sort": "Field"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": false
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": false,
       "custody": "Affine",
@@ -14598,9 +14743,12 @@
           "sort": "Field"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": false
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14615,9 +14763,15 @@
           "sort": "Group"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": {
+        "element": "parameter",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14632,9 +14786,12 @@
           "sort": "Group"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": false,
       "custody": "Affine",
@@ -14649,9 +14806,12 @@
           "sort": "Transcript"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14666,9 +14826,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14683,9 +14846,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14700,9 +14866,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14717,9 +14886,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14734,9 +14906,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": "prover",
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14751,9 +14926,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": "verifier",
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14768,9 +14946,12 @@
           "sort": "Commitment"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": false,
       "custody": "Affine",
@@ -14785,9 +14966,15 @@
           "sort": "Slot"
         }
       ],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": false
     },
     {
+      "collection": {
+        "element": "byte",
+        "rank": 1
+      },
       "constructible": true,
       "copy": true,
       "custody": "PublicValue",
@@ -14797,9 +14984,12 @@
       "name": "bytes",
       "nativeLocal": true,
       "parameters": [],
-      "participants": true
+      "participants": true,
+      "setup": null,
+      "sourceData": true
     },
     {
+      "collection": null,
       "constructible": false,
       "copy": true,
       "custody": "PrivateImmutable",
@@ -14809,7 +14999,9 @@
       "name": "shake128_state",
       "nativeLocal": true,
       "parameters": [],
-      "participants": false
+      "participants": false,
+      "setup": null,
+      "sourceData": true
     }
   ],
   "consumerProfiles": [
@@ -14820,7 +15012,8 @@
         "index",
         "bool",
         "field",
-        "vector"
+        "vector",
+        "resource_unit"
       ],
       "parameterValidators": [
         "None",
@@ -15441,8 +15634,3857 @@
               "capability": "ExtensionField"
             }
           ]
+        },
+        {
+          "operation": "resource_unit.create",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "S",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Slot"
+              }
+            }
+          ],
+          "stage": "CompilerGenerated",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "resource_unit.pass",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "S",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Slot"
+              }
+            }
+          ],
+          "stage": "CompilerGenerated",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "resource_unit.consume",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "S",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Slot"
+              }
+            }
+          ],
+          "stage": "CompilerGenerated",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "resource_unit"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": []
+          },
+          "requirements": []
         }
       ]
+    }
+  ],
+  "frontendDeclarations": [
+    {
+      "identity": "service.random",
+      "owner": "zkc::prelude",
+      "name": "Random",
+      "kind": "Interface",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [],
+      "output": null,
+      "association": {
+        "kind": "rule",
+        "target": "RandomConstructor"
+      },
+      "implicit": true
+    },
+    {
+      "identity": "prelude.field_add",
+      "owner": "zkc::prelude",
+      "name": "field_add",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.add"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.field_subtract",
+      "owner": "zkc::prelude",
+      "name": "field_subtract",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.sub"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.field_multiply",
+      "owner": "zkc::prelude",
+      "name": "field_multiply",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.mul"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.field_equal",
+      "owner": "zkc::prelude",
+      "name": "field_equal",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "field.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.group_add",
+      "owner": "zkc::prelude",
+      "name": "group_add",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "curve.add"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.group_scale",
+      "owner": "zkc::prelude",
+      "name": "group_scale",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0,
+            "member": "Scalar"
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "curve.scale"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.group_equal",
+      "owner": "zkc::prelude",
+      "name": "group_equal",
+      "kind": "Math",
+      "statics": [
+        {
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "curve.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.boolean_equal",
+      "owner": "zkc::prelude",
+      "name": "boolean_equal",
+      "kind": "Math",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "bool"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "bool"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "bool.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_add",
+      "owner": "zkc::prelude",
+      "name": "index_add",
+      "kind": "Local",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "index"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.add"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_subtract",
+      "owner": "zkc::prelude",
+      "name": "index_subtract",
+      "kind": "Local",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "index"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.sub"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_multiply",
+      "owner": "zkc::prelude",
+      "name": "index_multiply",
+      "kind": "Local",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "index"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.mul"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "prelude.index_equal",
+      "owner": "zkc::prelude",
+      "name": "index_equal",
+      "kind": "Math",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "a",
+          "type": {
+            "constructor": "index"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "constructor": "index"
+          }
+        }
+      ],
+      "output": {
+        "constructor": "bool"
+      },
+      "association": {
+        "kind": "primitive",
+        "target": "index.equal"
+      },
+      "implicit": false
+    },
+    {
+      "identity": "record.unpack",
+      "owner": "zkc::records",
+      "name": "unpack",
+      "kind": "Local",
+      "statics": [
+        {
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "rule",
+        "target": "RecordUnpack"
+      },
+      "implicit": true
+    },
+    {
+      "identity": "record.inspect",
+      "owner": "zkc::records",
+      "name": "inspect_record",
+      "kind": "Local",
+      "statics": [
+        {
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "static": 0
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "rule",
+        "target": "RecordInspect"
+      },
+      "implicit": true
+    },
+    {
+      "identity": "record.repack",
+      "owner": "zkc::records",
+      "name": "repack_record",
+      "kind": "Local",
+      "statics": [
+        {
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        },
+        {
+          "name": "P",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "static": 0
+          }
+        },
+        {
+          "name": "payload",
+          "type": {
+            "static": 1
+          }
+        }
+      ],
+      "output": {
+        "static": 0
+      },
+      "association": {
+        "kind": "rule",
+        "target": "RecordRepack"
+      },
+      "implicit": true
+    }
+  ],
+  "frontendRules": [
+    {
+      "name": "RecordUnpack",
+      "kind": "Local",
+      "statics": [
+        {
+          "kind": "Type",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "static": 0
+        }
+      ],
+      "output": {
+        "static": 0
+      }
+    },
+    {
+      "name": "RecordInspect",
+      "kind": "Local",
+      "statics": [
+        {
+          "kind": "Type",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "static": 0
+        }
+      ],
+      "output": {
+        "static": 0
+      }
+    },
+    {
+      "name": "RecordRepack",
+      "kind": "Local",
+      "statics": [
+        {
+          "kind": "Type",
+          "sort": ""
+        },
+        {
+          "kind": "Type",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "static": 0
+        },
+        {
+          "static": 1
+        }
+      ],
+      "output": {
+        "static": 0
+      }
+    },
+    {
+      "name": "RandomConstructor",
+      "kind": "Interface",
+      "statics": [
+        {
+          "kind": "Domain",
+          "sort": "Field"
+        }
+      ],
+      "inputs": [],
+      "output": null
+    }
+  ],
+  "frontendNotations": [
+    {
+      "owner": "zkc::prelude",
+      "symbol": "+",
+      "fixity": null,
+      "target": "field_add",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "+",
+      "fixity": null,
+      "target": "group_add",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "+",
+      "fixity": null,
+      "target": "index_add",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "-",
+      "fixity": {
+        "associativity": "left",
+        "precedence": 65
+      },
+      "target": "field_subtract",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "-",
+      "fixity": {
+        "associativity": "left",
+        "precedence": 65
+      },
+      "target": "index_subtract",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "*",
+      "fixity": null,
+      "target": "field_multiply",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "*",
+      "fixity": null,
+      "target": "group_scale",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "*",
+      "fixity": null,
+      "target": "index_multiply",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "field_equal",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "group_equal",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "boolean_equal",
+      "public": true
+    },
+    {
+      "owner": "zkc::prelude",
+      "symbol": "==",
+      "fixity": null,
+      "target": "index_equal",
+      "public": true
+    }
+  ],
+  "frontendConstructors": [
+    {
+      "name": "oracle",
+      "form": "OracleHandle"
+    },
+    {
+      "name": "oracle_sequence",
+      "form": "OracleHandleSequence"
+    }
+  ],
+  "frontendHomes": [
+    {
+      "constructor": "vector",
+      "module": "zkc::vector",
+      "members": [
+        "zkc::primitives::vector::append",
+        "zkc::primitives::vector::length",
+        "zkc::primitives::vector::get",
+        "zkc::primitives::vector::sum",
+        "zkc::primitives::vector::product",
+        "zkc::primitives::vector::split",
+        "zkc::primitives::vector::add",
+        "zkc::primitives::vector::hadamard",
+        "zkc::primitives::vector::scale",
+        "zkc::primitives::vector::dot",
+        "zkc::primitives::vector::fill",
+        "zkc::primitives::vector::elements",
+        "zkc::primitives::vector::indices",
+        "zkc::primitives::vector::at",
+        "zkc::primitives::vector::subtract",
+        "zkc::primitives::vector::inverse",
+        "zkc::primitives::vector::geometric",
+        "zkc::primitives::vector::rotate",
+        "zkc::primitives::vector::bit_reverse",
+        "zkc::primitives::vector::bit_reverse_rows",
+        "zkc::primitives::vector::equal",
+        "zkc::primitives::vector::find_last",
+        "zkc::primitives::vector::prefix_sum",
+        "zkc::primitives::vector::prefix_product"
+      ]
+    },
+    {
+      "constructor": "oracle",
+      "module": "zkc::oracles",
+      "members": []
+    },
+    {
+      "constructor": "oracle_sequence",
+      "module": "zkc::oracles",
+      "members": []
+    }
+  ],
+  "serviceSignatures": [
+    {
+      "name": "RandomDraw",
+      "capability": ""
+    },
+    {
+      "name": "RandomIndex",
+      "capability": "IndexRandomness"
+    },
+    {
+      "name": "RandomIndices",
+      "capability": "IndexBlockRandomness"
+    }
+  ],
+  "serviceMethods": [
+    {
+      "name": "draw",
+      "signature": "RandomDraw",
+      "capability": ""
+    },
+    {
+      "name": "index",
+      "signature": "RandomIndex",
+      "capability": "IndexRandomness"
+    },
+    {
+      "name": "indices",
+      "signature": "RandomIndices",
+      "capability": "IndexBlockRandomness"
+    }
+  ],
+  "domains": [
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "IndexTranscript",
+        "Transcript"
+      ],
+      "identity": "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
+      "members": [
+        [
+          "ChallengeField",
+          "koala-bear.ext8-binomial3"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": false,
+        "decoder": "rejection31le",
+        "family": "merlin3",
+        "hash": null
+      }
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "IndexTranscript",
+        "IndexBlockTranscript",
+        "Transcript"
+      ],
+      "identity": "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+      "members": [
+        [
+          "ChallengeField",
+          "koala-bear.ext8-binomial3"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": true,
+        "decoder": "rejection31le",
+        "family": "hash-chain",
+        "hash": "keccak256"
+      }
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "IndexTranscript",
+        "IndexBlockTranscript",
+        "Transcript"
+      ],
+      "identity": "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+      "members": [
+        [
+          "ChallengeField",
+          "koala-bear.ext4-binomial3"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": true,
+        "decoder": "rejection31le",
+        "family": "hash-chain",
+        "hash": "keccak256"
+      }
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "Transcript"
+      ],
+      "identity": "hash-chain.keccak256.bls12-381.fr64be/0",
+      "members": [
+        [
+          "ChallengeField",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": true,
+        "decoder": "fr64be",
+        "family": "hash-chain",
+        "hash": "keccak256"
+      }
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "scheme": "keccak256Rows",
+        "digestBytes": 32
+      },
+      "identity": "rows.merkle-keccak256.koala-bear/0",
+      "members": [
+        [
+          "ValueField",
+          "koala-bear"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "scheme": "keccak256Rows",
+        "digestBytes": 32
+      },
+      "identity": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "members": [
+        [
+          "ValueField",
+          "koala-bear.ext8-binomial3"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "scheme": "keccak256Rows",
+        "digestBytes": 32
+      },
+      "identity": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "members": [
+        [
+          "ValueField",
+          "koala-bear.ext4-binomial3"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "digestBytes": 32,
+        "digestWordBytes": 4,
+        "permutation": "koala-bear.poseidon2-16",
+        "scheme": "poseidon2Rows"
+      },
+      "identity": "rows.merkle-poseidon2-16.koala-bear/0",
+      "members": [
+        [
+          "ValueField",
+          "koala-bear"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "digestBytes": 32,
+        "digestWordBytes": 4,
+        "permutation": "koala-bear.poseidon2-16",
+        "scheme": "poseidon2Rows"
+      },
+      "identity": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "members": [
+        [
+          "ValueField",
+          "koala-bear.ext4-binomial3"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "Field",
+        "CommRing"
+      ],
+      "field": {
+        "characteristic": "2",
+        "structure": {
+          "degree": 64,
+          "kind": "extension",
+          "over": "PrimeSubfield",
+          "reduction": [
+            [
+              4,
+              "1"
+            ],
+            [
+              3,
+              "1"
+            ],
+            [
+              1,
+              "1"
+            ],
+            [
+              0,
+              "1"
+            ]
+          ]
+        },
+        "twoAdic": null
+      },
+      "identity": "gf2-64.pentanomial-4-3-1",
+      "members": [],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "ExtensionField",
+        "Field",
+        "CommRing"
+      ],
+      "field": {
+        "characteristic": "2",
+        "structure": {
+          "degree": 3,
+          "kind": "extension",
+          "over": "BaseField",
+          "reduction": [
+            [
+              1,
+              "1"
+            ],
+            [
+              0,
+              "1"
+            ]
+          ]
+        },
+        "twoAdic": null
+      },
+      "identity": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "members": [
+        [
+          "BaseField",
+          "gf2-64.pentanomial-4-3-1"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "Field",
+        "CommRing",
+        "PrimeField",
+        "CharacteristicNotTwo",
+        "TwoAdicField",
+        "PairingField"
+      ],
+      "field": {
+        "characteristic": "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+        "structure": {
+          "kind": "prime"
+        },
+        "twoAdic": {
+          "convention": "bn254.fr.two-adic.generator5/0",
+          "maximalRoot": "19103219067921713944291392827692070036145651957329286315305642004821462161904",
+          "ordering": "powers",
+          "twoAdicity": 28
+        }
+      },
+      "identity": "bn254.fr",
+      "members": [
+        [
+          "PairingG1",
+          "bn254.g1"
+        ],
+        [
+          "PairingG2",
+          "bn254.g2"
+        ],
+        [
+          "PairingGT",
+          "bn254.gt"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "bn254.g1",
+      "members": [
+        [
+          "Scalar",
+          "bn254.fr"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "bn254.g2",
+      "members": [
+        [
+          "Scalar",
+          "bn254.fr"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "bn254.gt",
+      "members": [
+        [
+          "Scalar",
+          "bn254.fr"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "Field",
+        "CommRing",
+        "PrimeField",
+        "CharacteristicNotTwo",
+        "PairingField"
+      ],
+      "field": {
+        "characteristic": "52435875175126190479447740508185965837690552500527637822603658699938581184513",
+        "structure": {
+          "kind": "prime"
+        },
+        "twoAdic": null
+      },
+      "identity": "bls12-381.fr",
+      "members": [
+        [
+          "PairingG1",
+          "bls12-381.g1"
+        ],
+        [
+          "PairingG2",
+          "bls12-381.g2"
+        ],
+        [
+          "PairingGT",
+          "bls12-381.gt"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "bls12-381.g2",
+      "members": [
+        [
+          "Scalar",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "bls12-381.gt",
+      "members": [
+        [
+          "Scalar",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "Field",
+        "CommRing",
+        "PrimeField",
+        "CharacteristicNotTwo"
+      ],
+      "field": {
+        "characteristic": "7237005577332262213973186563042994240857116359379907606001950938285454250989",
+        "structure": {
+          "kind": "prime"
+        },
+        "twoAdic": null
+      },
+      "identity": "ristretto255.scalar",
+      "members": [],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "ristretto255.group",
+      "members": [
+        [
+          "Scalar",
+          "ristretto255.scalar"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "edwards25519.prime",
+      "members": [
+        [
+          "Scalar",
+          "ristretto255.scalar"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "Transcript"
+      ],
+      "identity": "merlin3.ristretto255.scalar64le/0",
+      "members": [
+        [
+          "ChallengeField",
+          "ristretto255.scalar"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": false,
+        "decoder": "scalar64le",
+        "family": "merlin3",
+        "hash": null
+      }
+    },
+    {
+      "capabilities": [
+        "Group",
+        "ScalarAction"
+      ],
+      "identity": "bls12-381.g1",
+      "members": [
+        [
+          "Scalar",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Group"
+    },
+    {
+      "capabilities": [
+        "MultilinearOpening"
+      ],
+      "commitment": {
+        "scheme": "multilinearKzg"
+      },
+      "identity": "multilinear.kzg.bls12-381/0",
+      "members": [
+        [
+          "ValueField",
+          "bls12-381.fr"
+        ],
+        [
+          "PointField",
+          "bls12-381.fr"
+        ],
+        [
+          "EvaluationField",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "Transcript"
+      ],
+      "identity": "spongefish0.8.0.keccak.bls12-381.fr64be/0",
+      "members": [
+        [
+          "ChallengeField",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": true,
+        "decoder": "fr64be",
+        "family": "spongefish0.8.0",
+        "hash": null
+      }
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "Transcript"
+      ],
+      "identity": "merlin3.bls12-381.fr64be/0",
+      "members": [
+        [
+          "ChallengeField",
+          "bls12-381.fr"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": false,
+        "decoder": "fr64be",
+        "family": "merlin3",
+        "hash": null
+      }
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "PrimeField"
+      ],
+      "field": {
+        "characteristic": "2130706433",
+        "structure": {
+          "kind": "prime"
+        },
+        "twoAdic": {
+          "convention": "koala-bear.two-adic.1791270792/0",
+          "maximalRoot": "1791270792",
+          "ordering": "powers",
+          "twoAdicity": 24
+        }
+      },
+      "identity": "koala-bear",
+      "members": [],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "ExtensionField",
+        "IndexRandomness",
+        "IndexBlockRandomness"
+      ],
+      "field": {
+        "characteristic": "2130706433",
+        "structure": {
+          "degree": 8,
+          "kind": "extension",
+          "over": "BaseField",
+          "reduction": [
+            [
+              0,
+              "3"
+            ]
+          ]
+        },
+        "twoAdic": null
+      },
+      "identity": "koala-bear.ext8-binomial3",
+      "members": [
+        [
+          "BaseField",
+          "koala-bear"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "ExtensionField",
+        "IndexRandomness",
+        "IndexBlockRandomness"
+      ],
+      "field": {
+        "characteristic": "2130706433",
+        "structure": {
+          "degree": 4,
+          "kind": "extension",
+          "over": "BaseField",
+          "reduction": [
+            [
+              0,
+              "3"
+            ]
+          ]
+        },
+        "twoAdic": null
+      },
+      "identity": "koala-bear.ext4-binomial3",
+      "members": [
+        [
+          "BaseField",
+          "koala-bear"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "PrimeField"
+      ],
+      "field": {
+        "characteristic": "2013265921",
+        "structure": {
+          "kind": "prime"
+        },
+        "twoAdic": {
+          "convention": "baby-bear.two-adic.440564289/0",
+          "maximalRoot": "440564289",
+          "ordering": "powers",
+          "twoAdicity": 27
+        }
+      },
+      "identity": "baby-bear",
+      "members": [],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "ExtensionField",
+        "IndexRandomness",
+        "IndexBlockRandomness"
+      ],
+      "field": {
+        "characteristic": "2013265921",
+        "structure": {
+          "degree": 4,
+          "kind": "extension",
+          "over": "BaseField",
+          "reduction": [
+            [
+              0,
+              "11"
+            ]
+          ]
+        },
+        "twoAdic": null
+      },
+      "identity": "baby-bear.ext4-binomial11",
+      "members": [
+        [
+          "BaseField",
+          "baby-bear"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "PrimeField"
+      ],
+      "field": {
+        "characteristic": "18446744069414584321",
+        "structure": {
+          "kind": "prime"
+        },
+        "twoAdic": {
+          "convention": "goldilocks.two-adic.1753635133440165772/0",
+          "maximalRoot": "1753635133440165772",
+          "ordering": "powers",
+          "twoAdicity": 32
+        }
+      },
+      "identity": "goldilocks",
+      "members": [],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "TwoAdicField",
+        "Field",
+        "CommRing",
+        "CharacteristicNotTwo",
+        "ExtensionField",
+        "IndexRandomness",
+        "IndexBlockRandomness"
+      ],
+      "field": {
+        "characteristic": "18446744069414584321",
+        "structure": {
+          "degree": 2,
+          "kind": "extension",
+          "over": "BaseField",
+          "reduction": [
+            [
+              0,
+              "7"
+            ]
+          ]
+        },
+        "twoAdic": null
+      },
+      "identity": "goldilocks.ext2-binomial7",
+      "members": [
+        [
+          "BaseField",
+          "goldilocks"
+        ]
+      ],
+      "sort": "Field"
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "IndexTranscript",
+        "Transcript"
+      ],
+      "identity": "merlin3.baby-bear.ext4-binomial11.rejection31le/0",
+      "members": [
+        [
+          "ChallengeField",
+          "baby-bear.ext4-binomial11"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": true,
+        "decoder": "rejection31le",
+        "family": "merlin3",
+        "hash": null
+      }
+    },
+    {
+      "capabilities": [
+        "FieldTranscript",
+        "IndexTranscript",
+        "Transcript"
+      ],
+      "identity": "merlin3.goldilocks.ext2-binomial7.rejection64le/0",
+      "members": [
+        [
+          "ChallengeField",
+          "goldilocks.ext2-binomial7"
+        ]
+      ],
+      "sort": "Transcript",
+      "transcript": {
+        "bindsSuite": true,
+        "decoder": "rejection64le",
+        "family": "merlin3",
+        "hash": null
+      }
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "digestBytes": 32,
+        "digestWordBytes": 4,
+        "permutation": "baby-bear.poseidon2-16",
+        "scheme": "poseidon2Rows"
+      },
+      "identity": "rows.merkle-poseidon2-16.baby-bear/0",
+      "members": [
+        [
+          "ValueField",
+          "baby-bear"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "digestBytes": 32,
+        "digestWordBytes": 4,
+        "permutation": "baby-bear.poseidon2-16",
+        "scheme": "poseidon2Rows"
+      },
+      "identity": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "members": [
+        [
+          "ValueField",
+          "baby-bear.ext4-binomial11"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "digestBytes": 32,
+        "digestWordBytes": 8,
+        "permutation": "goldilocks.poseidon2-8",
+        "scheme": "poseidon2Rows"
+      },
+      "identity": "rows.merkle-poseidon2-8.goldilocks/0",
+      "members": [
+        [
+          "ValueField",
+          "goldilocks"
+        ]
+      ],
+      "sort": "Commitment"
+    },
+    {
+      "capabilities": [
+        "VectorCommitment",
+        "MultiOpening"
+      ],
+      "commitment": {
+        "digestBytes": 32,
+        "digestWordBytes": 8,
+        "permutation": "goldilocks.poseidon2-8",
+        "scheme": "poseidon2Rows"
+      },
+      "identity": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "members": [
+        [
+          "ValueField",
+          "goldilocks.ext2-binomial7"
+        ]
+      ],
+      "sort": "Commitment"
+    }
+  ],
+  "logicalTypes": [
+    {
+      "domain": "",
+      "kind": "bool"
+    },
+    {
+      "domain": "",
+      "kind": "index"
+    },
+    {
+      "domain": "",
+      "kind": "indices"
+    },
+    {
+      "domain": "",
+      "kind": "bytes"
+    },
+    {
+      "domain": "",
+      "kind": "shake128_state"
+    },
+    {
+      "domain": "",
+      "kind": "quotient_matrix"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "field"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "vector"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "round"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "matrix"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "table"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "point"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "rng"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "kind": "nonce"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "field"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "vector"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "round"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "matrix"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "rng"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "kind": "nonce"
+    },
+    {
+      "domain": "bn254.fr",
+      "kind": "field"
+    },
+    {
+      "domain": "bn254.fr",
+      "kind": "vector"
+    },
+    {
+      "domain": "bn254.fr",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "bn254.fr",
+      "kind": "round"
+    },
+    {
+      "domain": "bn254.fr",
+      "kind": "matrix"
+    },
+    {
+      "domain": "bn254.fr",
+      "kind": "rng"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "kind": "field"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "kind": "vector"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "kind": "round"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "kind": "matrix"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "kind": "field"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "kind": "vector"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "kind": "round"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "kind": "matrix"
+    },
+    {
+      "domain": "bls12-381.g1",
+      "kind": "group"
+    },
+    {
+      "domain": "bls12-381.g1",
+      "kind": "groups"
+    },
+    {
+      "domain": "bls12-381.g2",
+      "kind": "group"
+    },
+    {
+      "domain": "bls12-381.g2",
+      "kind": "groups"
+    },
+    {
+      "domain": "bls12-381.gt",
+      "kind": "group"
+    },
+    {
+      "domain": "ristretto255.group",
+      "kind": "group"
+    },
+    {
+      "domain": "ristretto255.group",
+      "kind": "groups"
+    },
+    {
+      "domain": "edwards25519.prime",
+      "kind": "group"
+    },
+    {
+      "domain": "edwards25519.prime",
+      "kind": "groups"
+    },
+    {
+      "domain": "bn254.g1",
+      "kind": "group"
+    },
+    {
+      "domain": "bn254.g1",
+      "kind": "groups"
+    },
+    {
+      "domain": "bn254.g2",
+      "kind": "group"
+    },
+    {
+      "domain": "bn254.gt",
+      "kind": "group"
+    },
+    {
+      "domain": "bn254.g2",
+      "kind": "groups"
+    },
+    {
+      "domain": "merlin3.bls12-381.fr64be/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "spongefish0.8.0.keccak.bls12-381.fr64be/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "merlin3.ristretto255.scalar64le/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "hash-chain.keccak256.bls12-381.fr64be/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "kind": "prover_key"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "kind": "verifier_key"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "koala-bear",
+      "kind": "field"
+    },
+    {
+      "domain": "koala-bear",
+      "kind": "vector"
+    },
+    {
+      "domain": "koala-bear",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "koala-bear",
+      "kind": "round"
+    },
+    {
+      "domain": "koala-bear",
+      "kind": "matrix"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "kind": "rng"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "kind": "field"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "kind": "vector"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "kind": "round"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "kind": "matrix"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "kind": "rng"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "kind": "field"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "kind": "vector"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "kind": "round"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "kind": "matrix"
+    },
+    {
+      "domain": "baby-bear",
+      "kind": "field"
+    },
+    {
+      "domain": "baby-bear",
+      "kind": "vector"
+    },
+    {
+      "domain": "baby-bear",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "baby-bear",
+      "kind": "round"
+    },
+    {
+      "domain": "baby-bear",
+      "kind": "matrix"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "kind": "rng"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "kind": "field"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "kind": "vector"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "kind": "round"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "kind": "matrix"
+    },
+    {
+      "domain": "goldilocks",
+      "kind": "field"
+    },
+    {
+      "domain": "goldilocks",
+      "kind": "vector"
+    },
+    {
+      "domain": "goldilocks",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "goldilocks",
+      "kind": "round"
+    },
+    {
+      "domain": "goldilocks",
+      "kind": "matrix"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "kind": "rng"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "kind": "field"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "kind": "vector"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "kind": "round"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "kind": "matrix"
+    },
+    {
+      "domain": "merlin3.baby-bear.ext4-binomial11.rejection31le/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "merlin3.goldilocks.ext2-binomial7.rejection64le/0",
+      "kind": "transcript"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "kind": "opening_states"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "opening_state"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "opening_states"
+    }
+  ],
+  "frameTags": [
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 1
+    },
+    {
+      "layout": "Table",
+      "shared": null,
+      "tag": 2
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 5
+    },
+    {
+      "layout": "PcsCommitment",
+      "shared": null,
+      "tag": 6
+    },
+    {
+      "layout": "PcsProof",
+      "shared": null,
+      "tag": 7
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 9
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 13
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 14
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 16
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 17
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 19
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 20
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 21
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 22
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 23
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 24
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 25
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 26
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 27
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 28
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 30
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 31
+    },
+    {
+      "layout": "MerkleRoot",
+      "shared": null,
+      "tag": 33
+    },
+    {
+      "layout": "MerklePath",
+      "shared": null,
+      "tag": 34
+    },
+    {
+      "layout": "MerkleRoot",
+      "shared": null,
+      "tag": 35
+    },
+    {
+      "layout": "MerklePath",
+      "shared": null,
+      "tag": 36
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 40
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 41
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 45
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 46
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 47
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 48
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 49
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 50
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 51
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 52
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 53
+    },
+    {
+      "layout": "FieldArray",
+      "shared": null,
+      "tag": 64
+    },
+    {
+      "layout": "Variant",
+      "shared": null,
+      "tag": 65
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 66
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 67
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 68
+    },
+    {
+      "layout": "Sequence",
+      "shared": null,
+      "tag": 69
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 70
+    },
+    {
+      "layout": "DigestRoot",
+      "shared": {
+        "kind": "commitment",
+        "scheme": "poseidon2Rows"
+      },
+      "tag": 71
+    },
+    {
+      "layout": "DigestProof",
+      "shared": {
+        "kind": "proof",
+        "scheme": "poseidon2Rows"
+      },
+      "tag": 72
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 73
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 74
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 75
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 76
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 77
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 78
+    },
+    {
+      "layout": "MerkleRoot",
+      "shared": null,
+      "tag": 79
+    },
+    {
+      "layout": "MerklePath",
+      "shared": null,
+      "tag": 80
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 81
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 82
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 90
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 91
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 92
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 93
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 94
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 95
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 96
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 97
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 98
+    },
+    {
+      "layout": "Scalar",
+      "shared": null,
+      "tag": 99
+    },
+    {
+      "layout": "Vector",
+      "shared": null,
+      "tag": 100
+    },
+    {
+      "layout": "SparseMatrix",
+      "shared": null,
+      "tag": 101
+    }
+  ],
+  "codecs": [
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "frame": {
+        "tag": 33
+      },
+      "identity": "zkcv.commitment.rows-merkle-keccak256.koala-bear/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "frame": {
+        "tag": 34
+      },
+      "identity": "zkcv.proof.rows-merkle-keccak256.koala-bear/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-keccak256.koala-bear/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "frame": {
+        "tag": 35
+      },
+      "identity": "zkcv.commitment.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "frame": {
+        "tag": 79
+      },
+      "identity": "zkcv.commitment.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "frame": {
+        "tag": 36
+      },
+      "identity": "zkcv.proof.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "frame": {
+        "tag": 80
+      },
+      "identity": "zkcv.proof.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "frame": {
+        "tag": 71
+      },
+      "identity": "zkcv.commitment.rows-merkle-poseidon2-16.koala-bear/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "frame": {
+        "tag": 72
+      },
+      "identity": "zkcv.proof.rows-merkle-poseidon2-16.koala-bear/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-poseidon2-16.koala-bear/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "frame": {
+        "tag": 71
+      },
+      "identity": "zkcv.commitment.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "frame": {
+        "tag": 72
+      },
+      "identity": "zkcv.proof.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 73
+      },
+      "identity": "zkcv.field.gf2-64.pentanomial-4-3-1/0",
+      "kind": "field"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 74
+      },
+      "identity": "zkcv.vector.gf2-64.pentanomial-4-3-1/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "frame": null,
+      "identity": "zkcv.polynomial.gf2-64.pentanomial-4-3-1/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "frame": null,
+      "identity": "zkcv.round.gf2-64.pentanomial-4-3-1/0",
+      "kind": "round"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 75
+      },
+      "identity": "zkcv.matrix.gf2-64.pentanomial-4-3-1/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "frame": {
+        "elementBytes": 24,
+        "tag": 76
+      },
+      "identity": "zkcv.field.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+      "kind": "field"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "frame": {
+        "elementBytes": 24,
+        "tag": 77
+      },
+      "identity": "zkcv.vector.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "frame": null,
+      "identity": "zkcv.polynomial.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "frame": null,
+      "identity": "zkcv.round.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+      "kind": "round"
+    },
+    {
+      "domain": "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+      "frame": {
+        "elementBytes": 24,
+        "tag": 78
+      },
+      "identity": "zkcv.matrix.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "bn254.fr",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 40
+      },
+      "identity": "zkcv.field.bn254.fr/0",
+      "kind": "field"
+    },
+    {
+      "domain": "bn254.fr",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 41
+      },
+      "identity": "zkcv.vector.bn254.fr/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "bn254.fr",
+      "frame": null,
+      "identity": "zkcv.polynomial.bn254.fr/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "bn254.fr",
+      "frame": null,
+      "identity": "zkcv.round.bn254.fr/0",
+      "kind": "round"
+    },
+    {
+      "domain": "bn254.fr",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 45
+      },
+      "identity": "zkcv.matrix.bn254.fr/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "bn254.g1",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 46
+      },
+      "identity": "zkcv.group.bn254.g1/0",
+      "kind": "group"
+    },
+    {
+      "domain": "bn254.g1",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 47
+      },
+      "identity": "zkcv.groups.bn254.g1/0",
+      "kind": "groups"
+    },
+    {
+      "domain": "bn254.g2",
+      "frame": {
+        "elementBytes": 64,
+        "tag": 48
+      },
+      "identity": "zkcv.group.bn254.g2/0",
+      "kind": "group"
+    },
+    {
+      "domain": "bn254.gt",
+      "frame": {
+        "elementBytes": 384,
+        "tag": 50
+      },
+      "identity": "zkcv.group.bn254.gt/0",
+      "kind": "group"
+    },
+    {
+      "domain": "bn254.g2",
+      "frame": {
+        "elementBytes": 64,
+        "tag": 49
+      },
+      "identity": "zkcv.groups.bn254.g2/0",
+      "kind": "groups"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 23
+      },
+      "identity": "zkcv.matrix.bls12-381.fr/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 24
+      },
+      "identity": "zkcv.matrix.ristretto255.scalar/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 66
+      },
+      "identity": "zkcv.vector.bls12-381.fr/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": null,
+      "identity": "zkcv.polynomial.bls12-381.fr/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 13
+      },
+      "identity": "zkcv.field.ristretto255.scalar/0",
+      "kind": "field"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 14
+      },
+      "identity": "zkcv.vector.ristretto255.scalar/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "frame": null,
+      "identity": "zkcv.polynomial.ristretto255.scalar/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "ristretto255.scalar",
+      "frame": null,
+      "identity": "zkcv.round.ristretto255.scalar/0",
+      "kind": "round"
+    },
+    {
+      "domain": "edwards25519.prime",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 81
+      },
+      "identity": "zkcv.group.edwards25519.prime/0",
+      "kind": "group"
+    },
+    {
+      "domain": "edwards25519.prime",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 82
+      },
+      "identity": "zkcv.groups.edwards25519.prime/0",
+      "kind": "groups"
+    },
+    {
+      "domain": "ristretto255.group",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 16
+      },
+      "identity": "zkcv.group.ristretto255.group/0",
+      "kind": "group"
+    },
+    {
+      "domain": "ristretto255.group",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 17
+      },
+      "identity": "zkcv.groups.ristretto255.group/0",
+      "kind": "groups"
+    },
+    {
+      "domain": "",
+      "frame": {
+        "elementBytes": 1,
+        "tag": 5
+      },
+      "identity": "zkcv.bool/0",
+      "kind": "bool"
+    },
+    {
+      "domain": "",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 31
+      },
+      "identity": "zkcv.index/0",
+      "kind": "index"
+    },
+    {
+      "domain": "",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 68
+      },
+      "identity": "zkcv.indices/0",
+      "kind": "indices"
+    },
+    {
+      "domain": "",
+      "frame": {
+        "elementBytes": 1,
+        "tag": 70
+      },
+      "identity": "zkcv.bytes/0",
+      "kind": "bytes"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 1
+      },
+      "identity": "zkcv.field.bls12-381.fr/0",
+      "kind": "field"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": {
+        "tag": 2
+      },
+      "identity": "zkcv.table.bls12-381.fr/0",
+      "kind": "table"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": null,
+      "identity": "zkcv.point.bls12-381.fr/0",
+      "kind": "point"
+    },
+    {
+      "domain": "bls12-381.fr",
+      "frame": null,
+      "identity": "zkcv.round.bls12-381.fr/0",
+      "kind": "round"
+    },
+    {
+      "domain": "bls12-381.g1",
+      "frame": {
+        "elementBytes": 48,
+        "tag": 9
+      },
+      "identity": "zkcv.group.bls12-381.g1/0",
+      "kind": "group"
+    },
+    {
+      "domain": "bls12-381.g1",
+      "frame": {
+        "elementBytes": 48,
+        "tag": 67
+      },
+      "identity": "zkcv.groups.bls12-381.g1/0",
+      "kind": "groups"
+    },
+    {
+      "domain": "bls12-381.g2",
+      "frame": {
+        "elementBytes": 96,
+        "tag": 51
+      },
+      "identity": "zkcv.group.bls12-381.g2/0",
+      "kind": "group"
+    },
+    {
+      "domain": "bls12-381.g2",
+      "frame": {
+        "elementBytes": 96,
+        "tag": 52
+      },
+      "identity": "zkcv.groups.bls12-381.g2/0",
+      "kind": "groups"
+    },
+    {
+      "domain": "bls12-381.gt",
+      "frame": {
+        "elementBytes": 576,
+        "tag": 53
+      },
+      "identity": "zkcv.group.bls12-381.gt/0",
+      "kind": "group"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "frame": {
+        "bytes": 135,
+        "tag": 6
+      },
+      "identity": "zkcv.commitment.multilinear-kzg.bls12-381/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "multilinear.kzg.bls12-381/0",
+      "frame": {
+        "bytes": 87,
+        "bytesPerArity": 96,
+        "tag": 7
+      },
+      "identity": "zkcv.proof.multilinear-kzg.bls12-381/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "koala-bear",
+      "frame": {
+        "elementBytes": 4,
+        "tag": 19
+      },
+      "identity": "zkcv.field.koala-bear/0",
+      "kind": "field"
+    },
+    {
+      "domain": "koala-bear",
+      "frame": {
+        "elementBytes": 4,
+        "tag": 20
+      },
+      "identity": "zkcv.vector.koala-bear/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "koala-bear",
+      "frame": null,
+      "identity": "zkcv.polynomial.koala-bear/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "koala-bear",
+      "frame": null,
+      "identity": "zkcv.round.koala-bear/0",
+      "kind": "round"
+    },
+    {
+      "domain": "koala-bear",
+      "frame": {
+        "elementBytes": 4,
+        "tag": 25
+      },
+      "identity": "zkcv.matrix.koala-bear/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 26
+      },
+      "identity": "zkcv.field.koala-bear.ext8-binomial3/0",
+      "kind": "field"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 27
+      },
+      "identity": "zkcv.vector.koala-bear.ext8-binomial3/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "frame": null,
+      "identity": "zkcv.polynomial.koala-bear.ext8-binomial3/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "frame": null,
+      "identity": "zkcv.round.koala-bear.ext8-binomial3/0",
+      "kind": "round"
+    },
+    {
+      "domain": "koala-bear.ext8-binomial3",
+      "frame": {
+        "elementBytes": 32,
+        "tag": 30
+      },
+      "identity": "zkcv.matrix.koala-bear.ext8-binomial3/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 21
+      },
+      "identity": "zkcv.field.koala-bear.ext4-binomial3/0",
+      "kind": "field"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 22
+      },
+      "identity": "zkcv.vector.koala-bear.ext4-binomial3/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "frame": null,
+      "identity": "zkcv.polynomial.koala-bear.ext4-binomial3/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "frame": null,
+      "identity": "zkcv.round.koala-bear.ext4-binomial3/0",
+      "kind": "round"
+    },
+    {
+      "domain": "koala-bear.ext4-binomial3",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 28
+      },
+      "identity": "zkcv.matrix.koala-bear.ext4-binomial3/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "baby-bear",
+      "frame": {
+        "elementBytes": 4,
+        "tag": 90
+      },
+      "identity": "zkcv.field.baby-bear/0",
+      "kind": "field"
+    },
+    {
+      "domain": "baby-bear",
+      "frame": {
+        "elementBytes": 4,
+        "tag": 91
+      },
+      "identity": "zkcv.vector.baby-bear/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "baby-bear",
+      "frame": null,
+      "identity": "zkcv.polynomial.baby-bear/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "baby-bear",
+      "frame": null,
+      "identity": "zkcv.round.baby-bear/0",
+      "kind": "round"
+    },
+    {
+      "domain": "baby-bear",
+      "frame": {
+        "elementBytes": 4,
+        "tag": 92
+      },
+      "identity": "zkcv.matrix.baby-bear/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 93
+      },
+      "identity": "zkcv.field.baby-bear.ext4-binomial11/0",
+      "kind": "field"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 94
+      },
+      "identity": "zkcv.vector.baby-bear.ext4-binomial11/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "frame": null,
+      "identity": "zkcv.polynomial.baby-bear.ext4-binomial11/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "frame": null,
+      "identity": "zkcv.round.baby-bear.ext4-binomial11/0",
+      "kind": "round"
+    },
+    {
+      "domain": "baby-bear.ext4-binomial11",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 95
+      },
+      "identity": "zkcv.matrix.baby-bear.ext4-binomial11/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "goldilocks",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 96
+      },
+      "identity": "zkcv.field.goldilocks/0",
+      "kind": "field"
+    },
+    {
+      "domain": "goldilocks",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 97
+      },
+      "identity": "zkcv.vector.goldilocks/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "goldilocks",
+      "frame": null,
+      "identity": "zkcv.polynomial.goldilocks/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "goldilocks",
+      "frame": null,
+      "identity": "zkcv.round.goldilocks/0",
+      "kind": "round"
+    },
+    {
+      "domain": "goldilocks",
+      "frame": {
+        "elementBytes": 8,
+        "tag": 98
+      },
+      "identity": "zkcv.matrix.goldilocks/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 99
+      },
+      "identity": "zkcv.field.goldilocks.ext2-binomial7/0",
+      "kind": "field"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 100
+      },
+      "identity": "zkcv.vector.goldilocks.ext2-binomial7/0",
+      "kind": "vector"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "frame": null,
+      "identity": "zkcv.polynomial.goldilocks.ext2-binomial7/0",
+      "kind": "polynomial"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "frame": null,
+      "identity": "zkcv.round.goldilocks.ext2-binomial7/0",
+      "kind": "round"
+    },
+    {
+      "domain": "goldilocks.ext2-binomial7",
+      "frame": {
+        "elementBytes": 16,
+        "tag": 101
+      },
+      "identity": "zkcv.matrix.goldilocks.ext2-binomial7/0",
+      "kind": "matrix"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "frame": {
+        "tag": 71
+      },
+      "identity": "zkcv.commitment.rows-merkle-poseidon2-16.baby-bear/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "frame": {
+        "tag": 72
+      },
+      "identity": "zkcv.proof.rows-merkle-poseidon2-16.baby-bear/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-poseidon2-16.baby-bear/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "frame": {
+        "tag": 71
+      },
+      "identity": "zkcv.commitment.rows-merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "frame": {
+        "tag": 72
+      },
+      "identity": "zkcv.proof.rows-merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "frame": {
+        "tag": 71
+      },
+      "identity": "zkcv.commitment.rows-merkle-poseidon2-8.goldilocks/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "frame": {
+        "tag": 72
+      },
+      "identity": "zkcv.proof.rows-merkle-poseidon2-8.goldilocks/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-poseidon2-8.goldilocks/0",
+      "kind": "commitments"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "frame": {
+        "tag": 71
+      },
+      "identity": "zkcv.commitment.rows-merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "commitment"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "frame": {
+        "tag": 72
+      },
+      "identity": "zkcv.proof.rows-merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "proof"
+    },
+    {
+      "domain": "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "frame": null,
+      "identity": "zkcv.commitments.rows-merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+      "kind": "commitments"
+    }
+  ],
+  "aggregateFrames": [
+    {
+      "constructor": "sequence",
+      "domain": "",
+      "tag": 69
+    },
+    {
+      "constructor": "variant",
+      "domain": "",
+      "tag": 65
+    },
+    {
+      "constructor": "field_array",
+      "domain": "bls12-381.fr",
+      "tag": 64
+    }
+  ],
+  "randomServices": [
+    {
+      "contract": "random.bls12-381.fr/0",
+      "field": "bls12-381.fr"
+    },
+    {
+      "contract": "random.bn254.fr/0",
+      "field": "bn254.fr"
+    },
+    {
+      "contract": "random.ristretto255.scalar/0",
+      "field": "ristretto255.scalar"
+    },
+    {
+      "contract": "random.koala-bear.ext8-binomial3/0",
+      "field": "koala-bear.ext8-binomial3"
+    },
+    {
+      "contract": "random.koala-bear.ext4-binomial3/0",
+      "field": "koala-bear.ext4-binomial3"
+    },
+    {
+      "contract": "random.baby-bear.ext4-binomial11/0",
+      "field": "baby-bear.ext4-binomial11"
+    },
+    {
+      "contract": "random.goldilocks.ext2-binomial7/0",
+      "field": "goldilocks.ext2-binomial7"
+    }
+  ],
+  "limits": [
+    {
+      "name": "protocol.roles",
+      "owner": "IR / Protocol",
+      "phase": "admission",
+      "scope": "Ordered role roster of one protocol, participant or Entry",
+      "unit": "roles",
+      "value": 1024
+    },
+    {
+      "name": "record.roles",
+      "owner": "Frontend / Language",
+      "phase": "admission",
+      "scope": "Role parameters of one distributed record telescope",
+      "unit": "roles",
+      "value": 1024
+    }
+  ],
+  "finiteDefinitions": [
+    {
+      "collection": null,
+      "filtered": false,
+      "identity": "math.fold",
+      "mode": "math",
+      "operation": "fold"
+    },
+    {
+      "collection": null,
+      "filtered": true,
+      "identity": "math.fold_where",
+      "mode": "math",
+      "operation": "fold"
+    },
+    {
+      "collection": "vector",
+      "filtered": false,
+      "identity": "math.collect.vector",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "vector",
+      "filtered": true,
+      "identity": "math.collect.vector_where",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "groups",
+      "filtered": false,
+      "identity": "math.collect.groups",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "groups",
+      "filtered": true,
+      "identity": "math.collect.groups_where",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "sequence",
+      "filtered": false,
+      "identity": "math.collect.sequence",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "sequence",
+      "filtered": true,
+      "identity": "math.collect.sequence_where",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "indices",
+      "filtered": false,
+      "identity": "math.collect.indices",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "indices",
+      "filtered": true,
+      "identity": "math.collect.indices_where",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": "field_array",
+      "filtered": false,
+      "identity": "math.collect.field_array",
+      "mode": "math",
+      "operation": "collect"
+    },
+    {
+      "collection": null,
+      "filtered": false,
+      "identity": "local.fold",
+      "mode": "local",
+      "operation": "fold"
+    },
+    {
+      "collection": null,
+      "filtered": true,
+      "identity": "local.fold_where",
+      "mode": "local",
+      "operation": "fold"
+    },
+    {
+      "collection": "vector",
+      "filtered": false,
+      "identity": "local.collect.vector",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "vector",
+      "filtered": true,
+      "identity": "local.collect.vector_where",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "groups",
+      "filtered": false,
+      "identity": "local.collect.groups",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "groups",
+      "filtered": true,
+      "identity": "local.collect.groups_where",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "sequence",
+      "filtered": false,
+      "identity": "local.collect.sequence",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "sequence",
+      "filtered": true,
+      "identity": "local.collect.sequence_where",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "indices",
+      "filtered": false,
+      "identity": "local.collect.indices",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "indices",
+      "filtered": true,
+      "identity": "local.collect.indices_where",
+      "mode": "local",
+      "operation": "collect"
+    },
+    {
+      "collection": "field_array",
+      "filtered": false,
+      "identity": "local.collect.field_array",
+      "mode": "local",
+      "operation": "collect"
+    }
+  ],
+  "domainConstructors": [
+    {
+      "axis": 0,
+      "identity": "elements",
+      "kind": "Elements"
+    },
+    {
+      "axis": 0,
+      "identity": "indices",
+      "kind": "Indices"
+    },
+    {
+      "axis": 0,
+      "identity": "indices.rows",
+      "kind": "Indices"
+    },
+    {
+      "axis": 1,
+      "identity": "indices.columns",
+      "kind": "Indices"
+    },
+    {
+      "axis": 0,
+      "identity": "range",
+      "kind": "Range"
+    },
+    {
+      "axis": 0,
+      "identity": "zip",
+      "kind": "Zip"
+    },
+    {
+      "axis": 0,
+      "identity": "product",
+      "kind": "Product"
+    },
+    {
+      "axis": 0,
+      "identity": "matrix.row",
+      "kind": "MatrixRow"
+    },
+    {
+      "axis": 1,
+      "identity": "matrix.column",
+      "kind": "MatrixColumn"
+    },
+    {
+      "axis": 0,
+      "identity": "matrix.coordinates.row_major",
+      "kind": "MatrixCoordinates"
+    },
+    {
+      "axis": 1,
+      "identity": "matrix.coordinates.column_major",
+      "kind": "MatrixCoordinates"
+    },
+    {
+      "axis": 0,
+      "identity": "source_array",
+      "kind": "SourceArray"
     }
   ]
 }

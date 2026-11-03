@@ -5,6 +5,10 @@ pub mod numerical;
 pub mod relation;
 pub mod ring;
 
+/// The generated catalog and installation projection the runtime reads, for
+/// backends that implement its contracts.
+pub use zkc_catalog as catalog;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Error(pub &'static str);
 impl std::fmt::Display for Error {

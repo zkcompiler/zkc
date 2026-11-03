@@ -39,38 +39,35 @@ def checkTableIgnoreClaimBody : Region dialect [.vector "bls12-381.fr", .vector 
   .letOp (.exec (.fieldEqual "bls12-381.fr")) (.cons .here (.cons .here .nil)) .nil <|
   .ret (.cons .here .nil)
 
-def checkFalseAcceptBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s9") .nil .nil <|
-  .letOp (.booleanConstant true) .nil .nil <|
-  .ret (.cons .here .nil)
-
-def checkAcceptMalformedBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s1") .nil .nil <|
-  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
-  .letOp (.mark "s2") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
+def checkAcceptMalformedBody : Region dialect checkHelper.inputs checkHelper.outputs :=
+  .letOp (.mark "s0_unpack_0") .nil .nil <|
+  .letOp (.consumeUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992") (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.invoke shapeHelper) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
-  .letOp (.mark "s6") .nil .nil <|
-  .letOp (.branch [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) (.cons checkTrueBody (.cons checkFalseAcceptBody .nil)) <|
+  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
+  .letOp (.mark "s4") .nil .nil <|
+  .letOp (.exec (.indexConstant 1)) .nil .nil <|
+  .letOp (.mark "s5") .nil .nil <|
+  .letOp (.invoke (⟨ "zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", .local, [(.vector "bls12-381.fr"), .index, .index], [.boolean] ⟩ : Helper)) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
+  .letOp (.mark "s9") .nil .nil <|
+  .letOp (.branch [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) (.cons (.letOp (.mark "s12") .nil .nil (.letOp (.invoke (⟨ "zkl_967e003dd39c9e1730d1e9e543081e08e351228ff07f85fb14e1e88dbded8a99", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil (.ret (.cons .here .nil)))) (.cons (.letOp (.mark "s14") .nil .nil (.letOp (.booleanConstant true) .nil .nil (.ret (.cons .here .nil)))) .nil)) <|
   .ret (.cons .here .nil)
-
 
 def sumsSwappedDefinition := checkedBody sumsHelper sumsSwappedBody
 def checkAcceptMalformedDefinition := checkedBody checkHelper checkAcceptMalformedBody
 def checkTableIgnoreClaimDefinition := checkedBody checkTableHelper checkTableIgnoreClaimBody
 
-def checkPermutedBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s1") .nil .nil <|
-  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
-  .letOp (.mark "s2") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
+def checkPermutedBody : Region dialect checkHelper.inputs checkHelper.outputs :=
+  .letOp (.mark "s0_unpack_0") .nil .nil <|
+  .letOp (.consumeUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992") (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.invoke shapeHelper) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
-  .letOp (.mark "s6") .nil .nil <|
-  .letOp (.branch [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean]) (.cons .here (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) (.cons checkTrueBody (.cons checkFalseBody .nil)) <|
+  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
+  .letOp (.mark "s4") .nil .nil <|
+  .letOp (.exec (.indexConstant 1)) .nil .nil <|
+  .letOp (.mark "s5") .nil .nil <|
+  .letOp (.invoke (⟨ "zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", .local, [(.vector "bls12-381.fr"), .index, .index], [.boolean] ⟩ : Helper)) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
+  .letOp (.mark "s9") .nil .nil <|
+  .letOp (.branch [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")] [.boolean]) (.cons .here (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) (.cons (.letOp (.mark "s12") .nil .nil (.letOp (.invoke (⟨ "zkl_967e003dd39c9e1730d1e9e543081e08e351228ff07f85fb14e1e88dbded8a99", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil (.ret (.cons .here .nil)))) (.cons (.letOp (.mark "s14") .nil .nil (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil)))) .nil)) <|
   .ret (.cons .here .nil)
-
 
 def checkPermutedDefinition := checkedBody checkHelper checkPermutedBody
 
@@ -93,13 +90,13 @@ theorem sums_swapped_expansion (table : Meanings F G) (xs : List F) (dimension c
 
 set_option backward.isDefEq.respectTransparency false in
 theorem check_permuted_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
-    checkPermutedBody.denote (meaning F G table) (checkInputs xs point claim).get =
+    checkPermutedBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get =
       if point.length < indexLimit then
         (invoke table shapeHelper (inputs xs point.length 1)).bind fun valid =>
           if valid.get .here then invoke table checkTableHelper (checkInputs point xs claim)
           else .done (boolResult false)
       else .halt .exhausted := by
-  simp only [checkPermutedBody, checkTrueBody, MultilinearBodies.checkTrueBody, checkFalseBody, MultilinearBodies.checkFalseBody, checkInputs, inputs, boolResult,
+  simp only [checkPermutedBody, terminalInputs, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
@@ -119,13 +116,13 @@ theorem check_permuted_expansion (table : Meanings F G) (xs point : List F) (cla
 
 set_option backward.isDefEq.respectTransparency false in
 theorem check_accept_malformed_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
-    checkAcceptMalformedBody.denote (meaning F G table) (checkInputs xs point claim).get =
+    checkAcceptMalformedBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get =
       if point.length < indexLimit then
         (invoke table shapeHelper (inputs xs point.length 1)).bind fun valid =>
           if valid.get .here then invoke table checkTableHelper (checkInputs xs point claim)
           else .done (boolResult true)
       else .halt .exhausted := by
-  simp only [checkAcceptMalformedBody, checkTrueBody, MultilinearBodies.checkTrueBody, checkFalseAcceptBody, checkInputs, inputs, boolResult,
+  simp only [checkAcceptMalformedBody, terminalInputs, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,

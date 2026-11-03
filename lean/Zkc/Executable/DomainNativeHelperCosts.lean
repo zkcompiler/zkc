@@ -47,7 +47,7 @@ theorem native_helper_metered
     (site name : String) (inputs outputs : List String)
     (helper : Structured.Helper)
     (checked : (nativeHelperSignatures program).find? (fun found => found.name == name) = some helper)
-    (eligible : helper.outputs.all dataType = true)
+    (eligible : helper.outputs.all localType = true)
     (callee : Function) (calleeEq : validator.function? name = some callee)
     (free : transcriptFree vocabulary validator callee.body = true)
     (prepared : Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)

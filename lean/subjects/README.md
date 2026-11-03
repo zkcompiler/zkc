@@ -47,7 +47,7 @@ root.
 | `profiles` | `construction` | original Data, constructed participant, generated glue, kernel checks |
 | `profiles` | `executable` | program data, executable facts, Lean lowering rule, runtime differential |
 | `profiles` | `scalar` | the derived Common scalar contract over Structured participants in `[scalar]` |
-| `generated` | `data`, `bodies`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
+| `generated` | `data`, `bodies`, `views`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
 | `generated` | `pair` | optional actual producer/validator pair; independently exported validator must match in full, and both participants enter generated-data freshness checks |
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive protocol |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
@@ -87,6 +87,15 @@ that module and applies its checked `compiled_transform`; admission alone does
 not imply correspondence. The maintained module may continue the metadata's
 namespace. Its file is separate from generated outputs, so regeneration cannot
 overwrite the proof or accidentally build it before its metadata is ready.
+
+Body generation binds the source correspondence inventory to the exact original,
+interface and snapshot before resolving symbols. Optional `bodies.owners` maps
+canonical authored owners to presentation names and requires exactly one closed
+instance per owner. It selects no theorem or meaning. Other body names follow
+the independent checker's dependency order. `generated.views`, when present,
+must be the declared external construction admission module. It is generated
+from those bodies and kernel-checked before source presentations
+and construction consumers. No previous generated body is an input to generation.
 
 Every generated path is owned by this subject: `--write` rewrites it and
 `--check` compares it. Generated paths that another subject or a structured
@@ -175,6 +184,7 @@ public exposure used by the installed generated modules.
 |---|---|---|
 | `construction` | `namespace` | declaration namespace of generated admission metadata (default: its module name) |
 | `construction` | `connection` | maintained source-correspondence module, required for generated source claims and distinct from generated metadata |
+| `construction` | `library`, `library_module` | optional checked `ConnectionLibrary.Bundle` and its importing module, supplied together for the compiled profile; the valid connection and every connection mutation use this same explicit library |
 | `construction` | `admission` | how the glue admits the original: `views` (default: from the printed Bodies, which `generated.bodies` must name) or `external` (an existing Views module) |
 | `construction` | `views` | the Views module for `external` admission |
 | `construction` | `inputs` | `values` (default) or `payloads`: the form of the generated `inputs` |
@@ -200,3 +210,11 @@ and their expected refusals are listed by `python3 lean/bridges/subject.py
 ## Files
 
 - `fixtures/`: sources of subjects that exist only as verification fixtures.
+
+An explicit construction library reuses kernel-checked callee proofs for the
+fresh source. Lean checks its source type and each application; a missing or
+mismatched library fails the check without falling back to rediscovery. The
+fresh participant, connection statement, mutation sites, refusal reasons and
+axiom policy are unchanged. This is physical proof reuse, separate from the
+`lean.library` that resolves source claim requests. The fresh connection checks
+run synchronously so a slow or failed control is attributed to its own proof.

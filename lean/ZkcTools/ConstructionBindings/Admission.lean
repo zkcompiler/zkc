@@ -47,15 +47,23 @@ private def deriveConnection (selectedLibrary : Option (TSyntax `term)) : Tactic
     let context ← Term.exprToSyntax args[1]!
     let mode ← Term.exprToSyntax args[2]!
     let artifact ← Term.exprToSyntax args[3]!
-    let selection ← mkAppM ``ConnectionAdmission.select args
-    let selected ← withTransparency .all <| whnf selection
-    unless selected.isAppOf ``Except.ok do
-      throwError "connection-selection-refused: {selected}"
-    let routing ← mkAppM ``ConnectionAdmission.Boundary.routing #[selected.getAppArgs.back!]
+    -- The final ofRootCertificate application checks the complete selection
+    -- equation. Do not evaluate a second discarded Boundary here: it would
+    -- duplicate the same finite admission before any reusable-body search.
+    -- Keep fixed source/context fields outside the computed discovery record,
+    -- so routine root projections do not evaluate the whole selection again.
+    let routing ← Term.elabTerm (← `(
+      ConnectionRootRoutes.routing ($program).snapshot $context $mode
+        (ConnectionRootInputs.serviceCapabilities ($program).payload.entry.inputs)
+        $artifact (by decide +kernel))) (some (mkConst ``Original.Routing))
+    Term.synthesizeSyntheticMVarsNoPostponing
     let routing ← Term.exprToSyntax routing
+    Alignment.tracePhase "admission instruction reflection start"
     let instructions ← unsafe closedInstructions args[3]!
+    Alignment.tracePhase "admission instructions reflected"
     let .ok (viewText, proofText) := StructuredSource.Constructed.blockTerms 1024 instructions
       | throwError "connection-view-proposal: unsupported constructed instruction shape"
+    Alignment.tracePhase "admission view syntax printed"
     let view ← parseTerm viewText
     let proof ← parseTerm proofText
     let modelName := mkIdent `model

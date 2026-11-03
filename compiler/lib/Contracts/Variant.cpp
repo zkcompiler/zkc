@@ -143,7 +143,7 @@ descriptor(const json::Value &tree, unsigned depth, TypeParseBudget &budget) {
   if (auto s = nominal.getAsString(); s && s->empty())
     return std::nullopt;
   auto *arms = (*root)[1].getAsArray();
-  if (!arms || arms->empty() || arms->size() > 32)
+  if (!arms || arms->empty() || arms->size() > VariantDescriptorAlternatives)
     return std::nullopt;
   VariantDescriptor result{nominal, {}};
   std::set<std::string> labels;
@@ -192,7 +192,7 @@ decodeVariant(std::string_view type, unsigned depth, TypeParseBudget *budget) {
   return tree ? descriptor(*tree, depth, *budget) : std::nullopt;
 }
 std::optional<std::string> encodeVariant(const VariantDescriptor &d) {
-  if (d.alternatives.size() > 32)
+  if (d.alternatives.size() > VariantDescriptorAlternatives)
     return std::nullopt;
   json::Array arms;
   for (const auto &arm : d.alternatives) {

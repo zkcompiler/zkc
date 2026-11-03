@@ -25,27 +25,27 @@ def childDimension : BoundarySelector childOwner.protocol.signature .index :=
 def childWidth : BoundarySelector childOwner.protocol.signature .index :=
   ⟨.input (.there (.there .here)), ⟨0, by decide⟩, by decide⟩
 def childClaim : BoundarySelector childOwner.protocol.signature scalar :=
-  ⟨.input (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
+  ⟨.input (.there (.there (.there (.there (.there .here))))), ⟨1, by decide⟩, by decide⟩
 def childPoint : BoundarySelector childOwner.protocol.signature vector :=
-  ⟨.output (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
-def childValue : BoundarySelector childOwner.protocol.signature scalar :=
   ⟨.output (.there (.there (.there (.there (.there .here))))), ⟨1, by decide⟩, by decide⟩
+def childValue : BoundarySelector childOwner.protocol.signature scalar :=
+  ⟨.output (.there (.there (.there (.there (.there (.there .here)))))), ⟨1, by decide⟩, by decide⟩
 
 def childInitialPoint : BoundarySelector childOwner.protocol.signature vector :=
-  ⟨.input (.there (.there (.there .here))), ⟨1, by decide⟩, by decide⟩
+  ⟨.input (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
 
 def childInput : ApplicationBinding childOwner (childOwner.clause (childOwner.namedClause "initial_sum")).subject :=
   by bind_contract
 
 abbrev callContext : List Ty :=
-  [vector, scalar, vector, .index, .index, .index, vector, scalar, .index,
+  [SumcheckPendingBodies.custodyType, vector, scalar, vector, .index, .index, .index, vector, scalar, .index,
     .service "random.bls12-381.fr/0"]
 
 def publicReductionCall : CheckedApplication childOwner callContext where
   caller := publicOwner
   roles := [0, 1]
   site := "label_726564756365"
-  operands := (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) .nil)))))))
+  operands := (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil))))))))
   occurrence := by
     iterate 7 apply ApplicationOccurrence.next
     exact ApplicationOccurrence.here _
@@ -111,7 +111,7 @@ theorem child_claim_at_call
     (returned : Nat → Values (Component (assignment F G)) childOwner.protocol.outputs) :
     childClaim.read (ProtocolContext.enter {} publicReductionCall.site [0, 1])
       (publicReductionCall.boundary {} environment returned) =
-      environment 1 (.there .here) := by
+      environment 1 (.there (.there .here)) := by
   exact publicReductionCall.input_substitution {} environment returned childClaim _ rfl
 
 variable [CommRing F]
@@ -130,8 +130,8 @@ theorem child_residual_at_call (remaining count : Nat)
         (publicReductionCall.boundary {} environment returned) = some claim ∧
       Residual remaining count table point claim) ↔
     ∃ point claim,
-      (returned 1).get (.there (.there (.there (.there .here)))) = some point ∧
-      (returned 1).get (.there (.there (.there (.there (.there .here))))) = some claim ∧
+      (returned 1).get (.there (.there (.there (.there (.there .here))))) = some point ∧
+      (returned 1).get (.there (.there (.there (.there (.there (.there .here)))))) = some claim ∧
       Residual remaining count table point claim := by
   erw [publicReductionCall.output_substitution {} environment returned childPoint _ rfl,
     publicReductionCall.output_substitution {} environment returned childValue _ rfl]

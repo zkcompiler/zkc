@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "CommonRequirements.h"
 #include "ScopedWitness.h"
 #include "WrittenSource.h"
 #include "zkc/Contracts/Declarations.h"
@@ -38,7 +39,7 @@ Error Checker::run() {
     return written.takeError();
   if (auto error = expandLayoutSections(syntax, work))
     return error;
-  if (!collect() || !imports() || !classifyServices() ||
+  if (!collect() || !imports() || !indexDeclarations() || !classifyServices() ||
       !prepareNotationSyntax())
     return types.takeError();
   namesReady = true;
@@ -69,8 +70,14 @@ Error Checker::run() {
       return error;
     output.writtenSources = std::move(*written);
   }
+  // Rule associations have catalog contracts; installed primitives infer
+  // theirs like any primitive declaration.
+  auto ruled = [&](const Declaration &decl) {
+    return output.declarationIndex->ruleAssociation(decl.id) != nullptr;
+  };
   for (auto &decl : output.declarations)
-    if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
+    if (!decl.abstract && !ruled(decl) &&
+        !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Oracle ||
          decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
@@ -106,6 +113,7 @@ Error Checker::run() {
   };
   // The vector is the checked contract; this index only accelerates collection.
   // Repeated sites need one condition, with one representative origin chain.
+  // Keyed by lookup key; local to this one checking pass.
   std::map<unsigned, std::map<std::pair<Boundary, std::string>, unsigned>>
       admissionIndices;
   types.recordAdmission = [this,
@@ -143,7 +151,7 @@ Error Checker::run() {
   // Preserve the independent signature facts, without running those phases.
   if (failedSignatures)
     return Error::success();
-  if (!prepareOperators())
+  if (!checkInstalledSignatures() || !prepareOperators())
     return types.takeError();
   if (!relationIdentities())
     return types.takeError();
@@ -215,6 +223,9 @@ Error Checker::run() {
   }
   if (recoveryDiagnostics && !recoveryDiagnostics->empty())
     return Error::success();
+  if (auto error = checkCommonControlRequirements(output.declarations,
+                                                  output.assets, work))
+    return error;
   if (!constructions() || !entries() || !sourceClaims())
     return types.takeError();
   inferredContracts.clear();
@@ -226,7 +237,11 @@ Error Checker::run() {
     return types.takeError();
   output.names = std::make_shared<NameEnvironment>(
       NameEnvironment{std::move(modules), std::move(visible)});
-  return checkScopedSources(output, work);
+  if (auto error = checkScopedSources(output, work))
+    return error;
+  // The scoped witness check re-resolves but records nothing, so every
+  // recorded route is final here.
+  return computeSourceAuthorities(output, assetDomains, work);
 }
 std::shared_ptr<const SyntaxDeclaration>
 Checker::retainSyntax(DeclarationId owner) {
@@ -389,8 +404,10 @@ bool Checker::collect() {
     decl.completes = source.completes;
     decl.permissions = source.permissions;
     decl.resource = source.resource;
-    decl.logical = source.logical;
-    decl.sealed = source.sealed || source.resource.has_value();
+    decl.logical =
+        source.logical ||
+        (source.kind == Declaration::Kind::Record && !source.roles.empty());
+    decl.sealed = source.sealed;
     if (source.effects)
       decl.effectAllowance = EffectSummary{*source.effects};
     decl.inputOrder = source.inputOrder;
@@ -444,6 +461,7 @@ bool Checker::collect() {
                               source.target,
                           source.span);
       decl.domain = assetType(sort, found->identity());
+      assetDomains.emplace(decl.id.index, found - output.assets.begin());
     } else if (source.kind == Declaration::Kind::Domain) {
       auto sorts = protocol::domainSorts();
       auto sort = llvm::find_if(sorts, [&](const std::string &sort) {
@@ -537,6 +555,17 @@ std::optional<DeclarationId>
 Checker::resolve(const Declaration &context, StringRef name, Span span,
                  bool required, std::vector<ModuleLookup> *route,
                  std::optional<DeclarationId> *provider) {
+  return lookupPath(context, name, span, required, route, provider, true);
+}
+std::optional<DeclarationId>
+Checker::probe(const Declaration &context, StringRef name, Span span,
+               std::optional<DeclarationId> *provider) {
+  return lookupPath(context, name, span, false, nullptr, provider, false);
+}
+std::optional<DeclarationId>
+Checker::lookupPath(const Declaration &context, StringRef name, Span span,
+                    bool required, std::vector<ModuleLookup> *route,
+                    std::optional<DeclarationId> *provider, bool record) {
   if (!types.charge(1, span))
     return {};
   const auto written = name;
@@ -610,22 +639,38 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
   if (root && selectedProvider) {
     if (provider)
       *provider = selectedProvider;
-    if (checkingVisibility &&
-        !recordReference(context, *selectedProvider, *root, written, span))
+    if (record && checkingVisibility &&
+        !recordReference(context, ReferenceRoute::Path, *selectedProvider,
+                         *root, written, span))
       return {};
   }
   return root;
 }
-bool Checker::recordReference(const Declaration &owner, DeclarationId provider,
-                              DeclarationId target, StringRef written,
-                              Span span,
+bool Checker::recordReference(const Declaration &owner, ReferenceRoute route,
+                              DeclarationId provider, DeclarationId target,
+                              StringRef written, Span span,
                               std::optional<std::string> abstractModule) {
+  // Selection over a frozen project and the scoped witness check re-resolve
+  // checked names; only the checking pass records source references.
+  if (!checkingVisibility ||
+      (replayedOwner && *replayedOwner == owner.id.index))
+    return true;
   if (!types.charge(written.size() + 1 +
                         (abstractModule ? abstractModule->size() : 0),
                     span))
     return false;
+  // Checking may resolve one written occurrence more than once, for example a
+  // constructor name as a callee and then as its nominal type. The occurrence
+  // and its route are recorded once.
+  if (!recordedReferences
+           .emplace(owner.id.index, route, provider.index, target.index,
+                    span.source.index, span.begin, span.end, written.str(),
+                    abstractModule)
+           .second)
+    return true;
   output.api.references.push_back({owner.id, provider, target, span,
-                                   written.str(), std::move(abstractModule)});
+                                   written.str(), std::move(abstractModule),
+                                   route});
   return true;
 }
 bool Checker::retainAPI() {
@@ -650,7 +695,21 @@ bool Checker::retainAPI() {
 std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
                                                     ArrayRef<std::string> names,
                                                     Span span) {
-  if (!types.charge(names.size() * (decl.roles.size() + 1), span))
+  auto result = roleArguments(decl, names, span);
+  if (!result)
+    return {};
+  if (result->empty()) {
+    types.fail("source.roles", "role set must be nonempty and distinct", span);
+    return {};
+  }
+  llvm::sort(*result);
+  return result;
+}
+std::optional<std::vector<unsigned>>
+Checker::roleArguments(const Declaration &decl, ArrayRef<std::string> names,
+                       Span span) {
+  if (!types.charge(names.size() * (decl.roles.size() + names.size() + 1),
+                    span))
     return {};
   std::vector<unsigned> result;
   for (auto &name : names) {
@@ -659,13 +718,13 @@ std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
       types.fail("source.roles", "unknown participant: " + name, span);
       return {};
     }
-    result.push_back(found - decl.roles.begin());
-  }
-  llvm::sort(result);
-  if (result.empty() ||
-      std::adjacent_find(result.begin(), result.end()) != result.end()) {
-    types.fail("source.roles", "role set must be nonempty and distinct", span);
-    return {};
+    unsigned role = found - decl.roles.begin();
+    if (llvm::is_contained(result, role)) {
+      types.fail("source.roles", "participant substitution must be injective",
+                 span);
+      return {};
+    }
+    result.push_back(role);
   }
   return result;
 }
@@ -716,6 +775,7 @@ Expected<std::shared_ptr<const AuthoringStorage>> Checker::retainAnalysis() {
   for (unsigned i = 0; i < result->layoutBodies.size(); ++i)
     if (!result->layoutBodies[i])
       result->layoutBodies[i] = output.layoutHeaders[i];
+  result->declarationIndex = output.declarationIndex;
   result->api = output.api;
   result->lexicalResolutions = output.lexicalResolutions;
   result->names = output.names ? output.names

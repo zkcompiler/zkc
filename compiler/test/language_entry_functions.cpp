@@ -1,9 +1,13 @@
 #include "../lib/Language/BindingWitness.h"
+#include "support/ExternalSupply.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Project.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/SHA256.h"
 using namespace llvm;
 using namespace zkc::language;
 using zkc::test::refuses;
@@ -131,6 +135,51 @@ int main() {
         limited.tokens = 1;
         refuses(closeEntry(project, "Work<Identity,3>", limited),
                 "source.limit");
+      });
+  cases.run(
+      "authored Function inputs pass complete opaque ordinary values", [] {
+        std::string source = R"(module sample;
+      pub struct Secret { value:index }
+      #[sealed] pub struct Sealed { pub value:index }
+      pub struct Empty { private:() }
+      pub struct Nested { pub child:Secret }
+      pub enum Choice { Some(Secret), None() }
+      entry fn Pass<T:Type>(value:T)->T { return value; }
+      protocol Raw roles(P)(value:Secret@P)->(out:index@P) {
+        return value.value;
+      }
+    )";
+        unsigned count = 0;
+        for (StringRef type :
+             {"Secret", "Sealed", "Empty", "Nested", "Choice", "[Secret;0]"}) {
+          source += "entry fn Echo" + std::to_string(count++) +
+                    "(value:" + type.str() + ")->" + type.str() +
+                    " {return Pass(value);}";
+        }
+        auto project = take(check(source));
+        for (unsigned i = 0; i < count; ++i) {
+          auto entry = take(closeEntry(project, "Echo" + std::to_string(i)));
+          require(entry.root().inputs.front().type ==
+                      entry.root().outputs.front().type,
+                  "whole opaque passage changed its closed nominal type");
+          Layouts layouts(entry);
+          auto layout = take(layouts.get(entry.root().inputs.front().type));
+          require(layout->permissions.copy && layout->permissions.drop,
+                  "typed passage lost ordinary usage permissions");
+          if (i < 3)
+            require(!layout->constructible,
+                    "typed passage granted a private or sealed constructor");
+        }
+        // Closing a raw Protocol selects no external operation. It publishes
+        // the private component, whose fresh supply the SDK's Entry admission
+        // refuses: it cannot be reconstructed from arbitrary fields or bytes.
+        auto raw = take(zkc::test::closeNativeRun(project, "sample::Raw"));
+        Layouts rawLayouts(raw);
+        auto port = take(rawLayouts.protocolPort(raw.protocol().inputs[0]));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(*port.body, "value"),
+            {"value", "value.value"},
+            "raw Protocol port lost its private constructor marks");
       });
   cases.run("external static names are unique across captured namespaces", [] {
     auto captured = take(
@@ -416,9 +465,16 @@ int main() {
     )";
         auto entry = take(close(source));
         require(entry.invocations().size() == 1, "verifier closure missing");
-        refuses(
-            closeEntry(entry.project(), "sample::Family", {}, EntryKind::Proof),
-            "source.ingress");
+        // The direct proof selection publishes the sealed prover witness; the
+        // SDK's Entry admission demands its supply only from operations that
+        // consume it, so Verify never does.
+        auto family = take(closeEntry(entry.project(), "sample::Family", {},
+                                      EntryKind::Proof));
+        Layouts layouts(family);
+        auto secret = take(layouts.protocolPort(family.protocol().inputs[1]));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(*secret.body, "secret"), {"secret"},
+            "sealed prover witness lost its supply mark");
       });
   cases.run("lazy proof APIs retain ordinary arithmetic operator resolution",
             [] {
@@ -630,6 +686,41 @@ int main() {
     LayoutIdentities identities(budget);
     require(take(identities.get(*x)) != take(identities.get(*y)),
             "candidate identity erased source family binding");
+  });
+  cases.run("generated families bind the installation before collection", [] {
+    for (StringRef source : {protocol, proof}) {
+      auto project = take(check(source));
+      require(project.installationIdentity() == installedCatalogIdentity(),
+              "checked project lost its installation identity");
+      unsigned families = 0;
+      for (const auto &decl : project.declarations()) {
+        if (!decl.generated)
+          continue;
+        const auto &family = *decl.generated;
+        auto fingerprint = [&](StringRef installation) {
+          SHA256 hash;
+          for (StringRef part :
+               {project.capture().identity(), installation,
+                StringRef(
+                    project.declarations()[family.target.index].qualifiedName),
+                StringRef(family.member)}) {
+            uint64_t size = part.size();
+            uint8_t prefix[8];
+            for (unsigned i = 0; i < 8; ++i)
+              prefix[i] = static_cast<uint8_t>(size >> (8 * i));
+            hash.update(prefix);
+            hash.update(part);
+          }
+          return toHex(hash.final(), true);
+        };
+        require(family.identity == fingerprint(project.installationIdentity()),
+                "generated family does not bind the actual installation");
+        require(family.identity != fingerprint(""),
+                "generated family retained the uninitialized installation");
+        ++families;
+      }
+      require(families != 0, "fixture has no generated families");
+    }
   });
   cases.run("generated traversal is bounded by declared limits", [] {
     Limits limits;

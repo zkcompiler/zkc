@@ -106,7 +106,7 @@ private def noRows : Json := arr [empty, empty]
 
 private def envelope (domains relations definitions : List Json) : Json :=
   arr [.str "zkc.structured-source/0", .str "original", .str digest, .str "main",
-    arr domains, arr relations, empty, arr definitions, empty, rows, noRows]
+    arr domains, arr relations, empty, arr definitions, empty, rows, arr [empty, empty, empty]]
 
 private def subject : Json := envelope [arr domainFields]
   [arr relationFields, arr (relationFields.set 1 (.str "Unused"))]
@@ -282,7 +282,7 @@ private def run : IO Unit := do
       ("draw-empty-owner", strings ["draw", "", scalarDomain], "structured-string"),
       ("restrict-not-array", strings ["restrict", "P"], "structured-array"),
       ("restrict-empty-name", arr [.str "restrict", strings [""]], "structured-string"),
-      ("restrict-role-capacity", arr [.str "restrict", strings (List.replicate 17 "P")], "structured-list-limit"),
+      ("restrict-role-capacity", arr [.str "restrict", strings (List.replicate 1025 "P")], "structured-list-limit"),
       ("statement-selector-shape", arr [.str "statement", .str "R", .str "P", toJson (0 : Nat), .null], "structured-array"),
       ("statement-acceptance-string", arr [.str "statement", .str "R", empty, .str "0", .null], "structured-natural"),
       ("statement-acceptance-bool", arr [.str "statement", .str "R", empty, .bool false, .null], "structured-natural"),
@@ -324,10 +324,10 @@ private def run : IO Unit := do
       ("interface-null", .null, "structured-array"),
       ("roster-not-array", arr [.str "protocol", .str "P", empty, empty], "structured-array"),
       ("roster-empty-name", arr [.str "protocol", strings [""], empty, empty], "structured-string"),
-      ("roster-capacity", arr [.str "protocol", strings (List.replicate 17 "P"), empty, empty], "structured-list-limit"),
+      ("roster-capacity", arr [.str "protocol", strings (List.replicate 1025 "P"), empty, empty], "structured-list-limit"),
       ("scope-not-array", arr [.str "protocol", strings ["P"], strings ["P"], empty], "structured-array"),
       ("scope-empty-name", arr [.str "protocol", strings ["P"], arr [strings [""]], empty], "structured-string"),
-      ("scope-capacity", arr [.str "protocol", strings ["P"], arr [strings (List.replicate 17 "P")], empty], "structured-list-limit"),
+      ("scope-capacity", arr [.str "protocol", strings ["P"], arr [strings (List.replicate 1025 "P")], empty], "structured-list-limit"),
       ("ports-capacity", arr [.str "protocol", strings ["P"], arr (List.replicate 513 empty), empty], "structured-list-limit")
     ] do
     check label (hasError (Format.interface value) code)
@@ -443,6 +443,13 @@ private def run : IO Unit := do
   for text in ["[-{}eE.123]", "quote\"backslash\\", String.ofList (List.replicate 65 '['),
       String.ofList (List.replicate 1025 '9')] do
     check "lexical-punctuation-inside-strings" (succeeds (Format.parse (Json.str text).compress))
+
+  check "restrict-role-boundary" (succeeds
+    (Format.descriptor (arr [.str "restrict", strings (List.replicate 1024 "P")])))
+  check "roster-boundary" (succeeds (Format.interface
+    (arr [.str "protocol", strings (List.replicate 1024 "P"), empty, empty])))
+  check "scope-boundary" (succeeds (Format.interface
+    (arr [.str "protocol", strings ["P"], arr [strings (List.replicate 1024 "P")], empty])))
 
   -- These are well-shaped wire records, not successful semantic admission.
   -- Never sort, deduplicate, or infer a relation/formula binding in the decoder.

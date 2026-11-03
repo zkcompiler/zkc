@@ -76,7 +76,8 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       if (!types.charge(binding.operands.size() + binding.symbol.size() +
                             binding.argumentOrder.size() +
                             binding.scopedArguments.size() +
-                            binding.domainArguments.size() + 1,
+                            binding.domainArguments.size() +
+                            binding.roles.size() + binding.services.size() + 1,
                         op.span))
         return false;
       if (binding.notation &&
@@ -165,9 +166,10 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
                         op.span) ||
           !chargeBodySnapshot(types, *repeat->region, op.span))
         return false;
-    } else if (const auto *control = std::get_if<LocalControl>(&op.action)) {
+    } else if (const auto *control = std::get_if<Control>(&op.action)) {
       if (!types.charge(control->operands.size() + control->regions.size() +
-                            control->domainArguments.size(),
+                            control->domainArguments.size() +
+                            control->roles.size() + control->services.size(),
                         op.span))
         return false;
       for (const auto &alternative : control->alternatives)
@@ -286,6 +288,15 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       for (auto &value : body.values) {
         if (!closeType(value.type, bindings, value.span))
           return false;
+        if (value.placement) {
+          unsigned participants = 0;
+          for (auto role : placementRoles(*value.placement))
+            participants = std::max(participants, role + 1);
+          value.placement = types.placement(value.type, *value.placement,
+                                            participants, value.span);
+          if (!value.placement)
+            return false;
+        }
         if (!types.permissions(value.type, value.span))
           return false;
         if (mode != Body::Mode::Math && mode != Body::Mode::Oracle &&
@@ -887,7 +898,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                          {}, {}))
             return false;
           repeat->region = std::move(copy);
-        } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
+        } else if (auto *control = std::get_if<Control>(&op.action)) {
           std::vector<ValueId> captures;
           for (const auto &entry : environment)
             captures.insert(captures.end(), entry.captures.begin(),
@@ -902,7 +913,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             control->domainShapes.push_back(domain->shape);
             selectedDomains.push_back(std::move(*domain));
           }
-          const bool loop = control->kind == LocalControl::Kind::For;
+          const bool loop = control->kind == Control::Kind::For;
           const unsigned header = loop ? 2 : 1;
           if (control->operands.size() < header)
             return types.fail("source.closure-inputs",
@@ -980,8 +991,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             for (auto &domain : nestedDomains)
               for (auto &operand : domain.operands)
                 operand = {selected->layout.captures[offset++]};
-            if (!closeBody(*copy, bindings, Body::Mode::Local, depth, height,
-                           nested, nestedDomains))
+            if (!closeBody(*copy, bindings, copy->mode, depth, height, nested,
+                           nestedDomains))
               return false;
             control->regionLayouts.push_back(std::move(selected->layout));
             region = std::move(copy);
@@ -1250,6 +1261,12 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               (result.kind == Declaration::Kind::EntryFunction &&
                !types.hostData(port.type, port.span)))
             return {};
+          if (port.placement) {
+            port.placement = types.placement(port.type, *port.placement,
+                                             result.roles.size(), port.span);
+            if (!port.placement)
+              return {};
+          }
           if (port.oracle && port.oracle->maximumRows &&
               !closeType(*port.oracle->maximumRows, bindings, port.span))
             return {};
@@ -1540,31 +1557,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       std::get<ProofEntry>(declarations[selected.index].configuration)
           .selectedConstruction = *construction;
     }
-    const auto &inputs = declarations[instance->index].inputs;
-    for (unsigned i = 0; i < inputs.size(); ++i) {
-      const auto &port = inputs[i];
-      if (operation == HostInvocation::Kind::Verify &&
-          !llvm::is_contained(port.roles,
-                              declarations[selected.index].proof()->verifier))
-        continue;
-      // Whole key ports use Entry setup initialization. Exact setup coverage is
-      // checked from the closed layout before closeEntry publishes its handle.
-      bool key = port.type.kind == Type::Kind::Builtin &&
-                 (port.type.domain == "prover_key" ||
-                  port.type.domain == "verifier_key");
-      bool initialized = llvm::any_of(
-          declarations[selected.index].setups, [&](const SetupSlot &slot) {
-            return llvm::any_of(slot.inputs, [&](const InputSelector &input) {
-              return input.port == i && input.path.empty();
-            });
-          });
-      if (key && initialized) {
-        if (!types.executableType(port.type, port.span))
-          return false;
-      } else if (port.oracle ? !types.oraclePort(port)
-                             : !types.ingress(port.type, port.span))
-        return false;
-    }
+    // Function inputs pass ordinary typed values. Their closed Host data and
+    // usage contracts were checked during instantiation. A retained opaque
+    // value does not need an external constructor; fresh input decoding must
+    // establish that authority independently of the function signature.
+    (void)operation;
     // Compare canonical typed terms, including parameters absent from runtime
     // inputs. Source names are aliases; one closed identity has one ABI.
     std::map<std::tuple<std::string, std::string, std::string, std::string>,

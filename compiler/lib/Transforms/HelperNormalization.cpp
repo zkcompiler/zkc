@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Interfaces/Collection.h"
+#include <functional>
 
 using namespace mlir;
 namespace zkc::mathematical {
@@ -92,30 +93,47 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
       // independent meaning reader checks the final result coordinates too.
       auto &body = proposal->front();
       OpBuilder builder(helper.getContext());
-      for (auto dim : llvm::make_early_inc_range(body.getOps<data::DimOp>())) {
-        if (!work)
+      std::function<LogicalResult(Block &, unsigned)> simplify =
+          [&](Block &block, unsigned depth) -> LogicalResult {
+        if (depth > 64)
           return failure();
-        --work;
-        auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
-        auto extent = type.getStaticExtent(dim.getAxisAttr().getInt());
-        if (!extent)
-          continue;
-        builder.setInsertionPoint(dim);
-        auto index = data::IndexOp::create(
-            builder, dim.getLoc(), dim.getOutput().getType(),
-            builder.getIntegerAttr(builder.getIntegerType(64, false), *extent));
-        dim.getOutput().replaceAllUsesWith(index.getOutput());
-        dim.erase();
-      }
-      if (failed(foldArrayProjections(body, work)))
+        for (auto &op : block)
+          for (Region &region : op.getRegions())
+            if (failed(simplify(region.front(), depth + 1)))
+              return failure();
+        for (auto dim :
+             llvm::make_early_inc_range(block.getOps<data::DimOp>())) {
+          if (!work)
+            return failure();
+          --work;
+          auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
+          auto extent = type.getStaticExtent(dim.getAxisAttr().getInt());
+          if (!extent)
+            continue;
+          builder.setInsertionPoint(dim);
+          auto index = data::IndexOp::create(
+              builder, dim.getLoc(), dim.getOutput().getType(),
+              builder.getIntegerAttr(builder.getIntegerType(64, false),
+                                     *extent));
+          dim.getOutput().replaceAllUsesWith(index.getOutput());
+          dim.erase();
+        }
+        if (failed(foldArrayProjections(block, work)))
+          return failure();
+        for (auto &op : llvm::make_early_inc_range(llvm::reverse(block))) {
+          if (!work)
+            return failure();
+          --work;
+          // Finite work and selected regions are retained even when unused:
+          // their reached work and arm premises are part of their meaning.
+          if (isTotal(&op) && !finite::isComputation(&op) &&
+              !isa<data::BranchOp>(op) && op.use_empty())
+            op.erase();
+        }
+        return success();
+      };
+      if (failed(simplify(body, 0)))
         return failure();
-      for (auto &op : llvm::make_early_inc_range(llvm::reverse(body))) {
-        if (!work)
-          return failure();
-        --work;
-        if (isTotal(&op) && !finite::isComputation(&op) && op.use_empty())
-          op.erase();
-      }
       if (failed(provenance.checkSimplification(*unsimplified, body)) ||
           failed(checker.check(helper, body)))
         return failure();

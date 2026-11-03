@@ -14,6 +14,7 @@ def repository(tmp_path, monkeypatch):
         project.mkdir(parents=True)
         dependency = 'shared' if name != 'three' else 'separate'
         (project / 'zkc.toml').write_text(f'''format="zkc.project/0"
+source-format="zkc"
 [modules]
 "{name}"="main.zkc"
 [dependencies]
@@ -22,7 +23,7 @@ base="../../../libraries/{dependency}"
     for name in ('shared', 'separate'):
         package = tmp_path / 'libraries' / name
         package.mkdir(parents=True)
-        (package / 'zkc.toml').write_text(f'format="zkc.project/0"\n[modules]\n"{name}"="lib.zkc"\n')
+        (package / 'zkc.toml').write_text(f'format="zkc.project/0"\nsource-format="zkc"\n[modules]\n"{name}"="lib.zkc"\n')
     return tmp_path
 
 
@@ -55,6 +56,7 @@ def test_selected_and_unclassified_changes_select_all(repository):
 def test_catalog_changes_select_users_and_missing_keys_select_all(repository):
     project = repository / 'examples/projects/one/zkc.toml'
     project.write_text('''format="zkc.project/0"
+source-format="zkc"
 [workspace]
 path="../../../zkc.workspace.toml"
 [dependencies]

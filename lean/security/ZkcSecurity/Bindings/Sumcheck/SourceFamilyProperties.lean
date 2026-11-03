@@ -52,24 +52,25 @@ def terminalCheck (_installation : Installation program) (original : List (model
     (invoke (tables model program.payload.definitions).closed
       SumcheckHelperBodies.checkHelper)
     (.cons (some original) (.cons (returned.get (.there (.there (.there (.there .here)))))
-      (.cons (returned.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind fun checked =>
+      (.cons (returned.get (.there (.there (.there (.there (.there .here))))))
+        (.cons (returned.get (.there (.there (.there (.there (.there (.there .here))))))) .nil))))).bind fun checked =>
     PIR.Process.done (checked.get .here)
 
 theorem terminal_check (installation : Installation program) (reference : PrefixState (model.Field field) Frame 0)
     (count : Nat) (shape : reference.original.length = 2^count) (small : count < 64)
     (finite : reference.original.length < indexLimit) :
     terminalCheck model installation reference.original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots) =
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots) =
       .done (some (decide (reference.scalar = reference.entries.sum))) := by
   have pointBound : reference.point.length < indexLimit := by
     rw [terminal_point_length model reference count shape]
     exact lt_trans small (by decide +kernel)
   have checker := Multilinear.Admission.check_eq model program.payload.linked
-    installation.admissionBodies reference.original reference.point reference.scalar finite pointBound
+    installation.admissionBodies reference.original 0 reference.point reference.scalar finite pointBound
   unfold terminalCheck
   change ((invoke (tables model program.payload.definitions).closed
     SumcheckHelperBodies.checkHelper
-    (Multilinear.Admission.checkInputs model field reference.original reference.point reference.scalar)).bind _).bind _ = _
+    (Multilinear.Admission.terminalInputs model field SumcheckPendingBodies.custodySlot reference.original 0 reference.point reference.scalar)).bind _).bind _ = _
   rw [Evaluation.closed_invoke_componentTablesOn, checker]
   have valid := terminal_shape model reference count shape small
   simp only [valid, true_and, PIR.Process.interpret, PIR.Process.bind]
@@ -95,13 +96,13 @@ theorem one_reduction_with_original (installation : Installation program) (site 
   rw [SumcheckReductionReference.body_reference model _ program.payload.linked
     (installation.validatorBodies model) _ _ _ distinct]
   unfold one
-  have initial := (Sum.initial model field "s0").invokeOn (model := model)
+  have initial := (SumcheckReductionReference.pendingLaw model).invokeOn (model := model)
     (I := Occurrence.signature model.toCarriers)
     (helper := initialHelper)
     _ program.payload.linked (installation.initial model) (.cons scalar .nil) trivial
   change invoke (tables model program.payload.definitions).closed
     initialHelper (.cons scalar .nil) =
-    PIR.Process.done (.cons [] (.cons scalar .nil)) at initial
+    PIR.Process.done (.cons 0 (.cons [] (.cons scalar .nil))) at initial
   change ((invoke (tables model program.payload.definitions).closed
     initialHelper (.cons scalar .nil)).bind _).bind _ = _
   rw [initial]
@@ -174,7 +175,7 @@ def one_no_bounded (absorb : Interface (Occurrence.signature model.toCarriers) E
       intro reached out valid
       let next := Classical.choose valid
       have result : next.original = original ∧ next.frame = callerFrame ∧
-          out = (SumcheckVerifierBodies.reduceReturnValues (encode model 0 next).slots, callerFrame) ∧
+          out = (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 next).slots, callerFrame) ∧
           (layout model).representation.No next := Classical.choose_spec valid
       have same : next.original = original := result.1
       have returned := result.2.2.1
@@ -313,7 +314,7 @@ theorem control_shape (count : Nat) : (controlTable model count).length = 2^coun
 theorem terminal_equation (installation : Installation program) (original : List (model.Field field))
     (reference : PrefixState (model.Field field) Frame 0) (small : reference.point.length < 64) :
     terminalCheck model installation original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots) =
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots) =
       if original.length < indexLimit then .done (some (decide
         (Multilinear.Admission.HasShape original reference.point.length 1 ∧
           (Zkc.Polynomial.Multilinear.restrictPrefixValues original reference.point).sum = reference.scalar)))
@@ -321,15 +322,15 @@ theorem terminal_equation (installation : Installation program) (original : List
   unfold terminalCheck
   change (((invoke (tables model program.payload.definitions).closed
     SumcheckHelperBodies.checkHelper
-    (Multilinear.Admission.checkInputs model field original reference.point reference.scalar)).bind _).bind _) = _
+    (Multilinear.Admission.terminalInputs model field SumcheckPendingBodies.custodySlot original 0 reference.point reference.scalar)).bind _).bind _) = _
   rw [Evaluation.closed_invoke_componentTablesOn]
   by_cases finite : original.length < indexLimit
   · rw [Multilinear.Admission.check_eq model program.payload.linked
-      installation.admissionBodies original reference.point reference.scalar finite (lt_trans small (by decide +kernel))]
+      installation.admissionBodies original 0 reference.point reference.scalar finite (lt_trans small (by decide +kernel))]
     simp only [finite, ↓reduceIte, PIR.Process.interpret, PIR.Process.bind]
     rfl
   · rw [SourceAdmission.check_overflow model field _ program.payload.linked
-      installation.admissionBodies original reference.point reference.scalar finite small]
+      installation.admissionBodies original 0 reference.point reference.scalar finite small]
     simp only [finite, ↓reduceIte, PIR.Process.interpret, PIR.Process.bind]
 
 theorem terminal_invalid (installation : Installation program) (original : List (model.Field field))
@@ -337,7 +338,7 @@ theorem terminal_invalid (installation : Installation program) (original : List 
     (referenceShape : reference.original.length = 2^count) (small : count < 64)
     (invalid : original.length ≠ 2^count) :
     PIR.Yields (fun out => out = some false) (terminalCheck model installation original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots)) := by
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots)) := by
   have length := terminal_point_length model reference count referenceShape
   have pointSmall : reference.point.length < 64 := by simpa only [length] using small
   rw [terminal_equation model installation original reference pointSmall]
@@ -363,7 +364,7 @@ theorem one_unbounded (installation : Installation program) (site : String)
     (installation.validatorBodies model)
     (Occurrence.table model program.payload) installation.maximum
     (ProtocolContext.enter {} site [0,1]) (context_distinct site)
-    (some []) (some scalar) (some count) (some handle)]
+    (some 0) (some []) (some scalar) (some count) (some handle)]
   simp [SumcheckReductionReference.reference, denoteRepeatOn, unbounded, PIR.Process.bind]
 
 theorem one_invalid_shape (installation : Installation program) (site : String)

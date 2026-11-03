@@ -10,8 +10,22 @@ fn hex(bytes: &[u8]) -> String {
 
 fn schema(kind: &str, ty: &str, leaves: &[&str]) -> Json {
     json!({"kind":kind,"identity":hex(&Sha256::digest(ty.as_bytes())),"type":ty,
-        "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+        "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+        "constructible":true,"permissions":["Copy","Drop"],
         "fields":[],"alternatives":[],"leaves":leaves})
+}
+fn field(name: &str, offset: usize, schema: &Json) -> Json {
+    json!({"name":name,"offset":offset,"public":true,"placement":null,"schema":schema})
+}
+/// A data-placed scalar port with one native component per placed role.
+fn port(name: &str, index: u32, roles: &[u32], schema: &Json) -> Json {
+    let components: Vec<Json> = roles
+        .iter()
+        .map(|role| json!({"path":[],"leaf":0,"role":role,"facet":"data","native":index}))
+        .collect();
+    json!({"name":name,"index":index,"native":[index],
+        "placement":{"kind":"data","roles":roles},"components":components,
+        "type":schema["type"],"schema":schema})
 }
 fn interface(schema: &Json, parameter: bool) -> Json {
     json!({"format":"zkc.language-interface/0","capture":hex(&Sha256::digest(b"capture")),
@@ -58,7 +72,7 @@ fn record(ty: &str, fields: &[(&str, Json)], constructible: bool) -> Json {
         fields
             .iter()
             .map(|(name, schema)| {
-                let field = json!({"name":name,"offset":offset,"schema":schema});
+                let field = field(name, offset, schema);
                 offset += schema["leaves"].as_array().unwrap().len();
                 field
             })
@@ -111,13 +125,13 @@ fn joint_package() -> Vec<u8> {
     let native = json!({"format":"zkc.run/0","candidate":program.to_string(),"entry":"pair",
         "roles":["role00000000","role00000001"],"steps":[
             {"role":0,"instruction":0,"anchor":null},{"role":1,"instruction":0,"anchor":null}]});
-    let port = json!({"name":"value","index":0,"native":[0],"roles":["P","V"],
-        "type":"bool","schema":boolean});
+    let port = port("value", 0, &[0, 1], &boolean);
     let child_interface = json!({"format":"zkc.language-interface/0","setups":[],"relations":[],
         "capture":hex(&Sha256::digest(b"capture")),"original":hex(&Sha256::digest(b"checked source")),
         "toolchain":hex(&Sha256::digest(b"toolchain")),"entry":"sample::Pair::run",
         "protocol":"pair","job":{"kind":"run"},"protocols":[{"symbol":"pair",
-            "roles":["P","V"],"inputs":[port],"outputs":[port],"services":[],"clauses":[]}]});
+            "roles":["P","V"],"inputs":[port],"outputs":[port],"services":[],
+            "common_input_requirements":[],"clauses":[]}]});
     let mut child: Json = serde_json::from_slice(&boolean_package(false)).unwrap();
     child["interface"] = json!(child_interface.to_string());
     child["artifact"] = json!(native.to_string());
@@ -186,10 +200,10 @@ fn joint_setup_package() -> Vec<u8> {
     ] {
         let mut ty = schema("builtin", logical, &[logical]);
         ty["constructible"] = json!(false);
-        view["protocols"][0]["inputs"].as_array_mut().unwrap().push(
-            json!({"name":name,"index":index,"native":[index],"roles":["P"],
-                "type":logical,"schema":ty}),
-        );
+        view["protocols"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(port(name, index, &[0], &ty));
         let physical = zkc_runtime::vm::PhysicalType::default_for(
             zkc_runtime::vm::LogicalType::parse(logical).unwrap(),
         )
@@ -204,6 +218,21 @@ fn joint_setup_package() -> Vec<u8> {
     native["candidate"] = json!(program.to_string());
     child["interface"] = json!(view.to_string());
     child["artifact"] = json!(native.to_string());
+    host["deployments"][0]["package"] = json!(child.to_string());
+    root["artifact"] = json!(host.to_string());
+    serde_json::to_vec(&root).unwrap()
+}
+/// The joint Run deployment with a value agreement on its shared port.
+fn common_input_package() -> Vec<u8> {
+    let mut root: Json = serde_json::from_slice(&joint_package()).unwrap();
+    let mut host: Json = serde_json::from_str(root["artifact"].as_str().unwrap()).unwrap();
+    let mut child: Json =
+        serde_json::from_str(host["deployments"][0]["package"].as_str().unwrap()).unwrap();
+    let mut view: Json = serde_json::from_str(child["interface"].as_str().unwrap()).unwrap();
+    view["protocols"][0]["common_input_requirements"] = json!([{"components":[
+        {"input":0,"role":"P","path":[]},{"input":0,"role":"V","path":[]}],
+        "observation":{"kind":"value"}}]);
+    child["interface"] = json!(view.to_string());
     host["deployments"][0]["package"] = json!(child.to_string());
     root["artifact"] = json!(host.to_string());
     serde_json::to_vec(&root).unwrap()
@@ -535,7 +564,7 @@ fn joint_children_use_native_defaults_and_exact_context_overrides() {
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     assert!(checked.get("execution").is_none());
     for (services, code) in [
-        (json!({"unknown":{}}), "entry-host-context-role"),
+        (json!({"unknown":{}}), "entry-input-roles"),
         (json!({"P":{"unknown":0}}), "entry-service-names"),
     ] {
         document["deployments"]["child.Pair"]["services"] = services;
@@ -629,7 +658,7 @@ fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() 
     );
     for (inputs, code) in [
         (json!({"P":{"value":true}}), "entry-input-names"),
-        (json!({"unknown":{}}), "entry-host-context-role"),
+        (json!({"unknown":{}}), "entry-input-roles"),
         (
             json!({"P":{"pk":{"file":"../prover.key","fingerprint":hex(&prover.material_fingerprint())}}}),
             "entry-input-reference",
@@ -734,11 +763,9 @@ fn structured_arguments_and_returns_follow_the_same_schema() {
     let boolean = schema("boolean", "bool", &["bool"]);
     let unit = schema("unit", "()", &[]);
     let mut pair = schema("tuple", "((),index)", &["index"]);
-    pair["fields"] =
-        json!([{"name":"0","offset":0,"schema":unit},{"name":"1","offset":0,"schema":index}]);
+    pair["fields"] = json!([field("0", 0, &unit), field("1", 0, &index)]);
     let mut record = schema("record", "sample::Data", &["index", "bool"]);
-    record["fields"] =
-        json!([{"name":"item","offset":0,"schema":pair},{"name":"ok","offset":1,"schema":boolean}]);
+    record["fields"] = json!([field("item", 0, &pair), field("ok", 1, &boolean)]);
     let bytes = package(
         &interface(&record, true),
         json!([]),
@@ -772,17 +799,16 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     let boolean = schema("boolean", "bool", &["bool"]);
     let metadata = interface(&boolean, true);
     std::fs::write(root.join("interface.json"), metadata.to_string()).unwrap();
-    let port = |name, index, roles: Json| {
-        json!({"name":name,"index":index,"native":[index],
-        "roles":roles,"type":"bool","schema":boolean})
-    };
+
     let proof = json!({"format":"zkc.language-interface/0","capture":metadata["capture"],
         "original":metadata["original"],"toolchain":metadata["toolchain"],"entry":"sample::Proof",
         "protocol":"sample_Protocol","setups":[],"relations":[],"protocols":[{
             "symbol":"sample_Protocol","roles":["P","V"],
-            "inputs":[port("statement",0,json!(["P","V"])),port("secret",1,json!(["P"]))],
-            "outputs":[port("accepted",0,json!(["V"]))],"services":[],"clauses":[]}],
-        "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],"completion":null,"target":null,
+            "inputs":[port("statement", 0, &[0, 1], &boolean),port("secret", 1, &[0], &boolean)],
+            "outputs":[port("accepted", 0, &[1], &boolean)],"services":[],
+            "common_input_requirements":[],"clauses":[]}],
+        "job":{"kind":"proof","prover":"P","verifier":"V",
+            "public":[{"port":0,"path":[],"role":"V"}],"completion":null,"target":null,
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
             "gates":[],"construction":{"kind":"authored","format":"zkc.framed/0"}}});
     std::fs::write(root.join("proof-interface.json"), proof.to_string()).unwrap();
@@ -801,7 +827,7 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     let manifest = root.join("zkc.toml");
     std::fs::write(
         &manifest,
-        "format = \"zkc.project/0\"\n[modules]\nsample = \"main.zkc\"\n",
+        "format = \"zkc.project/0\"\nsource-format = \"zkc\"\n[modules]\nsample = \"main.zkc\"\n",
     )
     .unwrap();
     let compiler = root.join("compiler");
@@ -851,4 +877,542 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     assert_eq!(suppressed["status"], "executed", "{suppressed}");
     assert!(suppressed.get("publication").is_none());
     assert!(suppressed.get("results").is_none());
+}
+
+#[test]
+fn common_inputs_command_writes_the_produced_context_and_reports_its_pin() {
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &common_input_package());
+    let role = |name: &str, value: bool| {
+        let path = dir.path().join(format!("{name}-{value}.json"));
+        std::fs::write(&path, json!({"value":value}).to_string()).unwrap();
+        format!("--input={name}={}", path.display())
+    };
+    let output = |name: &str| dir.path().join(name);
+    let produced = run(
+        "common-inputs",
+        &options,
+        &[
+            "--deployment=child.Pair".into(),
+            role("P", true),
+            role("V", true),
+            format!("--output={}", output("context").display()),
+        ],
+    );
+    assert_eq!(produced["status"], "produced", "{produced}");
+    let bytes = std::fs::read(output("context")).unwrap();
+    assert_eq!(
+        produced["context_sha256"],
+        json!(hex(&Sha256::digest(&bytes)))
+    );
+    let tree = zkc_format::logical::decode_tree(&bytes).unwrap();
+    assert_eq!(tree[0], "zkc.input-bindings/0");
+    assert_eq!(
+        tree[3],
+        json!([[
+            [["role00000000", "0", []], ["role00000001", "0", []]],
+            tree[3][0][1],
+            "value",
+            ["active", "5a4b4356000501"]
+        ]])
+    );
+    // Disagreeing participants produce no context, and nothing is published.
+    let refused = run(
+        "common-inputs",
+        &options,
+        &[
+            "--deployment=child.Pair".into(),
+            role("P", true),
+            role("V", false),
+            format!("--output={}", output("refused").display()),
+        ],
+    );
+    assert_eq!(refused["code"], "input-binding-Value", "{refused}");
+    assert!(!output("refused").exists());
+    // Only a static Run deployment of the package has a context.
+    let unknown = run(
+        "common-inputs",
+        &options,
+        &[
+            "--deployment=absent".into(),
+            role("P", true),
+            role("V", true),
+            format!("--output={}", output("unknown").display()),
+        ],
+    );
+    assert_eq!(unknown["code"], "entry-host-deployment", "{unknown}");
+}
+
+#[test]
+fn function_results_are_encoded_under_the_invocation_ledger() {
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &boolean_package(false));
+    let arguments = dir.path().join("arguments.json");
+    std::fs::write(&arguments, r#"{"flag":true}"#).unwrap();
+    let results = dir.path().join("result.json");
+    let invocation = |capacity: Option<&Path>| {
+        let mut invocation = vec![
+            format!("--input={}", arguments.display()),
+            format!("--results={}", results.display()),
+        ];
+        invocation.extend(capacity.map(|path| format!("--capacity={}", path.display())));
+        invocation
+    };
+    let report = run("run", &options, &invocation(None));
+    assert_eq!(report["status"], "executed", "{report}");
+    // A Function's root pools the instruction and iteration meter, which its
+    // rendered usage reports beside the bytes, in the one shape of every
+    // report; the Function's own counters stay under `usage`.
+    let root = &report["execution"]["invocation"];
+    assert_eq!(
+        root.as_object().unwrap().keys().collect::<Vec<_>>(),
+        [
+            "instructions",
+            "iterations",
+            "live_value_bytes",
+            "logical_bytes",
+            "total_value_bytes"
+        ]
+    );
+    assert!(root["instructions"].as_u64().unwrap() > 0);
+    assert_eq!(root["iterations"], 0);
+    assert!(report["execution"]["usage"].get("instructions").is_none());
+    let used = root["logical_bytes"].as_u64().unwrap();
+    std::fs::remove_file(&results).unwrap();
+    // Execution fits, but the first 512-byte result buffer does not: the
+    // encoder draws on the invocation root, which the record's logical work
+    // bounds, and publishes nothing.
+    let capacity = dir.path().join("capacity.json");
+    std::fs::write(
+        &capacity,
+        json!([
+            "zkc.native-capacity/0",
+            "65536",
+            "4096",
+            "16777216",
+            "67108864",
+            ["1000000", "100000", (used + 511).to_string()],
+            ["67108864", "268435456"]
+        ])
+        .to_string(),
+    )
+    .unwrap();
+    let report = run("run", &options, &invocation(Some(&capacity)));
+    assert_eq!(report["code"], "entry-output-limit", "{report}");
+    assert_eq!(report["phase"], "results");
+    assert_eq!(report["capacity"][5][2], json!((used + 511).to_string()));
+    assert!(!results.exists());
+}
+
+#[test]
+fn material_limits_select_the_setup_material_that_invocations_and_keys_read() {
+    use zkc::execution::MaterialLimits;
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &joint_setup_package());
+    let bounds = zkc_cpu::Policy::default().ark_bounds();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
+    let (verifier, prover) = (keys.verifier_key(), keys.prover_key());
+    let verifier_bytes = verifier.to_bytes(&bounds).unwrap();
+    std::fs::write(dir.path().join("verifier.key"), &verifier_bytes).unwrap();
+    std::fs::write(
+        dir.path().join("prover.key"),
+        prover.to_bytes(&bounds).unwrap(),
+    )
+    .unwrap();
+    let input = dir.path().join("arguments.json");
+    std::fs::write(
+        &input,
+        r#"{"flag":{"P":{"value":true},"V":{"value":false}}}"#,
+    )
+    .unwrap();
+    let context = dir.path().join("invocations.json");
+    std::fs::write(
+        &context,
+        json!({"format":"zkc.entry-invocations/0","deployments":{
+            "child.Pair":{"operation":"run","authority":{"format":"zkc.entry-setups/0",
+                "keys":{"pcs":hex(&verifier.metadata().key_id())}},"session":"setup-test",
+                "services":{},"setups":{"pcs":"verifier.key"},"inputs":{"P":{
+                    "pk":{"file":"prover.key","fingerprint":hex(&prover.material_fingerprint())}
+                }}}
+        }})
+        .to_string(),
+    )
+    .unwrap();
+    let selection = dir.path().join("material.json");
+    let select = |setup_bytes: u64| {
+        let mut record = MaterialLimits::DEFAULT.record();
+        record[3] = json!(setup_bytes.to_string());
+        std::fs::write(&selection, record.to_string()).unwrap();
+        format!("--material-limits={}", selection.display())
+    };
+    let check = |extra: &[String]| {
+        let arguments = [
+            "--dry-run".into(),
+            format!("--input={}", input.display()),
+            format!("--invocations={}", context.display()),
+        ];
+        run("run", &options, &[&arguments[..], extra].concat())
+    };
+    // Without a selection the defaults apply, and the report gives the
+    // effective record.
+    let default = check(&[]);
+    assert_eq!(default["status"], "inputs-checked", "{default}");
+    assert_eq!(default["material_limits"], MaterialLimits::DEFAULT.record());
+    // The selected setup allowance bounds the material that the invocation
+    // document reads.
+    let length = verifier_bytes.len() as u64;
+    let below = check(&[select(length - 1)]);
+    assert_eq!(below["code"], "entry-setup-limit", "{below}");
+    let exact = check(&[select(length)]);
+    assert_eq!(exact["status"], "inputs-checked", "{exact}");
+    assert_eq!(exact["material_limits"][3], json!(length.to_string()));
+    // Setup material may be raised to its maximum and never above it.
+    let maximum = MaterialLimits::MAXIMUM.setup_bytes as u64;
+    let raised = check(&[select(maximum)]);
+    assert_eq!(raised["status"], "inputs-checked", "{raised}");
+    assert_eq!(raised["material_limits"][3], json!(maximum.to_string()));
+    let above = check(&[select(maximum + 1)]);
+    assert_eq!(above["code"], "entry-setup-bytes-limit", "{above}");
+    // The selection file is an input that publication never replaces.
+    let results = format!("--results={}", selection.display());
+    let protected = run(
+        "run",
+        &options,
+        &[
+            format!("--input={}", input.display()),
+            format!("--invocations={}", context.display()),
+            select(length),
+            results,
+        ],
+    );
+    assert_eq!(protected["code"], "entry-output-path", "{protected}");
+    let mut kept = MaterialLimits::DEFAULT.record();
+    kept[3] = json!(length.to_string());
+    assert_eq!(
+        std::fs::read_to_string(&selection).unwrap(),
+        kept.to_string()
+    );
+    // Key files given with `--key` are read under the same allowance.
+    let common = dir.path().join("common");
+    std::fs::create_dir(&common).unwrap();
+    let package = pinned(&common, &common_input_package());
+    let produce = |limits: String| {
+        let path = common.join("value.json");
+        std::fs::write(&path, json!({"value":true}).to_string()).unwrap();
+        run(
+            "common-inputs",
+            &package,
+            &[
+                "--deployment=child.Pair".into(),
+                format!("--input=P={}", path.display()),
+                format!("--input=V={}", path.display()),
+                format!("--key=pcs={}", dir.path().join("verifier.key").display()),
+                format!("--output={}", common.join("context").display()),
+                limits,
+            ],
+        )
+    };
+    let below = produce(select(length - 1));
+    assert_eq!(below["code"], "entry-setup-limit", "{below}");
+    let read = produce(select(length));
+    assert_ne!(read["code"], "entry-setup-limit", "{read}");
+    assert_eq!(read["material_limits"][3], json!(length.to_string()));
+}
+
+/// A selection file under `directory`, and its option.
+fn interface_selection(directory: &Path, record: &Json) -> String {
+    let path = directory.join("interface-limits.json");
+    std::fs::write(&path, record.to_string()).unwrap();
+    format!("--interface-limits={}", path.display())
+}
+
+#[test]
+fn interface_limits_select_the_allowances_of_every_interface_read() {
+    use std::os::unix::fs::PermissionsExt;
+    use zkc::entry::InterfaceLimits;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let lowered = InterfaceLimits {
+        work: 64,
+        ..InterfaceLimits::DEFAULT
+    };
+    let work = "entry-interface-work-limit";
+    // Each command reads under the defaults without the option and under the
+    // selection with it; the report gives the effective record either way.
+    let check = |command: &str, options: &[String], extra: &[String]| {
+        let default = run(command, options, extra);
+        assert_ne!(default["status"], "refused", "{command}: {default}");
+        assert_eq!(
+            default["interface_limits"],
+            InterfaceLimits::DEFAULT.record()
+        );
+        let option = interface_selection(root, &lowered.record());
+        let refused = run(command, options, &[extra, &[option]].concat());
+        assert_eq!(refused["code"], work, "{command}: {refused}");
+        assert_eq!(refused["interface_limits"], lowered.record());
+    };
+
+    // A pinned Function package.
+    let function = pinned(root, &boolean_package(false));
+    let arguments = root.join("arguments.json");
+    std::fs::write(&arguments, r#"{"flag":true}"#).unwrap();
+    let input = format!("--input={}", arguments.display());
+    check("inspect", &function, &[]);
+    let templates = root.join("templates");
+    check(
+        "prepare",
+        &function,
+        &[format!("--output={}", templates.display())],
+    );
+    let bindings = root.join("bindings.rs");
+    check(
+        "bindings",
+        &function,
+        &[format!("--output={}", bindings.display())],
+    );
+    check("run", &function, &[input.clone(), "--dry-run".into()]);
+    let common = root.join("common");
+    std::fs::create_dir(&common).unwrap();
+    let value = common.join("value.json");
+    std::fs::write(&value, json!({"value":true}).to_string()).unwrap();
+    check(
+        "common-inputs",
+        &pinned(&common, &common_input_package()),
+        &[
+            "--deployment=child.Pair".into(),
+            format!("--input=P={}", value.display()),
+            format!("--input=V={}", value.display()),
+            format!("--output={}", common.join("context").display()),
+        ],
+    );
+
+    // A pinned proof package: prove and verify read its interface under the
+    // selection before admitting its artifact, which this test does not.
+    let boolean = schema("boolean", "bool", &["bool"]);
+    let proof_interface = json!({"format":"zkc.language-interface/0",
+        "capture":hex(&Sha256::digest(b"capture")),"original":hex(&Sha256::digest(b"checked source")),
+        "toolchain":hex(&Sha256::digest(b"toolchain")),"entry":"sample::Proof",
+        "protocol":"sample_Protocol","setups":[],"relations":[],"protocols":[{
+            "symbol":"sample_Protocol","roles":["P","V"],
+            "inputs":[port("statement", 0, &[0, 1], &boolean)],
+            "outputs":[port("accepted", 0, &[1], &boolean)],"services":[],
+            "common_input_requirements":[],"clauses":[]}],
+        "job":{"kind":"proof","prover":"P","verifier":"V",
+            "public":[{"port":0,"path":[],"role":"V"}],"completion":null,"target":null,
+            "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
+            "gates":[],"construction":{"kind":"authored","format":"zkc.framed/0"}}});
+    let proving = root.join("proof");
+    std::fs::create_dir(&proving).unwrap();
+    let proof = pinned(
+        &proving,
+        &package(&proof_interface, json!([]), json!([]), json!([])),
+    );
+    for command in ["prove", "verify"] {
+        let default = run(command, &proof, &["--dry-run".into()]);
+        assert_ne!(default["code"], work, "{default}");
+        assert_eq!(
+            default["interface_limits"],
+            InterfaceLimits::DEFAULT.record()
+        );
+        let option = interface_selection(root, &lowered.record());
+        let refused = run(command, &proof, &["--dry-run".into(), option]);
+        assert_eq!(refused["code"], work, "{command}: {refused}");
+    }
+
+    // A source project, through a stand-in compiler that publishes the same
+    // Function for any request: compile, inspect, prepare and run, and init
+    // and new, which prepare the project they create.
+    let metadata = interface(&schema("boolean", "bool", &["bool"]), true);
+    std::fs::write(root.join("interface.json"), metadata.to_string()).unwrap();
+    std::fs::write(root.join("package.json"), boolean_package(false)).unwrap();
+    let report = json!({"format":"zkc.source-check/0","status":"checked","phase":"complete",
+        "scope":"definitions","capture":metadata["capture"],"installation":metadata["toolchain"],
+        "source_claim_inventory":[],"entries":[{"name":"sample::Main","kind":"function"}]});
+    std::fs::write(root.join("check.json"), report.to_string()).unwrap();
+    let compiler = root.join("compiler");
+    std::fs::write(
+        &compiler,
+        format!(
+            "#!/bin/sh\ncd '{}' || exit 7\ncase \"$1\" in\nlanguage-interface) cat interface.json;;\nlanguage-check) cat check.json;;\nlanguage-package) cat package.json;;\n*) exit 8;;\nesac\n",
+            root.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&compiler, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let project = root.join("project");
+    std::fs::create_dir(&project).unwrap();
+    std::fs::write(project.join("main.zkc"), "module sample;\n").unwrap();
+    let manifest = project.join("zkc.toml");
+    std::fs::write(
+        &manifest,
+        "format = \"zkc.project/0\"\nsource-format = \"zkc\"\n[modules]\nsample = \"main.zkc\"\n",
+    )
+    .unwrap();
+    let source = [
+        format!("--project={}", manifest.display()),
+        format!("--compiler={}", compiler.display()),
+    ];
+    check("compile", &source, &[]);
+    check("inspect", &source, &[]);
+    check("prepare", &source, &[]);
+    check("run", &source, &[input, "--dry-run".into()]);
+    let tool = [format!("--compiler={}", compiler.display())];
+    for command in ["init", "new"] {
+        for (case, limits) in [("default", None), ("lowered", Some(lowered))] {
+            let created = root.join(format!("{command}-{case}"));
+            if command == "init" {
+                std::fs::create_dir(&created).unwrap();
+            }
+            let mut extra = vec![created.display().to_string()];
+            extra.extend(limits.map(|l| interface_selection(root, &l.record())));
+            let report = run(command, &tool, &extra);
+            let expected = limits.unwrap_or(InterfaceLimits::DEFAULT);
+            assert_eq!(report["interface_limits"], expected.record(), "{report}");
+            match limits {
+                None => assert_eq!(report["status"], "initialized", "{report}"),
+                Some(_) => assert_eq!(report["code"], work, "{command}: {report}"),
+            }
+        }
+    }
+
+    // A selection above a maximum refuses with that allowance's code before
+    // any interface is read; another record refuses as a format error.
+    for (field, code) in [(1, work), (2, "entry-interface-descriptor-bytes-limit")] {
+        let mut record = InterfaceLimits::MAXIMUM.record();
+        let maximum: u64 = record[field].as_str().unwrap().parse().unwrap();
+        record[field] = json!((maximum + 1).to_string());
+        let report = run("inspect", &function, &[interface_selection(root, &record)]);
+        assert_eq!(report["code"], code, "{report}");
+        assert_eq!(report["phase"], "arguments");
+    }
+    let mut other = InterfaceLimits::DEFAULT.record();
+    other[0] = json!("zkc.material-limits/0");
+    let report = run("inspect", &function, &[interface_selection(root, &other)]);
+    assert_eq!(report["code"], "interface-limits-format", "{report}");
+
+    // The selection file is an input that publication never replaces.
+    let option = interface_selection(root, &InterfaceLimits::DEFAULT.record());
+    let selection = root.join("interface-limits.json");
+    for (command, extra) in [
+        (
+            "run",
+            vec![
+                format!("--input={}", arguments.display()),
+                format!("--results={}", selection.display()),
+            ],
+        ),
+        (
+            "bindings",
+            vec![format!("--output={}", selection.display())],
+        ),
+    ] {
+        let report = run(command, &function, &[extra, vec![option.clone()]].concat());
+        assert_eq!(report["code"], "entry-output-path", "{command}: {report}");
+    }
+    assert_eq!(
+        std::fs::read_to_string(&selection).unwrap(),
+        InterfaceLimits::DEFAULT.record().to_string()
+    );
+    // Only the Entry view and a CPU package read a Host interface.
+    let report = run("inspect", &source, &["--view=api".into(), option.clone()]);
+    assert_eq!(report["code"], "cli-option", "{report}");
+    let report = run("compile", &source, &["--target=evm".into(), option]);
+    assert_eq!(report["code"], "cli-usage", "{report}");
+}
+
+/// The explicit pairing gate uses the compiler build selected by
+/// `ZKC_COMPILER_BIN`; a relative path is resolved from the checkout root.
+fn fresh_compiler() -> std::path::PathBuf {
+    let directory = std::env::var_os("ZKC_COMPILER_BIN")
+        .expect("set ZKC_COMPILER_BIN to the freshly built compiler directory");
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(directory)
+        .join("zkc-compile")
+}
+
+#[test]
+#[ignore = "explicit gate: pairs the CLI with the fresh zkc-compile in ZKC_COMPILER_BIN"]
+fn fresh_cpp_full_protocol_roster_runs_under_a_raised_interface_selection() {
+    use zkc::entry::InterfaceLimits;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let roster = (0..1024)
+        .map(|role| format!("R{role}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = root.join("many.zkc");
+    std::fs::write(
+        &source,
+        format!(
+            "module m;protocol Many roles({roster})(x:index@R0)->(r:bool@R1){{let r@R1=true;return(r=r);}}"
+        ),
+    )
+    .unwrap();
+    let compiler = [
+        format!("--compiler={}", fresh_compiler().display()),
+        "--source-format=zkc".into(),
+        format!("--module=m={}", source.display()),
+    ];
+    // The generated Host's own interface fits the defaults; its structure
+    // and child deployment, which inspection reads, need the raised work
+    // selection. An eighth of the installed maximum suffices.
+    let raised = InterfaceLimits {
+        work: InterfaceLimits::MAXIMUM.work / 8,
+        ..InterfaceLimits::DEFAULT
+    };
+    let selection = interface_selection(root, &raised.record());
+    let output = root.join("many.zkpkg");
+    let compiled = run(
+        "compile",
+        &compiler,
+        &["m::Many".into(), format!("--output={}", output.display())],
+    );
+    assert_eq!(compiled["status"], "compiled", "{compiled}");
+    let package = pinned(root, &std::fs::read(&output).unwrap());
+    let refused = run("inspect", &package, &[]);
+    assert_eq!(refused["code"], "entry-interface-work-limit", "{refused}");
+    assert_eq!(refused["phase"], "interface");
+    let inspected = run("inspect", &package, std::slice::from_ref(&selection));
+    assert_eq!(inspected["status"], "inspected", "{inspected}");
+    assert_eq!(inspected["interface_limits"], raised.record());
+    assert_eq!(inspected["invocations"].as_array().unwrap().len(), 1);
+
+    // Prepare the arguments under the same selection, and run the Host from
+    // the pinned package and from source.
+    let templates = root.join("templates");
+    let prepared = run(
+        "prepare",
+        &package,
+        &[
+            selection.clone(),
+            format!("--output={}", templates.display()),
+        ],
+    );
+    assert_eq!(prepared["status"], "prepared", "{prepared}");
+    let arguments = templates.join("arguments.json");
+    let mut document: Json = serde_json::from_slice(&std::fs::read(&arguments).unwrap()).unwrap();
+    assert_eq!(document["inputs"].as_object().unwrap().len(), 1024);
+    document["inputs"]["R0"]["x"] = json!("3");
+    std::fs::write(&arguments, document.to_string()).unwrap();
+    let invocation = [
+        format!("--input={}", arguments.display()),
+        "--no-results".into(),
+    ];
+    for target in [&package[..], &[&compiler[..], &["m::Many".into()]].concat()] {
+        let refused = run("run", target, &invocation);
+        assert_eq!(refused["code"], "entry-interface-work-limit", "{refused}");
+        let executed = run(
+            "run",
+            target,
+            &[&invocation[..], std::slice::from_ref(&selection)].concat(),
+        );
+        assert_eq!(executed["status"], "executed", "{executed}");
+        assert_eq!(executed["interface_limits"], raised.record());
+    }
 }

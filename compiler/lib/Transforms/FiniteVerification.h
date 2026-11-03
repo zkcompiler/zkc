@@ -29,9 +29,14 @@ struct VerificationLimits {
   const protocol::SourceExecutionClosure *sourceClosure = nullptr;
   const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr;
   ScopedCallbackReader callback = {};
-  // Required exact site sequence for ordered scoped preparation. Empty only
-  // for readers whose enclosing numerical recipe checks occurrence names.
+  // The occurrence whose exact site sequence this reader owns: every
+  // instruction it consumes and every operation of a total helper it hands
+  // on takes the next site. A reader without it checks no site and refuses
+  // total helpers.
   llvm::StringRef finiteSite = {};
+  // Selected regions enclosing this occurrence. Total helper readers continue
+  // counting from it against the one selected nesting bound.
+  unsigned selectedDepth = 0;
   // Supplied only after inspecting the actual adjacent, sole-use native sum.
   // A scalar result consumes both source steps; a vector result consumes one.
   llvm::StringRef collectionSumSite = {};

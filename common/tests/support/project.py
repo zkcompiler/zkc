@@ -63,6 +63,11 @@ def project_inputs(path, *, manifests=None):
     return modules, assets
 
 
+def project_source_format(path):
+    """The source format a known-good test manifest selects for its closure."""
+    return tomllib.loads(Path(path).read_text())['source-format']
+
+
 def project_arguments(path):
     modules, assets = project_inputs(path)
     return ([f'--module={name}={source}' for name, source in sorted(modules.items())]
@@ -89,6 +94,8 @@ def copy_project(path, directory, *, manifest='zkc.toml'):
         shutil.copyfile(source, directory / target)
         copied_assets[name] = {'format': kind, 'path': target}
     target = directory / manifest
-    target.write_text(project_text({'format': 'zkc.project/0', 'modules': copied_modules,
+    target.write_text(project_text({'format': 'zkc.project/0',
+                                    'source-format': project_source_format(path),
+                                    'modules': copied_modules,
                                     'assets': copied_assets}))
     return target

@@ -142,128 +142,55 @@ pub(crate) fn apply(
     }
 }
 
-/// Independent native port facts, also used for exact implementation assembly.
+/// Native implementations of catalog contracts. Ports and parameter rules
+/// come from each declaration; rows name only contract and implementation.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{curve, random, transcript};
-    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
-        transcript::challenge(
-            "transcript.observe",
-            &[Transcript, Bytes, Bytes],
-            &[Transcript],
-            AttributeRule::None,
-        )
-        .implemented_by(&[
+        transcript::challenge("transcript.observe").implemented_by(&[
             "arkworks/transcript.observe",
             "dalek/transcript.observe",
             "plonky3/transcript.observe",
             "spongefish/transcript.observe",
         ]),
-        transcript::challenge(
-            "transcript.challenge",
-            &[Transcript, Bytes],
-            &[Transcript, Field],
-            AttributeRule::None,
-        )
-        .implemented_by(&[
+        transcript::challenge("transcript.challenge").implemented_by(&[
             "arkworks/transcript.challenge",
             "dalek/transcript.challenge",
             "plonky3/transcript.challenge",
             "spongefish/transcript.challenge",
         ]),
-        transcript::challenge(
-            "transcript.index",
-            &[Transcript, Bytes, Index],
-            &[Transcript, Index],
-            AttributeRule::None,
-        )
-        .implemented_by(&["plonky3/transcript.index"]),
-        transcript::observation(
-            "transcript.native.indexed.observe.data",
-            &[],
-            &[],
-            AttributeRule::NativeMessageTemplate,
-        )
-        .implemented_by(&[
+        transcript::challenge("transcript.index").implemented_by(&["plonky3/transcript.index"]),
+        transcript::observation("transcript.native.indexed.observe.data").implemented_by(&[
             "arkworks/transcript.native.indexed.observe.data",
             "dalek/transcript.native.indexed.observe.data",
             "plonky3/transcript.native.indexed.observe.data",
             "spongefish/transcript.native.indexed.observe.data",
         ]),
-        transcript::challenge(
-            "transcript.native.indexed.challenge",
-            &[Transcript, Indices],
-            &[Field, Transcript],
-            AttributeRule::NativeChallengeTemplate,
-        )
-        .implemented_by(&[
+        transcript::challenge("transcript.native.indexed.challenge").implemented_by(&[
             "arkworks/transcript.native.indexed.challenge",
             "dalek/transcript.native.indexed.challenge",
             "plonky3/transcript.native.indexed.challenge",
             "spongefish/transcript.native.indexed.challenge",
         ]),
-        transcript::challenge(
-            "transcript.native.indexed.index",
-            &[Transcript, Index, Indices],
-            &[Index, Transcript],
-            AttributeRule::NativeIndexTemplate,
-        )
-        .implemented_by(&["plonky3/transcript.native.indexed.index"]),
-        transcript::challenge(
-            "transcript.native.indexed.indices",
-            &[Transcript, Indices],
-            &[Indices, Transcript],
-            AttributeRule::NativeIndexBlock,
-        )
-        .implemented_by(&["plonky3/transcript.native.indexed.indices"]),
-        transcript::challenge(
-            "transcript.native.indexed.indices.search",
-            &[Transcript, Indices],
-            &[Indices, Index, Transcript],
-            AttributeRule::NativeGatedIndexBlock,
-        )
-        .implemented_by(&["plonky3/transcript.native.indexed.indices.search"]),
-        transcript::challenge(
-            "transcript.native.indexed.indices.gated",
-            &[Transcript, Index, Indices],
-            &[Indices, Transcript],
-            AttributeRule::NativeGatedIndexBlock,
-        )
-        .implemented_by(&["plonky3/transcript.native.indexed.indices.gated"]),
-        curve::operation(
-            "curve.commit",
-            &[Groups, Nonce],
-            &[Groups, Nonce],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.commit", "dalek/curve.commit"]),
-        curve::operation(
-            "curve.response",
-            &[Field, Field, Nonce],
-            &[Field],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.response", "dalek/curve.response"]),
-        random::operation(
-            "random.index",
-            &[Rng, Index],
-            &[Index, Rng],
-            AttributeRule::None,
-        )
-        .implemented_by(&["plonky3/random.index"]),
-        random::operation("random.draw", &[Rng], &[Field, Rng], AttributeRule::None)
-            .implemented_by(&[
-                "arkworks/random.draw",
-                "dalek/random.draw",
-                "plonky3/random.draw",
-            ]),
-        random::operation(
-            "random.vector",
-            &[Rng],
-            &[Vector, Rng],
-            AttributeRule::NaturalIndex,
-        )
-        .implemented_by(&[
+        transcript::challenge("transcript.native.indexed.index")
+            .implemented_by(&["plonky3/transcript.native.indexed.index"]),
+        transcript::challenge("transcript.native.indexed.indices")
+            .implemented_by(&["plonky3/transcript.native.indexed.indices"]),
+        transcript::challenge("transcript.native.indexed.indices.search")
+            .implemented_by(&["plonky3/transcript.native.indexed.indices.search"]),
+        transcript::challenge("transcript.native.indexed.indices.gated")
+            .implemented_by(&["plonky3/transcript.native.indexed.indices.gated"]),
+        curve::operation("curve.commit")
+            .implemented_by(&["arkworks/curve.commit", "dalek/curve.commit"]),
+        curve::operation("curve.response")
+            .implemented_by(&["arkworks/curve.response", "dalek/curve.response"]),
+        random::operation("random.index").implemented_by(&["plonky3/random.index"]),
+        random::operation("random.draw").implemented_by(&[
+            "arkworks/random.draw",
+            "dalek/random.draw",
+            "plonky3/random.draw",
+        ]),
+        random::operation("random.vector").implemented_by(&[
             "arkworks/random.vector",
             "dalek/random.vector",
             "plonky3/random.vector",

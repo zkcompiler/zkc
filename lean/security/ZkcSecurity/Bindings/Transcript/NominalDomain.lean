@@ -68,7 +68,7 @@ mutual
     | .field _ => 0
     | .vector _ | .indices | .groups _ => []
     | .group _ => 0
-    | .service _ => 0
+    | .service _ | .resourceUnit _ => 0
     | .oracle _ => ⟨⟨0, []⟩, .input 0⟩
     | .oracleSequence .. | .sequence _ => []
     | .product _ _ fields => modelProduct model fields

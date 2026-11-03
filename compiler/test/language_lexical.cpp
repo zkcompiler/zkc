@@ -232,9 +232,6 @@ void control() {
          "source.drop"},
         {"fn f(k:Required,n:index)->(){for _ in 0..n{consume k;}return ();}",
          "source.permission"},
-        {"fn f(s:State)->Fr{return s.value;}", "source.private"},
-        {"fn f(s:State,go:bool)->Fr{return if go{s.value}else{s.value};}",
-         "source.private"},
         {"fn f(x:Fr,n:index)->(){let mut s=make(x);consume s;for _ in "
          "0..n{s=make(x);}consume s;return ();}",
          "source.move"},
@@ -247,6 +244,11 @@ void control() {
         {"fn f(x:Fr,go:bool)->(){if go{let _=x;}+x;return ();}",
          "source.notation-visibility"}})
     refuses(source, code);
+  // A record's home module has field authority, including a selected read of
+  // an ordinary field in an affine record. Foreign-module access is checked
+  // separately by the record authority tests.
+  check("fn f(s:State)->Fr{return s.value;}");
+  check("fn f(s:State,go:bool)->Fr{return if go{s.value}else{s.value};}");
   refuses(
       "fn f<T:Type>(x:T,n:index)->T where (){for _ in 0..n{let y=x;}return x;}",
       "source.permission");

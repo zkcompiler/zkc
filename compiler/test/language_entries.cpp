@@ -1,3 +1,4 @@
+#include "support/ExternalSupply.h"
 #include "support/NativeCases.h"
 #include "zkc/Language/Project.h"
 using namespace llvm;
@@ -291,7 +292,8 @@ int main() {
     auto selected = take(close(source()));
     const auto &proof = *selected.entry().proof();
     require(proof.prover == 0 && proof.verifier == 1 &&
-                proof.publicInputs == std::vector<unsigned>{0} &&
+                proof.publicInputs ==
+                    std::vector<EntryInputSelection>{{0, {}, 1, {}}} &&
                 proof.services == std::vector<unsigned>{0} &&
                 proof.target == 0 && proof.acceptance.port == 0 &&
                 proof.acceptance.role == 1 && proof.acceptance.path.empty(),
@@ -444,13 +446,8 @@ int main() {
           "{setup pcs{vk,pk,statement};setup pcs{statement};}",
           "{setup pcs{vk,pk,statement,statement.ordinary};}",
           "{setup pcs{vk,pk,statement,absent};}"}) {
-      // Missing key ingress is refused before the coverage check when no slot
-      // exists.
-      refuses(close(setupSource(choices, "function")),
-              choices == ";" || choices == "{}" ||
-                      choices == "{setup pcs{vk,statement};}"
-                  ? "source.ingress"
-                  : "source.entry");
+      // Retained Function arguments still require exact setup coverage.
+      refuses(close(setupSource(choices, "function")), "source.entry");
     }
   });
   cases.run("proof keys stay with their declared initializer", [] {
@@ -473,13 +470,21 @@ int main() {
                               "public{statement}")),
             "source.entry");
   });
-  cases.run("setup initialization does not grant nested or state constructors",
-            [] {
-              for (StringRef type : {"(PK,)", "builtin(\"opening_state\",C)"})
-                refuses(close(replaceText(setupSource(), "pk:PK@P",
-                                          ("pk:" + type + "@P").str())),
-                        "source.ingress");
-            });
+  cases.run(
+      "setup initialization admits nested keys and publishes an "
+      "unconstructible opening state",
+      [] {
+        take(close(replaceText(setupSource(), "pk:PK@P", "pk:(PK,)@P")));
+        // Setup context values keep their recursive constructor demand,
+        // which the SDK's Entry admission applies to the operation.
+        auto entry = take(close(replaceText(
+            setupSource(), "pk:PK@P", "pk:builtin(\"opening_state\",C)@P")));
+        Layouts layouts(entry);
+        auto port = take(layouts.protocolPort(entry.protocol().inputs[1]));
+        zkc::test::requireWithheld(zkc::test::withheldSupply(*port.body, "pk"),
+                                   {"pk"},
+                                   "opening state lost its constructor mark");
+      });
 
   cases.run(
       "proof completion selects a prover Boolean and survives aliases", [] {

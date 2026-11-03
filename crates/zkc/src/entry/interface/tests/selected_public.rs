@@ -68,8 +68,7 @@ fn variant() -> (Value, NativeValue) {
                 zkc_runtime::vm::Type::Group => "group",
                 _ => "builtin",
             };
-            json!({"name":i.to_string(),"offset":i,
-            "schema":schema(kind, &logical.spelling(), json!([logical.spelling()]))})
+            json!({"name":i.to_string(),"offset":i,"public":true,"placement":null,"schema":schema(kind, &logical.spelling(), json!([logical.spelling()]))})
         })
         .collect();
     source["alternatives"] = json!([
@@ -102,10 +101,11 @@ fn fixture(source: &Value, ty: &PhysicalType) -> (Value, Value) {
             "selected",
             2,
             json!([2]),
-            json!(["検証者", "証明者"]),
+            json!([0, 1]),
             source.clone(),
         ));
-    doc["job"]["public"] = json!([0, 2]);
+    doc["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"検証者"},{"port":2,"path":[],"role":"検証者"}]);
     let mut artifact: Value = serde_json::from_str(&artifact).unwrap();
     let mut program: Value = serde_json::from_str(artifact[4].as_str().unwrap()).unwrap();
     for i in 0..2 {
@@ -558,7 +558,8 @@ fn selected_public_operation_specific_packages_resolve_present_role_ports() {
 
 fn verifier_only_public_fixture(projected: bool) -> (Value, Value) {
     let (mut doc, artifact) = unicode::proof_fixture();
-    doc["protocols"][0]["inputs"][0]["roles"] = json!(["検証者"]);
+    doc["protocols"][0]["inputs"][0]["placement"] = data_placement(json!([0]));
+    refresh_components(&mut doc["protocols"][0]["inputs"][0]);
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()
@@ -566,10 +567,11 @@ fn verifier_only_public_fixture(projected: bool) -> (Value, Value) {
             "extra",
             2,
             json!([2]),
-            json!(["検証者"]),
+            json!([0]),
             schema("boolean", "bool", json!(["bool"])),
         ));
-    doc["job"]["public"] = json!([0, 2]);
+    doc["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"検証者"},{"port":2,"path":[],"role":"検証者"}]);
     let mut artifact: Value = serde_json::from_str(&artifact).unwrap();
     let mut program: Value = serde_json::from_str(artifact[4].as_str().unwrap()).unwrap();
     program[3][1][4].as_array_mut().unwrap().remove(0);

@@ -8,7 +8,7 @@ public import Zkc.Source.Structured.CommonAdapter
 
 @[expose] public section
 
-/-! The actual eight-input Pending Rounds verifier. The carried initial point
+/-! The actual nine-input Pending Rounds verifier. The carried initial point
 is preserved through every adversarial reply and every refusal branch. -/
 
 set_option autoImplicit false
@@ -74,8 +74,8 @@ theorem repeatN_reads {I J : PIR.Signature} (operations : PIR.OperationInterpret
 
 def roundsResults (result : List F × F) :
     Values (Component (assignment F G)) Generated.Presentations.Gkr.Rounds.roundsOutputs :=
-  .cons none (.cons none (.cons none (.cons none (.cons none (.cons (some result.1)
-    (.cons (some result.2) .nil))))))
+  .cons none (.cons none (.cons none (.cons none (.cons none (.cons (some 0) (.cons (some result.1)
+    (.cons (some result.2) .nil)))))))
 
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
@@ -120,20 +120,20 @@ theorem repeat_prefix (ctx : ProtocolContext) (handle count : Nat) (pointPrefix 
     funext next
     exact ih next
 
-theorem tuple40_plain (point : List F) (claim : F) :
-    invoke (closed (F := F) (G := G)) GkrSourceBodies.sourceHelper40Helper
-      (.cons point (.cons claim .nil)) = .done (.cons point (.cons claim .nil)) := by
+theorem tuple40_plain (custody : CustodyToken) (point : List F) (claim : F) :
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper22Helper
+      (.cons custody (.cons point (.cons claim .nil))) = .done (.cons point (.cons claim .nil)) := by
   kernel_rfl
 
 theorem tuple49_plain (point : List F) (claim : F) :
-    invoke (closed (F := F) (G := G)) GkrSourceBodies.sourceHelper49Helper
-      (.cons point (.cons claim .nil)) = .done (.cons point (.cons claim .nil)) := by
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper26Helper
+      (.cons point (.cons claim .nil)) = .done (.cons 0 (.cons point (.cons claim .nil))) := by
   kernel_rfl
 
 /-- Exact current-source Rounds binding, from any pending initial point. -/
 theorem reads (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
-    (handle count : Nat) (bounded : count ≤ 4) (initialPoint : List F) (claim : F) :
-    (Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := F) (G := G) ctx (some initialPoint)
+    (handle count : Nat) (bounded : count ≤ 4) (initialCustody : CustodyToken) (initialPoint : List F) (claim : F) :
+    (Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := F) (G := G) ctx (some initialCustody) (some initialPoint)
       (some claim) (some count) (some handle)).interpret CommonAdapter.project =
       (GkrVerifier.rounds ctx handle count claim).bind
         (fun result => .done (roundsResults (initialPoint ++ result.1, result.2))) := by

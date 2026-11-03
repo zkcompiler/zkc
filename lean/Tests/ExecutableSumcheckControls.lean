@@ -17,9 +17,9 @@ the changed constant, an installed operation that implements another structured
 operation and a rebound name, each with its named reason. Semantic controls run
 the executable meaning on a small concrete instance (values in `ZMod 5`, every
 message a one-byte frame, a constant challenge) and fix observations the runtime
-reports for the same situations: the honest run returns from 190 instructions, a round
+reports for the same situations: the honest run returns from 194 instructions, a round
 message that fails the round check stops at the check's explicit rejection inside
-its local call after 23 instructions, and a stop inside a loop iteration leaves
+its local call after 25 instructions, and a stop inside a loop iteration leaves
 the call's frame, the iteration's frame and the participant's frame, innermost
 first. -/
 
@@ -156,12 +156,12 @@ theorem appendWrongOperation_refused : helperRefusal appendWrongOperation append
 rebound name could change what the formal denotes. -/
 def appendRebound : Validator :=
   withFunction actual appendName fun function =>
-    match function.inputs with
-    | [(first, _), (second, _)] =>
-        { function with body := [.operation "s0" "zkl_binding_11" [] [first, second] [first], .ret [first]] }
-    | _ => function
+    match function.inputs, function.body with
+    | (first, _) :: _, [.operation site binding parameters inputs _, .ret _] =>
+        { function with body := [.operation site binding parameters inputs [first], .ret [first]] }
+    | _, _ => function
 
-theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "s0") := by
+theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "lc_2_s0") := by
   decide +kernel
 
 /-! ## Semantic controls on a concrete instance -/
@@ -201,28 +201,28 @@ def observed (run : Run F G) :
     | .stopped _ site call => some (site, call)
     | .returned _ => none, run.used, run.transitions, run.messages)
 
-/-- The honest proof is accepted from 190 instructions, with 8 transitions and
-4 messages, as the runtime reports; at 189 the final return is not charged. -/
+/-- The honest proof is accepted from 194 instructions, with 8 transitions and
+4 messages, as the runtime reports; at 193 the final return is not charged. -/
 theorem honest_threshold :
-    (runAt 190 honest).accepts SumcheckProof.acceptancePosition = true ∧
-      observed (runAt 190 honest) = (none, 190, 8, 4) ∧
-      (runAt 189 honest).result.outcome = .stopped .exhausted := by
+    (runAt 194 honest).accepts SumcheckProof.acceptancePosition = true ∧
+      observed (runAt 194 honest) = (none, 194, 8, 4) ∧
+      (runAt 193 honest).result.outcome = .stopped .exhausted := by
   decide +kernel
 
 /-- A first round message that fails the round check stops at the check's
-explicit rejection inside its local call, after 23 instructions, 2 transitions
+explicit rejection inside its local call, after 25 instructions, 2 transitions
 and 2 messages, as the runtime reports. -/
 theorem wrong_round_rejected :
     (runAt 1000 wrongRound).result matches .stopped (.explicit .reject) _ _ ∧
       observed (runAt 1000 wrongRound) =
         (some (some "apply_18_label_726564756365_s27",
-          some ("apply_18_label_726564756365_s27", "_calculation_3")), 23, 2, 2) := by
+          some ("apply_18_label_726564756365_s27", "_calculation_3")), 25, 2, 2) := by
   decide +kernel
 
-/-- The shape decision's site comes from the retained helper, not its printed spelling. -/
-private def shapeDecisionSite : Option String :=
-  match ZkcExamples.Executable.SumcheckHelpers.checkFunction.body[5] with
-  | .cond site .. => some site
+/-- The table-length read is selected from the retained shape-check branch. -/
+private def shapeReadSite : Option String :=
+  match ZkcExamples.Executable.SumcheckHelpers.checkFunction.body[6] with
+  | .cond _ _ _ (.operation site .. :: _) _ _ => some site
   | _ => none
 
 /-- Budget 100 stops inside the terminal check's region, as the runtime reports
@@ -230,7 +230,7 @@ for that budget: the stop site is the instruction's, the local call the
 check's. -/
 theorem exhausted_in_check :
     observed (runAt 100 honest) =
-      (some (shapeDecisionSite, some ("s9", checkName)), 100, 8, 4) := by
+      (some (shapeReadSite, some ("s9", checkName)), 100, 8, 4) := by
   decide +kernel
 
 /-- A stop inside a round's local call leaves the call's frame, the iteration's

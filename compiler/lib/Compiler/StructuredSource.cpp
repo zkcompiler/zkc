@@ -11,6 +11,8 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
@@ -18,12 +20,14 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -50,6 +54,7 @@ constexpr uint64_t staticSiteByteLimit = 16 * 1024 * 1024;
 /// exported with the unit, closed under associated members.
 struct UsedIdentities {
   llvm::StringSet<> domains, services;
+  uint64_t typeWork = 8000000;
 };
 
 // This profile is deliberately smaller than the installed native catalogue.
@@ -73,13 +78,18 @@ Expected<runtime::BindingOp> primitiveBinding(Operation *op,
   if (!profile ||
       declaration.getArguments().size() != profile->staticParameters.size())
     return error("structured-source-binding");
-  // Enrollment and actual static formation are separate. This initial profile
-  // has only closed domain roots; future kinds require an explicit consumer.
+  // Slot roots are exact nominal custody identities, not algebraic domains.
   for (auto [argument, parameter] :
        llvm::zip(declaration.getArguments(), profile->staticParameters)) {
     auto domain = dyn_cast<StringAttr>(argument);
-    if (parameter.kind != StaticKind::Domain || !domain ||
-        installedDomains().identitySort(domain.getValue()) != parameter.sort)
+    if (parameter.kind != StaticKind::Domain || !domain)
+      return error("structured-source-binding");
+    if (parameter.sort == "Slot") {
+      if (!resourceUnitDomain(domain.getValue()))
+        return error("structured-source-binding");
+      continue;
+    }
+    if (installedDomains().identitySort(domain.getValue()) != parameter.sort)
       return error("structured-source-binding");
     used.domains.insert(domain.getValue().str());
   }
@@ -91,10 +101,13 @@ Expected<runtime::BindingOp> primitiveBinding(Operation *op,
 unsigned siteLimit(StructuredSourceProfile profile) {
   return profile == StructuredSourceProfile::Prepared ? 4096 : 512;
 }
-Error checkAttributes(Operation &op, ArrayRef<StringRef> allowed,
+// The operation's decided semantic fields are admitted; a discardable attribute
+// or call metadata is admitted only when the caller names it. Every admitted
+// attribute is then bounded for the wire.
+Error checkAttributes(Operation &op, ArrayRef<StringRef> named,
                       StructuredSourceProfile profile) {
   for (NamedAttribute attr : op.getAttrs()) {
-    if (!llvm::is_contained(allowed, attr.getName().getValue()))
+    if (!admitsField(&op, attr, named))
       return error("structured-source-attribute", attr.getName().getValue());
     // Protocol origin has a separate bounded tree validator; only its
     // template path can exceed the ordinary string limit.
@@ -224,9 +237,12 @@ bool sourceIdentityWithinLimit(data::IdentityAttr identity) {
 }
 
 // Keep admission separate from the broader shared serializable vocabulary.
-// In particular, multi-alternative variants, fixed arrays, arbitrary catalog
-// heads, and nested service ports retain their previous source refusals.
+// Fixed arrays, arbitrary catalog heads, and nested service ports retain their
+// source refusals. Ordinary variants retain every declared payload.
 Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
+  if (!used.typeWork)
+    return error("structured-source-limit");
+  --used.typeWork;
   if (depth >= depthLimit)
     return error("structured-source-type-depth");
   const auto &catalog = installedDomains();
@@ -249,6 +265,12 @@ Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
     return nominal("group", "Group", group.getDomain());
   if (auto groups = dyn_cast<data::GroupVectorType>(type))
     return nominal("groups", "Group", groups.getDomain());
+  if (auto capability = dyn_cast<runtime::CapabilityType>(type);
+      capability &&
+      capability.getKind() == runtime::CapabilityKind::ResourceUnit)
+    return resourceUnitDomain(capability.getIdentity())
+               ? Error::success()
+               : error("structured-source-type");
   protocol_ir::OracleKindAttr kind;
   if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type))
     kind = handle.getKind();
@@ -268,16 +290,18 @@ Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
   if (auto sequence = dyn_cast<data::SequenceType>(type))
     return checkSortProfile(sequence.getElementType(), used, depth + 1);
   if (auto product = dyn_cast<data::VariantType>(type)) {
-    if (product.getAlternatives().size() != 1)
-      return error("structured-source-product");
-    auto constructor = product.getAlternatives().front();
     if (!sourceIdentityWithinLimit(product.getIdentity()) ||
-        constructor.getLabel().getValue().size() > 512 ||
-        constructor.getPayload().size() > signatureLimit)
+        product.getAlternatives().empty() ||
+        product.getAlternatives().size() > signatureLimit)
       return error("structured-source-limit");
-    for (auto child : constructor.getPayload())
-      if (auto e = checkSortProfile(child, used, depth + 1))
-        return e;
+    for (auto constructor : product.getAlternatives()) {
+      if (constructor.getLabel().getValue().size() > 512 ||
+          constructor.getPayload().size() > signatureLimit)
+        return error("structured-source-limit");
+      for (auto child : constructor.getPayload())
+        if (auto e = checkSortProfile(child, used, depth + 1))
+          return e;
+    }
     return Error::success();
   }
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {
@@ -344,45 +368,7 @@ Error collectStaticDomains(const json::Value &term, UsedIdentities &used) {
   return Error::success();
 }
 json::Value catalogueSlot(const UsedIdentities &used) {
-  const auto &catalog = installedDomains();
-  llvm::StringSet<> closure;
-  SmallVector<std::string> pending;
-  for (const auto &identity : used.domains)
-    pending.push_back(identity.getKey().str());
-  while (!pending.empty()) {
-    std::string identity = pending.pop_back_val();
-    if (!closure.insert(identity).second)
-      continue;
-    if (const auto *domain = catalog.domain(identity))
-      for (const auto &member : domain->associated)
-        pending.push_back(member.identity);
-  }
-  json::Array nominals, services;
-  for (const auto &domain : catalog.allDomains()) {
-    if (!closure.contains(domain.identity))
-      continue;
-    json::Array members, capabilities;
-    for (const auto &member : domain.associated)
-      members.push_back(json::Array{member.member, member.identity});
-    for (const auto &capability : domain.capabilities)
-      capabilities.push_back(capability);
-    nominals.push_back(json::Array{"nominal", domain.identity, domain.sort,
-                                   std::move(members), std::move(capabilities),
-                                   domain.modulus.empty()
-                                       ? json::Value(nullptr)
-                                       : json::Value(domain.modulus)});
-  }
-  for (const auto &service : randomServices) {
-    if (!used.services.contains(service.contract))
-      continue;
-    json::Array methods{"draw"};
-    for (StringRef method : {"index", "indices"})
-      if (serviceMethod(service.contract, method))
-        methods.push_back(method);
-    services.push_back(json::Array{"service", service.contract, service.field,
-                                   std::move(methods)});
-  }
-  return json::Array{std::move(nominals), std::move(services)};
+  return exportCatalogueRows(used.domains, used.services);
 }
 
 // Count lexical JSON arrays, rather than only native region nesting. A native
@@ -535,8 +521,8 @@ class Exporter {
   uint64_t associationBytes = 0;
   StructuredSourceProfile profile;
 
-  Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
-    return checkAttributes(op, allowed, profile);
+  Error attributes(Operation &op, ArrayRef<StringRef> named = {}) {
+    return checkAttributes(op, named, profile);
   }
 
   Error associate(ArrayRef<unsigned> row, Operation &op,
@@ -608,11 +594,54 @@ class Exporter {
       result.push_back(cast<StringAttr>(value).getValue());
     return result;
   }
+  /// A retained port's placement ranges over its protocol function's roster,
+  /// and its participant summary lists the placed roles in roster order.
+  Error portRosters(const json::Array &protocols) {
+    for (const auto &value : protocols) {
+      const auto &owner = *value.getAsArray();
+      auto function =
+          symbols.lookup<protocol_ir::MathematicalOp>(*owner[0].getAsString());
+      if (!function)
+        return error("component-declaration-role");
+      std::map<std::string, unsigned> roster;
+      for (auto [index, role] : llvm::enumerate(function.getRoles()))
+        roster.emplace(cast<StringAttr>(role).getValue().str(), index);
+      std::function<bool(const json::Value &)> inside =
+          [&](const json::Value &placement) {
+            const auto &node = *placement.getAsArray();
+            auto known = [&](const json::Value &role) {
+              return roster.count(role.getAsString()->str()) != 0;
+            };
+            auto all = [&](const json::Value &roles) {
+              return llvm::all_of(*roles.getAsArray(), known);
+            };
+            if (node[0] == json::Value("data"))
+              return all(node[1]);
+            if (node[0] == json::Value("oracle"))
+              return known(node[1]) && all(node[2]);
+            return all(node[1]) && llvm::all_of(*node[2].getAsArray(), inside);
+          };
+      for (unsigned side : {1u, 2u})
+        for (const auto &port : *owner[side].getAsArray()) {
+          const auto &row = *port.getAsArray();
+          if (!inside(row[5]))
+            return error("component-declaration-role");
+          std::optional<unsigned> previous;
+          for (const auto &role : *row[2].getAsArray()) {
+            auto at = roster.at(role.getAsString()->str());
+            if (previous && at <= *previous)
+              return error("component-declaration-role");
+            previous = at;
+          }
+        }
+    }
+    return Error::success();
+  }
 
   Expected<json::Array> interface(protocol_ir::MathematicalOp function) {
     roles = function.getRoles();
     // Native verification owns uniqueness, nonempty scopes and port shape.
-    if (roles.empty() || roles.size() > 16)
+    if (roles.empty() || roles.size() > instances::protocolRoleLimit)
       return error("structured-source-role");
     json::Array inputs, outputs;
     for (Attribute scope : function.getInputRoles())
@@ -761,7 +790,7 @@ class Exporter {
     json::Array encoded;
     for (const SourceExecutionStep &step : found->second) {
       Operation &op = *step.operation;
-      // Formation has checked the allowed attribute names. Apply the wire's
+      // Formation has checked the admitted attribute names. Apply the wire's
       // UTF-8 and size bounds to every actual attribute, including locations
       // represented by runtime.site and private computation references.
       SmallVector<StringRef> checkedAttributes;
@@ -853,16 +882,35 @@ class Exporter {
   }
 
   Expected<json::Value> descriptor(Operation &op, StringRef owner) {
-    // Each branch checks exactly the attributes represented by its descriptor.
-    // Inherent attributes and discardable attributes share this whitelist.
+    // Each branch represents its operation's decided semantic fields; no
+    // descriptor admits a discardable attribute or call metadata.
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
     };
+    const auto operationName = op.getName().getStringRef();
+    if (operationName == "protocol.branch" || operationName == "data.branch") {
+      bool protocol = operationName == "protocol.branch";
+      if (auto e = attributes(op))
+        return std::move(e);
+      if ((protocol && owner != "protocol") ||
+          (!protocol && owner != "math" && owner != "protocol"))
+        return error("structured-source-operation");
+      auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+      if (!alternatives || alternatives.size() != op.getNumRegions())
+        return error("structured-source-region");
+      if (!protocol)
+        return json::Array{"data_branch", names(alternatives)};
+      json::Array outputRoles;
+      for (auto scope : op.getAttrOfType<ArrayAttr>("output_roles"))
+        outputRoles.push_back(names(cast<ArrayAttr>(scope)));
+      return json::Array{"protocol_branch",
+                         names(op.getAttrOfType<ArrayAttr>("roles")),
+                         names(alternatives), std::move(outputRoles)};
+    }
     if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
       // Native formation already checked nested active rosters and state
       // scopes.
-      if (auto e = attributes(
-              op, {"site", "carried", "maximum", "roles", "carried_roles"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (owner != "protocol")
         return error("structured-source-operation");
@@ -874,7 +922,7 @@ class Exporter {
                          std::move(scopes)};
     }
     if (auto application = dyn_cast<protocol_ir::ApplyOp>(op)) {
-      if (auto e = attributes(op, {"callee", "roles", "site"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto callee =
           symbols.lookup<protocol_ir::MathematicalOp>(application.getCallee());
@@ -905,8 +953,7 @@ class Exporter {
       bool constant = isa<data::IndexOp>(op);
       if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
-      if (auto e = attributes(op, constant ? ArrayRef<StringRef>{"value"}
-                                           : ArrayRef<StringRef>{}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (constant)
         return json::Array{"index.constant",
@@ -923,7 +970,7 @@ class Exporter {
     if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
       if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto domain = restrict.getResult().getType().getDomain();
       used.domains.insert(domain);
@@ -934,7 +981,7 @@ class Exporter {
           dim.getAxis() != 0 ||
           !isa<data::FieldVectorType>(dim.getInput().getType()))
         return error("structured-source-operation");
-      if (auto e = attributes(op, {"axis"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto domain =
           cast<data::FieldVectorType>(dim.getInput().getType()).getDomain();
@@ -942,7 +989,7 @@ class Exporter {
       return json::Array{"vector.length", domain};
     }
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
-      if (auto e = attributes(op, {"value"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto literal = algebra::encodeFieldLiteral(constant.getValue());
       if (!literal)
@@ -961,13 +1008,13 @@ class Exporter {
     else if (isa<algebra::FieldEqualOp>(op))
       fieldOpcode = "field.equal";
     if (!fieldOpcode.empty()) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{fieldOpcode, field()};
     }
     if (isa<algebra::GroupIdentityOp, algebra::GroupAddOp,
             algebra::GroupScaleOp, algebra::GroupEqualOp>(op)) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       bool identity = isa<algebra::GroupIdentityOp>(op);
       auto group = cast<algebra::GroupType>(
@@ -991,16 +1038,7 @@ class Exporter {
       bool virtualHandle = isa<protocol_ir::OracleVirtualOp>(op);
       if (owner != "protocol")
         return error("structured-source-operation");
-      SmallVector<StringRef> allowed{send ? "sender" : "holder", "receivers"};
-      if (send)
-        allowed.push_back("site");
-      if (send)
-        allowed.push_back("shape_names");
-      if (send || input)
-        allowed.push_back("shape_bounds");
-      if (virtualHandle)
-        allowed.push_back("callee");
-      if (auto e = attributes(op, allowed))
+      if (auto e = attributes(op))
         return std::move(e);
       auto logicalType =
           components ? op.getOperand(0).getType() : op.getResult(0).getType();
@@ -1040,10 +1078,7 @@ class Exporter {
       bool forget = isa<protocol_ir::OracleForgetShapeOp>(op);
       if (owner != "protocol" && !(owner == "oracle" && query))
         return error("structured-source-operation");
-      if (auto e = attributes(op, query ? ArrayRef<StringRef>{"owner", "site"}
-                                  : contents ? ArrayRef<StringRef>{"owner"}
-                                  : forget ? ArrayRef<StringRef>{}
-                                           : ArrayRef<StringRef>{"dimension"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto handle =
           cast<protocol_ir::OracleHandleType>(op.getOperand(0).getType());
@@ -1083,9 +1118,7 @@ class Exporter {
       bool at = isa<protocol_ir::OracleSequenceAtOp>(op);
       if (owner != "protocol")
         return error("structured-source-operation");
-      if (auto e =
-              attributes(op, append || at ? ArrayRef<StringRef>{"roles", "site"}
-                                          : ArrayRef<StringRef>{}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto sequence = cast<protocol_ir::OracleSequenceType>(
           empty ? op.getResult(0).getType() : op.getOperand(0).getType());
@@ -1103,23 +1136,23 @@ class Exporter {
       return descriptor;
     }
     if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
-      if (auto e = attributes(op, {"roles"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"assemble", names(assembly.getRoles())};
     }
     if (auto restrict = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
-      if (auto e = attributes(op, {"roles"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"restrict", names(restrict.getRoles())};
     }
     if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(op)) {
-      if (auto e = attributes(op, {"sender", "receiver", "site"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"exchange", exchange.getSender(),
                          exchange.getReceiver()};
     }
     if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
-      if (auto e = attributes(op, {"owner", "method", "site"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto result = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
       auto service = op.getNumOperands() == 1
@@ -1132,8 +1165,7 @@ class Exporter {
       return json::Array{"draw", query.getOwner(), result.getDomain()};
     }
     if (auto statement = dyn_cast<protocol_ir::StatementOp>(op)) {
-      if (auto e =
-              attributes(op, {"relation", "selectors", "acceptance", "target"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"statement", statement.getRelation(),
                          names(statement.getSelectors()),
@@ -1143,7 +1175,7 @@ class Exporter {
                              : json::Value(nullptr)};
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(op)) {
-      if (auto e = attributes(op, {"value"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (!constant.getType().isSignlessInteger(1))
         return error("structured-source-operation");
@@ -1158,14 +1190,14 @@ class Exporter {
     else if (isa<arith::XOrIOp>(op))
       boolOpcode = "bool.xor";
     if (!boolOpcode.empty()) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (!op.getResult(0).getType().isSignlessInteger(1))
         return error("structured-source-operation");
       return json::Array{boolOpcode};
     }
     if (auto compare = dyn_cast<arith::CmpIOp>(op)) {
-      if (auto e = attributes(op, {"predicate"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (!compare.getLhs().getType().isSignlessInteger(1) ||
           (compare.getPredicate() != arith::CmpIPredicate::eq &&
@@ -1176,7 +1208,7 @@ class Exporter {
                              : "bool.not_equal"};
     }
     if (isa<arith::SelectOp>(op)) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto type = sort(op.getResult(0).getType());
       if (!type)
@@ -1184,21 +1216,25 @@ class Exporter {
       return json::Array{"select", std::move(*type)};
     }
     if (auto make = dyn_cast<data::MakeOp>(op)) {
-      if (auto e = attributes(op, {"alternative"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
-      return json::Array{"product.make", make.getAlternative()};
+      bool product = cast<data::VariantType>(make.getResult().getType())
+                         .getAlternatives()
+                         .size() == 1;
+      return json::Array{product ? "product.make" : "variant.make",
+                         make.getAlternative()};
     }
     if (auto get = dyn_cast<data::GetOp>(op)) {
-      if (auto e = attributes(op, {"index"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
       return json::Array{"product.get", get.getIndex()};
     }
     if (isa<data::BoundedAtOp>(op)) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto vector = dyn_cast<data::FieldVectorType>(op.getOperand(0).getType());
       if (!vector)
@@ -1208,9 +1244,7 @@ class Exporter {
     if (isa<func::CallOp, protocol_ir::LocalCallOp>(op)) {
       bool math = isa<func::CallOp>(op);
       bool participant = !math;
-      if (auto e = attributes(
-              op, math ? ArrayRef<StringRef>{"callee"}
-                       : ArrayRef<StringRef>{"callee", "site", "role"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (math && owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-reference");
@@ -1234,7 +1268,7 @@ class Exporter {
       return json::Array{"call", *callee};
     }
     if (isa<data::FiniteFoldOp>(op)) {
-      if (auto e = attributes(op, {"domain", "step", "predicate"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto refs = fold(op);
       if (!refs)
@@ -1243,7 +1277,7 @@ class Exporter {
                          std::move((*refs)[2])};
     }
     if (isa<protocol_ir::GuardOp>(op)) {
-      if (auto e = attributes(op, {"site", "owner"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto guardOwner = op.getAttrOfType<StringAttr>("owner");
       if (owner != "protocol" || !guardOwner || !hasRole(guardOwner.getValue()))
@@ -1291,11 +1325,13 @@ class Exporter {
                             : owner == "oracle"
                                 ? isa<protocol_ir::OracleYieldOp>(op)
                                 : isa<protocol_ir::MathematicalReturnOp>(op))
-                         : owner == "protocol" && terminator == "yield" &&
-                               isa<protocol_ir::ProtocolYieldOp>(op);
+                         : terminator == "yield" &&
+                               ((owner == "protocol" &&
+                                 isa<protocol_ir::ProtocolYieldOp>(op)) ||
+                                op.getName().getStringRef() == "data.yield");
         if (!valid || op.getOperandTypes() != outputs)
           return error("structured-source-region");
-        if (auto e = attributes(op, {}))
+        if (auto e = attributes(op))
           return std::move(e);
         if (auto e = associate(child(path, {2}), op))
           return std::move(e);
@@ -1306,7 +1342,8 @@ class Exporter {
         return error("structured-source-limit");
       auto inputs = sorts(op.getOperandTypes(),
                           isa<protocol_ir::QueryOp, protocol_ir::ApplyOp,
-                              protocol_ir::RepeatOp>(op));
+                              protocol_ir::RepeatOp>(op) ||
+                              op.getName().getStringRef() == "protocol.branch");
       if (!inputs)
         return inputs.takeError();
       auto results = sorts(op.getResultTypes());
@@ -1331,7 +1368,10 @@ class Exporter {
         return std::move(e);
       json::Array regions;
       if (op.getNumRegions()) {
-        if (!isa<protocol_ir::RepeatOp>(op) || op.getNumRegions() != 1)
+        bool selected = op.getName().getStringRef() == "protocol.branch" ||
+                        op.getName().getStringRef() == "data.branch";
+        if (!selected &&
+            (!isa<protocol_ir::RepeatOp>(op) || op.getNumRegions() != 1))
           return error("structured-source-region");
         for (Region &nested : op.getRegions()) {
           if (!llvm::hasSingleElement(nested) || nested.front().empty())
@@ -1339,7 +1379,24 @@ class Exporter {
           Block &inner = nested.front();
           // Count becomes the induction argument; state and immutable captures
           // retain their ordered types, without identifying their SSA values.
-          SmallVector<Type> expectedInputs(op.getOperandTypes());
+          SmallVector<Type> expectedInputs;
+          if (selected) {
+            if (!op.getNumOperands())
+              return error("structured-source-region");
+            auto selector = op.getOperand(0).getType();
+            if (!selector.isSignlessInteger(1)) {
+              auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+              auto payload = data::variantPayloadTypes(
+                  selector,
+                  cast<StringAttr>(alternatives[regions.size()]).getValue());
+              if (!payload)
+                return payload.takeError();
+              llvm::append_range(expectedInputs, *payload);
+            }
+            llvm::append_range(expectedInputs,
+                               TypeRange(op.getOperandTypes()).drop_front());
+          } else
+            llvm::append_range(expectedInputs, op.getOperandTypes());
           SmallVector<Type> expectedOutputs(op.getResultTypes());
           if (inner.getArgumentTypes() != TypeRange(expectedInputs))
             return error("structured-source-region");
@@ -1374,8 +1431,7 @@ class Exporter {
   }
 
   Expected<json::Value> domain(data::DomainOp op, ArrayRef<unsigned> path) {
-    if (auto e =
-            attributes(*op, {"sym_name", "sym_visibility", "function_type"}))
+    if (auto e = attributes(*op))
       return std::move(e);
     if (op.getSymVisibility() != "private" ||
         !llvm::hasSingleElement(op.getBody()))
@@ -1485,7 +1541,11 @@ class Exporter {
       if (!helper || helper.isExternal() || !helper.isPrivate() ||
           helper->getParentOp() != unit.getOperation())
         return error(code, "private Math closure required");
-      for (Operation &instruction : helper.getBody().front()) {
+      SmallVector<Operation *> actual;
+      helper.getBody().walk<WalkOrder::PreOrder>(
+          [&](Operation *op) { actual.push_back(op); });
+      for (Operation *nested : actual) {
+        Operation &instruction = *nested;
         if (auto call = dyn_cast<func::CallOp>(instruction)) {
           if (auto e = check(symbols.lookup(call.getCallee())))
             return e;
@@ -1516,7 +1576,10 @@ class Exporter {
                 data::DimOp, data::MakeOp, data::GetOp, data::BoundedAtOp,
                 arith::ConstantOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
                 arith::CmpIOp, arith::SelectOp>(instruction);
-        if (!allowed || instruction.getNumRegions())
+        bool selected = instruction.getName().getStringRef() == "data.branch";
+        allowed |=
+            selected || instruction.getName().getStringRef() == "data.yield";
+        if (!allowed || (instruction.getNumRegions() && !selected))
           return error(code, instruction.getName().getStringRef());
       }
       computationChecked.insert(op);
@@ -1574,9 +1637,7 @@ class Exporter {
 
   Expected<json::Value> oracle(protocol_ir::OracleDefinitionOp op,
                                ArrayRef<unsigned> path) {
-    if (auto e = attributes(*op, {"sym_name", "function_type", "kind",
-                                  "admissibility", "shape_arguments",
-                                  "shape_bounds"}))
+    if (auto e = attributes(*op))
       return std::move(e);
     auto inputs = sorts(op.getFunctionType().getInputs());
     if (!inputs)
@@ -1607,21 +1668,18 @@ class Exporter {
     auto scoped = dyn_cast<func::FuncOp>(op);
     if (scoped && !isScopedExecutionFunction(scoped))
       scoped = {};
-    SmallVector<StringRef> allowed{"sym_name", "sym_visibility",
-                                   "function_type"};
+    // Each owner's function operation admits its decided semantic fields and
+    // only these discardable attributes and call metadata.
+    SmallVector<StringRef, 3> named;
     if (owner == "math")
-      allowed.push_back("data.preconditions");
-    else if (owner == "local") {
-      llvm::append_range(allowed,
-                         ArrayRef<StringRef>{"runtime.origin", "no_inline",
-                                             "data.preconditions"});
-    } else if (owner == "protocol")
-      llvm::append_range(allowed, ArrayRef<StringRef>{"roles", "input_roles",
-                                                      "output_roles",
-                                                      "contracts", "origin"});
+      named = {"data.preconditions"};
+    else if (owner == "local")
+      named = {"runtime.origin", "no_inline", "data.preconditions"};
+    else if (owner == "protocol")
+      named = {"sym_visibility"};
     else
       return error("structured-source-operation", op.getName().getStringRef());
-    if (auto e = attributes(op, allowed))
+    if (auto e = attributes(op, named))
       return std::move(e);
     auto type = signature(op);
     if (!type)
@@ -1792,6 +1850,15 @@ class Exporter {
         } else if (!effective.insert(rendered).second) {
           return error("structured-source-site", "expanded protocol collision");
         }
+        if (op.getName().getStringRef() == "protocol.branch") {
+          // Stored native sites already encode lexical arm identity. Only
+          // application expansion adds an effective-site prefix.
+          for (auto &nested : op.getRegions()) {
+            if (auto e = visit(nested.front(), prefix, applicationDepth,
+                               repeatDepth + 1))
+              return e;
+          }
+        }
         if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op))
           // A repeat header survives expansion. Its body has the same static
           // prefix and is visited once, even when maximum is zero.
@@ -1821,7 +1888,7 @@ public:
         view(view), associations(view.associations), profile(profile) {}
 
   Expected<json::Value> run(StringRef bytes) {
-    if (auto e = attributes(*unit, {"profile", "source_declarations"}))
+    if (auto e = attributes(*unit))
       return std::move(e);
     auto admitted = readSourceExecutionClosure(unit);
     if (!admitted)
@@ -1854,9 +1921,7 @@ public:
       } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (relations.size() == 128)
           return error("structured-source-limit");
-        if (auto e = attributes(op, {"sym_name", "sym_visibility", "kind",
-                                     "key", "revision", "static_arguments",
-                                     "signature", "purposes", "formula"}))
+        if (auto e = attributes(op))
           return std::move(e);
         auto visible = visibility(op);
         if (!visible)
@@ -1889,8 +1954,7 @@ public:
       } else if (isa<runtime::BindingOp>(op)) {
         if (bindings.size() == 128)
           return error("structured-source-limit");
-        if (auto e = attributes(op, {"sym_name", "contract", "arguments",
-                                     "implementation", "function_type"}))
+        if (auto e = attributes(op))
           return std::move(e);
         auto binding = primitiveBinding(&op, used);
         if (!binding)
@@ -1994,7 +2058,8 @@ public:
       if (protocol.getRoles().size() > 1)
         if (auto e = scalarMath(protocol))
           return std::move(e);
-    json::Value declarations = json::Array{json::Array{}, json::Array{}};
+    json::Value declarations =
+        json::Array{json::Array{}, json::Array{}, json::Array{}};
     if (auto attr = unit->getAttr("source_declarations")) {
       auto parsed = exportDeclarationData(attr);
       if (!parsed) {
@@ -2002,14 +2067,16 @@ public:
         return error("component-declaration");
       }
       auto rows = parsed->getAsArray();
-      if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
-          !(*rows)[1].getAsArray())
+      if (!rows || rows->size() != 3 || !(*rows)[0].getAsArray() ||
+          !(*rows)[1].getAsArray() || !(*rows)[2].getAsArray())
         return error("component-declaration");
       if (auto e = language::checkComponentDeclarations(*parsed))
         return std::move(e);
+      if (auto e = portRosters(*(*rows)[1].getAsArray()))
+        return std::move(e);
       // These rows are emitted from the module's checked declaration context,
       // not reconstructed from an executable function or a printed symbol.
-      for (unsigned table : {0, 1})
+      for (unsigned table : {0, 1, 2})
         for (unsigned i = 0; i < (*rows)[table].getAsArray()->size(); ++i)
           if (auto e = associate({10, table, i}, *unit))
             return std::move(e);
@@ -2030,6 +2097,49 @@ public:
   }
 };
 } // namespace
+
+json::Value exportCatalogueRows(const llvm::StringSet<> &domains,
+                                const llvm::StringSet<> &services) {
+  const auto &catalog = installedDomains();
+  llvm::StringSet<> closure;
+  SmallVector<std::string> pending;
+  for (const auto &identity : domains)
+    pending.push_back(identity.getKey().str());
+  while (!pending.empty()) {
+    std::string identity = pending.pop_back_val();
+    if (!closure.insert(identity).second)
+      continue;
+    if (const auto *domain = catalog.domain(identity))
+      for (const auto &member : domain->associated)
+        pending.push_back(member.identity);
+  }
+  json::Array nominals, serviceRows;
+  for (const auto &domain : catalog.allDomains()) {
+    if (!closure.contains(domain.identity))
+      continue;
+    json::Array members, capabilities;
+    for (const auto &member : domain.associated)
+      members.push_back(json::Array{member.member, member.identity});
+    for (const auto &capability : domain.capabilities)
+      capabilities.push_back(capability);
+    nominals.push_back(json::Array{"nominal", domain.identity, domain.sort,
+                                   std::move(members), std::move(capabilities),
+                                   domain.modulus.empty()
+                                       ? json::Value(nullptr)
+                                       : json::Value(domain.modulus)});
+  }
+  for (const auto &service : randomServices()) {
+    if (!services.contains(service.contract))
+      continue;
+    json::Array methods{"draw"};
+    for (StringRef method : {"index", "indices"})
+      if (serviceMethod(service.contract, method))
+        methods.push_back(method);
+    serviceRows.push_back(json::Array{"service", service.contract,
+                                      service.field, std::move(methods)});
+  }
+  return json::Array{std::move(nominals), std::move(serviceRows)};
+}
 
 Expected<SourceView> readSourceView(StringRef bytes, StringRef name,
                                     MLIRContext &context,
@@ -2069,8 +2179,10 @@ Expected<SourceView> readSourceView(
     StructuredSourceProfile profile) {
   if (!original || failed(zkc::admitStage(*original)))
     return error("structured-source-original");
-  if (auto e = checkAttributes(**original, {}, profile))
-    return std::move(e);
+  // The original is one unadorned module.
+  if (!(*original)->getAttrs().empty())
+    return error("structured-source-attribute",
+                 (*original)->getAttrs().front().getName().getValue());
   if (!llvm::hasSingleElement(original->getBody()->getOperations()))
     return error("structured-source-module");
   auto unit =
@@ -2094,7 +2206,7 @@ Expected<SourceView> readSourceView(
     return error("structured-source-limit");
   // Own framing and its byte budget together: callers emit these exact bytes.
   if (!jsonWithinByteLimit(*exported, 1024 * 1024 - 1))
-    return error("structured-source-limit");
+    return error("structured-source-limit", "publication exceeds 1 MiB");
   result.publication = std::move(*exported);
   result.native = std::move(original);
   return result;

@@ -78,6 +78,12 @@ fn ledger() -> ExecutionLedger {
         WorkBudget::default(),
     )
 }
+/// Live bytes the invocation root holds for `count` report records of the
+/// fixture bundle, whose steps all share the empty root path: each record,
+/// plus the root path's two shared allocation headers once.
+fn records(count: usize) -> usize {
+    count * std::mem::size_of::<Reached>() + 4 * std::mem::size_of::<usize>()
+}
 fn inputs<B: Backend<Value = TestValue>>(producer: B, validator: B) -> Vec<RoleInput<B>> {
     vec![
         RoleInput {
@@ -328,9 +334,10 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
         &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
     )
     .unwrap();
-    // The smaller capacity admits encoding, but cannot also admit its append.
-    // At 7000 bytes either message fits, while two encoding allowances cannot.
-    for live_bytes in [1024 + 40 + 5124 + 14, 7000] {
+    // The smaller capacity admits encoding beside the producer's 8-byte
+    // input, but cannot also admit its append. At 7000 bytes either message
+    // fits, while two encoding allowances cannot.
+    for live_bytes in [8 + 40 + 5124 + 14, 7000] {
         let ledger = ExecutionLedger::new(
             ValueBudget {
                 live_bytes,
@@ -358,7 +365,8 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
         )
         .unwrap_or_else(|_| panic!("producer"));
         let loaded = ledger.snapshot();
-        assert_eq!(loaded.live_reserved_bytes, 1024);
+        // The producer holds its input's live bytes in the root, nothing more.
+        assert_eq!(loaded.live_reserved_bytes, 8);
         let report = proof::produce(
             &mut producer,
             &[7; 32],
@@ -367,7 +375,7 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
             Some(ledger.clone()),
         );
         let encodings = producer.backend().encodings.borrow().clone();
-        assert_eq!(encodings[0].live_reserved_bytes, 1024 + 40 + 5124);
+        assert_eq!(encodings[0].live_reserved_bytes, 8 + 40 + 5124);
         if live_bytes == 7000 {
             assert_eq!((report.messages, report.bytes), (2, 70));
             assert!(report.cancelled.is_none());
@@ -376,9 +384,11 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
             expected.extend_from_within(40..55);
             assert_eq!(produced.proof, expected);
             assert_eq!(encodings.len(), 2);
-            assert_eq!(encodings[1].live_reserved_bytes, 1024 + 55 + 5124);
+            assert_eq!(encodings[1].live_reserved_bytes, 8 + 55 + 5124);
             let used = ledger.snapshot();
-            assert_eq!(used.live_reserved_bytes, 1024 + 70);
+            // The returned producer released its input; the proof buffer
+            // stays.
+            assert_eq!(used.live_reserved_bytes, 70);
             assert_eq!(
                 used.total_value_bytes,
                 loaded.total_value_bytes + 70 + 2 * 5124
@@ -395,21 +405,22 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
             assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
             assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
         } else {
+            // The root refused the append's buffer: its own code, not the
+            // proof format's size limit.
             assert!(matches!(
                 report.outcome,
-                Err(ArtifactFailure::Format(FormatError::Limit))
+                Err(ArtifactFailure::Root(RootRefusal::Bytes))
             ));
             assert_eq!((report.messages, report.bytes), (0, 40));
             assert!(report.cancelled.is_some());
             assert_eq!(encodings.len(), 1);
             assert_eq!(producer.backend().host.encodes.get(), 1);
             assert_eq!(producer.usage().instructions, 1);
+            // The refused append is refused whole: the second message's
+            // buffer charges neither work nor fresh bytes.
             let used = ledger.snapshot();
             assert_eq!(used.live_reserved_bytes, 0);
-            assert_eq!(
-                used.total_value_bytes,
-                loaded.total_value_bytes + 40 + 5124 + 15
-            );
+            assert_eq!(used.total_value_bytes, loaded.total_value_bytes + 40 + 5124);
             drop(producer);
             assert_eq!(ledger.snapshot(), used);
         }
@@ -473,7 +484,10 @@ impl Hooks<Host> for ReplaceStorage {
     ) -> Result<Option<Vec<u8>>, String> {
         assert_eq!(bytes, b"ZKCV\0\x05\x01");
         self.before = Some(self.ledger.snapshot());
-        assert_eq!(self.before.unwrap().live_reserved_bytes, 2 * 64 + 7);
+        // The sender's retained input, the sent message, and the send and
+        // receive records the report already holds. The receiver holds
+        // nothing yet.
+        assert_eq!(self.before.unwrap().live_reserved_bytes, 8 + 7 + records(2));
         Ok(self.replacement.take())
     }
     fn observe(&mut self, _: &str, _: &Host, phase: Phase) -> Result<Option<String>, String> {
@@ -485,14 +499,78 @@ impl Hooks<Host> for ReplaceStorage {
 }
 
 #[test]
+fn joint_root_refusals_name_their_item_while_driver_allowances_keep_their_codes() {
+    // The runners keep their own budgets, so the root charges the Host's
+    // report records and wire transport alone.
+    let refusal = |live_bytes: usize, logical_bytes: u64, limits: RunLimits| {
+        let root = ExecutionLedger::new(
+            ValueBudget {
+                live_bytes,
+                total_bytes: 65536,
+            },
+            WorkBudget {
+                logical_bytes,
+                ..WorkBudget::default()
+            },
+        );
+        let report = run_with_ledgers(
+            &bundle(),
+            "session",
+            inputs(Host::default(), Host::default()),
+            limits,
+            &mut NoHooks,
+            None,
+            Some(root),
+        )
+        .unwrap();
+        match report.outcome {
+            Outcome::DriverFailed(Failure {
+                kind: FailureKind::Limit,
+                detail,
+            }) => detail.text,
+            outcome => panic!("{outcome:?}"),
+        }
+    };
+    let ample = 65536;
+    // The send's seven-byte buffer after the first record: the root's bytes
+    // or work refuse with the transport item's codes.
+    assert_eq!(
+        refusal(records(1) + 6, ample as u64, run_limits()),
+        "joint-transport-bytes-limit"
+    );
+    assert_eq!(
+        refusal(ample, records(1) as u64 + 6, run_limits()),
+        "joint-transport-work-limit"
+    );
+    // The message allowance refuses the same message with its own code.
+    let mut message = run_limits();
+    message.wire_bytes = 6;
+    assert_eq!(refusal(ample, ample as u64, message), "joint-limit");
+    // The first record: the root's bytes or work refuse with the record
+    // item's codes, the report allowance with its own.
+    assert_eq!(
+        refusal(records(1) - 1, ample as u64, run_limits()),
+        "joint-record-bytes-limit"
+    );
+    assert_eq!(
+        refusal(ample, records(1) as u64 - 1, run_limits()),
+        "joint-record-work-limit"
+    );
+    let mut report = run_limits();
+    report.report_bytes = records(1) - 1;
+    assert_eq!(refusal(ample, ample as u64, report), "joint-report-limit");
+}
+
+#[test]
 fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
     let mut replacement = Vec::with_capacity(64);
     replacement.extend_from_slice(b"ZKCV\0\x05\x00");
     let capacity = replacement.capacity();
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            // Both runner allowances, replacement capacity and decode storage.
-            live_bytes: 2 * 64 + capacity + 8,
+            // The sender's input, replacement capacity, decode storage, the
+            // received value and the report's four records.
+            live_bytes: 8 + capacity + 8 + 8 + records(4),
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -528,16 +606,19 @@ fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
     assert_eq!(report.backends[1].1.measurements.get(), 1);
     assert_eq!(report.backends[1].1.decodes.get(), 1);
     let used = ledger.snapshot();
-    assert_eq!(used.live_reserved_bytes, 2 * 64);
+    assert_eq!(report.report_bytes, records(4));
+    // The receiver's returned value keeps its live bytes beside the records.
+    assert_eq!(used.live_reserved_bytes, 8 + report.report_bytes);
     // Decoder allowance, the received inline value and its retained root result
-    // each charge eight bytes under the existing VM contract.
+    // each charge eight bytes under the existing VM contract; the two return
+    // records follow the transfer.
     assert_eq!(
         used.total_value_bytes,
-        hooks.before.unwrap().total_value_bytes + capacity + 3 * 8
+        hooks.before.unwrap().total_value_bytes + capacity + 3 * 8 + records(4) - records(2)
     );
     assert_eq!(
         hooks.before_cancellation.unwrap().live_reserved_bytes,
-        2 * 64
+        8 + report.report_bytes
     );
     drop(report);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
@@ -546,15 +627,21 @@ fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
 
 #[test]
 fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counters() {
-    // Wire oversize, overlapping live storage, then cumulative allocation refusal.
-    for (length, live_bytes, total_bytes, charged) in [
-        (4097usize, 16384, 65536, false),
-        (7, 2 * 64 + 64, 65536, true),
-        (7, 1024, 8 + 7 + 63, false),
+    // Wire oversize, overlapping live storage, then cumulative allocation
+    // refusal. A refused replacement leaves no charge behind. The message
+    // allowance refuses with its own code; the root with its transport code.
+    for (length, live_bytes, total_bytes, code) in [
+        (4097usize, 16384, 65536, "joint-limit"),
+        (7, 8 + 64 + records(2), 65536, "joint-transport-bytes-limit"),
+        (
+            7,
+            1024 + records(2),
+            8 + 7 + 63 + records(2),
+            "joint-transport-bytes-limit",
+        ),
     ] {
         let mut replacement = Vec::with_capacity(length.max(64));
         replacement.resize(length, 0);
-        let capacity = replacement.capacity();
         let ledger = ExecutionLedger::new(
             ValueBudget {
                 live_bytes,
@@ -578,11 +665,11 @@ fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counter
         )
         .unwrap();
         assert!(matches!(
-            report.outcome,
+            &report.outcome,
             Outcome::DriverFailed(Failure {
                 kind: FailureKind::Limit,
-                ..
-            })
+                detail,
+            }) if detail.text == code
         ));
         assert_eq!(
             report.wire,
@@ -609,19 +696,14 @@ fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counter
         ));
         let used = ledger.snapshot();
         let before = hooks.before.unwrap();
+        assert_eq!(report.report_bytes, records(2));
         assert_eq!(
             hooks.before_cancellation.unwrap().live_reserved_bytes,
-            2 * 64 + 7
+            8 + 7 + records(2)
         );
-        assert_eq!(used.live_reserved_bytes, 7);
-        assert_eq!(
-            used.total_value_bytes,
-            before.total_value_bytes + if charged { capacity } else { 0 }
-        );
-        assert_eq!(
-            used.logical_bytes,
-            before.logical_bytes + if charged { capacity as u64 } else { 0 }
-        );
+        assert_eq!(used.live_reserved_bytes, 7 + records(2));
+        assert_eq!(used.total_value_bytes, before.total_value_bytes);
+        assert_eq!(used.logical_bytes, before.logical_bytes);
         drop(report);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
@@ -635,7 +717,7 @@ fn joint_larger_replacement_keeps_its_reservation_after_measurement_refusal() {
     let capacity = replacement.capacity();
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            live_bytes: 2 * 64 + 7 + capacity,
+            live_bytes: 8 + 7 + capacity + records(2),
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -696,9 +778,9 @@ fn joint_larger_replacement_keeps_its_reservation_after_measurement_refusal() {
     let before = hooks.before.unwrap();
     assert_eq!(
         hooks.before_cancellation.unwrap().live_reserved_bytes,
-        2 * 64 + capacity
+        8 + capacity + records(2)
     );
-    assert_eq!(used.live_reserved_bytes, capacity);
+    assert_eq!(used.live_reserved_bytes, capacity + records(2));
     assert_eq!(used.total_value_bytes, before.total_value_bytes + capacity);
     assert_eq!(
         used.logical_bytes,
@@ -1064,9 +1146,11 @@ fn raw_record_borrows_payload_and_respects_publication_limit() {
 
 #[test]
 fn shared_decode_capacity_refuses_before_materialization_and_keeps_consumed_work() {
+    // The sender's input and the sent message fill the root beside the two
+    // records: the received payload's 8-byte decoded storage does not fit.
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            live_bytes: 135,
+            live_bytes: 8 + 7 + records(2),
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -1081,24 +1165,29 @@ fn shared_decode_capacity_refuses_before_materialization_and_keeps_consumed_work
     )
     .unwrap();
     assert!(matches!(
-        report.outcome,
+        &report.outcome,
         Outcome::DriverFailed(Failure {
             kind: FailureKind::Limit,
-            ..
-        })
+            detail,
+        }) if detail.text == "joint-transport-bytes-limit"
     ));
     assert_eq!((report.wire.sends, report.wire.receives), (1, 0));
     assert!(report.pending.is_some());
     assert_eq!(report.backends[1].1.decodes.get(), 0);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 7);
+    assert_eq!(
+        ledger.snapshot().live_reserved_bytes,
+        7 + report.report_bytes
+    );
     let cumulative = ledger.snapshot().total_value_bytes;
     drop(report);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
     assert_eq!(ledger.snapshot().total_value_bytes, cumulative);
 
+    // The validator holds nothing yet; the root cannot hold the received
+    // message's 8-byte decoded storage.
     let ledger = ExecutionLedger::new(
         ValueBudget {
-            live_bytes: 64,
+            live_bytes: 7,
             total_bytes: 65536,
         },
         WorkBudget::default(),
@@ -1114,13 +1203,16 @@ fn shared_decode_capacity_refuses_before_materialization_and_keeps_consumed_work
     );
     assert!(matches!(
         report.outcome,
-        Err(ArtifactFailure::Format(FormatError::Limit))
+        Err(ArtifactFailure::Root(RootRefusal::Bytes))
     ));
     assert_eq!((report.messages, report.bytes), (1, 55));
     assert!(report.cancelled.is_some());
     assert_eq!(validator.backend().decodes.get(), 0);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
-    assert!(ledger.snapshot().total_value_bytes > 0);
+    // Reading the received seven-byte message is consumed work; its refused
+    // decoded allocation leaves no fresh charge behind.
+    let used = ledger.snapshot();
+    assert_eq!(used.live_reserved_bytes, 0);
+    assert_eq!((used.logical_bytes, used.total_value_bytes), (7, 0));
 }
 
 #[test]

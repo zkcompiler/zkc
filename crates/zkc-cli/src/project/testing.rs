@@ -51,6 +51,8 @@ pub(crate) fn run(args: &Arguments<'_>) -> Value {
                         "--results",
                         "--setups",
                         "--capacity",
+                        "--material-limits",
+                        "--interface-limits",
                         "--limits",
                     ]
                     .contains(&flag)

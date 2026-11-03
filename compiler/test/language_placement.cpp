@@ -59,6 +59,36 @@ std::vector<unsigned> callOwners(const Body &body) {
       result.push_back(*call->owner);
   return result;
 }
+void communicationAssignments() {
+  for (StringRef payload : {"p", "f(p)", "f(1)"}) {
+    auto original =
+        native("protocol Run roles(P,V)(p:F@P,v:F@V)->(r:F@V){"
+               "let mut current@V=v;current=send P->V(" +
+               payload.str() +
+               ");return current;}entry fn Demo(inputs:Run::Inputs){"
+               "return Run::run(inputs);}");
+    unsigned exchanges = 0;
+    const auto &body = *original.entry().protocol().body;
+    for (const auto &operation : body.operations)
+      if (auto *exchange = std::get_if<Exchange>(&operation.action)) {
+        ++exchanges;
+        require(exchange->sender == 0 && exchange->receiver == 1 &&
+                    body.values[exchange->payload.index].components ==
+                        std::vector<unsigned>{0},
+                "assignment destination changed the payload owner");
+      }
+    require(exchanges == 1, "assignment lost its message");
+    for (auto owner : callOwners(body))
+      require(owner == 0, "receiving binding chose the payload helper owner");
+  }
+  const std::string header = "protocol Run roles(P,V)(p:F@P,v:F@V)->(){";
+  refuses(header + "let mut current@V=v;current=send P->V(v);return();}",
+          "source.roles");
+  refuses(header + "let mut current@P=p;current=send P->V(p);return();}",
+          "source.roles");
+  refuses(header + "let mut current@V=v;current=send P->V(true);return();}",
+          "source.type");
+}
 void examples() {
   native("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
          "fn consumeTicket(x:Ticket)->bool{consume x;return true;}"
@@ -327,6 +357,7 @@ void oracle() {
 }
 } // namespace
 int main() {
+  communicationAssignments();
   examples();
   oracle();
 }

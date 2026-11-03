@@ -14,9 +14,9 @@ open SumcheckVerifierBodies SumcheckVerifierHelpers
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-def verifierInputs (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+def verifierInputs (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     Values (Component (assignment F G)) reduceInputs :=
-  .cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil))))))
+  .cons none (.cons none (.cons none (.cons custody (.cons point (.cons claim (.cons count (.cons service .nil)))))))
 
 def reduce (payload : UnitPayload) (maximum : Nat) (context : ProtocolContext) (self : Nat)
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) :
@@ -38,13 +38,13 @@ def returnProcess (payload : UnitPayload) (context : ProtocolContext) (self : Na
   .done (.cons (state.get (.there (.there (.there .here))))
     (.cons (state.get .here) (.cons (state.get (.there .here))
       (.cons (state.get (.there (.there .here)))
-        (.cons (result.get .here) (.cons (result.get (.there .here)) .nil))))))
+        (.cons (result.get .here) (.cons (result.get (.there .here)) (.cons (result.get (.there (.there .here))) .nil)))))))
 
 def producerReturnValues (state : Values (Component (assignment F G)) repeatState) :
     Values (Component (assignment F G)) reduceOutputs :=
   .cons (state.get (.there (.there (.there .here))))
     (.cons (state.get .here) (.cons (state.get (.there .here))
-      (.cons (state.get (.there (.there .here))) (.cons none (.cons none .nil)))))
+      (.cons (state.get (.there (.there .here))) (.cons none (.cons none (.cons none .nil))))))
 
 theorem return_producer (payload : UnitPayload) (context : ProtocolContext)
     (separate : context.roles 1 ≠ context.roles 0)
@@ -57,11 +57,11 @@ theorem return_verifier (payload : UnitPayload) (bodies : SumcheckPendingLaws.Bo
     (context : ProtocolContext) (point : List F) (claim : F) :
     returnProcess payload context (context.roles 1)
       (SumcheckVerifierLaws.embedV (some point, some claim)) =
-      .done (reduceReturnValues (SumcheckVerifierLaws.embedV (G := G) (some point, some claim))) := by
+      .done (reduceReturnValues (some 0) (SumcheckVerifierLaws.embedV (G := G) (some point, some claim))) := by
   change (Participant.owned (context.roles 1) (context.roles 1)
     (invoke (helpers (F := F) (G := G) payload).closed SumcheckPendingBodies.atPrefixHelper)
     (.cons (some point) (.cons (some claim) .nil))).bind _ = _
-  rw [SumcheckPendingLaws.identity_owned payload _ bodies.atPrefix, ite_eq_left rfl]
+  rw [SumcheckPendingLaws.atPrefix_owned payload bodies, ite_eq_left rfl]
   rfl
 
 theorem width_lift (payload : UnitPayload) (bodies : Bodies payload.definitions)
@@ -91,12 +91,12 @@ source behavior; no transcript event is invented for an unreached iteration. -/
 theorem reduce_verifier (payload : UnitPayload) (bodies : Bodies payload.definitions)
     (maximum : Nat) (context : ProtocolContext) (separate : context.roles 0 ≠ context.roles 1)
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G)))
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     reduce payload maximum context (context.roles 1) protocols
-      (.cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil))))))) =
+      (.cons none (.cons none (.cons none (.cons custody (.cons point (.cons claim (.cons count (.cons service .nil)))))))) =
       (Participant.owned (context.roles 1) (context.roles 1)
         (invoke (helpers payload).closed SumcheckPendingBodies.openClaimHelper)
-        (.cons point (.cons claim .nil))).bind fun opened =>
+        (.cons custody (.cons point (.cons claim .nil)))).bind fun opened =>
       (denoteRepeatOn (carriers := uniformCarriers F G) (repeatSpec maximum) context
         (context.roles 1) count (SumcheckVerifierLaws.embedV (G := G) (opened.get .here, opened.get (.there .here)))
         (.cons service .nil) (round payload context (context.roles 1)) Occurrence.iterations repeatSite).bind (returnProcess payload context (context.roles 1)) := by
@@ -126,9 +126,9 @@ theorem reduce_verifier (payload : UnitPayload) (bodies : Bodies payload.definit
   simp only [Participant.owned, separate, ↓reduceIte, PIR.Process.bind]
   change (Participant.owned (context.roles 1) (context.roles 1)
     (invoke (helpers (F := F) (G := G) payload).closed SumcheckPendingBodies.openClaimHelper)
-    (.cons point (.cons claim .nil))).bind _ = _
+    (.cons custody (.cons point (.cons claim .nil)))).bind _ = _
   apply congrArg₂ (@PIR.Process.bind signature
-    (Values (Component (assignment F G)) SumcheckPendingLaws.claimTypes)
+    (Values (Component (assignment F G)) SumcheckPendingBodies.openClaimHelper.outputs)
     (Values (Component (assignment F G)) reduceOutputs))
   · simp only [Participant.owned, ↓reduceIte]
   funext opened
@@ -158,7 +158,6 @@ theorem reduce_verifier (payload : UnitPayload) (bodies : Bodies payload.definit
             apply congrArg₂ PIR.Process.bind
             · rfl
             funext result
-            cases result with | cons x result => cases result with | cons y result =>
-              cases result
-              rfl
+            cases result with | cons token result => cases result with | cons x result =>
+              cases result with | cons y result => cases result; rfl
 end ZkcExamples.Structured.OriginalSumcheckLibrary

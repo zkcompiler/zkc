@@ -26,6 +26,7 @@ let
     "compiler/tools"
     "common/unicode"
     "common/catalog"
+    "common/targets"
   ];
   rust = [
     "Cargo.toml"
@@ -34,6 +35,10 @@ let
     "crates"
     "common/unicode"
     "common/catalog/declarations.json"
+    "common/catalog/installation.json"
+    "common/catalog/validation-cases.json"
+    "common/targets/evm.json"
+    "common/targets/evm-validation-cases.json"
   ];
   projects = [
     "zkc.workspace.toml"
@@ -43,7 +48,9 @@ let
   ];
   rustFixtures = [
     "common/tests/fixtures/program/bytes.json"
+    "common/tests/fixtures/entry-json/nodes.json"
     "compiler/test/fixtures/relation/polynomial-chunks.json"
+    "compiler/test/fixtures/common-inputs/custody-fields.json"
     "compiler/adapters/accumulator-machine/fixtures"
     "compiler/adapters/plonky3/fixtures/recurrence"
   ];
@@ -62,6 +69,7 @@ let
         "common/tests/support"
         "common/tests/fixtures/clean/air-control.json"
         "common/tests/fixtures/program/bytes.json"
+        "common/tests/fixtures/entry-json/nodes.json"
       ];
     compilerDomain.paths = compiler ++ [ "compiler/examples/domain" ];
     domainChecks.paths = processSupport ++ [

@@ -3,6 +3,8 @@
 use serde::{Deserialize, Deserializer};
 mod logical;
 pub use logical::{Oracle, OracleArgument, Present, Unsigned};
+mod placement;
+pub use placement::{Component, Facet, Placement};
 
 // A nullable field is required in the carrier. serde's ordinary Option default
 // would also accept an omitted field, unlike the compiler's exact object schema.
@@ -49,7 +51,7 @@ pub(in crate::entry) enum Job {
     Proof {
         prover: String,
         verifier: String,
-        public: Vec<u32>,
+        public: Vec<PublicSelection>,
         acceptance: Selector,
         #[serde(deserialize_with = "present_optional")]
         completion: Option<Box<Selector>>,
@@ -100,6 +102,45 @@ pub(in crate::entry) struct Protocol {
     pub outputs: Vec<Port>,
     pub services: Vec<Service>,
     pub clauses: Vec<Clause>,
+    pub common_input_requirements: Vec<CommonRequirement>,
+}
+/// Source-only coordinates; the ordinary component map owns native positions.
+#[derive(Debug, Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+pub(in crate::entry) struct CommonRequirement {
+    pub components: Vec<CommonComponent>,
+    pub observation: CommonObservation,
+}
+#[derive(Debug, Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+pub(in crate::entry) struct CommonComponent {
+    pub input: u32,
+    pub role: String,
+    pub path: Vec<CommonStep>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(
+    remote = "Self",
+    tag = "kind",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub(in crate::entry) enum CommonStep {
+    Field { index: u32 },
+    Alternative { index: u32 },
+    Payload { index: u32 },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(
+    remote = "Self",
+    tag = "kind",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub(in crate::entry) enum CommonObservation {
+    Value {},
+    Tag {},
+    Extent { axis: u32 },
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]
@@ -108,12 +149,11 @@ pub(in crate::entry) struct Port {
     pub name: String,
     #[serde(rename = "type")]
     pub display_type: String,
-    pub roles: Vec<String>,
+    pub placement: Placement,
+    pub components: Vec<Component>,
     pub index: u32,
     pub native: Vec<u32>,
     pub schema: Schema,
-    #[serde(default)]
-    pub holder: Present<String>,
     #[serde(default)]
     pub maximum_rows: Present<Option<Unsigned>>,
 }
@@ -167,9 +207,15 @@ pub enum Permission {
 pub struct Schema {
     pub kind: Kind,
     pub identity: String,
+    #[serde(deserialize_with = "present_optional")]
+    pub generated: Option<String>,
     #[serde(rename = "type")]
     pub display_type: String,
-    pub custody: bool,
+    pub custody: u32,
+    pub sealed: bool,
+    pub roles: Vec<String>,
+    #[serde(deserialize_with = "present_optional")]
+    pub element: Option<Box<Schema>>,
     pub constructible: bool,
     pub permissions: Vec<Permission>,
     pub fields: Vec<Field>,
@@ -182,12 +228,22 @@ pub struct Schema {
     #[serde(default)]
     pub maximum: Present<Unsigned>,
 }
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+pub struct PublicSelection {
+    pub port: u32,
+    pub path: Vec<u32>,
+    pub role: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
 #[serde(deny_unknown_fields)]
 pub struct Field {
     pub name: String,
     pub offset: u32,
+    pub public: bool,
+    #[serde(deserialize_with = "present_optional")]
+    pub placement: Option<Placement>,
     pub schema: Schema,
     #[serde(default)]
     pub maximum_rows: Present<Unsigned>,
@@ -286,10 +342,15 @@ crate::entry::decode::objects!(
     Interface,
     Setup,
     EntryInput,
+    PublicSelection,
     Job,
     Gate,
     Construction,
     Protocol,
+    CommonRequirement,
+    CommonComponent,
+    CommonStep,
+    CommonObservation,
     Port,
     Service,
     Schema,
@@ -303,3 +364,13 @@ crate::entry::decode::objects!(
     Definition
 );
 crate::entry::decode::names!(Kind, Permission, Direction, ClauseKind, Purpose);
+
+impl Schema {
+    /// Category survives zero storage. Ordinary containers may not hide it.
+    pub fn is_logical(&self) -> bool {
+        self.kind.is_logical()
+            || matches!(self.kind, Kind::Tuple | Kind::Array)
+                && (self.fields.iter().any(|f| f.schema.is_logical())
+                    || self.element.as_deref().is_some_and(Self::is_logical))
+    }
+}

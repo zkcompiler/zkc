@@ -13,8 +13,20 @@ exactly once. Unknown tags, missing members and extra members refuse.
 
 A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
 `prover`, `verifier`, `public`, `acceptance`, `completion`, `target` and
-`construction`. Roles are original source roster names; `public` is a sorted
-array of logical input indices. Acceptance uses the selector format below. Completion is either
+`construction` and `gates`. The required `gates` array contains exact `{path,
+bits}` objects: nonempty source-identifier paths and integer difficulties, as
+defined by the [authored gate contract](../language/entries.md#proof-declarations).
+An empty array selects no gates. Roles are original source roster names;
+`public` is a sorted
+array of exact objects `{port, path, role}`. `port` is the logical input ordinal,
+`path` is the ordered schema-field path, and `role` is the verifier's source
+name. Entries are strictly ordered by port then path, with no duplicates or
+ancestor overlap. Each selects ordinary verifier data, including empty values;
+together they cover every verifier ordinary input, including setup-initialized
+verifier-key fields. Whole logical selections
+refuse; ordinary subtrees remain selectable. Native proof public inputs remain
+the derived increasing original native-index vector. Acceptance uses the
+selector format below. Completion is either
 a producer Boolean output selector or JSON null. Target is a clause name or JSON null. An authored
 construction has `kind: "authored"` and `format`. A native construction has
 `kind: "fiat_shamir"`, `format`, `suite` and `services`, a singleton array of
@@ -39,88 +51,263 @@ selector has exactly `port` and `path`, using logical input and product-field
 indices. Native slices are derived from the checked schema. Readers check exact
 coverage, nonoverlap, nonempty selections and proof-key availability. Source
 comparison additionally binds slot names and selector choices to the checked
-Entry. Setup metadata is part of authenticated package bytes.
+Entry. Setup metadata is part of authenticated package bytes. Setup association can
+split selectable product fields; an ordinary single-operand variant or native
+collection remains indivisible and still requires its supplied value, including
+when its active alternative is empty. Verifier-key initialization requires an
+exact builtin key selection.
 
-Each protocol record has `symbol`, `roles`, `inputs`, `outputs`, `services` and
-`clauses`. Each port has `name`, display `type`, `roles`, logical `index`, ordered
-native leaf indices in `native`, and recursive `schema`. A schema has `kind`,
-`identity`, display `type`, `custody`, `constructible`, `permissions`, `leaves`,
-`fields` and `alternatives`. Fields have `name`, leaf `offset` and child `schema`; alternatives
-have `name` and payload `fields`. Zero-leaf ports retain empty native indices.
-Offsets are relative to their product or alternative payload. `constructible` is
-a required Boolean for construction of that outer value. External input also
-requires construction authority for every nested field and alternative payload;
-packing already typed values does not fabricate their contents. Zero-length
-arrays retain their element construction policy despite having no fields.
-`permissions` is
+Each protocol record has exactly `symbol`, `roles`, `inputs`, `outputs`,
+`services`, `clauses` and `common_input_requirements`. The last member is always
+required, including an empty inventory. There is no compatibility default.
+A port has exactly `name`, display `type`, logical
+`index`, ordered absolute protocol input/result indices in `native`, recursive
+`schema`, `placement` and `components`. Only a direct `oracle` or
+`oracle_sequence` port additionally requires `maximum_rows`: null for a sized
+kind, otherwise a canonical uint64 decimal string. Aggregate logical ports
+reject this member. Zero-storage ports retain their complete schema and
+placement with empty native/component arrays.
+
+`common_input_requirements` contains exact common-control admission equivalence
+classes. Each record has exactly `components` and `observation`. Each component
+has exactly unsigned bounded `input` (source input ordinal), source roster name
+`role`, and `path`, an array of exact `{kind,index}` objects. Kinds are `field`,
+`alternative`, `payload`; every alternative is immediately followed by a payload.
+For example:
+
+```json
+{"components":[{"input":0,"role":"P","path":[{"kind":"field","index":1}]},
+               {"input":0,"role":"V","path":[{"kind":"field","index":1}]}],
+ "observation":{"kind":"value"}}
+```
+
+Field indices select declared fields, including zero-storage fields. Payload
+indices select declared alternative fields, independently of their flattened
+native offsets. Nested payload selections retain every enclosing alternative.
+A path ends at exactly one ordinary component. Logical handles, custody,
+zero-storage values and aggregate products cannot become invented common inputs.
+Ordinary children of distributed products use the existing component map at
+their actual roles, including below an enclosing custody prefix. Their selected
+Data facet and custody authority remain separate. No native coordinate, inferred
+type or diagnostic span is serialized in this inventory.
+
+Observation is exactly `{"kind":"value"}`, `{"kind":"tag"}` or
+`{"kind":"extent","axis":0}`. Value requires Copy data; tag requires a variant
+and establishes no payload equality. Extent requires Copy collection data and
+retains its original container type and exact axis, independently of contents.
+Supported axes follow the [input-binding contract](input-bindings.md). Conditional
+alternative paths do not project or compare inactive payloads.
+
+Each class has at least two distinct roles and one exact resolved logical type
+and observation. Components sort by input ordinal, lexicographic typed path
+(kind order field, alternative, payload; then index), and role ordinal. Classes
+sort lexicographically by their complete component arrays and then observation
+(value, tag, extent with axis). Independently derived equalities normalize into
+full connected classes, so chain and star derivations agree. Distinct nominal
+types and conditional coordinates do not merge through equal storage. Duplicate,
+nonmaximal or reordered serialized classes/components refuse; readers do not
+repair them. There are at most 1,024 classes, 32,768 components in total, and
+32 source path steps, further narrowed by type depth and cumulative work limits.
+Readers bound these structures before indexing, sorting or projection.
+Source publication and source comparison each use their enclosing inventory
+allowance across retained Protocols. Derivation setup, layout observation,
+nested semantic queries and canonicalization debit that same allowance,
+including work performed before an error. A per-Protocol observer cannot
+restart or independently spend the enclosing allowance.
+
+These inventory bounds are owned by Frontend / Language. Their units are
+classes and components per Protocol, path steps per component, and work units
+of the enclosing allowance, which is the invocation's `Limits::work` (by
+default 32,000,000) shared with the rest of publication, comparison or
+reading. The compiler's source publication, source comparison and independent
+reader refuse each bound, including exhaustion of the enclosing allowance
+during the inventory step, with `source.limit` "common inventory limit
+exceeded". The SDK reader enforces the class, component and path bounds and
+refuses with `entry-interface-limit`.
+
+The source producer derives from each immutable closed concrete Protocol and its
+actual helper closure. Independent C++ reading derives the original native
+requirements through native common-control analysis and compares the exact
+mapped inventory for every retained Protocol, including helpers. Source
+comparison independently replays every concrete declaration's source inventory.
+Host packages retain these inventories in their nested Protocol packages.
+Self-hashing a replacement package establishes neither source correspondence nor
+inventory completeness: those require the trusted compiler boundary. External
+context authentication and actual value admission belong to the SDK/runtime;
+interface metadata establishes no physical execution or proof support.
+
+Every schema has exactly these common members: `kind`, `identity`, display
+`type`, `generated`, `custody`, `sealed`, `constructible`, `permissions`, `roles`, `element`,
+`leaves`, `fields` and `alternatives`, with the kind-specific oracle members
+below. `generated` is required-nullable: null for ordinary source families,
+otherwise the lowercase 64-digit generated-family identity binding capture,
+installation, target and family. It is distinct from the static type `identity`. Retaining it lets independent
+readers reproduce the full schema hash without dropping its generated-family
+binding.
+`custody` is an unsigned bounded JSON integer prefix count, never a Boolean.
+An ordinary explicit wrapper has one custody leaf; a distributed wrapper has
+one per declaration role, in telescope order. `roles` contains declaration-order
+role parameter names only for nominal distributed records, at most 1,024, the
+catalog limit `record.roles`; other schemas have an empty array. The brace-profile alternative below, which the
+[contract register](../contracts.md#current-producers-and-consumers) records under recursive record placement, also has an empty
+array. These names are definition metadata, not protocol participants.
+`element` is required-nullable and non-null exactly for a fixed array, including
+length zero. Every expanded array field has that complete element schema.
+
+A field has exactly `name`, body `offset`, Boolean `public`, required-nullable
+`placement` and child `schema`, plus conditional `maximum_rows` below.
+Alternatives have exactly `name` and payload `fields`. Offsets include the whole
+custody prefix and count each handle once. Distributed record fields require
+placement formulas in their declaring record's role telescope, after static
+specialization. Ordinary fields, alternative payloads and expanded structural
+fields require null, as do fields of the brace-profile alternative.
+Private and zero-storage fields remain in declaration
+order. Privacy is part of schema consistency and identity; the independent
+reader does not reconstruct lexical home authority for internal source clauses.
+Source comparison checks that authority. External setup/input selectors require
+public accessible paths.
+
+`sealed` is a required Boolean independent of custody and constructibility;
+nonnominal schemas require false. Retained nominal declarations and source
+comparison authenticate sealing. External ordinary supply validates sealing,
+privacy and construction at every ancestor. Retained typed transport can pass a whole
+ordinary value under its export policy without constructor authority. This grants
+no public SDK projection or external assembly through sealing or private fields. Equal identities require
+equal complete authority metadata, including private and empty children.
+
+`constructible` is a required Boolean for construction of the outer value.
+External byte input additionally requires construction authority throughout the
+selected schema, including a zero array's element template. `permissions` is
 the canonical ordered subset of `Copy`, `Drop`; `Copy` requires `Drop`.
+Transparent products intersect child permissions; explicit restrictions can
+remove permissions. Logical products and handles are not ordinary byte-input
+constructors.
 
-A logical oracle port has schema kind `oracle` for a singleton handle or
-`oracle_sequence` for a bounded handle sequence. Both have no data `leaves`, no
-fields or alternatives, `custody: false`, `constructible: false`, and permissions
-`["Copy", "Drop"]`. Both additionally require `oracle: {kind, arguments}` and a
-recursive `data_schema` describing the complete holder projection. The closed
-kind arguments are ordered pairs
-`["type", <canonical logical BoundType>]` and `["nat", <decimal uint64 string>]`.
-The current kind is `table`, with a row type and optional exact row count. These
-are logical descriptors, not native opaque-handle spellings.
+Placement is exactly one of:
 
-An `oracle_sequence` schema additionally requires `maximum`, a canonical uint64
-decimal string including zero. This is the exact sequence capacity, independent
-of the kind's row count or per-element row bound. Singleton `oracle` schemas and
-ordinary schemas reject `maximum`. The singleton `data_schema` describes
-`K::Data`; the sequence `data_schema` describes the ordinary builtin
-`sequence<K::Data>`, including the outer sequence even when `K::Data` is itself
-a sequence. Repeated schema identities must agree on the complete kind, capacity
-and data schema.
+```json
+{"kind":"data","roles":[0,2]}
+{"kind":"oracle","holder":0,"receivers":[1,2]}
+{"kind":"product","instance":"<schema.identity>","arguments":[1,0],"fields":[]}
+```
 
-There is one strict current `/0` schema per alternative, with no legacy decoding
-path.
+All role values are integer ordinals in the owning protocol roster, or the
+owning declaration telescope for a field formula. Data roles and oracle
+receivers are nonempty increasing distinct sets; a holder is outside its
+receivers. Product arguments are injective and every child participant belongs
+to that application. A nominal product preserves telescope order and arity;
+its fields follow declaration order. Applying its role substitution to every
+field formula must reproduce the port child placements exactly. Product
+`instance` equals the corresponding external schema `identity`; hashing that
+already external digest again is invalid. Internal kind-framed type identities
+are converted once at the producer boundary.
 
-An oracle port additionally has `holder` (one source role name) and
-`maximum_rows` (null for a sized kind, otherwise a canonical uint64 string).
-For a sequence this row bound applies to each element, independently of capacity.
-Its `roles` is the union of that holder and the nonempty receiver set; the holder
-cannot be a receiver. Its two `native` indices select holder data first, then the
-receiver anchor. The native signature pair is `[K::Data, Oracle<K>]` for a
-singleton and `[Sequence<K::Data>, OracleSequence<K, M>]` for a sequence with
-capacity `M`. The reader checks that exact pair, each leaf's ordered roles,
-kind, capacity and row bound, and the actual input binding. Source comparison
-also binds the output row bound and complete descriptor to the checked
-declaration. Ordinary schema and port alternatives reject these additional keys.
+Structural tuples with logical children also use product placement, with one
+child per position. A logical fixed array uses exactly one element-placement
+template even at length zero; schema fields still expand its physical extent.
+Its template position is not a selected physical element index. Structural
+arguments are the canonical union of child participants, including the phantom
+element template of a zero array. Schema-aware substitution restores this
+canonical union while retaining nominal telescope order. Structural products do
+not gain nominal constructor or home authority. Ordinary availability for a
+structural Product is the intersection of its children's ordinary role sets,
+including a zero-array element template. The participant union grants no
+whole-value access. Selected target statements and witnesses use this same
+exact intersection for verifier visibility.
 
-The `logical_record` schema has the common schema members, no native `leaves`,
-no alternatives, `custody: false`, `constructible: false`, and permissions
-`["Copy", "Drop"]`. It requires a nonempty ordered field list containing at least
-one direct oracle handle or sequence. Other fields must recursively be ordinary
-total shared data. Nested logical records and ordinary products containing
-handles refuse. A direct unsized logical field additionally requires
-`maximum_rows`, a canonical uint64 decimal string including zero; sized logical
-fields and ordinary fields reject it. Field offsets count body leaves: one per
-direct handle or sequence, and the ordinary leaf count for other fields.
-Protocol native slots instead expand each direct handle or sequence into two
-slots, including a zero-capacity sequence. A logical record port requires
-`holder`, rejects a whole-port `maximum_rows`, and uses the same exact oriented
-holder/receiver family for all its logical fields. Repeated schema identities
-must agree on field order, names, offsets, bounds and complete child schemas.
+Each component has exactly `path`, `leaf`, `role`, `facet` and `native`. Path is
+a declaration-field ordinal array, including physical array indices; `leaf` is
+the local terminal or custody-prefix leaf ordinal. Facet is `data`,
+`oracle_data`, `oracle_anchor` or `custody`. Order is declaration traversal,
+then body leaf, then increasing participant. Native coordinates are absolute in
+the owning protocol input or result signature. Shared ordinary data and receiver
+anchor families can repeat a native coordinate; uniqueness is over
+`(path,leaf,role,facet)`. Readers reconstruct complete coverage, order, exact
+types, role attributes, bounds and ABI selections independently from schemas,
+placements and actual native signatures. Producer component arrays grant no
+additional authority. A port role union cannot authorize a field selection.
 
-Oracle schemas cannot occur as ordinary aggregate children, ordinary relation-data
-selectors or Host schemas. Logical contract anchor selectors admit a singleton
-handle port or a direct singleton handle field of a logical record; they do not
-select sequences. Such a selector has a required null `role` and selects the
-paired anchor slot, with the complete associated `data_schema` as its logical
-relation type. A named role cannot select a logical value as ordinary data.
-Projection through a logical record derives native prefixes from expanded
-widths, rather than using body offsets as native offsets.
+An oracle schema has kind `oracle` for a singleton handle or `oracle_sequence`
+for a bounded handle sequence. Both have no data `leaves`, fields or
+alternatives, zero custody, false constructible, empty declaration roles, null
+element, and permissions `["Copy", "Drop"]`. Both additionally require
+`oracle: {kind, arguments}` and recursive `data_schema`. Closed kind arguments
+are ordered pairs `["type", <canonical BoundType>]` or
+`["nat", <canonical uint64 decimal string>]`. The current kind is `table`, with
+a row type and optional exact row count. An `oracle_sequence` additionally
+requires canonical uint64 decimal-string `maximum`, including zero. This exact
+capacity is independent of row count and per-element row maximum. Other kinds
+reject `maximum`. Singleton data schema is `K::Data`; sequence data schema is
+`sequence<K::Data>`, retaining the outer sequence even if the associated data is
+itself a sequence.
+
+A direct unsized handle field requires canonical decimal-string `maximum_rows`;
+sized handle fields and all other fields omit it. Each handle body leaf expands
+to holder data followed by its receiver anchor family: `[K::Data, Oracle<K>]`
+or `[Sequence<K::Data>, OracleSequence<K,M>]`. Each nested handle owns its own
+holder, receivers and row bound. Actual input bindings and output component
+operations must retain the exact pair, order, roles and bounds.
+
+The `logical_record` kind is a nominal distributed product, including an empty
+product. It retains its telescope, formulas, private fields and restrictions,
+with no aggregate native `leaves` or alternatives. Tuples and arrays derive
+logical category recursively, including a zero array's element. They likewise
+have no aggregate data carrier. Ordinary records, variants, associated
+representations and builtin generic carriers cannot hide logical children.
+Ordinary schema leaves include their custody prefix; recursive body width for
+logical products includes their custody count and one body leaf per handle.
+Repeated type identities must agree on the complete schema, including privacy,
+formulas, generated family, element, capacity and associated data.
+
+While the brace source profile remains supported, its telescope-free
+`#[logical]` record has one explicit alternative in this current schema:
+`roles` is present and empty, every field `placement` is present and null,
+permissions are exactly Copy and Drop, custody is zero, and constructibility is
+false. At least one direct handle or sequence is required; zero capacity counts.
+Every other child must recursively be ordinary shared data. Nested logical
+metadata and restricted wrappers are excluded. Each use has a product placement
+whose direct handles share exactly one holder and receiver set, whose ordinary
+children all have that family's complete data-role set (including empty fields),
+and whose arguments are the canonical sorted family union. Private fields,
+sealing, nominal identity, row bounds and independent component reconstruction
+remain mandatory. This is not a missing-member fallback or permission to read
+historical encodings. Remove this alternative and the source Layout migration
+seam together when the brace parser retires; final 4.1 records always declare
+their role telescope and field formulas.
+
+Selectors retain the existing direction/port/path/role format. A named role
+selects ordinary data only when every selected leaf is a data component at that
+role. An anchor selector has null role and selects one singleton handle's anchor,
+with its associated data schema and its own implicit holder; sequences and whole
+logical products are not anchors. External projection through custody and projection through opaque types
+refuse. Internal checked-source clauses may observe ordinary Copy payload fields
+through custody for specification bookkeeping; this creates no executable field
+value and discharges no resource obligation. Native expansion comes from independently checked components rather
+than aggregate role unions or body offsets. Setup coverage and proof-key/public
+policy likewise inspect each actual data component. Public selections cover ordinary verifier subtrees. Handles, oracle holder data,
+anchors and custody are separate obligations; none is ordinary public byte data.
+Coverage uses semantic field/role atoms independently of physical native slots.
+A supplied ordinary child does not authorize assembling its parent.
 
 Internal protocol ports may carry checked logical records, handles and sequences;
 preparation eliminates these internal ports. Rust metadata inspection validates
 the retained closure structurally without importing or executing its logical
-handles. Selected executable logical inputs and outputs refuse native binding
-and Host input/output admission. Realization determines the public commitment and
+handles. Complete transparent distributed roots containing only admitted ordinary
+components can enter through checked ordinary selections. Outstanding sealed,
+hidden, custody, handle or origin obligations refuse; ordinary holder data does
+not create a handle. Root outputs expose admitted ordinary views, without an
+ordinary logical-value decoder. Realization determines the public commitment and
 witness interface before executable input admission; this source interface does
 not itself grant a data codec. Source names, display text and schema identities
 still require the separate source-correspondence check.
+
+There is one strict current `/0` shape, with required-nullable members and
+unknown/duplicate-key rejection. The recursive record fixture and consumer
+handoff are in [the interface fixtures](../../../compiler/test/fixtures/language-interface/README.md).
+Rust and independent Lean readers must migrate to this exact shape, including
+role-qualified public selections and sealing, before
+landing. Fixture admission does not establish a correspondence theorem or
+complete new formal proofs.
 
 ### Source names and native correspondence
 
@@ -179,14 +366,33 @@ the root; shared helper definitions are hashed once per immutable checking phase
 Printing pins every flag, disables hex output and uses elision thresholds above
 admitted payload sizes, independent of process-global MLIR flags.
 
-The schema digest hashes framed `zkc.language.schema/0`, textual kind, nominal
-`identity`, custody, constructible, Copy/Drop (each `0` or `1`), leaf count and ordered
-leaf spellings, field count and ordered fields, then alternative count and ordered
-alternatives. Counts and offsets use unsigned decimal text. A field contributes
-its name, offset and child schema digest; an alternative contributes its name,
-field count and fields. Display type spelling is excluded. This binds member names
-and structure across captures even when nominal names and native leaves agree.
-These identities retain names and printing policy; they are not semantic equivalence.
+The full schema digest hashes length-framed byte strings in this exact order:
+
+1. `zkc.language.schema/0`, textual kind, static nominal `identity`, then the
+   non-null `generated` digest if present (no frame for null).
+2. Decimal custody count, sealed, constructible, Copy and Drop (the latter four use
+   `0` or `1`); decimal role count and declaration-order role names.
+3. `element` and its full child digest when present, otherwise one empty frame;
+   then `data_schema` and its full child digest when present, otherwise one empty
+   frame.
+4. Decimal body leaf count and declaration-order leaf descriptions. Ordinary
+   leaves contribute their canonical native spelling, including custody units.
+   A handle contributes `oracle`, kind identity, each kind argument's canonical
+   spelling, and decimal sequence capacity or an empty frame for a singleton.
+5. Decimal field count and ordered field descriptions; then decimal alternative
+   count, each alternative name and its field count/descriptions.
+
+Each field description contributes name, decimal body offset, public (`0` or
+`1`), `placement` followed by the formula frames below or one empty frame for
+null, then `maximum_rows` and decimal bound if present (no frames when absent),
+then the child's full schema digest. Formula frames are: `data`, decimal role
+count and each role; `oracle`, holder, receiver count and each receiver; or
+`product`, external instance digest, argument count and arguments, field count
+and recursive child formulas. Every count, offset, role and bound uses canonical
+unsigned decimal text. Hash framing uses unsigned 64-bit little-endian byte
+lengths. Display type spelling is excluded from the digest but remains subject
+to repeated-identity consistency and checked-source comparison. These digests
+bind metadata and printing policy, not semantic equivalence.
 The formula helper name is `zkf_` followed by lowercase SHA-256 of the bytes
 `zkc.language.predicate:` concatenated with the native declaration key. Its JSON
 link must equal the original relation's explicit `formula` symbol reference.
@@ -235,25 +441,38 @@ labels/payloads, custody prefixes and managed-service contracts. Logical types
 with the same identity must have consistent kind, label and schema. Kinds are
 `boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `logical_record`, `variant`,
 `associated`, `builtin`, `oracle` and `oracle_sequence`. Ordinary scalars have
-their matching single native leaf; unit has none. Tuples/arrays have positional
+their matching single native leaf; unit has none. A `builtin` schema's single
+leaf is a catalog source-data type constructor without its own source kind
+(every source-data row except `bool`, `index`, `field` and `group`) whose catalog
+permissions are Copy and Drop. Interface leaves carry ordinary data, so affine
+managed state, such as a transcript, is never a leaf and refuses with
+`source.interface`. Tuples/arrays have positional
 fields, with one common element identity
-for nonempty arrays. Records have identifier fields; associated representations
+including the zero-length element template. Records have identifier fields; associated representations
 have exactly one `value` field. Only variants have alternatives. An empty product
-cannot hide data leaves. Custody belongs only to nominal kinds.
+cannot hide data leaves. Custody belongs only to nominal kinds, including distributed records.
 
-`identity` is the lowercase SHA-256 digest of the closed canonical source type
-key used by nominal custody and variant descriptors. It includes static arguments,
-including phantom and zero-length array element types. The key encodes the type
-kind tag, symbolic flag, length-framed domain and normalized dimension, then the
+`identity` is the lowercase SHA-256 digest of the closed
+[canonical source type key](../language/definitions.md#nominal-authority) used by
+nominal custody and variant descriptors. It includes static arguments,
+including phantom and zero-length array element types, and the defining source
+authority of every nominal they name. The key encodes the type kind tag,
+symbolic flag, length-framed domain, then, for a record, logical record, variant
+or module node that names a declaration, the framed authority (64 lowercase
+hex, or empty for a generated declaration), then the normalized dimension, the
 argument count and recursively framed argument keys; a natural uses its kind tag
 and framed normalized dimension alone. Tags follow `Type::Kind`; framing is an
 unsigned decimal byte length followed by `:` and the exact bytes. The toolchain
-identity fixes this encoding. Native custody carries the exact digest; a variant
+identity fixes this encoding. Equal paths from different source revisions have
+different identities. Native custody carries the exact digest; a variant
 carries `["zkc.language", lowercase_hex(full_preimage)]`. The preimage is the
 complete original UTF-8 type key. Both C++ and Rust readers require even-length
 lowercase hex, check encoded expansion and decoded byte bounds before allocation,
 validate UTF-8 and hash the decoded bytes. A chosen label or a digest in place of
-the preimage refuses. The reader checks both anchors. Other source type identities
+the preimage refuses. The reader checks both anchors. Over a retained
+declaration carrier, the C++ reader recomputes each retained nominal's identity
+from its term and the carrier's authority rows, and requires a null authority
+exactly for a schema with a non-null `generated`. Other source type identities
 remain source assertions until checked against the retained project. `type` is display text, never equality authority.
 An empty array's element meaning is bound by its identity and source agreement;
 no selectable element field is invented for it. Copy, Drop and
@@ -395,7 +614,15 @@ a `functions` signature inventory. Its `protocols`, `relations` and `setups`
 arrays are empty: child native packages own those contracts.
 
 Compiler publication and Rust admission bound the Host artifact to 16 MiB,
-JSON nesting to 256 and lexical nodes to 200,000 before structural decoding.
+JSON nesting to 256 and lexical nodes to 800,000 before structural decoding.
+The node ceiling is four times an interface document's, as its byte ceiling
+is: a Host artifact restates each signature, block-argument and deployment
+schema, so the generated wrapper of a Protocol selection grows by about 235
+nodes per role. Its 1,024-role roster needs about 240,000 nodes with one port,
+and about 369,000 with one port placed at every role.
+The shared [node-ceiling fixtures](../../../common/tests/fixtures/entry-json/README.md)
+give the interface document's and the Host artifact's node ceilings a case at
+the ceiling and one past it, which the compiler's and the SDK's readers both run.
 Scalar tokens have at most ten bytes. Embedded program and package strings
 share the artifact byte ceiling; interface metadata retains its narrower string
 limit. Duplicate decoded keys, invalid Unicode and noncanonical numeric tokens

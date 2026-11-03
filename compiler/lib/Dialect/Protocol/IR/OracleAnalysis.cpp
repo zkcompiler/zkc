@@ -2,6 +2,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 namespace zkc::mathematical {
@@ -33,6 +34,11 @@ LogicalResult verifyOracleHolder(Value root, llvm::StringRef role,
       return exhausted();
     --remaining;
     if (auto argument = dyn_cast<BlockArgument>(value)) {
+      if (auto capture = selectedCapture(argument)) {
+        if (!enqueue(capture))
+          return exhausted();
+        continue;
+      }
       auto repeat =
           dyn_cast<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp());
       if (!repeat || failed(repeat->getName().verifyInvariants(repeat)) ||
@@ -85,6 +91,13 @@ LogicalResult verifyOracleHolder(Value root, llvm::StringRef role,
     } else if (auto at = dyn_cast<protocol_ir::OracleSequenceAtOp>(producer)) {
       if (!enqueue(at.getSequence()))
         return exhausted();
+    } else if (auto branch = dyn_cast<protocol_ir::BranchOp>(producer)) {
+      if (failed(branch.verifyRegions()))
+        return refuse();
+      unsigned index = cast<OpResult>(value).getResultNumber();
+      for (Region &arm : branch.getArms())
+        if (!enqueue(arm.front().back().getOperand(index)))
+          return exhausted();
     } else if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(producer)) {
       if (failed(repeat.verifyRegions()))
         return refuse();

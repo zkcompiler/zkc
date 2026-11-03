@@ -271,10 +271,13 @@ circuit-output premises; soundness covers all typed adversarial statements.
 The installed GKR library still authors some frame and routing instantiations;
 that work is counted separately from generated views and new mathematics.
 
-The GKR Rounds interface requires both Pending point and scalar components
-before inspecting the round count. A missing component stops as incomplete,
-including at zero rounds. With both components present, zero rounds preserves
-them without requesting a service handle; an excessive count is refused.
+The GKR Rounds interface requires Pending custody, point and scalar before
+inspecting the round count. A missing coordinate stops as incomplete, including
+at zero rounds. Opening consumes custody before the seven-slot repeat state;
+closing returns a complete eight-slot result with custody. The closed
+`createUnit` interpretation returns zero, without asserting freshness. Zero
+rounds preserves point and scalar without requesting a service handle; an
+excessive count is refused after the complete Pending input has been opened.
 Generated caller equations retain the full Pending setup and every admission
 guard before the selected call or loop, together with the complete continuation.
 Producer and verifier points occupy separate role-indexed state positions.

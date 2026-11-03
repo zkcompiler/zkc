@@ -443,6 +443,13 @@ pub(super) fn installed_implementations() -> Result<Vec<(String, &'static str)>>
         .collect())
 }
 
+/// The inclusive bound of a binding's natural parameters, from the catalog
+/// validator of its contract: extents, matrix-vector shapes and gather indices
+/// are at most 1,048,576; other naturals span `u64`.
+pub(super) fn natural_parameter_bound(contract: &str) -> u64 {
+    catalog::natural_parameter_bound(contract)
+}
+
 pub(super) fn observes_history(contract: &str) -> Result<bool> {
     installed()?.observes_history(contract)
 }

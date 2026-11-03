@@ -207,9 +207,15 @@ def template(hex_text):
 
 
 def origin_step(value):
-    require(isinstance(value, list) and len(value) == 3 and value[0] in ("apply", "repeat")
-            and all(isinstance(item, str) for item in value), "invalid origin step")
-    return f"⟨{text(value[0])}, {text(value[1])}, {text(value[2])}⟩"
+    """An application or repeat step `[kind, protocol, site]`, or a branch step
+    `["branch", protocol, site, alternative]`; nothing else."""
+    require(isinstance(value, list) and value and all(isinstance(item, str) for item in value),
+            "invalid origin step")
+    if value[0] in ("apply", "repeat"):
+        require(len(value) == 3, "invalid origin step")
+        return f".{value[0]} {text(value[1])} {text(value[2])}"
+    require(value[0] == "branch" and len(value) == 4, "invalid origin step")
+    return f".branch {text(value[1])} {text(value[2])} {text(value[3])}"
 
 
 def origin(hex_text):

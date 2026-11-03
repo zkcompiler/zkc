@@ -1,6 +1,6 @@
 #include "Internal.h"
 #include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Language/Layout.h"
+#include "zkc/Language/EntryBoundary.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
@@ -10,53 +10,61 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
   const auto &protocol = entry.protocol();
   const auto &choices = entry.entry();
   std::set<unsigned> expected, covered;
-  std::map<unsigned, unsigned> verifierKeys;
+  struct VerifierKey {
+    unsigned port;
+    std::vector<unsigned> path, roles;
+  };
+  std::map<unsigned, VerifierKey> verifierKeys;
+  std::vector<ProtocolPortLayout> ports;
+  std::vector<unsigned> offsets;
   unsigned offset = 0;
-  for (unsigned port = 0; port < protocol.inputs.size(); ++port) {
-    const auto &input = protocol.inputs[port];
-    if (input.oracle) {
-      // Logical components carry no setup authority. Their realized input
-      // interface is checked after semantic realization.
-      offset += 2;
-      continue;
-    }
-    auto layout = layouts.get(input.type);
-    if (!layout)
-      return layout.takeError();
-    for (const auto &leaf : (*layout)->leaves) {
-      if (!leaf.data())
-        return failure("source.entry", "Entry input requires executable data",
-                       input.span);
+  for (auto [ordinal, input] : enumerate(protocol.inputs)) {
+    auto observed = layouts.protocolPort(input);
+    if (!observed)
+      return observed.takeError();
+    offsets.push_back(offset);
+    for (const auto &leaf : observed->leaves) {
+      if (!leaf.leaf.data() || leaf.custody)
+        continue;
       protocol::TypeParseBudget budget;
       budget.remaining =
           std::min<uint64_t>(budget.remaining, work.limits.work - work.used);
       auto before = budget.remaining;
-      auto type = protocol::parseBoundType(*leaf.data(), false, 0, &budget);
+      auto type =
+          protocol::parseBoundType(*leaf.leaf.data(), false, 0, &budget);
       if (!type) {
         consumeError(type.takeError());
         return failure(budget.remaining ? "source.entry" : "source.limit",
                        "setup input type admission failed", input.span);
       }
-      if (auto error =
-              work.charge(before - budget.remaining + leaf.cost(), input.span))
-        return error;
-      if (choices.proof() && type->kind == "prover_key" &&
-          llvm::is_contained(input.roles, choices.proof()->verifier))
+      if (auto e = work.charge(before - budget.remaining + leaf.leaf.cost(),
+                               input.span))
+        return e;
+      auto roles = leaf.roles();
+      auto key = protocol::setupKey(type->kind);
+      if (choices.proof() && key == protocol::SetupKey::Prover &&
+          is_contained(roles, choices.proof()->verifier))
         return failure("source.entry",
                        "proof prover keys must stay with the prover",
                        input.span);
+      unsigned index = offset + leaf.nativeOffset;
       if (protocol::nativeSetupType(*type))
-        expected.insert(offset);
-      if (type->kind == "verifier_key") {
-        if ((*layout)->type.kind != Type::Kind::Builtin ||
-            (*layout)->leaves.size() != 1)
+        expected.insert(index);
+      if (key == protocol::SetupKey::Verifier) {
+        auto selected = observed->body;
+        for (auto step : leaf.path)
+          selected = selected->fields[step].layout;
+        if (selected->type.kind != Type::Kind::Builtin ||
+            selected->leaves.size() != 1)
           return failure("source.ingress",
-                         "key initialization requires a whole builtin port",
+                         "key initialization requires an exact builtin field",
                          input.span);
-        verifierKeys.emplace(offset, port);
+        verifierKeys.emplace(index,
+                             VerifierKey{unsigned(ordinal), leaf.path, roles});
       }
-      ++offset;
     }
+    offset += observed->size();
+    ports.push_back(std::move(*observed));
   }
   if (choices.proof() && verifierKeys.size() > 64)
     return failure("source.limit", "proof verifier key limit exceeded",
@@ -64,28 +72,45 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
   for (const auto &slot : choices.setups) {
     bool publicVerifier = false;
     for (const auto &input : slot.inputs) {
-      if (auto error = work.charge(input.path.size() + 1, input.span))
-        return error;
-      auto selected = layouts.selectInput(protocol, input);
-      if (!selected)
-        return selected.takeError();
+      if (auto e = work.charge(input.path.size() + 1, input.span))
+        return e;
+      if (input.port >= ports.size())
+        return failure("source.entry", "setup input is absent", input.span);
+      const auto &port = ports[input.port];
+      auto schema = port.body;
+      for (auto step : input.path) {
+        if (schema->custodyCount || schema->sealed ||
+            schema->type.kind == Type::Kind::Associated ||
+            schema->type.kind == Type::Kind::Variant ||
+            step >= schema->fields.size() || !schema->fields[step].isPublic)
+          return failure("source.entry",
+                         "setup selector requires a visible product path",
+                         input.span);
+        schema = schema->fields[step].layout;
+      }
       bool nonempty = false;
-      for (unsigned i = 0; i < selected->layout->leaves.size(); ++i) {
-        if (auto error = work.charge(1, input.span))
-          return error;
-        unsigned index = selected->offset + i;
+      for (const auto &leaf : port.leaves) {
+        if (auto e = work.charge(leaf.path.size() + 1, input.span))
+          return e;
+        if (!entryPathContains(input.port, input.path, input.port, leaf.path))
+          continue;
+        unsigned index = offsets[input.port] + leaf.nativeOffset;
         if (!expected.count(index))
           continue;
         nonempty = true;
         if (!covered.insert(index).second)
           return failure("source.entry", "setup selectors overlap", input.span);
-        if (auto key = verifierKeys.find(index); key != verifierKeys.end()) {
-          if (!choices.proof())
-            continue;
-          auto port = key->second;
-          if (!llvm::is_contained(choices.proof()->publicInputs, port) ||
-              !llvm::is_contained(protocol.inputs[port].roles,
-                                  choices.proof()->verifier))
+        if (auto key = verifierKeys.find(index);
+            key != verifierKeys.end() && choices.proof()) {
+          const auto &selected = key->second;
+          bool isPublic = any_of(
+              choices.proof()->publicInputs, [&](const EntryInputSelection &p) {
+                return p.role == choices.proof()->verifier &&
+                       entryPathContains(p.port, p.path, selected.port,
+                                         selected.path);
+              });
+          if (!isPublic ||
+              !is_contained(selected.roles, choices.proof()->verifier))
             return failure("source.entry",
                            "proof setup keys must be public verifier inputs",
                            input.span);

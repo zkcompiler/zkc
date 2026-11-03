@@ -17,7 +17,7 @@ open Zkc.Source Zkc.Construction Zkc.Construction.Domain
 
 abbrev artifact : Participant := ZkcExamples.Construction.BatchOpeningArtifacts.Producer.participant
 
-def inputSorts : List ValueSort := ([Zkc.Construction.ValueSort.data    (Zkc.Source.Structured.Ty.sequence      (Zkc.Source.Structured.Ty.product        "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e67313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"        "case00000000"        (Zkc.Source.Structured.ProductFields.cons          (Zkc.Source.Structured.Ty.field "koala-bear")          (Zkc.Source.Structured.ProductFields.cons            (Zkc.Source.Structured.Ty.field "koala-bear")            (Zkc.Source.Structured.ProductFields.nil)))))])
+def inputSorts : List ValueSort := ([Zkc.Construction.ValueSort.data    (Zkc.Source.Structured.Ty.sequence      (Zkc.Source.Structured.Ty.product        "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e6736343a31303462613033366637316166353564636336373163613231373437396161643861393166646635333937663339666438623839623731373165623638623031313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"        "case00000000"        (Zkc.Source.Structured.ProductFields.cons          (Zkc.Source.Structured.Ty.field "koala-bear")          (Zkc.Source.Structured.ProductFields.cons            (Zkc.Source.Structured.Ty.field "koala-bear")            (Zkc.Source.Structured.ProductFields.nil)))))])
 def outputSorts : List ValueSort := ([])
 def returned : List Nat := ([])
 
@@ -29,7 +29,7 @@ theorem bodyStep0_eq (model : Structured.DomainModel) (program : Structured.Prog
       ((artifact.instructions)[0]'(by decide +kernel)) (bodyStep0 model program context) :=
   (Correspondence.send ("label_6261746368_0") ("label_6261746368_0") ("role00000001") 0 ([]))
 
-def bodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data    (Zkc.Source.Structured.Ty.sequence      (Zkc.Source.Structured.Ty.product        "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e67313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"        "case00000000"        (Zkc.Source.Structured.ProductFields.cons          (Zkc.Source.Structured.Ty.field "koala-bear")          (Zkc.Source.Structured.ProductFields.cons            (Zkc.Source.Structured.Ty.field "koala-bear")            (Zkc.Source.Structured.ProductFields.nil)))))])
+def bodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data    (Zkc.Source.Structured.Ty.sequence      (Zkc.Source.Structured.Ty.product        "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e6736343a31303462613033366637316166353564636336373163613231373437396161643861393166646635333937663339666438623839623731373165623638623031313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"        "case00000000"        (Zkc.Source.Structured.ProductFields.cons          (Zkc.Source.Structured.Ty.field "koala-bear")          (Zkc.Source.Structured.ProductFields.cons            (Zkc.Source.Structured.Ty.field "koala-bear")            (Zkc.Source.Structured.ProductFields.nil)))))])
 
 theorem bodySlotInputs_eq : bodySlotInputs =
     (artifact.inputs) := by kernel_rfl

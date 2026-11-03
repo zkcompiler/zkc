@@ -294,7 +294,7 @@ theorem native_runK_metered
                   .ok (codes', plan', ending, rawFinal) := by
                 convert restRead using 1; simp only [NativeScope.loopResult, NativeScope.reading, List.map_append, List.length_map]; rfl
               have innerReading : readActions vocabulary validator helpers data.length body
-                  ((induction, scope.slots.length) :: (carried.map (·.1)).zip (List.range' (scope.slots.length + 1) initialRefs.length) ++ captures.zip captured)
+                  ((induction, scope.slots.length) :: (carried.map (·.1)).zip (List.range' (scope.slots.length + 1) initialRefs.length) ++ (captures.map (·.formal)).zip captured)
                   (scope.loopBody slots).reading = .ok (inner, innerPlan, .yielded yielded, R₁) := by
                 convert innerRead using 1; simp only [NativeScope.loopBody, NativeScope.reading, List.map_append, List.map_cons, NativeSlot.sort, List.length_map]; rfl
               have initialMapRead : initialRefs.mapM (scalar[·]?) = some initialValues := initialScalarRead
@@ -319,7 +319,7 @@ theorem native_runK_metered
                       List.Forall₂ NativeSlot.Holds slots nominal →
                       LiveCarried values s'.live →
                       Run.observe <$> Executable.loopK (fun s exit => Executable.runK vocabulary validator context challenge decode budget body s exit)
-                        site induction (carried.map (·.1)) (captures.zip capturedValues) indices values s'
+                        site induction (carried.map (·.1)) ((captures.map (·.formal)).zip capturedValues) indices values s'
                         (fun results s'' => Executable.runK vocabulary validator context challenge decode budget actions (s''.bind outputs results) exit) =
                         nativeObservation context.suite Origin.withoutCoordinates initial <$>
                           meteredIterate budget (fun start unread used next => meteredK program context Origin.withoutCoordinates initial challenge
@@ -399,16 +399,18 @@ theorem native_runK_metered
                       · exact holds.append (.cons (show NativeSlot.Holds (.data .index) (Domain.Value.data (.index index)) from rfl) nominalHolds)
                       · rfl
                       · have keys : (induction, scope.slots.length) ::
-                            ((carried.map (·.1)).zip (List.range' (scope.slots.length + 1) initialRefs.length) ++ captures.zip captured) =
-                            (induction :: (carried.map (·.1) ++ captures)).zip
+                            ((carried.map (·.1)).zip (List.range' (scope.slots.length + 1) initialRefs.length) ++
+                              (captures.map (·.formal)).zip captured) =
+                            (induction :: (carried.map (·.1) ++ captures.map (·.formal))).zip
                               (scope.slots.length :: (List.range' (scope.slots.length + 1) initialRefs.length ++ captured)) := by
                           rw [List.zip_cons_cons, List.zip_append (by simp [carriedLength])]
                         have frameEnv : (induction, Value.index index) ::
-                            ((carried.map (·.1)).zip values ++ captures.zip capturedValues) =
-                            (induction :: (carried.map (·.1) ++ captures)).zip (.index index :: (values ++ capturedValues)) := by
+                            ((carried.map (·.1)).zip values ++ (captures.map (·.formal)).zip capturedValues) =
+                            (induction :: (carried.map (·.1) ++ captures.map (·.formal))).zip
+                              (.index index :: (values ++ capturedValues)) := by
                           rw [List.zip_cons_cons, List.zip_append (by simp [carriedLength, length, sortsLength'])]
                         change EnvAgrees _ ((induction, Value.index index) ::
-                          ((carried.map (·.1)).zip values ++ captures.zip capturedValues)) _
+                          ((carried.map (·.1)).zip values ++ (captures.map (·.formal)).zip capturedValues)) _
                         simp only [List.cons_append]
                         rw [frameEnv, keys]
                         apply EnvAgrees.enter
@@ -495,5 +497,7 @@ theorem native_runK_metered
   | .yield _ :: _ :: _, names, scope, codes, plan, ending, rawFinal, final, reading, checked => by simp [readActions] at reading
   | .ret _ :: _ :: _, names, scope, codes, plan, ending, rawFinal, final, reading, checked => by simp [readActions] at reading
   | .unsupported _ :: _, names, scope, codes, plan, ending, rawFinal, final, reading, checked => by simp [readActions] at reading
+  | .cond .. :: _, names, scope, codes, plan, ending, rawFinal, final, reading, checked => by simp [readActions] at reading
+  | .select .. :: _, names, scope, codes, plan, ending, rawFinal, final, reading, checked => by simp [readActions] at reading
 
 end Zkc.Executable.DomainVM

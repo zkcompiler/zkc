@@ -29,6 +29,7 @@ mutual
     | .vector _, json | .groups _, json => do (← Format.array json 4096).mapM scalar
     | .indices, json => do (← Format.array json 4096).mapM wireNatural
     | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
+    | .resourceUnit _, _ => throw "structured-input-custody"
     | .sequence element, json => do
       if element.isHandle then throw "structured-input-handle"
       (← Format.array json 4096).mapM (wireInput element)
@@ -68,6 +69,7 @@ mutual
       return .arr ((show List Scalar from values).map scalarJson).toArray
     | .indices, values => return .arr (values.map (fun value => .str (toString value))).toArray
     | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
+    | .resourceUnit _, _ => throw "structured-input-custody"
     | .sequence element, values => do
       if element.isHandle then throw "structured-input-handle"
       return .arr (← values.mapM (wireOutput element)).toArray

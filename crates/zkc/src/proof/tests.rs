@@ -2,6 +2,14 @@ use super::*;
 use zkc_runtime::host::wire::ProofWriter;
 use zkc_runtime::interpreter::Runner;
 mod admission;
+/// The invocation root of the default record with the fresh and logical
+/// selections `total_bytes` and `logical_bytes`.
+fn root_of(total_bytes: usize, logical_bytes: u64) -> zkc_runtime::vm::ExecutionLedger {
+    let mut record = Capacity::default();
+    record.values.total_bytes = total_bytes;
+    record.work.logical_bytes = logical_bytes;
+    record.root()
+}
 #[test]
 fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
     use zkc_runtime::vm::{ExecutionLedger, Program, StopKind, ValueBudget};
@@ -97,6 +105,91 @@ fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
     }
 }
 #[test]
+fn proof_transport_root_refusals_name_their_item_while_the_format_limit_keeps_its_code() {
+    use zkc_runtime::vm::{ExecutionLedger, Program};
+    let program = Program::decode(
+        json!([
+            "zkc.program/0",
+            [],
+            [],
+            [[
+                "participant",
+                "p",
+                "root",
+                "P",
+                [["payload", "bytes@native.bytes/0"]],
+                [],
+                [
+                    ["send", "message", "message", "V", "payload"],
+                    ["return", []]
+                ],
+                []
+            ]],
+            [["entry", "main", [["P", "p"]]]]
+        ])
+        .to_string()
+        .as_bytes(),
+        zkc_cpu::cpu_contracts(),
+    )
+    .unwrap();
+    // The producer keeps its own ledger, so the root charges proof transport
+    // alone: the header, the message's encoding allowance and its buffer.
+    let produce = |root: ExecutionLedger, limit: usize| {
+        let backend = CpuBackend::new(
+            Policy::default(),
+            EntryPolicy::new(Domain::new("P", "session", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let mut runner = Runner::new(
+            &program,
+            "main",
+            "P",
+            "session",
+            backend,
+            vec![Value::Bytes((&b"payload"[..]).into())],
+        )
+        .unwrap_or_else(|error| panic!("{}", error.error));
+        driver::produce(
+            &mut runner,
+            &[7; 32],
+            driver::Transport::Messages(ProofFormat::Native),
+            limit,
+            Some(root),
+        )
+        .outcome
+        .map(|produced| produced.into_parts().0)
+        .map_err(|error| driver_failure(&error))
+    };
+    let default = Capacity::default();
+    let measured = default.root();
+    let proof = produce(measured.clone(), MAX_PROOF_BYTES).unwrap();
+    let used = measured.snapshot();
+    // A root one unit short refuses the message buffer, the last transport
+    // charge, with the item's code for the allowance that refused.
+    assert_eq!(
+        produce(
+            root_of(used.total_value_bytes - 1, default.work.logical_bytes),
+            MAX_PROOF_BYTES
+        )
+        .unwrap_err(),
+        "proof-transport-bytes-limit"
+    );
+    assert_eq!(
+        produce(
+            root_of(default.values.total_bytes, used.logical_bytes - 1),
+            MAX_PROOF_BYTES
+        )
+        .unwrap_err(),
+        "proof-transport-work-limit"
+    );
+    // A proof beyond the format's own size limit keeps the format's code.
+    assert_eq!(
+        produce(default.root(), proof.len() - 1).unwrap_err(),
+        "proof-limit"
+    );
+}
+#[test]
 fn nested_wire_permission_is_exact() {
     for spelling in [
         "matrix:bls12-381.fr",
@@ -154,6 +247,13 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     []
                 ],
                 [
+                    "pass",
+                    "resource_unit.pass",
+                    ["Slot.A"],
+                    "logical/resource_unit.pass",
+                    []
+                ],
+                [
                     "consume",
                     "resource_unit.consume",
                     ["Slot.A"],
@@ -169,6 +269,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     [],
                     ["bool@native.bool/0"],
                     [
+                        ["op", "create", "create", [], [], ["u"]],
+                        ["op", "pass", "pass", [], ["u"], ["next"]],
+                        ["op", "consume", "consume", [], ["next"], []],
                         ["bool_constant", "accept", "yes", true],
                         ["return", ["yes"]]
                     ],
@@ -420,11 +523,16 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         .unwrap();
         assert!(verified.outcome.is_ok());
         assert_eq!(verified.verification_result(), Some(true));
+        if let Some(counts) = verified.execution_counts.json() {
+            assert_eq!(counts["operations"]["resource_unit.create"], 1);
+            assert_eq!(counts["operations"]["resource_unit.pass"], 1);
+            assert_eq!(counts["operations"]["resource_unit.consume"], 1);
+        }
         if handling == "consume" {
             // A normal negative decision is retained structurally before its
             // diagnostic is rendered. Malformed framing remains a failure.
             let mut rejected_program: Json = serde_json::from_str(&candidate).unwrap();
-            rejected_program[2][1][4][0][3] = json!(false);
+            rejected_program[2][1][4][3][3] = json!(false);
             let rejected_candidate = rejected_program.to_string();
             let mut rejected: Json = serde_json::from_str(&deployment_bytes).unwrap();
             rejected[4] = json!(rejected_candidate);
@@ -441,6 +549,46 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert!(declined.outputs.is_none());
             let malformed = execute(&rejected, &inputs, Invocation::Verify(&[])).unwrap();
             assert_eq!(malformed.verification_result(), None);
+
+            // A completed attempt's proof is retained by the call's root, as
+            // its last fresh allocation and logical work. A root one unit
+            // short refuses it with the code of the allowance that refused.
+            let completing = AttemptPolicy {
+                completion: 1,
+                rng: vec![],
+                limits: zkc_runtime::attempt::Limits {
+                    attempts: 1,
+                    proof_bytes: MAX_PROOF_BYTES,
+                },
+                instructions: deployment.capacity.work.instructions,
+                iterations: deployment.capacity.work.iterations,
+            };
+            let attempt = |root: zkc_runtime::vm::ExecutionLedger| {
+                let report = execute(
+                    &deployment.clone().with_invocation_ledger(root.clone()),
+                    &inputs,
+                    Invocation::Attempts(&completing),
+                )
+                .unwrap();
+                (report, root.snapshot())
+            };
+            let default = Capacity::default();
+            let (completed, used) = attempt(default.root());
+            assert!(completed.outcome.is_ok(), "{:?}", completed.outcome);
+            for (root, code) in [
+                (
+                    root_of(used.total_value_bytes - 1, default.work.logical_bytes),
+                    "native-attempt-proof-bytes-limit",
+                ),
+                (
+                    root_of(default.values.total_bytes, used.logical_bytes - 1),
+                    "native-attempt-proof-work-limit",
+                ),
+            ] {
+                let (refused, _) = attempt(root);
+                assert_eq!(refused.outcome.as_ref().unwrap_err(), code);
+                assert_eq!(refused.attempts[0].decision.as_ref().unwrap_err(), code);
+            }
 
             // Three completed false trials exercise aggregation independently
             // of successful one-shot proving and verification above.
@@ -461,13 +609,104 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     attempts: 3,
                     proof_bytes: MAX_PROOF_BYTES,
                 },
-                work: repeated.capacity.work,
-                values: repeated.capacity.values,
+                instructions: repeated.capacity.work.instructions,
+                iterations: repeated.capacity.work.iterations,
             };
             let report = execute(&repeated, &inputs, Invocation::Attempts(&policy)).unwrap();
             assert!(report.outcome.is_err());
             assert_eq!(report.attempts.len(), 3);
             assert!(report.attempts.iter().all(|a| a.decision == Ok(false)));
+
+            // Every attempt charges the call's one invocation root for its
+            // runner's bytes and its proof buffer, while each attempt's
+            // runner keeps its own fuel.
+            let rooted = |root: &zkc_runtime::vm::ExecutionLedger, attempts| {
+                let policy = AttemptPolicy {
+                    limits: zkc_runtime::attempt::Limits {
+                        attempts,
+                        proof_bytes: MAX_PROOF_BYTES,
+                    },
+                    ..policy.clone()
+                };
+                execute(
+                    &repeated.clone().with_invocation_ledger(root.clone()),
+                    &inputs,
+                    Invocation::Attempts(&policy),
+                )
+                .unwrap()
+            };
+            let one = repeated.invocation_root();
+            assert_eq!(rooted(&one, 1).attempts.len(), 1);
+            let three = repeated.invocation_root();
+            let counted = rooted(&three, 3);
+            assert_eq!(counted.attempts.len(), 3);
+            let (one, three) = (one.snapshot(), three.snapshot());
+            assert!(counted.usage.instructions > 0);
+            assert_eq!(three.instructions, 0);
+            // Discarded attempts keep their charges: each retry adds the same
+            // runner and proof buffer charges to the cumulative fresh bytes.
+            let attempt = (three.total_value_bytes - one.total_value_bytes) / 2;
+            assert!(attempt > 0);
+            assert_eq!(three.total_value_bytes, one.total_value_bytes + 2 * attempt);
+            // A root that affords only two attempts' charges refuses the third
+            // attempt: the root bounds every attempt's bytes.
+            let tight = root_of(
+                one.total_value_bytes + attempt + attempt / 2,
+                Capacity::default().work.logical_bytes,
+            );
+            let refused = rooted(&tight, 3);
+            assert!(refused.outcome.is_err());
+            assert_eq!(refused.attempts.len(), 3);
+            assert_eq!(refused.attempts[1].decision, Ok(false));
+            assert!(refused.attempts[2].decision.is_err());
+            assert!(
+                tight.snapshot().total_value_bytes <= one.total_value_bytes + attempt + attempt / 2
+            );
+
+            // Rendering the diagnostics copies every attempt record, so its
+            // bound is charged to the call's root first, as a fresh
+            // allocation that holds nothing live afterwards.
+            let root = repeated.invocation_root();
+            let counted = rooted(&root, 3);
+            let executed = root.snapshot();
+            let rendered = counted.diagnostics();
+            assert_eq!(rendered["attempts"].as_array().unwrap().len(), 3);
+            assert!(rendered.get("diagnostics").is_none());
+            // The rendering reports the root's usage when execution ended,
+            // beside the runner's own, and a proof's root pools no fuel.
+            let usage = json!({"instructions":null,"iterations":null,
+                "logical_bytes":executed.logical_bytes,"total_value_bytes":executed.total_value_bytes,
+                "live_value_bytes":executed.live_reserved_bytes});
+            assert_eq!(counted.invocation_usage(), Some(executed));
+            assert_eq!(rendered["invocation"], usage);
+            assert!(executed.total_value_bytes > counted.usage.total_value_bytes);
+            let charged = root.snapshot();
+            let rendering = charged.total_value_bytes - executed.total_value_bytes;
+            assert!(rendering >= rendered.to_string().len());
+            assert_eq!(
+                charged.logical_bytes - executed.logical_bytes,
+                rendering as u64
+            );
+            assert_eq!(charged.live_reserved_bytes, executed.live_reserved_bytes);
+            // Each rendering charges again, and reports the same usage.
+            assert_eq!(counted.diagnostics()["invocation"], usage);
+            assert_eq!(
+                root.snapshot().total_value_bytes,
+                charged.total_value_bytes + rendering
+            );
+            // A root that cannot afford the rendering yields the bounded
+            // summary, which keeps the outcome and the attempt count.
+            let tight = root_of(
+                executed.total_value_bytes + rendering - 1,
+                Capacity::default().work.logical_bytes,
+            );
+            let counted = rooted(&tight, 3);
+            assert_eq!(tight.snapshot(), executed);
+            let summary = counted.diagnostics();
+            assert_eq!(summary["diagnostics"], "omitted");
+            assert_eq!(summary["attempt_count"], 3);
+            assert_eq!(summary["invocation"], usage);
+            assert_eq!(tight.snapshot(), executed);
             if let Some(counts) = report.execution_counts.json() {
                 assert_eq!(counts["events"]["created_frames"], 6);
                 assert_eq!(counts["events"]["backend_enter_calls"], 6);
@@ -515,6 +754,8 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
         external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         cleanup_errors: vec![],
+        invocation: None,
+        invocation_usage: Default::default(),
     }
 }
 #[test]

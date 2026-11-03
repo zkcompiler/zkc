@@ -19,6 +19,7 @@ bool elaborateExpressions(Checker &checker, SyntaxDeclaration &syntax) {
       return false;
     Expression literal;
     literal.kind = K::Boolean;
+    literal.synthesized = true;
     literal.text = kind == K::Or ? "true" : "false";
     literal.span = expression.span;
     const auto constant = uint32_t(syntax.expressions.size());

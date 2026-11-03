@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_SEMANTICS_H
 #include "State.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Language/Layout.h"
 #include <functional>
 #include <set>
 namespace zkc::language::detail {
@@ -23,6 +24,14 @@ public:
   Work &work;
   NaturalArithmetic naturals;
   std::optional<Diagnostic> diagnostic;
+  /// Nominal authorities of every layout this view observes, inherited by each
+  /// nested Layouts. Checking and closure views keep the provisional view:
+  /// their carriers classify only, and emission recomputes every published one.
+  /// A Layouts over a finalized checked project sets the final view.
+  AuthorityView authorities;
+  /// The authority frame of one declaration path under `authorities`.
+  llvm::Expected<std::optional<std::string>>
+  nominalAuthority(llvm::StringRef path) const;
   /// Source checking can collect unproved open preconditions. Closed readers
   /// and conformance checks have no inference scope. Permission queries never
   /// infer resource authority.
@@ -53,6 +62,10 @@ public:
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;
   llvm::Expected<protocol::BoundType> nativeLayout(const Type &);
+  /// Synchronously borrow declarations for a bounded port observation. Returned
+  /// layout trees own their storage; performed work is reconciled on errors
+  /// too. The caller attaches its span when accepting an error.
+  llvm::Expected<ProtocolPortLayout> nativePortLayout(const Port &);
   Substitution substitution(const Declaration &, llvm::ArrayRef<Type>) const;
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);
@@ -79,6 +92,12 @@ public:
                                                      unsigned = 1);
   std::optional<std::vector<TypeField>> fields(const Type &, Span,
                                                unsigned = 1);
+  /// The fields of a product type without copying a memoized declared record.
+  /// The result points into `computed` or into this view's record memo and is
+  /// valid until the next query.
+  const std::vector<TypeField> *
+  productFields(const Type &, Span, unsigned,
+                std::optional<std::vector<TypeField>> &computed);
   /// Signature-only product shape. An abstract representation or open array
   /// length returns no shape and no diagnostic; it cannot select an overload.
   std::optional<std::vector<TypeField>> structuralFields(const Type &, Span);
@@ -121,6 +140,20 @@ public:
   bool oracleField(const TypeField &);
   /// Restricted nominal formation, cached by complete instantiated type.
   bool logicalRecord(const Type &, Span);
+  /// Recompute product identities and field formulas, never edit identity text.
+  std::optional<ValuePlacement> placement(const Type &, const ValuePlacement &,
+                                          unsigned participants, Span,
+                                          unsigned = 1);
+  std::optional<PlacedType>
+  substitutePlaced(const PlacedType &, const Substitution &, unsigned, Span);
+  bool admitPlaced(const PlacedType &, Span, const Declaration *, unsigned = 1);
+  std::optional<ValuePlacement> remapPlacement(const ValuePlacement &,
+                                               llvm::ArrayRef<unsigned>,
+                                               unsigned, Span);
+  std::optional<ValuePlacement> projectedPlacement(const Type &,
+                                                   const ValuePlacement &,
+                                                   llvm::ArrayRef<unsigned>,
+                                                   Span);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);
   /// Structural projection only; bounds and access are checked after inference.
@@ -142,6 +175,20 @@ public:
   std::optional<CallSignature>
   intrinsicSignature(const Declaration *, llvm::StringRef, llvm::ArrayRef<Type>,
                      llvm::ArrayRef<std::string>, Span);
+  struct EntryField {
+    EntryInputSelection selection;
+    Type type;
+    std::string name;
+    bool initialized = false;
+  };
+  /// Source subtree roster. Closed physical selection is derived by Layouts.
+  std::optional<std::vector<EntryField>>
+  entryFields(const Declaration &protocol, const Declaration *entry,
+              bool inputs, bool atoms = false);
+  std::optional<std::vector<EntryField>>
+  entryFamilyFields(const Declaration &generated,
+                    llvm::ArrayRef<Type> arguments, Span);
+  bool checkEntryPublic(const Declaration &, const Declaration &);
   bool checkProofEntry(const Declaration &, const Declaration &);
   /// Resolve labelled application paths against actual query/service
   /// identities. Returns the canonical source-occurrence order of the supplied
@@ -161,7 +208,32 @@ private:
   std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
+  /// Keyed by lookup key. Like every memo below, it is confined to this view,
+  /// which one checker or one Layouts owns over one immutable declaration set.
   std::set<std::string> checkedLogicalRecords;
+  /// One generated Entry family's ordinary roster, walked once. Fields keep
+  /// selection order; each role lists its own fields in that order. Roles are
+  /// indexed by name separately; the telescope order is never sorted.
+  struct FamilyRoster {
+    std::vector<EntryField> fields;
+    /// Per field: verifier public selection, and setup authority.
+    std::vector<std::pair<bool, bool>> facts;
+    std::vector<std::vector<unsigned>> byRole;
+    std::map<std::string, unsigned> roles;
+  };
+  /// Keyed by the family target, the walked Protocol, the direction and the
+  /// exact static substitution. Valid for this view's declarations.
+  std::map<std::string, FamilyRoster> familyRosters;
+  /// A declared record's substituted fields, keyed by its complete
+  /// instantiated type. Field types, placements and spans depend only on that
+  /// type and on the declaration, whose signature is complete before any type
+  /// term names it. `depth` is the greatest query depth that produced them; a
+  /// deeper query recomputes, so depth refusals are unchanged.
+  struct DeclaredFields {
+    std::vector<TypeField> fields;
+    unsigned depth;
+  };
+  std::map<std::string, DeclaredFields> declaredFields;
 };
 llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
                        Work &, DeclarationId,

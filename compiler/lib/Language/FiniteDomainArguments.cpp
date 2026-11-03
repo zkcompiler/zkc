@@ -163,8 +163,15 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
   }
   if (inference->collectionDomains.count(id)) {
     auto value = expression(id, {}, depth + 1);
-    if (!value || !use(*value, expr.span) ||
-        !checker.types.charge(1, expr.span))
+    if (!value)
+      return {};
+    if (product(*value)) {
+      fail("source.finite-domain",
+           "ordinary finite domains cannot capture a distributed product",
+           expr.span);
+      return {};
+    }
+    if (!use(*value, expr.span) || !checker.types.charge(1, expr.span))
       return {};
     body.expressionValues.insert_or_assign(id, *value);
     return collectionDomain(checker.types, body.values[value->index].type,
@@ -188,7 +195,15 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
       domainArguments[slot.index] = *value;
     } else {
       auto value = expression(child, {}, depth + 1);
-      if (!value || !use(*value, expr.span))
+      if (!value)
+        return {};
+      if (product(*value)) {
+        fail("source.finite-domain",
+             "ordinary domain operands cannot be distributed products",
+             expr.span);
+        return {};
+      }
+      if (!use(*value, expr.span))
         return {};
       body.expressionValues.insert_or_assign(child, *value);
       operands[slot.index] = *value;

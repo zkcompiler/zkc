@@ -1,10 +1,12 @@
 #include "ScopedWitness.h"
 #include "Arguments.h"
 #include "BindingWitness.h"
+#include "CallResolution.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
 #include "HelperResults.h"
+#include "RecordIntrinsics.h"
 #include "Semantics.h"
 #include "SignatureWitness.h"
 #include <algorithm>
@@ -282,6 +284,12 @@ public:
 } // namespace
 Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
+  if (!storage.declarationIndex ||
+      !checkDeclarationAssociations(types, storage.declarations,
+                                    *storage.declarationIndex))
+    return types.diagnostic
+               ? types.takeError()
+               : failure("source.installation", "missing declaration index");
   // This closure is immutable for the whole check; share operand-relative
   // summaries, while each declaration reconstructs its own premise scope.
   HelperResults helperResults(types, storage.declarations);
@@ -289,37 +297,291 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     return error;
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
+  std::vector<unsigned> intrinsicUses(storage.intrinsicCalls.size());
   std::vector<unsigned> invocationUses(storage.scopedInvocations.size());
+  auto authoredCall = [&](const Body &body, const Operation &op,
+                          const SourceCall &source) {
+    const char *diagnostic =
+        op.binding && (!op.binding->scopedArguments.empty() ||
+                       !op.binding->domainArguments.empty())
+            ? "source.scoped-witness"
+            : "source.binding-witness";
+    auto refuse = [&](StringRef message =
+                          "invocation differs from its authored source") {
+      return types.fail(diagnostic, message, op.span);
+    };
+    if (!op.binding || !source.syntax ||
+        source.owner.index >= storage.declarations.size() ||
+        source.target.index >= storage.declarations.size() ||
+        source.expression >= source.syntax->expressions.size())
+      return refuse();
+    const auto &binding = *op.binding;
+    const auto &expr = source.syntax->expressions[source.expression];
+    const auto &callee = storage.declarations[source.target.index];
+    const auto &owner = storage.declarations[source.owner.index];
+    if (!same(expr.span, op.span) || expr.binding ||
+        binding.target.declaration.index != source.target.index ||
+        binding.target.module != source.module ||
+        binding.arguments != source.arguments)
+      return refuse("resolved source target or static arguments differ");
+    if (expr.kind == Expression::Kind::Call && !source.module) {
+      // A protocol's generated Host companions are members of its public
+      // namespace, not lexical declarations visible inside its own body.
+      auto selected = storage.declarationIndex->lookup(
+          owner.parent.value_or(owner.module), expr.text);
+      if (!selected || selected->index != source.target.index)
+        return refuse("source declaration lookup differs");
+    }
+    auto order = bindArguments(types, inputNames(callee), expr.children.size(),
+                               expr.callLabels, true, expr.span, diagnostic);
+    if (!order || *order != binding.argumentOrder)
+      return types.diagnostic ? false : refuse();
+    for (unsigned i = 0; i < expr.children.size(); ++i) {
+      const auto slot =
+          callee.inputOrder.empty()
+              ? Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
+                                       (*order)[i]}
+              : callee.inputOrder[(*order)[i]];
+      auto child = expr.children[i];
+      if (child >= source.syntax->expressions.size())
+        return refuse();
+      if (slot.kind == Declaration::InputSlot::Kind::Data) {
+        auto value = body.expressionValues.find(child);
+        if (value == body.expressionValues.end() ||
+            slot.index >= binding.operands.size() ||
+            value->second.index >= body.values.size() ||
+            value->second.index != binding.operands[slot.index].index)
+          return refuse("source argument value differs");
+      } else if (slot.kind == Declaration::InputSlot::Kind::Service) {
+        const auto &argument = source.syntax->expressions[child];
+        if (argument.kind != Expression::Kind::Name || !argument.binding ||
+            slot.index >= binding.services.size())
+          return refuse();
+        auto lexical = *argument.binding;
+        auto at = llvm::find(source.syntax->serviceBindings, lexical);
+        std::set<BindingId> aliases;
+        while (at == source.syntax->serviceBindings.end()) {
+          if (!aliases.insert(lexical).second)
+            return refuse();
+          std::optional<BindingId> previous;
+          for (const auto &region : source.syntax->bodies)
+            for (const auto &statement : region.statements) {
+              if (!types.charge(1, statement.span))
+                return false;
+              if (statement.kind != Statement::Kind::Let ||
+                  !statement.pattern.binding ||
+                  !(*statement.pattern.binding == lexical))
+                continue;
+              const auto &rhs =
+                  source.syntax->expressions[statement.expression];
+              if (rhs.kind == Expression::Kind::Name && rhs.binding)
+                previous = *rhs.binding;
+            }
+          if (!previous)
+            return refuse();
+          lexical = *previous;
+          at = llvm::find(source.syntax->serviceBindings, lexical);
+        }
+        auto root = binding.services[slot.index].index;
+        if (at == source.syntax->serviceBindings.end() ||
+            size_t(at - source.syntax->serviceBindings.begin()) >=
+                source.syntax->services.size() ||
+            root >= body.services.size() ||
+            !same(body.services[root].span,
+                  source.syntax
+                      ->services[at - source.syntax->serviceBindings.begin()]
+                      .span))
+          return refuse();
+      }
+    }
+    if (expr.kind == Expression::Kind::MethodCall) {
+      if (expr.children.empty())
+        return refuse();
+      auto receiver = body.expressionValues.find(expr.children.front());
+      if (receiver == body.expressionValues.end() ||
+          receiver->second.index >= body.values.size())
+        return refuse();
+      auto selected = resolveHomeMethod(
+          types, storage.declarations, *storage.declarationIndex, owner,
+          body.values[receiver->second.index].type, expr.text, expr.span);
+      if (!selected || selected->declaration.index != source.target.index ||
+          selected->module != source.module)
+        return types.diagnostic ? false : refuse();
+    }
+    if (callee.kind == Declaration::Kind::Protocol) {
+      std::vector<unsigned> expected;
+      if (expr.kind == Expression::Kind::MethodCall) {
+        if (expr.roles || callee.inputs.empty() || binding.operands.empty())
+          return refuse();
+        const auto &port = callee.inputs.front();
+        const auto &receiver = body.values[binding.operands.front().index];
+        std::vector<std::optional<unsigned>> roles(callee.roles.size());
+        if (port.placement &&
+            std::holds_alternative<ProductPlacement>(port.placement->value)) {
+          if (!receiver.placement || !std::holds_alternative<ProductPlacement>(
+                                         receiver.placement->value))
+            return refuse();
+          const auto &formal =
+              std::get<ProductPlacement>(port.placement->value).arguments;
+          const auto &actual =
+              std::get<ProductPlacement>(receiver.placement->value).arguments;
+          if (formal.size() != actual.size())
+            return refuse();
+          for (unsigned i = 0; i < formal.size(); ++i) {
+            if (formal[i] >= roles.size())
+              return refuse();
+            roles[formal[i]] = actual[i];
+          }
+        } else {
+          auto formal = port.roles;
+          auto actual = receiver.components;
+          if (port.oracle) {
+            if (!receiver.oracleHolder || port.oracle->holder >= roles.size())
+              return refuse();
+            roles[port.oracle->holder] = *receiver.oracleHolder;
+            llvm::erase(formal, port.oracle->holder);
+            llvm::erase(actual, *receiver.oracleHolder);
+          }
+          if (formal.size() != actual.size() || formal.size() > 1)
+            return refuse();
+          if (!formal.empty()) {
+            if (formal.front() >= roles.size())
+              return refuse();
+            roles[formal.front()] = actual.front();
+          }
+        }
+        for (auto role : roles) {
+          if (!role || *role >= source.syntax->roles.size() ||
+              llvm::is_contained(expected, *role))
+            return refuse();
+          expected.push_back(*role);
+        }
+      } else {
+        auto header = storage.bodySources.find(callee.id.index);
+        if (header == storage.bodySources.end() || !header->second->syntax)
+          return refuse();
+        for (const auto &name :
+             expr.roles ? *expr.roles : header->second->syntax->roles) {
+          auto at = llvm::find(source.syntax->roles, name);
+          if (at == source.syntax->roles.end())
+            return refuse();
+          expected.push_back(at - source.syntax->roles.begin());
+        }
+      }
+      if (binding.roles != expected)
+        return refuse();
+    }
+    if (!binding.scopedArguments.empty() || !binding.domainArguments.empty())
+      return true;
+    return checkCallAction(types, storage.declarations, body, op,
+                           storage.declarationIndex.get());
+  };
   auto checkCall = [&](const Body &body, const Operation &op) {
+    if (op.binding &&
+        (op.binding->installedSignature || op.binding->intrinsicSource)) {
+      const auto &binding = *op.binding;
+      if (!binding.intrinsicSource ||
+          *binding.intrinsicSource >= storage.intrinsicCalls.size() ||
+          ++intrinsicUses[*binding.intrinsicSource] != 1)
+        return types.fail("source.binding-witness",
+                          "intrinsic source occurrence differs", op.span);
+      const auto &source = *storage.intrinsicCalls[*binding.intrinsicSource];
+      if (!source.syntax ||
+          source.expression >= source.syntax->expressions.size() ||
+          !binding.lexicalOwner ||
+          binding.lexicalOwner->index != source.owner.index ||
+          binding.target.declaration.index != source.target.index)
+        return types.fail("source.binding-witness",
+                          "intrinsic authored authority differs", op.span);
+      const auto &expr = source.syntax->expressions[source.expression];
+      auto selected = storage.declarationIndex->lookup(source.owner, expr.text);
+      if (expr.kind != Expression::Kind::Call || expr.binding ||
+          !same(expr.span, op.span) || !selected ||
+          selected->index != source.target.index ||
+          expr.children.size() != binding.operands.size() ||
+          !expr.callLabels.empty() || !expr.arguments.empty() || expr.roles)
+        return types.fail("source.binding-witness",
+                          "intrinsic resolved declaration differs", op.span);
+      return authoredCall(body, op, source);
+    }
     auto refuse = [&] {
       return types.fail("source.scoped-witness",
                         "scoped call differs from authored argument mapping",
                         op.span);
     };
-    if (std::holds_alternative<OracleInstantiation>(op.action))
-      return checkCallAction(types, storage.declarations, body, op);
     const auto *call = std::get_if<HelperCall>(&op.action);
-    if (!op.binding || !op.binding->scopedSource)
-      return (!call || (call->scopedArguments.empty() &&
-                        call->domainArguments.empty())) &&
-                     (!op.binding || (op.binding->scopedArguments.empty() &&
-                                      op.binding->domainArguments.empty() &&
-                                      op.binding->argumentOrder.empty()))
-                 ? true
-                 : refuse();
+    if (!op.binding || !op.binding->scopedSource) {
+      if (call &&
+          (!call->scopedArguments.empty() || !call->domainArguments.empty()))
+        return refuse();
+      if (!op.binding)
+        return true;
+      return types.fail("source.binding-witness",
+                        "invocation has no authored occurrence", op.span);
+    }
     const auto &binding = *op.binding;
-    if (!call || *binding.scopedSource >= storage.scopedCalls.size() ||
+    if (*binding.scopedSource >= storage.scopedCalls.size() ||
         ++callUses[*binding.scopedSource] != 1)
       return refuse();
     const auto &source = *storage.scopedCalls[*binding.scopedSource];
     if (!source.syntax || source.target.index >= storage.declarations.size() ||
-        source.target.index != binding.target.declaration.index ||
-        call->callee.index != source.target.index ||
+        !authoredCall(body, op, source))
+      return types.diagnostic ? false : refuse();
+    const auto &expr = source.syntax->expressions.at(source.expression);
+    const auto &callee = storage.declarations[source.target.index];
+    if (binding.scopedArguments.empty() && binding.domainArguments.empty()) {
+      if (!binding.notation)
+        return source.notationFamily.empty() || refuse();
+      if (!expr.notation || !expr.scope ||
+          *expr.scope >= source.syntax->bodies.size() ||
+          !source.syntax->bodies[*expr.scope].notationEnvironment ||
+          op.results.size() != 1 ||
+          op.results.front().index >= body.values.size())
+        return refuse();
+      std::vector<Type> inputs;
+      std::vector<ValueId> authored;
+      for (auto operand : binding.operands) {
+        if (operand.index >= body.values.size())
+          return refuse();
+        inputs.push_back(body.values[operand.index].type);
+      }
+      for (auto child : expr.children) {
+        auto value = body.expressionValues.find(child);
+        if (value == body.expressionValues.end())
+          return refuse();
+        authored.push_back(value->second);
+      }
+      return checkNotationOccurrence(
+                 types, expr,
+                 *source.syntax->bodies[*expr.scope].notationEnvironment) &&
+             checkOperatorOperands(types, *expr.notation, binding,
+                                   binding.argumentOrder, authored, op.span) &&
+             checkOperatorWitness(
+                 types, storage.declarations, source.notationFamily,
+                 *expr.notation, binding, inputs,
+                 body.values[op.results.front().index].type, op.span);
+    }
+    if (!call || call->callee.index != source.target.index ||
         call->scopedArguments != binding.scopedArguments ||
         call->domainArguments != binding.domainArguments)
       return refuse();
-    const auto &expr = source.syntax->expressions.at(source.expression);
-    const auto &callee = storage.declarations[source.target.index];
+    if (expr.kind == Expression::Kind::MethodCall) {
+      if (expr.children.empty())
+        return refuse();
+      auto receiver = body.expressionValues.find(expr.children.front());
+      if (receiver == body.expressionValues.end() ||
+          receiver->second.index >= body.values.size() ||
+          call->operands.empty() ||
+          receiver->second.index != call->operands.front().index)
+        return refuse();
+      auto selected = resolveHomeMethod(
+          types, storage.declarations, *storage.declarationIndex,
+          storage.declarations[source.owner.index],
+          body.values[receiver->second.index].type, expr.text, expr.span);
+      if (!selected || selected->declaration.index != source.target.index ||
+          selected->module != binding.target.module)
+        return refuse();
+    }
     if (!same(expr.span, op.span) ||
         expr.children.size() != callee.inputOrder.size() ||
         binding.argumentOrder.size() != expr.children.size() ||
@@ -344,7 +606,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                                 source.notationFamily, *expr.notation, binding,
                                 {}, body.values[op.results[0].index].type,
                                 op.span) ||
-          !checkCallAction(types, storage.declarations, body, op))
+          !checkCallAction(types, storage.declarations, body, op,
+                           storage.declarationIndex.get()))
         return false;
     } else if (binding.notation || binding.filteredReduction ||
                !source.notationFamily.empty())
@@ -529,11 +792,13 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       } else
         return refuse();
     }
-    return true;
+    return checkCallAction(types, storage.declarations, body, op,
+                           storage.declarationIndex.get());
   };
   using Formal = std::pair<const ScopedSignature *, Span>;
-  std::function<bool(const Body &, ArrayRef<Formal>, unsigned)> visit =
-      [&](const Body &body, ArrayRef<Formal> formals, unsigned depth) {
+  std::function<bool(const Body &, ArrayRef<Formal>, unsigned, DeclarationId)>
+      visit = [&](const Body &body, ArrayRef<Formal> formals, unsigned depth,
+                  DeclarationId lexicalOwner) {
         if (depth > work.limits.expressionDepth)
           return types.fail("source.limit", "scoped witness body depth", {});
         if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
@@ -596,7 +861,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                             storage.declarations[source.owner.index], producers)
                    .run(body, binding) ||
               !checkScopedValues(types, storage, source, binding) ||
-              !visit(*binding.computation->body, captured, depth + 1))
+              !visit(*binding.computation->body, captured, depth + 1,
+                     source.owner))
             return false;
           if (!effectsWithin(types, binding.computation->body->effects,
                              EffectSummary{binding.signature.allowance},
@@ -606,6 +872,17 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                               binding.span);
         }
         for (const auto &op : body.operations) {
+          if (op.binding &&
+              ((op.binding->installedSignature &&
+                (!op.binding->lexicalOwner ||
+                 op.binding->lexicalOwner->index != lexicalOwner.index)) ||
+               (op.binding->scopedSource &&
+                (*op.binding->scopedSource >= storage.scopedCalls.size() ||
+                 storage.scopedCalls[*op.binding->scopedSource]->owner.index !=
+                     lexicalOwner.index))))
+            return types.fail("source.binding-witness",
+                              "record invocation lexical owner differs",
+                              op.span);
           if (!types.charge(1, op.span) || !checkCall(body, op))
             return false;
           if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
@@ -647,12 +924,12 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 return refuse();
             }
           }
-          if (const auto *control = std::get_if<LocalControl>(&op.action))
+          if (const auto *control = std::get_if<Control>(&op.action))
             for (const auto &region : control->regions)
-              if (!visit(*region, formals, depth + 1))
+              if (!visit(*region, formals, depth + 1, lexicalOwner))
                 return false;
           if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-            if (!visit(*repeat->region, {}, depth + 1))
+            if (!visit(*repeat->region, {}, depth + 1, lexicalOwner))
               return false;
         }
         auto effects = inferEffects(types, storage.declarations, body);
@@ -669,9 +946,13 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     std::vector<Formal> formals;
     for (const auto &parameter : decl.scopedInputs)
       formals.emplace_back(&parameter.signature, parameter.span);
-    if (!visit(*decl.body, formals, 1) ||
+    if (!visit(*decl.body, formals, 1, decl.id) ||
         !checkFiniteContracts(types, storage.declarations, decl, *decl.body,
                               helperResults))
+      return types.takeError();
+    if (auto source = storage.bodySources.find(decl.id.index);
+        source != storage.bodySources.end() &&
+        !checkInvocationValues(types, storage, *source->second, *decl.body))
       return types.takeError();
     if (decl.effectAllowance &&
         !effectsWithin(types, decl.body->effects, *decl.effectAllowance,
@@ -683,6 +964,15 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   }
   if (auto error = checkModuleContracts(storage, work))
     return error;
+  for (const auto &[owner, source] : storage.bodySources)
+    if (source->syntax && !source->syntax->bodies.empty() &&
+        (owner >= storage.declarations.size() ||
+         !storage.declarations[owner].body))
+      return failure("source.binding-witness", "missing authored body");
+  for (auto count : intrinsicUses)
+    if (count != 1)
+      return failure("source.binding-witness",
+                     "missing intrinsic invocation occurrence");
   for (auto count : invocationUses)
     if (count != 1)
       return failure("source.scoped-witness",

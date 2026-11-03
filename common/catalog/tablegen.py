@@ -2,6 +2,9 @@
 
 This renderer supplies no interpretation or admission privilege. zkc-tblgen
 independently validates the resulting declarations before producing native data.
+The native installation document is projected into its own file, so the logical
+catalog records never contain physical choices. Every row is projected
+explicitly; record names are presentation only.
 """
 
 
@@ -18,7 +21,7 @@ def symbol(category, name):
     )
 
 
-def project(catalog):
+def project(catalog, installation):
     lines = []
 
     def q(value):
@@ -124,9 +127,17 @@ def project(catalog):
                     "participants",
                     "constructible",
                     "message",
+                    "sourceData",
                 )
             ],
         ]
+        if t["collection"] is not None:
+            c = t["collection"]
+            fields.append(
+                f"let collection = ZKC_TypeCollection<{c['rank']}, {q(c['element'])}>;"
+            )
+        if t["setup"] is not None:
+            fields.append(f"let setup = {q(t['setup'])};")
         types[t["name"]] = emit(
             f"ZKC_Type<{q(t['name'])}, {kinds(t['parameters'])}, {t['custody']}, {flag(t['copy'])}, {flag(t['drop'])}>",
             fields,
@@ -134,7 +145,8 @@ def project(catalog):
         )
     caps = {
         c["name"]: emit(
-            f"ZKC_Capability<{q(c['name'])}, {kinds(c['parameters'])}>",
+            f"ZKC_Capability<{q(c['name'])}, {kinds(c['parameters'])}, "
+            f"{seq(q(m) for m in c['requires'])}, {seq(q(m) for m in c['permits'])}>",
             [ordinal(i)],
             symbol("Capability", c["name"]),
         )
@@ -174,6 +186,35 @@ def project(catalog):
             target = caps[e["predicate"]]
             cls = "ZKC_CapabilityExport"
         emit(f"{cls}<{q(e['module'])}, {q(e['name'])}, {target}>", [ordinal(i)])
+    def source_term(t):
+        if "constructor" in t:
+            return inst(f"ZKC_SourceTerm<-1, \"\", {q(t['constructor'])}>")
+        return inst(f"ZKC_SourceTerm<{t['static']}, {q(t.get('member', ''))}>")
+
+    def source_output(t):
+        return seq([] if t is None else [source_term(t)])
+
+    for i, r in enumerate(catalog["frontendRules"]):
+        emit(f"ZKC_FrontendRule<{q(r['name'])}, {q(r['kind'])}, {kinds(r['statics'])}, "
+             f"{seq(source_term(t) for t in r['inputs'])}, {source_output(r['output'])}>", [ordinal(i)])
+    for i, d in enumerate(catalog["frontendDeclarations"]):
+        statics = seq(inst(f"ZKC_SourceStatic<{q(s['name'])}, {kind(s['parameter'])}>") for s in d["statics"])
+        inputs = seq(inst(f"ZKC_SourceInput<{q(s['name'])}, {source_term(s['type'])}>") for s in d["inputs"])
+        emit(f"ZKC_FrontendDeclaration<{q(d['identity'])}, {q(d['owner'])}, {q(d['name'])}, {q(d['kind'])}, "
+             f"{statics}, {inputs}, {source_output(d['output'])}, {q(d['association']['kind'])}, "
+             f"{q(d['association']['target'])}, {flag(d['implicit'])}>", [ordinal(i)])
+    for i, n in enumerate(catalog["frontendNotations"]):
+        fixity = n["fixity"] or {"associativity": "", "precedence": 0}
+        emit(f"ZKC_FrontendNotation<{q(n['owner'])}, {q(n['symbol'])}, {q(fixity['associativity'])}, "
+             f"{fixity['precedence']}, {q(n['target'])}, {flag(n['public'])}>", [ordinal(i)])
+    for i, c in enumerate(catalog["frontendConstructors"]):
+        emit(f"ZKC_FrontendConstructor<{q(c['name'])}, {q(c['form'])}>", [ordinal(i)])
+    for i, h in enumerate(catalog["frontendHomes"]):
+        emit(f"ZKC_FrontendHome<{q(h['constructor'])}, {q(h['module'])}, {seq(q(m) for m in h['members'])}>", [ordinal(i)])
+    for i, m in enumerate(catalog["serviceSignatures"]):
+        emit(f"ZKC_ServiceSignature<{q(m['name'])}, {q(m['capability'])}>", [ordinal(i)])
+    for i, m in enumerate(catalog["serviceMethods"]):
+        emit(f"ZKC_ServiceMethod<{q(m['name'])}, {q(m['signature'])}, {q(m['capability'])}>", [ordinal(i)])
     operations = {
         o["name"]: symbol("Operation", o["name"]) for o in catalog["operations"]
     }
@@ -274,9 +315,17 @@ def project(catalog):
                 continue
             if k == "Mathematical":
                 args = [meanings[f["identity"]]]
-            elif k in ("History", "Observation", "Diagonal", "Contraction", "Coset"):
+            elif k in (
+                "History",
+                "Succession",
+                "Observation",
+                "Diagonal",
+                "Contraction",
+                "Coset",
+            ):
                 keys = {
                     "History": ["stateInput", "stateOutput"],
+                    "Succession": ["stateInput", "stateOutput"],
                     "Observation": ["stateInput", "payloadInput", "stateOutput"],
                     "Diagonal": ["factorsInput", "valuesInput", "resultOutput"],
                     "Contraction": ["coefficientsInput", "valuesInput"],
@@ -353,6 +402,8 @@ def project(catalog):
             [ordinal(i), f"let implementation = {q(profile['implementation'])};"],
             symbol("ConsumerProfile", profile["name"]),
         )
+    project_instances(catalog, emit, ordinal, flag, q, seq)
+    native = project_installation(installation, q, seq, flag)
     schema = 'include "zkc/Contracts/Declarations/Schema.td"\n'
     math = (
         "#ifndef ZKC_CATALOG_MATHEMATICAL\n#define ZKC_CATALOG_MATHEMATICAL\n"
@@ -367,4 +418,208 @@ def project(catalog):
         + "\n".join(lines)
         + "\n#endif\n"
     )
-    return declarations, math
+    return declarations, math, native
+
+
+def project_instances(catalog, emit, ordinal, flag, q, seq):
+    """Installed-instance rows. Nested facts are records with explicit fields."""
+    for i, d in enumerate(catalog["domains"]):
+        fields = [ordinal(i)]
+        if "field" in d:
+            facts = d["field"]
+            structure = facts["structure"]
+            if structure["kind"] == "prime":
+                shape = emit(f"ZKC_FieldStructure<{q(structure['kind'])}>")
+            else:
+                terms = seq(
+                    f"ZKC_ReductionTerm<{e}, {q(c)}>" for e, c in structure["reduction"]
+                )
+                shape = emit(
+                    f"ZKC_FieldStructure<{q(structure['kind'])}>",
+                    [
+                        f"let over = {q(structure['over'])};",
+                        f"let degree = {structure['degree']};",
+                        f"let reduction = {terms};",
+                    ],
+                )
+            extra = []
+            if facts["twoAdic"] is not None:
+                t = facts["twoAdic"]
+                convention = emit(
+                    f"ZKC_TwoAdicConvention<{q(t['convention'])}, {q(t['maximalRoot'])}, "
+                    f"{t['twoAdicity']}, {q(t['ordering'])}>"
+                )
+                extra.append(f"let twoAdic = {convention};")
+            record = emit(
+                f"ZKC_FieldFacts<{q(facts['characteristic'])}, {shape}>", extra
+            )
+            fields.append(f"let fieldFacts = {record};")
+        if "transcript" in d:
+            facts = d["transcript"]
+            extra = [] if facts["hash"] is None else [f"let hash = {q(facts['hash'])};"]
+            record = emit(
+                f"ZKC_TranscriptFacts<{q(facts['family'])}, {q(facts['decoder'])}, "
+                f"{flag(facts['bindsSuite'])}>",
+                extra,
+            )
+            fields.append(f"let transcriptFacts = {record};")
+        if "commitment" in d:
+            facts = d["commitment"]
+            extra = [
+                f"let {key} = {q(value) if isinstance(value, str) else value};"
+                for key, value in facts.items()
+                if key != "scheme"
+            ]
+            record = emit(f"ZKC_CommitmentFacts<{q(facts['scheme'])}>", extra)
+            fields.append(f"let commitmentFacts = {record};")
+        members = seq(seq(q(part) for part in member) for member in d["members"])
+        emit(
+            f"ZKC_InstalledDomain<{q(d['identity'])}, {q(d['sort'])}, {members}, "
+            f"{seq(q(c) for c in d['capabilities'])}>",
+            fields,
+        )
+    for i, t in enumerate(catalog["logicalTypes"]):
+        emit(f"ZKC_LogicalTypeInstance<{q(t['kind'])}, {q(t['domain'])}>", [ordinal(i)])
+    for i, t in enumerate(catalog["frameTags"]):
+        fields = [ordinal(i)]
+        if t["shared"] is not None:
+            shared = t["shared"]
+            fields.append(
+                f"let shared = ZKC_SharedFrame<{q(shared['kind'])}, {q(shared['scheme'])}>;"
+            )
+        emit(f"ZKC_FrameTag<{t['tag']}, {q(t['layout'])}>", fields)
+    for i, c in enumerate(catalog["codecs"]):
+        fields = [ordinal(i)]
+        if c["frame"] is not None:
+            frame = c["frame"]
+            extra = [f"let {key} = {value};" for key, value in frame.items() if key != "tag"]
+            record = emit("ZKC_CodecFrame<" + str(frame["tag"]) + ">", extra)
+            fields.append(f"let frame = {record};")
+        emit(
+            f"ZKC_Codec<{q(c['identity'])}, {q(c['kind'])}, {q(c['domain'])}>", fields
+        )
+    for i, a in enumerate(catalog["aggregateFrames"]):
+        emit(
+            f"ZKC_AggregateFrame<{q(a['constructor'])}, {q(a['domain'])}, {a['tag']}>",
+            [ordinal(i)],
+        )
+    for i, s in enumerate(catalog["randomServices"]):
+        emit(f"ZKC_RandomService<{q(s['contract'])}, {q(s['field'])}>", [ordinal(i)])
+    for i, limit in enumerate(catalog["limits"]):
+        emit(
+            f"ZKC_Limit<{q(limit['name'])}, {limit['value']}, {q(limit['unit'])}, "
+            f"{q(limit['owner'])}, {q(limit['scope'])}, {q(limit['phase'])}>",
+            [ordinal(i)],
+        )
+    for i, f in enumerate(catalog["finiteDefinitions"]):
+        fields = [ordinal(i)]
+        if f["collection"] is not None:
+            fields.append(f"let collection = {q(f['collection'])};")
+        emit(
+            f"ZKC_FiniteDefinition<{q(f['identity'])}, {q(f['mode'])}, "
+            f"{q(f['operation'])}, {flag(f['filtered'])}>",
+            fields,
+        )
+    for i, c in enumerate(catalog["domainConstructors"]):
+        emit(
+            f"ZKC_DomainConstructor<{q(c['identity'])}, {q(c['kind'])}, {c['axis']}>",
+            [ordinal(i)],
+        )
+
+
+def project_installation(installation, q, seq, flag):
+    """The physical installation records, in their own generated file."""
+    lines = []
+
+    def emit(base, fields=()):
+        name = f"InstallationRecord{len(lines)}"
+        body = " ".join(fields)
+        lines.append(f"def {name} : {base}" + (" { " + body + " }" if body else ";"))
+
+    def ordinal(i):
+        return f"int ordinal = {i};"
+
+    def tree(value):
+        if not isinstance(value, list) or len(value) != 3 or value[0] != "apply":
+            raise ValueError("installation type patterns are constructor applications")
+        arguments = []
+        for argument in value[2]:
+            if argument[0] == "domain":
+                arguments.append(f"ZKC_DomainTypeArgument<{q(argument[1])}, {q(argument[2])}>")
+            elif argument[0] == "type":
+                arguments.append(f"ZKC_NestedTypeArgument<{tree(argument[1])}>")
+            elif argument[0] == "nat":
+                arguments.append(f"ZKC_NatTypeArgument<{q(argument[1])}>")
+            else:
+                raise ValueError("unknown type argument")
+        return f"ZKC_TypeTree<{q(value[1])}, {seq(arguments)}>"
+
+    def pattern(value):
+        tag = value[0]
+        if tag == "any":
+            return "ZKC_AnyPattern<>"
+        if tag == "domain":
+            return f"ZKC_DomainPattern<{q(value[1])}, {q(value[2])}>"
+        if tag == "type":
+            return f"ZKC_TypePattern<{tree(value[1])}>"
+        if tag == "natRange":
+            return f"ZKC_NatRangePattern<{q(value[1])}, {q(value[2])}>"
+        raise ValueError("unknown argument pattern")
+
+    for i, r in enumerate(installation["representations"]):
+        emit(
+            f"ZKC_NativeRepresentation<{q(r['identity'])}, {q(r['kind'])}, {q(r['domain'])}, "
+            f"{flag(r['default'])}, {q(r['layout'])}, {q(r['frame'])}, {q(r['unit'])}>",
+            [ordinal(i)],
+        )
+    for i, r in enumerate(installation["appliedRepresentations"]):
+        fields = [ordinal(i)]
+        for column in ("child", "vectorPort"):
+            if r[column] is not None:
+                reference = r[column]
+                fields.append(
+                    f"let {column} = ZKC_RepresentationReference<{q(reference['kind'])}, "
+                    f"{q(reference['domain'])}, {q(reference['representation'])}>;"
+                )
+        if r["provider"] is not None:
+            fields.append(f"let provider = {q(r['provider'])};")
+        emit(
+            f"ZKC_AppliedRepresentation<{q(r['constructor'])}, "
+            f"{seq(pattern(p) for p in r['arguments'])}, {q(r['identity'])}, "
+            f"{flag(r['default'])}, {q(r['frame'])}, {q(r['unit'])}>",
+            fields,
+        )
+    for i, p in enumerate(installation["providers"]):
+        emit(
+            f"ZKC_ProviderPreference<{q(p['domain'])}, {q(p['default'])}, "
+            f"{seq(q(a) for a in p['alternatives'])}>",
+            [ordinal(i)],
+        )
+    for i, u in enumerate(installation["providerUnits"]):
+        emit(f"ZKC_ProviderUnit<{q(u['provider'])}, {q(u['unit'])}>", [ordinal(i)])
+    for i, f in enumerate(installation["fieldForms"]):
+        fields = [ordinal(i)]
+        if f["arithmetic"] is not None:
+            a = f["arithmetic"]
+            fields.append(
+                f"let arithmetic = ZKC_ResidueArithmetic<{q(a['form'])}, {q(a['representation'])}>;"
+            )
+        if f["montgomery"] is not None:
+            m = f["montgomery"]
+            fields.append(
+                f"let montgomery = ZKC_MontgomeryForm<{m['wordBytes']}, {m['radixBits']}>;"
+            )
+        if f["byteEncoding"] is not None:
+            b = f["byteEncoding"]
+            fields.append(
+                f"let byteEncoding = ZKC_ByteEncoding<{q(b['codec'])}, {q(b['order'])}>;"
+            )
+        emit(f"ZKC_FieldForm<{q(f['field'])}>", fields)
+    for i, p in enumerate(installation["physicalArguments"]):
+        emit(f"ZKC_PhysicalArguments<{q(p['operation'])}>", [ordinal(i)])
+    return (
+        "#ifndef ZKC_NATIVE_INSTALLATION\n#define ZKC_NATIVE_INSTALLATION\n"
+        'include "zkc/Contracts/Declarations/NativeInstallationSchema.td"\n'
+        + "\n".join(lines)
+        + "\n#endif\n"
+    )

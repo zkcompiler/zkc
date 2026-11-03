@@ -9,6 +9,7 @@
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include <functional>
 using namespace llvm;
 using namespace zkc::language;
 using zkc::test::refuses;
@@ -33,7 +34,11 @@ json::Value scalar() {
   return json::Object{{"type", "bool"},
                       {"kind", "boolean"},
                       {"identity", std::string(64, '1')},
-                      {"custody", false},
+                      {"generated", nullptr},
+                      {"custody", 0},
+                      {"sealed", false},
+                      {"roles", json::Array{}},
+                      {"element", nullptr},
                       {"constructible", true},
                       {"permissions", json::Array{"Copy", "Drop"}},
                       {"leaves", json::Array{"bool"}},
@@ -45,15 +50,24 @@ json::Value pair() {
       {"type", "sample::Pair"},
       {"kind", "record"},
       {"identity", std::string(64, '2')},
-      {"custody", false},
+      {"generated", nullptr},
+      {"custody", 0},
+      {"sealed", false},
+      {"roles", json::Array{}},
+      {"element", nullptr},
       {"constructible", true},
       {"permissions", json::Array{"Copy", "Drop"}},
       {"leaves", json::Array{"bool", "bool"}},
-      {"fields",
-       json::Array{
-           json::Object{{"name", "left"}, {"offset", 0}, {"schema", scalar()}},
-           json::Object{
-               {"name", "right"}, {"offset", 1}, {"schema", scalar()}}}},
+      {"fields", json::Array{json::Object{{"name", "left"},
+                                          {"offset", 0},
+                                          {"public", true},
+                                          {"placement", nullptr},
+                                          {"schema", scalar()}},
+                             json::Object{{"name", "right"},
+                                          {"offset", 1},
+                                          {"public", true},
+                                          {"placement", nullptr},
+                                          {"schema", scalar()}}}},
       {"alternatives", json::Array{}}};
 }
 json::Value document() {
@@ -69,24 +83,53 @@ json::Value document() {
       {"job", json::Object{{"kind", "run"}}},
       {"protocol", "Transfer"},
       {"roles", json::Array{"P", "V"}},
-      {"inputs", json::Array{json::Object{{"name", "p"},
-                                          {"type", "sample::Pair"},
-                                          {"roles", json::Array{"P"}},
-                                          {"index", 0},
-                                          {"native", json::Array{0, 1}},
-                                          {"schema", pair()}}}},
-      {"outputs", json::Array{json::Object{{"name", "ok"},
-                                           {"type", "bool"},
-                                           {"roles", json::Array{"V"}},
-                                           {"index", 0},
-                                           {"native", json::Array{0}},
-                                           {"schema", scalar()}}}},
+      {"inputs",
+       json::Array{json::Object{
+           {"name", "p"},
+           {"type", "sample::Pair"},
+           {"placement",
+            json::Object{{"kind", "data"}, {"roles", json::Array{0}}}},
+           {"components", json::Array{json::Object{{"path", json::Array{}},
+                                                   {"leaf", 0},
+                                                   {"role", 0},
+                                                   {"facet", "data"},
+                                                   {"native", 0}}}},
+           {"index", 0},
+           {"native", json::Array{0, 1}},
+           {"schema", pair()}}}},
+      {"outputs",
+       json::Array{json::Object{
+           {"name", "ok"},
+           {"type", "bool"},
+           {"placement",
+            json::Object{{"kind", "data"}, {"roles", json::Array{1}}}},
+           {"components", json::Array{json::Object{{"path", json::Array{}},
+                                                   {"leaf", 0},
+                                                   {"role", 1},
+                                                   {"facet", "data"},
+                                                   {"native", 0}}}},
+           {"index", 0},
+           {"native", json::Array{0}},
+           {"schema", scalar()}}}},
       {"services",
        json::Array{json::Object{{"name", "coins"},
                                 {"contract", "random.bls12-381.fr/0"},
                                 {"owner", "V"},
                                 {"native", 2}}}}};
-  json::Object protocol{{"symbol", "Transfer"}, {"clauses", json::Array{}}};
+  (*root.getArray("inputs")->front().getAsObject())["components"] =
+      json::Array{json::Object{{"path", json::Array{0}},
+                               {"leaf", 0},
+                               {"role", 0},
+                               {"facet", "data"},
+                               {"native", 0}},
+                  json::Object{{"path", json::Array{1}},
+                               {"leaf", 0},
+                               {"role", 0},
+                               {"facet", "data"},
+                               {"native", 1}}};
+  json::Object protocol{{"symbol", "Transfer"},
+                        {"clauses", json::Array{}},
+                        {"common_input_requirements", json::Array{}}};
   for (StringRef key : {"roles", "inputs", "outputs", "services"}) {
     protocol[key] = std::move(*root.get(key));
     root.erase(key);
@@ -152,12 +195,18 @@ variantDocument(StringRef nominal, StringRef first = "case00000000",
   p["roles"] = json::Array{"P"};
   p["services"] = json::Array{};
   p["outputs"] = json::Array{};
-  p["inputs"] = json::Array{json::Object{{"name", "選択"},
-                                         {"type", "数学::Choice"},
-                                         {"roles", json::Array{"P"}},
-                                         {"index", 0},
-                                         {"native", json::Array{0}},
-                                         {"schema", scalar()}}};
+  p["inputs"] = json::Array{json::Object{
+      {"name", "選択"},
+      {"type", "数学::Choice"},
+      {"placement", json::Object{{"kind", "data"}, {"roles", json::Array{0}}}},
+      {"components", json::Array{json::Object{{"path", json::Array{}},
+                                              {"leaf", 0},
+                                              {"role", 0},
+                                              {"facet", "data"},
+                                              {"native", 0}}}},
+      {"index", 0},
+      {"native", json::Array{0}},
+      {"schema", scalar()}}};
   auto &schema = shape(value);
   schema["kind"] = "variant";
   schema["type"] = "数学::Choice";
@@ -169,16 +218,16 @@ variantDocument(StringRef nominal, StringRef first = "case00000000",
   for (StringRef name : {"Some", "case00000000"})
     alternatives.push_back(json::Object{
         {"name", name.str()},
-        {"fields", json::Array{json::Object{
-                       {"name", "0"}, {"offset", 0}, {"schema", scalar()}}}}});
+        {"fields", json::Array{json::Object{{"name", "0"},
+                                            {"offset", 0},
+                                            {"public", true},
+                                            {"placement", nullptr},
+                                            {"schema", scalar()}}}}});
   schema["alternatives"] = std::move(alternatives);
   return {std::move(native), std::move(value)};
 }
 void renameRoles(json::Value &value, StringRef first, StringRef second) {
   protocol(value)["roles"] = json::Array{first.str(), second.str()};
-  input(value)["roles"] = json::Array{first.str()};
-  (*protocol(value).getArray("outputs")->front().getAsObject())["roles"] =
-      json::Array{second.str()};
   (*protocol(value).getArray("services")->front().getAsObject())["owner"] =
       second.str();
 }
@@ -229,6 +278,21 @@ int main() {
               "Unicode metadata was normalized or replaced by native labels");
         }
       });
+  cases.run("affine builtin state is not an interface leaf", [] {
+    auto project = take(analyze(take(capture({{"m", R"(module m;
+domain H=transcript("merlin3.bls12-381.fr64be/0");
+type T=builtin("transcript",H);
+protocol Run roles(P)(t:T@P)->(t:T@P){return(t=t);}
+)",
+                                               "transcript.zkc"}})))
+                            .checkedProject());
+    auto published = prepareOriginal(take(closeSubject(project, "m::Run")));
+    require(!published, "affine builtin state was published as a leaf");
+    auto message = toString(published.takeError());
+    require(StringRef(message).contains("source.interface") &&
+                StringRef(message).contains("not ordinary Copy and Drop data"),
+            message);
+  });
   cases.run("source names resembling native ordinals remain independent", [] {
     auto value = document();
     renameRoles(value, "role00000001", "role00000000");
@@ -434,10 +498,16 @@ int main() {
         representation["constructible"] = false;
         representation["identity"] = std::string(64, '3');
         representation["type"] = "sample::C::State";
-        representation["fields"] = json::Array{json::Object{
-            {"name", "value"}, {"offset", 0}, {"schema", scalar()}}};
+        representation["fields"] =
+            json::Array{json::Object{{"name", "value"},
+                                     {"offset", 0},
+                                     {"public", true},
+                                     {"placement", nullptr},
+                                     {"schema", scalar()}}};
         auto &right = *(*shape(value).getArray("fields"))[1].getAsObject();
         right["schema"] = std::move(sealed);
+        (*(*input(value).getArray("components"))[1].getAsObject())["path"] =
+            json::Array{1, 0};
         shape(value)["constructible"] = false;
         auto clauses = std::move(*protocol(value).getArray("clauses"));
         protocol(value)["clauses"] = json::Array{};
@@ -537,6 +607,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
   cases.run("array elements require the same exact logical type", [] {
     auto v = document();
     shape(v)["kind"] = "array";
+    shape(v)["element"] = scalar();
     auto &fields = *shape(v).getArray("fields");
     for (unsigned i = 0; i < fields.size(); ++i)
       (*fields[i].getAsObject())["name"] = std::to_string(i);
@@ -868,6 +939,42 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
               "source.interface");
     }
   });
+  for (bool empty : {false, true})
+    cases.run(
+        empty ? "source comparison binds zero-array element privacy"
+              : "source comparison binds ordinary field privacy",
+        [&] {
+          std::string type = empty ? "[Secret;0]" : "Secret";
+          std::string constructor =
+              empty ? "[]" : "Secret{hidden:true,shown:true}";
+          auto source =
+              compileNative("module sample;struct Secret{hidden:bool,pub "
+                            "shown:bool}fn make()->" +
+                            type + "{return " + constructor +
+                            ";}protocol Run roles(P)(s:bool@P)->(r:" + type +
+                            "@P){let r @P=make();return(r=r);}");
+          auto value = take(json::parse(source.interfaceJson()));
+          std::function<void(json::Value &)> expose = [&](json::Value &value) {
+            if (auto *object = value.getAsObject()) {
+              if (object->getString("name") == "hidden" &&
+                  object->get("public"))
+                (*object)["public"] = true;
+              for (auto &member : *object)
+                expose(member.second);
+            } else if (auto *array = value.getAsArray())
+              for (auto &child : *array)
+                expose(child);
+          };
+          expose(value);
+          auto decoded =
+              take(readInterface(source.bytes(), zkc::printJson(value)));
+          auto result = compareInterface(source.entry(), decoded);
+          require(bool(result), "source field visibility was replaced by "
+                                "self-consistent metadata");
+          require(namesIdentifier(toString(std::move(result)),
+                                  "source.correspondence"),
+                  "privacy comparison lost its refusal identifier");
+        });
   cases.run("all installed field and group schemas remain admissible", [] {
     unsigned checked = 0;
     for (const auto &domain : zkc::protocol::installedDomains().allDomains()) {
@@ -981,13 +1088,19 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
       p["roles"] = json::Array{"P"};
       p["outputs"] = json::Array{};
       p["services"] = json::Array{};
-      p["inputs"] =
-          json::Array{json::Object{{"name", "data"},
-                                   {"type", (head + ":" + domain).str()},
-                                   {"roles", json::Array{"P"}},
-                                   {"index", 0},
-                                   {"native", json::Array{0}},
-                                   {"schema", scalar()}}};
+      p["inputs"] = json::Array{json::Object{
+          {"name", "data"},
+          {"type", (head + ":" + domain).str()},
+          {"placement",
+           json::Object{{"kind", "data"}, {"roles", json::Array{0}}}},
+          {"components", json::Array{json::Object{{"path", json::Array{}},
+                                                  {"leaf", 0},
+                                                  {"role", 0},
+                                                  {"facet", "data"},
+                                                  {"native", 0}}}},
+          {"index", 0},
+          {"native", json::Array{0}},
+          {"schema", scalar()}}};
       auto &schema = shape(value);
       schema["type"] = (head + ":" + domain).str();
       schema["kind"] = "builtin";

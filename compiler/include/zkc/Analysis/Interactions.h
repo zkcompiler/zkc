@@ -14,9 +14,20 @@
 namespace zkc {
 class InteractionAnalysis;
 
+/// An owned structural edge, never a claim that the region is reached.
+struct InteractionRegion {
+  enum class Kind { Repeat, BranchArm };
+  Kind kind;
+  unsigned ordinal;
+  unsigned sequence;
+  mlir::StringAttr alternative;
+  mlir::ArrayAttr roles;
+};
+
 /// One actual source operation. Paths are operation ordinals from the selected
-/// declaration body, descending ONLY through owned Protocol repeats. A path is
-/// neither an invocation identity nor evidence that an action was reached.
+/// declaration body, descending through owned Protocol repeats and selected
+/// arms. A path is neither an invocation identity nor evidence that an action
+/// was reached.
 class InteractionAction {
 public:
   mlir::Operation *getOperation() const { return operation_; }
@@ -29,19 +40,29 @@ public:
   /// target, distinct from the containing owner. Other symbol uses stay on the
   /// op. The target body is not expanded or interpreted by this view.
   mlir::Operation *getReferencedSymbol() const { return referencedSymbol_; }
-  std::optional<unsigned> getRepeatBody() const { return repeatBody_; }
+  std::optional<unsigned> getRepeatBody() const {
+    for (const auto &child : children_)
+      if (child.kind == InteractionRegion::Kind::Repeat)
+        return child.sequence;
+    return std::nullopt;
+  }
+  llvm::ArrayRef<InteractionRegion> getRegions() const { return children_; }
 
 private:
   friend class InteractionAnalysis;
   mlir::Operation *operation_ = nullptr, *declaration_ = nullptr;
   mlir::Operation *referencedSymbol_ = nullptr;
   llvm::SmallVector<unsigned> path_;
-  std::optional<unsigned> repeatBody_;
+  llvm::SmallVector<InteractionRegion> children_;
 };
 
 class InteractionSequence {
 public:
   mlir::Block *getBlock() const { return block_; }
+  mlir::Block::BlockArgListType getArguments() const {
+    return block_->getArguments();
+  }
+  mlir::OperandRange getYields() const { return block_->back().getOperands(); }
   /// Indices into the declaration's actions, in source order in this block.
   llvm::ArrayRef<unsigned> getActions() const { return actions_; }
 
@@ -56,7 +77,7 @@ public:
   InteractionDeclaration(const InteractionDeclaration &) = delete;
   InteractionDeclaration &operator=(const InteractionDeclaration &) = delete;
   mlir::Operation *getDeclaration() const { return declaration_; }
-  /// Lexical preorder, including repeat operations and their retained bodies.
+  /// Lexical preorder, including control operations and all retained arms.
   /// This storage order does not prescribe a consumer's query order.
   llvm::ArrayRef<InteractionAction> getActions() const { return actions_; }
   const InteractionSequence &getBody() const { return sequences_.front(); }
@@ -81,8 +102,9 @@ private:
 /// virtual oracle definitions. Admission
 /// (including unused declarations) is a prerequisite supplied by the caller;
 /// this view supplies no admission, reachability or semantic approval result.
-/// Only Protocol repetition introduces sequences. Pure mathematical regions
-/// remain opaque actions; local Exec control belongs to its existing readers.
+/// Protocol repeats and selected arms introduce sequences. Pure mathematical
+/// regions remain opaque actions; local Exec control belongs to its existing
+/// readers.
 ///
 /// Construct on the containing builtin ModuleOp, never a callable or a set of
 /// referenced symbols. Subject, helper, role, layout, installation or policy

@@ -121,6 +121,62 @@ int main() {
     llvm::errs() << llvm::toString(std::move(error));
     return 18;
   }
+  zkc::language::CaptureOptions options;
+  options.format = "zkc-layout";
+  auto components = zkc::language::capture({{"components", R"(
+struct State roles(P, V):
+    pub statement: index @(P, V)
+    pub witness: index @P
+    pub empty: () @V
+pub protocol Round roles(P, V)(state: State roles(P, V)) -> bool @V:
+    received <- send state.witness from P to V
+    return received == state.statement
+scheme Demo = Round:
+    prover P
+    verifier V
+    public state.statement, state.empty
+    accept result
+    construction authored
+)",
+                                             "components.zkc"}},
+                                           options);
+  if (!components) {
+    llvm::errs() << llvm::toString(components.takeError());
+    return 19;
+  }
+  auto componentProject = zkc::language::analyze(*components).checkedProject();
+  if (!componentProject) {
+    llvm::errs() << llvm::toString(componentProject.takeError());
+    return 20;
+  }
+  auto componentEntry =
+      zkc::language::closeEntry(*componentProject, "components::Demo");
+  if (!componentEntry) {
+    llvm::errs() << llvm::toString(componentEntry.takeError());
+    return 21;
+  }
+  auto componentOriginal = zkc::language::prepareOriginal(*componentEntry);
+  if (!componentOriginal) {
+    llvm::errs() << llvm::toString(componentOriginal.takeError());
+    return 24;
+  }
+  // Three native components; the empty field keeps a logical supply only.
+  const auto &componentPort =
+      componentOriginal->interface().selectedProtocol().inputs.front();
+  if (componentPort.components.size() != 3 ||
+      componentPort.schema->fields.size() != 3 ||
+      !componentPort.schema->fields.back().schema->leaves.empty())
+    return 23;
+  auto componentPolicy = zkc::language::proofPolicy(*componentOriginal);
+  if (!componentPolicy) {
+    llvm::errs() << llvm::toString(componentPolicy.takeError());
+    return 25;
+  }
+  const auto &publicInputs = componentOriginal->interface().proof->publicInputs;
+  if (publicInputs != std::vector<zkc::language::EntryInputSelection>(
+                          {{0, {0}, 1, {}}, {0, {2}, 1, {}}}) ||
+      componentPolicy->publicInputs != std::vector<unsigned>{0})
+    return 26;
   auto gatedEntry = zkc::language::closeEntry(*checked, "m::Gates");
   if (!gatedEntry) {
     llvm::errs() << llvm::toString(gatedEntry.takeError());

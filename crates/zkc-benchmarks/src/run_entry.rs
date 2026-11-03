@@ -40,15 +40,11 @@ fn check_output(
 ) -> Result<()> {
     let correct = match check {
         Check::Acceptance { role } => {
-            let output = match value {
-                Value::Record(roles) => roles.get(role),
-                _ => None,
-            };
-            let acceptance = match output {
-                Some(Value::Record(outputs)) => outputs.get("accepted"),
-                _ => None,
-            };
-            accepted(acceptance)
+            let acceptance = value
+                .field(role)
+                .and_then(|output| output.field("accepted"))
+                .ok();
+            accepted(acceptance.as_ref())
         }
         Check::Output { .. } => {
             let bytes = zkc::entry::outputs::function_output_with_cpu(
@@ -107,8 +103,11 @@ pub fn run(
     let (package, capture_ns) = capture(path, sha256)?;
     let start = Instant::now();
     // This inventory is checked by the common Host owner, before executable
-    // admission. Setup authority is never inferred from a child package.
-    let children = FunctionInterface::deployment_interfaces(&package).map_err(|e| e.to_string())?;
+    // admission, under the interface selection that admits the Entry. Setup
+    // authority is never inferred from a child package.
+    let options = FunctionOptions::default();
+    let children = FunctionInterface::deployment_interfaces(&package, options.limits.interface)
+        .map_err(|e| e.to_string())?;
     let mut authority = BTreeMap::new();
     for child in children {
         if child.operation() != "run" || child.interface().setup_names().len() != 0 {
@@ -116,7 +115,6 @@ pub fn run(
         }
         authority.insert(child.id().into(), Default::default());
     }
-    let options = FunctionOptions::default();
     let capacity = options.limits.capacity;
     let entry = FunctionEntry::admit_with_cpu(package, options, authority, job.cpu()?.clone())
         .map_err(|e| e.to_string())?;
@@ -307,13 +305,16 @@ mod tests {
         }
         let _cleanup = Cleanup(directory.clone());
         let boolean = json!({"kind":"boolean","type":"bool","identity":hash(b"bool"),
-            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],
             "fields":[],"alternatives":[],"leaves":["bool"]});
         let product = |name: &str, member: &str, child: &serde_json::Value| {
             json!({
             "kind":"record","type":name,"identity":hash(name.as_bytes()),
-            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
-            "fields":[{"name":member,"offset":0,"schema":child}],"alternatives":[],"leaves":["bool"]})
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],
+            "fields":[{"name":member,"offset":0,"public":true,"placement":null,"schema":child}],
+            "alternatives":[],"leaves":["bool"]})
         };
         let outputs = product("example::Outputs", "accepted", &boolean);
         let result = product("example::Result", "P", &outputs);
@@ -368,7 +369,7 @@ mod tests {
                 assert_eq!(report.boundary, "admitted_function_call");
                 assert_eq!(report.diagnostics["completed"], true);
                 assert!(
-                    report.diagnostics["usage"]["instructions"]
+                    report.diagnostics["invocation"]["instructions"]
                         .as_u64()
                         .unwrap()
                         > 0

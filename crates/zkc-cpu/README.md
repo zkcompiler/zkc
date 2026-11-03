@@ -96,10 +96,11 @@ request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
 reusing its identity or refunding work.
 
-`Backend::service_support` returns `ServiceSupport`: an independently authored
-physical signature and `max_retained_bytes`, the conservative aggregate charge
-for one reply tuple. Native service shapes are defined in `services.rs`, without
-reusing the runtime's contract resolver. Admission compares the declarations;
+`Backend::service_support` returns `ServiceSupport`: the declared method's
+request signature and `max_retained_bytes`, the conservative aggregate charge
+for one reply tuple. `services.rs` reads the signature from the runtime's
+catalog projection, where the field's capabilities gate each method, and owns
+only the reply bound. Admission compares the declarations;
 query preflight and reply validation enforce the bound. These installation facts
 do not authorize a root or replace live lease, generation and owner checks.
 
@@ -190,10 +191,16 @@ Computation checkpoints retain the immutable catalog/authorization-view identity
 changes to policy or exact grants require normal execution rather than replay.
 Kernel timing premises do not establish a whole-runtime timing guarantee.
 
-Each contract row lists its actual default implementation names. Custom families
-list exact implementation/contract pairs. The inventory contains no inferred
-provider-by-contract combinations; nominal arguments still need the owner's
-signature checks. Runtime and backend rows remain independently authored.
+Each contract row names its contract and its actual default implementation
+names. Its ports and parameter rule are the runtime's catalog-resolved
+declaration, and installation refuses a row whose contract has no catalog
+declaration. A family chooses each declared port's representation and checks
+its own applicability, such as which fields a kernel implements. Custom
+families list exact implementation/contract pairs. The inventory contains no
+inferred provider-by-contract combinations. Providers, representations, codec
+frame tags and the operations that accept physical arguments are read from the
+catalog and installation; the backend names only the domains, suites and
+kernels it implements.
 `Backend::Operation` is `CpuOperation`, which implements
 `vm::InstalledOperation`. `prepare_binding` returns this immutable handle with
 its exact binding, independently resolved signature, handler and static work

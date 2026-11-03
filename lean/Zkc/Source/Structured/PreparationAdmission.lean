@@ -103,6 +103,7 @@ def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
     profile == .realization
   | .indexConstant n => profile == .realization && n < indexLimit
   | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength _ | .multilinearRestrictPrefix _ |
+      .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
       .booleanConstant _ | .booleanAnd | .booleanOr |
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization
   | .makeProduct .. | .getProduct .. => profile == .realization

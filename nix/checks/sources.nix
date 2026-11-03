@@ -10,11 +10,14 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compiler}/common/unicode/generate.py
   test -f ${sources.compiler}/common/catalog/generate.py
   test -f ${sources.compiler}/common/catalog/declarations.json
+  test -f ${sources.compiler}/common/catalog/installation.json
+  test -f ${sources.compiler}/common/targets/evm.json
   test ! -e ${sources.compiler}/compiler/test
   test ! -e ${sources.compiler}/common/tests
   test ! -e ${sources.compiler}/lean
   test -f ${sources.compilerTests}/common/tests/fixtures/clean/air-control.json
   test -f ${sources.compilerTests}/common/tests/fixtures/program/bytes.json
+  test -f ${sources.compilerTests}/common/tests/fixtures/entry-json/nodes.json
   test -f ${sources.compilerTests}/compiler/test/CMakeLists.txt
   test -f ${sources.compilerTests}/lean/bridges/common/fixtures/schnorr-forms.zkc
   test -f ${sources.compilerTests}/compiler/test/support/source_project.py
@@ -28,6 +31,9 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.rust}/crates/zkc-catalog/codegen/projection.rs
   test -f ${sources.rust}/crates/zkc-catalog/codegen/validation.rs
   test -f ${sources.rust}/common/catalog/declarations.json
+  test -f ${sources.rust}/common/catalog/installation.json
+  test -f ${sources.rust}/common/catalog/validation-cases.json
+  test -f ${sources.rust}/common/targets/evm.json
   test ! -e ${sources.rust}/common/catalog/generate.py
   test -f ${sources.rustConsumer}/common/tests/check_rust_sdk.py
   test -f ${sources.rustConsumer}/common/tests/consumer/rust/main.rs
@@ -43,7 +49,9 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test ! -e ${sources.rust}/compiler
   test ! -e ${sources.rust}/common/tests
   test -f ${sources.rustTests}/common/tests/fixtures/program/bytes.json
+  test -f ${sources.rustTests}/common/tests/fixtures/entry-json/nodes.json
   test -f ${sources.rustTests}/compiler/test/fixtures/relation/polynomial-chunks.json
+  test -f ${sources.rustTests}/compiler/test/fixtures/common-inputs/custody-fields.json
   # Scope discovery must not require protocol-only project support.
   test ! -e ${sources.rustTests}/common/tests/support
   python3 ${sources.rustTests}/common/tests/run.py rust --help > /dev/null

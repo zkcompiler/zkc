@@ -1,7 +1,9 @@
 #include "zkc/Target/Evm/Layout.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
@@ -58,26 +60,31 @@ Expected<const FieldLayout *> NativeLayouts::field(algebra::FieldType type) {
       return modulus.takeError();
     result->modulus = *modulus;
   } else {
-    auto *extension = protocol::plonky3Field(type.getDomain());
-    if (!extension || extension->degree < 2 || extension->degree > 8 ||
-        !catalog.hasFact("ExtensionField", {type.getDomain().str()}) ||
-        catalog.associatedIdentity(type.getDomain(), "BaseField") !=
-            extension->base)
+    // The declared field structure: a binomial extension of degree 2 to 8
+    // over its prime BaseField. Degrees above 8 are outside this target.
+    auto extension = protocol::instances::binomialExtension(type.getDomain());
+    const auto *declared = protocol::instances::domain(type.getDomain());
+    if (!extension || !declared || extension->degree < 2 ||
+        extension->degree > 8 ||
+        !catalog.hasFact("ExtensionField", {type.getDomain().str()}))
       return zkc::error("evm.field",
                         "requires installed ascending-binomial facts");
     auto modulus = primeModulus(extension->base);
     if (!modulus)
       return modulus.takeError();
-    APInt declared;
-    if (extension->modulus.getAsInteger(10, declared) ||
-        declared.getActiveBits() > 256 ||
-        declared.zextOrTrunc(256) != *modulus || !extension->nonresidue ||
-        modulus->ule(extension->nonresidue))
+    APInt characteristic, beta;
+    if (StringRef(declared->field->characteristic)
+            .getAsInteger(10, characteristic) ||
+        characteristic.getActiveBits() > 256 ||
+        characteristic.zextOrTrunc(256) != *modulus ||
+        StringRef(extension->nonresidue).getAsInteger(10, beta) ||
+        beta.getActiveBits() > 256 || beta.isZero() ||
+        modulus->ule(beta.zextOrTrunc(256)))
       return zkc::error("evm.field", "inconsistent installed extension facts");
     result->base = algebra::FieldType::get(&storage->context, extension->base);
     result->modulus = *modulus;
     result->degree = extension->degree;
-    result->beta = APInt(256, extension->nonresidue);
+    result->beta = beta.zextOrTrunc(256);
   }
   auto *descriptor = result.get();
   storage->fields[type] = std::move(result);
@@ -172,6 +179,17 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
 Expected<SignatureLayout> NativeLayouts::signature(TypeRange types) {
   SignatureLayout result;
   for (Type type : types) {
+    if (auto unit = dyn_cast_if_present<runtime::CapabilityType>(type);
+        unit && unit.getKind() == runtime::CapabilityKind::ResourceUnit) {
+      LogicalTypePermissions permissions;
+      if (unit.getContext() != &storage->context || !formed(unit, permissions))
+        return zkc::error("evm.layout",
+                          "requires a formed nominal resource unit");
+      // Custody has no value storage. Keep its logical slot without granting
+      // Copy/Drop data layout or wire permission; closure admission owns uses.
+      result.values.push_back({unsigned(result.lanes.size()), 0});
+      continue;
+    }
     auto layout = get(type);
     if (!layout)
       return layout.takeError();

@@ -6,10 +6,11 @@ The artifact retains written syntax for the independently checked source
 correspondence connection. It neither admits an IR nor certifies elaboration.
 
 The parser is a named trust boundary. `capture` binds captured modules and
-assets; `installation` binds installation sources. Each source record contains
-its logical module, origin, UTF-8 byte length and SHA-256. Diagnostic filesystem
-paths are excluded. All captured and installation declarations are present,
-including private ones. This artifact has different consumers from the public
+assets; `installation` binds the installed declaration rows. Installed
+declarations are catalog rows, not written syntax: the artifact contains
+captured sources only. Each source record contains its logical module, origin,
+UTF-8 byte length and SHA-256. Diagnostic filesystem paths are excluded. All
+captured declarations are present, including private ones. This artifact has different consumers from the public
 API inspection graph, whose representation-privacy policy still applies there.
 
 ## Shared contract and producer boundary
@@ -77,7 +78,7 @@ elaboration proposal.
 ## Root and addresses
 
 The root has exactly `format`, `capture`, `installation`, `sources` and
-`declarations`. A source has `module`, `origin` (`captured` or `installation`),
+`declarations`. A source has `module`, `origin` (always `captured`),
 `bytes` and `sha256` (64 lowercase hexadecimal digits, without a prefix). A declaration record has `owner` and `nodes`. `owner` is
 its canonical authored declaration path; no generated declaration is an owner.
 
@@ -140,12 +141,25 @@ expressions, claims and declarations:
 
 | Family | Syntax carried |
 |---|---|
-| `type.*` | Named/builtin/formal terms, holes, natural expressions, arrays and tuples; written static arguments and argument labels |
+| `type.*` | Named/builtin/formal terms, holes, natural expressions, arrays and tuples; written static arguments, argument labels and explicit role applications |
 | `pattern.*` | Names, ignore/unit/tuple/record patterns, optional type, child patterns, record labels and shorthand flags |
 | `expr.*` | Written expressions, ordered operands, static arguments and labels, branch payloads, nested bodies, index patterns, roles, `each`, grouping and shorthand |
 | `stmt.*` | Binding/assignment/expression/drop/consume/require; written type, roles, site, guard owner and send endpoints |
 | `claim_expr.*` | Natural/reference/application/binary/unary/list claim terms, written registry versions, arguments and labels |
 | `declaration.*` | Authored declaration kind and header, body, inputs/results, members, clauses, setup, proof/construction choices and claim blocks |
+
+A type node with an authored `roles(...)` suffix additionally has
+`role_arguments`, an ordered array of written role names. An annotation inside a
+structural type additionally has `components`, its written role-name list, and
+`oracle_holder` exactly when an arrow was written. Unannotated ordinary type
+nodes retain their existing exact shape. These fields are source syntax, not
+ordinary static arguments or inferred agreement. Struct/alias declaration roles
+and field order/visibility remain in the existing declaration/port nodes.
+
+A proof's written `public` array contains `input_selector` nodes, retaining the
+written input name and dotted field names in order. The source verifier is
+implicit in these written selectors; checked Entry selections retain its exact
+participant ordinal. Whole ordinary inputs have an empty written path.
 
 The remaining kinds are `body`, `port`, `parameter`, `notation`, `selector`,
 `input_selector`, `name`, `requirement`, `clause`, `relation_application`,
@@ -266,8 +280,8 @@ remove either assumption.
 ## Source binding proposals
 
 `inspectSourceBindings` exports `zkc.source-bindings/0` beside the AST. Its
-root has `format`, `capture`, `installation`, `locals`, `unassociated_locals`
-and `declarations`. A local reference has `kind` (`read`, `call` or `assign`),
+root has `format`, `capture`, `installation`, `locals`, `unassociated_locals`,
+`declarations` and `units`. A local reference has `kind` (`read`, `call` or `assign`),
 `uses` and `binders`. The last two are nonempty arrays of written `{owner,path}` addresses. They retain every
 written occurrence of that parser node; a checker must validate the indicated
 scope and binding, not pick a same-spelled name from the document.
@@ -285,21 +299,43 @@ Generated syntax can lack a written counterpart. Such records appear in
 `unassociated_locals`, with the same kind/address fields and the containing
 declaration span (`module`, `begin`, `end`); at least one address list is empty. An empty list
 never authorizes a correspondence. An independent consumer determines whether
-the source fragment it checks has complete applicable coverage. Private and
-installation declarations are retained here, including declarations outside the
-selected executable closure.
+the source fragment it checks has complete applicable coverage. Private
+declarations are retained here, including declarations outside the selected
+executable closure.
 
 Retention is charged before storing each resolution record. Inspection shares
 one work counter between structural indexing and proposal construction, rechecks
 the project's ceilings and bounds serialization by `apiInspectionBytes`. Refusal
 publishes no partial proposal.
 
-Each declaration lookup record contains `owner`, `written`, `provider`, `target`,
-`abstract_module`, `source` and `candidates`. Provider and target are separate
-`{name,source}` declaration references; `source` is a module and UTF-8 range.
-An abstract-module term is the resolver's selected binder, or null. Repeated
-resolver observations are retained in their original order. Private and
-installation references are not filtered through the public API view.
+Each declaration lookup record contains `owner`, `route`, `written`,
+`provider`, `target`, `abstract_module`, `source` and `candidates`. Provider and
+target are separate `{name,source}` declaration references; `source` is a module
+and UTF-8 range, or null for an installed declaration, which has no written
+source. An abstract-module term is the resolver's selected binder, or null.
+Private and installation references are not filtered through the public API
+view.
+
+Every successful declaration-resolution route records exactly one record per
+written occurrence, in resolver order; a lookup whose result is discarded
+records nothing. `route` names the resolution route:
+
+| Route | Records |
+|---|---|
+| `path` | A written path in a signature, associated type, constraint, conformance contract, construction provider, body callee or type, including qualified paths without an import |
+| `import`, `import-name` | An import's module and each selected name; a facade keeps its facade provider |
+| `method` | A home method; the provider is the method's module |
+| `module-member` | A member of a bound module parameter; `abstract_module` is its binder |
+| `implicit` | An installed declaration selected without a written path |
+| `service` | A managed service constructor in a protocol port |
+| `notation` | An operator, delimiter, indexing or reduction use, once its callee is fixed. The provider is the module whose declaration or body introduces the selected binding, which is the installed module for prelude operators; the target is the selected, or filtered, callable |
+| `construction` | A construction provider's interface member: `State`, `initialize`, `Record`, `write` and `finish`. The provider is the implementing module; a symbolic provider keeps the written route of its interface bound and its binder as `abstract_module` |
+
+Records are source occurrences. They stay separate from the deduplicated unit
+dependencies in `units`, which has one row per captured unit, sorted by module
+path: `module`, its [source authority](definitions.md#source-authority)
+`revision`, and `dependencies`, the sorted module paths of its direct
+dependency units. A unit's closure and its edges follow from these rows.
 
 Declaration lookup can precede body parsing. Its `candidates` therefore contains
 **all** AST addresses with exactly the observed source range, including different
@@ -322,7 +358,8 @@ soundness theorem are still required.
 Ordinary Host functions are outside the structured protocol export profile.
 
 The root has exactly `format`, `admission`, `source_ast`, `bindings`, `snapshot`,
-`instances`, `instance_rows` and `rows`. `admission` is the same association used by the
+`instances`, `instance_rows`, `generated`, `generated_rows`, `occurrences` and
+`rows`. `admission` is the same association used by the
 [source-claim export](claims.md): original-byte SHA-256, protocol symbol,
 interface SHA-256, capture and installation. `source_ast` and `bindings` use the
 formats above. `snapshot` is the actual [structured source](../formats/structured-source.md)
@@ -335,8 +372,9 @@ and the nullable original lexical range come from the structured encoder's
 They are produced in the same call that emits the snapshot. The original range
 has `begin`, `end`, `line` and `column`.
 
-`sources` retains every checked-original source span at that parsed MLIR
-position. Each element contains `span` and `candidates`. Candidates are all
+`sources` retains every captured-source span at that parsed MLIR
+position. Installed declarations retain their original-row association with
+empty `sources`; no zero-length written span is invented for an installation. Each element contains `span` and `candidates`. Candidates are all
 written `{owner,path}` nodes with exactly that span. They are search hints;
 there is no nearest-span match. Empty sources or candidates remain explicit,
 including generated rows with no authored node. A row is never silently omitted
@@ -367,7 +405,9 @@ Oracle instances additionally have `oracle_definition`. The symbol is an actual
 closed declaration name. No consumer decodes its hash to establish source origin.
 
 A declaration template has `kind: "declaration"`, its canonical `owner`, a
-`generated` flag, its source span and exact-span `candidates`. A scoped template
+`generated` flag, its source span and exact-span `candidates`. An installed
+declaration has `source: null` and empty candidates: its authority is the
+installation, and it has no captured written source. A scoped template
 has `kind: "scoped"`, its lexical owner, source span and exact written `nodes`.
 The latter uses retained expression provenance, never the generated helper's
 private expression number. Empty nodes remain explicit for generated adapters.
@@ -454,3 +494,59 @@ this document; the latter contains one `{instance,rows}` entry per instance.
 in the actual snapshot's domain, relation, binding and definition tables. Empty
 rows remain explicit for closed declarations without a standalone exported row.
 The association never guesses a definition from its printed name.
+
+### Generated definitions and occurrences
+
+Emission assigns every native site and creates every generated helper, and it
+records both for the exact bytes it prints; the artifact projects that record,
+so there is no second site derivation.
+
+```text
+generated      := [{symbol, purpose, part, origins: [{definition, site}...]}...]
+generated_rows := [{generated, rows: [[table, index]...]}...]
+occurrences    := [{definition, site, nodes: [{owner, path}...]}...]
+```
+
+`generated` lists every definition that emission generates for a source
+operation rather than closing from a declaration. `purpose` is `control` (an
+outlined control region or check arm), `custody` (an outlined custody
+operation), `finite` (a finite domain, callback or array adapter) or `map` (a
+shared map domain or body adapter); `part` is the emitter's local
+discriminator, such as an arm label, `domain` or `body`, or the custody
+primitive. `origins` lists, sorted and unique, every `(definition, site)` that
+created or reused the helper: the definition holding the creating instruction
+and that instruction's site. A pure mathematical instruction publishes no site,
+so its origin keeps the site emission assigned it. A control region is
+published inside the definition whose instruction enters it, so its sites and
+origins name that definition. `symbol` is unique, and so is
+`(purpose, part, origins)`. `generated_rows` has the shape of `instance_rows`.
+
+`occurrences` has one row per nonempty site of every snapshot definition,
+including nested regions and stop terminators, in definition order and then
+block preorder. `nodes` is exactly the written-index entry of the originating
+expression of the source operation the site was emitted for, within that
+operation's lexical owner. Checking sets the originating expression on every
+operation it emits; specialization preserves it, and its comparison refuses a
+changed one. Operations derived from one expression share it, so several sites
+may share nodes. A site with no expression has `[]`; an expression without a
+written node refuses the export, and a span never selects a node. Every node is
+kept.
+
+Before publication the producer enforces the completeness invariant, which
+`checkCorrespondenceInventory` also checks: every domain row and every
+function or oracle definition row of the snapshot is the symbol of exactly one
+`instances` or `generated` entry; every realize, finite, collect and map row has
+its `computation` row association; binding rows are identified by their
+contract and arguments. A row of another producer is a new `purpose`, never an
+exemption. Every occurrence names a snapshot definition and one of its sites,
+and every origin names a snapshot definition. The export check is canonical
+equality, so any edit refuses.
+
+Occurrences, `generated` entries and their `origins` are exact-artifact
+associations, not edit-stable author addresses: a new use changes sites, paths
+and origins. Lean keys companions on authored owners, template or instance
+symbols and [companion keys](companions.md), and reusable generated-body laws
+on `purpose` and `part`; it does not key on site names, occurrence rows,
+`origins` or generated symbols. An ordered occurrence path comes from
+traversing the exact snapshot's applications, repeats and regions; `origins`
+is provenance, never call ancestry.

@@ -3,7 +3,7 @@
 mod bundle;
 mod decode;
 mod structure;
-pub use bundle::{Bundle, BundleError, BundleLimits, Segment, Step};
+pub use bundle::{BranchArm, Bundle, BundleError, BundleLimits, Segment, Step};
 mod report;
 mod session;
 use super::wire::{WireBackend, WireError};
@@ -13,4 +13,5 @@ pub use report::{
 };
 pub use session::{
     Exchange, Hooks, NoHooks, RoleInput, RunLimits, StartError, run, run_with_ledger,
+    run_with_ledgers,
 };

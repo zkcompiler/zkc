@@ -1,9 +1,11 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "OracleAnalysis.h"
 #include "ResourceOrigins.h"
+#include "zkc/Analysis/CommonControl.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -12,11 +14,14 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -126,9 +131,10 @@ public:
     }
     return success();
   }
-  LogicalResult body(Block &block, Availability &env, unsigned depth = 0) {
+  LogicalResult body(Block &block, Availability &env, unsigned depth = 0,
+                     const BitVector *active = nullptr) {
     if (depth > 64)
-      return refuse(block.getParentOp(), "repeat nesting exceeds 64");
+      return refuse(block.getParentOp(), "control nesting exceeds 64");
     llvm::DenseSet<Value> consumed;
     for (auto &operation : block) {
       auto *op = &operation;
@@ -136,6 +142,45 @@ public:
         return diagnostics::emit(op->emitOpError(),
                                  "mathematical-analysis-limit",
                                  "expanded analysis exceeds 100000 operations");
+      if (active) {
+        // Every declared role use inside selected or repeated control names
+        // only participating roles.
+        for (const auto &use : protocol_ir::getRoleUses(op)) {
+          if (use.shape == protocol_ir::RoleShape::Role) {
+            auto owner = dyn_cast<StringAttr>(use.value);
+            int r = owner ? role(owner) : -1;
+            if (r < 0 || !active->test(r))
+              return refuse(op, "action owner does not participate in control");
+            continue;
+          }
+          if (use.shape == protocol_ir::RoleShape::RoleNames) {
+            // Positions carry meaning, so this is not a set: the operation's
+            // own verifier decides whether a name may repeat.
+            auto names = dyn_cast<ArrayAttr>(use.value);
+            if (!names)
+              return refuse(op, "action adds a nonparticipating role");
+            for (Attribute name : names) {
+              int r = role(name);
+              if (r < 0 || !active->test(r))
+                return refuse(op, "action adds a nonparticipating role");
+            }
+            continue;
+          }
+          SmallVector<Attribute, 1> sets{use.value};
+          if (use.shape == protocol_ir::RoleShape::SlotRoleSets) {
+            auto slots = dyn_cast<ArrayAttr>(use.value);
+            if (!slots)
+              return refuse(op, "role sets must be nonempty");
+            sets.assign(slots.begin(), slots.end());
+          }
+          for (Attribute set : sets) {
+            BitVector required;
+            if (failed(roles(op, dyn_cast<ArrayAttr>(set), required)) ||
+                !subset(required, *active))
+              return refuse(op, "action adds a nonparticipating role");
+          }
+        }
+      }
       // A nonrecursive enclosing verification must also check helper-local
       // invariants, without relying on an earlier recursive verification.
       if (failed(op->getName().verifyInvariants(op)))
@@ -158,7 +203,7 @@ public:
       for (auto input : op->getOperands())
         if (isa<zkc::protocol_ir::ServiceReferenceType>(input.getType()) &&
             !isa<zkc::protocol_ir::QueryOp, zkc::protocol_ir::ApplyOp,
-                 zkc::protocol_ir::RepeatOp>(op))
+                 zkc::protocol_ir::RepeatOp, zkc::protocol_ir::BranchOp>(op))
           return refuse(
               op, "service references are entry ports used only by queries");
       for (auto input : op->getOperands())
@@ -170,6 +215,58 @@ public:
             (depth == 0) != isa<protocol_ir::MathematicalReturnOp>(op))
           return refuse(op, "wrong mathematical terminator");
         return success();
+      }
+      if (auto branch = dyn_cast<protocol_ir::BranchOp>(op)) {
+        if (failed(branch.verifyRegions()))
+          return failure();
+        if (!name(branch.getSite()) || !sites.insert(branch.getSite()).second)
+          return refuse(op, "branch sites must be unique identifiers");
+        BitVector participants;
+        if (failed(roles(op, branch.getRoles(), participants)) ||
+            !subset(participants, env.values.lookup(branch.getInputs()[0])))
+          return refuse(
+              op, "branch selector requires every participating component");
+        SmallVector<BitVector> placements;
+        for (auto [result, placement] :
+             zip(branch.getResults(), branch.getOutputRoles())) {
+          BitVector required;
+          auto policy = commonValuePolicy(result.getType());
+          if (isa<protocol_ir::ServiceReferenceType>(result.getType()) ||
+              failed(roles(op, dyn_cast<ArrayAttr>(placement), required)) ||
+              !subset(required, participants) || !policy ||
+              (!policy->shared && required.count() != 1))
+            return refuse(op,
+                          "invalid branch result placement or service result");
+          placements.push_back(std::move(required));
+        }
+        for (auto [index, region] : enumerate(branch.getArms())) {
+          auto payload = selectedPayloadTypes(op, index);
+          if (!payload)
+            return diagnostics::emit(op->emitOpError(), payload.takeError());
+          auto &arm = region.front();
+          if (failed(chargeAvailability(op, arm.getNumArguments())))
+            return failure();
+          for (Value argument : arm.getArguments().take_front(payload->size()))
+            env.values[argument] = participants;
+          for (auto [argument, capture] :
+               zip(arm.getArguments().drop_front(payload->size()),
+                   branch.getInputs().drop_front())) {
+            BitVector available = env.values.lookup(capture);
+            available &= participants;
+            if (available.none())
+              return refuse(op, "capture has no participating component");
+            env.values[argument] = std::move(available);
+          }
+          if (failed(body(arm, env, depth + 1, &participants)))
+            return failure();
+          for (auto [yielded, required] :
+               zip(arm.back().getOperands(), placements))
+            if (!subset(required, env.values.lookup(yielded)))
+              return refuse(op, "branch yield lacks an exact result component");
+        }
+        for (auto [result, placement] : zip(branch.getResults(), placements))
+          env.values[result] = placement;
+        continue;
       }
       if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
         if (failed(repeat.verifyRegions()))
@@ -212,51 +309,7 @@ public:
           }
           env.values[argument] = available;
         }
-        // A constant in a body is mathematically available everywhere, but
-        // cannot authorize an action by a role outside this segment.
-        for (auto &action : nested) {
-          ArrayAttr actionRoles;
-          if (auto child = dyn_cast<protocol_ir::RepeatOp>(action))
-            actionRoles = child.getRoles();
-          else if (auto assembly =
-                       dyn_cast<protocol_ir::AssembleRolesOp>(action))
-            actionRoles = assembly.getRoles();
-          else if (auto application = dyn_cast<protocol_ir::ApplyOp>(action))
-            actionRoles = application.getRoles();
-          else if (auto append =
-                       dyn_cast<protocol_ir::OracleSequenceAppendOp>(action))
-            actionRoles = append.getRoles();
-          else if (auto at = dyn_cast<protocol_ir::OracleSequenceAtOp>(action))
-            actionRoles = at.getRoles();
-          else if (auto virtualOracle =
-                       dyn_cast<protocol_ir::OracleVirtualOp>(action))
-            actionRoles = virtualOracle.getReceivers();
-          else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(action))
-            actionRoles = input.getReceivers();
-          else if (auto components =
-                       dyn_cast<protocol_ir::OracleComponentsOp>(action))
-            actionRoles = components.getReceivers();
-          else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(action))
-            actionRoles = send.getReceivers();
-          else if (auto start =
-                       dyn_cast<protocol_ir::ConstructionStartOp>(action))
-            actionRoles = start.getRoles();
-          if (actionRoles) {
-            BitVector required;
-            if (failed(roles(&action, actionRoles, required)) ||
-                !subset(required, participants))
-              return refuse(&action, "action adds a nonparticipating role");
-          }
-          for (StringRef key :
-               {"owner", "sender", "receiver", "role", "holder"})
-            if (auto owner = action.getAttrOfType<StringAttr>(key)) {
-              int r = role(owner);
-              if (r < 0 || !participants.test(r))
-                return refuse(&action,
-                              "action owner does not participate in repeat");
-            }
-        }
-        if (failed(body(nested, env, depth + 1)))
+        if (failed(body(nested, env, depth + 1, &participants)))
           return failure();
         bool needsOrigin = false;
         for (auto [index, yielded] : enumerate(nested.back().getOperands())) {
@@ -274,6 +327,8 @@ public:
         continue;
       }
       if (isTotal(op)) {
+        if (isa<data::BranchOp>(op) && failed(helpers.verifySelected(op)))
+          return failure();
         for (auto [index, output] : enumerate(op->getResults())) {
           BitVector available(count, true);
           auto inputs = operandDependencies(op, index);
@@ -478,9 +533,13 @@ public:
           return refuse(op, "ordered sites must be unique identifiers");
         if (isa<protocol_ir::OracleSequenceAppendOp,
                 protocol_ir::OracleSequenceAtOp>(op)) {
+          auto append = dyn_cast<protocol_ir::OracleSequenceAppendOp>(op);
           BitVector selected;
-          if (failed(
-                  roles(op, op->getAttrOfType<ArrayAttr>("roles"), selected)))
+          if (failed(roles(op,
+                           append ? append.getRolesAttr()
+                                  : cast<protocol_ir::OracleSequenceAtOp>(op)
+                                        .getRolesAttr(),
+                           selected)))
             return failure();
           for (Value input : op->getOperands())
             if (!subset(selected, env.values.lookup(input)))
@@ -612,9 +671,8 @@ public:
     return refuse(block.getParentOp(), "missing mathematical return");
   }
   LogicalResult run(Availability &env) {
-    for (auto attr : program->getAttrs())
-      if (!is_contained(program.getAttributeNames(), attr.getName().getValue()))
-        return refuse(program, "unsupported mathematical protocol attribute");
+    if (!admitsFields(program))
+      return refuse(program, "unsupported mathematical protocol attribute");
     if (auto origin = program->getAttr("origin")) {
       auto decoded = protocol_ir::readProtocolOrigin(origin);
       if (!decoded) {
@@ -627,8 +685,11 @@ public:
     auto ft = program.getFunctionType();
     auto &block = program.getBody().front();
     llvm::StringSet<> names;
-    if (!count || count > 1024)
-      return refuse(program, "role roster must contain 1 to 1024 roles");
+    if (!count || count > protocol::instances::protocolRoleLimit)
+      return refuse(program,
+                    "role roster must contain 1 to " +
+                        std::to_string(protocol::instances::protocolRoleLimit) +
+                        " roles");
     for (auto attr : program.getRoles()) {
       auto r = dyn_cast<StringAttr>(attr);
       if (!r || !name(r.getValue()) || !names.insert(r.getValue()).second)
@@ -725,11 +786,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       // The owning verifiers check every retained declaration, including
       // dormant computation units and polynomial realizations.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
-      for (auto attr : declaration->getAttrs())
-        if (!is_contained(declaration.getAttributeNames(),
-                          attr.getName().getValue()))
-          return refuse(declaration,
-                        "unsupported relation declaration attribute");
+      if (!admitsFields(declaration))
+        return refuse(declaration,
+                      "unsupported relation declaration attribute");
     } else {
       return diagnostics::emit(
           op.emitOpError(), "mathematical-module",
@@ -770,6 +829,54 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   for (auto repeat : originQueries)
     if (failed(origins.verify(repeat)))
       return failure();
+  uint64_t commonRemaining = 1000000;
+  facts::Work commonWork(commonRemaining);
+  llvm::DenseMap<Operation *, SmallVector<protocol_ir::MathematicalOp>> callers;
+  llvm::DenseSet<Operation *> selected;
+  SmallVector<protocol_ir::MathematicalOp> pending;
+  auto select = [&](protocol_ir::MathematicalOp program) {
+    if (selected.insert(program).second)
+      pending.push_back(program);
+  };
+  // Selected-control admission belongs to each actual call closure. An
+  // unrelated declaration must not change a generic loop's admission policy.
+  for (auto program :
+       module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+    auto walked = program.walk([&](Operation *op) {
+      if (!commonWork.charge())
+        return WalkResult::interrupt();
+      if (isa<protocol_ir::BranchOp>(op))
+        select(program);
+      if (auto call = dyn_cast<protocol_ir::ApplyOp>(op)) {
+        auto callee =
+            tables.lookupNearestSymbolFrom<protocol_ir::MathematicalOp>(
+                call, call.getCalleeAttr());
+        callers[callee].push_back(program);
+      }
+      return WalkResult::advance();
+    });
+    if (walked.wasInterrupted())
+      return diagnostics::emit(program.emitOpError(),
+                               "common-control-capacity");
+  }
+  while (!pending.empty()) {
+    auto program = pending.pop_back_val();
+    for (auto caller : callers[program]) {
+      if (!commonWork.charge())
+        return diagnostics::emit(caller.emitOpError(),
+                                 "common-control-capacity");
+      select(caller);
+    }
+  }
+  // Wrappers inherit actual callee requirements, even without a lexical branch.
+  for (auto program :
+       module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+    if (!selected.contains(program))
+      continue;
+    auto requirements = deriveCommonControlRequirements(program, commonWork);
+    if (!requirements)
+      return diagnostics::emit(program.emitOpError(), requirements.takeError());
+  }
   return success();
 }
 

@@ -1,0 +1,5944 @@
+{
+  "accepted": [
+    {
+      "name": "a hash-chain suite with its logical type, representation and provider",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "insert",
+          "value": {
+            "identity": "hash-chain.keccak256.baby-bear.ext4-binomial11.rejection31le/0",
+            "sort": "Transcript",
+            "members": [
+              [
+                "ChallengeField",
+                "baby-bear.ext4-binomial11"
+              ]
+            ],
+            "capabilities": [
+              "FieldTranscript",
+              "IndexTranscript",
+              "Transcript"
+            ],
+            "transcript": {
+              "family": "hash-chain",
+              "hash": "keccak256",
+              "decoder": "rejection31le",
+              "bindsSuite": true
+            }
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "insert",
+          "value": {
+            "kind": "transcript",
+            "domain": "hash-chain.keccak256.baby-bear.ext4-binomial11.rejection31le/0"
+          }
+        },
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "insert",
+          "value": {
+            "identity": "host.resource/0",
+            "kind": "transcript",
+            "domain": "hash-chain.keccak256.baby-bear.ext4-binomial11.rejection31le/0",
+            "default": true,
+            "layout": "",
+            "frame": "local",
+            "unit": "plonky3"
+          }
+        },
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "insert",
+          "value": {
+            "domain": "hash-chain.keccak256.baby-bear.ext4-binomial11.rejection31le/0",
+            "default": "plonky3",
+            "alternatives": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "a pairing field without a target group",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "bn254.fr"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "PairingGT",
+            "bn254.gt"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a local nondefault representation with its own layout",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "insert",
+          "value": {
+            "identity": "arkworks.fr-strided/0",
+            "kind": "vector",
+            "domain": "bls12-381.fr",
+            "default": false,
+            "layout": "strided",
+            "frame": "local",
+            "unit": "arkworks"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a field_array frame over another field with its tag and canonical applied row",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "insert",
+          "value": {
+            "tag": 3,
+            "layout": "FieldArray",
+            "shared": null
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "aggregateFrames",
+          "op": "insert",
+          "value": {
+            "constructor": "field_array",
+            "domain": "koala-bear",
+            "tag": 3
+          }
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "insert",
+          "value": {
+            "constructor": "field_array",
+            "arguments": [
+              [
+                "domain",
+                "Field",
+                "koala-bear"
+              ],
+              [
+                "natRange",
+                "0",
+                "1048576"
+              ]
+            ],
+            "identity": "plonky3.field-array/0",
+            "default": true,
+            "child": {
+              "kind": "field",
+              "domain": "koala-bear",
+              "representation": "plonky3.koala-bear/0"
+            },
+            "frame": "canonical",
+            "provider": "plonky3",
+            "unit": "plonky3",
+            "vectorPort": {
+              "kind": "vector",
+              "domain": "koala-bear",
+              "representation": "plonky3.koala-bear-vector/0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "an alternative provider preference",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "set",
+          "where": {
+            "domain": "goldilocks"
+          },
+          "path": [
+            "alternatives"
+          ],
+          "value": [
+            "arkworks"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a second limit with its own owner and scope",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "insert",
+          "value": {
+            "name": "example.bytes",
+            "value": 65536,
+            "unit": "bytes",
+            "owner": "Runtime",
+            "scope": "One example message",
+            "phase": "execution"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an installed notation of another declaration of its owner",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendNotations",
+          "op": "insert",
+          "value": {
+            "owner": "zkc::prelude",
+            "symbol": "⋅",
+            "fixity": null,
+            "target": "field_multiply",
+            "public": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "a further frontend rule shape declared as data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendRules",
+          "op": "insert",
+          "value": {
+            "name": "RecordProject",
+            "kind": "Local",
+            "statics": [
+              {
+                "kind": "Type",
+                "sort": ""
+              }
+            ],
+            "inputs": [
+              {
+                "static": 0
+              }
+            ],
+            "output": {
+              "static": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a renamed frontend constructor with its home",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "set",
+          "where": {
+            "name": "oracle"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "oracle_handle"
+        },
+        {
+          "document": "declarations",
+          "table": "frontendHomes",
+          "op": "set",
+          "where": {
+            "constructor": "oracle"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "oracle_handle"
+        }
+      ]
+    },
+    {
+      "name": "a capability that requires a member every row holding it has",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ScalarAction"
+          },
+          "path": [
+            "requires"
+          ],
+          "value": [
+            "Scalar"
+          ]
+        }
+      ]
+    }
+  ],
+  "refused": [
+    {
+      "name": "duplicate domain identity",
+      "rule": "nominal identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "duplicate",
+          "where": {
+            "identity": "bn254.gt"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate domain identity",
+        "native": "duplicate domain identity",
+        "rust": "domains: bn254.gt: identity is not unique across domains and codecs"
+      }
+    },
+    {
+      "name": "identity shared by a domain and a codec",
+      "rule": "nominal identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.bool/0"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": "koala-bear"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate identity across domains and codecs",
+        "native": "duplicate identity across domains and codecs",
+        "rust": "codecs: koala-bear: identity is not unique across domains and codecs"
+      }
+    },
+    {
+      "name": "identity outside the catalog name rule",
+      "rule": "nominal identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "bn254.gt"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": "9-gt"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid catalog identity '9-gt'",
+        "native": "invalid catalog identity",
+        "rust": "domains: invalid identity \"9-gt\""
+      }
+    },
+    {
+      "name": "domain of sort Slot",
+      "rule": "domain sort",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "edwards25519.prime"
+          },
+          "path": [
+            "sort"
+          ],
+          "value": "Slot"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid domain sort",
+        "native": "invalid domain sort",
+        "rust": "domains: edwards25519.prime: domain sort must be a declared sort other than Codec and Slot"
+      }
+    },
+    {
+      "name": "member of another sort",
+      "rule": "member typing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "ristretto255.group"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "koala-bear"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "BaseField is not a member of sort Group",
+        "native": "BaseField is not a member of sort Group",
+        "rust": "domains: ristretto255.group: BaseField is not a declared member of sort Group"
+      }
+    },
+    {
+      "name": "duplicate member",
+      "rule": "member typing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "koala-bear"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate domain member",
+        "native": "duplicate domain member",
+        "rust": "domains: koala-bear.ext4-binomial3: duplicate member BaseField"
+      }
+    },
+    {
+      "name": "member naming a domain of another sort",
+      "rule": "member typing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "edwards25519.prime"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            [
+              "Scalar",
+              "ristretto255.group"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain member sort mismatch",
+        "native": "domain member sort mismatch",
+        "rust": "domains: edwards25519.prime: member Scalar must name a domain of sort Field"
+      }
+    },
+    {
+      "name": "member naming an undeclared domain",
+      "rule": "member typing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "edwards25519.prime"
+          },
+          "path": [
+            "members",
+            0,
+            1
+          ],
+          "value": "missing"
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain member sort mismatch",
+        "native": "domain member sort mismatch",
+        "rust": "domains: edwards25519.prime: member Scalar must name a domain of sort Field"
+      }
+    },
+    {
+      "name": "capability over another sort",
+      "rule": "capabilities",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "bn254.g1"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "Field"
+        }
+      ],
+      "diagnostics": {
+        "generator": "Field is not a unary predicate over Group",
+        "native": "Field is not a unary predicate over Group",
+        "rust": "domains: bn254.g1: Field is not a unary predicate over Group"
+      }
+    },
+    {
+      "name": "duplicate capability",
+      "rule": "capabilities",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "Field"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate capability fact",
+        "native": "duplicate capability fact",
+        "rust": "domains: koala-bear: duplicate capability Field"
+      }
+    },
+    {
+      "name": "capabilities not closed under rules",
+      "rule": "capabilities",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "Field"
+        }
+      ],
+      "diagnostics": {
+        "generator": "capabilities are not closed under rules",
+        "native": "capabilities are not closed under rules",
+        "rust": "domains: koala-bear: capabilities are not closed under TwoAdicField => Field"
+      }
+    },
+    {
+      "name": "undeclared capability",
+      "rule": "capabilities",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "Missing"
+        }
+      ],
+      "diagnostics": {
+        "generator": "Missing is not a unary predicate over Field",
+        "native": "Missing is not a unary predicate over Field",
+        "rust": "domains: koala-bear: unknown capability Missing"
+      }
+    },
+    {
+      "name": "capability naming an undeclared member",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ScalarAction"
+          },
+          "path": [
+            "requires"
+          ],
+          "value": [
+            "Missing"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ScalarAction names Missing, which is not a member of its sort",
+        "native": "ScalarAction names Missing, which is not a member of its sort",
+        "rust": "ScalarAction names Missing, which is not a member of its sort"
+      }
+    },
+    {
+      "name": "capability naming a member of another sort",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ExtensionField"
+          },
+          "path": [
+            "permits"
+          ],
+          "value": [
+            "Scalar"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ExtensionField names Scalar, which is not a member of its sort",
+        "native": "ExtensionField names Scalar, which is not a member of its sort",
+        "rust": "ExtensionField names Scalar, which is not a member of its sort"
+      }
+    },
+    {
+      "name": "capability naming a member twice",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "ExtensionField"
+          },
+          "path": [
+            "permits"
+          ],
+          "value": [
+            "BaseField"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ExtensionField names a member twice",
+        "native": "ExtensionField names a member twice",
+        "rust": "ExtensionField names a member twice"
+      }
+    },
+    {
+      "name": "binary capability naming a member",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "set",
+          "where": {
+            "name": "Encodes.field"
+          },
+          "path": [
+            "requires"
+          ],
+          "value": [
+            "BaseField"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "Encodes.field names members but is not a unary domain predicate",
+        "native": "Encodes.field names members but is not a unary domain predicate",
+        "rust": "Encodes.field names members but is not a unary domain predicate"
+      }
+    },
+    {
+      "name": "permitted member on a row without its capability",
+      "rule": "capability members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "PairingGT",
+            "bn254.gt"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "a PairingGT member requires one of the capabilities PairingField",
+        "native": "a PairingGT member requires one of the capabilities PairingField",
+        "rust": "domains: koala-bear: a PairingGT member requires one of the capabilities PairingField"
+      }
+    },
+    {
+      "name": "PairingField without a PairingG2 group",
+      "rule": "pairing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "bn254.fr"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "PairingG2",
+            "bn254.g2"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "PairingField requires a PairingG2 member",
+        "native": "PairingField requires a PairingG2 member",
+        "rust": "domains: bn254.fr: PairingField requires a PairingG2 member"
+      }
+    },
+    {
+      "name": "pairing groups that are not distinct",
+      "rule": "pairing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "bls12-381.fr"
+          },
+          "path": [
+            "members",
+            1
+          ],
+          "value": [
+            "PairingG2",
+            "bls12-381.g1"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "pairing field requires distinct pairing groups",
+        "native": "pairing field requires distinct pairing groups",
+        "rust": "domains: bls12-381.fr: pairing groups must be distinct"
+      }
+    },
+    {
+      "name": "pairing group acting with another scalar",
+      "rule": "pairing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "bn254.g2"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            [
+              "Scalar",
+              "bls12-381.fr"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "pairing group must act with this field as Scalar",
+        "native": "pairing group must act with this field as Scalar",
+        "rust": "domains: bn254.fr: bn254.g2 must hold ScalarAction with bn254.fr as Scalar"
+      }
+    },
+    {
+      "name": "pairing group members without PairingField",
+      "rule": "pairing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "bn254.fr"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "PairingField"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a PairingG1 member requires one of the capabilities PairingField",
+        "native": "a PairingG1 member requires one of the capabilities PairingField",
+        "rust": "domains: bn254.fr: a PairingG1 member requires one of the capabilities PairingField"
+      }
+    },
+    {
+      "name": "pairing group without ScalarAction",
+      "rule": "pairing",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "bn254.g1"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "ScalarAction"
+        }
+      ],
+      "diagnostics": {
+        "generator": "pairing group must act with this field as Scalar",
+        "native": "pairing group must act with this field as Scalar",
+        "rust": "domains: bn254.fr: bn254.g1 must hold ScalarAction with bn254.fr as Scalar"
+      }
+    },
+    {
+      "name": "PointField on a row commitment",
+      "rule": "commitment members",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "rows.merkle-keccak256.koala-bear/0"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "PointField",
+            "koala-bear"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "PointField and EvaluationField occur only on multilinear KZG commitments",
+        "native": "PointField and EvaluationField occur only on multilinear KZG commitments",
+        "rust": "domains: rows.merkle-keccak256.koala-bear/0: PointField and EvaluationField occur only on multilinearKzg commitments"
+      }
+    },
+    {
+      "name": "characteristic one",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "field",
+            "characteristic"
+          ],
+          "value": "1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid characteristic",
+        "native": "invalid characteristic",
+        "rust": "domains: gf2-64.pentanomial-4-3-1: characteristic must be at least 2"
+      }
+    },
+    {
+      "name": "noncanonical characteristic",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "field",
+            "characteristic"
+          ],
+          "value": "02130706433"
+        }
+      ],
+      "diagnostics": {
+        "generator": "noncanonical decimal '02130706433'",
+        "native": "invalid characteristic",
+        "rust": "domains: koala-bear: noncanonical decimal \"02130706433\""
+      }
+    },
+    {
+      "name": "CharacteristicNotTwo in characteristic two",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "CharacteristicNotTwo"
+        }
+      ],
+      "diagnostics": {
+        "generator": "CharacteristicNotTwo disagrees with the characteristic",
+        "native": "CharacteristicNotTwo disagrees with the characteristic",
+        "rust": "domains: gf2-64.pentanomial-4-3-1: CharacteristicNotTwo must hold exactly when the characteristic is not 2"
+      }
+    },
+    {
+      "name": "prime structure without PrimeField",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "ristretto255.scalar"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "PrimeField"
+        }
+      ],
+      "diagnostics": {
+        "generator": "PrimeField disagrees with the structure",
+        "native": "PrimeField disagrees with the structure",
+        "rust": "domains: ristretto255.scalar: exactly the prime rows hold PrimeField"
+      }
+    },
+    {
+      "name": "prime structure holding ExtensionField",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "ExtensionField"
+        },
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "baby-bear"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ExtensionField disagrees with the structure",
+        "native": "ExtensionField disagrees with the structure",
+        "rust": "domains: koala-bear: exactly the rows over BaseField hold ExtensionField"
+      }
+    },
+    {
+      "name": "extension over BaseField without ExtensionField",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "ExtensionField"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a BaseField member requires one of the capabilities ExtensionField",
+        "native": "a BaseField member requires one of the capabilities ExtensionField",
+        "rust": "domains: koala-bear.ext4-binomial3: a BaseField member requires one of the capabilities ExtensionField"
+      }
+    },
+    {
+      "name": "BaseField member over the prime subfield",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "koala-bear"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "a BaseField member requires one of the capabilities ExtensionField",
+        "native": "a BaseField member requires one of the capabilities ExtensionField",
+        "rust": "domains: gf2-64.pentanomial-4-3-1: a BaseField member requires one of the capabilities ExtensionField"
+      }
+    },
+    {
+      "name": "extension degree one",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "degree"
+          ],
+          "value": 1
+        }
+      ],
+      "diagnostics": {
+        "generator": "extension degree is at least 2",
+        "native": "extension degree is at least 2",
+        "rust": "domains: koala-bear.ext4-binomial3: extension degree must be at least 2"
+      }
+    },
+    {
+      "name": "empty reduction",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "extension reduction is a nonempty list",
+        "native": "extension reduction is a nonempty list",
+        "rust": "domains: koala-bear.ext4-binomial3: reduction is a nonempty list"
+      }
+    },
+    {
+      "name": "reduction exponents in increasing order",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction"
+          ],
+          "value": [
+            [
+              0,
+              "1"
+            ],
+            [
+              1,
+              "1"
+            ],
+            [
+              3,
+              "1"
+            ],
+            [
+              4,
+              "1"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "reduction exponents must strictly decrease",
+        "native": "reduction exponents must strictly decrease",
+        "rust": "domains: gf2-64.pentanomial-4-3-1: reduction exponents must strictly decrease below the degree"
+      }
+    },
+    {
+      "name": "reduction exponent at the degree",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction"
+          ],
+          "value": [
+            [
+              4,
+              "3"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "reduction exponent reaches the degree",
+        "native": "reduction exponent reaches the degree",
+        "rust": "domains: koala-bear.ext4-binomial3: reduction exponents must strictly decrease below the degree"
+      }
+    },
+    {
+      "name": "zero reduction coefficient",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction"
+          ],
+          "value": [
+            [
+              0,
+              "0"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "reduction coefficient must be a nonzero prime-subfield element",
+        "native": "reduction coefficient must be a nonzero prime-subfield element",
+        "rust": "domains: koala-bear.ext4-binomial3: reduction coefficients must be nonzero and below the characteristic"
+      }
+    },
+    {
+      "name": "BaseField of another characteristic",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "goldilocks.ext2-binomial7"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            [
+              "BaseField",
+              "baby-bear"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "BaseField has another characteristic",
+        "native": "BaseField has another characteristic",
+        "rust": "domains: goldilocks.ext2-binomial7: BaseField must have the same characteristic"
+      }
+    },
+    {
+      "name": "characteristic beyond 1,024 digits",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "field",
+            "characteristic"
+          ],
+          "value": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid characteristic",
+        "native": "invalid characteristic",
+        "rust": "domains: koala-bear: noncanonical decimal"
+      }
+    },
+    {
+      "name": "odd characteristic without CharacteristicNotTwo",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "baby-bear"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "CharacteristicNotTwo"
+        }
+      ],
+      "diagnostics": {
+        "generator": "CharacteristicNotTwo disagrees with the characteristic",
+        "native": "CharacteristicNotTwo disagrees with the characteristic",
+        "rust": "domains: baby-bear: CharacteristicNotTwo must hold exactly when the characteristic is not 2"
+      }
+    },
+    {
+      "name": "extension without its BaseField member",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "koala-bear"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "ExtensionField requires a BaseField member",
+        "native": "BaseField extension requires its BaseField member",
+        "rust": "domains: koala-bear.ext4-binomial3: ExtensionField requires a BaseField member"
+      }
+    },
+    {
+      "name": "reduction coefficient equal to the characteristic",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction",
+            0,
+            1
+          ],
+          "value": "2130706433"
+        }
+      ],
+      "diagnostics": {
+        "generator": "reduction coefficient must be a nonzero prime-subfield element",
+        "native": "reduction coefficient must be a nonzero prime-subfield element",
+        "rust": "domains: koala-bear.ext4-binomial3: reduction coefficients must be nonzero and below the characteristic"
+      }
+    },
+    {
+      "name": "cyclic BaseField chain",
+      "rule": "field structure",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "ExtensionField"
+        },
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "field",
+            "structure",
+            "over"
+          ],
+          "value": "BaseField"
+        },
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "members"
+          ],
+          "value": [
+            "BaseField",
+            "gf2-64.pentanomial-4-3-1.ext3-trinomial1"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "cyclic BaseField extension",
+        "native": "cyclic BaseField extension",
+        "rust": "domains: gf2-64.pentanomial-4-3-1: gf2-64.pentanomial-4-3-1 has a cyclic BaseField chain"
+      }
+    },
+    {
+      "name": "coset convention on an extension",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "twoAdic"
+          ],
+          "value": {
+            "convention": "koala-bear.two-adic.1791270792/0",
+            "maximalRoot": "1791270792",
+            "ordering": "powers",
+            "twoAdicity": 24
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "a two-adic convention belongs to a prime row",
+        "native": "a two-adic convention belongs to a prime row",
+        "rust": "domains: koala-bear.ext4-binomial3: twoAdic is only on prime rows"
+      }
+    },
+    {
+      "name": "two-adicity beyond 64",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "field",
+            "twoAdic",
+            "twoAdicity"
+          ],
+          "value": 65
+        }
+      ],
+      "diagnostics": {
+        "generator": "two-adicity is between 1 and 64",
+        "native": "two-adicity is between 1 and 64",
+        "rust": "domains: koala-bear: twoAdicity must be between 1 and 64"
+      }
+    },
+    {
+      "name": "maximal root outside the field",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "field",
+            "twoAdic",
+            "maximalRoot"
+          ],
+          "value": "2130706433"
+        }
+      ],
+      "diagnostics": {
+        "generator": "maximal root is not a field element",
+        "native": "maximal root is not a field element",
+        "rust": "domains: koala-bear: maximalRoot must be below the characteristic"
+      }
+    },
+    {
+      "name": "duplicate coset convention",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "baby-bear"
+          },
+          "path": [
+            "field",
+            "twoAdic",
+            "convention"
+          ],
+          "value": "koala-bear.two-adic.1791270792/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate coset convention",
+        "native": "invalid or duplicate coset convention",
+        "rust": "domains: koala-bear: duplicate two-adic convention koala-bear.two-adic.1791270792/0"
+      }
+    },
+    {
+      "name": "extension without the TwoAdicField of its BaseField chain",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "TwoAdicField"
+        }
+      ],
+      "diagnostics": {
+        "generator": "TwoAdicField disagrees with the coset convention",
+        "native": "TwoAdicField disagrees with the coset convention",
+        "rust": "domains: koala-bear.ext4-binomial3: TwoAdicField must hold exactly when the row or its prime base has a convention"
+      }
+    },
+    {
+      "name": "TwoAdicField without a convention",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "append",
+          "where": {
+            "identity": "bls12-381.fr"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "TwoAdicField"
+        }
+      ],
+      "diagnostics": {
+        "generator": "TwoAdicField disagrees with the coset convention",
+        "native": "TwoAdicField disagrees with the coset convention",
+        "rust": "domains: bls12-381.fr: TwoAdicField must hold exactly when the row or its prime base has a convention"
+      }
+    },
+    {
+      "name": "two-adicity zero",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "field",
+            "twoAdic",
+            "twoAdicity"
+          ],
+          "value": 0
+        }
+      ],
+      "diagnostics": {
+        "generator": "two-adicity is between 1 and 64",
+        "native": "two-adicity is between 1 and 64",
+        "rust": "domains: koala-bear: twoAdicity must be between 1 and 64"
+      }
+    },
+    {
+      "name": "two-adic convention of an unknown ordering",
+      "rule": "two-adic conventions",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear"
+          },
+          "path": [
+            "field",
+            "twoAdic",
+            "ordering"
+          ],
+          "value": "bitReversed"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative bitReversed",
+        "native": "unknown coset ordering",
+        "rust": "domains: koala-bear: unknown declaration alternative bitReversed"
+      }
+    },
+    {
+      "name": "transcript without ChallengeField",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "merlin3.bls12-381.fr64be/0"
+          },
+          "path": [
+            "members"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "transcript row requires ChallengeField",
+        "native": "transcript row requires ChallengeField",
+        "rust": "domains: merlin3.bls12-381.fr64be/0: a transcript row has a ChallengeField member"
+      }
+    },
+    {
+      "name": "transcript without FieldTranscript",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "remove",
+          "where": {
+            "identity": "merlin3.bls12-381.fr64be/0"
+          },
+          "path": [
+            "capabilities"
+          ],
+          "value": "FieldTranscript"
+        }
+      ],
+      "diagnostics": {
+        "generator": "transcript row requires Transcript and FieldTranscript",
+        "native": "transcript row requires Transcript and FieldTranscript",
+        "rust": "domains: merlin3.bls12-381.fr64be/0: a transcript row holds Transcript and FieldTranscript"
+      }
+    },
+    {
+      "name": "byte hash on a Merlin transcript",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "merlin3.bls12-381.fr64be/0"
+          },
+          "path": [
+            "transcript",
+            "hash"
+          ],
+          "value": "keccak256"
+        }
+      ],
+      "diagnostics": {
+        "generator": "keccak256 hash exactly for hash-chain suites",
+        "native": "keccak256 hash exactly for hash-chain suites",
+        "rust": "domains: merlin3.bls12-381.fr64be/0: hash is keccak256 exactly for hash-chain transcripts, otherwise null"
+      }
+    },
+    {
+      "name": "hash-chain transcript without its byte hash",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "hash-chain.keccak256.bls12-381.fr64be/0"
+          },
+          "path": [
+            "transcript",
+            "hash"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "keccak256 hash exactly for hash-chain suites",
+        "native": "keccak256 hash exactly for hash-chain suites",
+        "rust": "domains: hash-chain.keccak256.bls12-381.fr64be/0: hash is keccak256 exactly for hash-chain transcripts, otherwise null"
+      }
+    },
+    {
+      "name": "fr64be over an extension challenge field",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
+          },
+          "path": [
+            "transcript",
+            "decoder"
+          ],
+          "value": "fr64be"
+        }
+      ],
+      "diagnostics": {
+        "generator": "fr64be requires a prime challenge field",
+        "native": "fr64be requires a prime challenge field",
+        "rust": "domains: hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0: fr64be requires a prime challenge field"
+      }
+    },
+    {
+      "name": "rejection31le over a 64-bit challenge field",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "merlin3.goldilocks.ext2-binomial7.rejection64le/0"
+          },
+          "path": [
+            "transcript",
+            "decoder"
+          ],
+          "value": "rejection31le"
+        }
+      ],
+      "diagnostics": {
+        "generator": "rejection31le challenge characteristic is too large",
+        "native": "rejection31le challenge characteristic is too large",
+        "rust": "domains: merlin3.goldilocks.ext2-binomial7.rejection64le/0: rejection31le requires a challenge characteristic below 2^31"
+      }
+    },
+    {
+      "name": "transcript of an unknown family",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "merlin3.bls12-381.fr64be/0"
+          },
+          "path": [
+            "transcript",
+            "family"
+          ],
+          "value": "merlin4"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative merlin4",
+        "native": "unknown transcript family",
+        "rust": "domains: merlin3.bls12-381.fr64be/0: unknown declaration alternative merlin4"
+      }
+    },
+    {
+      "name": "64-bit rejection over a wider challenge field",
+      "rule": "transcripts",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "merlin3.bls12-381.fr64be/0"
+          },
+          "path": [
+            "transcript",
+            "decoder"
+          ],
+          "value": "rejection64le"
+        }
+      ],
+      "diagnostics": {
+        "generator": "rejection64le challenge characteristic is too large",
+        "native": "rejection64le challenge characteristic is too large",
+        "rust": "domains: merlin3.bls12-381.fr64be/0: rejection64le requires a challenge characteristic below 2^64"
+      }
+    },
+    {
+      "name": "commitment without ValueField",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-keccak256.koala-bear/0"
+          },
+          "path": [
+            "members"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "commitment row requires ValueField",
+        "native": "commitment row requires ValueField",
+        "rust": "domains: rows.merkle-keccak256.koala-bear/0: a commitment row has a ValueField member"
+      }
+    },
+    {
+      "name": "row commitment with 64-byte digests",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-keccak256.koala-bear/0"
+          },
+          "path": [
+            "commitment",
+            "digestBytes"
+          ],
+          "value": 64
+        }
+      ],
+      "diagnostics": {
+        "generator": "row commitments have 32-byte digests",
+        "native": "row commitments have 32-byte digests",
+        "rust": "domains: rows.merkle-keccak256.koala-bear/0: digestBytes must be 32"
+      }
+    },
+    {
+      "name": "Poseidon2 permutation of another field",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-poseidon2-16.baby-bear/0"
+          },
+          "path": [
+            "commitment",
+            "permutation"
+          ],
+          "value": "koala-bear.poseidon2-16"
+        }
+      ],
+      "diagnostics": {
+        "generator": "permutation field is not the value field or its prime base",
+        "native": "permutation field is not the value field or its prime base",
+        "rust": "domains: rows.merkle-poseidon2-16.baby-bear/0: the permutation field must be the ValueField member or its prime base"
+      }
+    },
+    {
+      "name": "digest word width of another field",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-poseidon2-8.goldilocks/0"
+          },
+          "path": [
+            "commitment",
+            "digestWordBytes"
+          ],
+          "value": 4
+        }
+      ],
+      "diagnostics": {
+        "generator": "digest word width disagrees with the permutation field's codec frame",
+        "native": "digest word width disagrees with the permutation field's codec frame",
+        "rust": "domains: rows.merkle-poseidon2-8.goldilocks/0: digestWordBytes must equal the element width of the goldilocks field codec frame"
+      }
+    },
+    {
+      "name": "unknown commitment scheme",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-keccak256.koala-bear/0"
+          },
+          "path": [
+            "commitment",
+            "scheme"
+          ],
+          "value": "sha256Rows"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown commitment scheme",
+        "native": "unknown commitment scheme",
+        "rust": "domains: rows.merkle-keccak256.koala-bear/0: unknown declaration alternative sha256Rows"
+      }
+    },
+    {
+      "name": "row commitment with 16-byte digests",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-keccak256.koala-bear/0"
+          },
+          "path": [
+            "commitment",
+            "digestBytes"
+          ],
+          "value": 16
+        }
+      ],
+      "diagnostics": {
+        "generator": "row commitments have 32-byte digests",
+        "native": "row commitments have 32-byte digests",
+        "rust": "domains: rows.merkle-keccak256.koala-bear/0: digestBytes must be 32"
+      }
+    },
+    {
+      "name": "row commitment over an unknown permutation",
+      "rule": "commitments",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "rows.merkle-poseidon2-16.koala-bear/0"
+          },
+          "path": [
+            "commitment",
+            "permutation"
+          ],
+          "value": "koala-bear.poseidon2-24"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative koala-bear.poseidon2-24",
+        "native": "unknown Poseidon2 permutation",
+        "rust": "domains: rows.merkle-poseidon2-16.koala-bear/0: unknown permutation koala-bear.poseidon2-24"
+      }
+    },
+    {
+      "name": "logical type over a domain of another sort",
+      "rule": "logical types",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "insert",
+          "value": {
+            "kind": "field",
+            "domain": "bn254.g1"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid logical type instance field bn254.g1",
+        "native": "invalid logical type instance field bn254.g1",
+        "rust": "logicalTypes: (\"field\", \"bn254.g1\"): a unary instance names a domain of sort Field"
+      }
+    },
+    {
+      "name": "nullary instance with a domain",
+      "rule": "logical types",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "set",
+          "where": {
+            "kind": "bool",
+            "domain": ""
+          },
+          "path": [
+            "domain"
+          ],
+          "value": "koala-bear"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a nullary instance has the empty domain",
+        "native": "a nullary instance has the empty domain",
+        "rust": "logicalTypes: (\"bool\", \"koala-bear\"): a nullary instance has the empty domain"
+      }
+    },
+    {
+      "name": "duplicate logical type instance",
+      "rule": "logical types",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "duplicate",
+          "where": {
+            "kind": "field",
+            "domain": "koala-bear"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate logical type instance",
+        "native": "duplicate logical type instance",
+        "rust": "logicalTypes: (\"field\", \"koala-bear\"): duplicate logical type instance"
+      }
+    },
+    {
+      "name": "variant as a logical type instance",
+      "rule": "logical types",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "insert",
+          "value": {
+            "kind": "variant",
+            "domain": ""
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid logical type constructor variant",
+        "native": "invalid logical type constructor variant",
+        "rust": "logicalTypes: (\"variant\", \"\"): undeclared constructor variant"
+      }
+    },
+    {
+      "name": "resource unit as a logical type instance",
+      "rule": "logical types",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "insert",
+          "value": {
+            "kind": "resource_unit",
+            "domain": ""
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid logical type constructor resource_unit",
+        "native": "invalid logical type constructor resource_unit",
+        "rust": "logicalTypes: (\"resource_unit\", \"\"): variant and resource_unit have their own formation"
+      }
+    },
+    {
+      "name": "sequence as a logical type instance",
+      "rule": "logical types",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "insert",
+          "value": {
+            "domain": "",
+            "kind": "sequence"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid logical type instance sequence ",
+        "native": "invalid logical type instance sequence",
+        "rust": "logicalTypes: (\"sequence\", \"\"): only nullary and unary domain constructors have logical type instances"
+      }
+    },
+    {
+      "name": "setup key over a row commitment",
+      "rule": "setup keys",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "logicalTypes",
+          "op": "insert",
+          "value": {
+            "kind": "prover_key",
+            "domain": "rows.merkle-keccak256.koala-bear/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "setup keys exist only over multilinear KZG commitments",
+        "native": "setup keys exist only over multilinear KZG commitments",
+        "rust": "logicalTypes: (\"prover_key\", \"rows.merkle-keccak256.koala-bear/0\"): setup keys are admitted only over multilinearKzg commitments"
+      }
+    },
+    {
+      "name": "unknown setup role",
+      "rule": "setup keys",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "types",
+          "op": "set",
+          "where": {
+            "name": "prover_key"
+          },
+          "path": [
+            "setup"
+          ],
+          "value": "both"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative both",
+        "native": "unknown setup key",
+        "rust": "unknown declaration alternative both"
+      }
+    },
+    {
+      "name": "parameter element without a Field, Group or Type first parameter",
+      "rule": "type columns",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "types",
+          "op": "set",
+          "where": {
+            "name": "bytes"
+          },
+          "path": [
+            "collection",
+            "element"
+          ],
+          "value": "parameter"
+        }
+      ],
+      "diagnostics": {
+        "generator": "parameter collection element requires a Field, Group or Type first parameter",
+        "native": "parameter collection element requires a Field, Group or Type first parameter",
+        "rust": "a parameter collection element needs a Field, Group or Type first parameter"
+      }
+    },
+    {
+      "name": "collection of rank three",
+      "rule": "type columns",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "types",
+          "op": "set",
+          "where": {
+            "name": "matrix"
+          },
+          "path": [
+            "collection",
+            "rank"
+          ],
+          "value": 3
+        }
+      ],
+      "diagnostics": {
+        "generator": "collection rank is 1 or 2",
+        "native": "collection rank is 1 or 2",
+        "rust": "collection rank must be 1 or 2"
+      }
+    },
+    {
+      "name": "Succession port outside the signature",
+      "rule": "succession",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "operations",
+          "op": "set",
+          "where": {
+            "name": "resource_unit.pass"
+          },
+          "path": [
+            "facets",
+            0,
+            "stateInput"
+          ],
+          "value": 1
+        }
+      ],
+      "diagnostics": {
+        "generator": "succession port outside signature",
+        "native": "facet port outside signature",
+        "rust": "\"resource_unit.pass\": unscoped declaration reference"
+      }
+    },
+    {
+      "name": "Succession over ordinary values",
+      "rule": "succession",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "operations",
+          "op": "append",
+          "where": {
+            "name": "index.add"
+          },
+          "path": [
+            "facets"
+          ],
+          "value": {
+            "kind": "Succession",
+            "stateInput": 0,
+            "stateOutput": 0
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "succession ports must be resource units",
+        "native": "facet port constructor mismatch",
+        "rust": "\"index.add\": facet port constructor mismatch"
+      }
+    },
+    {
+      "name": "codec over an unadmitted type",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "insert",
+          "value": {
+            "identity": "zkcv.point.koala-bear/0",
+            "kind": "point",
+            "domain": "koala-bear",
+            "frame": null
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec payload is not an admitted logical type",
+        "native": "codec payload is not an admitted logical type",
+        "rust": "codecs: zkcv.point.koala-bear/0: (point, koala-bear) is not a logical type instance"
+      }
+    },
+    {
+      "name": "second codec for one logical type",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "insert",
+          "value": {
+            "identity": "zkcv.round.koala-bear/1",
+            "kind": "round",
+            "domain": "koala-bear",
+            "frame": null
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "second codec for one logical type",
+        "native": "second codec for one logical type",
+        "rust": "codecs: zkcv.round.koala-bear/1: at most one codec per logical type instance"
+      }
+    },
+    {
+      "name": "message codec without a frame",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.koala-bear/0"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "a message codec requires a frame",
+        "native": "a message codec requires a frame",
+        "rust": "codecs: zkcv.field.koala-bear/0: a message type's codec has a frame"
+      }
+    },
+    {
+      "name": "frame on a codec that is no message",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.round.koala-bear/0"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": {
+            "tag": 19,
+            "elementBytes": 4
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "only the input-only table frame may serve a non-message codec",
+        "native": "only the input-only table frame may serve a non-message codec",
+        "rust": "codecs: zkcv.round.koala-bear/0: only message types and the input-only table frame have frames"
+      }
+    },
+    {
+      "name": "codec frame of another layout",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.koala-bear/0"
+          },
+          "path": [
+            "frame",
+            "tag"
+          ],
+          "value": 20
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec kind field fixes its frame layout",
+        "native": "codec kind field fixes its frame layout",
+        "rust": "codecs: zkcv.field.koala-bear/0: field codecs do not use the Vector layout"
+      }
+    },
+    {
+      "name": "element width against the field structure",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.koala-bear/0"
+          },
+          "path": [
+            "frame",
+            "elementBytes"
+          ],
+          "value": 8
+        }
+      ],
+      "diagnostics": {
+        "generator": "zkcv.field.koala-bear/0 element width disagrees with the field structure",
+        "native": "zkcv.field.koala-bear/0 element width disagrees with the field structure",
+        "rust": "codecs: zkcv.field.koala-bear/0: elementBytes must follow the field structure"
+      }
+    },
+    {
+      "name": "codec over a field without an element-width rule",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "field",
+            "structure",
+            "degree"
+          ],
+          "value": 60
+        }
+      ],
+      "diagnostics": {
+        "generator": "zkcv.field.gf2-64.pentanomial-4-3-1/0 element width disagrees with the field structure",
+        "native": "zkcv.field.gf2-64.pentanomial-4-3-1/0 element width disagrees with the field structure",
+        "rust": "codecs: zkcv.field.gf2-64.pentanomial-4-3-1/0: gf2-64.pentanomial-4-3-1 has no element width rule"
+      }
+    },
+    {
+      "name": "group and groups codecs of unequal widths",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.groups.bn254.g1/0"
+          },
+          "path": [
+            "frame",
+            "elementBytes"
+          ],
+          "value": 64
+        }
+      ],
+      "diagnostics": {
+        "generator": "group and groups codecs disagree on elementBytes",
+        "native": "group and groups codecs disagree on elementBytes",
+        "rust": "codecs: group and groups codecs of bn254.g1 must have equal elementBytes"
+      }
+    },
+    {
+      "name": "codec kind whose Encodes predicate the domain lacks",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "insert",
+          "value": {
+            "identity": "zkcv.opening_state.multilinear-kzg/0",
+            "kind": "opening_state",
+            "domain": "multilinear.kzg.bls12-381/0",
+            "frame": null
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec kind opening_state lacks its Encodes predicate",
+        "native": "codec kind opening_state lacks its Encodes predicate",
+        "rust": "codecs: zkcv.opening_state.multilinear-kzg/0: Encodes.opening_state is not declared"
+      }
+    },
+    {
+      "name": "scalar frame without its element width",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.koala-bear/0"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": {
+            "tag": 19
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frame fields disagree with the tag layout",
+        "native": "frame fields disagree with the tag layout",
+        "rust": "codecs: zkcv.field.koala-bear/0: missing field elementBytes"
+      }
+    },
+    {
+      "name": "codec frame on an aggregate layout tag",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.bool/0"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": {
+            "tag": 69
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "layout Sequence carries no codec frame",
+        "native": "layout Sequence carries no codec frame",
+        "rust": "codecs: zkcv.bool/0: Sequence is not a codec frame layout"
+      }
+    },
+    {
+      "name": "proof codec with a digest root frame",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.proof.rows-merkle-poseidon2-16.koala-bear/0"
+          },
+          "path": [
+            "frame",
+            "tag"
+          ],
+          "value": 71
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec kind proof fixes its frame layout",
+        "native": "codec kind proof fixes its frame layout",
+        "rust": "codecs: zkcv.proof.rows-merkle-poseidon2-16.koala-bear/0: proof codecs do not use the DigestRoot layout"
+      }
+    },
+    {
+      "name": "KZG commitment frame of a row-commitment layout",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.commitment.multilinear-kzg.bls12-381/0"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": {
+            "tag": 33
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec kind commitment fixes its frame layout",
+        "native": "codec kind commitment fixes its frame layout",
+        "rust": "codecs: zkcv.commitment.multilinear-kzg.bls12-381/0: commitment codecs do not use the MerkleRoot layout"
+      }
+    },
+    {
+      "name": "field codec over a group",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.koala-bear/0"
+          },
+          "path": [
+            "domain"
+          ],
+          "value": "bn254.g1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec payload is not an admitted logical type",
+        "native": "codec payload is not an admitted logical type",
+        "rust": "codecs: zkcv.field.koala-bear/0: (field, bn254.g1) is not a logical type instance"
+      }
+    },
+    {
+      "name": "Encodes predicate without its payload parameter",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "remove",
+          "where": {
+            "name": "Encodes.field"
+          },
+          "path": [
+            "parameters"
+          ],
+          "value": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec kind field lacks its Encodes predicate",
+        "native": "codec kind field lacks its Encodes predicate",
+        "rust": "codecs: zkcv.field.gf2-64.pentanomial-4-3-1/0: Encodes.field must be declared over Codec and the payload sort"
+      }
+    },
+    {
+      "name": "codec whose Encodes predicate is undeclared",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "capabilities",
+          "op": "delete",
+          "where": {
+            "name": "Encodes.round"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec kind round lacks its Encodes predicate",
+        "native": "codec kind round lacks its Encodes predicate",
+        "rust": "codecs: zkcv.round.gf2-64.pentanomial-4-3-1/0: Encodes.round is not declared"
+      }
+    },
+    {
+      "name": "codec frame naming an undeclared tag",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.koala-bear/0"
+          },
+          "path": [
+            "frame",
+            "tag"
+          ],
+          "value": 254
+        }
+      ],
+      "diagnostics": {
+        "generator": "codec frame names an undeclared tag",
+        "native": "codec frame names an undeclared tag",
+        "rust": "codecs: zkcv.field.koala-bear/0: unknown frame tag 254"
+      }
+    },
+    {
+      "name": "digest root frame with an element width",
+      "rule": "codecs",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.commitment.rows-merkle-keccak256.koala-bear/0"
+          },
+          "path": [
+            "frame",
+            "elementBytes"
+          ],
+          "value": 32
+        }
+      ],
+      "diagnostics": {
+        "generator": "frame fields disagree with the tag layout",
+        "native": "frame fields disagree with the tag layout",
+        "rust": "codecs: zkcv.commitment.rows-merkle-keccak256.koala-bear/0: unknown field elementBytes"
+      }
+    },
+    {
+      "name": "unshared tag of two codecs",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.field.baby-bear/0"
+          },
+          "path": [
+            "frame",
+            "tag"
+          ],
+          "value": 19
+        }
+      ],
+      "diagnostics": {
+        "generator": "frame tag 19 needs exactly one user",
+        "native": "frame tag 19 needs exactly one user",
+        "rust": "frameTags: unshared frame tag 19 needs exactly one user"
+      }
+    },
+    {
+      "name": "duplicate frame tag",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "duplicate",
+          "where": {
+            "tag": 1
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frame tag",
+        "native": "invalid or duplicate frame tag",
+        "rust": "frameTags: duplicate frame tag 1"
+      }
+    },
+    {
+      "name": "frame tag beyond 255",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "insert",
+          "value": {
+            "tag": 256,
+            "layout": "Scalar",
+            "shared": null
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frame tag",
+        "native": "invalid or duplicate frame tag",
+        "rust": "frameTags: frame tags are between 1 and 255"
+      }
+    },
+    {
+      "name": "shared tag naming another kind",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "set",
+          "where": {
+            "tag": 71
+          },
+          "path": [
+            "shared",
+            "kind"
+          ],
+          "value": "proof"
+        }
+      ],
+      "diagnostics": {
+        "generator": "shared frame tag 71 users disagree with its kind and scheme",
+        "native": "shared frame tag 71 users disagree with its kind and scheme",
+        "rust": "frameTags: frame tag 71 must be shared by exactly the proof codecs over poseidon2Rows commitments, at least two"
+      }
+    },
+    {
+      "name": "frame tag zero",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "set",
+          "where": {
+            "tag": 1
+          },
+          "path": [
+            "tag"
+          ],
+          "value": 0
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frame tag",
+        "native": "invalid or duplicate frame tag",
+        "rust": "frameTags: frame tags are between 1 and 255"
+      }
+    },
+    {
+      "name": "frame tag with an unknown layout",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "set",
+          "where": {
+            "tag": 1
+          },
+          "path": [
+            "layout"
+          ],
+          "value": "Matrix"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative Matrix",
+        "native": "unknown frame layout",
+        "rust": "frameTags: unknown declaration alternative Matrix"
+      }
+    },
+    {
+      "name": "unshared frame tag without a user",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "insert",
+          "value": {
+            "layout": "Scalar",
+            "shared": null,
+            "tag": 254
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frame tag 254 needs exactly one user",
+        "native": "frame tag 254 needs exactly one user",
+        "rust": "frameTags: unshared frame tag 254 needs exactly one user"
+      }
+    },
+    {
+      "name": "Poseidon2 row proof on its own tag",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "insert",
+          "value": {
+            "layout": "DigestProof",
+            "shared": null,
+            "tag": 200
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "set",
+          "where": {
+            "identity": "zkcv.proof.rows-merkle-poseidon2-8.goldilocks/0"
+          },
+          "path": [
+            "frame",
+            "tag"
+          ],
+          "value": 200
+        }
+      ],
+      "diagnostics": {
+        "generator": "shared frame tag 72 users disagree with its kind and scheme",
+        "native": "shared frame tag 72 users disagree with its kind and scheme",
+        "rust": "frameTags: frame tag 72 must be shared by exactly the proof codecs over poseidon2Rows commitments, at least two"
+      }
+    },
+    {
+      "name": "shared frame tag naming an undeclared constructor",
+      "rule": "frame tags",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "set",
+          "where": {
+            "tag": 71
+          },
+          "path": [
+            "shared",
+            "kind"
+          ],
+          "value": "missing"
+        }
+      ],
+      "diagnostics": {
+        "generator": "shared frame names an undeclared kind",
+        "native": "shared frame names an undeclared kind or scheme",
+        "rust": "frameTags: shared frame tags name a declared constructor"
+      }
+    },
+    {
+      "name": "field_array frame over a group",
+      "rule": "aggregate frames",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "aggregateFrames",
+          "op": "set",
+          "where": {
+            "constructor": "field_array"
+          },
+          "path": [
+            "domain"
+          ],
+          "value": "bn254.g1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "field_array frame names a Field domain",
+        "native": "bn254.g1 is not a Field domain",
+        "rust": "aggregateFrames: sequence and variant frames have the empty domain and field_array frames a Field domain"
+      }
+    },
+    {
+      "name": "duplicate aggregate frame",
+      "rule": "aggregate frames",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frameTags",
+          "op": "insert",
+          "value": {
+            "tag": 3,
+            "layout": "Sequence",
+            "shared": null
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "aggregateFrames",
+          "op": "insert",
+          "value": {
+            "constructor": "sequence",
+            "domain": "",
+            "tag": 3
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate aggregate frame",
+        "native": "duplicate aggregate frame",
+        "rust": "aggregateFrames: duplicate aggregate frame (sequence, )"
+      }
+    },
+    {
+      "name": "aggregate frame on a tag of another layout",
+      "rule": "aggregate frames",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "aggregateFrames",
+          "op": "set",
+          "where": {
+            "constructor": "sequence"
+          },
+          "path": [
+            "tag"
+          ],
+          "value": 1
+        }
+      ],
+      "diagnostics": {
+        "generator": "aggregate frame tag layout mismatch",
+        "native": "aggregate frame tag layout mismatch",
+        "rust": "aggregateFrames: sequence frames do not use the Scalar layout"
+      }
+    },
+    {
+      "name": "sequence frame with a domain",
+      "rule": "aggregate frames",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "aggregateFrames",
+          "op": "set",
+          "where": {
+            "tag": 69
+          },
+          "path": [
+            "domain"
+          ],
+          "value": "koala-bear"
+        }
+      ],
+      "diagnostics": {
+        "generator": "sequence frame has the empty domain",
+        "native": "sequence frame has the empty domain",
+        "rust": "aggregateFrames: sequence and variant frames have the empty domain and field_array frames a Field domain"
+      }
+    },
+    {
+      "name": "field_array frame over a field without its field codec",
+      "rule": "aggregate frames",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "codecs",
+          "op": "delete",
+          "where": {
+            "identity": "zkcv.field.bls12-381.fr/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "field_array frame requires the field's scalar frame",
+        "native": "field_array frame requires the field's scalar frame",
+        "rust": "aggregateFrames: field_array frames need a field codec of bls12-381.fr with a Scalar frame"
+      }
+    },
+    {
+      "name": "aggregate frame of an unknown constructor",
+      "rule": "aggregate frames",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "aggregateFrames",
+          "op": "set",
+          "where": {
+            "tag": 69
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "map"
+        }
+      ],
+      "diagnostics": {
+        "generator": "no aggregate frame for map",
+        "native": "no aggregate frame for map",
+        "rust": "aggregateFrames: unknown declaration alternative map"
+      }
+    },
+    {
+      "name": "random service over a group",
+      "rule": "random services",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "randomServices",
+          "op": "set",
+          "where": {
+            "contract": "random.bn254.fr/0"
+          },
+          "path": [
+            "field"
+          ],
+          "value": "bn254.g1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "bn254.g1 is not a Field domain",
+        "native": "bn254.g1 is not a Field domain",
+        "rust": "randomServices: random.bn254.fr/0: a random service draws from a declared Field domain"
+      }
+    },
+    {
+      "name": "random service without its rng type",
+      "rule": "random services",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "randomServices",
+          "op": "insert",
+          "value": {
+            "contract": "random.koala-bear/0",
+            "field": "koala-bear"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "random services and rng logical types disagree",
+        "native": "random services and rng logical types disagree",
+        "rust": "randomServices: random services and rng types correspond one to one; unmatched [\"koala-bear\"]"
+      }
+    },
+    {
+      "name": "duplicate random service contract",
+      "rule": "random services",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "randomServices",
+          "op": "duplicate",
+          "where": {
+            "contract": "random.bls12-381.fr/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate random service contract",
+        "native": "invalid or duplicate random service contract",
+        "rust": "randomServices: duplicate random service random.bls12-381.fr/0"
+      }
+    },
+    {
+      "name": "rng type without its random service",
+      "rule": "random services",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "randomServices",
+          "op": "delete",
+          "where": {
+            "field": "bls12-381.fr"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "random services and rng logical types disagree",
+        "native": "random services and rng logical types disagree",
+        "rust": "randomServices: random services and rng types correspond one to one; unmatched [\"bls12-381.fr\"]"
+      }
+    },
+    {
+      "name": "two random services over one field",
+      "rule": "random services",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "randomServices",
+          "op": "set",
+          "where": {
+            "field": "bn254.fr"
+          },
+          "path": [
+            "field"
+          ],
+          "value": "bls12-381.fr"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate random service field",
+        "native": "duplicate random service field",
+        "rust": "randomServices: random services and rng types correspond one to one"
+      }
+    },
+    {
+      "name": "two random services with one contract",
+      "rule": "random services",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "randomServices",
+          "op": "set",
+          "where": {
+            "field": "bls12-381.fr"
+          },
+          "path": [
+            "contract"
+          ],
+          "value": "random.bn254.fr/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate random service contract",
+        "native": "invalid or duplicate random service contract",
+        "rust": "randomServices: duplicate random service random.bn254.fr/0"
+      }
+    },
+    {
+      "name": "limit with an empty owner",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "owner"
+          ],
+          "value": ""
+        }
+      ],
+      "diagnostics": {
+        "generator": "expected nonempty text",
+        "native": "limit owner and scope are named",
+        "rust": "limits: limit owner and scope are nonempty"
+      }
+    },
+    {
+      "name": "limit with an empty scope",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "scope"
+          ],
+          "value": ""
+        }
+      ],
+      "diagnostics": {
+        "generator": "expected nonempty text",
+        "native": "limit owner and scope are named",
+        "rust": "limits: limit owner and scope are nonempty"
+      }
+    },
+    {
+      "name": "limit value beyond 2^63 - 1",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "value"
+          ],
+          "value": 9223372036854775808
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid limit value",
+        "native": "invalid limit value",
+        "rust": "limits: limit value must be a JSON integer from 0 to 2^63 - 1"
+      }
+    },
+    {
+      "name": "negative limit value",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "value"
+          ],
+          "value": -1
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid limit value",
+        "native": "invalid limit value",
+        "rust": "limits: limit value must be a JSON integer from 0 to 2^63 - 1"
+      }
+    },
+    {
+      "name": "unknown limit phase",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "phase"
+          ],
+          "value": "runtime"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative runtime",
+        "native": "unknown limit unit or phase",
+        "rust": "limits: unknown declaration alternative runtime"
+      }
+    },
+    {
+      "name": "duplicate limit",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "duplicate",
+          "where": {
+            "name": "protocol.roles"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate limit",
+        "native": "invalid or duplicate limit",
+        "rust": "limits: duplicate limit protocol.roles"
+      }
+    },
+    {
+      "name": "a record telescope limit renamed to the protocol roster limit",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "record.roles"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "protocol.roles"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate limit",
+        "native": "invalid or duplicate limit",
+        "rust": "limits: duplicate limit protocol.roles"
+      }
+    },
+    {
+      "name": "limit of an unknown unit",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "seconds"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative seconds",
+        "native": "unknown limit unit or phase",
+        "rust": "limits: unknown declaration alternative seconds"
+      }
+    },
+    {
+      "name": "limit name outside the catalog name rule",
+      "rule": "limits",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "limits",
+          "op": "set",
+          "where": {
+            "name": "protocol.roles"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "protocol roles"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid catalog identity 'protocol roles'",
+        "native": "invalid or duplicate limit",
+        "rust": "limits: invalid identity \"protocol roles\""
+      }
+    },
+    {
+      "name": "duplicate finite definition",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "finiteDefinitions",
+          "op": "duplicate",
+          "where": {
+            "identity": "math.fold"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate finite definition",
+        "native": "invalid or duplicate finite definition",
+        "rust": "finiteDefinitions: duplicate finite definition math.fold"
+      }
+    },
+    {
+      "name": "fold naming a collection",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "finiteDefinitions",
+          "op": "set",
+          "where": {
+            "identity": "math.fold"
+          },
+          "path": [
+            "collection"
+          ],
+          "value": "vector"
+        }
+      ],
+      "diagnostics": {
+        "generator": "only collect names a collection",
+        "native": "only collect names a collection",
+        "rust": "finiteDefinitions: math.fold: collection is null exactly for fold"
+      }
+    },
+    {
+      "name": "filtered field_array collection",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "finiteDefinitions",
+          "op": "set",
+          "where": {
+            "identity": "math.collect.field_array"
+          },
+          "path": [
+            "filtered"
+          ],
+          "value": true
+        }
+      ],
+      "diagnostics": {
+        "generator": "field_array collection cannot be filtered",
+        "native": "field_array collection cannot be filtered",
+        "rust": "finiteDefinitions: math.collect.field_array: field_array collections are not filtered"
+      }
+    },
+    {
+      "name": "duplicate domain constructor",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domainConstructors",
+          "op": "duplicate",
+          "where": {
+            "identity": "elements"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate domain constructor",
+        "native": "invalid or duplicate domain constructor",
+        "rust": "domainConstructors: duplicate domain constructor elements"
+      }
+    },
+    {
+      "name": "domain constructor axis 2",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domainConstructors",
+          "op": "set",
+          "where": {
+            "identity": "elements"
+          },
+          "path": [
+            "axis"
+          ],
+          "value": 2
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain constructor axis is 0 or 1",
+        "native": "domain constructor axis is 0 or 1",
+        "rust": "domainConstructors: axis is 0 or 1"
+      }
+    },
+    {
+      "name": "collect without a collection",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "finiteDefinitions",
+          "op": "set",
+          "where": {
+            "identity": "math.collect.vector"
+          },
+          "path": [
+            "collection"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "only collect names a collection",
+        "native": "only collect names a collection",
+        "rust": "finiteDefinitions: math.collect.vector: collection is null exactly for fold"
+      }
+    },
+    {
+      "name": "finite definition of an unknown mode",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "finiteDefinitions",
+          "op": "set",
+          "where": {
+            "identity": "math.fold"
+          },
+          "path": [
+            "mode"
+          ],
+          "value": "global"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative global",
+        "native": "unknown finite definition mode or operation",
+        "rust": "finiteDefinitions: unknown declaration alternative global"
+      }
+    },
+    {
+      "name": "finite definition of an unknown collection",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "finiteDefinitions",
+          "op": "set",
+          "where": {
+            "identity": "math.collect.vector"
+          },
+          "path": [
+            "collection"
+          ],
+          "value": "matrix"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative matrix",
+        "native": "unknown finite collection",
+        "rust": "finiteDefinitions: unknown declaration alternative matrix"
+      }
+    },
+    {
+      "name": "domain constructor of an unknown kind",
+      "rule": "source vocabulary",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domainConstructors",
+          "op": "set",
+          "where": {
+            "identity": "zip"
+          },
+          "path": [
+            "kind"
+          ],
+          "value": "Columns"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative Columns",
+        "native": "unknown domain constructor kind",
+        "rust": "domainConstructors: unknown declaration alternative Columns"
+      }
+    },
+    {
+      "name": "provider row of an undeclared domain",
+      "rule": "providers",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "insert",
+          "value": {
+            "domain": "missing.field",
+            "default": "plonky3",
+            "alternatives": []
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "provider row names an undeclared domain",
+        "native": "provider row names an undeclared domain",
+        "rust": "native installation: providers: missing.field is not a declared domain"
+      }
+    },
+    {
+      "name": "domain without a provider row",
+      "rule": "providers",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "delete",
+          "where": {
+            "domain": "bn254.gt"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "every domain has exactly one provider row",
+        "native": "every domain has exactly one provider row",
+        "rust": "native installation: providers: bn254.gt has no provider row"
+      }
+    },
+    {
+      "name": "provider listed twice in one row",
+      "rule": "providers",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "set",
+          "where": {
+            "domain": "bn254.fr"
+          },
+          "path": [
+            "alternatives"
+          ],
+          "value": [
+            "arkworks"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "provider appears twice in one row",
+        "native": "provider appears twice in one row",
+        "rust": "native installation: providers: bn254.fr: provider arkworks appears twice"
+      }
+    },
+    {
+      "name": "unknown provider",
+      "rule": "providers",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "set",
+          "where": {
+            "domain": "bn254.fr"
+          },
+          "path": [
+            "default"
+          ],
+          "value": "openvm"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative openvm",
+        "native": "unknown provider",
+        "rust": "native installation: providers: unknown declaration alternative openvm"
+      }
+    },
+    {
+      "name": "unknown default provider",
+      "rule": "providers",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "set",
+          "where": {
+            "domain": "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
+          },
+          "path": [
+            "default"
+          ],
+          "value": "native"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative native",
+        "native": "unknown provider",
+        "rust": "native installation: providers: unknown declaration alternative native"
+      }
+    },
+    {
+      "name": "second provider row for one domain",
+      "rule": "providers",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providers",
+          "op": "duplicate",
+          "where": {
+            "domain": "koala-bear"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate provider row",
+        "native": "duplicate provider row",
+        "rust": "native installation: providers: koala-bear has more than one provider row"
+      }
+    },
+    {
+      "name": "provider without a unit row",
+      "rule": "provider units",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providerUnits",
+          "op": "delete",
+          "where": {
+            "provider": "spongefish"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "every provider has exactly one unit",
+        "native": "every provider has exactly one unit: spongefish",
+        "rust": "native installation: providerUnits: spongefish has no installation unit row"
+      }
+    },
+    {
+      "name": "provider with the independent unit",
+      "rule": "provider units",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providerUnits",
+          "op": "set",
+          "where": {
+            "provider": "blst"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "independent"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider owns a library unit",
+        "native": "invalid provider unit",
+        "rust": "native installation: providerUnits: blst: independent is the unit of provider-free storage"
+      }
+    },
+    {
+      "name": "spongefish installed by another unit",
+      "rule": "provider units",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providerUnits",
+          "op": "set",
+          "where": {
+            "provider": "spongefish"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "plonky3"
+        }
+      ],
+      "diagnostics": {
+        "generator": "spongefish is installed by arkworks",
+        "native": "spongefish is installed by arkworks",
+        "rust": "native installation: providerUnits: spongefish is installed by the arkworks unit"
+      }
+    },
+    {
+      "name": "halo2curves-axiom installed by another unit",
+      "rule": "provider units",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providerUnits",
+          "op": "set",
+          "where": {
+            "provider": "halo2curves-axiom"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "arkworks"
+        }
+      ],
+      "diagnostics": {
+        "generator": "halo2curves-axiom is installed by halo2curves",
+        "native": "halo2curves-axiom is installed by halo2curves",
+        "rust": "native installation: providerUnits: halo2curves-axiom is installed by the halo2curves unit"
+      }
+    },
+    {
+      "name": "duplicate provider unit",
+      "rule": "provider units",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "providerUnits",
+          "op": "duplicate",
+          "where": {
+            "provider": "arkworks"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate provider unit",
+        "native": "duplicate provider unit",
+        "rust": "native installation: providerUnits: arkworks has more than one unit row"
+      }
+    },
+    {
+      "name": "representation of an undeclared instance",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "insert",
+          "value": {
+            "identity": "native.bool/0",
+            "kind": "field",
+            "domain": "bn254.g1",
+            "default": false,
+            "layout": "",
+            "frame": "local",
+            "unit": "independent"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "representation names an undeclared logical type instance",
+        "native": "representation names an undeclared logical type instance",
+        "rust": "native installation: representations: native.bool/0 for (field, bn254.g1): undeclared logical type instance"
+      }
+    },
+    {
+      "name": "duplicate representation",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "duplicate",
+          "where": {
+            "identity": "native.bool/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate representation",
+        "native": "duplicate representation",
+        "rust": "native installation: representations: native.bool/0 for (bool, ): duplicate representation"
+      }
+    },
+    {
+      "name": "second default representation",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fr",
+            "kind": "field"
+          },
+          "path": [
+            "default"
+          ],
+          "value": true
+        }
+      ],
+      "diagnostics": {
+        "generator": "second default representation",
+        "native": "second default representation",
+        "rust": "native installation: representations: arkworks.fr/0 for (field, bls12-381.fr): second default representation"
+      }
+    },
+    {
+      "name": "instance without a default representation",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "native.bool/0"
+          },
+          "path": [
+            "default"
+          ],
+          "value": false
+        }
+      ],
+      "diagnostics": {
+        "generator": "logical type instance has no default representation",
+        "native": "logical type instance has no default representation: bool",
+        "rust": "native installation: representations: (bool, ) has no default representation"
+      }
+    },
+    {
+      "name": "layout selected twice for one instance",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.mle-msb/0"
+          },
+          "path": [
+            "layout"
+          ],
+          "value": "lsb"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate representation layout",
+        "native": "invalid or duplicate representation layout",
+        "rust": "native installation: representations: arkworks.mle-msb/0 for (table, bls12-381.fr): layout lsb is selected twice for one instance"
+      }
+    },
+    {
+      "name": "canonical representation without a framed codec",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.polynomial/0",
+            "domain": "bls12-381.fr"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": "canonical"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a canonical representation requires a framed codec for its instance",
+        "native": "a canonical representation requires a framed codec for its instance",
+        "rust": "native installation: representations: arkworks.polynomial/0 for (polynomial, bls12-381.fr): a canonical representation requires a framed codec"
+      }
+    },
+    {
+      "name": "local default of a framed instance",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "native.bool/0"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": "local"
+        }
+      ],
+      "diagnostics": {
+        "generator": "the default of a framed instance is canonical",
+        "native": "the default of a framed instance is canonical",
+        "rust": "native installation: representations: native.bool/0 for (bool, ): the default of an instance with a framed codec is canonical"
+      }
+    },
+    {
+      "name": "nullary default owned by a provider unit",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "native.bool/0"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "arkworks"
+        }
+      ],
+      "diagnostics": {
+        "generator": "default storage unit disagrees with the default provider",
+        "native": "default storage unit disagrees with the default provider",
+        "rust": "native installation: representations: native.bool/0 for (bool, ): the default of a nullary instance has unit independent"
+      }
+    },
+    {
+      "name": "default storage of another unit than the default provider's",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.fr/0",
+            "kind": "field"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "blst"
+        }
+      ],
+      "diagnostics": {
+        "generator": "default storage unit disagrees with the default provider",
+        "native": "default storage unit disagrees with the default provider",
+        "rust": "native installation: representations: arkworks.fr/0 for (field, bls12-381.fr): the default of a unary instance has the unit of its domain's default provider"
+      }
+    },
+    {
+      "name": "representation layout outside the name rule",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.mle-msb/0"
+          },
+          "path": [
+            "layout"
+          ],
+          "value": "most significant"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid catalog identity 'most significant'",
+        "native": "invalid or duplicate representation layout",
+        "rust": "native installation: representations: invalid identity \"most significant\""
+      }
+    },
+    {
+      "name": "representation with an empty identity",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fr",
+            "kind": "field"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": ""
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid catalog identity ''",
+        "native": "invalid representation identity",
+        "rust": "native installation: representations: invalid identity \"\""
+      }
+    },
+    {
+      "name": "representation with an unknown value frame",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fr",
+            "kind": "field"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": "remote"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative remote",
+        "native": "unknown representation frame",
+        "rust": "native installation: representations: unknown declaration alternative remote"
+      }
+    },
+    {
+      "name": "representation with an unknown storage unit",
+      "rule": "representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "representations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fr",
+            "kind": "field"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "native"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative native",
+        "native": "unknown installation unit",
+        "rust": "native installation: representations: unknown declaration alternative native"
+      }
+    },
+    {
+      "name": "applied representation of a constructor without parameters",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "insert",
+          "value": {
+            "constructor": "bool",
+            "arguments": [],
+            "identity": "native.bool-applied/0",
+            "default": false,
+            "child": null,
+            "frame": "local",
+            "provider": null,
+            "unit": "independent",
+            "vectorPort": null
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "applied representation needs a parameterized constructor",
+        "native": "applied representation needs a parameterized constructor",
+        "rust": "native installation: appliedRepresentations: native.bool-applied/0 for bool: applied representations need a constructor with parameters"
+      }
+    },
+    {
+      "name": "applied pattern count",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "logical.sequence/0"
+          },
+          "path": [
+            "arguments"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "applied representation pattern count differs",
+        "native": "applied representation pattern count differs",
+        "rust": "native installation: appliedRepresentations: logical.sequence/0 for sequence: one pattern per parameter"
+      }
+    },
+    {
+      "name": "type pattern that is no logical type instance",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0
+          ],
+          "value": [
+            "type",
+            [
+              "apply",
+              "sequence",
+              [
+                [
+                  "type",
+                  [
+                    "apply",
+                    "bool",
+                    []
+                  ]
+                ]
+              ]
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "type pattern is not a logical type instance",
+        "native": "type pattern is not a logical type instance",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: sequence pattern argument is not a domain"
+      }
+    },
+    {
+      "name": "Slot pattern without a declared domain",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "logical.resource_unit/0"
+          },
+          "path": [
+            "arguments"
+          ],
+          "value": [
+            [
+              "domain",
+              "Slot",
+              "Slot.A"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain argument disagrees with its parameter",
+        "native": "domain argument disagrees with its parameter",
+        "rust": "native installation: appliedRepresentations: logical.resource_unit/0 for resource_unit: domain pattern must name a declared Slot domain"
+      }
+    },
+    {
+      "name": "natural range beyond 1,048,576",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            1
+          ],
+          "value": [
+            "natRange",
+            "0",
+            "1048577"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "natural exceeds the static bound",
+        "native": "invalid natural range",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: natural range bound above 1,048,576"
+      }
+    },
+    {
+      "name": "empty natural range",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            1
+          ],
+          "value": [
+            "natRange",
+            "5",
+            "4"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "empty natural range",
+        "native": "invalid natural range",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: natural range minimum exceeds its maximum"
+      }
+    },
+    {
+      "name": "child that is not the logical element",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "child"
+          ],
+          "value": {
+            "kind": "field",
+            "domain": "koala-bear",
+            "representation": "plonky3.koala-bear/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "child is not the logical element",
+        "native": "child is not the logical element",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: child is not the logical child of the applied type"
+      }
+    },
+    {
+      "name": "child naming no representation row",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "child",
+            "representation"
+          ],
+          "value": "missing.fr/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "child names no representation row",
+        "native": "child names no representation row",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: child names no representation row"
+      }
+    },
+    {
+      "name": "canonical applied row without an aggregate frame",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "frame"
+          ],
+          "value": "canonical"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a canonical applied representation requires its aggregate frame",
+        "native": "a canonical applied representation requires its aggregate frame",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: a canonical applied representation requires an aggregate frame for its constructor"
+      }
+    },
+    {
+      "name": "canonical field_array over a field without a frame",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments"
+          ],
+          "value": [
+            [
+              "domain",
+              "Field",
+              "koala-bear"
+            ],
+            [
+              "natRange",
+              "0",
+              "1048576"
+            ]
+          ]
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "child"
+          ],
+          "value": {
+            "kind": "field",
+            "domain": "koala-bear",
+            "representation": "plonky3.koala-bear/0"
+          }
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "plonky3"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "unit"
+          ],
+          "value": "plonky3"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": {
+            "kind": "vector",
+            "domain": "koala-bear",
+            "representation": "plonky3.koala-bear-vector/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "a canonical applied representation requires its aggregate frame",
+        "native": "a canonical applied representation requires its aggregate frame",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: a canonical applied representation requires an aggregate frame for its constructor"
+      }
+    },
+    {
+      "name": "overlapping applied defaults",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "default"
+          ],
+          "value": true
+        }
+      ],
+      "diagnostics": {
+        "generator": "overlapping applied representations are both defaults",
+        "native": "overlapping applied representations are both defaults",
+        "rust": "native installation: appliedRepresentations: blst/field-array for field_array: overlapping patterns share an identity or a default"
+      }
+    },
+    {
+      "name": "overlapping applied rows sharing an identity",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "duplicate",
+          "where": {
+            "identity": "blst/fixed-vector"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "overlapping applied representations share an identity",
+        "native": "overlapping applied representations share an identity",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: overlapping patterns share an identity or a default"
+      }
+    },
+    {
+      "name": "canonical field array over any field",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "arguments",
+            0
+          ],
+          "value": [
+            "any"
+          ]
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "child"
+          ],
+          "value": null
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": null
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "a canonical applied representation requires its aggregate frame",
+        "native": "a canonical applied representation requires its aggregate frame",
+        "rust": "native installation: appliedRepresentations: blst/field-array for field_array: a canonical applied representation requires an aggregate frame for its constructor"
+      }
+    },
+    {
+      "name": "natural pattern for a Field parameter",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            0
+          ],
+          "value": [
+            "natRange",
+            "0",
+            "1"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "natural argument disagrees with its parameter",
+        "native": "invalid natural range",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: pattern does not match its parameter kind"
+      }
+    },
+    {
+      "name": "field type pattern over a group",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            2,
+            0,
+            2
+          ],
+          "value": "bn254.g1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain argument disagrees with its parameter",
+        "native": "domain argument disagrees with its parameter",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: field pattern argument must name a declared domain of its sort"
+      }
+    },
+    {
+      "name": "applied representation of an undeclared constructor",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "missing"
+        }
+      ],
+      "diagnostics": {
+        "generator": "applied representation needs a parameterized constructor",
+        "native": "undeclared constructor missing",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for missing: undeclared constructor"
+      }
+    },
+    {
+      "name": "domain pattern for a natural parameter",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            1
+          ],
+          "value": [
+            "domain",
+            "Field",
+            "bls12-381.fr"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain argument disagrees with its parameter",
+        "native": "domain argument disagrees with its parameter",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: pattern does not match its parameter kind"
+      }
+    },
+    {
+      "name": "domain pattern over a group",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            0,
+            2
+          ],
+          "value": "bn254.g1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "domain argument disagrees with its parameter",
+        "native": "domain argument disagrees with its parameter",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: domain pattern must name a declared Field domain"
+      }
+    },
+    {
+      "name": "natural range with a noncanonical bound",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            1,
+            1
+          ],
+          "value": "00"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "arguments",
+            1,
+            2
+          ],
+          "value": "1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "noncanonical decimal '00'",
+        "native": "invalid natural range",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: noncanonical natural \"00\""
+      }
+    },
+    {
+      "name": "type pattern of an undeclared constructor",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            1
+          ],
+          "value": "missing"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "remove",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            2
+          ],
+          "value": [
+            "domain",
+            "Field",
+            "bls12-381.fr"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "type pattern is not a logical type instance",
+        "native": "type pattern is not a logical type instance",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: (missing, ) is not an admitted logical type instance"
+      }
+    },
+    {
+      "name": "type pattern of an undeclared instance",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            1
+          ],
+          "value": "rng"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            2,
+            0,
+            2
+          ],
+          "value": "koala-bear"
+        }
+      ],
+      "diagnostics": {
+        "generator": "type pattern is not a logical type instance",
+        "native": "type pattern is not a logical type instance",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: (rng, koala-bear) is not an admitted logical type instance"
+      }
+    },
+    {
+      "name": "field_array type pattern",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            1
+          ],
+          "value": "field_array"
+        },
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "append",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            2
+          ],
+          "value": [
+            "nat",
+            "4"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "type pattern is not a logical type instance",
+        "native": "type pattern is not a logical type instance",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: field_array pattern is not a logical type instance"
+      }
+    },
+    {
+      "name": "field type pattern with a natural argument",
+      "rule": "applied representations",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "arguments",
+            0,
+            1,
+            2,
+            0
+          ],
+          "value": [
+            "nat",
+            "1"
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "type pattern is not a logical type instance",
+        "native": "type pattern is not a logical type instance",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: field pattern argument is not a domain"
+      }
+    },
+    {
+      "name": "dense container without a provider",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "dense container without a vector port",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/fixed-vector"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: blst/fixed-vector for fixed_vector: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "vector port on a row without a child",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "logical.sequence/0"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": {
+            "kind": "vector",
+            "domain": "bls12-381.fr",
+            "representation": "arkworks.fr-vector/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: logical.sequence/0 for sequence: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "provider on a row without a child",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "logical.variant/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "arkworks"
+        }
+      ],
+      "diagnostics": {
+        "generator": "a provider and a vector port are declared exactly for a dense child",
+        "native": "a provider and a vector port are declared exactly for a dense child",
+        "rust": "native installation: appliedRepresentations: logical.variant/0 for variant: a provider and a vector port are declared exactly for a dense child"
+      }
+    },
+    {
+      "name": "vector port over another domain",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "domain"
+          ],
+          "value": "bn254.fr"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port is not a vector over the child's domain",
+        "native": "vector port is not a vector over the child's domain",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port is not a vector over the child's domain"
+      }
+    },
+    {
+      "name": "vector port of another kind",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort"
+          ],
+          "value": {
+            "kind": "field",
+            "domain": "bls12-381.fr",
+            "representation": "arkworks.fr/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port is not a vector over the child's domain",
+        "native": "vector port is not a vector over the child's domain",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port is not a vector over the child's domain"
+      }
+    },
+    {
+      "name": "vector port naming no representation row",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "representation"
+          ],
+          "value": "missing.fr-vector/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port names no representation row",
+        "native": "vector port names no representation row",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port names no representation row"
+      }
+    },
+    {
+      "name": "vector port naming a layout selection",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "representation"
+          ],
+          "value": "arkworks.fr-diagonal/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port names a layout selection",
+        "native": "vector port names a layout selection",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port names a layout selection"
+      }
+    },
+    {
+      "name": "vector port stored by another unit",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "vectorPort",
+            "representation"
+          ],
+          "value": "blst/fr"
+        }
+      ],
+      "diagnostics": {
+        "generator": "vector port storage belongs to another unit",
+        "native": "vector port storage belongs to another unit",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: vector port storage belongs to another unit"
+      }
+    },
+    {
+      "name": "dense provider installed by another unit",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "dalek"
+        }
+      ],
+      "diagnostics": {
+        "generator": "dense provider is installed by another unit",
+        "native": "dense provider is installed by another unit",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: dense provider is installed by another unit"
+      }
+    },
+    {
+      "name": "dense provider outside the child's providers",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "arkworks.field-array/0"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "spongefish"
+        }
+      ],
+      "diagnostics": {
+        "generator": "dense provider is not a provider of the child's domain",
+        "native": "dense provider is not a provider of the child's domain",
+        "rust": "native installation: appliedRepresentations: arkworks.field-array/0 for field_array: dense provider is not a provider of the child's domain"
+      }
+    },
+    {
+      "name": "unknown dense provider",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "set",
+          "where": {
+            "identity": "blst/field-array"
+          },
+          "path": [
+            "provider"
+          ],
+          "value": "risc0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative risc0",
+        "native": "dense provider is installed by another unit",
+        "rust": "native installation: appliedRepresentations: unknown declaration alternative risc0"
+      }
+    },
+    {
+      "name": "second dense container of one provider",
+      "rule": "dense calling conventions",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "appliedRepresentations",
+          "op": "insert",
+          "value": {
+            "constructor": "field_array",
+            "arguments": [
+              [
+                "domain",
+                "Field",
+                "bls12-381.fr"
+              ],
+              [
+                "natRange",
+                "0",
+                "4"
+              ]
+            ],
+            "identity": "arkworks.small-field-array/0",
+            "default": false,
+            "child": {
+              "kind": "field",
+              "domain": "bls12-381.fr",
+              "representation": "arkworks.fr/0"
+            },
+            "frame": "local",
+            "provider": "arkworks",
+            "unit": "arkworks",
+            "vectorPort": {
+              "kind": "vector",
+              "domain": "bls12-381.fr",
+              "representation": "arkworks.fr-vector/0"
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "second dense container of one provider",
+        "native": "second dense container of one provider",
+        "rust": "native installation: appliedRepresentations: arkworks.small-field-array/0 for field_array: second dense container of one provider"
+      }
+    },
+    {
+      "name": "second field form of one field",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "duplicate",
+          "where": {
+            "field": "koala-bear"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate field form",
+        "native": "duplicate field form",
+        "rust": "native installation: fieldForms: koala-bear has more than one field form"
+      }
+    },
+    {
+      "name": "field form of a group",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "field"
+          ],
+          "value": "bn254.g1"
+        }
+      ],
+      "diagnostics": {
+        "generator": "bn254.g1 is not a Field domain",
+        "native": "bn254.g1 is not a Field domain",
+        "rust": "native installation: fieldForms: bn254.g1 is not a declared Field domain"
+      }
+    },
+    {
+      "name": "residue arithmetic naming another representation",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "arithmetic",
+            "representation"
+          ],
+          "value": "plonky3.koala-bear-vector/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic names the field's default representation",
+        "native": "residue arithmetic names the field's default representation",
+        "rust": "native installation: fieldForms: koala-bear: arithmetic names the default representation of its field instance"
+      }
+    },
+    {
+      "name": "Montgomery words without residue arithmetic",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "arithmetic"
+          ],
+          "value": null
+        }
+      ],
+      "diagnostics": {
+        "generator": "Montgomery words require residue arithmetic",
+        "native": "Montgomery words require residue arithmetic",
+        "rust": "native installation: fieldForms: koala-bear: montgomery requires an arithmetic row"
+      }
+    },
+    {
+      "name": "Montgomery radix of another word width",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "montgomery",
+            "radixBits"
+          ],
+          "value": 64
+        }
+      ],
+      "diagnostics": {
+        "generator": "Montgomery radix is the word width",
+        "native": "Montgomery radix is the word width",
+        "rust": "native installation: fieldForms: koala-bear: wordBytes * 8 must equal radixBits"
+      }
+    },
+    {
+      "name": "characteristic beyond the Montgomery radix",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "goldilocks"
+          },
+          "path": [
+            "montgomery"
+          ],
+          "value": {
+            "wordBytes": 4,
+            "radixBits": 32
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "characteristic exceeds the Montgomery radix",
+        "native": "characteristic exceeds the Montgomery radix",
+        "rust": "native installation: fieldForms: goldilocks: montgomery requires a characteristic below 2^radixBits"
+      }
+    },
+    {
+      "name": "byte encoding naming another field's codec",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "byteEncoding",
+            "codec"
+          ],
+          "value": "zkcv.field.baby-bear/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "byte encoding names the field's framed field codec",
+        "native": "byte encoding names the field's framed field codec",
+        "rust": "native installation: fieldForms: koala-bear: byteEncoding names the framed field codec of its field"
+      }
+    },
+    {
+      "name": "residue arithmetic of an unknown form",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "arithmetic",
+            "form"
+          ],
+          "value": "montgomery"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative montgomery",
+        "native": "residue arithmetic names the field's default representation",
+        "rust": "native installation: fieldForms: unknown declaration alternative montgomery"
+      }
+    },
+    {
+      "name": "byte encoding naming its field's vector codec",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "byteEncoding",
+            "codec"
+          ],
+          "value": "zkcv.vector.koala-bear/0"
+        }
+      ],
+      "diagnostics": {
+        "generator": "byte encoding names the field's framed field codec",
+        "native": "byte encoding names the field's framed field codec",
+        "rust": "native installation: fieldForms: koala-bear: byteEncoding names the framed field codec of its field"
+      }
+    },
+    {
+      "name": "byte encoding of an unknown order",
+      "rule": "field forms",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "koala-bear"
+          },
+          "path": [
+            "byteEncoding",
+            "order"
+          ],
+          "value": "bigEndian"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative bigEndian",
+        "native": "byte encoding names the field's framed field codec",
+        "rust": "native installation: fieldForms: unknown declaration alternative bigEndian"
+      }
+    },
+    {
+      "name": "residue arithmetic on an extension whose reduction is not binomial",
+      "rule": "residue field family",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "domains",
+          "op": "set",
+          "where": {
+            "identity": "koala-bear.ext4-binomial3"
+          },
+          "path": [
+            "field",
+            "structure",
+            "reduction"
+          ],
+          "value": [
+            [
+              1,
+              "1"
+            ],
+            [
+              0,
+              "3"
+            ]
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "native": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "rust": "residue arithmetic requires a prime field or a binomial extension of a prime base"
+      }
+    },
+    {
+      "name": "residue arithmetic on a binary field",
+      "rule": "residue field family",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "gf2-64.pentanomial-4-3-1"
+          },
+          "path": [
+            "arithmetic"
+          ],
+          "value": {
+            "form": "residue",
+            "representation": "plonky3.gf2-64.pentanomial-4-3-1/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "native": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "rust": "residue arithmetic requires a prime field or a binomial extension of a prime base"
+      }
+    },
+    {
+      "name": "residue arithmetic on an extension of a binary field",
+      "rule": "residue field family",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "fieldForms",
+          "op": "set",
+          "where": {
+            "field": "gf2-64.pentanomial-4-3-1.ext3-trinomial1"
+          },
+          "path": [
+            "arithmetic"
+          ],
+          "value": {
+            "form": "residue",
+            "representation": "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "native": "residue arithmetic requires a prime field or a binomial extension of a prime base",
+        "rust": "residue arithmetic requires a prime field or a binomial extension of a prime base"
+      }
+    },
+    {
+      "name": "calling convention of an undeclared operation",
+      "rule": "physical arguments",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "physicalArguments",
+          "op": "insert",
+          "value": {
+            "operation": "missing.operation"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "physical argument row names an undeclared operation",
+        "native": "physical argument row names an undeclared operation",
+        "rust": "native installation: physicalArguments: missing.operation is not a declared operation"
+      }
+    },
+    {
+      "name": "duplicate calling convention row",
+      "rule": "physical arguments",
+      "edits": [
+        {
+          "document": "installation",
+          "table": "physicalArguments",
+          "op": "duplicate",
+          "where": {
+            "operation": "field_array.at"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate physical argument row",
+        "native": "duplicate physical argument row",
+        "rust": "native installation: physicalArguments: field_array.at is listed twice"
+      }
+    },
+    {
+      "name": "a frontend primitive that names no operation",
+      "rule": "kind-compatible association",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.field_add"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "field.unknown"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "a mathematical declaration of an executable-only operation",
+      "rule": "kind-compatible association",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.index_add"
+          },
+          "path": [
+            "kind"
+          ],
+          "value": "Math"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "an interface with a primitive association",
+      "rule": "kind-compatible association",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "service.random"
+          },
+          "path": [
+            "association"
+          ],
+          "value": {
+            "kind": "primitive",
+            "target": "field.add"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "a rule association whose declared shape differs",
+      "rule": "rule shapes are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "record.repack"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "RecordUnpack"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "a rule association that names no declared rule",
+      "rule": "rule shapes are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "record.unpack"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "RecordUnknown"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "a source static index out of range",
+      "rule": "validated static references",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.field_add"
+          },
+          "path": [
+            "inputs",
+            0,
+            "type"
+          ],
+          "value": {
+            "static": 1
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "source static index out of range",
+        "native": "source static index out of range",
+        "rust": "source static index out of range"
+      }
+    },
+    {
+      "name": "an unknown associated member of a static",
+      "rule": "validated member references",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "prelude.group_scale"
+          },
+          "path": [
+            "inputs",
+            1,
+            "type"
+          ],
+          "value": {
+            "static": 0,
+            "member": "Unknown"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown source static member",
+        "native": "unknown source static member",
+        "rust": "unknown source static member"
+      }
+    },
+    {
+      "name": "two installed declarations with one owner and name",
+      "rule": "nominal identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "insert",
+          "value": {
+            "identity": "prelude.field_add.copy",
+            "owner": "zkc::prelude",
+            "name": "field_add",
+            "kind": "Math",
+            "statics": [
+              {
+                "name": "F",
+                "parameter": {
+                  "kind": "Domain",
+                  "sort": "Field"
+                }
+              }
+            ],
+            "inputs": [
+              {
+                "name": "a",
+                "type": {
+                  "static": 0
+                }
+              },
+              {
+                "name": "b",
+                "type": {
+                  "static": 0
+                }
+              }
+            ],
+            "output": {
+              "static": 0
+            },
+            "association": {
+              "kind": "primitive",
+              "target": "field.add"
+            },
+            "implicit": false
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend ownership",
+        "native": "duplicate source export ownership",
+        "rust": "duplicate frontend ownership"
+      }
+    },
+    {
+      "name": "a notation whose target is not a declaration of its owner",
+      "rule": "notations resolve within a checked owner",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendNotations",
+          "op": "set",
+          "where": {
+            "symbol": "+",
+            "target": "field_add"
+          },
+          "path": [
+            "target"
+          ],
+          "value": "field_sum"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend notation target is not declared",
+        "native": "frontend notation target is not declared",
+        "rust": "frontend notation target is not declared"
+      }
+    },
+    {
+      "name": "a notation of an owner that installs no declaration",
+      "rule": "notations resolve within a checked owner",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendNotations",
+          "op": "set",
+          "where": {
+            "symbol": "+",
+            "target": "index_add"
+          },
+          "path": [
+            "owner"
+          ],
+          "value": "zkc::elsewhere"
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend notation owner is not installed",
+        "native": "frontend notation owner is not installed",
+        "rust": "frontend notation owner is not installed"
+      }
+    },
+    {
+      "name": "a home whose logical constructor is no longer declared",
+      "rule": "home constructors are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "set",
+          "where": {
+            "name": "oracle"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "oracle_handle"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid frontend home",
+        "native": "invalid frontend home",
+        "rust": "invalid frontend home"
+      }
+    },
+    {
+      "name": "a frontend constructor that names a catalog type",
+      "rule": "home constructors are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "vector",
+            "form": "OracleHandle"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frontend constructor",
+        "native": "invalid or duplicate frontend constructor",
+        "rust": "invalid or duplicate frontend constructor"
+      }
+    },
+    {
+      "name": "a duplicate frontend constructor",
+      "rule": "home constructors are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "duplicate",
+          "where": {
+            "name": "oracle_sequence"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid or duplicate frontend constructor",
+        "native": "invalid or duplicate frontend constructor",
+        "rust": "invalid or duplicate frontend constructor"
+      }
+    },
+    {
+      "name": "a frontend constructor with an unknown form",
+      "rule": "frontend constructor forms",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "set",
+          "where": {
+            "name": "oracle"
+          },
+          "path": [
+            "form"
+          ],
+          "value": "OracleTable"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative OracleTable",
+        "native": "unknown frontend constructor form",
+        "rust": "unknown declaration alternative OracleTable"
+      }
+    },
+    {
+      "name": "two frontend constructors of one form",
+      "rule": "frontend constructor forms",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "oracle_handle",
+            "form": "OracleHandle"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend constructor form",
+        "native": "duplicate frontend constructor form",
+        "rust": "duplicate frontend constructor form"
+      }
+    },
+    {
+      "name": "a frontend constructor form without a row",
+      "rule": "frontend constructor forms",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "delete",
+          "where": {
+            "name": "oracle_sequence"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "missing frontend constructor form",
+        "native": "missing frontend constructor form",
+        "rust": "missing frontend constructor form"
+      }
+    },
+    {
+      "name": "a service method capability that differs from its signature",
+      "rule": "service capabilities are data",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "name": "draw"
+          },
+          "path": [
+            "capability"
+          ],
+          "value": "IndexRandomness"
+        }
+      ],
+      "diagnostics": {
+        "generator": "service method capability mismatch",
+        "native": "service method capability mismatch",
+        "rust": "service method capability mismatch"
+      }
+    }
+  ]
+}

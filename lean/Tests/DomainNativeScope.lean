@@ -171,7 +171,7 @@ theorem wrong_origin_rejected :
 
 theorem wrong_path_kind_rejected :
     nativeResults program context (messageScope 0)
-      (.observe context.suite { message with steps := [⟨"unsupported", "protocol", "site"⟩] })
+      (.observe context.suite { message with steps := [.branch "protocol" "site" "then"] })
       [0, 1, 2] = none := by decide +kernel
 
 theorem wrong_depth_rejected :

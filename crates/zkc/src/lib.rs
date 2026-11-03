@@ -2,6 +2,13 @@
 pub mod entry;
 #[cfg(feature = "evm")]
 pub mod evm;
+/// The installed EVM target declaration, `zkc.evm-target/0`, generated from
+/// `common/targets/evm.json`: the verifier ABI, solc settings, forks,
+/// deployment ceilings and revert classes.
+#[cfg(feature = "evm")]
+pub mod evm_target {
+    include!(concat!(env!("OUT_DIR"), "/evm_target.rs"));
+}
 #[cfg(feature = "cpu")]
 mod host;
 mod io;
@@ -18,11 +25,14 @@ pub mod source_names;
 pub mod execution {
     pub use zkc_cpu::{CpuExecution, CpuInstallation, providers};
 
-    pub use crate::host::capacity::Capacity;
+    pub use crate::host::capacity::{Capacity, MaterialLimits};
     pub use crate::host::data::PreparedData;
     pub use crate::host::input_source::InputSource;
     pub use crate::host::material::ProverMaterial;
     pub use crate::host::request::InputValue;
+    /// Bytes of one invocation input document, and of one native wire value
+    /// under the default capacity record.
+    pub use crate::io::bytes::INPUT_LIMIT as MAX_INPUT_BYTES;
 }
 
 /// Bounded file ingress and atomic artifact publication.

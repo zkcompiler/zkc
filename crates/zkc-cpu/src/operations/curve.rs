@@ -931,105 +931,49 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
     Ok(vec![result])
 }
 
-/// Independent native port facts, also used for exact implementation assembly.
+/// Native implementations of catalog contracts. Ports and parameter rules
+/// come from each declaration; rows name only contract and implementation.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::curve;
-    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
-        curve::operation("curve.identity", &[], &[Group], AttributeRule::None)
+        curve::operation("curve.identity")
             .implemented_by(&["arkworks/curve.identity", "dalek/curve.identity"]),
-        curve::operation("curve.generator", &[], &[Group], AttributeRule::None)
+        curve::operation("curve.generator")
             .implemented_by(&["arkworks/curve.generator", "dalek/curve.generator"]),
-        curve::operation("curve.add", &[Group, Group], &[Group], AttributeRule::None)
-            .implemented_by(&["arkworks/curve.add", "dalek/curve.add"]),
-        curve::operation(
-            "curve.scale",
-            &[Group, Field],
-            &[Group],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.scale", "dalek/curve.scale"]),
-        curve::operation("curve.equal", &[Group, Group], &[Bool], AttributeRule::None)
+        curve::operation("curve.add").implemented_by(&["arkworks/curve.add", "dalek/curve.add"]),
+        curve::operation("curve.scale")
+            .implemented_by(&["arkworks/curve.scale", "dalek/curve.scale"]),
+        curve::operation("curve.equal")
             .implemented_by(&["arkworks/curve.equal", "dalek/curve.equal"]),
-        curve::operation("curve.empty", &[], &[Groups], AttributeRule::None)
+        curve::operation("curve.empty")
             .implemented_by(&["arkworks/curve.empty", "dalek/curve.empty"]),
-        curve::operation(
-            "curve.append",
-            &[Groups, Group],
-            &[Groups],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.append", "dalek/curve.append"]),
-        curve::operation("curve.at", &[Groups], &[Group], AttributeRule::NaturalIndex)
-            .implemented_by(&["arkworks/curve.at", "dalek/curve.at"]),
-        curve::operation("curve.get", &[Groups, Index], &[Group], AttributeRule::None)
-            .implemented_by(&["arkworks/curve.get", "dalek/curve.get"]),
-        curve::operation("curve.length", &[Groups], &[Index], AttributeRule::None)
+        curve::operation("curve.append")
+            .implemented_by(&["arkworks/curve.append", "dalek/curve.append"]),
+        curve::operation("curve.at").implemented_by(&["arkworks/curve.at", "dalek/curve.at"]),
+        curve::operation("curve.get").implemented_by(&["arkworks/curve.get", "dalek/curve.get"]),
+        curve::operation("curve.length")
             .implemented_by(&["arkworks/curve.length", "dalek/curve.length"]),
-        curve::operation("curve.neg", &[Group], &[Group], AttributeRule::None)
-            .implemented_by(&["arkworks/curve.neg", "dalek/curve.neg"]),
-        curve::operation("curve.nonidentity", &[Group], &[Bool], AttributeRule::None)
+        curve::operation("curve.neg").implemented_by(&["arkworks/curve.neg", "dalek/curve.neg"]),
+        curve::operation("curve.nonidentity")
             .implemented_by(&["arkworks/curve.nonidentity", "dalek/curve.nonidentity"]),
-        curve::operation(
-            "curve.msm",
-            &[Vector, Groups],
-            &[Group],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.msm", "dalek/curve.msm"]),
-        curve::operation(
-            "curve.scale_each",
-            &[Vector, Groups],
-            &[Groups],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.scale_each", "dalek/curve.scale_each"]),
-        curve::operation(
-            "curve.vector_add",
-            &[Groups, Groups],
-            &[Groups],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.vector_add", "dalek/curve.vector_add"]),
-        curve::operation(
-            "curve.vector_scale",
-            &[Groups, Field],
-            &[Groups],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.vector_scale", "dalek/curve.vector_scale"]),
-        curve::operation(
-            "curve.split",
-            &[Groups],
-            &[Groups, Groups],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.split", "dalek/curve.split"]),
-        curve::operation(
-            "curve.concat",
-            &[Groups, Groups],
-            &[Groups],
-            AttributeRule::None,
-        )
-        .implemented_by(&["arkworks/curve.concat", "dalek/curve.concat"]),
+        curve::operation("curve.msm").implemented_by(&["arkworks/curve.msm", "dalek/curve.msm"]),
+        curve::operation("curve.scale_each")
+            .implemented_by(&["arkworks/curve.scale_each", "dalek/curve.scale_each"]),
+        curve::operation("curve.vector_add")
+            .implemented_by(&["arkworks/curve.vector_add", "dalek/curve.vector_add"]),
+        curve::operation("curve.vector_scale")
+            .implemented_by(&["arkworks/curve.vector_scale", "dalek/curve.vector_scale"]),
+        curve::operation("curve.split")
+            .implemented_by(&["arkworks/curve.split", "dalek/curve.split"]),
+        curve::operation("curve.concat")
+            .implemented_by(&["arkworks/curve.concat", "dalek/curve.concat"]),
     ]
 };
 pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
-    crate::bindings::curve::pairing(
-        "pairing.apply",
-        &[zkc_runtime::vm::Type::Group, zkc_runtime::vm::Type::Group],
-        &[zkc_runtime::vm::Type::Group],
-        zkc_runtime::vm::AttributeRule::None,
-    )
-    .implemented_by(&["arkworks/pairing.apply"]),
-    crate::bindings::curve::pairing(
-        "pairing.check",
-        &[zkc_runtime::vm::Type::Groups, zkc_runtime::vm::Type::Groups],
-        &[zkc_runtime::vm::Type::Bool],
-        zkc_runtime::vm::AttributeRule::None,
-    )
-    .implemented_by(&["arkworks/pairing.check"])
-    .selectable(),
+    crate::bindings::curve::pairing("pairing.apply").implemented_by(&["arkworks/pairing.apply"]),
+    crate::bindings::curve::pairing("pairing.check")
+        .implemented_by(&["arkworks/pairing.check"])
+        .selectable(),
 ];
 
 /// Prime-order pairing targets: individual values only, no target vectors.

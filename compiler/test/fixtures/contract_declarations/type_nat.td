@@ -1,4 +1,5 @@
 include "zkc/Contracts/Declarations/Schema.td"
+include "frontend_constructors.td"
 // These kinds are deliberately exercised only by the generator.
 def ElementType : ZKC_Root<"Element", TypeParameter>;
 def Length : ZKC_Root<"Length", NatParameter>;

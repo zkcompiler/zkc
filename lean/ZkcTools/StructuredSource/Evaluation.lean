@@ -54,6 +54,7 @@ mutual
       (← Format.array values 4096).mapM fun value => Structured.Format.natural value (indexLimit - 1)
     | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
     | .service _, _ => throw "structured-open-profile"
+    | .resourceUnit _, _ => throw "structured-input-custody"
     | .sequence element, json => do
       if element.isHandle then throw "structured-input-handle"
       let [.str "sequence", elementType, values] ← Format.array json | throw "structured-input-type"
@@ -94,6 +95,7 @@ mutual
     | .indices, values => .ok (.arr #[.str "indices", .arr (values.map toJson).toArray])
     | .oracle _, _ | .oracleSequence .., _ => .error "structured-oracle-profile"
     | .service _, _ => .error "structured-open-profile"
+    | .resourceUnit _, _ => .error "structured-input-custody"
     | .sequence element, values => do
         if element.isHandle then throw "structured-input-handle"
         return .arr #[.str "sequence", wireType element, .arr (← values.mapM (output element)).toArray]

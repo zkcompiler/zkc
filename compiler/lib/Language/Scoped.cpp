@@ -110,7 +110,14 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
     if (nested.math() && !nested.data(*type, span))
       return {};
     auto operand = capturePlace(capture, span);
-    if (!operand || !use(*operand, span))
+    if (!operand)
+      return {};
+    if (product(*operand)) {
+      fail("source.scoped-capture",
+           "scoped computations cannot capture distributed products", span);
+      return {};
+    }
+    if (!use(*operand, span))
       return {};
     binding.captures.push_back(*operand);
     computation->captures.push_back(
@@ -206,6 +213,21 @@ std::optional<ValueId> BodyChecker::invokeScoped(uint32_t id, unsigned depth) {
 }
 bool Checker::retainScopedSources() {
   for (const auto &decl : output.declarations) {
+    if ((!decl.body || !sources[decl.id.index]->resolved) &&
+        decl.kind != Declaration::Kind::Protocol)
+      continue;
+    auto source = std::make_shared<ScopedSource>();
+    source->owner = decl.id;
+    source->expression = 0;
+    source->syntax = retainSyntax(decl.id);
+    if (!source->syntax)
+      return false;
+    if (auto families = witnesses.notations.find(decl.id.index);
+        families != witnesses.notations.end())
+      source->notationFamilies = families->second;
+    output.bodySources.emplace(decl.id.index, std::move(source));
+  }
+  for (const auto &decl : output.declarations) {
     if (!types.charge(1, decl.span))
       return false;
     if (decl.scopedInputs.empty() && !decl.effectAllowance)
@@ -216,6 +238,12 @@ bool Checker::retainScopedSources() {
     output.signatureSources.emplace(decl.id.index, std::move(syntax));
   }
 
+  for (auto &source : witnesses.intrinsics) {
+    source->syntax = retainSyntax(source->owner);
+    if (!source->syntax)
+      return false;
+    output.intrinsicCalls.push_back(std::move(source));
+  }
   for (auto &source : witnesses.invocations) {
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)

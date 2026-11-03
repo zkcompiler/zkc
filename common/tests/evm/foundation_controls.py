@@ -18,6 +18,7 @@ from logical_tree import decode_tree, encode_tree
 from oracle import chain_trace
 from probe import PROFILES, check_solc, compile_request, execute
 from validate import check_return, check_revert
+import target
 
 ROOT = Path(__file__).resolve().parents[3]
 FIELDS = PLONKY3_FIELDS | {
@@ -153,12 +154,14 @@ class Subjects:
         (path / "source.json").write_text(json.dumps(compiled, indent=2) + "\n")
         artifact = compile_request(self.args.solc, {
             "language": "Yul", "sources": {"verifier.yul": {"content": compiled["yul"]}},
-            "settings": {"evmVersion": compiled["manifest"]["fork"],
+            "settings": {"evmVersion": target.fork(compiled["fork"])["solc"],
                          "optimizer": PROFILES["colon"],
                          "outputSelection": {"*": {"*": ["evm.bytecode.object",
                                                              "evm.deployedBytecode.object"]}}}})
-        if len(artifact["runtime"]) // 2 > 24576 or len(artifact["creation"]) // 2 > 49152:
-            raise AssertionError(f"{name}: deployment size exceeds frozen ceilings")
+        fork = target.fork(compiled["fork"])
+        if (len(artifact["runtime"]) // 2 > fork["runtime_code_bytes"]
+                or len(artifact["creation"]) // 2 > fork["initcode_bytes"]):
+            raise AssertionError(f"{name}: deployment size exceeds the fork's declared ceilings")
         return path, json.loads(package["artifact"]), compiled, artifact
 
     def run(self, subject, name, wires, *, expected=True, proof=None, native_error=None,
@@ -192,11 +195,11 @@ class Subjects:
             check_native_outcome(fixture, expected, native_error)
         except AssertionError as error:
             raise AssertionError(f"{path.name}/{name}: {error}") from error
-        if fixture["source"] != compiled["source_sha256"] or descriptor != compiled["descriptor"]:
+        if fixture["source"] != compiled["original"] or descriptor != compiled["descriptor"]:
             raise AssertionError("native and EVM checked subjects differ")
         public = list(map(bytes.fromhex, fixture["public"]))
         calldata = encode_verify(public, bytes.fromhex(fixture["context"]), bytes.fromhex(fixture["proof"]))
-        execution = execute(self.args.runner, artifact, calldata, gas=20_000_000)
+        execution = execute(self.args.runner, artifact, calldata)
         result_path = path / f"{name}.evm.json"
         result_path.write_text(json.dumps(execution, indent=2) + "\n")
         outcome = {key: execution[key] for key in ("status", "reason", "output", "runtime_gas")}
@@ -442,16 +445,18 @@ def filtered(subjects):
 def capacity(subjects):
     source = (Path(__file__).parent / "fixtures/filtered_capacity.zkc").read_text()
     field, f = "koala-bear.ext4-binomial3", FIELDS["koala-bear.ext4-binomial3"]
+    # Selected output elements against the declared collection ceiling.
+    cap = target.LIMITS["public_elements"]
     for flags in ((), ("--no-simplify", "--no-finite-bulk")):
         subject = subjects.compile("selected-capacity" + ("-ordered" if flags else "-default"),
                                    source, "capacity", flags)
         for name, selected, body_stop, predicate_stop in (
             ("none", 0, 2**64 - 1, 2**64 - 1),
             ("one", 1, 2**64 - 1, 2**64 - 1),
-            ("at-cap", 1024, 2**64 - 1, 2**64 - 1),
-            ("over-cap", 1025, 2**64 - 1, 2**64 - 1),
+            ("at-cap", cap, 2**64 - 1, 2**64 - 1),
+            ("over-cap", cap + 1, 2**64 - 1, 2**64 - 1),
             ("stopping-predicate", 0, 2**64 - 1, 0),
-            ("stopping-body-at-cap", 1025, 1024, 2**64 - 1),
+            ("stopping-body-at-cap", cap + 1, cap, 2**64 - 1),
         ):
             stopping = name.startswith("stopping-")
             wires = {0: field_wire(field, f.ONE), 1: index_wire(selected),

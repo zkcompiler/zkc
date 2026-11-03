@@ -9,6 +9,8 @@ import sys
 
 import intent
 from verify import read_json, verify
+from bridges.common import source_format
+from bridges.common.replacement import replace_exactly_once
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
@@ -23,7 +25,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     compiler = args.compiler.resolve()
     spec = read_json(HERE / 'requests/schnorr-dsl.json')
-    original = (ROOT / 'libraries/protocols/sigma/schnorr/lib.zkc').read_text()
+    library = ROOT / 'libraries/protocols/sigma/schnorr/lib.zkc'
+    original = library.read_text()
+    # Each case compiles an edited copy of the library, in the library's grammar.
+    selection = source_format.option([library])
     rows = []
 
     def invoke(name, request, source, expected):
@@ -33,7 +38,7 @@ def main():
         (directory / 'library.zkc').write_text(source)
         command = [sys.executable, str(HERE / 'verify.py'), '--spec', str(directory / 'spec.json'),
             '--module=example=' + str(ROOT / 'examples/projects/schnorr/main.zkc'),
-            '--module=schnorr=' + str(directory / 'library.zkc'), '--subject=schnorr::Schnorr<example::G>',
+            '--module=schnorr=' + str(directory / 'library.zkc'), '--subject=schnorr::Schnorr<example::G>', selection,
             '--compiler', str(compiler), '--output', str(directory)]
         run = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
         (directory / 'driver.log').write_text(run.stdout)
@@ -52,9 +57,7 @@ def main():
     simulation['properties'] = ['honest-verifier-zero-knowledge']
     simulation['experiment'] = 'interactive.honest-verifier-view/0'
     invoke('authored-dlog-simulation', simulation, original, 'verified-in-model')
-    false_relation = original.replace('return point == base * scalar;', 'return true;')
-    if not (false_relation != original):
-        raise AssertionError('bridges/common/intent_tests.py:54: false_relation != original')
+    false_relation = replace_exactly_once(original, 'return point == base * scalar;', 'return true;')
     _, negative = invoke('true-is-not-dlog', spec, false_relation, 'correspondence-unproved')
     bad = copy.deepcopy(spec)
     bad['target']['clause'] = 'unknown'
@@ -71,10 +74,8 @@ def main():
     bad = copy.deepcopy(spec)
     bad['wiring']['prover'] = 'unknown'
     invoke('unknown-prover', bad, original, 'intent-prover')
-    swapped = original.replace('DLog<G>(in.base@V, in.point@V, in.scalar)',
-                               'DLog<G>(in.point@V, in.base@V, in.scalar)')
-    if not (swapped != original):
-        raise AssertionError('bridges/common/intent_tests.py:73: swapped != original')
+    swapped = replace_exactly_once(original, 'DLog<G>(in.base@V, in.point@V, in.scalar)',
+                                   'DLog<G>(in.point@V, in.base@V, in.scalar)')
     invoke('swapped-target-operands', spec, swapped, 'intent-relation-bindings')
     # Corrupt the untrusted relation candidate while retaining the requested subject.
     data, request = read_json(negative / 'source.json'), read_json(negative / 'request.json')

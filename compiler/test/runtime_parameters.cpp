@@ -1,6 +1,6 @@
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Builders.h"
-#include "support/NativeCases.h"
+#include "support/Formation.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/LogicalTree.h"
 #include "llvm/ADT/StringExtras.h"
@@ -90,29 +90,164 @@ int main() {
       }
     }
   });
-  cases.run("malformed native metadata cannot bypass publication", [&] {
+  cases.run("malformed origin metadata is refused at storage formation", [&] {
     auto event = StartOriginAttr::get(&context, "main", "call");
-    for (Attribute malformed :
-         {Attribute(builder.getStringAttr("start")),
-          Attribute(StartOriginAttr::get(&context, "", "call")),
-          Attribute(QueryOriginAttr::get(&context, "main", "coin", 0, "service",
-                                         "draw", "bad owner"))}) {
-      auto origin = NativeOriginAttr::get(&context, "entry", {}, malformed);
-      refuses(exportNativeOrigin(origin), "interactive-native-origin");
+    refusesFormation<StartOriginAttr>(&context, "interactive-native-origin",
+                                      StringRef(""), StringRef("call"));
+    refusesFormation<QueryOriginAttr>(
+        &context, "interactive-native-origin", StringRef("main"),
+        StringRef("coin"), uint64_t(0), StringRef("service"), StringRef("draw"),
+        StringRef("bad owner"));
+    refusesFormation<NativeOriginAttr>(
+        &context, "interactive-native-origin", StringRef("entry"),
+        ArrayRef<OriginStepAttr>{}, Attribute(builder.getStringAttr("start")));
+    refusesFormation<OriginStepAttr>(
+        &context, "interactive-native-origin", static_cast<OriginStepKind>(42),
+        StringRef("main"), StringRef("site"), StringRef(""));
+    refusesFormation<NativeOriginAttr>(
+        &context, "interactive-native-origin", StringRef(std::string(129, 'x')),
+        ArrayRef<OriginStepAttr>{}, Attribute(event));
+  });
+  cases.run(
+      "origin publication and import retain their own refusal boundaries", [&] {
+        refuses(exportNativeOrigin({}), "interactive-native-origin");
+        NativeOriginTemplate huge{
+            "entry", {}, NativeStartOrigin{std::string(10000, 'x'), "call"}};
+        refuses(importNativeOrigin(&context, huge),
+                "interactive-native-origin");
+        refuses(encodeNativeOriginTemplate(huge), "interactive-native-origin");
+      });
+  cases.run(
+      "direct neutral origin import checks every name without diagnosing", [&] {
+        unsigned diagnostics = 0;
+        ScopedDiagnosticHandler capture(&context, [&](Diagnostic &) {
+          ++diagnostics;
+          return success();
+        });
+        NativeOriginTemplate source{
+            "entry",
+            {{NativeOriginStep::Kind::Apply, "outer", "call", ""},
+             {NativeOriginStep::Kind::Repeat, "middle", "round", ""},
+             {NativeOriginStep::Kind::Branch, "inner", "choose", "else"}},
+            NativeStartOrigin{"main", "start"}};
+        auto roundtrip = [&] {
+          auto native = take(importNativeOrigin(&context, source));
+          require(take(encodeNativeOriginTemplate(take(exportNativeOrigin(
+                      native)))) == take(encodeNativeOriginTemplate(source)),
+                  "direct import changed exact neutral fields");
+        };
+        auto checkNames = [&](std::initializer_list<std::string *> names) {
+          roundtrip();
+          for (auto *name : names) {
+            auto original = *name;
+            for (const auto &bad :
+                 {std::string(), std::string("bad name"),
+                  std::string("bad\nname"), std::string("bad\0name", 8),
+                  std::string(1, '\x7f'), std::string(129, 'x')}) {
+              *name = bad;
+              refuses(importNativeOrigin(&context, source),
+                      "interactive-native-origin");
+            }
+            *name = original;
+          }
+          roundtrip();
+        };
+        auto &start = std::get<NativeStartOrigin>(source.event);
+        checkNames({&source.entry, &start.protocol, &start.site,
+                    &source.path[0].protocol, &source.path[0].site,
+                    &source.path[1].protocol, &source.path[1].site,
+                    &source.path[2].protocol, &source.path[2].site,
+                    &source.path[2].alternative});
+        source.event = NativeQueryOrigin{
+            "main", "coin", UINT64_MAX, "random.domain/0", "index", "V"};
+        auto &query = std::get<NativeQueryOrigin>(source.event);
+        checkNames({&query.protocol, &query.site, &query.service, &query.method,
+                    &query.owner});
+        source.event = NativeMessageOrigin{"main", "send", "schema", "P", "V"};
+        auto &message = std::get<NativeMessageOrigin>(source.event);
+        checkNames({&message.protocol, &message.site, &message.schema,
+                    &message.sender, &message.receiver});
+        require(diagnostics == 0, "Expected-return import diagnosed");
+      });
+  cases.run("direct neutral origin import checks path kinds and context", [&] {
+    unsigned diagnostics = 0;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &) {
+      ++diagnostics;
+      return success();
+    });
+    NativeOriginTemplate source{"entry", {}, NativeStartOrigin{"main", "call"}};
+    for (auto kind :
+         {NativeOriginStep::Kind::Apply, NativeOriginStep::Kind::Repeat}) {
+      source.path = {{kind, "main", "site", "then"}};
+      refuses(importNativeOrigin(&context, source),
+              "interactive-native-origin");
     }
-    auto badStep = OriginStepAttr::get(
-        &context, static_cast<OriginStepKind>(42), "main", "site");
-    refuses(exportNativeOrigin(
-                NativeOriginAttr::get(&context, "entry", {badStep}, event)),
-            "interactive-native-origin");
-    refuses(exportNativeOrigin(NativeOriginAttr::get(
-                &context, std::string(129, 'x'), {}, event)),
-            "interactive-native-origin");
-    refuses(exportNativeOrigin({}), "interactive-native-origin");
-    NativeOriginTemplate huge{
-        "entry", {}, NativeStartOrigin{std::string(10000, 'x'), "call"}};
-    refuses(importNativeOrigin(&context, huge), "interactive-native-origin");
-    refuses(encodeNativeOriginTemplate(huge), "interactive-native-origin");
+    source.path = {
+        {static_cast<NativeOriginStep::Kind>(42), "main", "site", ""}};
+    refuses(importNativeOrigin(&context, source), "interactive-native-origin");
+    source.path.clear();
+    refuses(importNativeOrigin(nullptr, source), "interactive-native-origin");
+    MLIRContext unloaded;
+    refuses(importNativeOrigin(&unloaded, source), "interactive-native-origin");
+    take(importNativeOrigin(&context, source));
+    require(diagnostics == 0, "Expected-return import diagnosed");
+  });
+  cases.run(
+      "direct neutral origin import retains exact aggregate size bound", [&] {
+        unsigned diagnostics = 0;
+        ScopedDiagnosticHandler capture(&context, [&](Diagnostic &) {
+          ++diagnostics;
+          return success();
+        });
+        // Canonical framing is exactly 2048 bytes, although each name
+        // and the path independently remain below their own limits.
+        NativeOriginTemplate source{
+            std::string(120, 'e'), {}, NativeStartOrigin{"main", "call"}};
+        source.path.resize(42, {NativeOriginStep::Kind::Apply, "p", "s", ""});
+        auto native = take(importNativeOrigin(&context, source));
+        auto exported = take(exportNativeOrigin(native));
+        require(exported.entry == source.entry &&
+                    exported.path.size() == source.path.size(),
+                "boundary import changed entry or path");
+        for (const auto &step : exported.path)
+          require(step.kind == NativeOriginStep::Kind::Apply &&
+                      step.protocol == "p" && step.site == "s" &&
+                      step.alternative.empty(),
+                  "boundary import changed a path step");
+        auto event = std::get<NativeStartOrigin>(exported.event);
+        require(event.protocol == "main" && event.site == "call" &&
+                    take(importNativeOrigin(&context, exported)) == native,
+                "boundary import changed native identity");
+        source.entry.push_back('e');
+        refuses(importNativeOrigin(&context, source),
+                "interactive-native-origin");
+        require(diagnostics == 0, "Expected-return import diagnosed");
+      });
+  cases.run("selected origin frames retain exact alternatives", [&] {
+    auto native = roundtrip(json::Array{
+        "zkc.native-origin-template/0", "entry",
+        json::Array{json::Array{"branch", "main", "choose", "then"}},
+        json::Array{},
+        json::Array{"message", "main", "send", "schema", "P", "V"}});
+    require(native.getPath()[0].getKind() == OriginStepKind::Branch &&
+                native.getPath()[0].getAlternative() == "then",
+            "selected arm lost its native field");
+    auto event = native.getEvent();
+    refusesFormation<OriginStepAttr>(&context, "interactive-native-origin",
+                                     OriginStepKind::Branch, StringRef("main"),
+                                     StringRef("choose"), StringRef(""));
+    refusesFormation<OriginStepAttr>(&context, "interactive-native-origin",
+                                     OriginStepKind::Apply, StringRef("main"),
+                                     StringRef("call"), StringRef("then"));
+    auto changed = NativeOriginAttr::get(
+        &context, "entry",
+        {OriginStepAttr::get(&context, OriginStepKind::Branch, "main", "choose",
+                             "else")},
+        event);
+    auto exported = take(exportNativeOrigin(changed));
+    require(changed != native && exported.path[0].alternative == "else" &&
+                take(importNativeOrigin(&context, exported)) == changed,
+            "publication erased a changed native branch alternative");
   });
   cases.run("asset references preserve digest bits and format identity", [&] {
     StringRef digest =
@@ -132,10 +267,54 @@ int main() {
     refuses(decodeAssetReference(&context, "zkc.matrix/0", digest.drop_back()),
             "asset-reference");
     refuses(decodeAssetReference(&context, "", digest), "asset-reference");
-    auto malformed = AssetReferenceAttr::get(&context, "zkc.matrix/0",
-                                             builder.getDenseI8ArrayAttr({0}));
-    refuses(encodeAssetDigest(malformed), "asset-reference");
+    refusesFormation<AssetReferenceAttr>(&context, "asset-reference",
+                                         StringRef("zkc.matrix/0"),
+                                         builder.getDenseI8ArrayAttr({0}));
     refuses(encodeAssetDigest({}), "asset-reference");
+  });
+  cases.run("an array prefix begins its completed canonical encoding", [&] {
+    for (uint64_t arity : {uint64_t(5), uint64_t(300)}) {
+      json::Array elements;
+      for (uint64_t i = 0; i < arity; ++i)
+        elements.push_back(
+            i % 3 ? json::Value(std::to_string(i))
+                  : json::Value(json::Array{std::to_string(i), json::Array{}}));
+      auto full = take(encodeLogicalTree(json::Value(json::Array(elements))));
+      for (uint64_t present :
+           {uint64_t(0), uint64_t(1), uint64_t(3), arity - 1, arity}) {
+        json::Array first;
+        for (uint64_t i = 0; i < present; ++i)
+          first.push_back(elements[i]);
+        auto prefix = take(encodeLogicalTreePrefix(first, arity));
+        require(StringRef(full).starts_with(prefix) &&
+                    (present < arity || prefix == full),
+                "prefix differs from the completed encoding");
+      }
+    }
+    // Every byte of the eight-byte little-endian arity is written.
+    const char header[] = {1, 0, char(0x80), 0, 0, 0, 0, 0, 0};
+    require(take(encodeLogicalTreePrefix({}, 32768)) ==
+                std::string(header, sizeof header),
+            "array arity header differs");
+    refuses(encodeLogicalTreePrefix({}, 32769), "logical-tree-limit");
+    refuses(encodeLogicalTreePrefix(json::Array{"a", "b"}, 1),
+            "logical-tree-limit");
+    refuses(encodeLogicalTreePrefix(json::Array{json::Value(1)}, 2),
+            "logical-tree-kind");
+    // Present elements obey the full encoding's depth limit as children.
+    for (unsigned levels : {63u, 64u}) {
+      json::Value nested = "leaf";
+      for (unsigned i = 0; i < levels; ++i)
+        nested = json::Array{std::move(nested)};
+      auto prefix = encodeLogicalTreePrefix(json::Array{nested}, 2);
+      auto complete = encodeLogicalTree(json::Array{nested, "last"});
+      require(bool(prefix) == bool(complete) && bool(prefix) == (levels == 63),
+              "prefix and completed depth limits differ");
+      if (!prefix)
+        consumeError(prefix.takeError());
+      if (!complete)
+        consumeError(complete.takeError());
+    }
   });
   return cases.result();
 }

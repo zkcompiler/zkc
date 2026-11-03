@@ -6,16 +6,21 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/ApplicationMap.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/SourceCorrespondence.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include <functional>
 #include <iterator>
+#include <map>
 #include <optional>
+#include <set>
 
 using namespace llvm;
 using namespace mlir;
@@ -23,6 +28,17 @@ using namespace zkc;
 using namespace zkc::protocol;
 using namespace zkc::test;
 namespace {
+/// The structural check, without a correspondence: its status is absent.
+Error checkMap(StringRef original, StringRef candidate, StringRef entry,
+               StringRef map, mlir::MLIRContext &context) {
+  auto status = zkc::protocol::checkApplicationMap(original, candidate, entry,
+                                                   map, context);
+  if (!status)
+    return status.takeError();
+  if (*status != zkc::protocol::WrittenStatus::Absent)
+    return zkc::error("application-map-written", "status without input");
+  return Error::success();
+}
 void accept(Error e) {
   if (e)
     throw std::runtime_error(toString(std::move(e)));
@@ -51,6 +67,30 @@ protocol_ir::MathematicalOp function(ModuleOp module, StringRef name) {
 std::string digest(StringRef bytes) {
   return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
+/// A protocol over `roles` native role names with `scopes` Boolean inputs,
+/// each held by the whole roster.
+std::string rostered(unsigned roles, unsigned scopes) {
+  std::string names, inputs, types, held;
+  raw_string_ostream out(names);
+  out << '[';
+  for (unsigned ordinal = 0; ordinal < roles; ++ordinal)
+    out << (ordinal ? "," : "") << "\"role" << format_hex_no_prefix(ordinal, 8)
+        << '"';
+  out << ']';
+  for (unsigned input = 0; input < scopes; ++input) {
+    inputs += (input ? ",%x" : "%x") + std::to_string(input) + ":i1";
+    types += input ? ",i1" : "i1";
+    held += (input ? "," : "") + names;
+  }
+  return R"(module { "protocol.module"() ({
+      "protocol.func"() ({ ^entry()" +
+         inputs + R"():
+        "protocol.return"(%x0) : (i1)->()
+      }) {sym_name="main",origin=["main",[]],function_type=()" +
+         types + ")->i1,roles=" + names + ",input_roles=[" + held +
+         R"(],output_roles=[["role00000000"]]} : ()->()
+    }) {profile=#protocol.profile<protocol>} : ()->() })";
+}
 struct Fixture {
   MLIRContext &context;
   std::string original, candidate, entry;
@@ -68,8 +108,7 @@ struct Fixture {
       candidate = original;
     record = take(json::parse(
         take(produceApplicationMap(original, candidate, entry, context))));
-    accept(checkApplicationMap(original, candidate, entry, printJson(record),
-                               context));
+    accept(checkMap(original, candidate, entry, printJson(record), context));
   }
   json::Array &apps() {
     return *record.getAsObject()->getArray("applications");
@@ -78,8 +117,7 @@ struct Fixture {
     return *record.getAsObject()->getArray("instructions");
   }
   Error check(const json::Value &value) {
-    return checkApplicationMap(original, candidate, entry, printJson(value),
-                               context);
+    return checkMap(original, candidate, entry, printJson(value), context);
   }
   json::Object &nested(json::Value &value) {
     for (auto &row : *value.getAsObject()->getArray("applications"))
@@ -97,12 +135,226 @@ struct Fixture {
   }
   Error changed(StringRef bytes, json::Value value) {
     (*value.getAsObject()->getObject("candidate"))["digest"] = digest(bytes);
-    return checkApplicationMap(original, bytes, entry, printJson(value),
-                               context);
+    return checkMap(original, bytes, entry, printJson(value), context);
   }
 };
 } // namespace
 
+/// A checked protocol applying another one twice, its prepared candidate and
+/// its exact source correspondence.
+struct WrittenSubject {
+  zkc::language::CheckedOriginal checked;
+  std::string candidate, entry, correspondence;
+};
+WrittenSubject writtenSubject(MLIRContext &context, bool swapped = false) {
+  using namespace zkc::language;
+  std::string first = swapped ? "b" : "a", second = swapped ? "a" : "b";
+  auto text = R"(module sample;
+protocol Step roles(P,V)(x:bool@P)->(y:bool@V){let y@V=send P->V(x);return(y=y);}
+protocol Run roles(P,V)(a:bool@P,b:bool@P)->(c:bool@V,d:bool@V){
+  let c=Step roles(P,V)()" +
+              first + R"();
+  let d=Step roles(P,V)()" +
+              second + R"();
+  return(c=c,d=d);
+}
+)";
+  auto project = take(analyze(take(capture({{"sample", text, "written.zkc"}})))
+                          .checkedProject());
+  auto closed = take(closeSubject(project, "sample::Run"));
+  auto checked = take(prepareOriginal(closed));
+  auto module = parseSourceString<ModuleOp>(checked.bytes(), &context);
+  auto prepared = zkc::mathematical::prepareProtocol(*module, false);
+  require(bool(prepared), "written subject preparation failed");
+  std::string candidate;
+  raw_string_ostream stream(candidate);
+  prepared->print(stream);
+  stream.flush();
+  auto correspondence = take(exportSourceCorrespondence(checked));
+  auto entry = closed.protocol().symbol;
+  return {std::move(checked), std::move(candidate), std::move(entry),
+          std::move(correspondence)};
+}
+/// The site of the source instruction at a path of a snapshot definition.
+std::string sourceSite(const json::Value &snapshot, StringRef definition,
+                       const json::Array &path) {
+  const json::Value *block = nullptr;
+  for (const auto &row : *(*snapshot.getAsArray())[7].getAsArray())
+    if ((*row.getAsArray())[1].getAsString() == definition)
+      block = &row.getAsArray()->back();
+  require(block != nullptr, "source definition is missing");
+  for (unsigned i = 0; i < path.size(); ++i) {
+    auto ordinal = std::stoul(path[i].getAsString()->str());
+    const auto &instruction =
+        (*(*block->getAsArray())[1].getAsArray())[ordinal];
+    if (i + 1 == path.size())
+      return instruction.getAsArray()->back().getAsString()->str();
+    auto region = std::stoul(path[++i].getAsString()->str());
+    block = &(*(*instruction.getAsArray())[3].getAsArray())[region]
+                 .getAsArray()
+                 ->back();
+  }
+  return {};
+}
+void writtenLinks(Cases &cases, MLIRContext &context) {
+  using zkc::protocol::CorrespondenceInput;
+  using zkc::protocol::WrittenStatus;
+  cases.run("written links equal the correspondence occurrences", [&] {
+    auto subject = writtenSubject(context);
+    CorrespondenceInput input{subject.correspondence};
+    auto map = take(zkc::protocol::produceApplicationMap(
+        subject.checked.bytes(), subject.candidate, subject.entry, context,
+        input));
+    auto record = take(json::parse(map));
+    auto document = take(json::parse(subject.correspondence));
+    const auto &root = *document.getAsObject();
+    require(*record.getAsObject()->get("correspondence") ==
+                json::Value(
+                    json::Object{{"format", "zkc.source-correspondence/0"},
+                                 {"digest", digest(subject.correspondence)}}),
+            "the map does not bind the supplied correspondence bytes");
+    std::map<std::pair<std::string, std::string>, json::Value> occurrences;
+    for (const auto &item : *root.getArray("occurrences"))
+      occurrences.emplace(
+          std::make_pair(item.getAsObject()->getString("definition")->str(),
+                         item.getAsObject()->getString("site")->str()),
+          *item.getAsObject()->get("nodes"));
+    unsigned expansions = 0;
+    std::set<std::string> nodes;
+    for (const auto &item : *record.getAsObject()->getArray("applications")) {
+      const auto &application = *item.getAsObject();
+      const auto *written = application.getObject("written");
+      require(written != nullptr, "an application has no written link");
+      require(
+          *written->get("subject") ==
+                  json::Value(json::Object{
+                      {"capture", *root.getObject("admission")->get("capture")},
+                      {"installation",
+                       *root.getObject("admission")->get("installation")}}) &&
+              written->getString("instance") == application.getString("callee"),
+          "a written link names another subject or instance");
+      if (application.get("parent")->kind() == json::Value::Null) {
+        auto owner = written->getObject("node")->getString("owner");
+        require(*written->getObject("node")->get("path") ==
+                        json::Value(json::Array{}) &&
+                    (application.getString("callee") == subject.entry
+                         ? owner == "sample::Run"
+                         : owner == "sample::Step"),
+                "a root link is not its template declaration");
+        continue;
+      }
+      ++expansions;
+      auto site = sourceSite(*root.get("snapshot"),
+                             *application.getString("source_definition"),
+                             *application.getArray("source_path"));
+      auto found = occurrences.find(
+          {application.getString("source_definition")->str(), site});
+      require(found != occurrences.end() &&
+                  found->second.getAsArray()->size() == 1 &&
+                  (*found->second.getAsArray())[0] == *written->get("node"),
+              "an expansion link is not its occurrence's single node");
+      nodes.insert(zkc::printJson(*written->get("node")));
+    }
+    require(expansions == 2 && nodes.size() == 2,
+            "the two applications do not have their own written nodes");
+    require(take(zkc::protocol::checkApplicationMap(
+                subject.checked.bytes(), subject.candidate, subject.entry, map,
+                context, input)) == WrittenStatus::Conditional,
+            "supplied bytes alone made links authoritative");
+    CorrespondenceInput checked{subject.correspondence, &subject.checked};
+    require(take(zkc::protocol::checkApplicationMap(
+                subject.checked.bytes(), subject.candidate, subject.entry, map,
+                context, checked)) == WrittenStatus::Checked,
+            "the checked source did not make its links authoritative");
+    auto plain = take(zkc::protocol::produceApplicationMap(
+        subject.checked.bytes(), subject.candidate, subject.entry, context));
+    require(take(zkc::protocol::checkApplicationMap(
+                subject.checked.bytes(), subject.candidate, subject.entry,
+                plain, context)) == WrittenStatus::Absent,
+            "a map without correspondence has written links");
+  });
+  cases.run("written links and supplied correspondences refuse edits", [&] {
+    auto subject = writtenSubject(context);
+    CorrespondenceInput input{subject.correspondence};
+    auto record = take(json::parse(take(zkc::protocol::produceApplicationMap(
+        subject.checked.bytes(), subject.candidate, subject.entry, context,
+        input))));
+    auto check = [&](const json::Value &map,
+                     std::optional<CorrespondenceInput> supplied) {
+      return zkc::protocol::checkApplicationMap(
+                 subject.checked.bytes(), subject.candidate, subject.entry,
+                 zkc::printJson(map), context, supplied)
+          .takeError();
+    };
+    auto nested = [](json::Value &map) -> json::Object & {
+      return *(*map.getAsObject()->getArray("applications"))[1]
+                  .getAsObject()
+                  ->getObject("written");
+    };
+    for (StringRef field : {"node", "instance", "subject"}) {
+      auto changed = record;
+      auto &written = nested(changed);
+      if (field == "node")
+        (*written.getObject("node"))["owner"] = "sample::Step";
+      else if (field == "instance")
+        written["instance"] = "s0h";
+      else
+        (*written.getObject("subject"))["capture"] = std::string(64, '0');
+      refuse(check(changed, input), "application-map-written");
+    }
+    // Without a correspondence every link must be null.
+    refuse(check(record, std::nullopt), "application-map-written");
+    auto digested = record;
+    (*digested.getAsObject()->getObject("correspondence"))["digest"] =
+        digest("another document");
+    refuse(check(digested, input), "application-map-written");
+    // Another original's correspondence names other bytes.
+    auto other = writtenSubject(context, true);
+    require(other.checked.bytes() != subject.checked.bytes(),
+            "the other subject has the same original bytes");
+    refuse(check(record, CorrespondenceInput{other.correspondence}),
+           "application-map-written");
+    refuses(zkc::protocol::produceApplicationMap(
+                subject.checked.bytes(), subject.candidate, subject.entry,
+                context, CorrespondenceInput{other.correspondence}),
+            "application-map-written");
+    // Malformed supplied documents refuse; they are never treated as absent.
+    auto document = take(json::parse(subject.correspondence));
+    (*document.getAsObject())["authority"] = true;
+    auto unknown = zkc::printJson(document);
+    refuse(check(record, CorrespondenceInput{unknown}),
+           "application-map-written");
+    auto duplicate = "{\"format\":\"zkc.source-correspondence/0\"," +
+                     subject.correspondence.substr(1);
+    refuse(check(record, CorrespondenceInput{duplicate}),
+           "application-map-written");
+    // A checked source refuses bytes that are not its own export.
+    auto edited = take(json::parse(subject.correspondence));
+    for (auto &item : *edited.getAsObject()->getArray("occurrences"))
+      if (!item.getAsObject()->getArray("nodes")->empty()) {
+        auto &nodes = *item.getAsObject()->getArray("nodes");
+        nodes.push_back(nodes.front());
+      }
+    auto twice = zkc::printJson(edited);
+    auto conditional =
+        take(json::parse(take(zkc::protocol::produceApplicationMap(
+            subject.checked.bytes(), subject.candidate, subject.entry, context,
+            CorrespondenceInput{twice}))));
+    // An occurrence with several nodes keeps its link null.
+    for (unsigned i = 1; i < 3; ++i)
+      require((*conditional.getAsObject()->getArray("applications"))[i]
+                      .getAsObject()
+                      ->get("written")
+                      ->kind() == json::Value::Null,
+              "an occurrence with several nodes produced a link");
+    refuse(zkc::protocol::checkApplicationMap(
+               subject.checked.bytes(), subject.candidate, subject.entry,
+               zkc::printJson(conditional), context,
+               CorrespondenceInput{twice, &subject.checked})
+               .takeError(),
+           "application-map-written");
+  });
+}
 int main() {
   DialectRegistry registry;
   registerDialects(registry);
@@ -112,6 +364,7 @@ int main() {
   ScopedDiagnosticHandler diagnostics(&context,
                                       [](Diagnostic &) { return success(); });
   Cases cases;
+  writtenLinks(cases, context);
   const std::string original =
       read(ZKC_APPLICATION_FIXTURES "/application-map/nested.mlir");
   cases.run("expanded sites retain original string bounds elsewhere", [&] {
@@ -321,6 +574,8 @@ int main() {
                        : StringRef(name).contains("root") ||
                                StringRef(name) == "wrong format"
                            ? "application-map-schema"
+                       : StringRef(name).contains("written")
+                           ? "application-map-written"
                            : "application-map-correspondence";
       refuse(f.check(changed), code);
     });
@@ -329,9 +584,8 @@ int main() {
     cases.run("duplicate decoded JSON key: " + key, [&] {
       std::string bytes = printJson(f.record);
       bytes.insert(1, "\"" + key.str() + "\":\"zkc.application-map/0\",");
-      refuse(
-          checkApplicationMap(f.original, f.candidate, f.entry, bytes, context),
-          "application-map-json");
+      refuse(checkMap(f.original, f.candidate, f.entry, bytes, context),
+             "application-map-json");
     });
   cases.run("same typed actual return substitution with refreshed digest", [&] {
     auto changed = f.mutate([&](ModuleOp module) {
@@ -425,8 +679,8 @@ int main() {
     accept(f.changed(changed, f.record));
   });
   cases.run("exact original bytes bind whitespace", [&] {
-    refuse(checkApplicationMap("\n" + f.original, f.candidate, f.entry,
-                               printJson(f.record), context),
+    refuse(checkMap("\n" + f.original, f.candidate, f.entry,
+                    printJson(f.record), context),
            "application-map-identity");
   });
   cases.run(
@@ -530,6 +784,21 @@ int main() {
                 json::Value::Null,
             "shared helper body falsely owns one invocation");
   });
+  for (unsigned roles : {17u, 1024u})
+    cases.run("a roster of " + std::to_string(roles) + " roles maps and checks",
+              [&] {
+                Fixture wide(context, rostered(roles, 1));
+                require(wide.apps().size() == 1,
+                        "the root application row is missing");
+              });
+  cases.run("the source view inherits the structured publication ceiling", [&] {
+    // 80 full-roster scopes exceed only the 1 MiB publication.
+    auto bytes = rostered(1024, 80);
+    refuses(exportStructuredSource(bytes, "main", context),
+            "structured-source-limit: publication exceeds 1 MiB");
+    refuses(produceApplicationMap(bytes, bytes, "main", context),
+            "structured-source-limit: publication exceeds 1 MiB");
+  });
   cases.run("folded arithmetic needs an owning correspondence rule", [&] {
     std::string bytes = R"(module { "protocol.module"() ({
       "protocol.func"() ({ ^entry(%a:i1):
@@ -547,21 +816,19 @@ int main() {
   });
   cases.run("JSON depth bound precedes subject work", [&] {
     auto bytes = std::string(65, '[') + "null" + std::string(65, ']');
-    refuse(checkApplicationMap("", "", "", bytes, context),
-           "application-map-limit");
+    refuse(checkMap("", "", "", bytes, context), "application-map-limit");
   });
   cases.run("byte bound precedes subject work", [&] {
-    refuse(checkApplicationMap("", "", "",
-                               std::string(32 * 1024 * 1024 + 1, ' '), context),
-           "application-map-limit");
+    refuse(
+        checkMap("", "", "", std::string(32 * 1024 * 1024 + 1, ' '), context),
+        "application-map-limit");
   });
   cases.run("metadata work bound precedes JSON allocation", [&] {
     std::string bytes = "[";
     for (unsigned i = 0; i < 1000000; ++i)
       bytes += "null,";
     bytes += "null]";
-    refuse(checkApplicationMap("", "", "", bytes, context),
-           "application-map-limit");
+    refuse(checkMap("", "", "", bytes, context), "application-map-limit");
   });
   for (StringRef table : {"applications", "instructions"})
     cases.run("row bound: " + table, [&] {

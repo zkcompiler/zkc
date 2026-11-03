@@ -2,6 +2,8 @@
 
 The native interface is a tested name/selector boundary, not a proof. The relation
 body is exported and admitted independently; a matching name never proves it.
+Port types are compared by schema kind and identity and by the typed native
+leaf of the structured export; display `type` strings are never compared.
 """
 import copy
 import hashlib
@@ -9,18 +11,41 @@ import json
 
 from structured import entry, profile
 from bridges.structured.snapshot import render, text
+from bridges.common import interface as language_interface
 from bridges.common.schema import interpreted_type
 from request_support import require
 from verify import validate, VERSION
 
 
+def native_leaf(port, types):
+    """The typed native leaf of a single-leaf port, from the structured export."""
+    native = port['native']
+    if len(native) != 1 or not 0 <= native[0] < len(types):
+        return None
+    return interpreted_type(types[native[0]], payload=True)
+
+
+def boolean_decision(port, data):
+    """Whether an output port is one Boolean leaf."""
+    return port['schema']['kind'] == 'boolean' and native_leaf(port, entry(data)[5]) == ['bool']
+
+
+def witness_field(port, formal, data, field):
+    """Whether an input port has the relation witness formal's schema and is one
+    leaf of the requested field."""
+    schema = port['schema']
+    return (schema['kind'] == 'field' and
+            (schema['kind'], schema['identity']) == (formal['schema']['kind'], formal['schema']['identity']) and
+            native_leaf(port, entry(data)[4]) == ['field', field])
+
+
 def resolve(spec, data, interface, compiler, output):
+    interface = language_interface.decode(interface)
     require(isinstance(spec, dict) and set(spec) == {
         'format', 'contract', 'properties', 'experiment', 'role', 'inputs', 'wiring', 'target'},
         'spec-shape', 'Expected the named verification-spec fields')
     require(spec['format'] == 'zkc.verification-spec/0', 'spec-version', 'Unsupported verification specification')
-    require(interface.get('format') == 'zkc.language-interface/0' and
-            data[2] == 'sha256:' + interface['original'] and data[3] == interface['protocol'],
+    require(data[2] == 'sha256:' + interface['original'] and data[3] == interface['protocol'],
             'intent-identity', 'Interface and program export must describe the same source and selected protocol')
     protocols = [p for p in interface['protocols'] if p['symbol'] == data[3]]
     require(len(protocols) == 1, 'intent-protocol', 'The selected protocol must occur exactly once')
@@ -61,7 +86,7 @@ def resolve(spec, data, interface, compiler, output):
     outputs = protocol['outputs']
     decision = clause['decision']
     require(decision == {'direction': 'output', 'port': 0, 'role': spec['role'], 'path': []}
-            and len(outputs) == 1 and outputs[0]['native'] == [0] and outputs[0]['type'] == 'bool',
+            and len(outputs) == 1 and outputs[0]['native'] == [0] and boolean_decision(outputs[0], data),
             'intent-decision', 'The target must use the actual Boolean verifier output')
     operands = clause['subject']['operands']
     require(len(operands) == 3, 'intent-relation-bindings', 'Discrete-log expects base, key and witness')
@@ -75,11 +100,11 @@ def resolve(spec, data, interface, compiler, output):
             type(witness.get('port')) is int and 0 <= witness['port'] < len(protocol['inputs']),
             'intent-relation-bindings', 'Select a scalar prover witness input')
     witness_port = protocol['inputs'][witness['port']]
-    require(witness_port['type'] == 'field<' + request['wiring']['fieldDomain'] + '>',
-            'intent-relation-bindings', 'Witness field differs from the requested scalar field')
     relations = [r for r in interface['relations'] if r['symbol'] == clause['subject']['relation']]
     require(len(relations) == 1 and [x['purpose'] for x in relations[0]['inputs']] ==
             ['parameter', 'statement', 'witness'], 'intent-relation-formals', 'Wrong relation purposes')
+    require(witness_field(witness_port, relations[0]['inputs'][2], data, request['wiring']['fieldDomain']),
+            'intent-relation-bindings', 'Witness field differs from the requested scalar field')
     definition = relations[0]['definition']
     require(definition.get('kind') == 'formula', 'intent-relation-body', 'An opaque target needs its own proved adapter')
     # Select the retained named formula from this same Structured unit. There is

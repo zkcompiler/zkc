@@ -25,14 +25,26 @@ InteractionDeclaration::lookup(ArrayRef<unsigned> path,
     return capacity(work);
   const auto *sequence = &getBody();
   const InteractionAction *action = nullptr;
-  for (unsigned component : path) {
+  for (unsigned index = 0; index < path.size(); ++index) {
+    unsigned component = path[index];
     if (!work.charge())
       return capacity(work);
     if (!sequence || component >= sequence->getActions().size())
       return nullptr;
     action = &actions_[sequence->getActions()[component]];
-    sequence = action->getRepeatBody() ? &getSequence(*action->getRepeatBody())
-                                       : nullptr;
+    sequence = nullptr;
+    if (auto repeat = action->getRepeatBody())
+      sequence = &getSequence(*repeat);
+    else if (!action->getRegions().empty() && index + 1 < path.size()) {
+      if (!work.charge())
+        return capacity(work);
+      unsigned arm = path[++index];
+      for (const auto &region : action->getRegions())
+        if (region.ordinal == arm)
+          sequence = &getSequence(region.sequence);
+      if (!sequence || index + 1 == path.size())
+        return nullptr;
+    }
   }
   return action;
 }
@@ -60,8 +72,9 @@ struct InteractionAnalysis::Impl {
     return Error::success();
   }
   Expected<unsigned> sequence(InteractionDeclaration &view, Block &body,
-                              SmallVector<unsigned> &path, facts::Work &work) {
-    if (path.size() >= limits.depth)
+                              SmallVector<unsigned> &path, facts::Work &work,
+                              unsigned depth = 0) {
+    if (depth >= limits.depth)
       return capacity(work);
     if (auto failure = charge(view, work))
       return std::move(failure);
@@ -107,10 +120,36 @@ struct InteractionAnalysis::Impl {
       if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(operation)) {
         if (!hasSingleElement(repeat.getBody()))
           return error("interaction-analysis-unsupported");
-        auto nested = sequence(view, repeat.getBody().front(), path, work);
+        auto nested =
+            sequence(view, repeat.getBody().front(), path, work, depth + 1);
         if (!nested)
           return nested.takeError();
-        view.actions_[actionIndex].repeatBody_ = *nested;
+        view.actions_[actionIndex].children_.push_back(
+            {InteractionRegion::Kind::Repeat,
+             0,
+             *nested,
+             {},
+             repeat.getRoles()});
+      } else if (auto branch = dyn_cast<protocol_ir::BranchOp>(operation)) {
+        for (auto [index, region] : enumerate(branch.getArms())) {
+          if (!hasSingleElement(region) || region.front().empty())
+            return error("interaction-analysis-unsupported");
+          uint64_t associations = 1 + region.front().getNumArguments() +
+                                  region.front().back().getNumOperands() +
+                                  branch.getRoles().size();
+          for (uint64_t i = 0; i < associations; ++i)
+            if (auto failure = charge(view, work))
+              return std::move(failure);
+          path.push_back(index);
+          auto nested = sequence(view, region.front(), path, work, depth + 1);
+          path.pop_back();
+          if (!nested)
+            return nested.takeError();
+          view.actions_[actionIndex].children_.push_back(
+              {InteractionRegion::Kind::BranchArm, unsigned(index), *nested,
+               cast<StringAttr>(branch.getAlternatives()[index]),
+               branch.getRoles()});
+        }
       } else if (operation.getNumRegions() &&
                  !mathematical::isTotal(&operation)) {
         return error("interaction-analysis-unsupported");

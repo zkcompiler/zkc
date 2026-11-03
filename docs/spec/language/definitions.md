@@ -66,7 +66,8 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
-The CLI accepts a TOML manifest with `format = "zkc.project/0"`, an optional
+The CLI accepts a TOML manifest with `format = "zkc.project/0"`, a required
+`source-format` (`"zkc"` or `"zkc-layout"`), an optional
 `modules` table mapping logical names to paths, an optional `dependencies` table
 mapping local labels to library directories or workspace selections, and an optional `assets` table
 mapping names to tables with exactly `format` and `path`. Unknown or duplicate
@@ -88,6 +89,21 @@ All participating manifests and mapped files are protected compilation inputs.
 No registry lookup, implicit module discovery or version selection occurs. Each supplied path
 is nonempty, contains no NUL, and is at most 4096 bytes.
 
+`source-format` selects the reader of the package's authored modules and is the
+value of the compiler's `--source-format`. It is distinct from `format`, which
+names the manifest schema, and from `[profile.NAME]`, which selects build
+settings; no profile, build setting or request option reinterprets a package's
+source. Every manifest of a closure states the same value, including a manifest
+with only dependencies, so one compilation reads its authored modules with one
+grammar. A missing or unknown value refuses with `source-project-format`, and a
+closure whose manifests disagree refuses with `source-project-mixed-format`, both
+before any compilation or cache lookup. Assets keep their declared formats, and
+installation sources keep their installed origin. A parse failure never retries
+another grammar. Explicit SDK and CLI module maps carry the same typed selection:
+the CLI requires `--source-format` with `--module` or `--asset` and refuses it
+with a manifest. The selection is framed into the compilation cache key, the
+capture identity and the project graph's package records.
+
 Optional root `[build]` and `[profile.NAME]` tables contain partial Boolean
 implementation settings: `simplify`, `finite-bulk`, `release-storage`,
 `fuse-vector-reductions`, `fuse-collect-fold` and `calculation-batching`.
@@ -106,8 +122,8 @@ Optional root `[test.NAME]` tables describe consumer invocations, with required
 default `success`). At most 256 tests are admitted, with nonempty names of at most
 128 bytes. An Entry name is at most 4096 bytes; there are at most 64 arguments of
 4096 bytes each and an expectation is nonempty and at most 128 bytes. Recipes
-cannot replace source roots, the compiler, pinned packages, profiles, reports or
-compilation caches. File arguments resolve beside the root manifest. Dependency
+cannot replace source roots, source formats, the compiler, pinned packages,
+profiles, reports or compilation caches. File arguments resolve beside the root manifest. Dependency
 recipes are validated but never run implicitly. Tests use ordinary checking and
 Host execution. See [tooling](../../compiler/tooling.md) for defaults and usage.
 
@@ -192,17 +208,104 @@ carry their resolved descriptors, including those introduced privately; their
 targets must still be public. [Notation scope](notation.md#imports-and-lexical-scope)
 defines descriptor conflicts, whole-module visibility and local replacement.
 
-The `zkc` root is reserved. The `zkc::prelude` module belongs to the compiler installation. Its exact
-source is embedded and included in installation identity. Captures cannot supply
-either name or claim an installation origin. Installed sources cannot be linked
-as external children. Its public scalar operator bindings
+The `zkc` root is reserved. The `zkc::prelude` and `zkc::records` modules belong
+to the compiler installation. Their declarations and notations are the
+catalog's [installed declaration rows](../formats/contract-declarations.md#installed-source-declarations),
+read directly into the declaration index; they have no written source text, and
+every row is included in installation identity. Captures cannot supply either
+name or claim an installation origin. Installed modules cannot be linked as
+external children. The prelude's public scalar operator bindings
 are visible by default; its function names require qualification or explicit
 import. The prelude itself has no imports or inherited operator environment.
 There is no runtime source-file lookup. Capture identity and captured file/byte
-limits exclude the prelude; token, declaration, operation and work limits include
-its checking. `Analysis::sources()` and `CheckedProject::sources()` include both
-origins and index all diagnostic spans. `capture().sources()` includes only
-captured inputs.
+limits exclude installed modules; declaration and work limits include reading
+and checking them. `Analysis::sources()` and `CheckedProject::sources()` include
+both origins, an installed module with an empty buffer at
+`<installation>/catalog/<module>`, and index all diagnostic spans; installed
+declarations have empty spans. `capture().sources()` includes only captured
+inputs.
+
+### Source authority
+
+A *unit* is one captured file, named by its module path. The defining unit of a
+declaration is the unit holding its span; a generated declaration uses its
+family target's unit; an installed declaration has none, because installed
+declarations enter only through installation identity.
+
+Checking records one reference for every successful declaration-resolution
+route, with its route kind, as published in the
+[source bindings](source-ast.md#source-binding-proposals). A lookup whose result
+is discarded records nothing. The dependencies of a unit `u` are its parent
+file, its linked child files, and, for every recorded reference whose owner is
+defined in `u`, the defining units of the reference's provider and target. An
+abstract interface reference contributes only the interface member's unit, so
+a closed instance's concrete dispatch never enters a generic library's
+closure. The closure of `u` is the least set of units that contains `u` and is
+closed under dependencies. The assets of `u` are the captured assets named by
+asset domains and captured relations declared in its closure. Unrelated units,
+consumer Entry names, diagnostic paths and source ordering do not enter it.
+
+The revision of `u` is the lowercase SHA-256 hex of these fields, each framed
+by its u64 little-endian byte length; counts and byte lengths are decimal
+strings:
+
+1. `zkc.language.authority/0`;
+2. the capture's source format;
+3. the installation identity;
+4. the module path of `u`;
+5. the closure count, then, per closure unit sorted by module path, its module
+   path, byte length and the SHA-256 hex of its bytes;
+6. the edge count, then each dependency edge between closure units as its
+   `from` and `to` module paths, sorted by that pair;
+7. the asset count, then, per asset sorted by name, its name, format and the
+   SHA-256 hex of its bytes.
+
+A comment edit in any closure unit changes the revision. Lookup keys, symbols
+and companion keys do not change with it.
+
+The source authority of a declaration path is the revision of its defining unit
+when the declaration is authored, and the installation identity when it is
+installed. Only a generated declaration has no authority: its family identity
+already binds the capture and installation. An authored declaration without a
+computed authority refuses with `source.authority`; it never takes the generated
+case. Every revision is computed once, after all checking, and charged to
+checked work. Closed Entries read the checked project's revisions and never
+extend them.
+
+### Nominal authority
+
+A closed type has two keys. Its *lookup key* frames the kind, symbolic flag,
+path, sort, dimension and ordered arguments. It binds no revision, so it
+decides equality only inside one checked snapshot: instance keys and symbols,
+deployment identifiers, internal product placements, construction providers
+and memo tables use it, and a memo keyed by it lives no longer than that
+snapshot. Its *canonical key* frames exactly as the lookup key and adds one
+frame after the path of every record, logical record, variant and module node
+that names a declaration: that path's source authority, or an empty frame for
+a generated declaration. A symbolic module parameter names no declaration and
+adds no frame; an associated type is bound through its module argument. The
+*nominal identity* of a closed type is the lowercase SHA-256 hex of its
+canonical key.
+
+The nominal identity is the published schema identity and names the custody
+slot, `zkl_resource_` followed by the identity. The canonical key is the
+preimage of variant and packed-product nominal descriptors, and the full schema
+digest frames the nominal identity of the schema and of every product formula
+node. Equal paths from different source bytes therefore differ, a changed
+private dependency or a comment edit in the defining closure changes the
+identity, and an unrelated client declaration leaves a library's identities
+unchanged. Lookup keys, instance symbols and companion keys do not depend on
+any revision.
+
+Checking lays out some carriers before authorities are final. Those layouts
+take a provisional frame of 64 `-` bytes for each authored or installed node
+and an empty frame for each generated node, so every byte-limit decision during
+checking equals the final one; only a layout over the finished checked project
+publishes an identity, and no provisional frame reaches an output. Each
+authored or installed node adds 67 bytes to the canonical key and each
+generated node 2. A variant or packed-product preimage longer than 131,072
+bytes refuses with `source.limit` where it is first laid out; the native
+descriptor's own byte bounds still apply to its hex encoding.
 
 ## Definition checking and Entry closure
 
@@ -248,14 +351,18 @@ completed callable contracts and constructions from captured modules, sorted by 
 Module/interface records report directly declared public member names and any
 implemented contract. The inventory uses canonical declaration paths with public
 owners; it does not enumerate import alias or reexport routes.
-Installation declarations remain accessible through the checked SDK graph. Callable members
+Installation declarations remain accessible through the checked SDK graph. An
+installed declaration with a rule association reports `definition: installed`
+and its `association` identity; an installed primitive keeps `definition:
+primitive`. Callable members
 are visible through their public owner. Members identify that owner and mark
 inherited static parameters; `abstract` distinguishes interface declarations
 from definitions with bodies. Each item reports its kind, static
 parameters and permissions, role roster, data/service argument order, typed
 ports, services, requirements, body effects (or abstract allowance), and captured
-module byte span and source `origin`. `definition` is `body`, `abstract` or
-`primitive`; primitive definitions also report the installed `primitive` identity.
+module byte span and source `origin`. `definition` is `body`, `abstract`,
+`primitive` or `installed`; primitive definitions also report the installed
+`primitive` identity, and installed definitions their catalog `association`.
 Natural/capability bounds retain their inferred flags; explicit
 effect allowances remain separate; abstract Local declarations always include
 their explicit allowance. Effect objects report fixed `stop` and `opaque` flags
@@ -326,11 +433,16 @@ enum Choice<T: Type> { Some(T), None() }
 
 Runtime types comprise `bool`, `index`, unit `()`, tuples, fixed arrays, installed
 fields/groups, native data containers, nominal records/variants and associated module types. `(T,)`
-is a singleton tuple; `(T)` is grouping. A record's identity includes its declaration
-and every static argument, including phantom arguments. Variant identity includes
-its declaration and static arguments, not only its payload layout. Aliases expand
+is a singleton tuple; `(T)` is grouping. A record's identity includes its declaration,
+the source authority of its defining unit, and every static argument, including
+phantom arguments ([nominal authority](#nominal-authority)). Variant identity includes
+its declaration, its authority and static arguments, not only its payload layout. Aliases expand
 without creating a nominal identity. Variant payloads are positional; a variant
-has one to 32 distinct alternatives. Formal mathematical types have a separate
+has one to 64 distinct alternatives. The source language lays out every runtime
+variant through its [portable descriptor](../ir/variants.md#portable-representation),
+from which emission forms the native type, so the source bound is that
+descriptor's 64 rather than the 512 of native formation. A wider declaration
+refuses with `source.limit`. Formal mathematical types have a separate
 [authoring contract](#formal-mathematics).
 
 Domain declarations require an installed identity of the declared catalog sort:
@@ -343,6 +455,10 @@ domains are static only: they cannot be runtime ports, tuple/array elements or
 arguments to a `Type` parameter.
 
 ### Logical oracle types
+
+[Distributed records](records.md) separately defines role-bearing struct
+telescopes, placed type applications and recursive field placement. Their
+source checking does not imply complete native lowering or SDK support.
 
 `OracleKind` is a static sort independent of the installed native domain
 catalogue. Library aliases use the existing constructor syntax:
@@ -467,6 +583,13 @@ substituted when the selected body closes; a call can therefore pass generic
 checking and fail closing. Symbolic nonlinear exponents and nested symbolic powers
 are unsupported. Closed exponents must be below 64; term, factor and work limits
 bound symbolic expansion.
+Semantic normalization admits each work charge through the enclosing source or
+observer allowance before performing the charged operation. Its local
+normalization ceiling still applies. Successful charges remain spent when a
+later operation refuses, including overflow; an exhausted enclosing allowance
+can therefore refuse with `source.limit` before reaching an arithmetic
+`source.natural` refusal. With sufficient work the arithmetic rules and overflow
+refusals are unchanged. Standalone natural arithmetic uses its own allowance.
 This is a sound set of normalization rules, not a complete procedure for
 exponential arithmetic. Static argument inference does not invert `pow2`.
 
@@ -609,7 +732,8 @@ Its carrier is `sequence<Pack(T)>`. `Pack(T)` retains an existing single native
 carrier for scalars, containers and source variants. A source record, tuple,
 array, unit or concrete associated product uses a canonical single-alternative
 native variant. Its nominal identity is `["zkc.language.pack",
-encodeNominalIdentity(typeIdentity(T))]`, and its sole alternative has native
+encodeNominalIdentity(K)]`, where `K` is the
+[canonical key](#nominal-authority) of `T`, and its sole alternative has native
 label `case00000000` and the ordinary flattened leaves in declaration/index order.
 Empty products have an empty payload. Full source identity distinguishes nominal
 records and their static instantiations; normalized export aliases agree.
@@ -971,11 +1095,50 @@ runtime type definitions. Associated domains
 such as `type F: Field` and `type C: Commitment` cannot carry them: selecting a
 domain does not introduce a nominal runtime wrapper.
 
-A linear record whose complete payload is shared native data has no synthetic
-native resource root. Source move checking, sealing and successful-path use
-obligations still apply. This permits a loop to consume one such value and yield
-a successor; payloads containing native resources retain custody and exact-root
-checks. In a specification, field selectors may observe a sealed record only
+Every explicitly affine or linear ordinary record retains a nominal native
+`resource_unit`, including empty records and records with entirely Copy/Drop
+payloads. Complete instantiated type identity, including phantom arguments,
+distinguishes its custody. Nested restricted wrappers retain separate units.
+Sealing and private payload construction remain separate authority checks.
+
+Two home-authorized operations support explicit record succession when every
+payload field has both Copy and Drop: ordinary records in Local mode, and
+fixed-roster distributed records in Protocol mode.
+
+- `inspect_record(value)` consumes the whole restricted record and returns
+  `(successor, payload)`. The successor forwards the exact whole value; the
+  payload is the tuple of field observations in declaration order (unit when
+  there are no fields). This is a consuming API with a returned obligation,
+  without a borrowing exception or permission to project a sealed input.
+- `repack_record(value, payload)` consumes a restricted record and its new field tuple,
+  returns the same instantiated nominal record type, and transfers the selected
+  old custody through the installed `resource_unit.pass` operation, once per
+  fragment for a distributed wrapper. Old payload fields permit abandonment;
+  new fields retain their exact types and placements.
+
+For a distributed wrapper, inspection returns the unchanged nominal/ordered role
+instance and a payload tuple with the exact declaration-ordered child placements.
+An empty payload is unit at the wrapper's fixed roster. Repacking requires that
+same payload placement, including nested role maps and zero-storage fields, and
+preserves the wrapper placement. It does not union roles, substitute the ambient
+roster or send fields. Every wrapper participant must be active.
+
+These are discoverable declarations in `zkc::records`, associated with typed
+catalog signature rules. Unqualified compatibility lookup considers them only
+after ordinary declaration resolution fails. User helpers, imports, module
+aliases and scoped callbacks with these names retain their authored meaning.
+Qualified calls select the same canonical binding. Both installed operations
+require constructor authority from the lexical authored caller and ordered
+execution in the corresponding mode; their implementation module grants no authority. They
+exclude variants, associated representations, unrestricted/sealed-only records
+and records with non-Copy or non-Drop fields. Existing `unpack` and `consume`
+retire custody, and fresh construction creates new custody. A same-typed
+consume/create pair supplies no exact successor equation. The native repeat
+invariant checks actual pass/call/control bodies and every continuing backedge;
+a zero-trip execution retains the initial unit. Stopped paths supply no returned
+successor. These ownership laws do not establish relation truth or equal payloads.
+
+In a specification, field selectors may observe a sealed record only
 inside the module tree authorized to unpack it. These reads consume nothing
 and do not grant executable projection or constructor access. The current
 surface uses existing relation applications and typed field selectors; it does
@@ -990,7 +1153,10 @@ codec checks remain independent.
 Fields are private unless marked `pub`. A restricted nominal constructor and its
 representation are available in its defining module and descendants. Private associated
 representations are sealed behind module members. `unpack(value)` requires
-that module's authority; it consumes the wrapper and returns its fields (a tuple
+that module's authority. It resolves through the installed record declaration
+association after ordinary name lookup. Restricted custody-retiring unpack and
+custody-retiring restricted record destructuring require an outer `<-` binding in layout source;
+unrestricted unpack remains pure. It consumes the wrapper and returns its fields (a tuple
 for a record, the representation for an associated type). Restricted values do
 not expose ordinary field projection. `consume value;` requires constructor
 authority and cannot discard fields that lack `Drop`. Such fields must be
@@ -1072,6 +1238,41 @@ in source order; participant inference follows its
 
 ### Arguments and inference
 
+A dotted invocation `receiver.name(args)` selects an eligible callable declared
+directly in the canonical home module of the receiver's nominal type. The first
+declared input must be data of that same nominal type; Math, Local and Protocol
+declarations are eligible. Aliases preserve the nominal home, including generic
+aliases in other modules. Imports and reexports never add methods. A callable
+whose first input merely uses a foreign type is not a method of that type.
+The complete home declaration set determines eligibility, independently of
+import order and body success. A field owns its spelling before method lookup;
+private fields cannot fall through to methods. Missing or ambiguous methods
+use `source.method`; inaccessible methods or fields use `source.private`.
+
+The receiver must have a known nominal constructor before method selection;
+its static arguments and the remaining arguments use ordinary inference over
+the selected signature. The receiver evaluates once, before the written
+arguments. Qualification, method spelling and notation selecting the same
+function retain its canonical declaration and semantic binding. The resolved
+callable fixes mode and effects. Written source retains the dotted spelling,
+explicit labels and omitted statics separately from inferred bindings.
+
+Protocol methods derive every declared role from exact receiver placement.
+They do not substitute equal role names or invent missing roles from other
+arguments. A distributed nominal receiver supplies its ordered declaration-role
+map, including roles retained by empty fields. Aliases preserve the target's
+map. Structural participation unions are not ordered role maps. Direct logical
+families distinguish the holder and receiver; an unordered family with several
+possible member correspondences or a receiver that does not determine every
+declared role refuses with `source.roles`. The complete substituted placement
+is checked before invocation. Qualified protocol calls retain independent
+explicit role substitution.
+
+Managed Random service operations remain installed service adapters with their
+existing positional contracts. Their signatures are not yet unified with the
+canonical callable declaration index. This integration seam does not grant
+ordinary user declarations service authority.
+
 User-declared helper and protocol parameters accept positional arguments followed
 by named arguments. A named argument is `parameter = expression`; its name belongs
 to the resolved declaration. For example, `pair(right = n, left = flag)` binds
@@ -1090,6 +1291,18 @@ to maps: `map affine(r = r, high = each ys, low = each xs)` associates `each`
 with its named parameter. Record fields already use their declared names. Variant
 payloads, associated representation constructors and fixed intrinsic,
 kernel and service-method interfaces retain positional arguments.
+
+Independent invocation checking retains immutable resolved source occurrences
+and checks every authored body and callback, including unused definitions.
+It reconstructs argument destinations from written labels and relates source
+children to SSA through lexical inputs, binding patterns and projections.
+Protocol roles follow the written substitution or exact receiver placement;
+managed inputs retain their particular lexical service roots even when field
+and owner types coincide. Installed record invocations retain their caller's
+authority and actual child provenance. Agreement between an operation and its
+call binding alone does not establish any of these source relationships.
+Specialization preserves the occurrence and checks substituted types and value
+mapping against the authenticated source.
 
 Helper and protocol calls infer bare static parameters from data argument types,
 managed-service fields and expected helper results. Static arguments also accept
@@ -1206,8 +1419,8 @@ bound is a source contract, not inferred from a backend implementation. Formal
 intrinsics called from local code retain the existing realization boundary.
 Retained helper calls, including mapped primitives, count toward the call-depth
 limit; directly emitted primitive operations add no helper edge.
-The prelude is excluded from capture file/byte limits, but its parsing and
-checking count toward token, declaration and work limits for the invocation.
+The prelude is excluded from capture file/byte limits, but reading and checking
+its rows count toward declaration and work limits for the invocation.
 `!`, `&&` and `||` keep their fixed Boolean control/formula semantics and are not
 redefined by library equality bindings.
 
@@ -1302,9 +1515,13 @@ domain fn positions<F: Field>(xs: Vector<F>) -> domain<index> {
 }
 ```
 
-Registered domain definitions validate their complete signatures. Constructors
-cover container elements and indices, half-open ranges, strict zip, independent
-product, explicit matrix rows/columns/coordinate order, and fixed source arrays.
+Registered domain definitions validate their complete signatures. Each
+`domain("...")` identity names a row of the catalog's
+[source vocabulary](../formats/contract-declarations.md#source-vocabulary),
+whose kind and axis are its meaning; an identity without a row refuses.
+Constructors cover container elements and indices, half-open ranges, strict
+zip, independent product, explicit matrix rows/columns/coordinate order, and
+fixed source arrays.
 The [finite IR contract](../ir/finite.md#domain-declarations) defines enumeration
 and admission. Defined factories compose domain calls and immutable aliases;
 ordinary computations producing their data operands stay at the call site.
@@ -1368,6 +1585,11 @@ fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
 ) -> Sequence<B> effects(stop) = finite("local.collect.sequence");
 ```
 
+Each `finite("...")` identity names a row of the catalog's
+[source vocabulary](../formats/contract-declarations.md#source-vocabulary): its
+mode, fold or collect, collected constructor and predicate form are that row's
+columns, and an identity without a row refuses. A collect admits the collected
+constructor's catalog collection view as its result.
 The complete signature is checked against the selected identity. Fold state
 and domain item types are independent; Unit is a valid state. Fold requires
 exactly the origin map `{1 -> 0}`: its second callback input receives the whole
@@ -1722,8 +1944,17 @@ Requests can lower these ceilings, never raise them. Checks refuse before charge
 work or recursive-depth budgets are exceeded; no truncated result is returned.
 Capture lexing, parsing and definition checking share one work budget.
 Specialization, layouts, emission, comparison, predicate admission and interface
-serialization each have a separate work budget. The capture-wide specification
-inventory has a separate phase budget from per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
+serialization each have a separate work budget. Within the common-input
+interface inventory, retained Protocol derivation, semantic-index setup,
+layout observation and normalization share the enclosing allowance, including
+work preceding a failed observation. Native common-input derivation likewise
+shares one API allowance with its layout and component-mapping stages.
+Nested placement validation, role remapping and alias generation use the current
+remaining allowance and debit performed work on both success and refusal.
+Semantic native-layout and port observations reconcile their bounded work before
+the enclosing query continues, including failed observations.
+The capture-wide specification inventory has a separate phase budget from
+per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
 
 | Quantity | Ceiling |
@@ -1736,7 +1967,7 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Declarations; source or emitted operations | 10,000; 100,000 |
 | Static instances; aggregate leaves/array length | 4096; 1024 |
 | Natural monomials; factors per monomial | 1024; 64 |
-| Charged work per phase | 8,000,000 |
+| Charged work per phase | 32,000,000 |
 | Emitted MLIR; interface JSON | 16 MiB; 4 MiB |
 | Encoded symbol; diagnostic path bytes | 4096 each |
 | Active notation descriptor keys per environment; delimiter holes | 4096; 64 |
@@ -1749,8 +1980,14 @@ Bodies in one source file share its filtered token stream, with a separate
 notation environment for each module.
 
 The work ceiling accommodates composed source libraries while preserving charges
-for each traversal. File, type, instance, operation and output ceilings remain
-independent; a higher work allowance does not admit a larger type or deeper call.
+for each traversal. Project checking derives every concrete Protocol's
+common-input requirements and checks record placement; the ceiling is twice the
+work of the largest maintained closure, the STARK library with its AIR
+relations. Each parse invocation stays within the
+[layout syntax ceiling](layout-syntax.md#syntax-environments-and-recovery) and
+is charged to the phase. File, type, instance, operation and output ceilings
+remain independent; a higher work allowance does not admit a larger type or
+deeper call.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
 trees, including operator chains. [Notation limits](notation.md#bounds) also

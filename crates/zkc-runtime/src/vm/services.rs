@@ -1,114 +1,98 @@
 //! Closed service-port profile, separate from the ordinary data type lattice.
 use super::{AdmissionError, ErrorCode, PhysicalType};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ServiceContract {
-    RandomBls12381Field,
-    RandomBn254Field,
-    RandomRistrettoField,
-    RandomExtensionField,
-    RandomKoalaBearExt4,
-    RandomBabyBearExt4,
-    RandomGoldilocksExt2,
+// The presentation names of the installed random services. A variant names
+// the catalog row of its field; the contract identity, membership and method
+// gates come from the catalog.
+macro_rules! services {
+    ($($variant:ident => $field:ident),* $(,)?) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum ServiceContract {
+            $($variant,)*
+        }
+        impl ServiceContract {
+            pub const ALL: &[Self] = &[$(Self::$variant,)*];
+            /// The installed field the service draws from.
+            pub fn field(self) -> super::Identity {
+                match self {
+                    $(Self::$variant => super::Identity::$field,)*
+                }
+            }
+        }
+    };
+}
+services! {
+    RandomBls12381Field => Bls12381Fr,
+    RandomBn254Field => Bn254Fr,
+    RandomRistrettoField => Ristretto255Scalar,
+    RandomExtensionField => KoalaBearExt8,
+    RandomKoalaBearExt4 => KoalaBearExt4,
+    RandomBabyBearExt4 => BabyBearExt4,
+    RandomGoldilocksExt2 => GoldilocksExt2,
 }
 impl ServiceContract {
+    fn row(self) -> Option<&'static zkc_catalog::RandomService> {
+        let field = self.field().catalog()?;
+        zkc_catalog::CATALOG
+            .random_services
+            .iter()
+            .find(|row| row.field == field)
+    }
     pub fn parse(value: &str) -> Result<Self, AdmissionError> {
-        match value {
-            "random.bls12-381.fr/0" => Ok(Self::RandomBls12381Field),
-            "random.bn254.fr/0" => Ok(Self::RandomBn254Field),
-            "random.ristretto255.scalar/0" => Ok(Self::RandomRistrettoField),
-            "random.baby-bear.ext4-binomial11/0" => Ok(Self::RandomBabyBearExt4),
-            "random.goldilocks.ext2-binomial7/0" => Ok(Self::RandomGoldilocksExt2),
-            "random.koala-bear.ext8-binomial3/0" => Ok(Self::RandomExtensionField),
-            "random.koala-bear.ext4-binomial3/0" => Ok(Self::RandomKoalaBearExt4),
-            _ => Err(AdmissionError::new(
-                ErrorCode::Type,
-                "unsupported service contract",
-            )),
-        }
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|contract| contract.row().is_some_and(|row| row.contract == value))
+            .ok_or_else(|| {
+                AdmissionError::new(ErrorCode::Type, "unsupported service contract")
+                    .with_class(super::RefusalClass::UnsupportedProfile)
+            })
     }
+    /// The installed contract identity of the service.
     pub fn name(self) -> &'static str {
-        match self {
-            Self::RandomBls12381Field => "random.bls12-381.fr/0",
-            Self::RandomBn254Field => "random.bn254.fr/0",
-            Self::RandomRistrettoField => "random.ristretto255.scalar/0",
-            Self::RandomExtensionField => "random.koala-bear.ext8-binomial3/0",
-            Self::RandomKoalaBearExt4 => "random.koala-bear.ext4-binomial3/0",
-            Self::RandomBabyBearExt4 => "random.baby-bear.ext4-binomial11/0",
-            Self::RandomGoldilocksExt2 => "random.goldilocks.ext2-binomial7/0",
-        }
-    }
-    pub fn field(self) -> super::Identity {
-        use super::Identity;
-        match self {
-            Self::RandomBls12381Field => Identity::Bls12381Fr,
-            Self::RandomBn254Field => Identity::Bn254Fr,
-            Self::RandomRistrettoField => Identity::Ristretto255Scalar,
-            Self::RandomExtensionField => Identity::KoalaBearExt8,
-            Self::RandomKoalaBearExt4 => Identity::KoalaBearExt4,
-            Self::RandomBabyBearExt4 => Identity::BabyBearExt4,
-            Self::RandomGoldilocksExt2 => Identity::GoldilocksExt2,
-        }
+        self.row().map_or("", |row| row.contract)
     }
     pub fn for_field(field: super::Identity) -> Option<Self> {
-        [
-            Self::RandomBls12381Field,
-            Self::RandomBn254Field,
-            Self::RandomRistrettoField,
-            Self::RandomExtensionField,
-            Self::RandomKoalaBearExt4,
-            Self::RandomBabyBearExt4,
-            Self::RandomGoldilocksExt2,
-        ]
-        .into_iter()
-        .find(|contract| contract.field() == field)
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|contract| contract.field() == field && contract.row().is_some())
     }
+    /// The declared service method's request signature, when the field holds
+    /// the method's capability. Provider installation is a separate check and
+    /// never follows from the method.
     pub fn signature(self, method: &str) -> Option<ServiceSignature> {
-        let physical = |kind, identity| {
-            PhysicalType::default_for(
-                super::LogicalType::new(kind, identity).expect("installed type"),
-            )
-            .expect("installed representation")
-        };
-        match method {
-            // This describes a block distribution; provider installation is a
-            // separate check and cannot follow from the scalar method.
-            "indices"
-                if matches!(
-                    self,
-                    Self::RandomExtensionField
-                        | Self::RandomKoalaBearExt4
-                        | Self::RandomBabyBearExt4
-                        | Self::RandomGoldilocksExt2
-                ) =>
-            {
-                Some(ServiceSignature {
-                    inputs: vec![physical(super::Type::Index, super::Identity::None); 2],
-                    outputs: vec![physical(super::Type::Indices, super::Identity::None)],
-                })
-            }
-            "draw" => Some(ServiceSignature {
-                inputs: vec![],
-                outputs: vec![physical(super::Type::Field, self.field())],
-            }),
-            // UniformIndex(bound) masks one uniform 64-bit word to a
-            // power-of-two bound. Only explicitly installed roots offer it.
-            "index"
-                if matches!(
-                    self,
-                    Self::RandomExtensionField
-                        | Self::RandomKoalaBearExt4
-                        | Self::RandomBabyBearExt4
-                        | Self::RandomGoldilocksExt2
-                ) =>
-            {
-                Some(ServiceSignature {
-                    inputs: vec![physical(super::Type::Index, super::Identity::None)],
-                    outputs: vec![physical(super::Type::Index, super::Identity::None)],
-                })
-            }
-            _ => None,
+        use super::{Identity, LogicalType, Type};
+        use zkc_catalog::ServiceSignature as Rule;
+        let declared = zkc_catalog::CATALOG
+            .service_methods
+            .iter()
+            .find(|row| row.name == method)?;
+        let field = self.row().map(|_| self.field())?;
+        if !declared.capability.is_empty() && !field.holds(declared.capability) {
+            return None;
         }
+        let physical = |kind, identity| {
+            PhysicalType::default_for(LogicalType::new(kind, identity).expect("installed type"))
+                .expect("installed representation")
+        };
+        Some(match declared.signature {
+            Rule::RandomDraw => ServiceSignature {
+                inputs: vec![],
+                outputs: vec![physical(Type::Field, field)],
+            },
+            // UniformIndex(bound) masks one uniform 64-bit word to a
+            // power-of-two bound.
+            Rule::RandomIndex => ServiceSignature {
+                inputs: vec![physical(Type::Index, Identity::None)],
+                outputs: vec![physical(Type::Index, Identity::None)],
+            },
+            // A block distribution with its own two parameters.
+            Rule::RandomIndices => ServiceSignature {
+                inputs: vec![physical(Type::Index, Identity::None); 2],
+                outputs: vec![physical(Type::Indices, Identity::None)],
+            },
+        })
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

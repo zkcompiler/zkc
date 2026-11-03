@@ -229,15 +229,18 @@ def checkFalseBody (domain : String) (_bindings : Bindings) : Region dialect [.v
   .letOp (.booleanConstant false) .nil .nil <|
   .ret (.cons .here .nil)
 
-def checkBody (domain : String) (bindings : Bindings) : Region dialect [.vector domain, .vector domain, .field domain] [.boolean] :=
+def checkBody (domain slot : String) (bindings : Bindings) :
+    Region dialect [.vector domain, .resourceUnit slot, .vector domain, .field domain] [.boolean] :=
+  .letOp (.mark "s0_unpack_0") .nil .nil <|
+  .letOp (.consumeUnit slot) (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.exec (.vectorLength domain)) (.cons (.there .here) .nil) .nil <|
+  .letOp (.exec (.vectorLength domain)) (.cons (.there (.there .here)) .nil) .nil <|
   .letOp (.mark "s4") .nil .nil <|
   .letOp (.exec (.indexConstant 1)) .nil .nil <|
   .letOp (.mark "s5") .nil .nil <|
   .letOp (.invoke ⟨bindings.shape, .local, [.vector domain, .index, .index], [.boolean]⟩) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
   .letOp (.mark "s9") .nil .nil <|
-  .letOp (.branch [.vector domain, .vector domain, .field domain] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) (.cons (checkTrueBody domain bindings) (.cons (checkFalseBody domain bindings) .nil)) <|
+  .letOp (.branch [.vector domain, .vector domain, .field domain] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) (.cons (checkTrueBody domain bindings) (.cons (checkFalseBody domain bindings) .nil)) <|
   .ret (.cons .here .nil)
 
 end Zkc.Source.Structured.MultilinearBodies

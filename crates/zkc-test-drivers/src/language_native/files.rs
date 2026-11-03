@@ -124,7 +124,8 @@ pub(super) fn setups(
     let bytes = std::fs::read(directory.join("pcs-setup-Run.zkpkg")).unwrap();
     let package =
         Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap();
-    let interface = FunctionInterface::read(&package).unwrap();
+    let interface =
+        FunctionInterface::read(&package, zkc::entry::InterfaceLimits::DEFAULT).unwrap();
     let mut arguments = serde_json::Map::new();
     let mut external = serde_json::Map::new();
     for role in &interface.signature().parameters[0].schema.fields {
@@ -147,7 +148,9 @@ pub(super) fn setups(
         "cli-run-arguments.json",
         &json!({"inputs": arguments}),
     );
-    let requirements = FunctionInterface::deployment_interfaces(&package).unwrap();
+    let requirements =
+        FunctionInterface::deployment_interfaces(&package, zkc::entry::InterfaceLimits::DEFAULT)
+            .unwrap();
     let [deployment] = requirements.as_slice() else {
         panic!("expected one setup-bearing joint child");
     };

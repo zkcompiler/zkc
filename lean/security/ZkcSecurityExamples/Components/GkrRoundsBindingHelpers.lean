@@ -65,40 +65,41 @@ theorem owned_append (self : Nat) (point : Option (List F)) (r : F) :
       | some point => .done (.cons (some (point ++ [r])) .nil) :=
   ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_append payload.linked bodies self point r
 
-/-- The complete linear Pending boundary retains both optional components. -/
-theorem owned_rounds_open (self : Nat) (point : Option (List F)) (claim : Option F) :
+/-- The complete linear Pending boundary retains custody and both optional fields. -/
+theorem owned_rounds_open (self : Nat) (token : Option Nat) (point : Option (List F)) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) payload).toOn.closed roundsOpenHelper)
-      (.cons point (.cons claim .nil)) =
-      match point, claim with
-      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
-      | _, _ => .halt .incomplete :=
-  ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_rounds_open payload.linked bodies self point claim
+      (.cons token (.cons point (.cons claim .nil))) =
+      match token, point, claim with
+      | some _, some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | _, _, _ => .halt .incomplete :=
+  ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_rounds_open payload.linked bodies self token point claim
 
 theorem owned_rounds_close (self : Nat) (point : Option (List F)) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) payload).toOn.closed roundsCloseHelper)
       (.cons point (.cons claim .nil)) =
       match point, claim with
-      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | some point, some claim => .done (.cons (some 0) (.cons (some point) (.cons (some claim) .nil)))
       | _, _ => .halt .incomplete :=
   ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_rounds_close payload.linked bodies self point claim
 
-theorem owned_layer_open (self : Nat) (point : Option (List F)) (claim : Option F) :
+theorem owned_layer_open (self : Nat) (token : Option Nat) (point : Option (List F)) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) payload).toOn.closed layerOpenHelper)
-      (.cons point (.cons claim .nil)) =
-      match point, claim with
-      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
-      | _, _ => .halt .incomplete :=
-  ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_layer_open payload.linked bodies self point claim
+      (.cons token (.cons point (.cons claim .nil))) =
+      match token, point, claim with
+      | some token, some point, some claim => .done (.cons (some token) (.cons (some point) (.cons (some claim)
+          (.cons (some point) (.cons (some claim) .nil)))))
+      | _, _, _ => .halt .incomplete :=
+  ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_layer_open payload.linked bodies self token point claim
 
 theorem owned_pending (self : Nat) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) payload).toOn.closed pendingHelper)
       (.cons claim .nil) =
       match claim with
-      | some claim => .done (.cons (some []) (.cons (some claim) .nil))
+      | some claim => .done (.cons (some 0) (.cons (some []) (.cons (some claim) .nil)))
       | none => .halt .incomplete :=
   ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.owned_pending payload.linked bodies self claim
 

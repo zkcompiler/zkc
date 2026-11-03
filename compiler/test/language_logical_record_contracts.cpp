@@ -1,7 +1,6 @@
 #include "../lib/Compiler/ComponentContracts.h"
 #include "../lib/Language/Semantics.h"
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
@@ -41,7 +40,7 @@ Expected<CheckedProject> check(StringRef code) {
   return analyze(*captured).checkedProject();
 }
 ClosedEntry close(StringRef code) {
-  return take(closeNativeRun(take(check(code)), "m::Run"));
+  return take(closeSubject(take(check(code)), "m::Run"));
 }
 void accept(Error result) {
   if (result)
@@ -74,13 +73,35 @@ A &row(J &declarations, StringRef name) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("setup selection follows the complete expanded logical inputs", [] {
+    auto entry = close(R"(
+domain C=commitment("multilinear.kzg.bls12-381/0");
+type VK=builtin("verifier_key",C);
+protocol Run roles(P,V)(state:State@P->V,other:O@P->V,key:VK@V)
+  ->(out:State@P->V) setup pcs{key}; {return(out=state);}
+)");
+    Layouts layouts(entry);
+    const auto &inputs = entry.protocol().inputs;
+    auto state = take(layouts.protocolPort(inputs[0]));
+    auto other = take(layouts.protocolPort(inputs[1]));
+    require(state.size() > 2, "fixture does not expand a logical product");
+    unsigned keyOffset = state.size() + other.size();
+    auto original = take(prepareOriginal(entry));
+    auto view = take(readInterface(original.bytes(), original.interfaceJson()));
+    accept(compareInterface(entry, view));
+    require(view.setups.size() == 1 && view.setups[0].inputs.size() == 1 &&
+                view.setups[0].inputs[0].port == 2 &&
+                view.setups[0].inputs[0].native ==
+                    std::vector<unsigned>{keyOffset},
+            "setup slot lost the exact native key coordinate");
+  });
   cases.run("retained rows preserve logical and ordinary nominal members", [] {
     auto entry = close(relay);
     auto retained = declarations(entry);
     accept(checkComponentDeclarations(retained));
     auto &state = row(retained, "m::State");
     require((*state[0].getAsArray())[1] == J("logical_record") &&
-                state[1] == J("ordinary") && state.size() == 4 &&
+                state[1] == J("ordinary") && state.size() == 6 &&
                 state[3].getAsArray()->size() == 6,
             "logical declaration kind or private/empty fields disappeared");
     require(row(retained, "m::Empty")[3].getAsArray()->size() == 1 &&
@@ -248,8 +269,7 @@ protocol Run roles(P,V)(a:O@P->V,b:O@P->V)->(out:O@P->V){
   });
   for (StringRef mutation :
        {"duplicate-row", "duplicate-field", "duplicate-alternative",
-        "duplicate-payload", "malformed-payload", "wrong-kind", "resource",
-        "child-resource", "empty-child-resource", "missing-child",
+        "duplicate-payload", "malformed-payload", "wrong-kind", "missing-child",
         "conflicting-kind"})
     cases.run("retained declarations reject " + mutation, [&] {
       auto retained = declarations(close(relay));
@@ -278,13 +298,7 @@ protocol Run roles(P,V)(a:O@P->V,b:O@P->V)->(out:O@P->V){
         diagnostic = "component-declaration";
       } else {
         diagnostic = "component-declaration-record";
-        if (mutation == "resource")
-          state[1] = "affine";
-        else if (mutation == "child-resource")
-          choice[1] = "affine";
-        else if (mutation == "empty-child-resource")
-          row(retained, "m::Empty")[1] = "affine";
-        else if (mutation == "wrong-kind")
+        if (mutation == "wrong-kind")
           (*state[0].getAsArray())[1] = "associated";
         else if (mutation == "missing-child") {
           auto found = llvm::find_if(records, [](const J &value) {
@@ -300,22 +314,37 @@ protocol Run roles(P,V)(a:O@P->V,b:O@P->V)->(out:O@P->V){
       }
       refuse(checkComponentDeclarations(retained), diagnostic);
     });
+  for (StringRef name : {"m::State", "m::Choice", "m::Empty"})
+    for (StringRef resource : {"affine", "linear"})
+      cases.run(
+          "retained declaration grammar supports " + resource + " " + name,
+          [&] {
+            auto retained = declarations(close(relay));
+            row(retained, name)[1] = resource;
+            // A resource row names its custody slot.
+            row(retained, name)[5] = "zkl_resource_" + std::string(64, 'a');
+            accept(checkComponentDeclarations(retained));
+            row(retained, name)[1] = "unknown";
+            refuse(checkComponentDeclarations(retained),
+                   "component-declaration");
+          });
   cases.run(
       "ordinary source record declarations retain existing semantics", [] {
         auto entry = close(R"(
 struct Plain{pub value:index,pub empty:()}
 protocol Run roles(P)(value:Plain@P)->(out:Plain@P){return(out=value);}
 )");
-        require(take(inspectComponentDeclarations(entry)) == "[[],[]]",
+        require(take(inspectComponentDeclarations(entry)) == "[[],[],[]]",
                 "ordinary records alone enabled the retained carrier");
         auto ordinary = take(json::parse(R"([
       [[["nominal","record","m::Pending",[]],"linear",true,
-        [["value",["bool"]]]]],[]])"));
+        [["value",["bool"],null]],[],
+        "zkl_resource_0000000000000000000000000000000000000000000000000000000000000000"]],
+      [],[["m::Pending",null]]])"));
         accept(checkComponentDeclarations(ordinary));
         (*(*(*ordinary.getAsArray())[0].getAsArray())[0].getAsArray())[2] =
             false;
-        refuse(checkComponentDeclarations(ordinary),
-               "component-declaration-record");
+        accept(checkComponentDeclarations(ordinary));
       });
   return cases.result();
 }

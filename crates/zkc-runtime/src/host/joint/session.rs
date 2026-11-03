@@ -1,10 +1,12 @@
 use super::{Bundle, Step, bundle::Segment, report::*};
 use super::{WireBackend, WireError};
+use crate::host::wire::RootRefusal;
 use crate::interpreter::Runner;
 use crate::vm::{
     Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
     ValueBudget, WorkBudget,
 };
+use std::{cell::Cell, sync::Arc};
 
 /// Hooks are trusted host policy. They cannot access runners or select a peer.
 /// Observers must be read-only, bounded, and release resource locks before return.
@@ -57,6 +59,9 @@ pub struct RunLimits {
     pub steps: usize,
     pub wire_bytes: usize,
     pub total_wire_bytes: usize,
+    /// Report storage: every reached record, and each distinct dynamic path
+    /// once, with its loop iteration numbers.
+    pub report_bytes: usize,
     pub values: ValueBudget,
     pub work: WorkBudget,
 }
@@ -66,6 +71,7 @@ impl Default for RunLimits {
             steps: 32768,
             wire_bytes: 4096,
             total_wire_bytes: 16 * 1024 * 1024,
+            report_bytes: Self::HARD_MAX.report_bytes,
             values: ValueBudget::default(),
             work: WorkBudget::default(),
         }
@@ -73,19 +79,23 @@ impl Default for RunLimits {
 }
 impl RunLimits {
     /// Installed joint execution ceilings. Steps count dispatched occurrences,
-    /// wire_bytes bounds one message, and total_wire_bytes counts all messages.
-    /// Work and retained payload limits apply separately to each runner.
+    /// wire_bytes bounds one message, total_wire_bytes counts all messages and
+    /// report_bytes the report's retained storage. Instructions and iterations
+    /// are each runner's own fuel. With a runner ledger, that ledger bounds
+    /// every runner's retained payload and logical work together; without
+    /// one, those limits apply separately to each runner.
     pub const HARD_MAX: Self = Self {
         steps: 32768,
         wire_bytes: 4096,
         total_wire_bytes: 16 * 1024 * 1024,
+        report_bytes: 64 * 1024 * 1024,
         values: ValueBudget {
             live_bytes: Limits::VALUE_BYTES,
             total_bytes: Limits::TOTAL_VALUE_BYTES,
         },
         work: WorkBudget {
-            instructions: Limits::INSTRUCTIONS,
-            iterations: Limits::ITERATIONS,
+            instructions: Limits::MAX_INSTRUCTIONS,
+            iterations: Limits::MAX_ITERATIONS,
             logical_bytes: Limits::LOGICAL_BYTES,
         },
     };
@@ -94,6 +104,7 @@ impl RunLimits {
         if self.steps > hard.steps
             || self.wire_bytes > hard.wire_bytes
             || self.total_wire_bytes > hard.total_wire_bytes
+            || self.report_bytes > hard.report_bytes
             || self.values.live_bytes > hard.values.live_bytes
             || self.values.total_bytes > hard.values.total_bytes
             || self.work.instructions > hard.work.instructions
@@ -136,12 +147,76 @@ impl<B: Backend> Slot<B> {
         }
     }
 }
+/// One dynamic control region: its complete outer-to-inner path and loop
+/// iteration numbers, stored once and shared by every reached step inside it.
+struct Region {
+    path: Arc<[PathElement]>,
+    iterations: Arc<[u64]>,
+    /// Report bytes of the shared storage, charged when the first reached
+    /// step references it. A region no step reaches retains nothing.
+    bytes: usize,
+    retained: Cell<bool>,
+}
+impl Region {
+    fn root() -> Self {
+        Self::new(Vec::new(), Vec::new())
+    }
+    fn new(path: Vec<PathElement>, iterations: Vec<u64>) -> Self {
+        let strings: usize = path
+            .iter()
+            .map(|element| match element {
+                PathElement::Branch { site, alternative }
+                | PathElement::Match { site, alternative } => {
+                    site.capacity() + alternative.capacity()
+                }
+                PathElement::Conditional { site, .. }
+                | PathElement::For { site, .. }
+                | PathElement::Loop { site, .. } => site.capacity(),
+            })
+            .sum();
+        // Two shared allocations, each with its reference-count header.
+        let bytes = 2 * 2 * std::mem::size_of::<usize>()
+            + path.len() * std::mem::size_of::<PathElement>()
+            + strings
+            + iterations.len() * std::mem::size_of::<u64>();
+        Self {
+            path: path.into(),
+            iterations: iterations.into(),
+            bytes,
+            retained: Cell::new(false),
+        }
+    }
+    /// The region one control element further in, without copying it into
+    /// any report row.
+    fn child(&self, element: PathElement) -> Option<Self> {
+        let iteration = match &element {
+            PathElement::Loop { iteration, .. } => Some(*iteration),
+            _ => None,
+        };
+        let mut path = Vec::new();
+        let mut iterations = Vec::new();
+        path.try_reserve_exact(self.path.len() + 1).ok()?;
+        iterations
+            .try_reserve_exact(self.iterations.len() + usize::from(iteration.is_some()))
+            .ok()?;
+        path.extend_from_slice(&self.path);
+        path.push(element);
+        iterations.extend_from_slice(&self.iterations);
+        iterations.extend(iteration);
+        Some(Self::new(path, iterations))
+    }
+}
 struct Execution<B: WireBackend> {
     wire_live: Option<crate::vm::LiveReservation>,
     slots: Vec<Slot<B>>,
     report: Report<B>,
     limits: RunLimits,
-    shared_ledger: Option<crate::vm::ExecutionLedger>,
+    /// Report records the selected step and report allowances admit.
+    records: usize,
+    /// Shared by every runner, when the invocation pools runner charges.
+    runner_ledger: Option<crate::vm::ExecutionLedger>,
+    /// The invocation root: wire transport, decoding and report storage.
+    host_ledger: Option<crate::vm::ExecutionLedger>,
 }
 enum StepResult {
     Completed,
@@ -151,8 +226,35 @@ type Attempt = Result<StepResult, Failure>;
 fn contract(detail: &str) -> Failure {
     Failure::new(FailureKind::Contract, detail)
 }
+/// A driver allowance of [`RunLimits`] refused: dispatch, message or
+/// cumulative wire bytes.
 fn limit() -> Failure {
     Failure::new(FailureKind::Limit, "joint-limit")
+}
+/// The report storage allowance, `RunLimits::report_bytes`, refused.
+fn report_limit() -> Failure {
+    Failure::new(FailureKind::Limit, "joint-report-limit")
+}
+/// The invocation root refused wire transport: an encoded or replacement
+/// message buffer, or the work or decoded storage of a received payload.
+fn transport_refusal(refusal: RootRefusal) -> Failure {
+    Failure::new(
+        FailureKind::Limit,
+        match refusal {
+            RootRefusal::Work => "joint-transport-work-limit",
+            RootRefusal::Bytes => "joint-transport-bytes-limit",
+        },
+    )
+}
+/// The invocation root refused a report record or its region's shared path.
+fn record_refusal(refusal: RootRefusal) -> Failure {
+    Failure::new(
+        FailureKind::Limit,
+        match refusal {
+            RootRefusal::Work => "joint-record-work-limit",
+            RootRefusal::Bytes => "joint-record-bytes-limit",
+        },
+    )
 }
 fn codec(error: WireError) -> Failure {
     match error {
@@ -171,16 +273,44 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
     limits: RunLimits,
     hooks: &mut H,
 ) -> Result<Report<B>, StartError<B>> {
-    run_with_ledger(bundle, session, inputs, limits, hooks, None)
+    run_with_ledgers(bundle, session, inputs, limits, hooks, None, None)
 }
-/// Joint runners share cumulative charging before any owner begins execution.
+/// Joint runners charge every byte to one ledger before any owner begins
+/// execution. The same ledger is also the invocation root of the Host's wire
+/// transport, decoding and report storage.
 pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
+    bundle: &Bundle,
+    session: &str,
+    inputs: Vec<RoleInput<B>>,
+    limits: RunLimits,
+    hooks: &mut H,
+    shared_ledger: Option<crate::vm::ExecutionLedger>,
+) -> Result<Report<B>, StartError<B>> {
+    run_with_ledgers(
+        bundle,
+        session,
+        inputs,
+        limits,
+        hooks,
+        shared_ledger.clone(),
+        shared_ledger,
+    )
+}
+/// Run with separate runner and Host accounting. `runners`, when present, is
+/// shared by every runner, which charges every byte it retains there as it
+/// executes and keeps only the selected instructions and iterations as its
+/// own fuel. `host` is the invocation root: it charges wire transport,
+/// received payload decoding and report storage, and the report keeps its
+/// live allowances. Runners without a shared ledger keep their separate
+/// per-runner budgets.
+pub fn run_with_ledgers<B: WireBackend, H: Hooks<B>>(
     bundle: &Bundle,
     session: &str,
     mut inputs: Vec<RoleInput<B>>,
     limits: RunLimits,
     hooks: &mut H,
-    shared_ledger: Option<crate::vm::ExecutionLedger>,
+    runners: Option<crate::vm::ExecutionLedger>,
+    host: Option<crate::vm::ExecutionLedger>,
 ) -> Result<Report<B>, StartError<B>> {
     if let Err(failure) = limits.validate() {
         return Err(StartError { failure, inputs });
@@ -232,12 +362,16 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     }
     let mut slots = Vec::new();
     let mut rows = Vec::new();
-    let mut reached = Vec::new();
     let mut backends = Vec::new();
+    // Each reached record charges at least its own size, so the report
+    // allowance bounds the record storage as well as the step count. Records
+    // are stored on demand, each charged to the invocation root first.
+    let records = limits
+        .steps
+        .min(limits.report_bytes / std::mem::size_of::<Reached>());
     if slots.try_reserve_exact(inputs.len()).is_err()
         || rows.try_reserve_exact(inputs.len()).is_err()
         || backends.try_reserve_exact(inputs.len()).is_err()
-        || reached.try_reserve_exact(limits.steps).is_err()
     {
         return refuse(FailureKind::Limit, "report-allocation", inputs);
     }
@@ -277,18 +411,23 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
         wire_live: None,
         slots,
         limits,
-        shared_ledger,
+        records,
+        runner_ledger: runners,
+        host_ledger: host.clone(),
         report: Report {
             session: session.into(),
             limits,
             outcome: Outcome::Completed,
-            reached,
+            reached: Vec::new(),
+            report_bytes: 0,
             wire: WireUsage::default(),
             pending: None,
             roles: rows,
             backends,
             retained: Vec::new(),
             wire_live: None,
+            storage_live: Vec::new(),
+            invocation: host,
         },
     };
     let outcome = execution
@@ -297,7 +436,33 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     Ok(execution.finalize(outcome, hooks))
 }
 impl<B: WireBackend> Execution<B> {
+    /// Charge one report record, with its region's shared path when this is the
+    /// region's first record, to the invocation root before storing it, and
+    /// keep the live allowance with the report: the root then holds exactly
+    /// `report_bytes` for the report's storage. The report allowance refuses
+    /// with `joint-report-limit`; the root with its own record codes.
+    fn retain_record(&mut self, charge: usize) -> Result<(), Failure> {
+        if self.report.reached.len() >= self.records
+            || self.report.reached.try_reserve(1).is_err()
+            || self.report.storage_live.try_reserve(1).is_err()
+        {
+            return Err(report_limit());
+        }
+        let live = crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), charge)
+            .map_err(record_refusal)?;
+        self.report.storage_live.extend(live);
+        Ok(())
+    }
     fn initialize(&mut self, bundle: &Bundle, session: &str) -> Option<Outcome> {
+        // Runners that share a ledger charge every byte to it and keep only
+        // their own fuel; without one, each keeps the selected budgets.
+        let (values, work) = match self.runner_ledger {
+            Some(_) => (
+                ValueBudget::UNBOUNDED,
+                WorkBudget::fuel(self.limits.work.instructions, self.limits.work.iterations),
+            ),
+            None => (self.limits.values, self.limits.work),
+        };
         for (index, slot) in self.slots.iter_mut().enumerate() {
             let backend = slot.backend.take().expect("unstarted backend");
             match Runner::new_for_role_with_ledger(
@@ -307,9 +472,9 @@ impl<B: WireBackend> Execution<B> {
                 session,
                 backend,
                 std::mem::take(&mut slot.inputs),
-                self.limits.values,
-                self.limits.work,
-                self.shared_ledger.clone(),
+                values,
+                work,
+                self.runner_ledger.clone(),
             ) {
                 Ok(runner) => {
                     let stopped = runner.stop().is_some();
@@ -331,7 +496,7 @@ impl<B: WireBackend> Execution<B> {
         None
     }
     fn execute<H: Hooks<B>>(&mut self, bundle: &Bundle, hooks: &mut H) -> Outcome {
-        if let Some(outcome) = self.segments(bundle, &bundle.segments, &[], hooks) {
+        if let Some(outcome) = self.segments(bundle, &bundle.segments, &Region::root(), hooks) {
             return outcome;
         }
         if self.report.pending.is_some() {
@@ -350,14 +515,85 @@ impl<B: WireBackend> Execution<B> {
         &mut self,
         bundle: &Bundle,
         segments: &[Segment],
-        path: &[PathElement],
+        region: &Region,
         hooks: &mut H,
     ) -> Option<Outcome> {
         for segment in segments {
             match segment {
                 Segment::Action(index) => {
-                    if let Some(outcome) = self.step(bundle, *index, path, hooks) {
+                    if let Some(outcome) = self.step(bundle, *index, region, hooks) {
                         return Some(outcome);
+                    }
+                }
+                Segment::Branch { entries, arms } => {
+                    let mut headers = Vec::new();
+                    for index in entries {
+                        let step = &bundle.steps[*index];
+                        let reached = self.report.reached.len();
+                        if let Some(outcome) = self.step(bundle, *index, region, hooks) {
+                            return Some(outcome);
+                        }
+                        if !self.returned(step.role)
+                            && matches!(bundle.action(step), Some(ProgramAction::Branch { .. }))
+                        {
+                            headers.push((*index, reached));
+                        }
+                    }
+                    if headers.is_empty() {
+                        continue;
+                    }
+                    let alternative = self.report.reached[headers[0].1]
+                        .branch_alternative
+                        .expect("checked selector");
+                    if headers.iter().any(|(_, reached)| {
+                        self.report.reached[*reached].branch_alternative != Some(alternative)
+                    }) {
+                        return Some(Outcome::DriverFailed(contract(
+                            "branch-selector-disagreement",
+                        )));
+                    }
+                    let first = &bundle.steps[headers[0].0];
+                    let ProgramAction::Branch { site, .. } =
+                        bundle.action(first).expect("branch header")
+                    else {
+                        unreachable!()
+                    };
+                    let arm = &arms[alternative];
+                    for (index, reached) in headers {
+                        let step = &bundle.steps[index];
+                        let runner = self.slots[step.role]
+                            .runner
+                            .as_mut()
+                            .expect("initialized role");
+                        let mut origin = runner.root_origin().clone();
+                        origin.path.extend_from_slice(&region.path);
+                        let result = runner.enter_branch(&origin, site, alternative);
+                        if runner.stop().is_some() {
+                            self.report.reached[reached].progress = Progress::Stopped;
+                            return Some(Outcome::ParticipantStopped { role: step.role });
+                        }
+                        if let Err(error) = result {
+                            self.report.reached[reached].progress = Progress::Failed;
+                            return Some(Outcome::DriverFailed(runtime_failure(
+                                FailureKind::Contract,
+                                &error,
+                            )));
+                        }
+                        self.report.reached[reached].branch_started = true;
+                    }
+                    let Some(child) = region.child(PathElement::Branch {
+                        site: site.clone(),
+                        alternative: arm.alternative.clone(),
+                    }) else {
+                        return Some(Outcome::DriverFailed(limit()));
+                    };
+                    if let Some(outcome) = self.segments(bundle, &arm.body, &child, hooks) {
+                        return Some(outcome);
+                    }
+                    for index in &arm.exits {
+                        if let Some(outcome) = self.step(bundle, *index, &child, hooks) {
+                            return Some(outcome);
+                        }
                     }
                 }
                 Segment::Loop {
@@ -369,7 +605,7 @@ impl<B: WireBackend> Execution<B> {
                     for index in entries {
                         let step = &bundle.steps[*index];
                         let reached = self.report.reached.len();
-                        if let Some(outcome) = self.step(bundle, *index, path, hooks) {
+                        if let Some(outcome) = self.step(bundle, *index, region, hooks) {
                             return Some(outcome);
                         }
                         if !self.returned(step.role)
@@ -405,7 +641,7 @@ impl<B: WireBackend> Execution<B> {
                             .as_mut()
                             .expect("initialized role");
                         let mut origin = runner.root_origin().clone();
-                        origin.path.extend_from_slice(path);
+                        origin.path.extend_from_slice(&region.path);
                         let result = runner.enter_loop(&origin, site, count);
                         if runner.stop().is_some() {
                             self.report.reached[*reached].progress = Progress::Stopped;
@@ -427,11 +663,12 @@ impl<B: WireBackend> Execution<B> {
                         {
                             break;
                         }
-                        let mut child = path.to_vec();
-                        child.push(PathElement::Loop {
+                        let Some(child) = region.child(PathElement::Loop {
                             site: site.clone(),
                             iteration,
-                        });
+                        }) else {
+                            return Some(Outcome::DriverFailed(limit()));
+                        };
                         if let Some(outcome) = self.segments(bundle, body, &child, hooks) {
                             return Some(outcome);
                         }
@@ -456,7 +693,7 @@ impl<B: WireBackend> Execution<B> {
         &mut self,
         bundle: &Bundle,
         coordinate: usize,
-        path: &[PathElement],
+        region: &Region,
         hooks: &mut H,
     ) -> Option<Outcome> {
         let step = &bundle.steps[coordinate];
@@ -477,7 +714,7 @@ impl<B: WireBackend> Execution<B> {
             });
         }
         let index = self.report.reached.len();
-        if let Some(reason) = hooks.cancel_before(index, step, path) {
+        if let Some(reason) = hooks.cancel_before(index, step, &region.path) {
             return Some(Outcome::HostCancelled(Text::copy(&reason)));
         }
         let action = bundle.action(step).expect("admitted step");
@@ -492,26 +729,41 @@ impl<B: WireBackend> Execution<B> {
         {
             return Some(Outcome::DriverFailed(limit()));
         }
-        let mut iterations = Vec::new();
-        if iterations.try_reserve_exact(path.len()).is_err() {
-            return Some(Outcome::DriverFailed(limit()));
+        // The record is charged at every step; the region's shared path and
+        // iterations only when the first step references them.
+        let charge = std::mem::size_of::<Reached>()
+            + if region.retained.get() {
+                0
+            } else {
+                region.bytes
+            };
+        let Some(bytes) = self
+            .report
+            .report_bytes
+            .checked_add(charge)
+            .filter(|n| *n <= self.limits.report_bytes)
+        else {
+            return Some(Outcome::DriverFailed(report_limit()));
+        };
+        if let Err(failure) = self.retain_record(charge) {
+            return Some(Outcome::DriverFailed(failure));
         }
-        for element in path {
-            if let PathElement::Loop { iteration, .. } = element {
-                iterations.push(*iteration);
-            }
-        }
+        self.report.report_bytes = bytes;
+        region.retained.set(true);
         self.report.reached.push(Reached {
             step: *step,
-            iterations,
+            iterations: region.iterations.clone(),
             loop_count: None,
             loop_started: false,
+            branch_alternative: None,
+            branch_started: false,
+            path: region.path.clone(),
             progress: Progress::Exposed,
             sent_bytes: None,
             replacement_bytes: None,
             receive_completion: None,
         });
-        let result = self.dispatch(bundle, index, step, action, path, hooks);
+        let result = self.dispatch(bundle, index, step, action, &region.path, hooks);
         let reached = self
             .report
             .reached
@@ -594,10 +846,10 @@ impl<B: WireBackend> Execution<B> {
                 // Both allocations coexist until the replacement is accepted.
                 // Retained storage includes spare Vec capacity, not just wire bytes.
                 let replacement_live = crate::host::wire::reserve_allocation(
-                    self.shared_ledger.as_ref(),
+                    self.host_ledger.as_ref(),
                     bytes.capacity(),
                 )
-                .map_err(|_| limit())?;
+                .map_err(transport_refusal)?;
                 self.report.wire.replacement_bytes = total;
                 self.report.reached.last_mut().unwrap().replacement_bytes = Some(bytes.len());
                 pending.bytes = bytes;
@@ -611,6 +863,18 @@ impl<B: WireBackend> Execution<B> {
             .expect("initialized roster");
         let mut origin = runner.root_origin().clone();
         origin.path.extend_from_slice(path);
+        if let ProgramAction::Branch { site, .. } = action {
+            match runner
+                .branch_selector(&origin, site)
+                .map_err(|e| runtime_failure(FailureKind::Contract, &e))?
+            {
+                Some(arm) => {
+                    self.report.reached.last_mut().unwrap().branch_alternative = Some(arm);
+                    return Ok(StepResult::Completed);
+                }
+                None => return Ok(StepResult::Stopped),
+            }
+        }
         if let ProgramAction::Loop { site, .. } = action {
             match runner
                 .loop_count(&origin, site)
@@ -734,7 +998,7 @@ impl<B: WireBackend> Execution<B> {
                 // bytes, not bytes sent. Only an installed fixed width can decide
                 // this limit before encoding. Dynamic frames are fully reserved
                 // here and checked below before committing the send.
-                if self.shared_ledger.is_some()
+                if self.host_ledger.is_some()
                     && runner
                         .backend()
                         .fixed_wire_size(&value.physical_type())
@@ -751,8 +1015,8 @@ impl<B: WireBackend> Execution<B> {
                     return Err(limit());
                 }
                 let wire_live =
-                    crate::host::wire::reserve_allocation(self.shared_ledger.as_ref(), bound)
-                        .map_err(|_| limit())?;
+                    crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), bound)
+                        .map_err(transport_refusal)?;
                 let bytes = runner.backend().encode_wire(&value).map_err(codec)?;
                 if bytes.len() > bound {
                     return Err(limit());
@@ -810,7 +1074,9 @@ impl<B: WireBackend> Execution<B> {
                     .pending
                     .as_ref()
                     .ok_or_else(|| contract("empty-handoff"))?;
-                if let Some(ledger) = &self.shared_ledger {
+                // Reading the received payload is work the root charges
+                // first; its decoded storage is a second charge.
+                if let Some(ledger) = &self.host_ledger {
                     ledger
                         .charge(
                             WorkBudget {
@@ -820,20 +1086,18 @@ impl<B: WireBackend> Execution<B> {
                             },
                             0,
                         )
-                        .map_err(|_| limit())?;
+                        .map_err(|_| transport_refusal(RootRefusal::Work))?;
                 }
-                let (_decoded_live, invalid) = match runner
-                    .backend()
-                    .decoding_bound(ty, &pending.bytes)
-                {
-                    Ok(bound) => (
-                        crate::host::wire::reserve_allocation(self.shared_ledger.as_ref(), bound)
-                            .map_err(|_| limit())?,
-                        None,
-                    ),
-                    Err(WireError::Invalid(reason)) => (None, Some(reason)),
-                    Err(error) => return Err(codec(error)),
-                };
+                let (_decoded_live, invalid) =
+                    match runner.backend().decoding_bound(ty, &pending.bytes) {
+                        Ok(bound) => (
+                            crate::host::wire::reserve_allocation(self.host_ledger.as_ref(), bound)
+                                .map_err(transport_refusal)?,
+                            None,
+                        ),
+                        Err(WireError::Invalid(reason)) => (None, Some(reason)),
+                        Err(error) => return Err(codec(error)),
+                    };
                 let decoded = match invalid {
                     Some(reason) => Err(reason),
                     None => match runner.backend().decode_wire(ty, &pending.bytes) {
@@ -856,6 +1120,7 @@ impl<B: WireBackend> Execution<B> {
                 }
             }
             ProgramAction::Finish
+            | ProgramAction::Branch { .. }
             | ProgramAction::Loop { .. }
             | ProgramAction::Yield { .. }
             | ProgramAction::ReturnIf { .. } => {

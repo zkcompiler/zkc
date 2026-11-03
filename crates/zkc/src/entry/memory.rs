@@ -23,12 +23,20 @@ pub struct Documents<'a> {
     bindings: &'a BTreeMap<String, Arc<Vec<u8>>>,
 }
 impl<'a> Documents<'a> {
+    /// Each named reference is one wire frame of `capacity`; together they are
+    /// bounded by `reference_bytes`
+    /// ([`Allowances::REFERENCE_BYTES`](crate::run::Allowances::REFERENCE_BYTES)),
+    /// not by a runner's capacity.
     pub fn new(
         capacity: Capacity,
+        reference_bytes: usize,
         installation: zkc_cpu::CpuInstallation,
         bindings: &'a BTreeMap<String, Arc<Vec<u8>>>,
     ) -> Result<Self, String> {
         capacity.validate()?;
+        if !crate::run::Allowances::REFERENCE_BYTES.admits(reference_bytes as u64) {
+            return Err("entry-reference-bytes-limit".into());
+        }
         if bindings.len() > 1024 {
             return Err("entry-input-reference-limit".into());
         }
@@ -37,7 +45,7 @@ impl<'a> Documents<'a> {
             capacity.check_wire(bytes.len())?;
             total = total
                 .checked_add(bytes.len())
-                .filter(|n| *n <= capacity.values.total_bytes)
+                .filter(|n| *n <= reference_bytes)
                 .ok_or("entry-request-limit")?;
         }
         Ok(Self {
@@ -59,8 +67,7 @@ impl Resolver for Bindings<'_> {
     fn resolve(&mut self, name: &str) -> Result<InputSource, String> {
         self.0
             .get(name)
-            .cloned()
-            .map(InputSource::from_bytes)
+            .map(|bytes| InputSource::named(name, bytes.clone()))
             .ok_or("entry-input-reference".into())
     }
 }
@@ -82,13 +89,25 @@ impl ProofEntry {
             self.check_result_encoding(operation)
                 .map_err(|e| EntryError::new(EntryPhase::Request, e))?;
         }
+        // The call's invocation root starts with request decoding: each
+        // decoded document is a fresh allocation, held until conversion.
+        let invocation = self.invocation_root();
+        let mut documents = Vec::new();
+        let mut decoded = |values: &NamedValues| {
+            let bytes = super::value::request_bytes(values.values());
+            zkc_runtime::host::wire::reserve_allocation(Some(&invocation), bytes)
+                .map(|live| documents.extend(live))
+                .map_err(|_| EntryError::new(EntryPhase::Preparation, "entry-request-limit"))
+        };
         let groups = self.interface().input_groups();
         let public = load(&groups[0]).map_err(EntryError::input)?;
+        decoded(&public)?;
         let private = if operation == ProofOperation::Prove {
             load(&groups[1]).map_err(EntryError::input)?
         } else {
             NamedValues::new()
         };
+        decoded(&private)?;
         let role = self
             .interface()
             .proof_role(operation)
@@ -98,7 +117,7 @@ impl ProofEntry {
         if !services.is_empty() {
             return Err(EntryError::new(EntryPhase::Request, "entry-service-names"));
         }
-        self.preflight_call(
+        self.preflight_rooted(
             operation,
             ProofRequest {
                 public,
@@ -112,6 +131,8 @@ impl ProofEntry {
             },
             attempts,
             encode_results,
+            invocation,
+            documents,
         )
     }
     /// Bounded resident documents, with the same input/setup/proof precedence as
@@ -132,11 +153,16 @@ impl ProofEntry {
         self.preflight_document_call(operation, options, attempts, encode_results, |group| {
             if documents.is_none() {
                 documents = Some(
-                    Documents::new(self.capacity(), self.installation().clone(), bindings)
-                        .map_err(|code| InputError {
-                            code,
-                            path: group.name().into(),
-                        })?,
+                    Documents::new(
+                        self.capacity(),
+                        self.material_limits().reference_bytes,
+                        self.installation().clone(),
+                        bindings,
+                    )
+                    .map_err(|code| InputError {
+                        code,
+                        path: group.name().into(),
+                    })?,
                 );
             }
             documents.as_mut().expect("initialized documents").load(

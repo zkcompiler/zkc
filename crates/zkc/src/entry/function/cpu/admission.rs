@@ -12,10 +12,21 @@ pub(super) fn admit(
         .limits
         .validate()
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
-    require(options.journal_events <= 4096, "entry-host-journal-limit")?;
-    let interface = FunctionInterface::read(package)?;
-    let document: Document = decode(package.artifact().as_bytes(), 16 * 1024 * 1024)?;
-    let mut validator = structure(&document, &interface)?;
+    use crate::host::capacity::Allowances;
+    require(
+        Allowances::JOURNAL_EVENTS.admits(options.journal_events as u64),
+        "entry-host-journal-limit",
+    )?;
+    require(
+        Allowances::FUNCTION_SERVICE_DRAWS.admits(options.service_draws),
+        "entry-host-service-limit",
+    )?;
+    let interface = FunctionInterface::read(package, options.limits.interface)?;
+    let document: Document = decode(
+        package.artifact().as_bytes(),
+        crate::entry::package::ARTIFACT_BYTES,
+    )?;
+    let mut validator = structure(&document, &interface, options.limits.interface)?;
     let mut native_calculations = BTreeMap::new();
     let mut references = Vec::new();
     let backend = data::backend(
@@ -127,6 +138,11 @@ pub(super) fn admit(
                         crate::entry::ProofOptions {
                             capacity: options.limits.capacity,
                             external_work: options.limits.external_work,
+                            ring_work: options.limits.ring_work,
+                            sequence_work: options.limits.sequence_work,
+                            interface: options.limits.interface,
+                            loading_work: options.limits.loading_work,
+                            material: options.limits.material,
                             binding: options.binding,
                             installation: options.limits.installation.clone(),
                         },
@@ -148,6 +164,18 @@ pub(super) fn admit(
                 kind: native,
             },
         );
+    }
+    // Retry authorization follows the standalone proof Entry: only a producing
+    // deployment with a completion choice accepts it.
+    for (id, attempts) in &options.attempts {
+        match native_deployments.get(id).map(|d| &d.kind) {
+            Some(super::DeploymentKind::Proof {
+                entry,
+                operation: crate::entry::ProofOperation::Prove,
+            }) => entry.check_attempts(*attempts)?,
+            Some(_) => return Err(error("entry-attempt-operation")),
+            None => return Err(error("entry-host-attempts")),
+        }
     }
     let mut schema_pool = BTreeMap::new();
     fn intern(s: &Schema, pool: &mut BTreeMap<String, std::sync::Arc<Schema>>) {
@@ -214,8 +242,13 @@ pub(super) fn admit(
             // Bound the CPU's independently reconstructed cache as well.
             descriptor_bytes = descriptor_bytes
                 .checked_add(ty.descriptor_bytes())
-                .filter(|bytes| *bytes <= 16 * 1024 * 1024)
-                .ok_or_else(|| EntryError::new(EntryPhase::Interface, "entry-interface-limit"))?;
+                .filter(|bytes| *bytes <= options.limits.interface.descriptor_bytes)
+                .ok_or_else(|| {
+                    EntryError::new(
+                        EntryPhase::Interface,
+                        crate::entry::InterfaceError::DescriptorLimit,
+                    )
+                })?;
             Ok((spelling, ty))
         })
         .collect::<Result<_>>()?;

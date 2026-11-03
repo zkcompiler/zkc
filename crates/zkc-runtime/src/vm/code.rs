@@ -24,7 +24,7 @@ pub(crate) static INDEX_TYPE: LazyLock<PhysicalType> =
     LazyLock::new(|| PhysicalType::parse("index@native.index/0").expect("installed index type"));
 
 pub(crate) type Slot = usize;
-pub(crate) type ParticipantLayouts = BTreeMap<String, BTreeMap<String, FrameInputs>>;
+pub(crate) type ParticipantLayouts = BTreeMap<String, BTreeMap<String, Vec<FrameInputs>>>;
 
 #[derive(Debug)]
 pub(crate) struct Executable {
@@ -444,7 +444,31 @@ pub(crate) struct Participant {
     pub body: Body,
 }
 #[derive(Clone, Debug)]
+pub(crate) struct ParticipantArm {
+    pub alternative: String,
+    pub payload: Vec<String>,
+    pub body: Body,
+}
+/// Participant control binds each distinct region formal to its parent value
+/// as `(local, parent)`. A Copy parent may repeat; every formal keeps its own
+/// storage binding.
+#[derive(Clone, Debug)]
 pub(crate) enum Instruction {
+    Conditional {
+        site: String,
+        condition: String,
+        captures: Vec<(String, String)>,
+        then_body: Body,
+        else_body: Body,
+        outputs: Vec<String>,
+    },
+    Match {
+        site: String,
+        input: String,
+        captures: Vec<(String, String)>,
+        arms: Vec<ParticipantArm>,
+        outputs: Vec<String>,
+    },
     Query {
         site: String,
         port: String,

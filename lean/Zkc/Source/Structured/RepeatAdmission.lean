@@ -26,11 +26,16 @@ def resolveRepeatSpec (interface : ProtocolInterface) (arguments results : List 
     throw "structured-protocol-signature"
   let state := (arguments.drop 1).take carried
   let captures := arguments.drop (1 + carried)
-  if results != state || state.any Ty.isHandle then throw "structured-protocol-signature"
+  if results != state || state.any Ty.isForeignHandle then throw "structured-protocol-signature"
+  -- A repeated callback receives its captures at every iteration: an affine
+  -- custody permission can only be carried as state.
+  if captures.any Ty.isCustody then throw "structured-custody-capture"
   let roles ← resolveScope interface.roles roles
   let stateScopes ← scopes.mapM (resolveScope interface.roles)
   if stateScopes.length != carried then throw "structured-scope-count"
   if !stateScopes.all (fun scope => scope.all roles.contains) then throw "structured-scope"
+  if (state.zip stateScopes).any (fun (type, scope) => type.isCustody && scope.length != 1) then
+    throw "structured-custody-holder"
   return ⟨state, captures, roles, stateScopes, maximum⟩
 
 /-- Only immutable service captures inherit protocol-input authority. Induction,
@@ -127,7 +132,7 @@ theorem resolveRepeatSpec_fields {interface : ProtocolInterface} {arguments resu
     spec.maximum = maximum ∧ maximum ≤ 1048576 ∧ carried < arguments.length ∧
       arguments.head? = some .index ∧ spec.state = (arguments.drop 1).take carried ∧
       spec.captures = arguments.drop (1 + carried) ∧ results = spec.state ∧
-      spec.state.any Ty.isHandle = false ∧
+      spec.state.any Ty.isForeignHandle = false ∧
       resolveScope interface.roles roles = .ok spec.roles ∧
       scopes.mapM (resolveScope interface.roles) = .ok spec.stateScopes ∧
       spec.stateScopes.length = carried ∧

@@ -46,6 +46,7 @@ theorem observed_layers_fold (encoding : CircuitEncoding F) (sites : HonestProdu
     (equation : ∀ index point, index < encoding.layers → point.length = encoding.width →
       observedLayerBody (F := F) (G := G)
         (SourceRows.LayerArguments.pack {
+            custody := none,
             index := some index,
             proverPoint := some point,
             point := none,
@@ -130,6 +131,7 @@ theorem observed_from_layer (encoding : CircuitEncoding F) («outputs» : List F
     (equation : ∀ index point, index < encoding.layers → point.length = encoding.width →
       observedLayerBody (F := F) (G := G)
         (SourceRows.LayerArguments.pack {
+            custody := none,
             index := some index,
             proverPoint := some point,
             point := none,

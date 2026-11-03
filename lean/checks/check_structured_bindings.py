@@ -13,6 +13,10 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from bridges.common.request_support import check_lean_resources  # noqa: E402
 
 
 CLIENTS = ("SmallSumcheck", "TwoSums", "GkrRounds")
@@ -143,6 +147,7 @@ example : GkrRoundsGate.gateValueDefinition.body.component
         result = run(path, "-DwarningAsError=true", "-DElab.async=false")
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)
+        check_lean_resources(result, str(path))
         if not (result.returncode > 0):
             raise AssertionError(f"expected ordinary certificate refusal: {name}; exit={result.returncode}")
         if not ("error" in log and any(reason in log for reason in [

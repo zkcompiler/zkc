@@ -42,6 +42,7 @@ helper bodies and are excluded. -/
 def Op.total : Op → Bool
   | .makeProduct .. | .getProduct .. => true
   | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract ..
   | .fieldMultiply .. | .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale ..
   | .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor

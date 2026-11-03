@@ -1,0 +1,36 @@
+pub struct Secret:
+    value: index
+#[sealed]
+pub struct Sealed:
+    pub value: index
+pub struct Mixed:
+    pub public: index
+    pub child: Secret
+    hidden: index
+pub struct Nested:
+    child: Mixed
+pub struct Empty:
+    private: ()
+pub enum Choice:
+    Some(Secret)
+pub type Alias = Secret
+def make(value: index) -> Secret:
+    return Secret {value: value}
+entry def Fetch() -> Secret:
+    return make(7)
+entry def FetchSealed() -> Sealed:
+    return Sealed {value: 7}
+entry def FetchMixed() -> Mixed:
+    return Mixed {public: 5, child: make(19), hidden: 281}
+entry def FetchNested() -> Nested:
+    return Nested {child: Mixed {public: 5, child: make(19), hidden: 281}}
+entry def FetchEmpty() -> Empty:
+    return Empty {private: ()}
+entry def FetchArray() -> [Secret; 0]:
+    return []
+entry def FetchChoice() -> Choice:
+    return Choice::Some(make(7))
+entry def FetchAlias() -> Alias:
+    return make(7)
+entry def Echo(value: Secret) -> Secret:
+    return value

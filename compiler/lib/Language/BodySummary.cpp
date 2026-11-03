@@ -498,7 +498,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
                           std::is_same_v<T, Construct> ||
                           std::is_same_v<T, RoleAssembly> ||
                           std::is_same_v<T, LocalPrimitive> ||
-                          std::is_same_v<T, LocalControl>)
+                          std::is_same_v<T, Control>)
               operands = action.operands;
             else if constexpr (std::is_same_v<T, Projection> ||
                                std::is_same_v<T, Consume> ||
@@ -525,7 +525,39 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
       auto values = gather(operands);
       if (!values)
         return {};
-      if (const auto *control = std::get_if<LocalControl>(&op.action)) {
+      if (const auto *control = std::get_if<Control>(&op.action)) {
+        std::vector<Dependencies> selectedDomains;
+        for (auto domain : control->domainArguments) {
+          auto dependency = summarizeDomainBinding(
+              types, body, domain, result.values, domains, depth);
+          if (!dependency)
+            return {};
+          selectedDomains.push_back(*dependency);
+        }
+
+        // Formation checks include dormant arms. Payloads depend on the
+        // selector; capture associations remain ordered and exact.
+        if (body.mode == Body::Mode::Math &&
+            control->kind != Control::Kind::For) {
+          const unsigned captures = control->operands.size() - 1;
+          for (const auto &region : control->regions) {
+            if (region->inputs < captures)
+              return {};
+            std::vector<Dependencies> nestedInputs(
+                region->inputs - captures,
+                result.values[control->operands.front().index]);
+            for (auto capture : ArrayRef(control->operands).drop_front())
+              nestedInputs.push_back(result.values[capture.index]);
+            auto nested = summarizeBody(types, declarations, *region, statics,
+                                        nestedInputs, environment, depth + 1,
+                                        selectedDomains);
+            if (!nested)
+              return {};
+            result.formation.insert(result.formation.end(),
+                                    nested->formation.begin(),
+                                    nested->formation.end());
+          }
+        }
         for (auto domain : control->domainArguments) {
           auto dependency = summarizeDomainBinding(
               types, body, domain, result.values, domains, depth);

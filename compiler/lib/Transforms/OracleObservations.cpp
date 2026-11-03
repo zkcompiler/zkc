@@ -49,7 +49,29 @@ struct Analysis {
       Summary step;
       if (isa<pir::ApplyOp>(op))
         return error("oracle-observation-preparation");
-      if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
+      if (auto branch = dyn_cast<pir::BranchOp>(op)) {
+        if (includes(branch.getRoles())) {
+          std::optional<unsigned> selected;
+          if (branch.getInputs()[0].getType().isSignlessInteger(1)) {
+            auto selector = constant(branch.getInputs()[0]);
+            if (!selector)
+              return selector.takeError();
+            if (*selector)
+              selected = **selector ? 0 : 1;
+          }
+          bool first = true;
+          for (const auto &edge : action.getRegions()) {
+            auto nested =
+                sequence(view, view.getSequence(edge.sequence), depth - 1);
+            if (!nested)
+              return nested.takeError();
+            if (selected && edge.ordinal != *selected)
+              continue;
+            step = first ? *nested : step.either(*nested);
+            first = false;
+          }
+        }
+      } else if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
         if (includes(repeat.getRoles())) {
           auto nested = sequence(
               view, view.getSequence(*action.getRepeatBody()), depth - 1);

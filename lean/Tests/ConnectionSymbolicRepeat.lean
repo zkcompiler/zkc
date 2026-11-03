@@ -51,7 +51,7 @@ def snapshot : Snapshot where
 structured_views snapshot helpers [] protocols [nested]
 theorem admitted : check snapshot = .ok program := kernel_admission
 
-def message : Template := ⟨"nested", [⟨"repeat", "nested", "outer"⟩, ⟨"repeat", "nested", "inner"⟩],
+def message : Template := ⟨"nested", [.repeat "nested" "outer", .repeat "nested" "inner"],
   ["message", "nested", "message", "message", "P", "V"]⟩
 def plainContext : Context := .plain "nested" ["P", "V"] 0 1
 def fsContext : Context := .fiatShamir "nested" ["P", "V"] 0 1 0 "random.bls12-381.fr/0"

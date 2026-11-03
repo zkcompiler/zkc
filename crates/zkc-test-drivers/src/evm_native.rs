@@ -56,17 +56,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let project = Project::load(required("--project")?)?;
     let entry = required("--entry")?;
     let rounds: u32 = required("--rounds")?.parse()?;
-    // Include the first one-over-bound control without permitting huge fixtures.
-    if rounds > 11 {
-        return Err("fixture round limit is 11".into());
+    // The fixture's rounds are its participant loop count. Include the first
+    // control over the declared participant loop maximum without permitting
+    // huge fixtures.
+    let declared = zkc::evm_target::LIMITS
+        .iter()
+        .find(|limit| limit.name == "participant_loop_maximum")
+        .ok_or("the target declaration has no participant loop maximum")?
+        .maximum;
+    let bound = u32::try_from(declared + 1)?;
+    if rounds > bound {
+        return Err(format!("fixture round limit is {bound}").into());
     }
     let numbers: Vec<u64> = if let Some(path) = options.get("--values") {
         serde_json::from_slice(&std::fs::read(path)?)?
     } else {
         (1..=(1u64 << rounds)).collect()
     };
-    if numbers.len() > 2048 {
-        return Err("fixture table limit is 2048".into());
+    if numbers.len() > 1usize << bound {
+        return Err(format!("fixture table limit is {}", 1usize << bound).into());
     }
     let fields: Vec<_> = numbers.iter().map(|n| Scalar::from(*n)).collect();
     let claim: Scalar = if let Some(value) = options.get("--claim") {
@@ -106,6 +114,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             kind: Some(EntryKind::Proof),
         },
         project.settings(None, &Default::default())?.options(),
+        zkc::entry::InterfaceLimits::DEFAULT,
     )?;
     let envelope: Json = serde_json::from_str(package.artifact())?;
     let descriptor = &envelope[2];
@@ -203,7 +212,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let evm = if let Some(directory) = options.get("--evm-artifact") {
         let artifact = Artifact::capture(directory, required("--evm-sha256")?)?;
         let source = artifact.source()?;
-        if source.metadata()["source_sha256"] != envelope[1]
+        if source.metadata()["original"] != envelope[1]
             || source.metadata()["descriptor"] != *descriptor
             || source.entry() != entry
         {

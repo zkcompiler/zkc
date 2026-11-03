@@ -72,7 +72,7 @@ theorem shape_plain (xs : List F) (dimension : Nat) :
 
 theorem shape_plain_values (xs : List F) (dimension : Nat) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper4Helper (.cons xs (.cons dimension (.cons 1 .nil))) =
+      GkrSourceBodies.helper2Helper (.cons xs (.cons dimension (.cons 1 .nil))) =
       if dimension < indexLimit then
         if dimension < 64 then
           if xs.length < indexLimit then
@@ -83,7 +83,7 @@ theorem shape_plain_values (xs : List F) (dimension : Nat) :
 
 theorem index_add_plain (a b : Nat) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.sourceHelper4Helper (.cons a (.cons b .nil)) =
+      GkrSourceBodies.helper3Helper (.cons a (.cons b .nil)) =
       if a < indexLimit ∧ b < indexLimit ∧ a + b < indexLimit then
         .done (.cons (a + b) .nil) else .halt .refused := by
   rw [closed_invoke_plain]
@@ -93,7 +93,7 @@ theorem index_add_plain (a b : Nat) :
 
 theorem power_plain (exponent : Nat) (small : exponent < 64) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper18Helper (.cons exponent .nil) =
+      GkrSourceBodies.helper4Helper (.cons exponent .nil) =
       .done (.cons (2 ^ exponent) .nil) := by
   rw [closed_invoke_plain]
   change (invoke (GkrSourceGuards.helpers (F := F) (G := G)) _ _).interpret _ = _

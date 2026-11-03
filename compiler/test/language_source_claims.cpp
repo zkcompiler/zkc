@@ -4,7 +4,9 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -872,6 +874,31 @@ int main() {
     refuses(check(editSource(source, "#[site(inner)] ", "")),
             "source.claim.site");
   });
+  for (StringRef arm : {"then", "else"})
+    cases.run(
+        (Twine("selected ") + arm + " claim sites retain native scope").str(),
+        [&] {
+          auto source = editSource(
+              fixture("nested"), "#[site(challenge)] let c=coins.draw();",
+              "#[site(choice)] let c=if true {"
+              "#[site(challenge)] let value=coins.draw();value"
+              "} else {#[site(challenge)] let value=coins.draw();"
+              "value};");
+          source = editSource(
+              std::move(source), "sites.inner.challenge",
+              (Twine("sites.inner.choice.") + arm + ".challenge").str());
+          auto value = report(source);
+          auto *claim =
+              (*value.getAsObject()->getArray("claims"))[0].getAsObject();
+          auto *binding = (*claim->getArray("site_bindings"))[0].getAsObject();
+          auto *path = binding->getArray("native_path");
+          require(path->size() == 2 &&
+                      (*path)[0].getAsString() == nativeSiteName("inner", 0) &&
+                      (*path)[1].getAsString() ==
+                          nativeSelectedSite(nativeSiteName("choice", 0), arm,
+                                             nativeSiteName("challenge", 0)),
+                  "selected claim native path mismatch");
+        });
   cases.run(
       "interactive protocol claims are retained independently of proof plans",
       [] {
@@ -1019,8 +1046,12 @@ int main() {
           }
           exits += fields[2] == json::Value("terminal");
         }
-        require(init == 1 && yielded == 1 && zero == 1 && exits == 1,
-                "missing invariant or actual terminal exit");
+        // Both the nominal custody unit and the Boolean payload carry the
+        // Pending route; neither may disappear at the zero-trip join.
+        require(init == 2 && yielded == 2 && zero == 2 && exits == 1,
+                "missing invariant or actual terminal exit: " +
+                    std::to_string(init) + "," + std::to_string(yielded) + "," +
+                    std::to_string(zero) + "," + std::to_string(exits));
         auto encode = [](const json::Value &v) {
           std::string result;
           raw_string_ostream out(result);
@@ -1200,11 +1231,13 @@ int main() {
     auto declarations = (*baseline.publication.getAsArray())[10];
     auto &records = *(*declarations.getAsArray())[0].getAsArray();
     (*records[0].getAsArray())[2] = false;
+    cantFail(checkComponentDeclarations(declarations));
+    (*records[0].getAsArray())[2] = "false";
     auto error = checkComponentDeclarations(declarations);
-    require(bool(error), "unsealed linear record accepted");
-    require(StringRef(toString(std::move(error)))
-                .contains("component-declaration-record"),
-            "wrong unsealed linear record diagnostic");
+    require(bool(error), "non-Boolean sealing flag accepted");
+    require(
+        StringRef(toString(std::move(error))).contains("component-declaration"),
+        "wrong sealing shape diagnostic");
     auto changed = take(json::parse(bytes));
     auto &row = *changed.getAsObject()->getArray("seams")->front().getAsArray();
     (*row[1].getAsArray())[1] = 999;
@@ -1237,9 +1270,13 @@ int main() {
                   "target.missing,model=models.example@0(),accept=out.claim,"
                   "stage=interactive,error=0);}"),
             "source.claim.target");
-    refuses(closeSubject(take(check(fixture("components-local-fields"))),
-                         "claims::Reduce"),
-            "source.ingress");
+    auto project = take(check(fixture("components-local-fields")));
+    take(prepareOriginal(take(closeSubject(project, "claims::Reduce"))));
+    auto direct = take(prepareOriginal(
+        take(zkc::test::closeNativeRun(project, "claims::Reduce"))));
+    zkc::test::requireWithheld(
+        zkc::test::withheldSupply(direct.interface()), {"claim"},
+        "direct selection hid the pending residual's supply mark");
   });
   cases.run("pending output requires an actual residual relation", [] {
     auto source = editSource(

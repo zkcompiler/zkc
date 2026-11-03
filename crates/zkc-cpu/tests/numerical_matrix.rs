@@ -15,7 +15,7 @@ fn binding(domain: domains::NativeDomain, operation: &str) -> OperationBinding {
     OperationBinding {
         contract: operation.into(),
         arguments: vec![domain.field.name().into()],
-        implementation: format!("{}/{operation}", domain.provider),
+        implementation: format!("{}/{operation}", domain.provider()),
         physical_arguments: vec![],
     }
 }

@@ -2,6 +2,7 @@
 # reordered. Its export is retained beside this directory and imported by
 # lean/ZkcExamples/Structured/SumcheckRepacked*.lean.
 "format" = "zkc.project/0"
+"source-format" = "zkc"
 
 ["modules"]
 "example" = "main.zkc"

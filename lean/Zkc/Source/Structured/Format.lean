@@ -64,6 +64,9 @@ mutual
       return .group (← group name)
     | [.str "apply", .str "groups", .arr #[.arr #[.str "domain", .str "Group", name]]] =>
       return .groups (← group name)
+    | [.str "apply", .str "resource_unit", .arr #[.arr #[.str "domain", .str "Slot", .str slot]]] =>
+      unless LogicalFormat.slotIdentityValid slot do throw "structured-slot-identity"
+      return .resourceUnit slot
     | [.str "oracle", .str "table", arguments] =>
       return .oracle (← oracleKindAt depth (.arr #[.str "table", arguments]))
     | [.str "oracle_sequence", .str "table", arguments, maximum] =>
@@ -128,7 +131,7 @@ def strings (json : Json) (limit : Nat := 512) : Except String (List String) := 
   (← array json limit).mapM string
 
 def scopes (json : Json) : Except String (List (List String)) := do
-  (← array json).mapM (fun scope => strings scope 16)
+  (← array json).mapM (fun scope => strings scope Limits.protocolRoles)
 
 /-- Shape and capacity only: roster uniqueness, scope membership and signature
 alignment are checked by semantic admission, including for unused protocols. -/
@@ -136,7 +139,7 @@ def interface (json : Json) : Except String (Option ProtocolInterface) := do
   match ← array json with
   | [] => return none
   | [.str "protocol", roles, inputs, outputs] =>
-      return some ⟨← strings roles 16, ← scopes inputs, ← scopes outputs⟩
+      return some ⟨← strings roles Limits.protocolRoles, ← scopes inputs, ← scopes outputs⟩
   | _ => throw "structured-interface"
 
 def optional {α : Type} (decode : Json → Except String α) : Json → Except String (Option α)
@@ -174,11 +177,11 @@ def descriptor (json : Json) : Except String Descriptor := do
   match ← array json with
   | [.str "oracle_input", holder, receivers, sort, bounds] =>
       let (sort, kind) ← oracleLogicalSort sort
-      return .oracle (.input (← string holder) (← strings receivers 16)
+      return .oracle (.input (← string holder) (← strings receivers Limits.protocolRoles)
         sort (← oracleShapeValues kind bounds))
   | [.str "oracle_send", holder, receivers, kind, dimensions, bounds] =>
       let kind ← oracleKind kind
-      return .oracle (.send (← string holder) (← strings receivers 16)
+      return .oracle (.send (← string holder) (← strings receivers Limits.protocolRoles)
         kind (← oracleDimensions kind dimensions) (← oracleShapeValues kind bounds))
   | [.str "oracle_query", owner, kind] =>
       return .oracle (.query (← optional (fun value => string value) owner) (← oracleKind kind))
@@ -186,7 +189,7 @@ def descriptor (json : Json) : Except String Descriptor := do
       return .oracle (.contents (← string owner) (← oracleKind kind))
   | [.str "oracle_components", holder, receivers, sort] =>
       let (sort, _) ← oracleLogicalSort sort
-      return .oracle (.components (← string holder) (← strings receivers 16) sort)
+      return .oracle (.components (← string holder) (← strings receivers Limits.protocolRoles) sort)
   | [.str "oracle_shape", kind, dimension] =>
       let kind ← oracleKind kind
       let dimension ← string dimension
@@ -196,13 +199,13 @@ def descriptor (json : Json) : Except String Descriptor := do
       return .oracle (.forgetShape (← oracleKind source) (← oracleKind target))
   | [.str "oracle_virtual", declaration, holder, receivers, kind] =>
       return .oracle (.virtual (← string declaration) (← string holder)
-        (← strings receivers 16) (← oracleKind kind))
+        (← strings receivers Limits.protocolRoles) (← oracleKind kind))
   | [.str "oracle_sequence_empty", kind, maximum] =>
       return .oracle (.sequenceEmpty (← oracleKind kind) (← oracleNatural maximum))
   | [.str "oracle_sequence_append", kind, maximum, roles] =>
-      return .oracle (.sequenceAppend (← oracleKind kind) (← oracleNatural maximum) (← strings roles 16))
+      return .oracle (.sequenceAppend (← oracleKind kind) (← oracleNatural maximum) (← strings roles Limits.protocolRoles))
   | [.str "oracle_sequence_at", kind, maximum, roles] =>
-      return .oracle (.sequenceAt (← oracleKind kind) (← oracleNatural maximum) (← strings roles 16))
+      return .oracle (.sequenceAt (← oracleKind kind) (← oracleNatural maximum) (← strings roles Limits.protocolRoles))
   | [.str "oracle_sequence_length", kind, maximum] =>
       return .oracle (.sequenceLength (← oracleKind kind) (← oracleNatural maximum))
   | [.str "exec", operation, binding, parameters] =>
@@ -216,6 +219,10 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "index.equal"] => return .indexEqual
   | [.str "index.less"] => return .indexLess
   | [.str "index.power_of_two"] => return .indexPowerOfTwo
+  | [.str "index.wrapping_add"] => return .indexWrappingAdd
+  | [.str "index.wrapping_sub"] => return .indexWrappingSubtract
+  | [.str "index.bit_and"] => return .indexBitAnd
+  | [.str "index.logical_shift_right"] => return .indexLogicalShiftRight
   | [.str "multilinear.restrict_prefix", d] => return .multilinearRestrictPrefix (← field d)
   | [.str "vector.length", d] => return .vectorLength (← field d)
   | [.str "field.constant", d, n] =>
@@ -243,10 +250,10 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "product.get", index] => return .getProduct (← natural index 511)
   | [.str "call", name] => return .call (← string name)
   | [.str "apply", name] => return .apply (← string name)
-  | [.str "protocol_apply", name, roles] => return .protocolApply (← string name) (← strings roles 16)
+  | [.str "protocol_apply", name, roles] => return .protocolApply (← string name) (← strings roles Limits.protocolRoles)
   | [.str "protocol_repeat", carried, maximum, roles, stateScopes] =>
       return .protocolRepeat (← natural carried 512) (← natural maximum 1048576)
-        (← strings roles 16) (← scopes stateScopes)
+        (← strings roles Limits.protocolRoles) (← scopes stateScopes)
   | [.str "local_call", name, role] => return .localCall (← string name) (← string role)
   | [.str "fold", domain, step, predicate] =>
       return .fold (← string domain) (← string step) (← string predicate true)
@@ -254,8 +261,8 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "for"] => return .loop
   | [.str "for_condition"] => return .loopCondition
   | [.str "guard", owner] => return .guard (← string owner)
-  | [.str "restrict", roles] => return .restrict (← strings roles 16)
-  | [.str "assemble", roles] => return .assemble (← strings roles 16)
+  | [.str "restrict", roles] => return .restrict (← strings roles Limits.protocolRoles)
+  | [.str "assemble", roles] => return .assemble (← strings roles Limits.protocolRoles)
   | [.str "exchange", sender, receiver] => return .exchange (← string sender) (← string receiver)
   | [.str "draw", owner, f] => return .draw (← string owner) (← field f)
   | [.str "statement", relation, selectors, acceptance, target] =>
@@ -403,8 +410,9 @@ def binding (json : Json) : Except String Binding := do
   match ← array json with
   | [.str "binding", name, contract, arguments, implementation, inputs, outputs] =>
     let arguments ← (← array arguments 16).mapM bindingArgument
+    let sort := bindingRootSort (← string contract)
     let roots ← arguments.mapM fun argument => match argument with
-      | .domain "Field" root => pure root
+      | .domain actual root => if actual == sort then pure root else throw "structured-binding-argument"
       | _ => throw "structured-binding-argument"
     let schema : BindingSchema := ⟨arguments, ← types inputs, ← types outputs⟩
     let value : Binding := ⟨← string name, ← string contract, roots,
@@ -485,26 +493,8 @@ def digestValid (source : String) : Bool :=
   source.length == 71 && source.toList.take 7 == "sha256:".toList &&
     (source.toList.drop 7).all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
 
-def sourceRecord (json : Json) : Except String SourceRecord := do
-  let [type, .str resource, .bool sealed, fields] ← array json | throw "component-declaration"
-  unless ["ordinary", "affine", "linear"].contains resource do throw "component-declaration"
-  let fields ← (← array fields).mapM fun field => do
-    let [name, type] ← array field | throw "component-declaration"
-    return (← string name, ← OriginFormat.term Limits.nesting type)
-  return ⟨← OriginFormat.term Limits.nesting type, resource, sealed, fields⟩
-
-def sourcePort (json : Json) : Except String SourcePort := do
-  let [name, type, roles, offset, count] ← array json | throw "component-declaration"
-  return ⟨← string name, ← OriginFormat.term Limits.nesting type,
-    ← strings roles 16, ← natural offset, ← natural count 512⟩
-
-def sourceDeclarations (json : Json) : Except String SourceDeclarations := do
-  let [records, protocols] ← array json | throw "component-declaration"
-  let protocols ← (← array protocols Limits.tableEntries).mapM fun protocol => do
-    let [name, inputs, outputs] ← array protocol | throw "component-declaration"
-    return SourceProtocol.mk (← string name) (← (← array inputs).mapM sourcePort)
-      (← (← array outputs).mapM sourcePort)
-  return ⟨← (← array records Limits.tableEntries).mapM sourceRecord, protocols⟩
+/-- Only the current three-table declaration carrier is decoded. -/
+def sourceDeclarations := DeclarationFormat.decode
 
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with

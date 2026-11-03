@@ -280,7 +280,9 @@ proof Right=Run{
     const auto &view = checked.interface();
     require(view.proof && view.proof->target == 0 &&
                 view.proof->services == std::vector<unsigned>{1} &&
-                view.proof->publicInputs == std::vector<unsigned>({0, 1}),
+                view.proof->publicInputs ==
+                    std::vector<EntryInputSelection>(
+                        {{0, {}, 1, {}}, {1, {}, 1, {}}}),
             "Entry choices not retained");
     auto module = parse(checked.bytes());
     unsigned statements = 0;

@@ -247,20 +247,30 @@ math fn bad(xs:Vector<Fr>,i:index)->Fr {
                         .str()),
               "source.data-bound");
     });
-  cases.run("mathematical selection does not admit mathematical if", [] {
-    refuses(check(R"(
-math fn bad(c:bool,a:Fr,b:Fr)->Fr {
+  cases.run("mathematical if retains its mode and selected control", [] {
+    auto project = take(check(R"(
+math fn choose(c:bool,a:Fr,b:Fr)->Fr {
   return if c { a } else { b };
 }
-)"),
-            "source.mode");
-    refuses(check(R"(
+)"));
+    const auto &body = *named(project, "choose").body;
+    require(body.mode == Body::Mode::Math &&
+                llvm::any_of(body.operations,
+                             [](const auto &operation) {
+                               return std::holds_alternative<Control>(
+                                   operation.action);
+                             }),
+            "mathematical conditional lost its selected control");
+  });
+  cases.run("mathematical intrinsic syntax remains unavailable in Local mode",
+            [] {
+              refuses(check(R"(
 fn bad(c:bool,a:Fr,b:Fr)->Fr {
   return intrinsic<Fr>("field.select",c,a,b);
 }
 )"),
-            "source.mode");
-  });
+                      "source.mode");
+            });
 
   mlir::DialectRegistry registry;
   registerDialects(registry);

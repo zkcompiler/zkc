@@ -58,16 +58,16 @@ theorem layers_fold (encoding : CircuitEncoding F) («outputs» : List F)
     (pointSize : point.length = encoding.width) :
     Finite.fold (fun state index => Repeat.stepOn layerSpec {} 1 (captures encoding handle)
       (callback (F := F) (G := G)) state index Occurrence.iterations (layerSite.site))
-      (List.range' index count) (verifierLayerState (some point) (some claim)) =
+      (List.range' index count) (verifierLayerState (some 0) (some point) (some claim)) =
     (validatorLayers {} handle currentSites encoding index count (index, point, claim)).bind
-      (fun result => .done (verifierLayerState (some result.2.1) (some result.2.2))) := by
+      (fun result => .done (verifierLayerState (some 0) (some result.2.1) (some result.2.2))) := by
   have translated := Zkc.Source.Structured.LoopPresentation.foldInvariant
     (fun state index => Repeat.stepOn layerSpec {} 1 (captures encoding handle)
       (callback (F := F) (G := G)) state index Occurrence.iterations (layerSite.site))
     (fun state index => Occurrence.iterations.within (layerSite.site) index
       (HonestProducerObservedLayers.validatorLayer (G := G) {} handle encoding.width
         currentLayerSites encoding.circuit.add encoding.circuit.mul state))
-    (fun (_ : Nat) (state : Nat × List F × F) => verifierLayerState (some state.2.1) (some state.2.2))
+    (fun (_ : Nat) (state : Nat × List F × F) => verifierLayerState (some 0) (some state.2.1) (some state.2.2))
     (fun index state => state.1 = index ∧ state.2.1.length = encoding.width) encoding.layers
     (by
       rintro index ⟨offset, point, claim⟩ inside ⟨same, sized⟩

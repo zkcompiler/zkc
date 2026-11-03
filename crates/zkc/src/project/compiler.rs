@@ -1,5 +1,5 @@
 use super::{CheckedInterface, Project, selection};
-use crate::entry::{CompileOptions, Package};
+use crate::entry::{CompileOptions, InterfaceLimits, Package};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -193,10 +193,7 @@ impl Compiler {
         if !selection::matches(selection.name, source.entry()) {
             return Err("source-entry-selection".into());
         }
-        if source.fork() != options.fork
-            || source.options() != &options.compile
-            || source.metadata()["options"]["numerical_expressions"] != "prefer-native"
-        {
+        if source.fork() != options.fork || source.options() != &options.compile {
             return Err("evm-source-options".into());
         }
         Ok(source)
@@ -252,7 +249,11 @@ impl Compiler {
         for source in project.paths() {
             crate::io::open_regular(source).map_err(|_| "artifact-io")?;
         }
-        let mut arguments = vec![OsString::from(command), "--source-format=zkc".into()];
+        // The project's own selection; the compiler never chooses a grammar.
+        let mut arguments = vec![
+            OsString::from(command),
+            format!("--source-format={}", project.source_format.as_str()).into(),
+        ];
         if let Some(name) = selection.name {
             if name.is_empty() {
                 return Err("source-entry-selection".into());
@@ -416,26 +417,37 @@ impl Compiler {
         }
         serde_json::from_value(report).map_err(|_| "source-check-format".into())
     }
-    /// A checked logical view, obtained before executable lowering. It cannot bind a Host.
-    pub fn inspect(&self, project: &Project, selection: Selection<'_>) -> Result<CheckedInterface> {
+    /// A checked logical view, obtained before executable lowering, read
+    /// under the Host's selected interface admission allowances. It cannot
+    /// bind a Host.
+    pub fn inspect(
+        &self,
+        project: &Project,
+        selection: Selection<'_>,
+        interface: InterfaceLimits,
+    ) -> Result<CheckedInterface> {
         let bytes = self.invoke(project, "language-interface", selection, &[])?;
-        let view = CheckedInterface::from_compiler(&bytes)?;
+        let view = CheckedInterface::from_compiler(&bytes, interface)?;
         if !selection.matches(&view) {
             return Err("source-entry-selection".into());
         }
         Ok(view)
     }
-    /// Captures exactly the locally compiled bytes. Trust rests on source and compiler.
+    /// Captures exactly the locally compiled bytes, whose interface is read
+    /// under the Host's selected interface admission allowances. Trust rests
+    /// on source and compiler.
     pub fn compile(
         &self,
         project: &Project,
         selection: Selection<'_>,
         options: CompileOptions,
+        interface: InterfaceLimits,
     ) -> Result<Package> {
         self.build(CompilationRequest {
             project,
             selection,
             options,
+            interface,
             observations: None,
             cache: None,
         })
@@ -449,6 +461,7 @@ impl Compiler {
             project,
             selection,
             options,
+            interface,
             observations,
             ..
         } = request;
@@ -456,7 +469,7 @@ impl Compiler {
         let flags: Vec<_> = flags.iter().map(String::as_str).collect();
         let invocation =
             self.invoke_observed(project, "language-package", selection, &flags, observations)?;
-        let mut result = Self::captured(&invocation.bytes, selection, options)?;
+        let mut result = Self::captured(&invocation.bytes, selection, options, interface)?;
         result.observation = invocation.observation;
         result.diagnostics = invocation.diagnostics;
         result.diagnostics_truncated = invocation.diagnostics_truncated;
@@ -466,11 +479,12 @@ impl Compiler {
         bytes: &[u8],
         selection: Selection<'_>,
         options: CompileOptions,
+        interface: InterfaceLimits,
     ) -> Result<CompilationResult> {
         let pin = Sha256::digest(bytes).into();
         let package =
             Package::capture(bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
-        let view = CheckedInterface::read(&package)?;
+        let view = CheckedInterface::read(&package, interface)?;
         if !selection.matches(&view) || package.options() != options {
             return Err("source-entry-selection".into());
         }
@@ -564,6 +578,9 @@ pub struct CompilationRequest<'a> {
     pub project: &'a Project,
     pub selection: Selection<'a>,
     pub options: CompileOptions,
+    /// The Host's selected interface admission allowances, under which the
+    /// compiled package's interface is read.
+    pub interface: InterfaceLimits,
     pub observations: Option<&'a ObservationRequest>,
     pub cache: Option<&'a super::CompilationCache>,
 }
@@ -702,6 +719,7 @@ mod tests {
     #[cfg(all(feature = "evm", target_os = "linux"))]
     mod evm {
         use super::super::*;
+        use crate::project::SourceFormat;
         use serde_json::Value;
         use std::{collections::BTreeMap, os::unix::fs::PermissionsExt};
 
@@ -723,6 +741,7 @@ mod tests {
             let module = directory.join("main.zkc");
             std::fs::write(&module, "module example;\n").unwrap();
             let project = Project::explicit(
+                SourceFormat::Zkc,
                 BTreeMap::from([("example".into(), module.to_str().unwrap().into())]),
                 BTreeMap::new(),
             )
@@ -747,15 +766,11 @@ mod tests {
                 crate::entry::OracleQueryOrder::AfterFinalDraw;
             let mut record =
                 crate::evm::tests::source_record("example::Proof", "invocation control");
-            let mut selected = serde_json::to_value(&options.compile).unwrap();
-            selected["numerical_expressions"] = serde_json::json!("prefer-native");
-            record["options"] = selected.clone();
-            record["manifest"]["options"] = selected;
+            record["options"] = serde_json::to_value(&options.compile).unwrap();
             let mut normalized = options.compile.oracle_realization.clone();
             normalized.roots = crate::entry::OracleRoots::Exact(vec![]);
             record["descriptor"][8] = serde_json::json!(normalized.canonical_json().unwrap());
             record["fork"] = serde_json::json!(options.fork);
-            record["manifest"]["fork"] = serde_json::json!(options.fork);
             let mut checks = String::new();
             for flag in options
                 .compile
@@ -790,7 +805,6 @@ mod tests {
             )];
             let mut wrong_fork = record.clone();
             wrong_fork["fork"] = serde_json::json!("cancun");
-            wrong_fork["manifest"]["fork"] = serde_json::json!("cancun");
             ignored.push(wrong_fork);
             for field in [
                 "simplify",
@@ -802,13 +816,11 @@ mod tests {
                 let mut wrong = record.clone();
                 wrong["options"][field] =
                     serde_json::json!(!wrong["options"][field].as_bool().unwrap());
-                wrong["manifest"]["options"] = wrong["options"].clone();
                 ignored.push(wrong);
             }
             let mut wrong_oracle = record.clone();
             wrong_oracle["options"]["oracle_realization"] =
                 serde_json::to_value(crate::entry::OracleSelection::default()).unwrap();
-            wrong_oracle["manifest"]["options"] = wrong_oracle["options"].clone();
             let normalized = crate::entry::OracleSelection {
                 roots: crate::entry::OracleRoots::Exact(vec![]),
                 ..Default::default()
@@ -1276,8 +1288,8 @@ mod tests {
             }
             for (path, replacement) in [
                 ("/unknown", Value::Bool(true)),
-                ("/manifest/format", Value::String("wrong-format".into())),
-                ("/manifest/limits", Value::Null),
+                ("/format", Value::String("wrong-format".into())),
+                ("/limits", Value::Null),
             ] {
                 let mut malformed = sealed.metadata().clone();
                 if path == "/unknown" {
@@ -1291,7 +1303,7 @@ mod tests {
                 );
             }
             let response = serde_json::to_string(sealed.metadata()).unwrap();
-            let duplicate = format!("{{\"target\":\"cpu\",{}", &response[1..]);
+            let duplicate = format!("{{\"fork\":\"cancun\",{}", &response[1..]);
             assert_eq!(
                 crate::evm::Source::capture(duplicate.as_bytes())
                     .unwrap_err()
@@ -1393,6 +1405,7 @@ proof Proof=Echo{prover P;verifier V;public{value};accept accepted;construction 
             )
             .unwrap();
             let authored = Project::explicit(
+                SourceFormat::Zkc,
                 BTreeMap::from([("authored".into(), authored_path.to_str().unwrap().into())]),
                 BTreeMap::new(),
             )

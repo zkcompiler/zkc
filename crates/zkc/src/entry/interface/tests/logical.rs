@@ -1,10 +1,10 @@
 use super::*;
 
-// This is actual defaultFRI fullmodule output, retained verbatim as an external
-// producer fixture. It includes every closed protocol, not just the proof root.
+// Actual FRI source output from the compiler's independent native/source gate.
+// Fixture provenance and reproduction are recorded beside the retained bytes.
 const FRI: &[u8] = include_bytes!("fixtures/fri-interface.json");
 
-fn handle(row: &str, rows: Option<&str>, capacity: Option<&str>) -> Value {
+pub(super) fn handle(row: &str, rows: Option<&str>, capacity: Option<&str>) -> Value {
     let data = if let Some(field) = row.strip_prefix("field:") {
         format!("vector:{field}")
     } else if let Some(group) = row.strip_prefix("group:") {
@@ -44,8 +44,13 @@ fn handle(row: &str, rows: Option<&str>, capacity: Option<&str>) -> Value {
     result
 }
 fn logical_port(value: Value, maximum: Value) -> Value {
-    let mut p = port("word", 0, json!([0, 1]), json!(["P", "V"]), value);
-    p["holder"] = json!("P");
+    let mut p = placed_port(
+        "word",
+        0,
+        json!([0, 1]),
+        json!({"kind":"oracle","holder":0,"receivers":[1]}),
+        value,
+    );
     p["maximum_rows"] = maximum;
     p
 }
@@ -55,32 +60,46 @@ fn retained(p: Value) -> Value {
         .as_array_mut()
         .unwrap()
         .push(json!({"symbol":"internal","roles":["P","V"],
-        "inputs":[p],"outputs":[],"services":[],"clauses":[]}));
+        "inputs":[p],"outputs":[],"services":[],"common_input_requirements":[],"clauses":[]}));
     d
 }
 fn record() -> Value {
     let mut r = schema("logical_record", "State", json!([]));
     r["constructible"] = json!(false);
+    r["roles"] = json!(["H", "R"]);
     r["fields"] = json!([
-        {"name":"empty","offset":0,"schema":schema("unit","()",json!([]))},
-        {"name":"word","offset":0,"maximum_rows":"0","schema":handle("field:koala-bear",None,None)},
-        {"name":"count","offset":1,"schema":schema("index","index",json!(["index"]))},
-        {"name":"layers","offset":2,"schema":handle("bool",Some("0"),Some("0"))},
-        {"name":"tail","offset":3,"schema":schema("index","index",json!(["index"]))}
+        {"name":"empty","offset":0,"public":true,"placement":null,"schema":schema("unit","()",json!([]))},
+        {"name":"word","offset":0,"public":true,"placement":null,"maximum_rows":"0","schema":handle("field:koala-bear",None,None)},
+        {"name":"count","offset":1,"public":true,"placement":null,"schema":schema("index","index",json!(["index"]))},
+        {"name":"layers","offset":2,"public":true,"placement":null,"schema":handle("bool",Some("0"),Some("0"))},
+        {"name":"tail","offset":3,"public":true,"placement":null,"schema":schema("index","index",json!(["index"]))}
     ]);
+    for field in r["fields"].as_array_mut().unwrap() {
+        field["placement"] = if field["schema"]["kind"] == "oracle"
+            || field["schema"]["kind"] == "oracle_sequence"
+        {
+            json!({"kind":"oracle","holder":0,"receivers":[1]})
+        } else {
+            data_placement(json!([0, 1]))
+        };
+    }
     r
 }
+fn record_placement(r: &Value) -> Value {
+    json!({"kind":"product","instance":r["identity"],"arguments":[0,1],
+        "fields":r["fields"].as_array().unwrap().iter().map(|f|f["placement"].clone()).collect::<Vec<_>>()})
+}
 fn record_port() -> Value {
-    let mut p = port(
+    let r = record();
+    placed_port(
         "state",
         0,
         json!([0, 1, 2, 3, 4, 5]),
-        json!(["P", "V"]),
-        record(),
-    );
-    p["holder"] = json!("P");
-    p
+        record_placement(&r),
+        r,
+    )
 }
+
 fn replace(d: &Value, path: &str, value: Value) -> Value {
     let mut d = d.clone();
     *d.pointer_mut(path).unwrap() = value;
@@ -95,9 +114,139 @@ fn refuses(d: &Value, cases: &[(&str, Value)]) {
     }
 }
 
+// The source-profile transition retains exact current wire members. This fixture
+// is not a repair of the historical FRI document and supplies no native evidence.
+fn legacy_port(holder: u32, receivers: Vec<u32>) -> Value {
+    let mut schema = record();
+    schema["roles"] = json!([]);
+    let mut roles = receivers.clone();
+    roles.push(holder);
+    roles.sort_unstable();
+    let mut fields = vec![];
+    for field in schema["fields"].as_array_mut().unwrap() {
+        fields.push(
+            if field["schema"]["kind"] == "oracle" || field["schema"]["kind"] == "oracle_sequence" {
+                json!({"kind":"oracle","holder":holder,"receivers":receivers})
+            } else {
+                data_placement(json!(roles))
+            },
+        );
+        field["placement"] = Value::Null;
+    }
+    let placement = json!({"kind":"product","instance":schema["identity"],
+        "arguments":roles,"fields":fields});
+    placed_port("state", 0, json!([0, 1, 2, 3, 4, 5]), placement, schema)
+}
+fn refresh_components(document: &mut Value) {
+    let p = &mut document["protocols"][1]["inputs"][0];
+    p["components"] = fixture_components(&p["schema"], &p["placement"], 0);
+}
+
+#[test]
+fn legacy_family_transition_is_exact_and_keeps_empty_private_metadata() {
+    for (holder, receivers) in [(0, vec![1]), (2, vec![0, 1])] {
+        for sealed in [false, true] {
+            let mut p = legacy_port(holder, receivers.clone());
+            p["schema"]["sealed"] = json!(sealed);
+            p["schema"]["fields"][0]["public"] = json!(false);
+            let mut d = retained(p);
+            d["protocols"][1]["roles"] = json!(["A", "B", "C", "unused"]);
+            read(&d).unwrap();
+            for (path, value) in [
+                ("/protocols/1/inputs/0/schema/permissions", json!(["Drop"])),
+                ("/protocols/1/inputs/0/schema/custody", json!(1)),
+                ("/protocols/1/inputs/0/schema/roles", json!(["H", "R"])),
+                (
+                    "/protocols/1/inputs/0/schema/fields/0/placement",
+                    data_placement(json!([0, 1])),
+                ),
+                (
+                    "/protocols/1/inputs/0/placement/fields/0/roles",
+                    json!([holder]),
+                ),
+                (
+                    "/protocols/1/inputs/0/placement/fields/3/holder",
+                    json!(receivers[0]),
+                ),
+            ] {
+                let mut bad = replace(&d, path, value);
+                refresh_components(&mut bad);
+                assert!(read(&bad).is_err(), "accepted legacy mutation {path}");
+            }
+            for path in ["roles", "element"] {
+                let mut bad = d.clone();
+                bad["protocols"][1]["inputs"][0]["schema"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove(path);
+                assert!(read(&bad).is_err(), "defaulted legacy schema {path}");
+            }
+            let mut missing = d.clone();
+            missing["protocols"][1]["inputs"][0]["schema"]["fields"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("placement");
+            assert!(read(&missing).is_err());
+        }
+    }
+    // A family with two valid, independently oriented handles is not this
+    // transition category, even when the complete component cache agrees.
+    let mut different = retained(legacy_port(0, vec![1]));
+    different["protocols"][1]["inputs"][0]["placement"]["fields"][3] =
+        json!({"kind":"oracle","holder":1,"receivers":[0]});
+    refresh_components(&mut different);
+    assert!(read(&different).is_err());
+    let mut extra = retained(legacy_port(0, vec![1]));
+    extra["protocols"][1]["roles"] = json!(["A", "B", "unused"]);
+    let placement = &mut extra["protocols"][1]["inputs"][0]["placement"];
+    placement["arguments"] = json!([0, 1, 2]);
+    for index in [0, 2, 4] {
+        placement["fields"][index]["roles"] = json!([0, 1, 2]);
+    }
+    refresh_components(&mut extra);
+    assert!(read(&extra).is_err());
+}
+
+#[test]
+fn legacy_category_requires_a_direct_handle_and_ordinary_metadata() {
+    let mut ordinary = schema("logical_record", "NoHandle", json!([]));
+    ordinary["constructible"] = json!(false);
+    ordinary["fields"] = json!([{"name":"empty","offset":0,"public":false,
+        "placement":null,"schema":schema("unit","()",json!([]))}]);
+    let placed = json!({"kind":"product","instance":ordinary["identity"],
+        "arguments":[0,1],"fields":[data_placement(json!([0,1]))]});
+    let d = retained(placed_port("state", 0, json!([]), placed, ordinary));
+    assert_eq!(read(&d).unwrap_err(), InterfaceError::Schema);
+
+    let inner = legacy_port(0, vec![1]);
+    read(&retained(inner.clone())).unwrap();
+    let mut outer = schema("logical_record", "NestedLegacy", json!([]));
+    outer["constructible"] = json!(false);
+    outer["fields"] = json!([
+        {"name":"nested","offset":0,"public":true,"placement":null,"schema":inner["schema"]},
+        {"name":"word","offset":4,"public":true,"placement":null,"schema":handle("bool",Some("0"),None)}
+    ]);
+    let placed = json!({"kind":"product","instance":outer["identity"],
+        "arguments":[0,1],"fields":[inner["placement"],{"kind":"oracle","holder":0,"receivers":[1]}]});
+    let d = retained(placed_port(
+        "state",
+        0,
+        json!([0, 1, 2, 3, 4, 5, 6, 7]),
+        placed,
+        outer,
+    ));
+    assert_eq!(read(&d).unwrap_err(), InterfaceError::Schema);
+}
+
 #[test]
 fn actual_fri_retains_internal_state_metadata() {
-    let view = Interface::decode(FRI, None).unwrap();
+    for fri in toolchain_parameters(FRI) {
+        fri_internal_state_metadata(
+            &Interface::decode(&fri, None, InterfaceLimits::DEFAULT).unwrap(),
+        );
+    }
+}
+fn fri_internal_state_metadata(view: &Interface) {
     assert_eq!(view.document.protocols.len(), 7);
     assert_eq!(view.document.relations.len(), 1);
     view.check_executable_ports().unwrap();
@@ -108,7 +257,7 @@ fn actual_fri_retains_internal_state_metadata() {
         .flat_map(|p| &p.inputs)
         .find(|p| p.display_type.starts_with("fri::QueryState<"))
         .unwrap();
-    assert_eq!(p.schema.kind, raw::Kind::LogicalRecord);
+    assert!(matches!(p.placement, raw::Placement::Product { .. }));
     let committed = view
         .document
         .protocols
@@ -116,7 +265,10 @@ fn actual_fri_retains_internal_state_metadata() {
         .flat_map(|p| &p.inputs)
         .find(|p| p.display_type.starts_with("fri::CommitmentState<"))
         .unwrap();
-    assert_eq!(committed.schema.kind, raw::Kind::LogicalRecord);
+    assert!(matches!(
+        committed.placement,
+        raw::Placement::Product { .. }
+    ));
     assert_eq!(committed.native, (0..10).collect::<Vec<_>>());
     assert_eq!(
         committed
@@ -134,8 +286,6 @@ fn actual_fri_retains_internal_state_metadata() {
             "round_count"
         ]
     );
-    assert_eq!(committed.holder.get().map(String::as_str), Some("P"));
-    assert_eq!(p.holder.get().map(String::as_str), Some("P"));
     assert_eq!(p.native, (0..12).collect::<Vec<_>>());
     assert!(p.schema.leaves.is_empty());
     assert_eq!(
@@ -163,8 +313,20 @@ fn actual_fri_retains_internal_state_metadata() {
         p.schema.fields[1].schema.maximum.get(),
         Some(&raw::Unsigned(3))
     );
-    // Body offset 3 follows three handles and therefore starts at native slot 6.
-    let (geometry, slots) = validate::project(p, &[3]).unwrap();
+    // Internal geometry follows three handles at native slots 6 and 7. Its
+    // private source field is retained for inspection, not external projection.
+    assert_eq!(
+        validate::project(p, &[3]).unwrap_err(),
+        InterfaceError::Selection
+    );
+    let geometry = &p.schema.fields[3].schema;
+    assert!(!p.schema.fields[3].public);
+    let slots: Vec<_> = p
+        .components
+        .iter()
+        .filter(|c| c.path.starts_with(&[3]) && c.role == 0)
+        .map(|c| c.native)
+        .collect();
     assert_eq!(slots, [6, 7]);
     assert_eq!(
         geometry.leaves,
@@ -216,7 +378,7 @@ fn direct_handles_and_sequences_preserve_unsigned_bounds_and_associations() {
 fn exact_conditional_fields_and_objects_refuse_omission_null_and_extras() {
     let d = retained(logical_port(handle("bool", None, Some("0")), json!("0")));
     for path in [
-        "/protocols/1/inputs/0/holder",
+        "/protocols/1/inputs/0/placement",
         "/protocols/1/inputs/0/maximum_rows",
         "/protocols/1/inputs/0/schema/oracle",
         "/protocols/1/inputs/0/schema/data_schema",
@@ -277,11 +439,11 @@ fn oracle_kind_data_shape_and_family_are_checked() {
     refuses(
         &d,
         &[
-            ("/protocols/1/inputs/0/holder", json!("unknown")),
-            ("/protocols/1/inputs/0/roles", json!(["P"])),
-            ("/protocols/1/inputs/0/roles", json!(["V", "P"])),
-            ("/protocols/1/inputs/0/roles", json!(["P", "P"])),
-            ("/protocols/1/inputs/0/roles", json!(["P", "X"])),
+            ("/protocols/1/inputs/0/placement/holder", json!(2)),
+            ("/protocols/1/inputs/0/placement/receivers", json!([])),
+            ("/protocols/1/inputs/0/placement/receivers", json!([1, 0])),
+            ("/protocols/1/inputs/0/placement/receivers", json!([1, 1])),
+            ("/protocols/1/inputs/0/placement/receivers", json!([2])),
             ("/protocols/1/inputs/0/native", json!([0])),
             ("/protocols/1/inputs/0/native", json!([1, 0])),
             ("/protocols/1/inputs/0/schema/constructible", json!(true)),
@@ -408,13 +570,13 @@ fn logical_field_bounds_offsets_and_ordinary_products_are_exact() {
         .remove("maximum_rows");
     assert!(read(&missing).is_err());
     let mut ordinary = schema("record", "Hidden", json!([]));
-    ordinary["fields"] = json!([{"name":"word","offset":0,"schema":handle("bool",Some("0"),None)}]);
+    ordinary["fields"] = json!([{"name":"word","offset":0,"public":true,"placement":null,"schema":handle("bool",Some("0"),None)}]);
     assert!(
         read(&retained(port(
             "hidden",
             0,
             json!([]),
-            json!(["P"]),
+            json!([0]),
             ordinary
         )))
         .is_err()
@@ -443,7 +605,7 @@ fn reordered_objects_accept_but_duplicate_and_unknown_logical_fields_refuse() {
     read_text(&reversed(&d)).unwrap();
     let text = d.to_string();
     for (key, value) in [
-        ("holder", json!("P")),
+        ("arguments", json!([0, 1])),
         ("maximum_rows", json!("0")),
         ("maximum", json!("0")),
         ("arguments", json!([["type", "bool"], ["nat", "0"]])),
@@ -545,20 +707,19 @@ fn logical_width_and_kind_nesting_limits_include_zero_capacity_handles() {
     for count in [512usize, 513] {
         let mut r = schema("logical_record", "WideState", json!([]));
         r["constructible"] = json!(false);
+        r["roles"] = json!(["H", "R"]);
         r["fields"] = json!(
             (0..count)
-                .map(|i| json!({"name":format!("word_{i}"),"offset":i,
-            "schema":handle("bool",Some("0"),Some("0"))}))
+                .map(|i| json!({"name":format!("word_{i}"),"offset":i,"public":true,"placement":{"kind":"oracle","holder":0,"receivers":[1]},"schema":handle("bool",Some("0"),Some("0"))}))
                 .collect::<Vec<_>>()
         );
-        let mut p = port(
+        let p = placed_port(
             "state",
             0,
             json!((0..2 * count).collect::<Vec<_>>()),
-            json!(["P", "V"]),
+            record_placement(&r),
             r,
         );
-        p["holder"] = json!("P");
         let result = read(&retained(p));
         if count == 512 {
             result.unwrap();

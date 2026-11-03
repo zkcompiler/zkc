@@ -563,35 +563,10 @@ pub(crate) fn apply(
 
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::poly;
-    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
-        poly::operation(
-            "ring.point",
-            &[Vector],
-            &[Vector],
-            AttributeRule::AssetIdentity,
-        )
-        .implemented_by(&["plonky3/ring.point"]),
-        poly::operation(
-            "ring.rows",
-            &[Vector, Index],
-            &[Vector],
-            AttributeRule::AssetIdentity,
-        )
-        .implemented_by(&["plonky3/ring.rows"]),
-        poly::operation(
-            "ring.coefficients",
-            &[Vector, Index],
-            &[Vector],
-            AttributeRule::AssetIdentity,
-        )
-        .implemented_by(&["plonky3/ring.coefficients"]),
-        poly::operation(
-            "ring.affine_sum",
-            &[Vector, Vector, Index],
-            &[Vector],
-            AttributeRule::AssetIdentity,
-        )
-        .implemented_by(&["plonky3/ring.affine_sum"]),
+        poly::operation("ring.point").implemented_by(&["plonky3/ring.point"]),
+        poly::operation("ring.rows").implemented_by(&["plonky3/ring.rows"]),
+        poly::operation("ring.coefficients").implemented_by(&["plonky3/ring.coefficients"]),
+        poly::operation("ring.affine_sum").implemented_by(&["plonky3/ring.affine_sum"]),
     ]
 };

@@ -148,7 +148,7 @@ source form. Its results use the very same constant-folded source terms. -/
 theorem calculation_frame (model : DomainModel) {scope : Scope}
     (calculation : Calculation) (total : calculation.op.total = true)
     (terms : Terms [] scope calculation.op.arguments)
-    (outputData : calculation.op.results.all Domain.dataType = true)
+    (outputData : calculation.op.results.all Domain.localType = true)
     (binders : Binders model scope) {history : Domain.History model.toCarriers}
     {layout : Layout scope} {environment : Domain.Environment model.toCarriers}
     (related : Holds model binders history layout environment) :
@@ -171,7 +171,7 @@ def tupleLayout {scope : Scope} (layout : Layout scope) (types : List Ty) : Layo
   layout.map (Cell.rename .there) ++ cells (readComps types)
 
 theorem results_frame (model : DomainModel) {scope : Scope} {types : List Ty}
-    (outputData : types.all Domain.dataType = true) (values : Values model.Value types)
+    (outputData : types.all Domain.localType = true) (values : Values model.Value types)
     (binders : Binders model scope) {history : Domain.History model.toCarriers}
     {layout : Layout scope} {environment : Domain.Environment model.toCarriers}
     (related : Holds model binders history layout environment) :
@@ -183,7 +183,7 @@ theorem results_frame (model : DomainModel) {scope : Scope} {types : List Ty}
     (Original.encodeHelperResult_eq outputData values))
 
 theorem tuple_frame (model : DomainModel) {scope : Scope} {types : List Ty}
-    (outputData : types.all Domain.dataType = true) (values : Values model.Value types)
+    (outputData : types.all Domain.localType = true) (values : Values model.Value types)
     (binders : Binders model scope) {history : Domain.History model.toCarriers}
     {layout : Layout scope} {environment : Domain.Environment model.toCarriers}
     (related : Holds model binders history layout environment) :

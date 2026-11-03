@@ -128,7 +128,7 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
     for path in (ROOT / "lean/bridges/common").glob("*.py"):
         files[path.relative_to(ROOT).as_posix()] = path.read_text()
     for name in ("scripts/reporting.py", "common/tests/support/project.py", "common/catalog/declarations.json",
-                 "lean/bridges/structured/fixtures.toml"):
+                 "common/catalog/installation.json", "lean/bridges/structured/fixtures.toml"):
         files[name] = (ROOT / name).read_text()
     for name, value in files.items():
         path = root / name
@@ -441,7 +441,7 @@ def test_repeat_inventory_captures_owners_and_runs_from_git_free_archive(
         "lean/support/lake.py", "libraries/lib/lib.zkc", "libraries/lib/zkc.toml",
         "lean/bridges/common/lean_render.py", "lean/bridges/common/native_entry.py",
         "lean/bridges/common/schema.py", "common/catalog/declarations.json",
-        "lean/bridges/structured/fixtures.toml",
+        "common/catalog/installation.json", "lean/bridges/structured/fixtures.toml",
         "compiler/include/zkc/Support/Json.h", "compiler/lib/Compiler/StructuredSource.cpp",
         "compiler/test/structured_reference.cpp",
         "common/unicode/manifest.json",
@@ -493,6 +493,7 @@ def test_live_repeat_inventory_covers_main_lean_imports_and_python_owners(repeat
     assert ROOT / "lean/ZkcTools/StructuredSource/Bounds.lean" in inventory
     assert set((ROOT / "common/unicode").rglob("*.txt")) <= inventory
     assert ROOT / "common/catalog/declarations.json" in inventory
+    assert ROOT / "common/catalog/installation.json" in inventory
 
 
 @pytest.mark.parametrize("driver", ["shared", "repeat"])

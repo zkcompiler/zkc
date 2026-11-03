@@ -7,6 +7,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -18,6 +19,7 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/SmallPtrSet.h"
 
@@ -25,9 +27,14 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::evm {
 namespace {
-constexpr StringLiteral suite = "hash-chain.keccak256.bls12-381.fr64be/0";
 using Values = SmallVector<Value>;
 using ValueMap = llvm::DenseMap<Value, Values>;
+
+bool isTranscript(Type type) {
+  auto capability = dyn_cast<runtime::CapabilityType>(type);
+  return capability &&
+         capability.getKind() == runtime::CapabilityKind::Transcript;
+}
 
 class EvmTypes : public TypeConverter {
 public:
@@ -52,9 +59,24 @@ private:
     } else if (isa<IndexType>(type))
       out.push_back(i64);
     else if (auto capability = dyn_cast<runtime::CapabilityType>(type)) {
-      if (capability.getKind() != runtime::CapabilityKind::Transcript ||
-          capability.getIdentity() != suite)
+      if (capability.getKind() == runtime::CapabilityKind::ResourceUnit) {
+        auto signature = layouts.signature(TypeRange(type));
+        if (!signature) {
+          consumeError(signature.takeError());
+          return failure();
+        }
+        append_range(out, signature->lanes);
+        return success();
+      }
+      if (capability.getKind() != runtime::CapabilityKind::Transcript)
         return failure();
+      // A transcript lowers only for a suite whose facts the EVM realizes.
+      auto realized =
+          realizeTranscript(layouts, *context, capability.getIdentity());
+      if (!realized) {
+        consumeError(realized.takeError());
+        return failure();
+      }
       out.push_back(i64);
     } else if (isa<runtime::ScopeType, exec::StopType>(type))
       out.push_back(i64);
@@ -81,15 +103,14 @@ private:
 
 class Lowering {
 public:
-  Lowering(ModuleOp source, ModuleOp complete, ModuleOp target,
-           const EvmOptions &options)
-      : source(source), complete(complete), target(target), options(options),
+  Lowering(ModuleOp source, ModuleOp target, const EvmOptions &options)
+      : source(source), target(target), options(options),
         layouts(*source.getContext()), types(layouts, source.getContext()),
         builder(source.getContext()) {}
   LogicalResult run();
 
 private:
-  ModuleOp source, complete, target;
+  ModuleOp source, target;
   const EvmOptions &options;
   NativeLayouts layouts;
   EvmTypes types;
@@ -156,7 +177,7 @@ private:
   LogicalResult checkCapabilities(Operation *op, TypeRange types) {
     unsigned count = 0;
     std::function<bool(Type)> inspect = [&](Type type) {
-      if (isa<runtime::CapabilityType>(type))
+      if (isTranscript(type))
         return ++count <= 1;
       if (auto outcome = dyn_cast<exec::OutcomeType>(type))
         return llvm::all_of(outcome.getPayload(), inspect);
@@ -219,26 +240,8 @@ LogicalResult Lowering::run() {
         entry ? "verify_endpoint" : "helper_" + std::to_string(serial++),
         builder.getFunctionType(*inputs, *outputs));
     function.setPrivate();
-    if (entry) {
+    if (entry)
       function->setAttr("evm.entry", builder.getUnitAttr());
-      function->setAttr("evm.logical_type", attribute);
-      // The complete source retains the checked original-to-endpoint ports;
-      // executable closure selection deliberately prunes that record.
-      complete.walk([&](Operation *record) {
-        if (record->getName().getStringRef() != "protocol.projection")
-          return;
-        for (Attribute item : record->getAttrOfType<ArrayAttr>("interfaces")) {
-          auto interface = cast<DictionaryAttr>(item);
-          if (interface.get("source") != owner->getAttr("instance"))
-            continue;
-          for (Attribute port : interface.getAs<ArrayAttr>("participants")) {
-            auto participant = cast<DictionaryAttr>(port);
-            if (participant.get("role") == owner->getAttr("role"))
-              function->setAttr("evm.output_ports", participant.get("outputs"));
-          }
-        }
-      });
-    }
     functions[owner] = function;
   }
   if (entries != 1)
@@ -409,6 +412,11 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
   auto resultTypes = converted(op->getResultTypes(), op);
   if (failed(resultTypes))
     return failure();
+  if (protocol::resourceUnitContract(name)) {
+    // Exact nominal signatures and affine succession were checked before
+    // erasure. Retain the active-scope check above, even for empty results.
+    return bind(op, {}, map);
+  }
   if (auto scalar = lowerScalar(op, name, operands, parameters, map))
     return *scalar;
   if (name == "index.constant") {
@@ -499,9 +507,11 @@ LogicalResult Lowering::lowerLoop(Operation *op, ValueMap &map) {
   auto carried = op->getAttrOfType<IntegerAttr>("carried");
   auto maximum = op->getAttrOfType<IntegerAttr>("maximum");
   auto parameter = op->getAttrOfType<BoolAttr>("parameter");
+  // lowerEndpoint has refused a maximum above the deployment's ceiling.
   if (!carried || !maximum || maximum.getInt() < 0 || !parameter ||
       parameter.getValue() || op->getNumOperands() < 1 ||
-      static_cast<uint64_t>(maximum.getInt()) > options.limits.rounds)
+      static_cast<uint64_t>(maximum.getInt()) >
+          options.limits.participantLoopMaximum)
     return refuse(op, "loop requires an admitted deployment maximum");
   Value count = map.lookup(op->getOperand(0))[0];
   checked(op, "loop.bound", {},
@@ -980,7 +990,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       return failure();
     Value generation = integer(loc, UINT64_MAX);
     for (Value value : op->getOperands())
-      if (isa<runtime::CapabilityType>(value.getType()))
+      if (isTranscript(value.getType()))
         generation = map.lookup(value)[0];
     return bind(op, checkedResult(op, "scope.enter", {operands[0], generation}),
                 map);
@@ -993,7 +1003,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     auto outcome = cast<exec::OutcomeType>(op->getOperand(1).getType());
     unsigned offset = 1;
     for (Type type : outcome.getPayload()) {
-      if (isa<runtime::CapabilityType>(type))
+      if (isTranscript(type))
         generation = operands[offset];
       auto convertedTypes = converted(TypeRange(type), op);
       if (failed(convertedTypes))
@@ -1040,7 +1050,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         return failure();
       Value generation = integer(loc, UINT64_MAX);
       for (Value value : op->getOperands())
-        if (isa<runtime::CapabilityType>(value.getType()))
+        if (isTranscript(value.getType()))
           generation = map.lookup(value)[0];
       Value parent =
           checked(op, "scope.current", {builder.getI64Type()}, {})[0];
@@ -1055,7 +1065,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       Value generation = integer(loc, UINT64_MAX);
       unsigned offset = 0;
       for (Type type : op->getResultTypes()) {
-        if (isa<runtime::CapabilityType>(type))
+        if (isTranscript(type))
           generation = (*results)[offset];
         auto convertedTypes = converted(TypeRange(type), op);
         if (failed(convertedTypes))
@@ -1397,6 +1407,47 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   auto candidate = endpoint.candidateSnapshot();
   if (auto error = checkEndpointClosure(*source, *candidate, endpoint.role()))
     return std::move(error);
+  // The selected closure holds only the verifier's own completions. This
+  // target realizes no conditional completion outcome, so one refuses by name
+  // before realization rather than through the generic operation refusal.
+  Operation *completion = nullptr;
+  candidate->walk([&](Operation *op) {
+    if (op->getName().getStringRef() != "protocol.finish_if")
+      return WalkResult::advance();
+    completion = op;
+    return WalkResult::interrupt();
+  });
+  if (completion) {
+    completion->emitError("[evm.completion] protocol.finish_if: conditional "
+                          "participant completion has no EVM realization");
+    return zkc::error("evm.completion", "conditional participant completion "
+                                        "has no EVM realization");
+  }
+  // Each participant loop's checked maximum lies within the deployment's
+  // participant loop maximum; the transcript transitions stay the only global
+  // bound.
+  std::optional<uint64_t> overLimit;
+  candidate->walk([&](Operation *op) {
+    if (op->getName().getStringRef() != "protocol.loop")
+      return WalkResult::advance();
+    auto maximum = op->getAttrOfType<IntegerAttr>("maximum");
+    if (!maximum || maximum.getInt() < 0 ||
+        maximum.getUInt() <= options.limits.participantLoopMaximum)
+      return WalkResult::advance();
+    overLimit = maximum.getUInt();
+    op->emitError("[evm.participant-loop-maximum] protocol.loop: loop "
+                  "maximum ")
+        << *overLimit << " exceeds the deployment's participant loop maximum "
+        << options.limits.participantLoopMaximum;
+    return WalkResult::interrupt();
+  });
+  if (overLimit)
+    return zkc::error(
+        "evm.participant-loop-maximum",
+        "loop maximum " + std::to_string(*overLimit) +
+            " exceeds the deployment's participant loop "
+            "maximum " +
+            std::to_string(options.limits.participantLoopMaximum));
   auto *context = candidate->getContext();
   context->getOrLoadDialect<EvmDialect>();
   context->getOrLoadDialect<scf::SCFDialect>();
@@ -1404,7 +1455,7 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   context->getOrLoadDialect<cf::ControlFlowDialect>();
   context->getOrLoadDialect<func::FuncDialect>();
   OwningOpRef<ModuleOp> target(ModuleOp::create(candidate->getLoc()));
-  Lowering lowering(*candidate, *source, *target, options);
+  Lowering lowering(*candidate, *target, options);
   if (failed(lowering.run()) || failed(verify(*target)))
     return zkc::error("evm.lowering", "EVM operation realization failed");
   InactiveIntegerLanes policy;

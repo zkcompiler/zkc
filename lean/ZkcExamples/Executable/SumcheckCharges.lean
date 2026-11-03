@@ -43,7 +43,7 @@ def maximum : Nat := maximumOf ZkcExamples.Construction.SumcheckProof.participan
 abbrev names : Names := Names.of ZkcExamples.Construction.SumcheckProof.participant.instructions
 
 def lowered (maximum : Nat) : Lowered :=
-  ⟨code names maximum, [13, 10], [.loop 2 maximum [.receive coordinate, .receive coordinate]]⟩
+  ⟨code names maximum, [15, 11], [.loop 2 maximum [.receive coordinate, .receive coordinate]]⟩
 
 -- The generated facts expose the same executable reading, including returns.
 theorem lowered_eq : ZkcExamples.Executable.SumcheckProof.lowered = lowered maximum := by kernel_rfl
@@ -54,9 +54,9 @@ def roundCharge : Nat :=
   (Code.charges (helperBound ZkcExamples.Executable.SumcheckProof.validator) (roundCode names)).getD 0
 
 def charge (rounds : Nat) : Nat :=
-  1 + 2 + 1 + 1 + 1 + rounds * (roundCharge + 1) + 1 + 1 + 1 + (62 + 20 * rounds) + 1
+  1 + 3 + 1 + 2 + 1 + rounds * (roundCharge + 1) + 1 + 2 + 1 + (63 + 20 * rounds) + 1
 
-theorem charge_eq (rounds : Nat) : charge rounds = 72 + 59 * rounds := by
+theorem charge_eq (rounds : Nat) : charge rounds = 76 + 59 * rounds := by
   simp only [charge, roundCharge, round_charge, Option.getD_some]
   omega
 
@@ -102,7 +102,7 @@ theorem round_fits (values : List F) (publicClaim : F) (rounds : Nat)
     (roundCode names) 38 round_charge _ proof used _ (by
       change ScalarSourceCost.schema
         [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data .index,
-          .transcript context.suite, .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
+          .transcript context.suite, .data (.resourceUnit names.custodySlot), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
           .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data .index,
           .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
         (roundCode names) = true
@@ -123,22 +123,20 @@ theorem programContract (maximum : Nat) (small : maximum < 64) :
     (by change SumcheckPendingLaws.Bodies SumcheckCheckedRound.program.payload.definitions
         rw [SumcheckCheckedRound.source_payload]
         exact SumcheckSourceVerifier.claimBodies)
-  openClaim := SumcheckArtifacts.DomainHelpers.claim_identity ZkcExamples.Construction.SumcheckProof.program
-    SumcheckPendingBodies.openClaimHelper.name
-    (by change Structured.BodyIn SumcheckCheckedRound.program.payload.definitions _ _
+  openClaim := SumcheckArtifacts.DomainHelpers.openClaim ZkcExamples.Construction.SumcheckProof.program
+    (by change SumcheckPendingLaws.Bodies SumcheckCheckedRound.program.payload.definitions
         rw [SumcheckCheckedRound.source_payload]
-        exact SumcheckSourceVerifier.claimBodies.openClaim)
-  atPrefix := SumcheckArtifacts.DomainHelpers.claim_identity ZkcExamples.Construction.SumcheckProof.program
-    SumcheckPendingBodies.atPrefixHelper.name
-    (by change Structured.BodyIn SumcheckCheckedRound.program.payload.definitions _ _
+        exact SumcheckSourceVerifier.claimBodies) 0
+  atPrefix := SumcheckArtifacts.DomainHelpers.atPrefix ZkcExamples.Construction.SumcheckProof.program
+    (by change SumcheckPendingLaws.Bodies SumcheckCheckedRound.program.payload.definitions
         rw [SumcheckCheckedRound.source_payload]
-        exact SumcheckSourceVerifier.claimBodies.atPrefix)
+        exact SumcheckSourceVerifier.claimBodies)
   pendingCost := fun _ => helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
-    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.pendingHelper = some 2 by kernel_rfl) _
+    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.pendingHelper = some 3 by kernel_rfl) _
   openClaimCost := fun _ _ => helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
-    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.openClaimHelper = some 1 by kernel_rfl) _
+    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.openClaimHelper = some 2 by kernel_rfl) _
   atPrefixCost := fun _ _ => helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
-    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.atPrefixHelper = some 1 by kernel_rfl) _
+    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.atPrefixHelper = some 2 by kernel_rfl) _
   checkCost := fun _ _ _ small shaped => SumcheckHelpers.check_cost small shaped
   round := round_fits
 

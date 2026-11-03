@@ -342,6 +342,25 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
         assert_eq!(accepted["status"], status);
         assert_eq!(accepted["binding_scope"], "header");
         assert_eq!(accepted["cpu"]["workers"], 2);
+        // The invocation root's usage, in the shape every report renders it
+        // in, beside the runner's own: a proof's root pools no fuel, and it
+        // charged every byte the runner did and the Host's work besides.
+        let root = &accepted["invocation"];
+        assert_eq!(
+            root.as_object().unwrap().keys().collect::<Vec<_>>(),
+            [
+                "instructions",
+                "iterations",
+                "live_value_bytes",
+                "logical_bytes",
+                "total_value_bytes"
+            ]
+        );
+        assert_eq!(root["instructions"], Json::Null);
+        assert_eq!(root["iterations"], Json::Null);
+        for field in ["logical_bytes", "total_value_bytes"] {
+            assert!(root[field].as_u64().unwrap() > accepted[field].as_u64().unwrap());
+        }
         if command == "bundle verify" {
             assert_eq!(std::fs::read(&proof).unwrap(), previous);
         }

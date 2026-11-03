@@ -5,8 +5,8 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Verifier.h"
+#include "support/Formation.h"
 #include "support/NativeBindings.h"
-#include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
@@ -486,22 +486,20 @@ std::string selectedVariantSource(MLIRContext &context, StringRef descriptor) {
           exec::ScopedExecutionBuilder &control) {
         auto field = work.getArgument(1).getType();
         auto sequence = data::SequenceType::get(&context, field);
-        auto fixed = data::FixedVectorType::get(&context, field, 2);
+        auto variant = zkc::test::variantType(&context, descriptor);
         auto empty =
             sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
         auto values = sc::apply(control, builder, "append", "append",
                                 {empty, work.getArgument(1)}, {sequence})[0];
         auto tag = control.invoke(
-            "exec.variant", {zkc::test::variantType(&context, descriptor)},
-            control.scoped({values}),
+            "exec.variant", {variant}, control.scoped({values}),
             {builder.getNamedAttr("alternative", builder.getStringAttr("some")),
              builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
         auto result = control.match(
             tag, {values}, {sequence}, {"none", "some", "unused"}, "match",
             [&](unsigned arm) {
-              SmallVector<Type> arguments;
-              if (arm)
-                arguments.push_back(arm == 1 ? Type(sequence) : Type(fixed));
+              SmallVector<Type> arguments(
+                  variant.getAlternatives()[arm].getPayload());
               arguments.push_back(sequence);
               auto region =
                   sc::region(builder, work, "arm" + std::to_string(arm),
@@ -1235,19 +1233,27 @@ int main(int argc, char **argv) {
         {"Outer",
          {{"none", {}}, {"nested", {inner, "sequence<field:koala-bear>"}}}});
     auto logical = zkc::test::variantType(&context, outer);
+    // Native default formation does not inherit the byte contract's
+    // alternative limit: a variant at that limit keeps its portable spelling,
+    // and one beyond it still forms without one.
     SmallVector<data::AlternativeAttr> wideArms;
-    for (unsigned i = 0; i < 33; ++i)
+    for (unsigned i = 0; i < 65; ++i)
       wideArms.push_back(data::AlternativeAttr::get(
           &context, StringAttr::get(&context, "arm" + std::to_string(i)),
           ArrayRef<Type>{}));
-    auto wide = data::VariantType::get(
-        &context,
-        data::importVariantIdentity(&context, json::Value("WideChoice")),
-        wideArms);
-    auto widePhysical = take(defaultPlanType(wide));
-    require(logicalValueType(widePhysical) == wide,
-            "native default formation inherited byte alternative limits");
-    refuses(encodeBoundType(widePhysical, true), "variant-type");
+    for (size_t count : {size_t(64), size_t(65)}) {
+      auto wide = data::VariantType::get(
+          &context,
+          data::importVariantIdentity(&context, json::Value("WideChoice")),
+          ArrayRef<data::AlternativeAttr>(wideArms).take_front(count));
+      auto widePhysical = take(defaultPlanType(wide));
+      require(logicalValueType(widePhysical) == wide,
+              "native default formation inherited byte alternative limits");
+      if (count <= 64)
+        take(encodeBoundType(widePhysical, true));
+      else
+        refuses(encodeBoundType(widePhysical, true), "variant-type");
+    }
     auto native = take(defaultPlanType(logical));
     auto expected =
         take(defaultRepresentation(take(parseBoundType(outer, false))));
@@ -1273,19 +1279,57 @@ int main(int argc, char **argv) {
   });
   for (StringRef mutation :
        {"missing child", "reordered children", "inactive logical child",
-        "inactive representation", "nominal identity", "alternative order"})
-    cases.run("native physical reader refuses " + mutation, [&] {
+        "unknown inactive layout"})
+    cases.run("native layout formation refuses " + mutation, [&] {
       auto spelling = *encodeVariant(
-          {"ReaderChoice",
+          {"FormationChoice",
            {{"none", {}},
             {"some", {"sequence<field:bls12-381.fr>"}},
             {"unused", {"fixed_vector<field:bls12-381.fr,2>"}}}});
+      auto logical = zkc::test::variantType(&context, spelling);
+      auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+      auto scalar = runtime::RepresentedType::get(&context, field, "blst/fr",
+                                                  ArrayRef<Type>{});
+      auto sequence = data::SequenceType::get(&context, field);
+      auto fixed = data::FixedVectorType::get(&context, field, 2);
+      SmallVector<Type> children{
+          runtime::RepresentedType::get(&context, sequence,
+                                        "logical.sequence/0", {scalar}),
+          runtime::RepresentedType::get(&context, fixed, "blst/fixed-vector",
+                                        {scalar})};
+      auto represented = runtime::RepresentedType::get(
+          &context, logical, "logical.variant/0", children);
+      if (mutation == "missing child")
+        children.pop_back();
+      else if (mutation == "reordered children")
+        std::swap(children[0], children[1]);
+      else if (mutation == "inactive logical child")
+        children[1] = logicalValueType(children[1]);
+      else {
+        auto inactive = cast<runtime::RepresentedType>(children[1]);
+        refusesFormation<runtime::RepresentedType>(
+            &context, "represented-type-formation", inactive.getLogical(),
+            StringRef("foreign/dense"), inactive.getChildren());
+        return;
+      }
+      refusesFormation<runtime::RepresentedType>(
+          &context, "represented-type-formation", Type(logical),
+          represented.getRepresentation(), ArrayRef<Type>(children));
+    });
+  for (StringRef mutation : {"inactive representation", "inactive extent",
+                             "nominal identity", "alternative order"})
+    cases.run("native physical reader refuses " + mutation, [&] {
+      auto spelling =
+          *encodeVariant({"ReaderChoice",
+                          {{"none", {}},
+                           {"some", {"sequence<field:bls12-381.fr>"}},
+                           {"unused", {"field_array<bls12-381.fr,2>"}}}});
       auto schema = take(parseBoundType(spelling, false));
       auto full = take(physicalType(
           schema, "logical.variant/0",
           {take(parseBoundType(sequence, true)),
            take(parseBoundType(
-               "fixed_vector<field:bls12-381.fr,2>@blst/fixed-vector[blst/fr]",
+               "field_array<bls12-381.fr,2>@blst/field-array[blst/fr]",
                true))}));
       auto module = take(
           executableFixture(selectedVariantSource(context, spelling), context));
@@ -1300,17 +1344,25 @@ int main(int argc, char **argv) {
       auto represented = cast<runtime::RepresentedType>(decision.outputs[0]);
       auto logical = cast<data::VariantType>(represented.getLogical());
       SmallVector<Type> children(represented.getChildren());
-      if (mutation == "missing child")
-        children.pop_back();
-      else if (mutation == "reordered children")
-        std::swap(children[0], children[1]);
-      else if (mutation == "inactive logical child")
-        children[1] = logicalValueType(children[1]);
-      else if (mutation == "inactive representation") {
+      if (mutation == "inactive representation") {
         auto inactive = cast<runtime::RepresentedType>(children[1]);
+        children[1] = take(defaultPlanType(inactive.getLogical()));
+        require(children[1] != inactive,
+                "inactive layout mutation did not change storage");
+      } else if (mutation == "inactive extent") {
+        auto inactive = cast<runtime::RepresentedType>(children[1]);
+        auto array = cast<data::FieldArrayType>(inactive.getLogical());
+        auto changed =
+            data::FieldArrayType::get(&context, array.getDomain(), 3);
         children[1] = runtime::RepresentedType::get(
-            &context, inactive.getLogical(), "foreign/dense",
+            &context, changed, inactive.getRepresentation(),
             inactive.getChildren());
+        SmallVector<data::AlternativeAttr> alternatives(
+            logical.getAlternatives());
+        alternatives[2] = data::AlternativeAttr::get(
+            &context, alternatives[2].getLabel(), {changed});
+        logical = data::VariantType::get(&context, logical.getIdentity(),
+                                         alternatives);
       } else if (mutation == "nominal identity")
         logical = data::VariantType::get(
             &context,
@@ -1327,10 +1379,7 @@ int main(int argc, char **argv) {
       }
       decision.outputs[0] = runtime::RepresentedType::get(
           &context, logical, represented.getRepresentation(), children);
-      refuses(validatePhysical(*module, plan),
-              mutation == "nominal identity" || mutation == "alternative order"
-                  ? "binding-operation-signature"
-                  : "binding-representation");
+      refuses(validatePhysical(*module, plan), "binding-operation-signature");
     });
   cases.run("implementation selection premises are descriptor data", [&] {
     auto ordinary =

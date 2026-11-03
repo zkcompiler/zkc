@@ -63,6 +63,8 @@ def opJson (op : Op) : Json := Json.mkObj [
   ("constructor", toJson (match op with
     | .exec _ => "exec" | .indexConstant _ => "indexConstant" | .indexEqual => "indexEqual"
     | .indexLess => "indexLess" | .indexPowerOfTwo => "indexPowerOfTwo"
+    | .indexWrappingAdd => "indexWrappingAdd" | .indexWrappingSubtract => "indexWrappingSubtract"
+    | .indexBitAnd => "indexBitAnd" | .indexLogicalShiftRight => "indexLogicalShiftRight"
     | .vectorLength _ => "vectorLength"
     | .multilinearRestrictPrefix _ => "multilinearRestrictPrefix"
     | .fieldConstant .. => "fieldConstant" | .fieldAdd _ => "fieldAdd"
@@ -77,7 +79,8 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .select _ => "select" | .boundedAt _ => "boundedAt" | .invoke _ => "invoke"
     | .fold _ => "fold" | .collect _ => "collect" | .map _ => "map" | .branch .. => "branch"
     | .loop .. => "loop" | .loopCondition .. => "loopCondition"
-    | .guard => "guard" | .mark _ => "mark")),
+    | .guard => "guard" | .mark _ => "mark"
+    | .createUnit _ => "createUnit" | .passUnit _ => "passUnit" | .consumeUnit _ => "consumeUnit")),
   ("arguments", toJson (op.arguments.map wireType)),
   ("results", toJson (op.results.map wireType)),
   ("helpers", toJson (op.helpers.map (·.name))),
@@ -86,6 +89,7 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .indexConstant n | .fieldConstant _ n => toJson [toString n]
     | .booleanConstant b => toJson b
     | .mark site => toJson site
+    | .createUnit slot | .passUnit slot | .consumeUnit slot => toJson slot
     | .fold spec => Json.mkObj [("domain", domainJson spec.domain),
         ("step", toJson spec.step), ("predicate", toJson spec.predicate),
         ("state", toJson (spec.state.map wireType)), ("captures", toJson (spec.captures.map wireType)),

@@ -10,19 +10,6 @@ use crate::{
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use zkc_runtime::vm::PhysicalType;
-impl InputInterface<'_> {
-    fn check_native_input(self, schema: &Schema) -> Result<(), String> {
-        self.check_input(schema)?;
-        if schema.leaves.iter().all(|s| {
-            zkc_runtime::vm::LogicalType::parse(s).is_ok_and(|t| t.is_native_message_data())
-        }) {
-            Ok(())
-        } else {
-            Err("entry-input-codec".into())
-        }
-    }
-}
-
 /// File resolution is opt-in. Implementations return opened regular descriptors;
 /// reads and cryptographic import still occur in common Host preparation.
 pub trait Resolver {
@@ -124,7 +111,7 @@ impl Decoder {
             } else {
                 group
                     .interface
-                    .check_native_input(port.schema)
+                    .check_input(port.schema)
                     .map_err(|e| InputError::at(e, &path))?;
                 self.value(group.interface, port.schema, value, &path, &mut resolver)?
             };

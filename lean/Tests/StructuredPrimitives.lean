@@ -136,7 +136,7 @@ private def run : IO Unit := do
     "structured-domain-capability")
   test "root-field" ((binding "vector.sum" ["f"]).resolveRoot fieldOnly matches .ok "f")
   let envelope := [Json.str "zkc.structured-source/0", .str "original", .str digest,
-    .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []], arr [arr [], arr []]]
+    .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []], arr [arr [], arr [], arr []]]
   test "wire-eleven-fields" ((Format.snapshot (arr envelope)).isOk)
   test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 10))).isOk)
   test "wire-no-extra-envelope" (!(Format.snapshot (arr (envelope ++ [arr []]))).isOk)

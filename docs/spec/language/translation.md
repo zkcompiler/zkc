@@ -119,10 +119,25 @@ continuing true branch and `exec.reject` with reason `reject` on false. Comparis
 checks both branches, their sites and the rejection reason. Raw bound
 `control.require` remains a separate backend operation.
 
+Fresh restricted record construction is an ordered Local action, or a Protocol
+action for fixed-roster distributed records (`<-` in the layout source profile).
+`inspect_record` forwards the whole wrapper and its Copy/Drop
+field observations; `repack_record` emits a checked `resource_unit.pass` on the selected
+old wrapper unit, once per declared-role fragment for a distributed wrapper,
+and combines its results with the exactly placed new payload. Independent
+actual-body comparison checks that exact pass operand, output type, binding and
+site. A create/consume substitution is not equivalent. Record invocations retain
+the installed canonical target and authored lexical constructor authority in the
+common call binding; signature and source-occurrence witnesses are independently
+checked before closure and preserved by specialization. Restricted unpack and
+record patterns retire custody only at ordered layout binding sites.
+
 Products flatten in declaration order. Variants retain a native tagged descriptor
 with exact nominal identity and payload layouts. A noncopyable restricted nominal
-or associated value has a leading `resource_unit` custody leaf even when its data
-is empty. Custody slot identities use the complete SHA-256 digest of canonical source type identity, with collision refusal; traversal order does not affect them. Empty unrestricted products have no leaves, but remain logical values.
+or associated value has leading `resource_unit` custody even when its data
+is empty: one leaf for an ordinary wrapper, or one per declared role in telescope
+order for a distributed wrapper. Nested restricted wrappers keep their own
+prefixes. Custody slot identities use the complete SHA-256 digest of canonical source type identity, with collision refusal; traversal order does not affect them. Empty unrestricted products have no leaves, but remain logical values.
 
 ## Selected constructions
 

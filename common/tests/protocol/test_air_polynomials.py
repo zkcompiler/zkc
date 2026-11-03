@@ -82,7 +82,7 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
     source = directory / 'scope.zkc'
     source.write_text(SCOPE_CLIENT)
     package = directory / 'scope.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=example={source}', *library_modules('relations/air'),
                            'example::Demo', f'--output={package}', *flags])
     height = 8
@@ -109,7 +109,7 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
     source = directory / 'client.zkc'
     source.write_text(CLIENT)
     package = directory / 'math.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=example={source}', *library_modules('relations/air'),
                            'example::Demo', f'--output={package}', *flags])
     pin = report['package_sha256']

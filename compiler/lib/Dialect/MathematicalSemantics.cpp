@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -13,7 +14,7 @@ using namespace llvm;
 namespace zkc::mathematical {
 std::optional<OperationSemantics> classify(Operation *op) {
   return llvm::TypeSwitch<Operation *, std::optional<OperationSemantics>>(op)
-#define ZKC_MATH_OPERATION(OP, CATEGORY, CONTEXTS, ...)                        \
+#define ZKC_MATH_OPERATION(OP, CATEGORY, CONTEXTS)                             \
   .Case<OP>([](OP) -> std::optional<OperationSemantics> {                      \
     return OperationSemantics{Category::CATEGORY, CONTEXTS};                   \
   })
@@ -90,19 +91,11 @@ LogicalResult verifyOperation(Operation *op, Context context) {
     return diagnostics::emit(
         op->emitOpError(), "mathematical-formation",
         "operation has no admitted meaning in this context");
-  auto allowed = llvm::TypeSwitch<Operation *, ArrayRef<StringRef>>(op)
-#define ZKC_MATH_OPERATION(OP, CATEGORY, CONTEXTS, ...)                        \
-  .Case<OP>([](OP) -> ArrayRef<StringRef> {                                    \
-    static const SmallVector<StringRef> attrs = {__VA_ARGS__};                 \
-    return attrs;                                                              \
-  })
-#include "zkc/Dialect/MathematicalOperations.def"
-#undef ZKC_MATH_OPERATION
-                     .Default(ArrayRef<StringRef>{});
-  for (auto attribute : op->getAttrs())
-    if (!llvm::is_contained(allowed, attribute.getName().getValue()))
-      return diagnostics::emit(op->emitOpError(), "mathematical-formation",
-                               "unsupported mathematical operation attribute");
+  // Admit only the decided fields of the closed semantic profile; no
+  // discardable attribute or call metadata is admitted.
+  if (!admitsFields(op))
+    return diagnostics::emit(op->emitOpError(), "mathematical-formation",
+                             "unsupported mathematical operation attribute");
   if (meaning->category == Category::Total)
     for (unsigned result = 0; result < op->getNumResults(); ++result)
       if (failed(operandDependencies(op, result)))

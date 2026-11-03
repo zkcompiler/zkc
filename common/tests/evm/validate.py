@@ -9,12 +9,13 @@ import hashlib
 import json
 from pathlib import Path
 
+import target
 from abi import encode_verify, malformed_cases
 from oracle import check_trace
 from probe import execute
 from reference import invocation_root, reconstruct
 
-REVERT_CLASSES = {"source": b"ZKCS", "decode": b"ZKCD", "resource": b"ZKCR", "fault": b"ZKCT"}
+REVERT_CLASSES = target.REVERT_CLASSES
 # These are the stable target diagnostic codes, not arbitrary revert payloads.
 ABI_REFUSALS = {
     "selector": ("decode", 7), "short-head": ("decode", 7),
@@ -54,9 +55,9 @@ def check_sdk_artifact(fixture, artifact):
     if captured["calldata"] != calldata.hex():
         raise AssertionError("SDK and independent Python calldata differ")
     fork = captured["manifest"]["evm_version"]
-    if fork not in ("cancun", "prague"):
+    if fork not in target.FORKS:
         raise AssertionError("SDK exported unsupported execution fork")
-    if artifact.get("request", {}).get("settings", {}).get("evmVersion") != fork:
+    if artifact.get("request", {}).get("settings", {}).get("evmVersion") != target.fork(fork)["solc"]:
         raise AssertionError("selected execution fork differs from SDK captured artifact")
     for name in ("creation", "runtime"):
         digest = hashlib.sha256(bytes.fromhex(captured[name])).hexdigest()
@@ -77,10 +78,8 @@ def bytecode(path, encoding):
 
 def deployed_artifact(creation, runtime, encoding, fork):
     """Attach the selected fork when checking separately stored bytecode."""
-    if fork not in ("cancun", "prague"):
-        raise ValueError("unsupported-fork")
     return {"creation": bytecode(creation, encoding), "runtime": bytecode(runtime, encoding),
-            "request": {"settings": {"evmVersion": fork}}}
+            "request": {"settings": {"evmVersion": target.fork(fork)["solc"]}}}
 
 
 def removed_final_hash_control(runner, artifact, calldata, original, expected_trace, gas,
@@ -128,7 +127,7 @@ def removed_final_hash_control(runner, artifact, calldata, original, expected_tr
             "trace_error": trace_error, "execution": mutated}
 
 
-def validate(runner, artifact, fixture, expected_trace, *, gas=20_000_000,
+def validate(runner, artifact, fixture, expected_trace, *, gas=None,
              expected_status="return", expected_output=None, controls=True, final_hash_mutant=None,
              expected_revert_class=None, expected_revert_code=None, repeat_count=2):
     if (expected_revert_class is None) != (expected_revert_code is None):
@@ -198,7 +197,7 @@ def validate(runner, artifact, fixture, expected_trace, *, gas=20_000_000,
     context_trace = [{"kind": "sha256", "input": root.hex(),
                       "output": hashlib.sha256(root).hexdigest(), "status": "return"}]
     cases["changed-context"] = (encode_verify(public, context + b"\x01", proof),
-                                "decode", 12, context_trace) if len(context) < 4096 else (
+                                "decode", 12, context_trace) if len(context) < target.LIMITS["context_bytes"] else (
                                     encode_verify(public, context + b"\x01", proof), "resource", 5, [])
     for name, (mutated, kind, code, prefix) in cases.items():
         rejected = execute(runner, artifact, mutated, gas)
@@ -219,10 +218,10 @@ def main():
     parser.add_argument("--expected-trace", type=Path,
                         help="independent trace JSON; defaults to maintained Sumcheck reconstruction")
     parser.add_argument("--bytecode-format", choices=["binary", "hex"], default="binary")
-    parser.add_argument("--evm-version", choices=("cancun", "prague"), default="cancun")
+    parser.add_argument("--evm-version", choices=target.FORK_NAMES, default=target.DEFAULT_FORK)
     parser.add_argument("--final-hash-mutant", type=Path,
                         help="mutant.py receipt when the last Keccak opcode is shared")
-    parser.add_argument("--gas", type=int, default=20_000_000)
+    parser.add_argument("--gas", type=int, help="call gas; defaults to the fork's declared budget")
     parser.add_argument("--expected-status", choices=["return", "revert", "halt"], default="return")
     parser.add_argument("--expected-output")
     parser.add_argument("--expected-revert-class", choices=["source", "decode", "resource", "fault"])

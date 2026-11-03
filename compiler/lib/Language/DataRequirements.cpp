@@ -1,27 +1,51 @@
 #include "DataRequirements.h"
 #include "Checker.h"
+#include "zkc/Contracts/Declarations.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
+namespace {
+// The collection view of a source data constructor applied to `arguments`
+// static arguments: its catalog row's rank and element.
+const protocol::TypeCollection *sourceCollection(const Type &head,
+                                                 size_t arguments) {
+  if (head.kind != Type::Kind::Builtin)
+    return nullptr;
+  const auto *declared = protocol::typeDeclaration(head.domain);
+  return declared && declared->sourceData && declared->collection &&
+                 arguments == declared->parameters.size()
+             ? &*declared->collection
+             : nullptr;
+}
+} // namespace
 CollectionElementKind collectionElementKind(const Type &head,
                                             size_t arguments) {
-  if (head.kind != Type::Kind::Builtin)
+  // Rank-one traversal; a byte collection has an extent but no item.
+  const auto *collection = sourceCollection(head, arguments);
+  if (!collection || collection->rank != 1)
     return CollectionElementKind::None;
-  if (head.domain == "indices" && !arguments)
+  switch (collection->element) {
+  case protocol::CollectionElement::Parameter:
+    return arguments ? CollectionElementKind::Parameter
+                     : CollectionElementKind::None;
+  case protocol::CollectionElement::Index:
     return CollectionElementKind::Index;
-  if (((head.domain == "vector" || head.domain == "groups" ||
-        head.domain == "sequence") &&
-       arguments == 1) ||
-      (head.domain == "field_array" && arguments == 2))
-    return CollectionElementKind::Parameter;
-  return CollectionElementKind::None;
+  case protocol::CollectionElement::Byte:
+    return CollectionElementKind::None;
+  }
+  llvm_unreachable("collection element");
 }
 std::optional<Type> collectionElement(const Type &type, bool matrix) {
-  if (matrix)
-    return type.kind == Type::Kind::Builtin && type.domain == "matrix" &&
-                   type.arguments.size() == 1
+  if (matrix) {
+    // A rank-two collection of its first parameter, through the matrix view.
+    const auto *collection = sourceCollection(type, type.arguments.size());
+    return collection && collection->rank == 2 &&
+                   collection->element ==
+                       protocol::CollectionElement::Parameter &&
+                   !type.arguments.empty()
                ? std::optional<Type>(type.arguments.front())
                : std::nullopt;
+  }
   switch (collectionElementKind(type, type.arguments.size())) {
   case CollectionElementKind::Parameter:
     return type.arguments.front();

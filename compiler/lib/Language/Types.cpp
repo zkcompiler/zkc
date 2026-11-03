@@ -1,4 +1,6 @@
 #include "zkc/Language/Types.h"
+#include "zkc/Contracts/Declarations.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
@@ -40,19 +42,27 @@ bool isOracleHandle(const Type &type) {
          type.kind == Type::Kind::OracleSequence;
 }
 bool isLogicalValue(const Type &type) {
-  return isOracleHandle(type) || type.kind == Type::Kind::LogicalRecord;
+  return isOracleHandle(type) || type.kind == Type::Kind::LogicalRecord ||
+         ((type.kind == Type::Kind::Tuple || type.kind == Type::Kind::Array) &&
+          llvm::any_of(type.arguments, [](const Type &child) {
+            return isLogicalValue(child);
+          }));
+}
+bool isLogicalValue(const PlacedType &type) {
+  return isLogicalValue(type.type) ||
+         (type.placement &&
+          std::holds_alternative<ProductPlacement>(type.placement->value));
 }
 StringRef oracleConstructor(const Type &type) {
-  switch (type.kind) {
-  case Type::Kind::OracleKind:
+  if (type.kind == Type::Kind::OracleKind)
     return type.domain == "table" ? "oracle.table" : "";
-  case Type::Kind::Oracle:
-    return "oracle";
-  case Type::Kind::OracleSequence:
-    return "oracle_sequence";
-  default:
-    return {};
-  }
+  // A logical handle is spelled by the frontend constructor row whose form
+  // the frontend gives this kind.
+  if (isOracleHandle(type))
+    for (const auto &row : protocol::frontendConstructors())
+      if (logicalHeadKind(row.form) == type.kind)
+        return row.name;
+  return {};
 }
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {
@@ -155,23 +165,50 @@ std::string spelling(const Type &type) {
   }
   return result;
 }
-std::string typeIdentity(const Type &type) {
-  std::string result;
+namespace {
+Error typeKey(const Type &type, const NominalAuthority *authority,
+              std::string &result) {
   raw_string_ostream out(result);
   auto frame = [&](StringRef value) { out << value.size() << ':' << value; };
   out << static_cast<unsigned>(type.kind) << ':';
   if (type.kind == Type::Kind::Natural) {
     frame(type.dimension.spelling());
-    return result;
+    return Error::success();
   }
   out << type.symbolic << ':';
   frame(type.domain);
+  if (authority && !type.symbolic &&
+      (type.kind == Type::Kind::Record ||
+       type.kind == Type::Kind::LogicalRecord ||
+       type.kind == Type::Kind::Variant || type.kind == Type::Kind::Module)) {
+    auto revision = (*authority)(type.domain);
+    if (!revision)
+      return revision.takeError();
+    frame(*revision ? StringRef(**revision) : StringRef());
+  }
   if (type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset)
     frame(type.sort);
   frame(type.dimension.spelling());
   out << type.arguments.size() << ':';
-  for (const auto &argument : type.arguments)
-    frame(typeIdentity(argument));
+  for (const auto &argument : type.arguments) {
+    std::string nested;
+    if (auto error = typeKey(argument, authority, nested))
+      return error;
+    frame(nested);
+  }
+  return Error::success();
+}
+} // namespace
+std::string typeIdentity(const Type &type) {
+  std::string result;
+  cantFail(typeKey(type, nullptr, result));
+  return result;
+}
+Expected<std::string> canonicalTypeKey(const Type &type,
+                                       NominalAuthority authority) {
+  std::string result;
+  if (auto error = typeKey(type, &authority, result))
+    return std::move(error);
   return result;
 }
 Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,

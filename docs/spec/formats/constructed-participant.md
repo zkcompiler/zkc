@@ -34,7 +34,7 @@ The format is an exact tagged array, `zkc.constructed-participant/0`:
 
 ```text
 [format, source-sha256, candidate-sha256, policy, participant,
- inputs, outputs, instructions, returned, service-ports]
+ inputs, outputs, instructions, returned, service-ports, catalogue]
 ```
 
 `source-sha256` hashes the exact supplied source bytes. `candidate-sha256` hashes
@@ -66,6 +66,18 @@ index; `role-input` is the native port position in the role's complete input
 interface after construction removes the selected validator services. The
 port's state identity is the original entry and root input, not its name or a
 query site. Borrowed aliases of one root therefore share state.
+
+`catalogue` is `[nominal-rows, service-rows]` in the
+[structured-source encoding](structured-source.md#envelope-and-types): the
+installed rows of every catalogue identity the participant names, closed under
+associated members, in native catalogue order, and the rows of the random
+services it names, in registry order. The named identities are the domain
+arguments of its input, output, instruction-result and loop-argument types and
+of its operation bindings, the policy's transcript suite, and the contracts of
+its service ports with the fields they sample. A reader resolves the associated
+members and capability facts of a binding signature through these rows, never
+through a table of its own, and admits the rows only when they agree with its
+own catalogue. The rows are producer data, not authority.
 
 ## Instructions
 
@@ -144,7 +156,8 @@ the admitted helper view, or missing references refuse with a
 conditional codec helper does not imply support in this formal export.
 
 Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
-2048 exported instructions in total and 1 MiB of printed JSON per participant.
+2048 exported instructions in total and 1 MiB of printed JSON per participant,
+catalogue included.
 The pair container applies these limits independently to its two children.
 Readers require the exact current shapes, including an empty service interface
 and the query annotation where applicable, with no compatibility reader.

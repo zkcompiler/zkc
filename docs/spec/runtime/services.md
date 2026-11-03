@@ -221,10 +221,11 @@ arguments and reply names/types. Polling alone has no service effect. The host
 must execute that exact cut; stale or altered cuts are refused. The host's port
 binding identifies the concrete root, which is never encoded into artifact text.
 
-At admission, `Backend::service_support` advertises an independently authored
-`ServiceSupport` with the complete method signature and aggregate conservative
-reply-byte bound. The runner compares that signature with its declared service
-contract. Metadata alone cannot authorize a live resource; port binding and
+At admission, `Backend::service_support` advertises a `ServiceSupport` with the
+complete method signature and aggregate conservative reply-byte bound. The
+signature is the catalog's declared method, gated by the field's capabilities;
+the backend owns the reply bound. The runner compares that signature with its
+declared service contract. Metadata alone cannot authorize a live resource; port binding and
 current lease checks still apply.
 
 Before consumption, the runner checks its output count/retained-byte capacity

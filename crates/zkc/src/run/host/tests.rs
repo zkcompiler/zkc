@@ -107,7 +107,7 @@ fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
     child_limits.capacity.values.live_bytes /= 4;
     let configured = configured
         .clone()
-        .with_invocation_limits(child_limits, zkc_cpu::ring::DEFAULT_WORK_LIMIT, 16_777_216)
+        .with_child_limits(child_limits)
         .with_shared_ledger(ledger);
     let prepared = configured
         .prepare(&serde_json::to_vec(&request).unwrap())
@@ -743,7 +743,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
     }
     drop(plan);
     let mut tight = limits.clone();
-    tight.capacity.values.total_bytes = 0;
+    tight.loading_work = 0;
     let limited =
         RunHost::admit(&raw, &Sha256::digest(&raw).into(), tight, authority.clone()).unwrap();
     assert_eq!(
@@ -839,4 +839,333 @@ fn independent_concurrent_hosts_charge_the_same_ledger_before_execution() {
     assert_eq!(success, 1);
     assert_eq!(ledger.snapshot().instructions, 1);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+#[test]
+fn standalone_runs_keep_one_record_bounded_root_beside_separate_runner_fuel() {
+    let (raw, request) = fixture("bool");
+    let request = request.to_string();
+    let run = |limits| {
+        host(&raw, limits)
+            .prepare(request.as_bytes())
+            .unwrap()
+            .execute()
+    };
+    let prepared = host(&raw, HostLimits::default());
+    let prepared = prepared.prepare(request.as_bytes()).unwrap();
+    let root = prepared.invocation_ledger().clone();
+    // Loading charged the root and holds the loaded inputs until the runners
+    // take custody of them.
+    let loaded = root.snapshot();
+    assert!(loaded.logical_bytes > 0 && loaded.live_reserved_bytes > 0);
+    // The selected record bounds the root: one that cannot afford the loading
+    // names the loading allowance it exhausted, the loaded input bytes or the
+    // loading work.
+    let refusal = |limits| {
+        host(&raw, limits)
+            .prepare(request.as_bytes())
+            .err()
+            .unwrap()
+    };
+    let mut limits = HostLimits::default();
+    limits.capacity.values.total_bytes = loaded.total_value_bytes - 1;
+    assert_eq!(refusal(limits), "artifact-input-bytes-limit");
+    let mut limits = HostLimits::default();
+    limits.capacity.values.live_bytes = loaded.live_reserved_bytes - 1;
+    assert_eq!(refusal(limits), "artifact-input-bytes-limit");
+    let mut limits = HostLimits::default();
+    limits.capacity.work.logical_bytes = loaded.logical_bytes - 1;
+    assert_eq!(refusal(limits), "artifact-input-work-limit");
+    let report = prepared.execute();
+    let execution = report.execution.as_ref().unwrap();
+    assert_eq!(execution.outcome, Outcome::Completed);
+    assert!(report.failure.is_none());
+    let used = root.snapshot();
+    // Each participant kept its own fuel: no instruction reached the root.
+    assert!(
+        execution
+            .roles
+            .iter()
+            .all(|role| role.usage.unwrap().instructions > 0)
+    );
+    assert_eq!(used.instructions, 0);
+    // The root charged every participant's bytes beside the loading and the
+    // report's records, and it holds the records and the returned values,
+    // which kept the live hold their runners charged.
+    let runners: usize = execution
+        .roles
+        .iter()
+        .map(|role| role.usage.unwrap().total_value_bytes)
+        .sum();
+    assert!(runners > 0);
+    assert_eq!(
+        used.total_value_bytes,
+        loaded.total_value_bytes + execution.report_bytes + runners
+    );
+    assert_eq!(execution.unreserved_output_bytes(), 0);
+    assert!(used.live_reserved_bytes > execution.report_bytes);
+    drop(report);
+    assert_eq!(root.snapshot().live_reserved_bytes, 0);
+    assert_eq!(root.snapshot().total_value_bytes, used.total_value_bytes);
+    // The record's fresh selection bounds the participants' charges in the
+    // root too: one byte short of the run's total, the last charge, a
+    // participant's, refuses, and that participant stops with its own limit
+    // stop. The report keeps its usage and the root's.
+    let mut limits = HostLimits::default();
+    limits.capacity.values.total_bytes = used.total_value_bytes - 1;
+    let report = run(limits);
+    let execution = report.execution.as_ref().unwrap();
+    let Outcome::ParticipantStopped { role } = execution.outcome else {
+        panic!("{:?}", execution.outcome);
+    };
+    assert!(matches!(
+        &execution.roles[role].before,
+        State::Stopped(stop) if stop.cause == StopCause::Limit
+    ));
+    assert!(execution.roles[role].usage.is_some());
+    assert!(report.invocation_ledger().snapshot().total_value_bytes < used.total_value_bytes);
+    // Rendering repeats each record's path, so it charges the root first; a
+    // root that cannot afford it renders the bounded summary instead.
+    let report = run(HostLimits::default());
+    let root = report.invocation_ledger().clone();
+    let before = root.snapshot();
+    let rendered = report.diagnostics();
+    assert!(rendered["reached"].is_array());
+    assert!(root.snapshot().total_value_bytes > before.total_value_bytes);
+    let mut limits = HostLimits::default();
+    limits.capacity.values.total_bytes = before.total_value_bytes + 1;
+    let report = run(limits);
+    let summary = report.diagnostics();
+    assert_eq!(summary["diagnostics"], "omitted");
+    assert_eq!(summary["outcome"], json!(["completed"]));
+}
+
+/// The two-role Boolean fixture with an externally pinned value agreement.
+fn bound_bool_run(
+    limits: HostLimits,
+) -> (
+    RunHost,
+    Vec<u8>,
+    zkc_runtime::host::input_binding::InputBindings,
+) {
+    use zkc_runtime::host::input_binding::{
+        InputBindings, InputComponent, InputRequirement, Observation,
+    };
+    let (raw, request) = fixture("bool");
+    // The context comes from a default-policy producer; the host under test
+    // takes the selected limits.
+    let producer = host(&raw, HostLimits::default());
+    let host = host(&raw, limits);
+    let program = host.bundle().admitted();
+    let ty = program.entry("main").unwrap()[0].inputs[0].1.clone();
+    let required = [InputRequirement {
+        components: ["Alice", "Bob"]
+            .map(|role| InputComponent {
+                role: role.into(),
+                input: 0,
+                path: vec![],
+            })
+            .to_vec(),
+        ty: ty.clone(),
+        observation: Observation::Value,
+    }];
+    // Both roles receive the canonical false frame from the fixture request;
+    // the producer derives the context from the prepared request itself.
+    let bytes = serde_json::to_vec(&request).unwrap();
+    let context = producer
+        .prepare(&bytes)
+        .unwrap()
+        .common_input_context(&required)
+        .unwrap();
+    assert_eq!(
+        zkc_format::logical::decode_tree(&context).unwrap(),
+        json!([
+            "zkc.input-bindings/0",
+            hex(&Sha256::digest(program.bytes())),
+            "main",
+            [[
+                [["Alice", "0", []], ["Bob", "0", []]],
+                ty.spelling(),
+                "value",
+                ["active", "5a4b4356000500"]
+            ]]
+        ])
+    );
+    let bindings = InputBindings::admit_pinned(
+        program,
+        "main",
+        &required,
+        &context,
+        &Sha256::digest(&context).into(),
+    )
+    .unwrap();
+    (host, bytes, bindings)
+}
+
+#[test]
+fn common_input_inspection_charges_one_invocation_ledger_for_all_roles() {
+    let (host, request, bindings) = bound_bool_run(HostLimits::default());
+    let prepared = host.prepare(&request).unwrap();
+    // Loading charged the same root and holds the loaded inputs.
+    let loaded = prepared.invocation_ledger().snapshot();
+    assert!(loaded.logical_bytes > 0 && loaded.live_reserved_bytes > 0);
+    prepared.check_common_inputs(&bindings).unwrap();
+    let both = prepared.invocation_ledger().snapshot();
+    let inspection = both.logical_bytes - loaded.logical_bytes;
+    assert!(inspection > 0 && both.total_value_bytes > loaded.total_value_bytes);
+    assert_eq!(both.live_reserved_bytes, loaded.live_reserved_bytes);
+    assert_eq!(inspection % 2, 0);
+    // The invocation's selected logical-work allowance bounds loading and
+    // inspection together. Half of the inspection admits the first role only:
+    // nothing restarts per role.
+    for (allowance, admitted) in [
+        (both.logical_bytes, true),
+        (both.logical_bytes - 1, false),
+        (loaded.logical_bytes + inspection / 2, false),
+    ] {
+        let mut limits = HostLimits::default();
+        limits.capacity.work.logical_bytes = allowance;
+        let (host, request, bindings) = bound_bool_run(limits);
+        let prepared = host.prepare(&request).unwrap();
+        let result = prepared.check_common_inputs(&bindings);
+        assert_eq!(result.is_ok(), admitted, "{allowance}");
+        if !admitted {
+            assert_eq!(result.unwrap_err(), "input-binding-work-limit");
+        }
+    }
+}
+
+#[test]
+fn a_child_run_charges_inspection_to_the_outer_ledger() {
+    let (host, request, bindings) = bound_bool_run(HostLimits::default());
+    let outer = zkc_runtime::vm::ExecutionLedger::new(Default::default(), Default::default());
+    let host = host.with_shared_ledger(outer.clone());
+    let prepared = host.prepare(&request).unwrap();
+    let before = outer.snapshot();
+    prepared.check_common_inputs(&bindings).unwrap();
+    let after = outer.snapshot();
+    assert!(after.logical_bytes > before.logical_bytes);
+    assert!(after.total_value_bytes > before.total_value_bytes);
+    assert_eq!(prepared.invocation_ledger().snapshot(), outer.snapshot());
+}
+
+#[test]
+fn host_policy_owns_ring_sequence_and_external_allowances() {
+    use crate::host::capacity::Allowances;
+    let limits = HostLimits::default();
+    assert_eq!(limits.ring_work, Allowances::RING_WORK.default);
+    assert_eq!(limits.sequence_work, Allowances::SEQUENCE_WORK.default);
+    assert_eq!(limits.external_work, Allowances::EXTERNAL_WORK.default);
+    assert_eq!(
+        HostLimits::MAX_EXTERNAL_WORK_PER_ROLE,
+        Allowances::EXTERNAL_WORK.maximum
+    );
+    let record = limits.record();
+    assert_eq!(
+        record["execution"]["ring_work_per_role"],
+        json!(Allowances::RING_WORK.default)
+    );
+    assert_eq!(
+        record["execution"]["sequence_work_per_role"],
+        json!(Allowances::SEQUENCE_WORK.default)
+    );
+    assert_eq!(limits.loading_work, Allowances::LOADING_WORK.default);
+    // The capacity record's byte fields are the invocation's; the policy
+    // record selects no separate root allowance.
+    assert!(record.get("invocation").is_none());
+    assert_eq!(
+        record["loading"]["work"],
+        json!(Allowances::LOADING_WORK.default)
+    );
+    assert_eq!(limits.material, crate::execution::MaterialLimits::DEFAULT);
+    assert_eq!(
+        record["material"]["setup_bytes"],
+        json!(Allowances::SETUP_BYTES.default)
+    );
+    for (field, code) in [
+        ("ring", "bundle-ring-work-limit"),
+        ("sequence", "bundle-sequence-work-limit"),
+        ("external", "bundle-limits"),
+        ("loading", "bundle-loading-work-limit"),
+        ("live", "native-capacity-limit"),
+        ("total", "native-capacity-limit"),
+        ("logical", "native-capacity-limit"),
+        ("public", "entry-public-bytes-limit"),
+        ("reference", "entry-reference-bytes-limit"),
+        ("setup", "entry-setup-bytes-limit"),
+        ("retained", "entry-retained-imports-limit"),
+    ] {
+        let mut lowered = HostLimits::default();
+        let mut raised = HostLimits::default();
+        match field {
+            "ring" => {
+                lowered.ring_work = 0;
+                raised.ring_work = Allowances::RING_WORK.maximum + 1;
+            }
+            "sequence" => {
+                lowered.sequence_work = 0;
+                raised.sequence_work = Allowances::SEQUENCE_WORK.maximum + 1;
+            }
+            "loading" => {
+                lowered.loading_work = 0;
+                raised.loading_work = Allowances::LOADING_WORK.maximum + 1;
+            }
+            "live" => {
+                lowered.capacity.values.live_bytes = 0;
+                raised.capacity.values.live_bytes = Capacity::HARD_MAX.values.live_bytes + 1;
+            }
+            "total" => {
+                lowered.capacity.values.total_bytes = 0;
+                raised.capacity.values.total_bytes = Capacity::HARD_MAX.values.total_bytes + 1;
+            }
+            "logical" => {
+                lowered.capacity.work.logical_bytes = 0;
+                raised.capacity.work.logical_bytes = Capacity::HARD_MAX.work.logical_bytes + 1;
+            }
+            "public" => {
+                lowered.material.public_bytes = 0;
+                raised.material.public_bytes = Allowances::PUBLIC_BYTES.maximum as usize + 1;
+            }
+            "reference" => {
+                lowered.material.reference_bytes = 0;
+                raised.material.reference_bytes = Allowances::REFERENCE_BYTES.maximum as usize + 1;
+            }
+            "setup" => {
+                lowered.material.setup_bytes = 0;
+                raised.material.setup_bytes = Allowances::SETUP_BYTES.maximum as usize + 1;
+            }
+            "retained" => {
+                lowered.material.retained_imports = 0;
+                raised.material.retained_imports =
+                    Allowances::RETAINED_IMPORTS.maximum as usize + 1;
+            }
+            _ => {
+                lowered.external_work = 0;
+                raised.external_work = Allowances::EXTERNAL_WORK.maximum + 1;
+            }
+        }
+        assert!(lowered.validate().is_ok(), "{field}");
+        assert_eq!(raised.validate().unwrap_err(), code, "{field}");
+    }
+    // Admission refuses a selection above a maximum; it is never clamped.
+    let (raw, _) = fixture("bool");
+    let mut raised = HostLimits::default();
+    raised.capacity.values.live_bytes = Capacity::HARD_MAX.values.live_bytes + 1;
+    assert_eq!(
+        RunHost::admit(
+            &raw,
+            &Sha256::digest(&raw).into(),
+            raised,
+            SetupAuthority::default()
+        )
+        .err()
+        .unwrap(),
+        "native-capacity-limit"
+    );
+    // The builder selects the same record field the policy owns.
+    let (raw, _) = fixture("bool");
+    let host = host(&raw, HostLimits::default())
+        .with_ring_work_limit(7)
+        .unwrap();
+    assert_eq!(host.limits().ring_work, 7);
 }

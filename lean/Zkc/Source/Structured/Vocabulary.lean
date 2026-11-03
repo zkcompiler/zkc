@@ -1,8 +1,8 @@
 module
 
 public import Zkc.Source.Structured.Addresses
-public import Zkc.Source.Structured.Catalogue
-public import Zkc.Source.Structured.Origin
+public import Zkc.Source.Structured.CatalogueEnvironment
+public import Zkc.Source.Structured.SourceDeclarations
 
 @[expose] public section
 
@@ -23,7 +23,9 @@ def scalarModulus : Nat :=
 def indexLimit : Nat := 2 ^ 64
 
 /- The identity of a represented product is its complete nominal encoding,
-not a digest. Its constructor and flattened component order remain explicit. -/
+not a digest. Its constructor and flattened component order remain explicit.
+`resourceUnit slot` is the nominal, role-local affine custody permission of one
+exact slot identity: it has no data payload, codec or algebraic meaning. -/
 mutual
   inductive Ty where
     | boolean | index | field (domain : String) | vector (domain : String)
@@ -33,6 +35,7 @@ mutual
     | oracleSequence (kind : OracleKind) (maximum : Nat)
     | sequence (element : Ty)
     | product (identity constructor : String) (fields : ProductFields)
+    | resourceUnit (slot : String)
     deriving DecidableEq, Repr, Inhabited
   inductive OracleKind where
     | table (row : Ty) (rows : Option Nat)
@@ -155,6 +158,7 @@ inductive Descriptor where
   | indexEqual
   | indexLess
   | indexPowerOfTwo
+  | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
   | fieldConstant (domain decimal : String)
@@ -357,34 +361,6 @@ structure ProtocolContract where
   owner : String
   clauses : List ContractClause
   deriving DecidableEq, Repr
-
-/-- Source records retain their declared usage attribute and closed field types.
-No resource property is inferred from a flattened native carrier. -/
-structure SourceRecord where
-  type : OriginTerm
-  resource : String
-  sealed : Bool
-  fields : List (String × OriginTerm)
-  deriving BEq, Repr
-
-structure SourcePort where
-  name : String
-  type : OriginTerm
-  roles : List String
-  offset : Nat
-  count : Nat
-  deriving BEq, Repr
-
-structure SourceProtocol where
-  name : String
-  inputs : List SourcePort
-  outputs : List SourcePort
-  deriving BEq, Repr
-
-structure SourceDeclarations where
-  records : List SourceRecord := []
-  protocols : List SourceProtocol := []
-  deriving BEq, Repr
 
 structure Snapshot where
   source : String

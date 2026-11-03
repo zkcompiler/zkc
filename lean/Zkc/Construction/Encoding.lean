@@ -140,8 +140,12 @@ theorem decimal_inj {a b : Nat} (equal : toString a = toString b) : a = b := by
   rw [Nat.toString_eq_ofList_toDigits, Nat.toString_eq_ofList_toDigits] at equal
   exact toDigits_inj a b (by simpa using congrArg String.toList equal)
 
-/-- A step's canonical tree: `[kind, protocol, site]`. -/
-def stepTree (step : Step) : Tree := .list [.text step.kind, .text step.protocol, .text step.site]
+/-- A step's canonical tree: `[kind, protocol, site]` for an application or a
+repeat, and `["branch", protocol, site, alternative]` for a branch. -/
+def stepTree : Step → Tree
+  | .apply protocol site => .list [.text "apply", .text protocol, .text site]
+  | .repeat protocol site => .list [.text "repeat", .text protocol, .text site]
+  | .branch protocol site alternative => .list [.text "branch", .text protocol, .text site, .text alternative]
 
 /-- The canonical tree of a native occurrence:
 `["zkc.native-origin/0", entry, [step, ...], [iteration_decimal, ...], event]`. -/
@@ -159,9 +163,8 @@ theorem map_injective_of {α β : Type} {f : α → β} (injective : ∀ x y, f 
   | _ :: _, [], equal => by simp at equal
 
 theorem stepTree_inj (x y : Step) (same : stepTree x = stepTree y) : x = y := by
-  simp only [stepTree, Tree.list.injEq, List.cons.injEq, Tree.text.injEq, and_true] at same
-  obtain ⟨kind, protocol, site⟩ := same
-  cases x; cases y; simp_all
+  cases x <;> cases y <;>
+    simp_all [stepTree, Tree.list.injEq, List.cons.injEq, Tree.text.injEq]
 
 /-- Distinct native occurrences absorb distinct bytes, and no occurrence's
 bytes extend another's: the canonical encoding is injective and prefix-free on

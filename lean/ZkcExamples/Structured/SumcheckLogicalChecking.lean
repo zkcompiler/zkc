@@ -46,7 +46,7 @@ the proposed export form. No compiler exporter produces it yet. -/
 def residualExport (remaining count : Nat) : RawContext where
   binders := [.library (tableIdentity (remaining + count))]
   atoms := [⟨residualIdentity remaining count,
-    [.binder 0, .observed .output 2 1, .observed .output 3 1]⟩,
+    [.binder 0, .observed .output 3 1, .observed .output 4 1]⟩,
     ⟨sumIdentity (remaining + count), [.binder 0, .observed .input 2 1]⟩]
 
 /-- The same request's metadata for the repacked root: identical identities,
@@ -54,7 +54,7 @@ the repacked port positions. -/
 def repackedExport (remaining count : Nat) : RawContext where
   binders := [.library (tableIdentity (remaining + count))]
   atoms := [⟨residualIdentity remaining count,
-    [.binder 0, .observed .output 0 1, .observed .output 1 1]⟩,
+    [.binder 0, .observed .output 1 1, .observed .output 2 1]⟩,
     ⟨sumIdentity (remaining + count), [.binder 0, .observed .input 0 1]⟩]
 
 variable {F G : Type}
@@ -65,9 +65,9 @@ theorem residual_export_checks (remaining count : Nat) :
     checkContext (Value := assignment F G) resolution reductionRoot.protocol.signature
       (residualExport remaining count) =
       .ok ⟨tableContext (remaining + count), [residualAtom remaining count, initialAtom (remaining + count)]⟩ := by
-  have point : decodeSelector reductionRoot.protocol.signature SumcheckRelationContract.vector .output 2 1 =
+  have point : decodeSelector reductionRoot.protocol.signature SumcheckRelationContract.vector .output 3 1 =
       some residualRootPoint := rfl
-  have value : decodeSelector reductionRoot.protocol.signature SumcheckRelationContract.scalar .output 3 1 =
+  have value : decodeSelector reductionRoot.protocol.signature SumcheckRelationContract.scalar .output 4 1 =
       some residualRootValue := rfl
   have claim : decodeSelector reductionRoot.protocol.signature SumcheckRelationContract.scalar .input 2 1 =
       some rootClaim := rfl
@@ -83,9 +83,9 @@ theorem repacked_export_checks (remaining count : Nat) :
       (repackedExport remaining count) =
       .ok ⟨tableContext (remaining + count),
         [rootMap.atom (residualAtom remaining count), rootMap.atom (initialAtom (remaining + count))]⟩ := by
-  have point : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.vector .output 0 1 =
+  have point : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.vector .output 1 1 =
       some repackedPoint := rfl
-  have value : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.scalar .output 1 1 =
+  have value : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.scalar .output 2 1 =
       some repackedValue := rfl
   have claim : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.scalar .input 0 1 =
       some repackedClaim := rfl
@@ -99,8 +99,8 @@ theorem repacked_export_checks (remaining count : Nat) :
 repacked root: its output position two now names P's residual values. -/
 theorem retained_export_refused_at_repacked (remaining count : Nat) :
     checkContext (Value := assignment F G) resolution repackedRoot.protocol.signature
-      (residualExport remaining count) = .error (.observationMismatch .output 2 1) := by
-  have point : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.vector .output 2 1 =
+      (residualExport remaining count) = .error (.observationMismatch .output 3 1) := by
+  have point : decodeSelector repackedRoot.protocol.signature SumcheckRelationContract.vector .output 3 1 =
       none := rfl
   simp [checkContext, checkSorts, checkSort, checkAtoms, checkAtom, checkTerms, checkTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, residualExport, tableIdentity, sumIdentity,
@@ -124,8 +124,8 @@ theorem unbound_binder_refused :
 observing P's input where only V holds the claim. -/
 theorem wrong_observation_refused :
     checkContext (Value := assignment F G) resolution reductionRoot.protocol.signature
-        ⟨[.library (tableIdentity 1)], [⟨sumIdentity 1, [.binder 0, .observed .output 2 1]⟩]⟩ =
-        .error (.observationMismatch .output 2 1) ∧
+        ⟨[.library (tableIdentity 1)], [⟨sumIdentity 1, [.binder 0, .observed .output 3 1]⟩]⟩ =
+        .error (.observationMismatch .output 3 1) ∧
     checkContext (Value := assignment F G) resolution reductionRoot.protocol.signature
         ⟨[.library (tableIdentity 1)], [⟨sumIdentity 1, [.binder 0, .observed .input 2 0]⟩]⟩ =
         .error (.observationMismatch .input 2 0) := by

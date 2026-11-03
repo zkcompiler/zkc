@@ -22,11 +22,13 @@
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
+#include <functional>
 
 #include "zkc/Transforms/Algorithms.h"
 
@@ -44,9 +46,12 @@ class RecipeReader {
   const CheckedHelperNormalizations &helpers;
   uint64_t remaining = 1000000;
   bool allowFiniteBulk = true;
+  MathematicalSelectionPolicy invocationPolicy;
   NumericalSelection *selection = nullptr;
   std::optional<RealizationSubject> activeSubject;
   unsigned nextChild = 0;
+  uint64_t *siteBytes = nullptr;
+  llvm::DenseSet<Operation *> checkedSelections;
   uint64_t compositionInspection = 100000;
   finite::VerificationLimits finiteLimits;
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
@@ -67,19 +72,28 @@ class RecipeReader {
   bool occurrences(Operation *begin, Operation *end, StringRef root,
                    bool finite) {
     auto prefix = (root + (finite ? "_finite_" : "_recipe_")).str();
-    for (auto *op = begin; op != end; op = ports.next(op)) {
-      if (!op)
+    std::function<bool(Operation *, unsigned)> inspect = [&](Operation *op,
+                                                             unsigned depth) {
+      if (depth > 64 || !ports.contains(op) || !charge())
         return false;
-      auto walk = ports.walk(op, [&](Operation *nested) {
-        if (!charge())
-          return WalkResult::interrupt();
-        auto site = nested->getAttrOfType<StringAttr>("site");
-        if (site && site.getValue() != root &&
-            !site.getValue().starts_with(prefix))
-          return WalkResult::interrupt();
-        return WalkResult::advance();
-      });
-      if (walk.wasInterrupted())
+      auto site = op->getAttrOfType<StringAttr>("site");
+      if (site && site.getValue() != root &&
+          !site.getValue().starts_with(prefix))
+        return false;
+      // Selected bodies have already been compared under their independently
+      // derived arm namespaces. Long sites can be hashed by algorithmSite;
+      // their exact check cannot be replaced with an outer prefix test.
+      if (checkedSelections.contains(op))
+        return true;
+      for (unsigned index = 0; index < ports.bodies(op); ++index)
+        for (auto *child = ports.first(ports.body(op, index)); child;
+             child = ports.next(child))
+          if (!inspect(child, depth + 1))
+            return false;
+      return true;
+    };
+    for (auto *op = begin; op != end; op = ports.next(op)) {
+      if (!inspect(op, 0))
         return false;
     }
     return true;
@@ -115,10 +129,10 @@ class RecipeReader {
     return true;
   }
 
-  FailureOr<SmallVector<Value>> readHelper(Operation *helper, ValueRange args,
-                                           Operation *&at, Value collected = {},
-                                           Value position = {},
-                                           Value element = {}) {
+  FailureOr<SmallVector<Value>>
+  readHelper(Operation *helper, ValueRange args, Operation *&at,
+             const finite::HelperPosition &occurrence, Value collected = {},
+             Value position = {}, Value element = {}) {
     // Only exact bounded closure snapshots are available here. Lookup
     // is read-only: this verifier cannot run either normalizer.
     auto normalized = helpers.lookup(helper);
@@ -151,19 +165,47 @@ class RecipeReader {
       }
       if (collected && is_contained(operands, collected))
         return failure();
-      if (finite::isComputation(&op)) {
-        auto results = finiteRecipe(&op, at, operands);
-        if (failed(results) || results->size() != op.getNumResults())
+      // The enclosing finite reader issues this operation's occurrence; the
+      // candidate's own site is never the expectation.
+      auto site = occurrence.site();
+      if (failed(site) || !siteBytes)
+        return failure();
+      auto *begin = at;
+      bool finite = finite::isComputation(&op);
+      bool branch = isa<data::BranchOp>(op);
+      SmallVector<Value> results;
+      if (branch) {
+        auto outputs = selected(&op, at, operands, *site, *siteBytes,
+                                invocationPolicy, occurrence.depth);
+        if (failed(outputs))
           return failure();
-        for (auto [a, b] : zip(op.getResults(), *results))
-          values[a] = b;
+        results = std::move(*outputs);
+      } else if (finite) {
+        auto outputs = finiteRecipe(&op, at, operands, *site, occurrence.depth);
+        if (failed(outputs))
+          return failure();
+        results = std::move(*outputs);
       } else {
         auto value = recipe(&op, at, operands);
         if (!value || op.getNumResults() != 1 ||
             !representation(op.getResult(0).getType(), value.getType()))
           return failure();
-        values[op.getResult(0)] = value;
+        results.push_back(value);
       }
+      // As on the entry path: generated instructions stay inside this
+      // occurrence's namespace, and a primitive root keeps it exactly.
+      if (results.size() != op.getNumResults() ||
+          (!branch && !occurrences(begin, at, *site, finite)))
+        return failure();
+      if (!finite && !results.empty() && !isa<poly::ObserveQuotientOp>(op)) {
+        auto *root = ports.producer(results.back());
+        auto rootSite =
+            root ? root->getAttrOfType<StringAttr>("site") : StringAttr();
+        if (!rootSite || rootSite.getValue() != *site)
+          return failure();
+      }
+      for (auto [before, after] : zip(op.getResults(), results))
+        values[before] = after;
     }
     SmallVector<Value> results;
     for (Value v : body.back().getOperands()) {
@@ -174,10 +216,11 @@ class RecipeReader {
     }
     return results;
   }
-  FailureOr<SmallVector<Value>> finiteRecipe(Operation *source,
-                                             Operation *&cursor,
-                                             ValueRange inputs,
-                                             bool root = false) {
+  // The finite reader owns the occurrence sequence under `site` and carries
+  // the enclosing selected nesting `depth` into total helper reads.
+  FailureOr<SmallVector<Value>>
+  finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs,
+               StringRef site, unsigned depth, bool root = false) {
     auto inherited = activeSubject;
     auto inheritedChild = nextChild;
     auto subject = root || !activeSubject
@@ -196,13 +239,17 @@ class RecipeReader {
     auto *begin = cursor;
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
+    auto limits = finiteLimits;
+    limits.finiteSite = site;
+    limits.selectedDepth = depth;
     auto result = finite::verifyExpression(
         source, inputs, cursor,
-        [&](Operation *helper, ValueRange args,
-            Operation *&at) -> FailureOr<SmallVector<Value>> {
-          return readHelper(helper, args, at);
+        [&](Operation *helper, ValueRange args, Operation *&at,
+            const finite::HelperPosition &occurrence)
+            -> FailureOr<SmallVector<Value>> {
+          return readHelper(helper, args, at, occurrence);
         },
-        sourceRoot, finiteLimits, outcome, {allowFiniteBulk, false});
+        sourceRoot, limits, outcome, {allowFiniteBulk, false});
     if (failed(result) &&
         (outcome.status == finite::VerificationStatus::OptionalCapacity ||
          outcome.status == finite::VerificationStatus::RequiredCapacity))
@@ -559,59 +606,130 @@ public:
                finite::VerificationLimits limits, NumericalSelection *selection)
       : sourceRoot(sourceRoot), symbols(targetRoot), ports(limits.candidate),
         helpers(helpers), selection(selection), finiteLimits(limits) {}
-  FailureOr<SmallVector<Value>> read(func::FuncOp entry, StringRef callSite,
-                                     ValueRange arguments, Operation *&cursor,
-                                     uint64_t &budget, uint64_t &remainingBytes,
-                                     MathematicalSelectionPolicy policy,
-                                     finite::VerificationResult &outcome) {
-    allowFiniteBulk = policy.finiteBulk;
-    remaining = std::min<uint64_t>(remaining, budget);
-    auto initial = remaining;
-    auto finish =
-        [&](bool valid,
-            SmallVector<Value> values = {}) -> FailureOr<SmallVector<Value>> {
-      budget -= initial - remaining;
-      outcome =
-          valid
-              ? finite::VerificationResult{finite::VerificationStatus::Verified,
-                                           {}}
-              : finiteOutcome;
-      return valid ? FailureOr<SmallVector<Value>>(std::move(values))
-                   : FailureOr<SmallVector<Value>>(failure());
-    };
+  FailureOr<SmallVector<Value>> selected(Operation *source, Operation *&cursor,
+                                         ValueRange inputs, StringRef site,
+                                         uint64_t &bytes,
+                                         MathematicalSelectionPolicy policy,
+                                         unsigned depth) {
+    auto branch = cast<data::BranchOp>(source);
+    bool boolean = inputs.front().getType().isSignlessInteger(1);
+    if (depth > 64 || !charge(1 + inputs.size() + source->getNumResults()) ||
+        !ports.contains(cursor) ||
+        (boolean ? !isa<exec::TestOp>(cursor) : !isa<exec::MatchOp>(cursor)) ||
+        ports.bodies(cursor) != source->getNumRegions() ||
+        ports.outputs(cursor).getTypes() != source->getResultTypes())
+      return failure();
+    auto actualSite = cursor->getAttrOfType<StringAttr>("site");
+    if (!actualSite || actualSite.getValue() != site ||
+        (!boolean &&
+         cursor->getAttr("alternatives") != branch.getAlternatives()))
+      return failure();
+    SmallVector<Value> canonical{inputs.front()};
+    llvm::DenseMap<Value, unsigned> positions;
+    SmallVector<unsigned> captures;
+    for (Value input : inputs.drop_front()) {
+      auto [found, inserted] = positions.try_emplace(input, positions.size());
+      captures.push_back(found->second);
+      if (inserted)
+        canonical.push_back(input);
+    }
+    unsigned captureWidth = positions.size();
+    if (ports.inputs(cursor) == inputs) {
+      // Initial scoped recipes retain every capture slot. Later scoped
+      // substitution may merge exact SSA aliases in first-use order. Both
+      // carriers must preserve the original positional association.
+      captureWidth = captures.size();
+      for (auto [index, position] : enumerate(captures))
+        position = index;
+    } else if (ports.inputs(cursor) != ValueRange(canonical))
+      return failure();
+    for (auto [index, region] : enumerate(branch.getArms())) {
+      auto *actual = ports.body(cursor, index);
+      auto payload = selectedPayloadTypes(source, index);
+      if (!actual || !payload) {
+        if (!payload)
+          consumeError(payload.takeError());
+        return failure();
+      }
+      auto arguments = ports.arguments(actual);
+      if (arguments.size() != payload->size() + captureWidth)
+        return failure();
+      SmallVector<Value> associated;
+      append_range(associated, arguments.take_front(payload->size()));
+      for (unsigned capture : captures)
+        associated.push_back(arguments[payload->size() + capture]);
+      auto *at = ports.first(actual);
+      auto prefix = (site + "_recipe_arm_" + Twine(index) + "_").str();
+      // Arm finite work owns root subjects, as in the producer. The enclosing
+      // finite occurrence and its child ordinal resume after the arm.
+      auto inherited = activeSubject;
+      auto inheritedChild = nextChild;
+      auto outputs = block(region.front(), prefix, associated, at, bytes,
+                           policy, true, depth + 1);
+      activeSubject = inherited;
+      nextChild = inheritedChild;
+      if (failed(outputs) || !isa_and_nonnull<exec::CompleteOp>(at) ||
+          ports.next(at) || ports.inputs(at) != ValueRange(*outputs))
+        return failure();
+    }
+    checkedSelections.insert(cursor);
+    SmallVector<Value> results(ports.outputs(cursor));
+    cursor = ports.next(cursor);
+    return results;
+  }
+  FailureOr<SmallVector<Value>> block(Block &entry, StringRef callSite,
+                                      ValueRange arguments, Operation *&cursor,
+                                      uint64_t &remainingBytes,
+                                      MathematicalSelectionPolicy policy,
+                                      bool arm = false, unsigned depth = 0) {
+    if (depth > 64)
+      return failure();
     if (arguments.size() != entry.getNumArguments())
-      return finish(false);
+      return failure();
     llvm::DenseMap<Value, Value> values;
     for (auto [source, actual] : zip(entry.getArguments(), arguments)) {
       if (source.getType() != actual.getType())
-        return finish(false);
+        return failure();
       values[source] = actual;
     }
     unsigned ordinal = 0;
     Operation *consumed = nullptr;
-    for (auto &op : entry.getBody().front()) {
+    for (auto &op : entry) {
       if (&op == consumed) {
         auto skippedSite =
-            protocol::algorithmSite({{callSite.str(), "kernel"}},
-                                    std::to_string(ordinal++), remainingBytes);
+            arm ? protocol::algorithmSite(
+                      {}, (callSite + Twine(ordinal++)).str(), remainingBytes)
+                : protocol::algorithmSite({{callSite.str(), "kernel"}},
+                                          std::to_string(ordinal++),
+                                          remainingBytes);
         if (!skippedSite) {
           consumeError(skippedSite.takeError());
-          return finish(false);
+          return failure();
         }
         consumed = nullptr;
         continue;
       }
       if (!charge(1 + op.getNumOperands() + op.getNumResults()))
-        return finish(false);
+        return failure();
       SmallVector<Value> inputs;
       for (Value value : op.getOperands()) {
         auto actual = values.lookup(value);
         if (!actual)
-          return finish(false);
+          return failure();
         inputs.push_back(actual);
       }
-      if (isa<func::ReturnOp>(op))
-        return finish(true, inputs);
+      if (isa<func::ReturnOp, data::YieldOp>(op))
+        return inputs;
+      auto site =
+          arm ? protocol::algorithmSite({}, (callSite + Twine(ordinal++)).str(),
+                                        remainingBytes)
+              : protocol::algorithmSite({{callSite.str(), "kernel"}},
+                                        std::to_string(ordinal++),
+                                        remainingBytes);
+      if (!site) {
+        consumeError(site.takeError());
+        return failure();
+      }
       auto *begin = cursor;
       SmallVector<Value> results;
       bool finite = finite::isComputation(&op);
@@ -639,17 +757,22 @@ public:
           if (complete) {
             finite::VerificationResult composedOutcome{
                 finite::VerificationStatus::Mismatch, {}};
+            auto limits = finiteLimits;
+            limits.finiteSite = *site;
+            limits.selectedDepth = depth;
             auto read = finite::verifyCollectFold(
                 *pair, inputs, consumerInputs, at,
-                [&](Operation *helper, ValueRange args, Operation *&where) {
-                  return readHelper(helper, args, where);
+                [&](Operation *helper, ValueRange args, Operation *&where,
+                    const finite::HelperPosition &occurrence) {
+                  return readHelper(helper, args, where, occurrence);
                 },
                 [&](Operation *helper, ValueRange args, Operation *&where,
-                    Value collected, Value position, Value element) {
-                  return readHelper(helper, args, where, collected, position,
-                                    element);
+                    const finite::HelperPosition &occurrence, Value collected,
+                    Value position, Value element) {
+                  return readHelper(helper, args, where, occurrence, collected,
+                                    position, element);
                 },
-                finiteLimits, composedOutcome);
+                limits, composedOutcome);
             if (succeeded(read)) {
               results = *read;
               cursor = at;
@@ -664,18 +787,24 @@ public:
       if (composed) {
         // Both source callbacks have been read against this actual traversal.
       } else if (finite) {
-        auto read = finiteRecipe(&op, cursor, inputs, true);
+        auto read = finiteRecipe(&op, cursor, inputs, *site, depth, true);
         if (failed(read)) {
           if (compositionFailure &&
               finiteOutcome.status == finite::VerificationStatus::Mismatch)
             finiteOutcome = *compositionFailure;
-          return finish(false);
+          return failure();
         }
+        results = *read;
+      } else if (isa<data::BranchOp>(op)) {
+        auto read =
+            selected(&op, cursor, inputs, *site, remainingBytes, policy, depth);
+        if (failed(read))
+          return failure();
         results = *read;
       } else {
         auto value = recipe(&op, cursor, inputs);
         if (!value)
-          return finish(false);
+          return failure();
         results.push_back(value);
       }
       if (finite && selection) {
@@ -686,11 +815,11 @@ public:
           consumeError(owner.takeError());
           finiteOutcome = {finite::VerificationStatus::RequiredCapacity,
                            "numerical occurrence discovery"};
-          return finish(false);
+          return failure();
         }
         for (auto *at = begin; at != cursor; at = ports.next(at)) {
           if (!at)
-            return finish(false);
+            return failure();
           if (ports
                   .walk(at,
                         [&](Operation *nested) {
@@ -698,19 +827,13 @@ public:
                           return WalkResult::advance();
                         })
                   .wasInterrupted())
-            return finish(false);
+            return failure();
         }
       }
-      auto site =
-          protocol::algorithmSite({{callSite.str(), "kernel"}},
-                                  std::to_string(ordinal++), remainingBytes);
-      if (!site) {
-        consumeError(site.takeError());
-        return finish(false);
-      }
       if (results.size() != resultSource->getNumResults() ||
-          !occurrences(begin, cursor, *site, finite))
-        return finish(false);
+          (!isa<data::BranchOp>(op) &&
+           !occurrences(begin, cursor, *site, finite)))
+        return failure();
       // Primitive roots keep the original occurrence, while a finite recipe
       // has its documented traversal suffixes. No label establishes meaning.
       if (!finite && !results.empty() &&
@@ -718,15 +841,35 @@ public:
         auto rootSite =
             ports.producer(results.back())->getAttrOfType<StringAttr>("site");
         if (!rootSite || rootSite.getValue() != *site)
-          return finish(false);
+          return failure();
       }
       for (auto [source, actual] : zip(resultSource->getResults(), results)) {
         if (!representation(source.getType(), actual.getType()))
-          return finish(false);
+          return failure();
         values[source] = actual;
       }
     }
-    return finish(false);
+    return failure();
+  }
+  FailureOr<SmallVector<Value>> read(func::FuncOp entry, StringRef callSite,
+                                     ValueRange arguments, Operation *&cursor,
+                                     uint64_t &budget, uint64_t &remainingBytes,
+                                     MathematicalSelectionPolicy policy,
+                                     finite::VerificationResult &outcome) {
+    allowFiniteBulk = policy.finiteBulk;
+    invocationPolicy = policy;
+    siteBytes = &remainingBytes;
+    remaining = std::min<uint64_t>(remaining, budget);
+    auto initial = remaining;
+    auto result = block(entry.front(), callSite, arguments, cursor,
+                        remainingBytes, policy);
+    budget -= initial - remaining;
+    outcome =
+        succeeded(result)
+            ? finite::VerificationResult{finite::VerificationStatus::Verified,
+                                         {}}
+            : finiteOutcome;
+    return result;
   }
 };
 } // namespace

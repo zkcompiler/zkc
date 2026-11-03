@@ -6,6 +6,10 @@ struct Calculation {
   NumericalFragment fragment;
   std::vector<ValueId> inputs;
 };
+/// Lexically authorized source construction of an opaque value must execute in
+/// its checked numerical fragment, never as a freely callable Host constructor.
+llvm::Expected<bool>
+requiresNumericalConstruction(const Body &, const Operation &, Layouts &);
 /// Extract exactly one checked source action with its ordered distinct
 /// captures. Native emission and source-side comparison share only this source
 /// operation; the emitted numerical module is independently checked against it.

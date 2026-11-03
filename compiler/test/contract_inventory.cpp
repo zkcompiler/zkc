@@ -1,6 +1,9 @@
 // Inert installation data for conformance enumeration. No consumer loads this
 // output as an admission table, representation registry, or interpretation.
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeRepresentations.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
@@ -11,20 +14,37 @@ using namespace zkc::protocol;
 int main() {
   const auto &catalog = installedDomains();
   json::Array domains, codecs, types, representations, appliedRepresentations;
+  json::Array services, cosets, widths;
   for (const auto &domain : catalog.allDomains()) {
-    json::Object members;
+    // Declared order is part of the published catalogue bytes, so members
+    // are ordered pairs rather than an object.
+    json::Array members;
     json::Array capabilities;
     for (const auto &member : domain.associated)
-      members[member.member] = member.identity;
+      members.push_back(json::Array{member.member, member.identity});
     for (const auto &capability : domain.capabilities)
       capabilities.push_back(capability);
     domains.push_back(
         json::Object{{"identity", domain.identity},
                      {"sort", domain.sort},
-                     {"associated", std::move(members)},
+                     {"members", std::move(members)},
                      {"capabilities", std::move(capabilities)},
+                     {"modulus", domain.modulus},
                      {"provider", catalog.defaultProvider(domain.identity)}});
+    if (const auto *convention = cosetConvention(domain.identity))
+      cosets.push_back(json::Object{{"field", domain.identity},
+                                    {"identity", convention->identity},
+                                    {"rootField", convention->rootField},
+                                    {"maximalRoot", convention->maximalRoot},
+                                    {"order", convention->order},
+                                    {"maxLogSize", convention->maxLogSize}});
+    if (unsigned width = fieldBitPatternWidth(domain.identity))
+      widths.push_back(
+          json::Object{{"field", domain.identity}, {"width", width}});
   }
+  for (const auto &service : randomServices())
+    services.push_back(
+        json::Object{{"contract", service.contract}, {"field", service.field}});
   for (const auto &codec : catalog.allCodecs())
     codecs.push_back(json::Object{{"identity", codec.identity},
                                   {"kind", codec.kind},
@@ -55,7 +75,8 @@ int main() {
         json::Object{{"constructor", entry.constructor},
                      {"arguments", std::move(arguments)},
                      {"representation", entry.representation},
-                     {"default", entry.isDefault}});
+                     {"default", entry.isDefault},
+                     {"child", entry.childType.spelling()}});
   }
   outs() << json::Value(json::Object{
                 {"profile", "zkc.contract-catalog"},
@@ -63,6 +84,9 @@ int main() {
                 {"codecs", std::move(codecs)},
                 {"logical_types", std::move(types)},
                 {"atomic_representations", std::move(representations)},
-                {"applied_representations", std::move(appliedRepresentations)}})
+                {"applied_representations", std::move(appliedRepresentations)},
+                {"random_services", std::move(services)},
+                {"coset_conventions", std::move(cosets)},
+                {"bit_pattern_widths", std::move(widths)}})
          << '\n';
 }

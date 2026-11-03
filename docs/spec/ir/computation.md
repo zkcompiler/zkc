@@ -127,6 +127,36 @@ The independent reader checks this entire fragment, including dormant
 declarations and scope/outcome associations, before comparing its actual data
 coordinates and ordered instructions with the mathematical entry.
 
+Selected total mathematics uses the registered `data.branch` / `data.yield`
+forms from [selected control](control.md#selected-protocol-and-mathematical-regions).
+A branch remains one expression at the existing demand cut. Its selector is
+computed once and its operands retain exact capture order. Helper expansion,
+polynomial normalization and simplification recurse inside each closed arm;
+no arm instruction moves into the parent or another arm. Admission checks every
+arm and the complete total helper closure, including dormant formation work.
+The existing restrictions on selected polynomial observations remain in force.
+
+Recipes emit Boolean selection through the existing scoped conditional and
+ordinary variants through scoped match. Each arm is a private `runtime.region`
+function whose arguments are the borrowed scope, exact alternative payload,
+then captures. The arm completes with its ordered yields. Only selected entry
+creates a runtime scope, executes instructions, allocates values or completes;
+Copy mathematical values require no synthetic resource root. Nested branches
+and installed finite computations use these same recipes. Equation recognition
+may conservatively retain ordered execution for selected callbacks; no new
+finite domain or collection grammar is implied.
+
+The independent recipe reader consumes the actual scoped bodies against each
+original arm, checking selector, typed payload and capture association, declared
+alternative order, every instruction and exact completion operands. Actual
+capture aliases may share a port only with the checked positional association.
+Instruction sites include arm and local operation coordinates and are checked
+separately from numerical meaning. A generated label or emitter roundtrip never
+establishes correspondence. Frontier sharing retains branches as concrete
+occurrences and cannot share their arm work across cuts. Representation and
+kernel selection admit the resulting existing scoped control forms before
+Program publication.
+
 Structural analysis retains numerical call occurrences independently of their
 selection policy. An enclosing finite optimization must still honor every
 retained call's replacement restrictions. Analysis views borrow immutable source

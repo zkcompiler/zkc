@@ -1,5 +1,6 @@
 #include "Declarations.h"
 #include "Contributions.h"
+#include "Instances.h"
 #include "Mathematical.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -88,7 +89,8 @@ struct Model {
   DeclarationOrder order;
   Records sorts, types, operations, members, capabilities, rules, typeExports,
       families, familyCases, associatedTypes, capabilityExports,
-      consumerProfiles;
+      consumerProfiles, frontendRules, frontendDeclarations, frontendNotations,
+      frontendConstructors, frontendHomes, serviceSignatures, serviceMethods;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
         types(order.sort("ZKC_Type")), operations(order.sort("ZKC_Operation")),
@@ -100,12 +102,20 @@ struct Model {
         familyCases(order.sort("ZKC_TypeFamilyCase")),
         associatedTypes(order.sort("ZKC_AssociatedType")),
         capabilityExports(order.sort("ZKC_CapabilityExport")),
-        consumerProfiles(order.sort("ZKC_ConsumerProfile")) {
+        consumerProfiles(order.sort("ZKC_ConsumerProfile")),
+        frontendRules(order.sort("ZKC_FrontendRule")),
+        frontendDeclarations(order.sort("ZKC_FrontendDeclaration")),
+        frontendNotations(order.sort("ZKC_FrontendNotation")),
+        frontendConstructors(order.sort("ZKC_FrontendConstructor")),
+        frontendHomes(order.sort("ZKC_FrontendHome")),
+        serviceSignatures(order.sort("ZKC_ServiceSignature")),
+        serviceMethods(order.sort("ZKC_ServiceMethod")) {
     if (records.getAllDerivedDefinitions("ZKC_Declaration").size() > 100000)
       PrintFatalError("declaration record limit");
     validateMathematicalDeclarations(records);
     validate();
     validateConsumerProfiles();
+    validateInstalledInstances(records);
   }
   void validate();
   void validateOperation(const Record *op, bool consumer = false);
@@ -167,6 +177,29 @@ void Model::validate() {
                                        parameter(ps.front()).first == "Domain");
     require(atomic || custody != "PublicValue", t,
             "applied types require an explicit complete-type codec model");
+    if (const auto *collection = optionalDef(t, "collection")) {
+      const auto rank = collection->getValueAsInt("rank");
+      const auto element = collection->getValueAsString("element");
+      require(rank == 1 || rank == 2, t, "collection rank is 1 or 2");
+      require(element == "parameter" || element == "index" || element == "byte",
+              t, "unknown collection element");
+      // The element is the first parameter's value type: a Field or Group
+      // domain's element, or the Type argument itself.
+      if (element == "parameter")
+        require(!ps.empty() &&
+                    (parameter(ps[0]) == std::make_pair(StringRef("Domain"),
+                                                        StringRef("Field")) ||
+                     parameter(ps[0]) == std::make_pair(StringRef("Domain"),
+                                                        StringRef("Group")) ||
+                     parameter(ps[0]).first == "Type"),
+                t,
+                "parameter collection element requires a Field, Group or Type "
+                "first parameter");
+    }
+    if (!t->isValueUnset("setup"))
+      require(t->getValueAsString("setup") == "prover" ||
+                  t->getValueAsString("setup") == "verifier",
+              t, "unknown setup key");
   }
   std::set<std::tuple<std::string, std::string, std::string>> memberKeys;
   for (const auto *m : members) {
@@ -241,6 +274,198 @@ void Model::validate() {
         r->getValueAsDef("capability")->getValueAsListOfDefs("parameters");
     require(ps.size() == 1 && parameter(ps[0]).first == "Domain", r,
             "source capability requires a unary domain predicate");
+  }
+  // Installed source declarations. Rule shapes, service capabilities and
+  // declaration references are data: no rule or method name is fixed here.
+  using Term = std::tuple<int, std::string, std::string>;
+  using Shape =
+      std::tuple<std::string, std::vector<std::pair<std::string, std::string>>,
+                 std::vector<Term>, std::optional<Term>>;
+  auto sourceShape = [&](const Record *r, StringRef kind,
+                         ArrayRef<const Record *> statics,
+                         ArrayRef<const Record *> inputs,
+                         ArrayRef<const Record *> output) {
+    require(kind == "Math" || kind == "Local" || kind == "Interface", r,
+            "unknown source declaration kind");
+    auto term = [&](const Record *t) -> Term {
+      auto index = t->getValueAsInt("index");
+      auto member = t->getValueAsString("member");
+      auto head = t->getValueAsString("constructor");
+      if (index < 0) {
+        require(
+            index == -1 && member.empty() &&
+                any_of(
+                    types,
+                    [&](const auto *type) {
+                      return name(type) == head &&
+                             type->getValueAsListOfDefs("parameters").empty();
+                    }),
+            r, "unknown source constructor");
+        return {-1, "", head.str()};
+      }
+      require(head.empty() && size_t(index) < statics.size(), r,
+              "source static index out of range");
+      require(member.empty() ||
+                  any_of(members,
+                         [&](const auto *m) {
+                           return name(m) == member &&
+                                  sameParameter(m->getValueAsDef("owner"),
+                                                statics[index]);
+                         }),
+              r, "unknown source static member");
+      return {int(index), member.str(), ""};
+    };
+    Shape shape{kind.str(), {}, {}, {}};
+    for (const auto *p : statics)
+      std::get<1>(shape).emplace_back(parameter(p).first.str(),
+                                      parameter(p).second.str());
+    for (const auto *t : inputs)
+      std::get<2>(shape).push_back(term(t));
+    require(output.size() <= 1 && (kind == "Interface") == output.empty() &&
+                (kind != "Interface" || inputs.empty()),
+            r, "source declaration kind and signature disagree");
+    if (!output.empty())
+      std::get<3>(shape) = term(output.front());
+    return shape;
+  };
+  std::map<StringRef, Shape> ruleShapes;
+  for (const auto *r : frontendRules) {
+    require(identifier(name(r)) && !ruleShapes.count(name(r)), r,
+            "invalid or duplicate frontend rule");
+    ruleShapes.emplace(name(r), sourceShape(r, r->getValueAsString("kind"),
+                                            r->getValueAsListOfDefs("statics"),
+                                            r->getValueAsListOfDefs("inputs"),
+                                            r->getValueAsListOfDefs("output")));
+  }
+  std::set<StringRef> intrinsicNames, operationNames;
+  for (const auto *r : order.sort("ZKC_MathematicalIntrinsic"))
+    intrinsicNames.insert(name(r));
+  for (const auto *r : operations)
+    operationNames.insert(name(r));
+  std::set<StringRef> frontendIds, implicitNames, homes, methods;
+  std::set<std::pair<StringRef, StringRef>> declared;
+  for (const auto *r : frontendDeclarations) {
+    auto identity = r->getValueAsString("identity");
+    require(!identity.empty() && frontendIds.insert(identity).second, r,
+            "duplicate frontend identity");
+    checkExport(r);
+    declared.emplace(r->getValueAsString("module"), name(r));
+    std::vector<const Record *> statics;
+    std::set<StringRef> names;
+    for (const auto *slot : r->getValueAsListOfDefs("statics")) {
+      require(identifier(name(slot)) && names.insert(name(slot)).second, r,
+              "invalid or duplicate source parameter name");
+      statics.push_back(slot->getValueAsDef("parameter"));
+    }
+    std::vector<const Record *> inputs;
+    for (const auto *slot : r->getValueAsListOfDefs("inputs")) {
+      require(identifier(name(slot)) && names.insert(name(slot)).second, r,
+              "invalid or duplicate source parameter name");
+      inputs.push_back(slot->getValueAsDef("type"));
+    }
+    auto kind = r->getValueAsString("kind");
+    auto shape = sourceShape(r, kind, statics, inputs,
+                             r->getValueAsListOfDefs("output"));
+    auto association = r->getValueAsString("association");
+    auto target = r->getValueAsString("target");
+    if (association == "rule") {
+      auto rule = ruleShapes.find(target);
+      require(rule != ruleShapes.end() && rule->second == shape, r,
+              "frontend rule signature mismatch");
+    } else
+      require(
+          association == "primitive" && kind != "Interface" &&
+              (kind == "Math" ? intrinsicNames : operationNames).count(target),
+          r, "frontend primitive kind mismatch");
+    if (r->getValueAsBit("implicit"))
+      require(implicitNames.insert(name(r)).second, r,
+              "duplicate implicit frontend name");
+  }
+  std::set<std::tuple<StringRef, StringRef, StringRef>> notations;
+  for (const auto *r : frontendNotations) {
+    auto module = r->getValueAsString("module");
+    auto symbol = r->getValueAsString("symbol");
+    auto target = r->getValueAsString("target");
+    require(any_of(declared, [&](const auto &d) { return d.first == module; }),
+            r, "frontend notation owner is not installed");
+    require(declared.count({module, target}), r,
+            "frontend notation target is not declared");
+    require(!symbol.empty() && none_of(symbol, isSpace), r,
+            "invalid frontend notation symbol");
+    auto fixity = r->getValueAsString("fixity");
+    auto precedence = r->getValueAsInt("precedence");
+    require(fixity.empty()
+                ? precedence == 0
+                : (fixity == "left" || fixity == "right" || fixity == "none") &&
+                      precedence >= 1 && precedence <= 99,
+            r, "invalid frontend notation fixity");
+    require(notations.emplace(module, symbol, target).second, r,
+            "duplicate frontend notation");
+  }
+  // A home names a catalog type constructor or a declared frontend
+  // constructor, a logical type head the source language owns. Exactly one
+  // row spells each form, the logical meaning the frontend gives a head.
+  static constexpr StringRef frontendConstructorForms[] = {
+      "OracleHandle", "OracleHandleSequence"};
+  std::set<StringRef> heads, forms;
+  for (const auto *t : types)
+    heads.insert(name(t));
+  for (const auto *r : frontendConstructors) {
+    require(identifier(name(r)) && heads.insert(name(r)).second, r,
+            "invalid or duplicate frontend constructor");
+    auto form = r->getValueAsString("form");
+    require(is_contained(frontendConstructorForms, form), r,
+            "unknown frontend constructor form");
+    require(forms.insert(form).second, r,
+            "duplicate frontend constructor form");
+  }
+  if (forms.size() != std::size(frontendConstructorForms))
+    PrintFatalError("missing frontend constructor form");
+  for (const auto *r : frontendHomes) {
+    auto head = name(r), module = r->getValueAsString("module");
+    require(heads.count(head) && module.starts_with("zkc::") &&
+                path(module, "::"),
+            r, "invalid frontend home");
+    require(homes.insert(head).second, r, "duplicate frontend home");
+    std::set<StringRef> exports;
+    for (auto member : r->getValueAsListOfStrings("members"))
+      require(member.starts_with("zkc::") && path(member, "::") &&
+                  exports.insert(member).second,
+              r, "invalid frontend home members");
+  }
+  std::map<StringRef, StringRef> serviceRules;
+  for (const auto *r : serviceSignatures) {
+    auto cap = r->getValueAsString("capability");
+    require(identifier(name(r)) && serviceRules.emplace(name(r), cap).second, r,
+            "invalid or duplicate service signature");
+    require(cap.empty() || any_of(capabilities,
+                                  [&](const auto *c) {
+                                    auto ps =
+                                        c->getValueAsListOfDefs("parameters");
+                                    return name(c) == cap && ps.size() == 1 &&
+                                           parameter(ps.front()) ==
+                                               std::pair<StringRef, StringRef>(
+                                                   "Domain", "Field");
+                                  }),
+            r, "unknown service capability");
+  }
+  for (const auto *r : serviceMethods) {
+    auto rule = r->getValueAsString("signature"),
+         cap = r->getValueAsString("capability");
+    require(identifier(name(r)) && methods.insert(name(r)).second, r,
+            "invalid or duplicate service method");
+    require(serviceRules.count(rule) && serviceRules.at(rule) == cap, r,
+            "service method capability mismatch");
+    require(cap.empty() ||
+                any_of(capabilities,
+                       [&](const auto *c) {
+                         auto ps = c->getValueAsListOfDefs("parameters");
+                         return name(c) == cap && ps.size() == 1 &&
+                                parameter(ps.front()) ==
+                                    std::make_pair(StringRef("Domain"),
+                                                   StringRef("Field"));
+                       }),
+            r, "unknown service capability");
   }
 }
 void Model::validateOperation(const Record *op, bool consumer) {
@@ -413,8 +638,9 @@ void Model::validateOperation(const Record *op, bool consumer) {
   }
 }
 std::string facetKind(const Record *r) {
-  for (auto kind : {"History", "Observation", "Sampling", "Diagonal",
-                    "Contraction", "Coset", "DomainValue", "Mathematical"})
+  for (auto kind :
+       {"History", "Succession", "Observation", "Sampling", "Diagonal",
+        "Contraction", "Coset", "DomainValue", "Mathematical"})
     if (r->isSubClassOf((Twine("ZKC_") + kind).str()))
       return kind;
   return r->getName().str();
@@ -454,6 +680,33 @@ void Model::validateFacets(const Record *op) {
       require(
           sameType(port(r, "stateInput", false), port(r, "stateOutput", true)),
           op, "history successor type mismatch");
+    } else if (kind == "Succession") {
+      // The exact resource received at stateInput is returned at stateOutput:
+      // both are resource_unit applications of one Slot root, and no other
+      // port carries a resource unit, so custody is neither duplicated nor
+      // dropped.
+      auto received = port(r, "stateInput", false, "resource_unit")
+                          ->getValueAsListOfDefs("arguments");
+      auto returned = port(r, "stateOutput", true, "resource_unit")
+                          ->getValueAsListOfDefs("arguments");
+      require(received.size() == 1 && received == returned, op,
+              "succession resource types differ");
+      const auto *slot = received.front();
+      require(slot->isSubClassOf("ZKC_Root") &&
+                  is_contained(op->getValueAsListOfDefs("scope"), slot) &&
+                  parameter(slot->getValueAsDef("parameter")) ==
+                      std::make_pair(StringRef("Domain"), StringRef("Slot")),
+              op, "succession requires a Slot root");
+      auto resource = [](const Record *app) {
+        return app->isSubClassOf("ZKC_Apply") &&
+               name(app->getValueAsDef("constructor")) == "resource_unit";
+      };
+      for (auto [i, app] : enumerate(inputs))
+        require(int64_t(i) == r->getValueAsInt("stateInput") || !resource(app),
+                op, "succession operation has another resource unit port");
+      for (auto [i, app] : enumerate(outputs))
+        require(int64_t(i) == r->getValueAsInt("stateOutput") || !resource(app),
+                op, "succession operation has another resource unit port");
     } else if (kind == "Observation") {
       observation = r;
       require(sameType(port(r, "stateInput", false, "transcript"),
@@ -640,6 +893,9 @@ void emitFacets(raw_ostream &os, const Record *op) {
     else if (kind == "History")
       os << "c.history = HistoryContract{" << number(r, "stateInput") << ", "
          << number(r, "stateOutput") << "};\n";
+    else if (kind == "Succession")
+      os << "c.succession = SuccessionContract{" << number(r, "stateInput")
+         << ", " << number(r, "stateOutput") << "};\n";
     else if (kind == "Observation")
       os << "c.observation = ObservationContract{" << number(r, "stateInput")
          << ", " << number(r, "payloadInput") << ", "
@@ -705,8 +961,24 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     }
     os << "}";
     for (auto fact : {"nativeLocal", "mathematical", "participants",
-                      "constructible", "message"})
+                      "constructible", "message", "sourceData"})
       os << ", " << boolean(type->getValueAsBit(fact));
+    if (const auto *collection = optionalDef(type, "collection")) {
+      const auto element = collection->getValueAsString("element");
+      os << ", TypeCollection{" << number(collection, "rank")
+         << ", CollectionElement::"
+         << (element == "parameter" ? "Parameter"
+             : element == "index"   ? "Index"
+                                    : "Byte")
+         << "}";
+    } else
+      os << ", std::nullopt";
+    if (type->isValueUnset("setup"))
+      os << ", std::nullopt";
+    else
+      os << ", SetupKey::"
+         << (type->getValueAsString("setup") == "prover" ? "Prover"
+                                                         : "Verifier");
     os << "},\n";
   }
   os << "}; return values; }\n"
@@ -861,6 +1133,81 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
         "AuthoringStage::CompilerGenerated; }\n"
         "const ParameterContract *parameterContract(llvm::StringRef key) { "
         "auto *d = declaration(key); return d ? &d->parameters : nullptr; }\n";
+  auto sourceTerm = [](const Record *t) {
+    auto index = t->getValueAsInt("index");
+    return index < 0 ? "{std::nullopt, \"\", " +
+                           quote(t->getValueAsString("constructor")) + "}"
+                     : "{" + std::to_string(index) + "u, " +
+                           quote(t->getValueAsString("member")) + ", \"\"}";
+  };
+  os << "llvm::ArrayRef<FrontendDeclaration> frontendDeclarations() {\n"
+        "static const std::vector<FrontendDeclaration> rows = {\n";
+  for (const auto *r : m.frontendDeclarations) {
+    os << "{" << quote(r->getValueAsString("identity")) << ", "
+       << quote(r->getValueAsString("module")) << ", " << quote(name(r))
+       << ", SourceDeclarationKind::" << r->getValueAsString("kind") << ", {";
+    for (const auto *slot : r->getValueAsListOfDefs("statics")) {
+      auto [kind, sort] = parameter(slot->getValueAsDef("parameter"));
+      os << "{" << quote(name(slot)) << ", " << quote(kind) << ", "
+         << quote(sort) << "}, ";
+    }
+    os << "}, {";
+    for (const auto *slot : r->getValueAsListOfDefs("inputs"))
+      os << "{" << quote(name(slot)) << ", "
+         << sourceTerm(slot->getValueAsDef("type")) << "}, ";
+    os << "}, ";
+    auto output = r->getValueAsListOfDefs("output");
+    os << (output.empty() ? std::string("std::nullopt")
+                          : "SourceTerm" + sourceTerm(output.front()))
+       << ", ";
+    bool rule = r->getValueAsString("association") == "rule";
+    os << (rule ? "FrontendSignature::" + r->getValueAsString("target").str()
+                : std::string("std::nullopt"))
+       << ", " << quote(rule ? "" : r->getValueAsString("target")) << ", "
+       << boolean(r->getValueAsBit("implicit")) << "},\n";
+  }
+  os << "}; return rows; }\n"
+        "const FrontendDeclaration *frontendDeclaration(llvm::StringRef "
+        "qualified) {\n"
+        "for (const auto &r : frontendDeclarations())\n"
+        "if (qualified == r.module + \"::\" + r.name) return &r;\n"
+        "return nullptr; }\n";
+  os << "llvm::ArrayRef<FrontendNotation> frontendNotations() {\n"
+        "static const std::vector<FrontendNotation> rows = {\n";
+  for (const auto *r : m.frontendNotations)
+    os << "{" << quote(r->getValueAsString("module")) << ", "
+       << quote(r->getValueAsString("symbol")) << ", "
+       << quote(r->getValueAsString("fixity")) << ", "
+       << r->getValueAsInt("precedence") << ", "
+       << quote(r->getValueAsString("target")) << ", "
+       << boolean(r->getValueAsBit("public")) << "},\n";
+  os << "}; return rows; }\n";
+  os << "llvm::ArrayRef<FrontendConstructor> frontendConstructors() {\n"
+        "static const std::vector<FrontendConstructor> rows = {\n";
+  for (const auto *r : m.frontendConstructors)
+    os << "{" << quote(name(r))
+       << ", FrontendConstructorForm::" << r->getValueAsString("form")
+       << "},\n";
+  os << "}; return rows; }\n"
+        "const FrontendConstructor *frontendConstructor(llvm::StringRef "
+        "spelling) {\n"
+        "for (const auto &r : frontendConstructors())\n"
+        "if (spelling == r.name) return &r;\n"
+        "return nullptr; }\n";
+  os << "llvm::ArrayRef<FrontendHome> frontendHomes() {\n"
+        "static const std::vector<FrontendHome> rows = {\n";
+  for (const auto *r : m.frontendHomes)
+    os << "{" << quote(name(r)) << ", " << quote(r->getValueAsString("module"))
+       << ", " << strings(r->getValueAsListOfStrings("members")) << "},\n";
+  os << "}; return rows; }\n";
+  os << "llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations() "
+        "{\n"
+        "static const std::vector<ServiceMethodDeclaration> rows = {\n";
+  for (const auto *r : m.serviceMethods)
+    os << "{" << quote(name(r))
+       << ", ServiceSignature::" << r->getValueAsString("signature") << ", "
+       << quote(r->getValueAsString("capability")) << "},\n";
+  os << "}; return rows; }\n";
   os << "llvm::ArrayRef<SourceTypeExport> sourceTypeExports() {\nstatic const "
         "std::vector<SourceTypeExport> values = {\n";
   for (const auto *r : m.typeExports)
@@ -982,7 +1329,8 @@ json::Object facetJSON(const Record *facet) {
   };
   if (kind == "Mathematical")
     result["identity"] = name(facet->getValueAsDef("identity"));
-  else if (kind == "History" || kind == "Observation" || kind == "Sampling") {
+  else if (kind == "History" || kind == "Succession" || kind == "Observation" ||
+           kind == "Sampling") {
     integer("stateInput");
     integer("stateOutput");
     if (kind == "Observation")
@@ -1122,7 +1470,7 @@ void Model::validateConsumerProfiles() {
   for (const auto *entry : order.sort("ZKC_ConsumerOperation"))
     require(selectedEntries.count(entry), entry, "unowned consumer operation");
 }
-json::Object inventory(const Model &m) {
+json::Object inventory(const Model &m, const RecordKeeper &records) {
   json::Object result{{"format", "zkc.contract-declarations/0"}};
   json::Array sorts;
   for (const auto *sort : m.sorts)
@@ -1130,7 +1478,14 @@ json::Object inventory(const Model &m) {
   result["sorts"] = std::move(sorts);
   json::Array types, ops, members, rules, capabilities, exports, families,
       associatedTypes, meanings, intrinsics;
-  for (const auto *t : m.types)
+  for (const auto *t : m.types) {
+    json::Value collection = nullptr;
+    if (const auto *c = optionalDef(t, "collection"))
+      collection = json::Object{{"rank", c->getValueAsInt("rank")},
+                                {"element", c->getValueAsString("element")}};
+    json::Value setup = nullptr;
+    if (!t->isValueUnset("setup"))
+      setup = t->getValueAsString("setup");
     types.push_back(
         json::Object{{"name", name(t)},
                      {"parameters", parametersJSON(t)},
@@ -1141,10 +1496,23 @@ json::Object inventory(const Model &m) {
                      {"mathematical", t->getValueAsBit("mathematical")},
                      {"participants", t->getValueAsBit("participants")},
                      {"constructible", t->getValueAsBit("constructible")},
-                     {"message", t->getValueAsBit("message")}});
-  for (const auto *c : m.capabilities)
-    capabilities.push_back(
-        json::Object{{"name", name(c)}, {"parameters", parametersJSON(c)}});
+                     {"message", t->getValueAsBit("message")},
+                     {"sourceData", t->getValueAsBit("sourceData")},
+                     {"collection", std::move(collection)},
+                     {"setup", std::move(setup)}});
+  }
+  for (const auto *c : m.capabilities) {
+    auto names = [&](StringRef field) {
+      json::Array values;
+      for (auto member : c->getValueAsListOfStrings(field))
+        values.push_back(member);
+      return values;
+    };
+    capabilities.push_back(json::Object{{"name", name(c)},
+                                        {"parameters", parametersJSON(c)},
+                                        {"requires", names("requires")},
+                                        {"permits", names("permits")}});
+  }
   for (const auto *member : m.members)
     members.push_back(json::Object{
         {"name", name(member)},
@@ -1206,6 +1574,96 @@ json::Object inventory(const Model &m) {
                      {"naturals", intrinsic->getValueAsInt("naturals")},
                      {"domainPoints", intrinsic->getValueAsBit("domainPoints")},
                      {"scalar", intrinsic->getValueAsBit("scalar")}});
+  json::Array frontendRules, declarations, notations, constructors, homes,
+      signatures, services;
+  auto sourceTerm = [](const Record *t) {
+    auto index = t->getValueAsInt("index");
+    if (index < 0)
+      return json::Object{{"constructor", t->getValueAsString("constructor")}};
+    json::Object term{{"static", index}};
+    if (!t->getValueAsString("member").empty())
+      term["member"] = t->getValueAsString("member");
+    return term;
+  };
+  auto sourceOutput = [&](const Record *r) -> json::Value {
+    auto output = r->getValueAsListOfDefs("output");
+    return output.empty() ? json::Value(nullptr)
+                          : json::Value(sourceTerm(output.front()));
+  };
+  for (const auto *r : m.frontendRules) {
+    json::Array statics, inputs;
+    for (const auto *p : r->getValueAsListOfDefs("statics"))
+      statics.push_back(parameterJSON(p));
+    for (const auto *t : r->getValueAsListOfDefs("inputs"))
+      inputs.push_back(sourceTerm(t));
+    frontendRules.push_back(json::Object{{"name", name(r)},
+                                         {"kind", r->getValueAsString("kind")},
+                                         {"statics", std::move(statics)},
+                                         {"inputs", std::move(inputs)},
+                                         {"output", sourceOutput(r)}});
+  }
+  for (const auto *r : m.frontendDeclarations) {
+    json::Array statics, inputs;
+    for (const auto *slot : r->getValueAsListOfDefs("statics"))
+      statics.push_back(json::Object{
+          {"name", name(slot)},
+          {"parameter", parameterJSON(slot->getValueAsDef("parameter"))}});
+    for (const auto *slot : r->getValueAsListOfDefs("inputs"))
+      inputs.push_back(
+          json::Object{{"name", name(slot)},
+                       {"type", sourceTerm(slot->getValueAsDef("type"))}});
+    declarations.push_back(
+        json::Object{{"identity", r->getValueAsString("identity")},
+                     {"owner", r->getValueAsString("module")},
+                     {"name", name(r)},
+                     {"kind", r->getValueAsString("kind")},
+                     {"statics", std::move(statics)},
+                     {"inputs", std::move(inputs)},
+                     {"output", sourceOutput(r)},
+                     {"association",
+                      json::Object{{"kind", r->getValueAsString("association")},
+                                   {"target", r->getValueAsString("target")}}},
+                     {"implicit", r->getValueAsBit("implicit")}});
+  }
+  for (const auto *r : m.frontendNotations) {
+    json::Value fixity = nullptr;
+    if (!r->getValueAsString("fixity").empty())
+      fixity = json::Object{{"associativity", r->getValueAsString("fixity")},
+                            {"precedence", r->getValueAsInt("precedence")}};
+    notations.push_back(json::Object{{"owner", r->getValueAsString("module")},
+                                     {"symbol", r->getValueAsString("symbol")},
+                                     {"fixity", std::move(fixity)},
+                                     {"target", r->getValueAsString("target")},
+                                     {"public", r->getValueAsBit("public")}});
+  }
+  for (const auto *r : m.serviceSignatures)
+    signatures.push_back(json::Object{
+        {"name", name(r)}, {"capability", r->getValueAsString("capability")}});
+  for (const auto *r : m.frontendConstructors)
+    constructors.push_back(
+        json::Object{{"name", name(r)}, {"form", r->getValueAsString("form")}});
+  for (const auto *r : m.frontendHomes)
+    homes.push_back(json::Object{{"constructor", name(r)},
+                                 {"module", r->getValueAsString("module")},
+                                 {"members", [&] {
+                                    json::Array members;
+                                    for (auto member :
+                                         r->getValueAsListOfStrings("members"))
+                                      members.push_back(member);
+                                    return members;
+                                  }()}});
+  for (const auto *r : m.serviceMethods)
+    services.push_back(
+        json::Object{{"name", name(r)},
+                     {"signature", r->getValueAsString("signature")},
+                     {"capability", r->getValueAsString("capability")}});
+  result["frontendRules"] = std::move(frontendRules);
+  result["frontendDeclarations"] = std::move(declarations);
+  result["frontendNotations"] = std::move(notations);
+  result["frontendConstructors"] = std::move(constructors);
+  result["frontendHomes"] = std::move(homes);
+  result["serviceSignatures"] = std::move(signatures);
+  result["serviceMethods"] = std::move(services);
   result["types"] = std::move(types);
   result["operations"] = std::move(ops);
   result["members"] = std::move(members);
@@ -1237,6 +1695,9 @@ json::Object inventory(const Model &m) {
         {"operations", std::move(entries)}});
   }
   result["consumerProfiles"] = std::move(profiles);
+  // Logical installed-instance tables only; the native installation has its
+  // own inventory action.
+  addInstalledInstanceInventory(result, records);
   return result;
 }
 } // namespace
@@ -1248,6 +1709,6 @@ bool emitContractDeclarations(raw_ostream &os, const RecordKeeper &records) {
   return false;
 }
 bool emitContractInventory(raw_ostream &os, const RecordKeeper &records) {
-  os << formatv("{0:2}\n", json::Value(inventory(Model(records))));
+  os << formatv("{0:2}\n", json::Value(inventory(Model(records), records)));
   return false;
 }

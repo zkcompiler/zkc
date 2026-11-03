@@ -17,7 +17,7 @@ set_option maxHeartbeats 2000000
 /-- Exact source request; attachment and method are separate. -/
 def request0Data : Wire.Request :=
 {
-  subject := ⟨"sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", .compiledIdeal, [⟨"constructed-participant", "sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec"⟩]⟩
+  subject := ⟨"sha256:7b3e3da564803e49660fccb8feb29b0e4aaa01acb5f08b4e60e8a32b85079c2b", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", .compiledIdeal, [⟨"constructed-participant", "sha256:2f0e071388e726c32a5a18354a5ff7ded0972ecacb7f3f03975e8e83290ad6fa"⟩]⟩
   property := ⟨"soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.adaptive")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q")), (some "validator_cost", (.binary .div (.natural 160) (.application "cardinality" none [(none, (.reference "bls12-381.fr"))]))), (some "application", (.reference "application"))]⟩
@@ -34,7 +34,7 @@ claim_request request0Data using ZkcSecurity.Realizations.Gkr.Generated.SubjectS
 /-- Exact source request; attachment and method are separate. -/
 def request1Data : Wire.Request :=
 {
-  subject := ⟨"sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", .compiledIdeal, [⟨"constructed-participant", "sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec"⟩]⟩
+  subject := ⟨"sha256:7b3e3da564803e49660fccb8feb29b0e4aaa01acb5f08b4e60e8a32b85079c2b", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", .compiledIdeal, [⟨"constructed-participant", "sha256:2f0e071388e726c32a5a18354a5ff7ded0972ecacb7f3f03975e8e83290ad6fa"⟩]⟩
   property := ⟨"soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.adaptive")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q")), (some "validator_cost", (.binary .div (.natural 160) (.application "cardinality" none [(none, (.reference "bls12-381.fr"))]))), (some "application", (.reference "application"))]⟩

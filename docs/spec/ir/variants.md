@@ -14,6 +14,29 @@ identity. Equal physical layouts do not identify distinct nominal variants.
 Generic instantiation retains every static actual, including a phantom actual
 that does not occur in a payload.
 
+Formation in the Data type language admits at most 512 alternatives, and
+[logical type data](../formats/logical-types.md) carries the same profile.
+Every other layer states its own limit in its owning contract and refuses at its
+own boundary; none narrows formation:
+
+| Layer | Alternatives | Refusal |
+| --- | --- | --- |
+| MLIR formation and logical type data | 512 | Type verification; `structured-data` |
+| [Selected regions](control.md#selected-protocol-and-mathematical-regions) | 512 arms | `selected-control-limit` |
+| [Retained projection metadata](control.md#selected-protocol-and-mathematical-regions) | 256 arms per Protocol selected region | `mathematical-projection` |
+| [Portable descriptor](#portable-representation) | 64 | `variant-type` when a formed variant is spelled |
+| [Program `match`](../formats/program-bytes.md#bounds-and-admission) | 64 arms | `local-match-shape`, `interactive-match-shape` |
+| [Source variants](../language/definitions.md#types-and-static-terms) | 64 | `source.limit` |
+| [Oracle opening exchange](../formats/oracle-realization.md#common-opening-communication) | 32 constructors | `oracle-common-communication-profile` |
+
+A variant that forms with more than 64 alternatives can therefore be selected
+over in MLIR, but has no portable spelling and no Program `match`.
+The oracle opening exchange answers with one response alternative per remote
+constructor. One exchange dispatches at most 32 constructors, the capacity its
+response and packet helpers and their verifiers share; the planner refuses a
+larger inventory before it forms the response type. The limit lies below the
+wire's 64, so the alternative count never makes a response unspellable.
+
 A value contains exactly one alternative label and that alternative's payload.
 An inactive payload does not exist. Nested variants obey the same rule. Copy and
 drop permissions are independently the conjunction of those permissions over
@@ -105,8 +128,14 @@ length. This bounds expansion work proportionally to input size, including
 modules with many distinct small graphs; it is not a wall-clock guarantee. A string counts as one node and its compact JSON byte length; an array
 counts as one plus its children's node counts, and two bracket bytes plus child
 byte lengths and separating commas. Variant nesting remains at most eight,
-alternatives 32, and immediate payload entries 128. Bounds are simultaneous;
-none promises every combination fits. The containing artifact retains its
+alternatives 64, and immediate payload entries 128. Bounds are simultaneous;
+none promises every combination fits. The alternative limit is the largest power
+of two for which a variant with that many alternatives can still be spelled
+within the program format's 4,096-byte type string; long labels or payloads can
+refuse sooner. Spelling a formed variant with more alternatives refuses with
+`variant-type`. The shared [program byte fixtures](../formats/program-bytes.md#independent-readers)
+spell a descriptor at the alternative ceiling and one past it, and both the C++
+and the Rust readers run them. The containing artifact retains its
 existing byte and structural limits. Ordinary nontype fields retain their own
 limits; a `variant:` prefix in a literal attribute does not enlarge them.
 

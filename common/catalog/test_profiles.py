@@ -13,6 +13,10 @@ def source():
     return json.loads(Path(__file__).with_name("declarations.json").read_text(), object_pairs_hook=unique)
 
 
+def installation():
+    return json.loads(Path(__file__).with_name("installation.json").read_text(), object_pairs_hook=unique)
+
+
 def enroll(value, operation):
     value["operations"].append(operation)
     value["consumerProfiles"][0]["operations"].append({
@@ -30,13 +34,14 @@ class Profiles(unittest.TestCase):
         self.assertEqual([m["operation"] for m in profile["operations"]], [
             "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
             "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
-            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"])
+            "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed",
+            "resource_unit.create", "resource_unit.pass", "resource_unit.consume"])
         self.assertEqual(profile["implementation"], "unselected")
         for member in profile["operations"]:
             roots = [t["parameter"] for t in member["scope"] if t["kind"] == "root"]
             self.assertEqual(roots, [] if member["operation"].startswith("index.") else [
-                {"kind": "Domain", "sort": "Field"}])
-        self.assertEqual(project(value), project(value))
+                {"kind": "Domain", "sort": "Slot" if member["operation"].startswith("resource_unit.") else "Field"}])
+        self.assertEqual(project(value, installation()), project(value, installation()))
 
     def test_profile_refusals(self):
         cases = [
@@ -103,7 +108,7 @@ class Profiles(unittest.TestCase):
         })
         value["consumerProfiles"].append(other)
         validate(value)
-        project(value)
+        project(value, installation())
         self.assertEqual(value["consumerProfiles"][0], original)
 
     def test_closed_nested_type_dependencies(self):

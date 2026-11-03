@@ -1,4 +1,5 @@
 """Source Entry functions share native calculation, proof and cumulative policy."""
+import hashlib
 import json
 
 import pytest
@@ -10,7 +11,7 @@ def compile_function(toolchain, journal, directory, source, entry='Main', flags=
     path = directory / 'entry.zkc'
     path.write_text(source)
     package = directory / f'{entry}.zkpkg'
-    built = journal.json([toolchain.runtime, '--json', 'compile',
+    built = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                           f'--compiler={toolchain.compiler}', f'--module=example={path}',
                           f'example::{entry}', f'--output={package}', *flags])
     return package, built['package_sha256']
@@ -209,7 +210,7 @@ entry fn Main(x:bool,count:index)->bool{
     for _ in range(8):
         expected = (expected * expected + 1) % 2130706433
     assert value == (str(expected) if numeric else True)
-    low, high = (r['execution']['usage']['instructions'] for r in (once, repeated))
+    low, high = (r['execution']['invocation']['instructions'] for r in (once, repeated))
     assert low < high
     ceiling = (low + high) // 2
     capacity = journal.write('cumulative.capacity.json', [
@@ -221,8 +222,13 @@ entry fn Main(x:bool,count:index)->bool{
     assert value == ('5' if numeric else True)
     refused, _ = execute(toolchain, journal, directory, package, pin, 'bounded-many',
                           arguments(8), flags=flags, refuses=True)
-    assert refused['code'] in {'Limit', 'entry-host-numeric-stopped'}
-    usage = refused['execution']['usage']
+    # The Function's own charge of the pooled meter refuses naming the exhausted
+    # meter; only a numerical child can instead stop on it with its limit stop.
+    expected = {'entry-host-instruction-limit'}
+    if numeric:
+        expected.add('entry-host-numeric-stopped')
+    assert refused['code'] in expected
+    usage = refused['execution']['invocation']
     assert usage['instructions'] <= ceiling
     calls = refused['execution']['calls']
     assert any(call['completed'] for call in calls)
@@ -464,3 +470,29 @@ entry fn Produce(complete:bool){return Core::prove(Core::Public{},Core::Witness{
     calls = report['execution']['calls']
     assert calls[-1]['operation'] == operation
     assert calls[-1]['completed'] is not stopped
+
+
+UNPACKED_RECORDS = {
+    'one-field': ('pub struct Secret:\n    pub value: index\n',
+                  'value: Secret', '', {'value': {'value': 7}}),
+    'two-field': ('pub struct Secret:\n    pub value: index\n    pub flag: bool\n',
+                  'value: Secret', '', {'value': {'value': 7, 'flag': True}}),
+    # A sealed record has no external constructor; its home module builds it.
+    'sealed': ('#[sealed]\npub struct Secret:\n    value: index\n', 'x: index',
+               '    value = Secret {value: x}\n', {'x': 7}),
+}
+
+
+@pytest.mark.parametrize('record', sorted(UNPACKED_RECORDS))
+def test_host_unpack_yields_each_record_field(toolchain, journal, directory, record):
+    declaration, parameter, prelude, arguments = UNPACKED_RECORDS[record]
+    path = directory / 'entry.zkc'
+    path.write_text(declaration + f'entry def Echo({parameter}) -> index:\n' + prelude +
+                    '    fields = unpack(value)\n    return fields.0\n')
+    package = directory / 'Echo.zkpkg'
+    package.write_text(journal.run([toolchain.compiler, 'language-package',
+                                    '--source-format=zkc-layout', '--entry=example::Echo',
+                                    f'--module=example={path}']))
+    pin = hashlib.sha256(package.read_bytes()).hexdigest()
+    _, value = execute(toolchain, journal, directory, package, pin, record, arguments)
+    assert value == '7'

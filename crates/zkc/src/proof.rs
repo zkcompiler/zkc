@@ -30,6 +30,10 @@ use zkc_runtime::vm::{
     PreparationStats, PreparedComputations, Type,
 };
 
+/// Bytes of Host invocation context one proof call accepts. Native framing
+/// checks it in the header and managed transcripts bind it in their root.
+pub const MAX_CONTEXT_BYTES: usize = 4096;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Port {
     pub(crate) original: usize,
@@ -54,13 +58,21 @@ pub struct NativeDeployment {
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    /// The invocation's own root when no outer invocation's ledger is
+    /// attached: it charges the Host's work and storage and every runner's
+    /// bytes, while each runner keeps its own fuel.
+    invocation_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     retained_inputs: bool,
     operation: Option<bool>,
     proof_bytes_limit: usize,
     publication: String,
     choices: [String; 7],
     external_work_limit: u64,
+    /// The selected record: per-operation ceilings, each runner's fuel, and
+    /// the byte allowances of the root this deployment creates for an
+    /// invocation, which every runner of the call charges.
     capacity: Capacity,
+    loading_work: u64,
     setups: SetupAuthority,
     entry: NativeProofEntry,
     preparation: PreparedComputations<CpuBackend>,
@@ -509,16 +521,18 @@ impl NativeDeployment {
             cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
-            sequence_work_limit: 16_777_216,
+            ring_work_limit: crate::host::capacity::Allowances::RING_WORK.default,
+            sequence_work_limit: crate::host::capacity::Allowances::SEQUENCE_WORK.default,
             shared_ledger: None,
+            invocation_ledger: None,
             retained_inputs,
             operation,
             proof_bytes_limit: MAX_PROOF_BYTES,
             publication: expected_sha256.to_owned(),
             choices,
-            external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work_limit: crate::host::capacity::Allowances::EXTERNAL_WORK.default,
             capacity: Capacity::default(),
+            loading_work: crate::host::capacity::Allowances::LOADING_WORK.default,
             setups,
             preparation: PreparedComputations::new(
                 proof_entry.admitted(),
@@ -587,6 +601,23 @@ impl NativeDeployment {
         self.capacity = capacity;
         Ok(self)
     }
+    /// Select the loading work allowance of each input loading.
+    pub fn with_loading_work_limit(mut self, limit: u64) -> Result<Self> {
+        if !crate::host::capacity::Allowances::LOADING_WORK.admits(limit) {
+            return Err("native-proof-loading-work-limit".into());
+        }
+        self.loading_work = limit;
+        Ok(self)
+    }
+    pub(crate) fn loading(&self) -> crate::host::admission::LoadLimits {
+        self.capacity.loading(self.loading_work)
+    }
+    /// A new invocation root that the selected capacity record bounds. The
+    /// selected role's runner, and each attempt's runner, charge their bytes
+    /// to it and keep their own fuel.
+    pub(crate) fn invocation_root(&self) -> zkc_runtime::vm::ExecutionLedger {
+        self.capacity.root()
+    }
     pub fn binding_scope(&self) -> crate::entry::BindingScope {
         if self.entry().binds_invocation() {
             crate::entry::BindingScope::Transcript
@@ -608,7 +639,7 @@ impl NativeDeployment {
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_cpu::ring::DEFAULT_WORK_LIMIT {
+        if !crate::host::capacity::Allowances::RING_WORK.admits(limit) {
             return Err("native-proof-ring-work-limit".into());
         }
         self.ring_work_limit = limit;
@@ -654,7 +685,7 @@ impl NativeDeployment {
     /// from deployment and attempt-policy identities. The CLI exposes the same
     /// cap through `--external-work`. Zero permits only zero-work transitions.
     pub fn with_external_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+        if !crate::host::capacity::Allowances::EXTERNAL_WORK.admits(limit) {
             return Err("native-proof-external-work-limit".into());
         }
         self.external_work_limit = limit;
@@ -666,20 +697,50 @@ impl NativeDeployment {
         self.shared_ledger = Some(ledger);
         self
     }
-    pub(crate) fn with_invocation_limits(
+    /// Charge one standalone invocation's Host-side work and its runners'
+    /// bytes to its invocation root `ledger`; runners keep their own fuel.
+    pub(crate) fn with_invocation_ledger(
+        mut self,
+        ledger: zkc_runtime::vm::ExecutionLedger,
+    ) -> Self {
+        self.invocation_ledger = Some(ledger);
+        self
+    }
+    /// The invocation root that charges Host-side work: the shared ledger of
+    /// an outer invocation, otherwise this invocation's own root, if any.
+    pub(crate) fn host_ledger(&self) -> Option<&zkc_runtime::vm::ExecutionLedger> {
+        self.shared_ledger
+            .as_ref()
+            .or(self.invocation_ledger.as_ref())
+    }
+    /// This deployment with an invocation root: the attached one, or a new
+    /// root with the selected invocation allowances for a low-level call.
+    fn rooted(&self) -> std::borrow::Cow<'_, Self> {
+        if self.host_ledger().is_some() {
+            std::borrow::Cow::Borrowed(self)
+        } else {
+            std::borrow::Cow::Owned(self.clone().with_invocation_ledger(self.invocation_root()))
+        }
+    }
+    /// Select one invocation's capacity and work allowances. A proof-byte
+    /// allowance above the native proof limit refuses rather than being clamped.
+    pub(crate) fn with_allowances(
         mut self,
         capacity: Capacity,
         external: u64,
         ring: u64,
         sequence: u64,
         proof_bytes: usize,
-    ) -> Self {
+    ) -> Result<Self> {
+        if proof_bytes > MAX_PROOF_BYTES {
+            return Err("native-proof-proof-limit".into());
+        }
         self.capacity = capacity;
         self.external_work_limit = external;
         self.ring_work_limit = ring;
         self.sequence_work_limit = sequence;
-        self.proof_bytes_limit = proof_bytes.min(MAX_PROOF_BYTES);
-        self
+        self.proof_bytes_limit = proof_bytes;
+        Ok(self)
     }
     /// Execute immutable role inputs with an explicit production, verification
     /// or retry request. Public inputs and setups remain application-authorized.
@@ -695,7 +756,8 @@ impl NativeDeployment {
             self.capacity.backend().ark_bounds(),
             self.installation().clone(),
         );
-        self.execute_prepared(input, invocation, &mut imports)
+        self.rooted()
+            .execute_prepared(input, invocation, &mut imports)
     }
     /// Deterministic provider controls for tests. No production command or file
     /// format selects this feature-gated entry point.
@@ -711,7 +773,8 @@ impl NativeDeployment {
             self.capacity.backend().ark_bounds(),
             self.installation().clone(),
         );
-        self.execute_with_imports(input, invocation.plan(self)?, &entropy, &mut imports)
+        let rooted = self.rooted();
+        rooted.execute_with_imports(input, invocation.plan(self)?, &entropy, &mut imports)
     }
     pub(crate) fn execute_prepared(
         &self,
@@ -729,7 +792,8 @@ impl NativeDeployment {
             self.capacity.backend().ark_bounds(),
             self.installation().clone(),
         );
-        self.prepare_inputs(input, invocation.is_producer(), &mut imports)
+        self.rooted()
+            .prepare_inputs(input, invocation.is_producer(), &mut imports)
             .map(|_| ())
     }
     fn selected_role(&self, producing: bool) -> Result<&EntryRole> {
@@ -746,7 +810,8 @@ impl NativeDeployment {
         producer: bool,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<inputs::Prepared> {
-        imports.set_ledger(self.shared_ledger.clone());
+        // Setup imports, including persistent cache hits, charge the root.
+        imports.set_ledger(self.host_ledger().cloned());
         let role = self.selected_role(producer)?;
         self.cpu
             .enter(|| inputs::prepare(self, input, role, producer, imports))
@@ -774,7 +839,7 @@ impl NativeDeployment {
             planned,
             root,
             binding,
-            loading,
+            mut loading,
             encoding,
         } = self.prepare_inputs(input, proof.is_none(), imports)?;
         let policy = self.capacity.backend();
@@ -831,10 +896,7 @@ impl NativeDeployment {
                 && let Some(proof) = proof
             {
                 let ty = &role.inputs.last().expect("admitted codec input").1;
-                retained.extend(zkc_runtime::host::wire::reserve_allocation(
-                    self.shared_ledger.as_ref(),
-                    proof.len().saturating_add(512),
-                )?);
+                retained.extend(self.retain_received_proof(proof)?);
                 values.push(
                     backend
                         .decode_raw_bytes(ty, proof)
@@ -860,6 +922,8 @@ impl NativeDeployment {
             }
             Ok(values)
         })();
+        // The operands now hold the loaded values; the Host keeps no copy.
+        drop(loaded);
         let mut report = NativeProofReport {
             verification: None,
             retained,
@@ -885,6 +949,8 @@ impl NativeDeployment {
             ring_work_limit: self.ring_work_limit,
             external_work_limit: self.external_work_limit,
             cleanup_errors: Vec::new(),
+            invocation: self.host_ledger().cloned(),
+            invocation_usage: Default::default(),
         };
         match setup {
             Err(error) => report.outcome = Err(error),
@@ -904,101 +970,115 @@ impl NativeDeployment {
                     &mut report,
                 );
             }
-            Ok(values) => match Runner::new_for_role_with_ledger(
-                self.entry.admitted(),
-                self.entry.entry(),
-                &role.role,
-                "native-proof",
-                backend,
-                values,
-                zkc_runtime::vm::ValueBudget {
-                    live_bytes: self
-                        .capacity
-                        .values
-                        .live_bytes
-                        .saturating_sub(loading.as_ref().map_or(0, |v| v.bytes())),
-                    ..self.capacity.values
-                },
-                self.capacity.work,
-                self.shared_ledger.clone(),
-            ) {
-                Err(failed) => {
-                    report.outcome = Err(failed.error.to_string());
-                    report.usage = failed.usage;
-                    backend = failed.backend;
-                }
-                Ok(mut runner) => {
-                    match proof {
-                        None => {
-                            let produced = self.prepared_call(&mut runner, role, |runner| {
-                                driver::produce(
-                                    runner,
-                                    &binding,
-                                    self.transport(),
-                                    self.proof_bytes_limit,
-                                    self.shared_ledger.clone(),
-                                )
-                            });
-                            retain_driver_stop(&mut report, &produced);
-                            report.outcome = produced
-                                .outcome
-                                .map(|p| {
-                                    let (proof, outputs, retained) = p.into_parts();
-                                    report.retained.extend(retained);
-                                    report.outputs = Some(self.original_outputs(role, outputs));
-                                    proof
-                                })
-                                .map_err(|e| driver_failure(&e));
-                            report.messages = produced.messages;
-                            report.bytes = produced.bytes;
-                            report.cancelled = produced.cancelled.is_some();
-                        }
-                        Some(proof) => {
-                            let validated = self.prepared_call(&mut runner, role, |runner| {
-                                driver::validate(
-                                    runner,
-                                    proof,
-                                    &binding,
-                                    self.transport(),
-                                    self.entry.acceptance(),
-                                    self.shared_ledger.clone(),
-                                )
-                            });
-                            retain_driver_stop(&mut report, &validated);
-                            report.verification = match &validated.outcome {
-                                Ok(_) => Some(VerificationDecision::Accepted),
-                                Err(driver::ArtifactFailure::Rejected) => {
-                                    Some(VerificationDecision::Rejected)
-                                }
-                                Err(_) => None,
-                            };
-                            report.outcome = validated
-                                .outcome
-                                .map(|values| {
-                                    report.outputs = Some(self.original_outputs(role, values));
-                                    Vec::new()
-                                })
-                                .map_err(|e| driver_failure(&e));
-                            report.messages = validated.messages;
-                            report.bytes = validated.bytes;
-                            report.cancelled = validated.cancelled.is_some();
-                        }
+            Ok(values) => {
+                // The runner charges the root as it retains its inputs, so
+                // the Host's reservation of them ends at its boundary.
+                drop(loading.take());
+                let (budget, fuel) = self.capacity.runner_budgets();
+                let started = Runner::new_for_role_with_ledger(
+                    self.entry.admitted(),
+                    self.entry.entry(),
+                    &role.role,
+                    "native-proof",
+                    backend,
+                    values,
+                    budget,
+                    fuel,
+                    self.host_ledger().cloned(),
+                );
+                match started {
+                    Err(failed) => {
+                        report.outcome = Err(failed.error.to_string());
+                        report.usage = failed.usage;
+                        backend = failed.backend;
                     }
-                    report.usage = runner.usage();
-                    report.execution_counts = runner.execution_counts();
-                    report.return_at = runner.early_return().map(|(o, s)| (o.clone(), s.into()));
-                    let (returned_backend, outputs) = runner.into_retained_outputs();
-                    report.retained_outputs.extend(outputs);
-                    backend = returned_backend;
+                    Ok(mut runner) => {
+                        match proof {
+                            None => {
+                                let produced = self.prepared_call(&mut runner, role, |runner| {
+                                    driver::produce(
+                                        runner,
+                                        &binding,
+                                        self.transport(),
+                                        self.proof_bytes_limit,
+                                        self.host_ledger().cloned(),
+                                    )
+                                });
+                                retain_driver_stop(&mut report, &produced);
+                                report.outcome = produced
+                                    .outcome
+                                    .map(|p| {
+                                        let (proof, outputs, retained) = p.into_parts();
+                                        report.retained.extend(retained);
+                                        report.outputs = Some(self.original_outputs(role, outputs));
+                                        proof
+                                    })
+                                    .map_err(|e| driver_failure(&e));
+                                report.messages = produced.messages;
+                                report.bytes = produced.bytes;
+                                report.cancelled = produced.cancelled.is_some();
+                            }
+                            Some(proof) => {
+                                let validated = self.prepared_call(&mut runner, role, |runner| {
+                                    driver::validate(
+                                        runner,
+                                        proof,
+                                        &binding,
+                                        self.transport(),
+                                        self.entry.acceptance(),
+                                        self.host_ledger().cloned(),
+                                    )
+                                });
+                                retain_driver_stop(&mut report, &validated);
+                                report.verification = match &validated.outcome {
+                                    Ok(_) => Some(VerificationDecision::Accepted),
+                                    Err(driver::ArtifactFailure::Rejected) => {
+                                        Some(VerificationDecision::Rejected)
+                                    }
+                                    Err(_) => None,
+                                };
+                                report.outcome = validated
+                                    .outcome
+                                    .map(|values| {
+                                        report.outputs = Some(self.original_outputs(role, values));
+                                        Vec::new()
+                                    })
+                                    .map_err(|e| driver_failure(&e));
+                                report.messages = validated.messages;
+                                report.bytes = validated.bytes;
+                                report.cancelled = validated.cancelled.is_some();
+                            }
+                        }
+                        report.usage = runner.usage();
+                        report.execution_counts = runner.execution_counts();
+                        report.return_at =
+                            runner.early_return().map(|(o, s)| (o.clone(), s.into()));
+                        let (returned_backend, outputs) = runner.into_retained_outputs();
+                        report.retained_outputs.extend(outputs);
+                        backend = returned_backend;
+                    }
                 }
-            },
+            }
         }
         report.instructions = report.usage.instructions;
         report.external_work = backend.external_work_spent();
         report.ring_work = backend.ring_work_spent();
         report.sequence_work = backend.sequence_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
+        report.record_invocation_usage();
         Ok(report)
+    }
+    /// Charge a received proof that the record codec decodes to the
+    /// invocation root before it is decoded: its bytes and a fixed header
+    /// allowance, read once and held live with the call. A root that cannot
+    /// afford it refuses with `native-proof-received-work-limit` or
+    /// `native-proof-received-bytes-limit`.
+    fn retain_received_proof(
+        &self,
+        proof: &[u8],
+    ) -> Result<Option<zkc_runtime::vm::LiveReservation>> {
+        crate::host::capacity::RootCharge::RECEIVED_PROOF
+            .reserve_bytes(self.host_ledger(), proof.len().saturating_add(512))
     }
     /// Native admission has checked the output map against the role signature.
     /// Private successors belong to cleanup, not immutable application results.
@@ -1118,6 +1198,12 @@ pub struct NativeProofReport {
     pub cleanup_errors: Vec<String>,
     retained_outputs: Vec<zkc_runtime::vm::RetainedOutputs<Value>>,
     retained: Vec<zkc_runtime::vm::LiveReservation>,
+    /// The invocation root that charged this call, which also charges each
+    /// rendering of its diagnostics.
+    invocation: Option<zkc_runtime::vm::ExecutionLedger>,
+    /// The root's usage when the call's execution ended, which every
+    /// rendering reports; renderings and encodings charge the root beyond it.
+    invocation_usage: zkc_runtime::vm::ExecutionLedgerUsage,
 }
 fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
     json!({"origin":s.origin.json(),"role":s.role,"site":s.site,
@@ -1126,6 +1212,29 @@ fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
         "cleanup_errors":s.cleanup_errors.iter().map(ToString::to_string).collect::<Vec<_>>()})
 }
 impl NativeProofReport {
+    /// The invocation root that charged this call: the Host's work and
+    /// storage and every runner's bytes. Beside the runner's own `usage`, it
+    /// shows which bound a limit stop met.
+    pub fn invocation_ledger(&self) -> Option<&zkc_runtime::vm::ExecutionLedger> {
+        self.invocation.as_ref()
+    }
+    /// The root's usage when the call's execution ended: the Host's work and
+    /// storage, every runner's bytes and, for an Entry call, its result
+    /// reconstruction. Every rendering reports this figure.
+    pub fn invocation_usage(&self) -> Option<zkc_runtime::vm::ExecutionLedgerUsage> {
+        self.invocation.as_ref().map(|_| self.invocation_usage)
+    }
+    /// Record the root's usage as the end of the call's execution.
+    pub(crate) fn record_invocation_usage(&mut self) {
+        if let Some(root) = &self.invocation {
+            self.invocation_usage = root.snapshot();
+        }
+    }
+    fn rendered_invocation(&self) -> Json {
+        let used = &self.invocation_usage;
+        let root = self.invocation.as_ref();
+        json!(root.map(|root| crate::host::diagnostics::invocation(root, used)))
+    }
     /// A completed verification may reject normally. Never infer that case from
     /// diagnostic strings, and never turn an operational failure into rejection.
     pub fn verification_result(&self) -> Option<bool> {
@@ -1141,14 +1250,79 @@ impl NativeProofReport {
         use crate::host::diagnostics::{message, stop, values};
         json!({"verification_decision":self.verification.map(|d|match d {VerificationDecision::Accepted=>"accepted",VerificationDecision::Rejected=>"rejected"}),
             "usage":{"instructions":self.usage.instructions,"iterations":self.usage.iterations,"total_value_bytes":self.usage.total_value_bytes,"logical_bytes":self.usage.logical_bytes},
+            "invocation":self.rendered_invocation(),
             "binding_sha256":self.binding,"messages":self.messages,"bytes":self.bytes,"cancelled":self.cancelled,
             "stop":self.stop.as_ref().map(stop),"cleanup_errors":self.cleanup_errors.iter().take(16).map(|e|message(e)).collect::<Vec<_>>(),
             "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),"resources":values(self.resources.iter()),
             "resource_count":self.resources.len(),"attempt_count":self.attempts.len(),
             "attempts":self.attempts.iter().take(16).map(|a|json!({"attempt":a.attempt,"decision":a.decision.as_ref().map_err(|e|message(e)),"stop":a.stop.as_ref().map(stop)})).collect::<Vec<_>>()})
     }
+    /// A bound of the rendered diagnostics: a fixed allowance for each attempt,
+    /// resource and cleanup record and for the report itself, plus every
+    /// string and coordinate the rendering copies, including the origin paths
+    /// of stops and early returns. It reads the retained records without
+    /// rendering them.
+    fn diagnostics_bound(&self) -> usize {
+        use crate::host::diagnostics::{json_bound, origin_bound, stop_bound, text_bound};
+        const RECORD: usize = 2048;
+        let attempts = self
+            .attempts
+            .iter()
+            .map(|attempt| {
+                RECORD
+                    .saturating_add(attempt.decision.as_ref().err().map_or(0, |e| text_bound(e)))
+                    .saturating_add(attempt.transcript.as_ref().map_or(0, json_bound))
+                    .saturating_add(attempt.return_at.as_ref().map_or(0, |(origin, site)| {
+                        origin_bound(origin).saturating_add(text_bound(site))
+                    }))
+                    .saturating_add(attempt.stop.as_ref().map_or(0, stop_bound))
+            })
+            .fold(0usize, usize::saturating_add);
+        let resources = self
+            .resources
+            .iter()
+            .map(|resource| RECORD.saturating_add(json_bound(resource)))
+            .fold(0usize, usize::saturating_add);
+        let cleanup = self
+            .cleanup_errors
+            .iter()
+            .map(|error| RECORD.saturating_add(text_bound(error)))
+            .fold(0usize, usize::saturating_add);
+        RECORD
+            .saturating_add(crate::host::diagnostics::INVOCATION_BOUND)
+            .saturating_add(text_bound(&self.binding))
+            .saturating_add(self.attempt_policy.as_deref().map_or(0, text_bound))
+            .saturating_add(self.return_at.as_ref().map_or(0, |(origin, site)| {
+                origin_bound(origin).saturating_add(text_bound(site))
+            }))
+            .saturating_add(self.stop.as_ref().map_or(0, stop_bound))
+            .saturating_add(attempts)
+            .saturating_add(resources)
+            .saturating_add(cleanup)
+    }
     /// Payload-free execution diagnostics, including failed attempts and cleanup.
+    /// Rendering copies every attempt, resource and cleanup record, so its
+    /// bound is charged to the call's invocation root first. When the root
+    /// cannot afford it, the result is the bounded summary with
+    /// `"diagnostics": "omitted"`.
     pub fn diagnostics(&self) -> Json {
+        let bound = self.diagnostics_bound();
+        if let Some(root) = &self.invocation
+            && root
+                .charge(
+                    zkc_runtime::vm::WorkBudget {
+                        instructions: 0,
+                        iterations: 0,
+                        logical_bytes: bound as u64,
+                    },
+                    bound,
+                )
+                .is_err()
+        {
+            let mut summary = self.diagnostics_summary();
+            summary["diagnostics"] = json!("omitted");
+            return summary;
+        }
         let mut report = json!({});
         report["verification_decision"] = json!(self.verification.map(|decision| match decision {
             VerificationDecision::Accepted => "accepted",
@@ -1176,6 +1350,7 @@ impl NativeProofReport {
         report["iterations"] = json!(self.usage.iterations);
         report["total_value_bytes"] = json!(self.usage.total_value_bytes);
         report["logical_bytes"] = json!(self.usage.logical_bytes);
+        report["invocation"] = self.rendered_invocation();
         report["attempts"] = json!(self.attempts.iter().map(|r| json!({
             "attempt":r.attempt, "decision":match &r.decision {
                 Ok(true)=>"complete", Ok(false)=>"retry", Err(_)=>"stopped"},
@@ -1218,6 +1393,9 @@ fn driver_failure(error: &ArtifactFailure) -> String {
     match error {
         ArtifactFailure::StartedRunner => "artifact-runner-started".into(),
         ArtifactFailure::Format(e) => e.to_string(),
+        ArtifactFailure::Root(refusal) => {
+            zkc_runtime::host::wire::TransportError::Root(*refusal).to_string()
+        }
         ArtifactFailure::Backend(e) => e.code.clone(),
         ArtifactFailure::Wire(e) => zkc_cpu::NativeWireError::from(e.clone()).to_string(),
         ArtifactFailure::Runtime(e) => e.to_string(),

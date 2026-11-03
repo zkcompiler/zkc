@@ -101,6 +101,30 @@ pub(crate) fn decode_proof_value<B: ProofBackend>(
     }
 }
 
+/// A refusal of proof transport: the proof format's own refusal, or the
+/// invocation root's refusal of a transport buffer or a received message,
+/// which reports its own item code rather than the format's limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransportError {
+    Format(FormatError),
+    Root(RootRefusal),
+}
+impl From<FormatError> for TransportError {
+    fn from(error: FormatError) -> Self {
+        Self::Format(error)
+    }
+}
+impl fmt::Display for TransportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Format(error) => error.fmt(f),
+            Self::Root(RootRefusal::Work) => f.write_str("proof-transport-work-limit"),
+            Self::Root(RootRefusal::Bytes) => f.write_str("proof-transport-bytes-limit"),
+        }
+    }
+}
+impl std::error::Error for TransportError {}
+
 /// Expected context is supplied by the application, never by the candidate.
 pub struct ProofWriter {
     format: ProofFormat,
@@ -141,15 +165,18 @@ impl ProofWriter {
         expected_binding: &[u8; 32],
         limit: usize,
         ledger: Option<crate::vm::ExecutionLedger>,
-    ) -> Result<Self, FormatError> {
+    ) -> Result<Self, TransportError> {
         let header = proof::header_size(format);
-        let guard = reserve_allocation(ledger.as_ref(), header).map_err(|_| FormatError::Limit)?;
+        let guard = reserve_allocation(ledger.as_ref(), header).map_err(TransportError::Root)?;
         let mut writer = Self::with_limit(format, expected_binding, limit)?;
         writer.ledger = ledger;
         writer.retained.extend(guard);
         Ok(writer)
     }
-    pub fn message(&mut self, payload: &[u8]) -> Result<(), FormatError> {
+    /// Append one message. The format's own limits refuse first; a buffer
+    /// that the invocation root cannot afford refuses with the root's
+    /// allowance, and nothing is appended or charged.
+    pub fn message(&mut self, payload: &[u8]) -> Result<(), TransportError> {
         let additional = proof::message_preflight(
             self.format,
             self.bytes.len(),
@@ -158,7 +185,7 @@ impl ProofWriter {
             self.limit,
         )?;
         let guard =
-            reserve_allocation(self.ledger.as_ref(), additional).map_err(|_| FormatError::Limit)?;
+            reserve_allocation(self.ledger.as_ref(), additional).map_err(TransportError::Root)?;
         self.retained.extend(guard);
         self.bytes
             .try_reserve_exact(additional)
@@ -190,28 +217,74 @@ impl ProofWriter {
     }
 }
 
-/// Charge cumulative allocation/work and retain live storage until the guard drops.
+/// The invocation-root allowance that refused a Host charge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RootRefusal {
+    /// The root's logical work allowance.
+    Work,
+    /// The root's cumulative fresh or live byte allowance.
+    Bytes,
+}
+
+/// Charge Host work and storage to an invocation root before its effect, all
+/// or nothing: `work` logical work bytes, `fresh` fresh allocation bytes, and
+/// `live` bytes that the returned reservation holds until it drops. Either
+/// the root affords every part and all of them are committed, or the charge
+/// refuses, names the allowance that refused and leaves the root's usage as
+/// it was, so a refused item leaves no residual charge for a later charge to
+/// meet. A charge that a byte allowance and the work allowance both refuse
+/// names the bytes.
+pub fn reserve_root(
+    ledger: &ExecutionLedger,
+    work: u64,
+    fresh: usize,
+    live: usize,
+) -> Result<LiveReservation, RootRefusal> {
+    // Withhold the fresh bytes and hold the live bytes before committing any
+    // work: both are released uncommitted when a later part refuses.
+    let withheld = ledger.reserve_output(fresh, false);
+    if withheld.bytes() < fresh {
+        release(withheld);
+        return Err(RootRefusal::Bytes);
+    }
+    let held = match ledger.reserve_live(live) {
+        Ok(held) => held,
+        Err(_) => {
+            release(withheld);
+            return Err(RootRefusal::Bytes);
+        }
+    };
+    let work = WorkBudget {
+        instructions: 0,
+        iterations: 0,
+        logical_bytes: work,
+    };
+    if ledger.charge(work, 0).is_err() {
+        release(withheld);
+        return Err(RootRefusal::Work);
+    }
+    withheld
+        .settle(fresh, 0)
+        .expect("the withheld bytes cover the fresh charge");
+    Ok(held)
+}
+/// Release withheld capacity that no effect used: nothing is committed.
+fn release(withheld: crate::vm::execution_ledger::AllocationReservation) {
+    // Settling nothing never exceeds what was withheld.
+    let _ = withheld.settle(0, 0);
+}
+
+/// Charge storage that the Host writes to an invocation root and hold it until
+/// the guard drops: `bytes` of logical work, fresh allocation and live bytes,
+/// all or nothing, as [`reserve_root`] charges. A refused charge leaves the
+/// root's usage as it was. Without a root nothing is charged.
 pub fn reserve_allocation(
     ledger: Option<&ExecutionLedger>,
     bytes: usize,
-) -> Result<Option<LiveReservation>, String> {
-    let Some(ledger) = ledger else {
-        return Ok(None);
-    };
+) -> Result<Option<LiveReservation>, RootRefusal> {
     ledger
-        .charge(
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: bytes as u64,
-            },
-            bytes,
-        )
-        .map_err(|e| e.to_string())?;
-    ledger
-        .reserve_live(bytes)
-        .map(Some)
-        .map_err(|e| e.to_string())
+        .map(|ledger| reserve_root(ledger, bytes as u64, bytes, bytes))
+        .transpose()
 }
 
 #[cfg(test)]
@@ -234,6 +307,62 @@ mod tests {
     }
 
     #[test]
+    fn a_root_charge_commits_every_part_or_none() {
+        let root = |live_bytes, total_bytes, logical_bytes| {
+            ExecutionLedger::new(
+                crate::vm::ValueBudget {
+                    live_bytes,
+                    total_bytes,
+                },
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes,
+                },
+            )
+        };
+        let untouched = crate::vm::ExecutionLedgerUsage::default();
+        for (ledger, refusal) in [
+            (root(64, 64, 7), RootRefusal::Work),
+            (root(64, 7, 64), RootRefusal::Bytes),
+            (root(7, 64, 64), RootRefusal::Bytes),
+            // Both a byte allowance and the work allowance refuse.
+            (root(64, 7, 7), RootRefusal::Bytes),
+        ] {
+            assert_eq!(reserve_root(&ledger, 8, 8, 8).err(), Some(refusal));
+            // The refused charge leaves no residual work or bytes, so an
+            // affordable charge after it is not refused.
+            assert_eq!(ledger.snapshot(), untouched);
+            let held = reserve_root(&ledger, 7, 7, 7).unwrap();
+            assert_eq!(held.bytes(), 7);
+        }
+        // An affordable charge commits each part exactly; dropping its
+        // reservation releases only the live bytes.
+        let ledger = root(10, 10, 10);
+        let held = reserve_root(&ledger, 3, 5, 7).unwrap();
+        let used = ledger.snapshot();
+        assert_eq!(
+            (
+                used.logical_bytes,
+                used.total_value_bytes,
+                used.live_reserved_bytes,
+                used.pending_value_bytes
+            ),
+            (3, 5, 7, 0)
+        );
+        drop(held);
+        let used = ledger.snapshot();
+        assert_eq!(
+            (
+                used.logical_bytes,
+                used.total_value_bytes,
+                used.live_reserved_bytes
+            ),
+            (3, 5, 0)
+        );
+    }
+
+    #[test]
     fn writer_header_reservation_keeps_its_original_refusal_order() {
         let ledger = ledger(40);
         assert!(matches!(
@@ -243,7 +372,7 @@ mod tests {
                 39,
                 Some(ledger.clone())
             ),
-            Err(FormatError::Limit)
+            Err(TransportError::Format(FormatError::Limit))
         ));
         // Header work precedes lowered-limit validation, but the failed writer
         // releases its live reservation without refunding cumulative charges.
@@ -259,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn writer_preflight_precedes_ledger_and_failed_live_reservation_precedes_append() {
+    fn writer_preflight_precedes_ledger_and_a_refused_reservation_precedes_append() {
         let ledger = ledger(40);
         let mut writer = ProofWriter::with_shared_ledger(
             ProofFormat::Native,
@@ -269,23 +398,75 @@ mod tests {
         )
         .unwrap();
         let before = ledger.snapshot();
-        assert_eq!(writer.message(&[0; 2]), Err(FormatError::Limit));
+        assert_eq!(writer.message(&[0; 2]), Err(FormatError::Limit.into()));
         assert_eq!(ledger.snapshot(), before);
         assert_eq!((writer.messages(), writer.bytes_written()), (0, 40));
-        // Size fits, so cumulative work is charged before live capacity refuses.
-        assert_eq!(writer.message(&[0]), Err(FormatError::Limit));
-        let used = ledger.snapshot();
+        // Size fits, but live capacity refuses the message's buffer: its work
+        // and fresh bytes are refused with it, so nothing is appended or
+        // charged. The refusal names the root's allowance, not the format's
+        // size limit.
         assert_eq!(
-            (
-                used.logical_bytes,
-                used.total_value_bytes,
-                used.live_reserved_bytes
-            ),
-            (49, 49, 40)
+            writer.message(&[0]),
+            Err(TransportError::Root(RootRefusal::Bytes))
         );
+        assert_eq!(
+            TransportError::Root(RootRefusal::Bytes).to_string(),
+            "proof-transport-bytes-limit"
+        );
+        assert_eq!(
+            TransportError::Root(RootRefusal::Work).to_string(),
+            "proof-transport-work-limit"
+        );
+        assert_eq!(
+            TransportError::from(FormatError::Limit).to_string(),
+            "proof-limit"
+        );
+        assert_eq!(ledger.snapshot(), before);
         assert_eq!((writer.messages(), writer.bytes_written()), (0, 40));
         drop(writer);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    }
+
+    #[test]
+    fn a_refused_allocation_leaves_no_residue() {
+        let root = |live_bytes, total_bytes, logical_bytes| {
+            ExecutionLedger::new(
+                crate::vm::ValueBudget {
+                    live_bytes,
+                    total_bytes,
+                },
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes,
+                },
+            )
+        };
+        let untouched = crate::vm::ExecutionLedgerUsage::default();
+        // Each allowance alone refuses; the refusal names the bytes whenever
+        // a byte allowance refuses.
+        for (ledger, refusal) in [
+            (root(7, 64, 64), RootRefusal::Bytes),
+            (root(64, 7, 64), RootRefusal::Bytes),
+            (root(64, 64, 7), RootRefusal::Work),
+        ] {
+            assert_eq!(reserve_allocation(Some(&ledger), 8).err(), Some(refusal));
+            assert_eq!(ledger.snapshot(), untouched);
+            // Nothing refused remains to be met: the largest affordable
+            // allocation still fits.
+            let held = reserve_allocation(Some(&ledger), 7).unwrap().unwrap();
+            assert_eq!(held.bytes(), 7);
+            let used = ledger.snapshot();
+            assert_eq!(
+                (
+                    used.logical_bytes,
+                    used.total_value_bytes,
+                    used.live_reserved_bytes
+                ),
+                (7, 7, 7)
+            );
+        }
+        assert!(reserve_allocation(None, usize::MAX).unwrap().is_none());
     }
 
     #[test]
@@ -294,7 +475,7 @@ mod tests {
             let mut writer =
                 ProofWriter::with_limit(ProofFormat::RawBytes, &[1; 32], payload.len()).unwrap();
             writer.message(payload).unwrap();
-            assert_eq!(writer.message(&[]), Err(FormatError::Trailing));
+            assert_eq!(writer.message(&[]), Err(FormatError::Trailing.into()));
             assert_eq!(writer.messages(), 1);
             assert_eq!(writer.finish().unwrap(), payload);
             let mut reader = ProofReader::new(ProofFormat::RawBytes, payload, &[2; 32]).unwrap();
@@ -309,7 +490,7 @@ mod tests {
             Err(FormatError::Truncated)
         );
         let mut writer = ProofWriter::with_limit(ProofFormat::RawBytes, &[0; 32], 2).unwrap();
-        assert_eq!(writer.message(&[1, 2, 3]), Err(FormatError::Limit));
+        assert_eq!(writer.message(&[1, 2, 3]), Err(FormatError::Limit.into()));
         assert_eq!(writer.messages(), 0);
         assert_eq!(writer.bytes_written(), 0);
     }
@@ -326,7 +507,7 @@ mod tests {
         ));
         let mut writer = ProofWriter::with_limit(ProofFormat::Native, &[0; 32], 49).unwrap();
         writer.message(&[1]).unwrap();
-        assert_eq!(writer.message(&[]), Err(FormatError::Limit));
+        assert_eq!(writer.message(&[]), Err(FormatError::Limit.into()));
         assert_eq!(writer.bytes_written(), 49);
         assert_eq!(writer.messages(), 1);
     }

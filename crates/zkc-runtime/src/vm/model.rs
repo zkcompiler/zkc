@@ -3,29 +3,67 @@ use super::{PhysicalType, ResolvedBinding};
 use std::{collections::BTreeMap, fmt, sync::Arc};
 
 /// Admission and execution ceilings, plus explicitly documented policy defaults.
+/// The program carrier bounds are the table of
+/// `docs/spec/formats/program-bytes.md`; every bound is inclusive.
 pub struct Limits;
 impl Limits {
+    /// Raw program bytes.
     pub const ARTIFACT_BYTES: usize = 4 * 1024 * 1024;
-    /// Conservative installed descriptor charge across distinct physical spellings
-    /// and each resolved binding signature. Parsing scratch has separate bounds.
+    /// Cumulative descriptor charge units of one program: each distinct physical
+    /// spelling once, and every binding signature position. Parsing scratch has
+    /// separate bounds.
     pub const TYPE_BYTES: usize = 64 * 1024 * 1024;
+    /// Arrays on one path through the program; the root array is level 1.
     pub const JSON_DEPTH: usize = 64;
     pub const ARRAY_LENGTH: usize = 32_768;
     pub const PARAMETER: u64 = 1_048_576;
+    /// Arrays, strings and Boolean literals of the whole program.
     pub const JSON_NODES: usize = 400_000;
+    /// Decoded bytes of one string other than an operation attribute, including
+    /// type spellings.
     pub const STRING_BYTES: usize = 4096;
     pub const PARAMETER_BYTES: usize = 16384;
+    /// Names and sites.
+    pub const IDENTIFIER_BYTES: usize = 128;
+    /// Operation binding declarations.
+    pub const BINDINGS: usize = 4096;
+    /// Static arguments and, separately, physical arguments of one binding.
+    pub const BINDING_ARGUMENTS: usize = 128;
+    /// Assignments of one function origin.
+    pub const ORIGIN_ASSIGNMENTS: usize = 128;
+    /// Functions plus participants.
     pub const DEFINITIONS: usize = 4096;
+    pub const ENTRIES: usize = 4096;
+    /// Entries of every name and row list. A `for_while` yield counts its
+    /// condition.
     pub const PORTS: usize = 1024;
+    /// Inputs plus service ports of one participant.
+    pub const PARTICIPANT_INTERFACE: usize = 1024;
     /// Ordered operation parameters (for example gather indices), not SSA ports.
     /// Still bounded by the artifact byte/node ceilings and per-operation rules.
     pub const OPERATION_ATTRIBUTES: usize = 16_384;
     pub const STATIC_INSTRUCTIONS: usize = 65_536;
+    /// Bodies nested below a definition body, which is level 0.
     pub const BLOCK_DEPTH: usize = 64;
+    /// A match lists one arm per alternative, within the variant alternatives a
+    /// program can spell: the descriptor's alternative ceiling.
+    pub const MATCH_ARMS: usize = super::variant::VARIANT_ALTERNATIVES;
     pub const STACK_DEPTH: usize = 64;
     pub const LOOP_COUNT: u64 = 1_048_576;
+    /// Default per-runner instruction budget. A Host may select any budget up
+    /// to [`Self::MAX_INSTRUCTIONS`].
     pub const INSTRUCTIONS: u64 = 1_000_000;
+    /// Default per-runner budget of entered loop iterations. A Host may select
+    /// any budget up to [`Self::MAX_ITERATIONS`].
     pub const ITERATIONS: u64 = 100_000;
+    /// Hard instruction budget. The counter is 64-bit and charged one unit at a
+    /// time after its bound check, so no budget can overflow it. The maximum
+    /// equals the logical-work ceiling, 2^32: every counter a report publishes
+    /// stays an exact integer for JSON readers, including JavaScript Hosts.
+    pub const MAX_INSTRUCTIONS: u64 = 1 << 32;
+    /// Hard iteration budget, bounded for the same reasons as instructions.
+    /// Loop indices and origin path iterations are 64-bit as well.
+    pub const MAX_ITERATIONS: u64 = 1 << 32;
     pub const LIVE_VALUES: usize = 16_384;
     /// Hard per-value ceiling and default live-value budget.
     pub const VALUE_BYTES: usize = 64 * 1024 * 1024;
@@ -112,40 +150,14 @@ impl Type {
         !self.is_duplicable()
     }
     /// Wire codec availability for a nominal leaf, independently of
-    /// the catalog's message-data profile and complete aggregate permissions.
+    /// the catalog's message-data profile and complete aggregate permissions:
+    /// the catalog declares the constructor's `Encodes` capability.
     pub fn is_serializable(self) -> bool {
-        match self {
-            Self::QuotientMatrix
-            | Self::Shake128State
-            | Self::Sequence
-            | Self::FieldArray
-            | Self::FixedVector
-            | Self::Variant
-            | Self::ResourceUnit
-            | Self::Rng
-            | Self::Nonce
-            | Self::Transcript
-            | Self::OpeningStates
-            | Self::ProverKey
-            | Self::VerifierKey
-            | Self::OpeningState => false,
-            Self::Index
-            | Self::Bytes
-            | Self::Indices
-            | Self::Matrix
-            | Self::Vector
-            | Self::Polynomial
-            | Self::Field
-            | Self::Table
-            | Self::Point
-            | Self::Round
-            | Self::Bool
-            | Self::Commitment
-            | Self::Commitments
-            | Self::Proof
-            | Self::Group
-            | Self::Groups => true,
-        }
+        let name = self.name();
+        zkc_catalog::CATALOG
+            .capabilities
+            .iter()
+            .any(|row| row.name.strip_prefix("Encodes.") == Some(name))
     }
     /// Copy permission guaranteed by the constructor head alone.
     /// `FixedVector` and `Variant` conservatively return false; their complete
@@ -161,45 +173,48 @@ impl Type {
         zkc_catalog::constructor(self.name())
             .is_some_and(|row| row.drop && !row.parameters.contains(&zkc_catalog::Kind::Type))
     }
+    /// Every constructor head the runtime names; `variant` has its own
+    /// formation and every other head is a catalog constructor.
+    pub const ALL: [Self; 30] = [
+        Self::Sequence,
+        Self::FieldArray,
+        Self::FixedVector,
+        Self::Variant,
+        Self::ResourceUnit,
+        Self::Index,
+        Self::Indices,
+        Self::Bytes,
+        Self::Shake128State,
+        Self::QuotientMatrix,
+        Self::Matrix,
+        Self::Vector,
+        Self::Polynomial,
+        Self::Field,
+        Self::Table,
+        Self::Point,
+        Self::Round,
+        Self::Bool,
+        Self::Rng,
+        Self::Commitment,
+        Self::Commitments,
+        Self::OpeningStates,
+        Self::Proof,
+        Self::ProverKey,
+        Self::VerifierKey,
+        Self::OpeningState,
+        Self::Group,
+        Self::Nonce,
+        Self::Transcript,
+        Self::Groups,
+    ];
+    /// The head of a declared catalog constructor. `variant` has its own
+    /// spelling and no constructor row.
     pub(crate) fn parse_kind(name: &str) -> Result<Self, AdmissionError> {
-        let ty = match name {
-            "sequence" => Self::Sequence,
-            "field_array" => Self::FieldArray,
-            "fixed_vector" => Self::FixedVector,
-            "resource_unit" => Self::ResourceUnit,
-            "index" => Self::Index,
-            "indices" => Self::Indices,
-            "bytes" => Self::Bytes,
-            "shake128_state" => Self::Shake128State,
-            "quotient_matrix" => Self::QuotientMatrix,
-            "matrix" => Self::Matrix,
-            "vector" => Self::Vector,
-            "polynomial" => Self::Polynomial,
-            "field" => Self::Field,
-            "table" => Self::Table,
-            "point" => Self::Point,
-            "round" => Self::Round,
-            "bool" => Self::Bool,
-            "rng" => Self::Rng,
-            "commitments" => Self::Commitments,
-            "opening_states" => Self::OpeningStates,
-            "commitment" => Self::Commitment,
-            "proof" => Self::Proof,
-            "prover_key" => Self::ProverKey,
-            "verifier_key" => Self::VerifierKey,
-            "opening_state" => Self::OpeningState,
-            "group" => Self::Group,
-            "nonce" => Self::Nonce,
-            "transcript" => Self::Transcript,
-            "groups" => Self::Groups,
-            _ => {
-                return Err(AdmissionError::new(
-                    ErrorCode::Type,
-                    "unknown or opaque executable type",
-                ));
-            }
-        };
-        Ok(ty)
+        zkc_catalog::constructor(name)
+            .and_then(|_| Self::ALL.into_iter().find(|ty| ty.name() == name))
+            .ok_or_else(|| {
+                AdmissionError::new(ErrorCode::Type, "unknown or opaque executable type")
+            })
     }
 }
 
@@ -247,6 +262,31 @@ pub struct OperationSignature<T = Type> {
     pub attributes: AttributeRule,
 }
 
+/// Shared refusal classes of independent program readers
+/// (`docs/spec/formats/program-bytes.md`). Diagnostic codes and details remain
+/// reader-specific; the class is what readers agree on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefusalClass {
+    Syntax,
+    Capacity,
+    NamesAndSsa,
+    Types,
+    AffineUse,
+    UnsupportedProfile,
+}
+impl RefusalClass {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Syntax => "syntax",
+            Self::Capacity => "capacity",
+            Self::NamesAndSsa => "names-and-ssa",
+            Self::Types => "types",
+            Self::AffineUse => "affine-use",
+            Self::UnsupportedProfile => "unsupported-profile",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErrorCode {
     Json,
@@ -291,6 +331,23 @@ impl ErrorCode {
             Self::Backend => "Backend",
         }
     }
+    /// The refusal class of an error with this code, unless the refusal site
+    /// states another one.
+    pub fn class(self) -> RefusalClass {
+        match self {
+            Self::Json | Self::Record | Self::Name | Self::Natural | Self::Terminal => {
+                RefusalClass::Syntax
+            }
+            Self::Limit => RefusalClass::Capacity,
+            Self::Symbol | Self::Ssa | Self::Site | Self::Capture | Self::Role => {
+                RefusalClass::NamesAndSsa
+            }
+            Self::Type | Self::Representation | Self::Signature | Self::Attributes => {
+                RefusalClass::Types
+            }
+            Self::Stage | Self::Backend => RefusalClass::UnsupportedProfile,
+        }
+    }
 }
 impl fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -301,13 +358,24 @@ impl fmt::Display for ErrorCode {
 pub struct AdmissionError {
     pub code: ErrorCode,
     pub detail: String,
+    class: RefusalClass,
 }
 impl AdmissionError {
     pub fn new(code: ErrorCode, detail: impl Into<String>) -> Self {
         Self {
             code,
             detail: detail.into(),
+            class: code.class(),
         }
+    }
+    /// A refusal whose class differs from its code's, such as reuse of a
+    /// consumed operand, which keeps the code of the value environment.
+    pub(crate) fn with_class(mut self, class: RefusalClass) -> Self {
+        self.class = class;
+        self
+    }
+    pub fn class(&self) -> RefusalClass {
+        self.class
     }
 }
 impl fmt::Display for AdmissionError {
@@ -391,6 +459,9 @@ pub(crate) struct Model {
     pub functions: BTreeMap<String, Arc<Function>>,
     pub participants: BTreeMap<String, Arc<Participant>>,
     pub entries: BTreeMap<String, BTreeMap<String, String>>,
+    /// Normalized measures that independent readers compare.
+    pub static_instructions: usize,
+    pub descriptor_charge: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

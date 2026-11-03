@@ -14,7 +14,7 @@ use zkc_runtime::vm::{
 
 // Each nominal Keccak carrier uses the same typed tree and resource policy.
 macro_rules! domains {
-    ($($domain:ident => ($identity:ident, $field:ident, $element:ty, $vector:ident, $root:literal, $path:literal)),+ $(,)?) => {
+    ($($domain:ident => ($identity:ident, $field:ident, $element:ty, $vector:ident, $root:path, $path:path)),+ $(,)?) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum Domain { $($domain),+ }
         impl Domain {
@@ -118,9 +118,9 @@ macro_rules! domains {
     };
 }
 domains! {
-    Base => (MerkleKoalaBear, KoalaBear, crate::KoalaBear, KoalaBearVector, 33, 34),
-    Extension => (MerkleKoalaBearExt8, KoalaBearExt8, crate::KoalaBearExt8, KoalaBearExt8Vector, 35, 36),
-    Quartic => (MerkleKoalaBearExt4, KoalaBearExt4, crate::KoalaBearExt4, KoalaBearExt4Vector, 79, 80),
+    Base => (MerkleKoalaBear, KoalaBear, crate::KoalaBear, KoalaBearVector, crate::codec::native::tags::MERKLE_ROOT, crate::codec::native::tags::MERKLE_PATH),
+    Extension => (MerkleKoalaBearExt8, KoalaBearExt8, crate::KoalaBearExt8, KoalaBearExt8Vector, crate::codec::native::tags::MERKLE_EXT8_ROOT, crate::codec::native::tags::MERKLE_EXT8_PATH),
+    Quartic => (MerkleKoalaBearExt4, KoalaBearExt4, crate::KoalaBearExt4, KoalaBearExt4Vector, crate::codec::native::tags::MERKLE_EXT4_ROOT, crate::codec::native::tags::MERKLE_EXT4_PATH),
 }
 impl Domain {
     fn physical(self, kind: Type) -> Option<PhysicalType> {

@@ -49,6 +49,7 @@ mutual
     | .oracleSequence (.table row rows) maximum =>
       .arr #[.str "oracle_sequence", .str "table", wireOracleArguments row rows, .str (toString maximum)]
     | .service contract => .arr #[.str "service", .str contract]
+    | .resourceUnit slot => wireDomainApplication "resource_unit" "Slot" slot
     | .sequence element => wireApplication "sequence" #[.arr #[.str "type", wireType element]]
     | .product identity constructor fields =>
       -- Null is deliberately not an identity: an invalid internal encoding

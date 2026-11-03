@@ -33,13 +33,17 @@ def decodeCarry (priorPoint : List Octic) (point : Option (List Octic))
 
 /-- Read the actual linear carry. Partial values stop incomplete; any change
 to the prior point is rejected before a logical state can be constructed. -/
-def decodeEvaluation (priorPoint : List Octic)
-    (out : Values (Component model.Value) [.vector octicIdentity, extension]) :
+def decodeEvaluation {slot : String} (priorPoint : List Octic)
+    (out : Values (Component model.Value) [.resourceUnit slot, .vector octicIdentity, extension]) :
     PIR.Process (Interface model) (Values (Component model.Value) [extension, extension]) :=
-  decodeCarry priorPoint (out.get .here) (out.get (.there .here))
+  match out.get .here with
+  | none => .halt .incomplete
+  | some _ => decodeCarry priorPoint (out.get (.there .here)) (out.get (.there (.there .here)))
 
-theorem decodeEvaluation_complete (priorPoint : List Octic) (challenge value : Octic) :
-    decodeEvaluation priorPoint (.cons (some (priorPoint ++ [challenge])) (.cons (some value) .nil)) =
+theorem decodeEvaluation_complete {slot : String} (priorPoint : List Octic) (challenge value : Octic)
+    (token : CustodyToken) :
+    decodeEvaluation (slot := slot) priorPoint
+      (.cons (some token) (.cons (some (priorPoint ++ [challenge])) (.cons (some value) .nil))) =
       .done (.cons (some value) (.cons (some challenge) .nil)) := by
   simp [decodeEvaluation, decodeCarry, Values.get]
 

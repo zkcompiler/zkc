@@ -467,6 +467,124 @@ void scheduling(MLIRContext &context) {
   });
   require(guards == 1, "generic transforms erased the zero-result guard");
 }
+// A retained statement names its relation declaration. Identity, signature
+// and purposes are read from that declaration, so a statement record carries
+// no copy of them and a changed declaration is a changed projection.
+void statementRecords(MLIRContext &context) {
+  auto common = parseSourceString<ModuleOp>(fixture, &context);
+  require(bool(common), "statement fixture refused");
+  auto projected = copy(*common);
+  run(*projected, protocol::createProjectProtocolPass());
+  auto statement = [](ModuleOp module) {
+    auto record = *unit(module)
+                       .getBody()
+                       .front()
+                       .getOps<protocol_ir::ProjectionOp>()
+                       .begin();
+    auto interface = cast<DictionaryAttr>(record.getInterfaces()[0]);
+    auto statements = interface.getAs<ArrayAttr>("statements");
+    require(statements && statements.size() == 1,
+            "statement fixture lost its retained statement");
+    return std::pair{record, cast<DictionaryAttr>(statements[0])};
+  };
+  SmallVector<StringRef> keys;
+  for (auto field : statement(*projected).second)
+    keys.push_back(field.getName().getValue());
+  require(keys == SmallVector<StringRef>{"acceptance", "inputs", "relation",
+                                         "selectors"},
+          "statement record copies its relation declaration");
+  ScopedDiagnosticHandler silence(&context,
+                                  [](Diagnostic &) { return success(); });
+  {
+    // A stale copy beside the symbol is refused, even when it is accurate.
+    auto stale = copy(*projected);
+    auto [record, fields] = statement(*stale);
+    NamedAttrList extended(fields);
+    extended.set("relation_revision", StringAttr::get(&context, "0"));
+    auto interface = cast<DictionaryAttr>(record.getInterfaces()[0]);
+    NamedAttrList updated(interface);
+    updated.set("statements",
+                ArrayAttr::get(&context, {extended.getDictionary(&context)}));
+    record.setInterfacesAttr(
+        ArrayAttr::get(&context, {updated.getDictionary(&context)}));
+    require(failed(zkc::admitStage(*stale)),
+            "statement record admitted a copied relation field");
+  }
+  auto changeRevision = [&](ModuleOp module) {
+    bool changed = false;
+    module->walk([&](relation::DeclareOp declaration) {
+      declaration.setRevision("other");
+      changed = true;
+    });
+    require(changed, "statement fixture lost its relation declaration");
+  };
+  {
+    auto changed = copy(*projected);
+    changeRevision(*changed);
+    require(succeeded(zkc::admitStage(*changed)),
+            "a self-consistent declaration change lost formation");
+    require(failed(mathematical::verifyProjectionPreserved(*common, *changed)),
+            "projection admitted a changed relation declaration");
+  }
+  auto lowered = copy(*projected);
+  run(*lowered, protocol::createLowerMathPass());
+  changeRevision(*lowered);
+  require(succeeded(zkc::admitStage(*lowered)),
+          "a lowered declaration change lost formation");
+  require(failed(mathematical::verifyProjectionPreserved(*projected, *lowered)),
+          "lowering admitted a changed relation declaration");
+}
+// A two-role Protocol selection over a variant with `arms` alternatives.
+std::string selectedRegion(unsigned arms) {
+  std::string alternatives, labels, regions;
+  for (unsigned i = 0; i < arms; ++i) {
+    std::string label = "a" + std::to_string(i);
+    std::string separator = i ? ", " : "";
+    alternatives += separator + "#data.alternative<\"" + label + "\">";
+    labels += separator + "\"" + label + "\"";
+    regions += separator + "{\n   \"protocol.yield\"() : ()->()\n  }";
+  }
+  return "!Wide = !data.variant<#data.identity<[\"atom\", \"Wide\"]>, [" +
+         alternatives +
+         "]>\nmodule { \"protocol.module\"() ({\n"
+         " \"protocol.func\"() ({ ^entry(%choice:!Wide):\n"
+         "  \"protocol.branch\"(%choice) (" +
+         regions + ") {site=\"choose\",roles=[\"P\",\"V\"],output_roles=[]," +
+         "alternatives=[" + labels +
+         "]} : (!Wide)->()\n"
+         "  \"protocol.return\"() : ()->()\n"
+         " }) {sym_name=\"main\",function_type=(!Wide)->(),roles=[\"P\",\"V\"],"
+         "input_roles=[[\"P\",\"V\"]],output_roles=[]} : ()->()\n"
+         "}) {profile=#protocol.profile<protocol>} : ()->() }";
+}
+// Retained projection metadata records at most 256 arms per selected region,
+// a bound of its own below the 512 arms a selected region may form with.
+void retainedArmLimit(MLIRContext &context) {
+  for (unsigned arms : {256u, 257u}) {
+    auto source = parseSourceString<ModuleOp>(selectedRegion(arms), &context);
+    require(bool(source) && succeeded(zkc::admitStage(*source)),
+            "wide selected region did not form");
+    std::string diagnostics;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &d) {
+      diagnostics += d.str() + "\n";
+      return success();
+    });
+    auto projected = copy(*source);
+    PassManager manager(&context);
+    manager.addPass(protocol::createProjectProtocolPass());
+    bool admitted = succeeded(manager.run(*projected)) &&
+                    succeeded(zkc::admitStage(*projected));
+    if (arms == 256)
+      require(admitted, "256 retained arms refused: " + diagnostics);
+    else
+      require(!admitted &&
+                  diagnostics.find("mathematical-projection") !=
+                      std::string::npos &&
+                  diagnostics.find("invalid retained selected arms") !=
+                      std::string::npos,
+              "257 retained arms were not refused: " + diagnostics);
+  }
+}
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -477,6 +595,8 @@ int main() {
   profileEdges(context);
   suppliedMaterialization(context);
   scheduling(context);
+  statementRecords(context);
+  retainedArmLimit(context);
   auto common = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(common), "common fixture refused");
   auto projected = copy(*common);

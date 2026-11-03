@@ -140,7 +140,7 @@ pub fn native_query_template(attrs: &[String], method: &str) -> Result<Vec<u8>> 
     }
     Ok(bytes)
 }
-/// A source template contains ordered static apply/repeat steps and no dynamic
+/// A source template contains ordered static apply/repeat/branch steps and no dynamic
 /// coordinates. Coordinates are explicit operands of its indexed transition.
 pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
     checked_native_origin(attrs, kind).map(|(bytes, _)| bytes)
@@ -189,10 +189,9 @@ fn checked_native_origin(attrs: &[String], kind: &str) -> Result<(Vec<u8>, Value
             p.len() <= 64
                 && p.iter().all(|step| {
                     step.as_array().is_some_and(|a| {
-                        a.len() == 3
-                            && (a[0] == "apply" || a[0] == "repeat")
-                            && name(&a[1])
-                            && name(&a[2])
+                        ((a.len() == 3 && (a[0] == "apply" || a[0] == "repeat"))
+                            || (a.len() == 4 && a[0] == "branch"))
+                            && a[1..].iter().all(name)
                     })
                 })
         })

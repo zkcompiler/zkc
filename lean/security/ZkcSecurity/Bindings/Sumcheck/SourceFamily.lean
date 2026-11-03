@@ -23,9 +23,7 @@ open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck
 open Zkc.Source Zkc.Source.Structured NormalForm ReferenceLibrary
 open ZkcExamples.Structured SumcheckReferenceInstallation
 
-def initialHelper : Helper :=
-  ⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local,
-    [.field field], [.vector field, .field field]⟩
+abbrev initialHelper : Helper := SumcheckPendingBodies.pendingHelper
 
 def tableHelper : Helper :=
   ⟨MultilinearSourceBindings.sumcheck.table, .local,
@@ -33,7 +31,7 @@ def tableHelper : Helper :=
 
 def reductionSignature (name : String) : ProtocolSignature :=
   ⟨name, ["role00000000", "role00000001"], SumcheckVerifierBodies.reduceInputs,
-    SumcheckVerifierBodies.reduceOutputs, [[0],[0],[0],[1],[1],[0,1],[1]], [[0],[0],[0],[0],[1],[1]]⟩
+    SumcheckVerifierBodies.reduceOutputs, [[0],[0],[0],[1],[1],[1],[0,1],[1]], [[0],[0],[0],[0],[1],[1],[1]]⟩
 
 /-- All source-specific evidence consists of exact typed associations. The
 mathematical laws below consume this evidence without rechecking the source.
@@ -47,21 +45,21 @@ structure Installation (program : Zkc.Source.Structured.Program) where
     (reductionSignature reductionName) (SumcheckVerifierBodies.reduceBody maximum)
   roundBodies : Bodies program.payload.definitions MultilinearSourceBindings.sumcheck
   admissionBodies : Multilinear.Admission.Bodies program.payload.definitions field
-    MultilinearSourceBindings.sumcheck SumcheckHelperBodies.checkHelper.name
+    MultilinearSourceBindings.sumcheck SumcheckPendingBodies.custodySlot SumcheckHelperBodies.checkHelper.name
   validatorBodies : ∀ model, SumcheckReductionReference.Bodies model program.payload.definitions
   producerBodies : ∀ model, SourceProducerReduction.Bodies model program.payload.definitions
   initial : ∀ model, BodyIn program.payload.definitions
-    initialHelper (Sum.initial model field "s0").body
+    initialHelper (SumcheckReductionReference.pendingLaw model).body
 
 variable {program : Zkc.Source.Structured.Program} (installation : Installation program) (model : DomainModel)
 
 def validatorPattern : InputPattern SumcheckVerifierBodies.reduceInputs :=
   .cons .absent (.cons .absent (.cons .absent (.cons .optional
-    (.cons .optional (.cons .optional (.cons .optional .nil))))))
+    (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil)))))))
 
 def producerPattern : InputPattern SumcheckVerifierBodies.reduceInputs :=
   .cons .optional (.cons .optional (.cons .optional (.cons .absent
-    (.cons .absent (.cons .optional (.cons .absent .nil))))))
+    (.cons .absent (.cons .absent (.cons .optional (.cons .absent .nil)))))))
 
 /-- The reusable callee law retains every optional input and full return slot. -/
 theorem validator_invoke (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
@@ -73,15 +71,16 @@ theorem validator_invoke (ctx : ProtocolContext) (distinct : RosterDistinct ctx 
       (SumcheckReductionReference.reference model program.payload.definitions
         (Occurrence.table model program.payload) installation.maximum ctx
         (entryAt args .here) (entryAt args (.there .here)) (entryAt args (.there (.there .here)))
-        (entryAt args (.there (.there (.there .here))))).bind fun out =>
+        (entryAt args (.there (.there (.there .here))))
+        (entryAt args (.there (.there (.there (.there .here)))))).bind fun out =>
           .done (staticMask 1 out (reductionSignature installation.reductionName).outputScopes
             (Operands.identity SumcheckVerifierBodies.reduceOutputs)) := by
   install_source_template installation.reduction using_pattern validatorPattern
-  · cases args with | cons point rest => cases rest with | cons scalar rest =>
+  · cases args with | cons custody rest => cases rest with | cons point rest => cases rest with | cons scalar rest =>
       cases rest with | cons count rest => cases rest with | cons service rest =>
         cases rest
         exact SumcheckReductionReference.body_reference model _ program.payload.linked
-          (installation.validatorBodies model) _ _ ctx distinct point scalar count service
+          (installation.validatorBodies model) _ _ ctx distinct custody point scalar count service
 
 def producerReduction (ctx : ProtocolContext) (args : Binders model producerPattern.scope) :=
   (SumcheckVerifierBodies.reduceBody installation.maximum).denote
@@ -110,11 +109,12 @@ def one (ctx : ProtocolContext) (site : String)
     (.cons scalar .nil)).bind fun initial =>
   (SumcheckReductionReference.reference model program.payload.definitions
     (Occurrence.table model program.payload) installation.maximum (ctx.enter site [0,1])
-    (initial.get .here) (initial.get (.there .here)) count service).bind fun reduced =>
+    (initial.get .here) (initial.get (.there .here)) (initial.get (.there (.there .here))) count service).bind fun reduced =>
   (Participant.owned (ctx.roles 1) (ctx.roles 1)
     (invoke (tables model program.payload.definitions).closed SumcheckHelperBodies.checkHelper)
     (.cons raw (.cons (reduced.get (.there (.there (.there (.there .here)))))
-      (.cons (reduced.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind fun checked =>
+      (.cons (reduced.get (.there (.there (.there (.there (.there .here))))))
+        (.cons (reduced.get (.there (.there (.there (.there (.there (.there .here))))))) .nil))))).bind fun checked =>
   PIR.Process.done (checked.get .here)
 
 def producerOne (site : String) (original : List (model.Field field)) (count : Nat) :=

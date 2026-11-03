@@ -13,8 +13,10 @@ impl<B: Backend> Runner<B> {
         depth: usize,
         key: Option<crate::vm::preparation::Key>,
     ) -> Result<Transfer<B::Value>> {
-        let reservation = self.instance.enter_local(frame, &args)?;
-        let reused = key.as_ref().and_then(|key| self.reuse_computation(key));
+        let mut reservation = self.instance.enter_local(frame, &args)?;
+        let reused = key
+            .as_ref()
+            .and_then(|key| self.reuse_computation(key, &mut reservation));
         let (result, record) = if let Some(values) = reused {
             (Ok(values), None)
         } else {

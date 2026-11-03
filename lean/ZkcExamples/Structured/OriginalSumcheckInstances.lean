@@ -48,21 +48,21 @@ theorem reduce_lookup (context : ProtocolContext) (self : Nat)
 
 /-- The whole original body at the actual source call prefix, including its
 missing-input and loop-admission behavior and the full returned tuple. -/
-theorem verifier (point : Option (List F)) (claim : Option F) (count service : Option Nat)
+theorem verifier (custody : Option Nat) (point : Option (List F)) (claim : Option F) (count service : Option Nat)
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) :
     reduceDefinition.body.denote
       (participantMeaningWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn
         (context.roles 1) protocols context Occurrence.iterations)
-      (verifierInputs (G := G) point claim count service).get =
+      (verifierInputs (G := G) custody point claim count service).get =
       (Participant.owned (context.roles 1) (context.roles 1)
         (invoke (helpers payload).closed SumcheckPendingBodies.openClaimHelper)
-        (.cons point (.cons claim .nil))).bind fun opened =>
+        (.cons custody (.cons point (.cons claim .nil)))).bind fun opened =>
       (denoteRepeatOn (carriers := uniformCarriers F G) (repeatSpec Generated.Original.SmallSumcheck.maximum) context (context.roles 1)
         count (SumcheckVerifierLaws.embedV (G := G) (opened.get .here, opened.get (.there .here))) (.cons service .nil)
         (round payload context (context.roles 1)) Occurrence.iterations repeatSite).bind
           (returnProcess payload context (context.roles 1)) := by
   rw [reduce_body]
-  exact reduce_verifier payload helpers_bound Generated.Original.SmallSumcheck.maximum context distinct protocols point claim count service
+  exact reduce_verifier payload helpers_bound Generated.Original.SmallSumcheck.maximum context distinct protocols custody point claim count service
 end Small
 
 namespace Two
@@ -97,21 +97,21 @@ theorem reduce_lookup (context : ProtocolContext) (self : Nat)
   Generated.Original.TwoSums.reduce_lookup context self args
 
 theorem verifier (context : ProtocolContext) (distinct : context.roles 0 ≠ context.roles 1)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat)
+    (custody : Option Nat) (point : Option (List F)) (claim : Option F) (count service : Option Nat)
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) :
     reduceDefinition.body.denote
       (participantMeaningWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn
         (context.roles 1) protocols context Occurrence.iterations)
-      (verifierInputs (G := G) point claim count service).get =
+      (verifierInputs (G := G) custody point claim count service).get =
       (Participant.owned (context.roles 1) (context.roles 1)
         (invoke (helpers payload).closed SumcheckPendingBodies.openClaimHelper)
-        (.cons point (.cons claim .nil))).bind fun opened =>
+        (.cons custody (.cons point (.cons claim .nil)))).bind fun opened =>
       (denoteRepeatOn (carriers := uniformCarriers F G) (repeatSpec Generated.Original.TwoSums.maximum) context (context.roles 1)
         count (SumcheckVerifierLaws.embedV (G := G) (opened.get .here, opened.get (.there .here))) (.cons service .nil)
         (round payload context (context.roles 1)) Occurrence.iterations repeatSite).bind
           (returnProcess payload context (context.roles 1)) := by
   rw [reduce_body]
-  exact reduce_verifier payload helpers_bound Generated.Original.TwoSums.maximum context distinct protocols point claim count service
+  exact reduce_verifier payload helpers_bound Generated.Original.TwoSums.maximum context distinct protocols custody point claim count service
 
 abbrev left_verifier := @verifier F G _ _ _ _ _ leftContext left_distinct
 abbrev right_verifier := @verifier F G _ _ _ _ _ rightContext right_distinct

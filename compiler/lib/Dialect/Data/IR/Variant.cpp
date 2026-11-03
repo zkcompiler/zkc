@@ -62,8 +62,11 @@ LogicalResult AlternativeAttr::verify(function_ref<InFlightDiagnostic()> emit,
 LogicalResult VariantType::verify(function_ref<InFlightDiagnostic()> emit,
                                   IdentityAttr identity,
                                   ArrayRef<AlternativeAttr> alternatives) {
-  if (!identity || alternatives.empty() || alternatives.size() > 512)
+  if (!identity || alternatives.empty())
     return emit() << "variant requires an identity and alternatives";
+  if (alternatives.size() > maximumAlternatives)
+    return emit() << "variant exceeds " << maximumAlternatives
+                  << " alternatives";
   llvm::SmallDenseSet<StringAttr, 8> names;
   for (auto arm : alternatives)
     if (!arm || !names.insert(arm.getLabel()).second)

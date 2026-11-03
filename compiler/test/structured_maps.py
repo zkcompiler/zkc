@@ -522,8 +522,8 @@ with case('received-row-malformation-capacity-and-shape-remain-distinct'):
     source = source.replace('input_roles=[["P"],["P"],["P"],["P"]]', 'input_roles=[["P"],["V"],["V"],["V"]]')
     source = source.replace('output_roles=[["P"]]', 'output_roles=[["V"]]')
     export(source)
-    # Replay action types belong to the independent open-request contract.
-    action = ['receive', 'receive', 'P', 'V', ['vector', 'bls12-381.fr']]
+    # Replay action types are inline logical type trees.
+    action = ['receive', 'receive', 'P', 'V', ['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]]]
     inputs = [None, ['11'], ['8'], '3']
     def replies(value):
         return [['reply', action, ['value', value]]]

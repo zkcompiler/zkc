@@ -1,6 +1,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/TypeRepresentations.h"
@@ -21,13 +22,21 @@ bool name(StringRef value) {
 }
 Expected<BoundType> formPhysicalType(const BoundType &, StringRef,
                                      std::vector<BoundType>);
+/// The installation's constructor-wide default: a default row without a
+/// child representation whose argument patterns accept every argument. Such a
+/// constructor has exactly this representation.
+std::optional<StringRef> constructorDefaultIdentity(StringRef constructor) {
+  for (const auto &row : installation::appliedRepresentations())
+    if (row.constructor == constructor && row.isDefault && !row.child &&
+        all_of(row.arguments, [](const auto &pattern) {
+          return pattern.kind == installation::ArgumentPattern::Kind::Any;
+        }))
+      return StringRef(row.identity);
+  return std::nullopt;
+}
 Expected<StringRef> defaultRepresentationIdentity(const BoundType &logical) {
-  if (logical.kind == "sequence")
-    return "logical.sequence/0";
-  if (logical.kind == "variant")
-    return "logical.variant/0";
-  if (logical.kind == "resource_unit")
-    return "logical.resource_unit/0";
+  if (auto identity = constructorDefaultIdentity(logical.kind))
+    return *identity;
   if (!logical.arguments.empty()) {
     auto entry = appliedTypeRepresentation(logical);
     if (!entry)
@@ -446,18 +455,14 @@ Expected<BoundType> formPhysicalType(const BoundType &logical,
   for (auto [child, schema] : zip(children, *schemas))
     if (child.representation.empty() || !(erasePhysicalType(child) == schema))
       return error("binding-representation");
-  if (logical.kind == "sequence" || logical.kind == "variant") {
-    if (representation != (logical.kind == "sequence" ? "logical.sequence/0"
-                                                      : "logical.variant/0"))
+  if (auto identity = constructorDefaultIdentity(logical.kind)) {
+    if (representation != *identity)
       return error("binding-representation");
   } else if (logical.kind == "field_array" || logical.kind == "fixed_vector") {
     const auto *descriptor = appliedTypeRepresentation(logical, representation);
     if (!descriptor)
       return error("binding-representation");
     if (children.size() != 1 || !(children[0] == descriptor->childType))
-      return error("binding-representation");
-  } else if (logical.kind == "resource_unit") {
-    if (representation != "logical.resource_unit/0")
       return error("binding-representation");
   } else if (!installedDomains().representation(logical.kind, logical.identity,
                                                 representation))

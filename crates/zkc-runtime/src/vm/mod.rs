@@ -10,6 +10,7 @@ pub use aggregate_bindings::AggregateImplementationFamily;
 pub(crate) mod backend;
 mod bindings;
 mod contracts;
+mod installed;
 mod physical;
 pub use contracts::{
     AggregateChildRule, AuthorizationId, ContractSupport, Contracts, ContractsBuilder,
@@ -65,7 +66,8 @@ pub use bindings::{
     ResolvedBinding, bit_pattern_literal,
 };
 pub use model::{
-    AdmissionError, AttributeRule, ErrorCode, Limits, LogicalOrigin, OperationSignature, Type,
+    AdmissionError, AttributeRule, ErrorCode, Limits, LogicalOrigin, OperationSignature,
+    RefusalClass, Type,
 };
 pub use observe::{
     Action, Cut, CutKind, DecodeReason, Envelope, LoadError, LocalAction, LocalContext, Origin,

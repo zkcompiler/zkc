@@ -25,6 +25,11 @@ There is no assignment to individual fields. Each authored binding and assigned
 successor retains its own resource obligations, including empty values.
 Overwriting an unused value without `Drop` refuses.
 
+For a message assignment, the destination constrains the received value. The
+payload is checked at the sender first; the receiving binding cannot grant the
+sender access to data or choose a payload helper's participant. The resulting
+message must still satisfy the destination's unchanged type and role set.
+
 Blocks have lexical scope. A new binding's initializer sees the previous binding;
 same-scope rebinding and inner immutable shadowing are allowed. Nested bindings
 cannot shadow an outer mutable binding or a managed service. Declaration names
@@ -42,7 +47,9 @@ expression statements require `Drop`. Record patterns preserve field privacy;
 opening a restricted record requires local mode and constructor authority.
 Record construction supports same-name fields, such as `Point{x, y}`.
 
-`if` and exhaustive `match` are local expressions. All arms are checked, including
+`if` and exhaustive ordinary-enum `match` use the enclosing Math, Local or
+Protocol mode. The [selected-control contract](selected-control.md) fixes
+Protocol rosters, common-input requirements and exact placed joins. All arms are checked, including
 statically unselected arms, and continuing arms have one common result type.
 `match choice { Some(x) => { x }, None() => { stop "reject"; } }` covers every
 alternative once. A missing `else` supplies an empty block. A block-like statement
@@ -411,9 +418,10 @@ unchanged; separate participant states are never bundled into a common-role tupl
 The checked graph and native `protocol.repeat` retain explicit state, data
 captures, managed references, region inputs and successors. Source comparison
 checks those operands, the maximum, roles, signature and nested operations.
-A conditional query can use a one-role loop with maximum one. An owned local
-helper computes its zero-or-one count; the draw executes only in the reached
-iteration and is never hoisted or evaluated speculatively.
+Selected Protocol branches retain conditional queries directly in their actual
+arms. A role-local roster restricts every nested action to that participant;
+shared rosters require common selector provenance. A draw occurs only in the
+selected arm and is never hoisted or evaluated speculatively.
 
 ## Conditional participant completion
 
@@ -427,7 +435,7 @@ protocol Run roles(V)(go: bool @V, x: Fr @V) -> (result: Fr @V) completes {
 `completes` declares an Entry-only protocol: applying it as a reusable component
 refuses, including when its body has no current completion action. `finish_if`
 requires that marker and occupies a complete unannotated immutable `let` RHS in
-a protocol body or protocol-loop body. It cannot occur inside a value operand,
+a protocol body, protocol-loop body or statement-position selected arm. It cannot occur inside a value operand,
 including a block or loop used as an operand: completion must not interrupt a
 pending transfer. Its Boolean condition and named outputs must be available at
 its owner. The named list

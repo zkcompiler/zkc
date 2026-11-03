@@ -1,7 +1,7 @@
 //! Ordered proof production and validation under application-supplied contracts.
 use super::wire::{
-    ProofBackend, ProofWriter, WireError, decode_proof_value, encode_proof_value,
-    proof_decoding_bound,
+    ProofBackend, ProofWriter, RootRefusal, TransportError, WireError, decode_proof_value,
+    encode_proof_value, proof_decoding_bound,
 };
 use crate::interpreter::Runner;
 use crate::vm::{Action, Backend, BackendError, RuntimeError, Stop, Value as RuntimeValue};
@@ -10,7 +10,12 @@ use zkc_format::proof::{FormatError, ProofFormat, ProofReader};
 #[derive(Debug)]
 pub enum ArtifactFailure {
     StartedRunner,
+    /// The proof format's own refusal, such as its size limit.
     Format(FormatError),
+    /// The invocation root refused proof transport: a transport buffer, or
+    /// the work or decoded storage of a received message. It names the
+    /// root's allowance that refused ([`TransportError::Root`]).
+    Root(RootRefusal),
     Runtime(RuntimeError),
     Backend(BackendError),
     Wire(WireError),
@@ -22,6 +27,14 @@ pub enum ArtifactFailure {
 impl From<FormatError> for ArtifactFailure {
     fn from(error: FormatError) -> Self {
         Self::Format(error)
+    }
+}
+impl From<TransportError> for ArtifactFailure {
+    fn from(error: TransportError) -> Self {
+        match error {
+            TransportError::Format(error) => Self::Format(error),
+            TransportError::Root(refusal) => Self::Root(refusal),
+        }
     }
 }
 impl From<RuntimeError> for ArtifactFailure {
@@ -129,8 +142,8 @@ fn write_message<B: ProofBackend>(
     };
     // Keep the temporary allowance through encoding and the writer's copy,
     // then release it before the next message. Raw payloads remain borrowed.
-    let _live = crate::host::wire::reserve_allocation(ledger, bound)
-        .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
+    let _live =
+        crate::host::wire::reserve_allocation(ledger, bound).map_err(ArtifactFailure::Root)?;
     let bytes = encode_proof_value(format, backend, value).map_err(ArtifactFailure::Wire)?;
     writer.message(&bytes)?;
     Ok(())
@@ -268,6 +281,8 @@ pub fn validate<B: ProofBackend>(
             let cut = Action::<B::Value>::Receive(request.clone())
                 .cut()
                 .ok_or(ArtifactFailure::UnexpectedCommunication)?;
+            // Reading the received message is work the root charges first;
+            // its decoded storage is a second charge, below.
             if let Some(ledger) = &ledger {
                 ledger
                     .charge(
@@ -278,7 +293,7 @@ pub fn validate<B: ProofBackend>(
                         },
                         0,
                     )
-                    .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
+                    .map_err(|_| ArtifactFailure::Root(RootRefusal::Work))?;
             }
             let retained = match proof_decoding_bound(
                 transport.format(),
@@ -295,7 +310,7 @@ pub fn validate<B: ProofBackend>(
                 Err(error) => return Err(ArtifactFailure::Wire(error)),
             };
             let _live = crate::host::wire::reserve_allocation(ledger.as_ref(), retained)
-                .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
+                .map_err(ArtifactFailure::Root)?;
             let decoded = match decode_proof_value(
                 transport.format(),
                 runner.backend(),

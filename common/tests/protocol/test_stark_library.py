@@ -141,7 +141,7 @@ class Package:
         path = directory / f'{name}.zkc'
         path.write_text(source)
         return cls(toolchain, journal, directory,
-                   [f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', *modules, overrides=overrides),
+                   ['--source-format=zkc', f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', *modules, overrides=overrides),
                     *[f'--asset={k}=relation-bundle-json={v}' for k, v in assets.items()],
                     'example::Proof', *flags], name, realization)
 
@@ -167,7 +167,8 @@ class Package:
     def honest(self, public, witness, capacity=None):
         produced, proof = self.prove(public, witness, capacity=capacity)
         assert produced['status'] == 'produced'
-        assert self.verify(public, proof, capacity=capacity)['status'] == 'accepted'
+        self.verification = self.verify(public, proof, capacity=capacity)
+        assert self.verification['status'] == 'accepted'
         self.journal.write(f'{self.name}-{self.runs}-wire.json', wire_profile(proof.read_bytes()))
         return proof
 
@@ -322,6 +323,41 @@ def generated(height, final, blowup, queries, configuration='Poseidon2', extra='
             .replace('domain Trace', extra + 'domain Trace'))
 
 
+# Verifier capacity of the maintained 256-row, 100-query clients
+# (docs/spec/runtime/capacity.md, "Maintained scale controls"). Each count is
+# the verify report's measurement for the retained client. A change may move a
+# count by at most CAPACITY_TOLERANCE of its expectation in either direction; a
+# larger move updates the expectation in the same change, so the remaining
+# margin to the default execution budget stays a reviewed number. The budget
+# is the effective capacity record of the same report, the default here: a
+# verifier that needs more is refused before this record exists.
+CAPACITY_TOLERANCE = 0.002
+VERIFIER_CAPACITY = {
+    'quartic-keccak-block': {'instructions': 992_560, 'total_value_bytes': 228_842_680},
+    'generated-poseidon2': {'instructions': 994_176, 'total_value_bytes': 227_747_208},
+}
+
+
+def record_verifier_capacity(journal, client, report):
+    """Record a maintained client's verifier work against its expectation."""
+    expected = VERIFIER_CAPACITY[client]
+    # zkc.native-capacity/0: [tag, elements, groups, wire, value,
+    # [instructions, iterations, logical], [live, total]].
+    capacity = report['capacity']
+    budget = {'instructions': int(capacity[5][0]), 'total_value_bytes': int(capacity[6][1])}
+    record = {counter: {'measured': report['execution'][counter],
+                        'expected': expected[counter],
+                        'budget': budget[counter],
+                        'margin': budget[counter] - report['execution'][counter]}
+              for counter in budget}
+    journal.write(f'{client}-verifier-capacity.json', record)
+    print(f'{client} verifier capacity: {json.dumps(record, sort_keys=True)}')
+    for counter, row in record.items():
+        assert row['margin'] >= 0, (client, counter, row)
+        assert abs(row['measured'] - row['expected']) <= CAPACITY_TOLERANCE * row['expected'], (
+            client, counter, row)
+
+
 @pytest.mark.parametrize(('sampling', 'difficulty', 'height', 'final', 'blowup', 'queries'), [
     ('Scalar', None, 8, 0, 2, 4), ('Block', None, 8, 0, 2, 4),
     ('Block', 0, 8, 0, 2, 4), ('Block', 4, 8, 0, 2, 4),
@@ -356,6 +392,8 @@ def test_direct_quartic_keccak_sampling(toolchain, journal, directory, sampling,
     assert produced['status'] == 'produced'
     accepted = package.verify(public_inputs, proof)
     assert accepted['status'] == 'accepted'
+    if height == 256:
+        record_verifier_capacity(journal, f'quartic-keccak-{sampling.lower()}', accepted)
     if difficulty == 0:
         messages = frames(proof.read_bytes())
         witnesses = [i for i, value in enumerate(messages) if tag(value) == 31]
@@ -465,6 +503,8 @@ def test_generated_air_parameters(toolchain, journal, directory, height, width, 
     package = Package.source(toolchain, journal, directory, generated(height, final, blowup, queries),
                              {'trace': asset}, realization=QUARTIC_REALIZATION)
     proof = package.honest({'public_data': public_data}, {'trace': trace})
+    if height == 256:
+        record_verifier_capacity(journal, 'generated-poseidon2', package.verification)
     rounds = height.bit_length() - 1 - final
     messages = frames(proof.read_bytes())
     assert_quartic_frames(messages, log_size=height.bit_length() - 1 + blowup,

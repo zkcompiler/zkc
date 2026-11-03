@@ -74,11 +74,13 @@ for optimize in (False, True):
 mutant = copy.deepcopy(carrier)
 mutant[0] = "invalid.program"
 canonical_program(commands, json.dumps(mutant), refuses="interactive-format")
-for value in ("true", 1, None, []):
+# JSON numbers and null are outside the byte grammar, refused before decoding.
+for value, code in (("true", "native-boolean-value"), (1, "invalid-shape"),
+                    (None, "invalid-shape"), ([], "native-boolean-value")):
     mutant = copy.deepcopy(carrier)
     literal = next(op for f in mutant[2] for op in f[4] if op[0] == "bool_constant")
     literal[3] = value
-    canonical_program(commands, json.dumps(mutant), refuses="native-boolean-value")
+    canonical_program(commands, json.dumps(mutant), refuses=code)
 mutant = copy.deepcopy(carrier)
 mutant[3][0][6].insert(0, ["bool_constant", "root_literal", "new_value", True])
 canonical_program(commands, json.dumps(mutant), refuses="native-boolean-context")
@@ -140,4 +142,4 @@ for length in (128, 129):
     named = copy.deepcopy(carrier)
     literal = next(op for f in named[2] for op in f[4] if op[0] == 'bool_constant')
     literal[1] = 's' * length
-    canonical_program(commands, json.dumps(named), refuses=None if length == 128 else 'interactive-name')
+    canonical_program(commands, json.dumps(named), refuses=None if length == 128 else 'interactive-name-limit')

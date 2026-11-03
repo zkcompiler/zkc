@@ -420,9 +420,8 @@ theorem ClosedProgram.participant_eq_denote (program : ClosedProgram)
       ((program.denote F G (program.closedInputs args)).interpret closedLift).bind
         fun results => .done (program.subjectOutputs results).present := by
   have sites : SiteObservations.Interprets (forgetSites (F := F) (G := G))
-      (observedSites F G) (.silent (participantInterface F G)) := by
-    intro site
-    rfl
+      (observedSites F G) (.silent (participantInterface F G)) :=
+    ⟨fun _ => rfl, fun _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
   have erased := Evaluation.payloadDenote_interpret forgetSites sites program.payload
     (program.closedInputs args)
   have lifted := Evaluation.payloadDenote_interpret

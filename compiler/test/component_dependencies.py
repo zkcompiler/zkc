@@ -207,6 +207,10 @@ def main():
         for name in ("FormalSource", "FormalSourceWriter", "LayoutReader", "OracleSyntax", "OracleDefinitions", "OracleInspection")
     )
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
+    private_headers["ZkcLanguage"].update(
+        ROOT / f"lib/Language/{name}.h"
+        for name in ("CallResolution", "CommonRequirements", "RecordIntrinsics")
+    )
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
     private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Entry/Native.h")
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
@@ -365,6 +369,12 @@ def main():
     contract_mathematics = manifest.parent / "include/zkc/Contracts/Mathematical.inc"
     assert contract_mathematics.is_file(), "missing neutral mathematical declarations"
     assert contract_mathematics not in generated, "neutral mathematics must not belong to IR generation"
+    contract_instances = manifest.parent / "include/zkc/Contracts/Instances.inc"
+    assert contract_instances.is_file(), "missing installed-instance tables"
+    assert contract_instances not in generated, "installed-instance tables must not belong to IR generation"
+    evm_target_declaration = manifest.parent / "include/zkc/Target/Evm/Declaration.h.inc"
+    assert evm_target_declaration.is_file(), "missing EVM target declaration tables"
+    assert evm_target_declaration not in generated, "the EVM target declaration must not belong to IR generation"
     mathematical_recipes = manifest.parent / "generated/Transforms/MathematicalRecipes.inc"
     assert mathematical_recipes.is_file(), "missing private mathematical recipes"
     assert mathematical_recipes not in generated, "recipes must not belong to IR generation"
@@ -392,6 +402,9 @@ def main():
             permitted.add(contract_declarations)
         if "ZkcContracts" in closure(name):
             permitted.add(contract_mathematics)
+            permitted.add(contract_instances)
+        if "ZkcEvmTarget" in closure(name):
+            permitted.add(evm_target_declaration)
         visited = set()
 
         def visit(path):

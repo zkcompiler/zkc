@@ -133,14 +133,14 @@ theorem loop_equation (original : List (model.Field field)) (callerFrame : Frame
     simpa only [valid.2, encode] using ih next valid.1
 
 /-- Actual complete reduction, with arbitrary caller frame returned alongside
-all six source outputs. The source still owns count admission and terminal reads. -/
+all seven source outputs. The source still owns count admission and terminal reads. -/
 def reduction {n : Nat} (maximum count : Nat)
     (reference : PrefixState (model.Field field) Frame n) :=
   ((SumcheckVerifierBodies.reduceBody maximum).denote
     (participantMeaningWithOn model (.silent _) Occurrence.actions (tables model definitions)
       (ctx.roles 1) protocols ctx Occurrence.iterations)
     (SumcheckReductionReference.pattern.environment model
-      (SumcheckReductionReference.inputs model (some reference.point) (some reference.scalar)
+      (SumcheckReductionReference.inputs model (some 0) (some reference.point) (some reference.scalar)
         (some count) (some handle))).get).bind fun returned => .done (returned, reference.frame)
 
 theorem reduction_equation (reductionBodies : SumcheckReductionReference.Bodies model definitions)
@@ -148,7 +148,7 @@ theorem reduction_equation (reductionBodies : SumcheckReductionReference.Bodies 
     (reference : PrefixState (model.Field field) Frame count) :
     reduction model definitions protocols ctx handle maximum count reference =
       (PIR.repeatN count (step model definitions protocols ctx handle) (encode model 0 reference)).bind
-        (fun returned => .done (SumcheckVerifierBodies.reduceReturnValues returned.slots, reference.frame)) := by
+        (fun returned => .done (SumcheckVerifierBodies.reduceReturnValues (some 0) returned.slots, reference.frame)) := by
   unfold reduction
   rw [SumcheckReductionReference.body_reference model definitions linked reductionBodies protocols
     maximum ctx distinct]
@@ -190,7 +190,7 @@ theorem reduction_frame (reductionBodies : SumcheckReductionReference.Bodies mod
     (reference : PrefixState (model.Field field) Frame count) :
     PIR.Yields (fun out => ∃ next : PrefixState (model.Field field) Frame 0,
       next.original = reference.original ∧ next.frame = reference.frame ∧
-      out = (SumcheckVerifierBodies.reduceReturnValues (encode model 0 next).slots, reference.frame))
+      out = (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 next).slots, reference.frame))
       (reduction model definitions protocols ctx handle maximum count reference) := by
   rw [reduction_equation model definitions linked bodies protocols ctx distinct handle reductionBodies
     maximum count bounded]
@@ -210,7 +210,7 @@ def reductionNo (original : List (model.Field field)) (callerFrame : Frame)
     (out : Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs × Frame) : Prop :=
   ∃ reference : PrefixState (model.Field field) Frame 0,
     reference.original = original ∧ reference.frame = callerFrame ∧
-      out = (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots, callerFrame) ∧
+      out = (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots, callerFrame) ∧
       (layout model).representation.No reference
 
 def reduction_no {P : Type} {Raw : E → Type}
@@ -241,7 +241,7 @@ def reductionYes (original : List (model.Field field)) (callerFrame : Frame)
     (out : Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs × Frame) : Prop :=
   ∃ reference : PrefixState (model.Field field) Frame 0,
     reference.original = original ∧ reference.frame = callerFrame ∧
-      out = (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots, callerFrame) ∧
+      out = (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots, callerFrame) ∧
       (layout model).representation.Yes reference
 
 /-- A caller can retain its handler synchronization predicate through the final
@@ -258,7 +258,7 @@ theorem reduction_honest_preserving {H : Type}
     (initial : honest model good original callerFrame history count (encode model 0 reference) h)
     (post : (Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs × Frame) → H → List E → Prop)
     (finish : ∀ reached runtime final, honest model good original callerFrame reached 0 runtime final →
-      post (SumcheckVerifierBodies.reduceReturnValues runtime.slots, reference.frame) final reached) :
+      post (SumcheckVerifierBodies.reduceReturnValues (some 0) runtime.slots, reference.frame) final reached) :
     PIR.WeakestPrecondition.satisfies
       ((reduction model definitions protocols ctx handle maximum count reference).run handler h)
       post (fun _ _ _ => False) history := by

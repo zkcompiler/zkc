@@ -574,3 +574,53 @@ fn query_templates_name_their_method_and_index_bounds_are_canonical() {
         assert!(uniform_index_bound(text).is_err(), "{text:?}");
     }
 }
+
+#[test]
+fn selected_native_origin_paths_preserve_exact_arms_without_extra_coordinates() {
+    use zkc_format::logical::{indexed_native_origin, native_origin_template};
+    let make = |alternative: &str| {
+        json!([
+            "zkc.native-origin-template/0",
+            "main",
+            [
+                ["apply", "main", "helper"],
+                ["repeat", "Round", "rounds"],
+                ["branch", "Round", "choice", alternative]
+            ],
+            [],
+            ["message", "Round", "reply", "Schema", "P", "V"]
+        ])
+    };
+    let mut encoded = Vec::new();
+    for arm in ["then", "else", "some"] {
+        let tree = make(arm);
+        let bytes = encode_tree(&tree).unwrap();
+        let attrs = [zkc_test_support::hex(&bytes)];
+        assert_eq!(native_origin_template(&attrs, "message").unwrap(), bytes);
+        let actual = indexed_native_origin(&attrs, "message", &[7]).unwrap();
+        let decoded = decode_tree(&actual).unwrap();
+        assert_eq!(decoded[2][2], tree[2][2]);
+        assert_eq!(decoded[3], json!(["7"]));
+        assert!(indexed_native_origin(&attrs, "message", &[7, 0]).is_err());
+        encoded.push(actual);
+    }
+    assert!(encoded.windows(2).all(|pair| pair[0] != pair[1]));
+    for step in [
+        json!(["branch", "Round", "choice"]),
+        json!(["branch", "Round", "choice", ""]),
+        json!(["branch", "Round", "choice", "then", "extra"]),
+        json!(["branch", "Round", "choice", []]),
+    ] {
+        let mut tree = make("then");
+        tree[2][2] = step;
+        assert_eq!(
+            native_origin_template(
+                &[zkc_test_support::hex(&encode_tree(&tree).unwrap())],
+                "message"
+            )
+            .unwrap_err()
+            .0,
+            "native-origin"
+        );
+    }
+}

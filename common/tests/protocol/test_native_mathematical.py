@@ -91,8 +91,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
 
     attempt_policy = directory / 'prefix.attempts.json'
     attempt_policy.write_text(json.dumps(['zkc.native-attempt-policy/0', '1', [['2', '2']],
-                                          ['3', '1048576'], ['1000000', '100000', '4294967296'],
-                                          ['1048576', '16777216']]))
+                                          ['3', '1048576'], ['1000000', '100000']]))
     prefix_summaries = {}
     for case in json.loads((directory / 'manifest.json').read_text()):
         name = case['name']
@@ -280,8 +279,7 @@ def check_native_attempt_commands(toolchain, journal, directory):
             validator = directory / f'{name}.validator.json'
             proof = directory / f'{name}.cli.proof'
             policy = ['zkc.native-attempt-policy/0', '1', [['2', '2']] if family == 'fold' else [],
-                      ['4', '16777216'], ['1000000', '100000', '4294967296'],
-                      ['67108864', '268435456']]
+                      ['4', '16777216'], ['1000000', '100000']]
             policy_path = directory / f'{name}.attempts'
             policy_path.write_text(json.dumps(policy))
             args = [toolchain.runtime, '--json', 'bundle', 'prove', deployment, pin, producer, proof,
@@ -341,8 +339,7 @@ def check_composed_state_commands(toolchain, journal, directory):
             pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
             proof = directory / f'{name}.cli.proof'
             policy = ['zkc.native-attempt-policy/0', '1', [['4', '2']],
-                      ['4', '16777216'], ['1000000', '100000', '4294967296'],
-                      ['67108864', '268435456']]
+                      ['4', '16777216'], ['1000000', '100000']]
             attempts = directory / f'{name}.attempts'
             attempts.write_text(json.dumps(policy))
             args = [toolchain.runtime, '--json', 'bundle', 'prove', deployment, pin,
@@ -465,7 +462,7 @@ def check_composition_commands(toolchain, journal, directory):
         assert result['stop']['origin'][0] == 'zkc.origin/0'
         attempt = directory / 'excessive-attempt-policy.json'
         attempt.write_text(json.dumps(['zkc.native-attempt-policy/0', '0', [],
-                                       ['1', '16777216'], capacity[5], capacity[6]]))
+                                       ['1', '16777216'], capacity[5][:2]]))
         journal.json([toolchain.runtime, '--json', 'bundle', 'prove', *args, producer,
                       proof, *options, option, f'--attempt-policy={attempt}'], refuses='native-attempt-limits')
         assert proof.read_bytes() == original

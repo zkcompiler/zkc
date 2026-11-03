@@ -4,8 +4,13 @@ This is an optional test workspace. It does not add an EVM engine to the SDK,
 decode a native program in EVM, or implement a replacement Sumcheck prover.
 The runner uses revm **43.0.3**, whose MSRV is Rust 1.91, with Rust 1.99 in the
 development environment. Its own `Cargo.lock` freezes transitive dependencies.
-The selected Cancun or Prague fork is explicit; standard precompiles, gas,
-initcode and runtime size limits remain enabled. Each request deploys the supplied
+The selected fork is explicit and is one of the forks of the
+[target declaration](../../../docs/spec/targets/evm.md#target-declaration);
+standard precompiles, gas, initcode and runtime size limits remain enabled. The
+runner and the Python helpers (`target.py`) read the declaration itself: its
+forks, solc release and optimizer settings, ABI selector, deployment ceilings and
+revert classes. The runner refuses every request if a declared fork's engine
+hardfork has a different transaction gas cap or code size limits. Each request deploys the supplied
 creation bytes once into fresh state, reads the installed code, then invokes that
 same deployment one to eight times. Calls
 commit storage and advance the caller nonce; passive traces reset for each call.
@@ -35,7 +40,7 @@ by `0x`:
   "expected_runtime_bytecode": "...",
   "calldata": "...",
   "gas_limit": 20000000,
-  "deployment_gas_limit": 5000000,
+  "deployment_gas_limit": 20000000,
   "fork": "cancun",
   "repeat_count": 2
 }
@@ -55,12 +60,19 @@ the top-level runtime result describes the first call. `repeat_count` defaults
 to one and must be between one and eight. Installed code is checked after every
 call. `test_engine.py` uses a storage counter to prove state persists and traces
 do not accumulate.
-`fork` is exactly `cancun` or `prague`; results repeat that selection. Gas includes
-transaction intrinsic gas and the selected fork's normal charges. Deployment
+`fork` is exactly a declared fork name; results repeat that selection. Gas includes
+transaction intrinsic gas and the selected fork's normal charges. `gas_limit`
+and `deployment_gas_limit` are optional: each defaults to the fork's transaction
+budget, its declared consensus transaction gas cap or, for a fork without one,
+the declaration's `validation_gas`. The Python helpers request the same budget
+for calls and deployment alike, so a runtime at the fork's code size ceiling
+always deploys. Deployment
 failure sets `phase=deployment` and `runtime_gas=null`. Transaction admission,
 JSON, runtime pin and trace-capacity errors use `error` and nonzero process exit;
-they are not EVM false/revert/halt. Limits are 4 MiB JSON, 100 million gas per
-transaction, 16,384 primitive events and 32 MiB captured preimages. Exceeding a
+they are not EVM false/revert/halt. A request above the declaration's
+`validation_gas_maximum` refuses with `runner-gas-cap`; that maximum is also the
+block gas limit of every run. Other limits are 4 MiB JSON, 16,384 primitive
+events and 32 MiB captured preimages. Exceeding a
 trace limit refuses the result, so no truncated trace can pass the oracle.
 
 Keccak events capture memory after a successful opcode and the actual resulting
@@ -97,9 +109,11 @@ python3 common/tests/evm/probe.py \
  --output build/experiments/evm-implementation/EVM-EXECUTION-PROBE.json
 ```
 
-The script verifies the pinned solc 0.8.38 executable SHA-256, compiles standard
-JSON for Cancun, and deploys every exact resulting artifact. It compares disabled,
-enabled and explicit `:` optimizer profiles. A missing runner records compilation
+The script verifies the pinned solc executable SHA-256 and the declared solc
+release, compiles standard JSON for the selected declared fork (the declared
+default unless `--evm-version` selects another), and deploys every exact
+resulting artifact. It compares disabled, enabled and the declared release
+optimizer profiles. A missing runner records compilation
 only with `dynamic=false`; it does not establish hash preservation.
 
 Observed with the pinned tool: all three profiles delete an unused final Keccak;
@@ -135,7 +149,7 @@ exported root must equal the independently executed native binding. It never
 implements protocol arithmetic beyond preparing the public table and its claim.
 
 ```sh
-evm_native --compiler "$ZKC_COMPILER_BIN" \
+evm_native --compiler "$ZKC_COMPILER_BIN/zkc-compile" \
  --project examples/projects/sumcheck-keccak/zkc.toml \
  --entry example::Proof --rounds 4 --context 65766d --budget 64
 ```
@@ -150,7 +164,7 @@ Generate the complete native/reference matrix with:
 
 ```sh
 python3 common/tests/evm/native_fixtures.py \
- --driver /path/to/evm_native --compiler "$ZKC_COMPILER_BIN" \
+ --driver /path/to/evm_native --compiler "$ZKC_COMPILER_BIN/zkc-compile" \
  --output build/experiments/evm-implementation/EVM-EXECUTION-FIXTURES
 ```
 
@@ -177,9 +191,9 @@ pin. Optional paired `evm_native --evm-artifact DIR --evm-sha256 PIN` calls
 source and descriptor agreement and exports calldata, authenticated hashes and
 the exact captured bytecode under `evm` in the fixture. `validate.py` compares
 that calldata against the independent Python codec and requires supplied
-bytecode and the selected execution fork to equal the SDK export. Pass
-`--evm-version=prague` to validation and capacity commands for a Prague artifact;
-a mismatch refuses before execution. `native_fixtures.py` accepts the same paired
+bytecode and the selected execution fork to equal the SDK export. Pass the
+artifact's fork as `--evm-version` to validation and capacity commands when it is
+not the declared default; a mismatch refuses before execution. `native_fixtures.py` accepts the same paired
 options for the complete matrix.
 
 Pass the unmodified **binary** creation/runtime files to the execution helper; `--bytecode-format hex` is available for explicit hex files.
@@ -273,6 +287,7 @@ the exact 32-byte ABI Boolean; refusals require the exact class, code and hash
 frontier. The wire consumer emits the production expected-type helpers; separate
 raw-value views check coefficient order independently of their encoder. Its
 controls cover whole-value node/element/memory budgets, inactive/empty type
-refusals, fixed arrays, and opaque root/path envelopes. Envelope transport does
+refusals, fixed arrays, and opaque root/path envelopes, including the path
+ceiling at the declared default and lowered below a path's length. Envelope transport does
 not establish cryptographic authentication. These are bounded differential
 controls, not a general EVM refinement proof.

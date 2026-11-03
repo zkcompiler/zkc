@@ -32,6 +32,7 @@ impl TestRecipe {
                     "--project",
                     "--module",
                     "--asset",
+                    "--source-format",
                     "--compiler",
                     "--package",
                     "--sha256",

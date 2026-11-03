@@ -12,6 +12,8 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import lean_render, schema  # noqa: E402
+from bridges.common.catalogue import (  # noqa: E402
+    catalogue, member_resolver, require_capabilities)
 from bridges.common.lean_render import optional, record  # noqa: E402
 
 # The structured source profile bounds strings at 512 bytes and references at 4096.
@@ -30,6 +32,9 @@ def interpreted_ty(value, depth=0):
         raise ValueError("invalid structured type")
     if value == ["indices"]:
         return ".indices"
+    if value[0] == "resource_unit":
+        _, slot = record(value, 2)
+        return f".resourceUnit {text(schema.domain_identity(slot, slot=True))}"
     if value[0] == "groups":
         _, domain = record(value, 2)
         return f".groups {text(domain)}"
@@ -99,7 +104,7 @@ def oracle_descriptor(tag, args):
         extra = ""
         if tag == "oracle_input":
             extra = " " + oracle_shape(sort[1:3], args[3])
-        return (f".oracle (.{tag.removeprefix('oracle_')} {text(holder)} {seq(receivers, text, 16)} "
+        return (f".oracle (.{tag.removeprefix('oracle_')} {text(holder)} {seq(receivers, text, 1024)} "
                 f"({rendered}){extra})")
     if tag in ("oracle_send", "oracle_virtual"):
         size = {"oracle_send": 5, "oracle_virtual": 4}[tag]
@@ -112,7 +117,7 @@ def oracle_descriptor(tag, args):
                 raise ValueError("invalid oracle dimensions")
             extra = f" {seq(args[3], text, 16)} {oracle_shape(kind, args[4])}"
         constructor = tag.removeprefix("oracle_")
-        return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 16)} "
+        return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 1024)} "
                 f"({oracle_kind(kind)}){extra})")
     if tag in ("oracle_query", "oracle_contents"):
         owner, kind = record(args, 2)
@@ -131,9 +136,17 @@ def oracle_descriptor(tag, args):
     if tag in names:
         record(args, 3 if tag in ("oracle_sequence_append", "oracle_sequence_at") else 2)
         kind, maximum = args[:2]
-        roles = " " + seq(args[2], text, 16) if len(args) == 3 else ""
+        roles = " " + seq(args[2], text, 1024) if len(args) == 3 else ""
         return f".oracle (.{names[tag]} ({oracle_kind(kind)}) {lean_render.decimal(maximum, 2**64)}{roles})"
     raise ValueError("unknown oracle descriptor")
+
+
+# Index descriptors without arguments: comparisons and the total word operations.
+INDEX_OPERATIONS = {
+    "index.less": ".indexLess", "index.power_of_two": ".indexPowerOfTwo",
+    "index.wrapping_add": ".indexWrappingAdd", "index.wrapping_sub": ".indexWrappingSubtract",
+    "index.bit_and": ".indexBitAnd", "index.logical_shift_right": ".indexLogicalShiftRight",
+}
 
 
 def descriptor(value):
@@ -142,9 +155,9 @@ def descriptor(value):
     tag, *args = value
     if tag.startswith("oracle_"):
         return oracle_descriptor(tag, args)
-    if tag in ("index.less", "index.power_of_two"):
+    if tag in INDEX_OPERATIONS:
         record(args, 0)
-        return ".indexLess" if tag == "index.less" else ".indexPowerOfTwo"
+        return INDEX_OPERATIONS[tag]
     if tag == "vector.length":
         record(args, 1)
         return f".vectorLength {text(args[0])}"
@@ -184,13 +197,13 @@ def descriptor(value):
     if tag == "protocol_repeat":
         carried, maximum, roles, scopes = record(args, 4)
         return (f".protocolRepeat {nat(carried, 512)} {nat(maximum, 1048576)} "
-                f"{seq(roles, text)} {seq(scopes, lambda scope: seq(scope, text))}")
+                f"{seq(roles, text, 1024)} {seq(scopes, lambda scope: seq(scope, text, 1024))}")
     if tag == "protocol_apply":
         callee, roles = record(args, 2)
-        return f".protocolApply {text(callee)} {seq(roles, text)}"
+        return f".protocolApply {text(callee)} {seq(roles, text, 1024)}"
     if tag in ("restrict", "assemble"):
         record(args, 1)
-        return f".{tag} {seq(args[0], text, 16)}"
+        return f".{tag} {seq(args[0], text, 1024)}"
     if tag == "statement":
         relation_name, selectors, acceptance, target = record(args, 4)
         return (f".statement {text(relation_name)} {seq(selectors, text)} "
@@ -266,7 +279,7 @@ def protocol_interface(value):
     tag, roles, inputs, outputs = record(value, 4)
     if tag != "protocol":
         raise ValueError("invalid protocol interface")
-    return f"some ⟨{seq(roles, text)}, {seq(inputs, lambda x: seq(x, text))}, {seq(outputs, lambda x: seq(x, text))}⟩"
+    return f"some ⟨{seq(roles, text, 1024)}, {seq(inputs, lambda x: seq(x, text, 1024))}, {seq(outputs, lambda x: seq(x, text, 1024))}⟩"
 
 
 def relation(value):
@@ -313,11 +326,20 @@ def protocol_contract(value):
     return f"⟨{text(owner)}, {seq(clauses, contract_clause)}⟩"
 
 
-# Independently selected interpreter vocabulary; catalog membership is data only.
-SOURCE_PRIMITIVES = frozenset((
-    "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
-    "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
-    "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed"))
+def source_primitives():
+    """The operations of the catalog's structured-source consumer profile.
+
+    This only stops the renderer from refusing ahead of Lean: the closed
+    primitive inventory of `Zkc.Source.Structured` admits or refuses.
+    """
+    profiles = [profile for profile in schema.declarations()["consumerProfiles"]
+                if profile["name"] == "structured-source-primitives"]
+    if len(profiles) != 1:
+        raise ValueError("missing structured-source consumer profile")
+    return frozenset(entry["operation"] for entry in profiles[0]["operations"])
+
+
+SOURCE_PRIMITIVES = source_primitives()
 
 
 def render_parameter(value):
@@ -344,38 +366,14 @@ def primitive_binding(value, rows=None):
     op, terms = schema.resolve_signature(actual, project=member_resolver(rows), allowed=SOURCE_PRIMITIVES)
     if actual[2] != "":
         raise ValueError("selected implementation outside source profile")
-    nominals = {row[1]: row for row in rows[0]} if rows else {}
-    for requirement in op["requirements"]:
-        arguments = [terms[i] for i in requirement["arguments"]]
-        if len(arguments) != 1 or arguments[0][0] != "domain":
-            raise ValueError("unsupported source requirement")
-        domain = nominals.get(arguments[0][2])
-        if domain is None or requirement["capability"] not in domain[4]:
-            raise ValueError("missing binding capability")
-    # The installed source primitives have only Field roots. The neutral tree
-    # and supplied ports were checked above before this semantic projection.
+    require_capabilities(op, terms, rows)
+    # The installed source primitives have Field roots, or one exact Slot root
+    # for a custody transfer. The neutral tree and supplied ports were checked
+    # above before this semantic projection.
     arguments = [argument[2] for argument in actual[1]]
     return (f"⟨{text(value[1])}, {text(actual[0])}, {seq(arguments, text)}, "
             f"{text(actual[2])}, some ⟨{seq(actual[1], binding_argument)}, "
             f"{seq(actual[3], ty)}, {seq(actual[4], ty)}⟩⟩")
-
-
-def member_resolver(rows):
-    def project(parent, member):
-        if rows is None or parent[0] != "domain":
-            raise ValueError("missing associated domain catalogue")
-        matches = [row for row in rows[0] if row[1] == parent[2] and row[2] == parent[1]]
-        if len(matches) != 1:
-            raise ValueError("unknown associated domain")
-        members = dict(matches[0][3])
-        if member not in members:
-            raise ValueError("missing associated domain member")
-        declarations = [row for row in schema.declarations()["members"]
-                        if row["name"] == member and row["owner"]["sort"] == parent[1]]
-        if len(declarations) != 1:
-            raise ValueError("unknown associated member declaration")
-        return ["domain", declarations[0]["result"]["sort"], members[member]]
-    return project
 
 
 def origin_string(value, limit=512):
@@ -507,58 +505,49 @@ def definition(value):
             f"{seq(outputs, ty)}, {protocol_interface(interface)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
 
 
-SORTS = {"Field": ".field", "Group": ".group", "Commitment": ".commitment",
-         "Transcript": ".transcript"}
+def source_placement(value, depth=0):
+    if depth >= 64:
+        raise ValueError("component-declaration-limit")
+    node = record(value)
+    if not node:
+        raise ValueError("component-declaration-placement")
+    if node[0] == "data":
+        _, roles = record(node, 2)
+        return f".data {seq(roles, text, 1024)}"
+    if node[0] == "oracle":
+        _, holder, receivers = record(node, 3)
+        return f".oracle {text(holder)} {seq(receivers, text, 1024)}"
+    if node[0] == "product":
+        _, arguments, fields = record(node, 3)
+        return (f".product {seq(arguments, text, 1024)} "
+                f"{seq(fields, lambda field: source_placement(field, depth + 1))}")
+    raise ValueError("component-declaration-placement")
 
 
-def modulus(value):
-    if value is None:
-        return "none"
-    if not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{0,1023}", value):
-        raise ValueError("invalid catalogue modulus")
-    return f"(some {value})"
-
-
-def nominal(value):
-    tag, identity, sort, members, capabilities, characteristic = record(value, 6)
-    if tag != "nominal" or sort not in SORTS:
-        raise ValueError("invalid nominal catalogue row")
-    def member(pair):
-        name, target = record(pair, 2)
-        return f"({text(name)}, {text(target)})"
-    return (f"⟨{text(identity)}, {SORTS[sort]}, {seq(members, member)}, "
-            f"{seq(capabilities, text)}, {modulus(characteristic)}⟩")
-
-
-def service_row(value):
-    tag, contract, sampled, methods = record(value, 4)
-    if tag != "service":
-        raise ValueError("invalid service catalogue row")
-    return f"⟨{text(contract)}, {text(sampled)}, {seq(methods, text)}⟩"
-
-
-def catalogue(value):
-    nominals, services = record(value, 2)
-    return f"{{ nominals := {seq(nominals, nominal)}, services := {seq(services, service_row)} }}"
+def source_field(value):
+    name, type_, placement = record(value, 3)
+    return f"⟨{text(name)}, {origin_term(type_)}, ({optional(placement, source_placement)})⟩"
 
 
 def source_record(value):
-    type_, resource, sealed, fields = record(value, 4)
+    type_, resource, sealed, fields, roles, slot = record(value, 6)
     if resource not in ("ordinary", "affine", "linear") or type(sealed) is not bool:
         raise ValueError("invalid source record")
-
-    def field(value):
-        name, type_ = record(value, 2)
-        return f"({text(name)}, {origin_term(type_)})"
-
+    if isinstance(type_, list) and type_[:2] == ["nominal", "variant"]:
+        def alternative(value):
+            name, fields = record(value, 2)
+            return f"({text(name)}, {seq(fields, source_field)})"
+        members = f".alternatives {seq(fields, alternative)}"
+    else:
+        members = f".fields {seq(fields, source_field)}"
     return (f"⟨{origin_term(type_)}, {text(resource)}, {str(sealed).lower()}, "
-            f"{seq(fields, field)}⟩")
+            f"({members}), {seq(roles, text, 1024)}, ({optional(slot, text)})⟩")
 
 
 def source_port(value):
-    name, type_, roles, offset, count = record(value, 5)
-    return (f"⟨{text(name)}, {origin_term(type_)}, {seq(roles, text, limit=16)}, "
-            f"{nat(offset)}, {nat(count, 512)}⟩")
+    name, type_, roles, offset, count, placement = record(value, 6)
+    return (f"⟨{text(name)}, {origin_term(type_)}, {seq(roles, text, 1024)}, "
+            f"{nat(offset)}, {nat(count, 512)}, ({source_placement(placement)})⟩")
 
 
 def source_protocol(value):
@@ -567,9 +556,16 @@ def source_protocol(value):
 
 
 def source_declarations(value):
-    records, protocols = record(value, 2)
+    """Render only the current carrier. Lean independently checks its associations."""
+    records, protocols, authorities = record(value, 3)
+
+    def authority(value):
+        path, revision = record(value, 2)
+        return f"({text(path)}, {optional(revision, text)})"
+
     return (f"{{ records := {seq(records, source_record)}, "
-            f"protocols := {seq(protocols, source_protocol)} }}")
+            f"protocols := {seq(protocols, source_protocol)}, "
+            f"authorities := {seq(authorities, authority, limit=1048576)} }}")
 
 
 def render(data, namespace):

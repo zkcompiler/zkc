@@ -20,8 +20,9 @@ import subprocess
 import sys
 
 from native_entry import native_subject
+from bridges.common import source_format
 from registry import CONTRACTS
-from request_support import Obligation, require
+from request_support import check_lean_resources, Obligation, require
 from structured import entry, profile, views, compile_modules, lean_environment
 from bridges.structured.snapshot import render, text, nat
 from bridges.common.schema import interpreted_type
@@ -411,6 +412,7 @@ theorem requested_subject : ExpectedData.snapshot = CandidateData.snapshot := by
                 raise Obligation('proof-budget', 'Lean exceeded the bounded proof-generation timeout')
             result = subprocess.CompletedProcess(child.args, child.returncode, stdout)
         (output / 'lean.log').write_text(result.stdout)
+        check_lean_resources(result, str(output / 'lean.log'))
         require(result.returncode == 0 and 'PROOF-REQUEST-KERNEL-PASS' in result.stdout and 'PROOF-REQUEST-BOUNDARY-PASS' in result.stdout,
                 'correspondence-unproved', 'Lean did not certify this source/contract/property combination; inspect Certificate.lean and lean.log')
         require(relation is None or 'RELATION-BOUNDARY-PASS' in result.stdout,
@@ -441,9 +443,9 @@ theorem requested_subject : ExpectedData.snapshot = CandidateData.snapshot := by
     return receipt
 
 
-def export_native(modules, subject, compiler, output):
+def export_native(modules, subject, compiler, output, selection=None):
     output.mkdir(parents=True, exist_ok=True)
-    flags = ['--source-format=zkc', *['--module=' + item for item in modules], '--subject=' + subject]
+    flags = source_format.with_option([*['--module=' + item for item in modules], '--subject=' + subject], selection)
     def execute(command):
         return subprocess.check_output(list(map(str, command)), text=True, stderr=subprocess.PIPE, timeout=30)
     text, interface_text, interface = native_subject(execute, compiler, flags)
@@ -464,6 +466,9 @@ def main():
     parser.add_argument('--snapshot', type=Path)
     parser.add_argument('--module', action='append', default=[], help='Native module binding NAME=PATH; repeatable')
     parser.add_argument('--subject', help='Closed native protocol specialization')
+    parser.add_argument('--source-format', choices=source_format.FORMATS,
+                        help='Grammar of the --module sources; default: their package manifests or fixture '
+                             'declarations')
     parser.add_argument('--compiler', type=Path, default=ROOT.parent / 'build/compiler/zkc-compile')
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument('--request', type=Path)
@@ -481,7 +486,8 @@ def main():
         if args.snapshot:
             data = read_json(args.snapshot)
         else:
-            data, native = export_native(args.module, args.subject, args.compiler.resolve(), args.output.resolve())
+            data, native = export_native(args.module, args.subject, args.compiler.resolve(), args.output.resolve(),
+                                         args.source_format)
         relation = None
         if args.spec:
             from intent import resolve

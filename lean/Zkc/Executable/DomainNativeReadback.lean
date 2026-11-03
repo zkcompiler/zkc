@@ -26,7 +26,7 @@ theorem nativeHelper_results (program : Structured.Program) (context : Context)
     (checked : checkNativeItem program context (.helper ⟨.call name, references, declared, []⟩) scope = some final) :
     ∃ helper, (nativeHelperSignatures program).find? (fun found => found.name == name) = some helper ∧
       references.map (scope.slots[·]?) = helper.inputs.map (some ∘ NativeSlot.data) ∧
-      helper.inputs.all dataType = true ∧ helper.outputs.all dataType = true ∧
+      helper.inputs.all localType = true ∧ helper.outputs.all localType = true ∧
       declared = helper.outputs.map ValueSort.data ∧
       final = scope.append (helper.outputs.map NativeSlot.data) false := by
   change (nativeResults program context scope (.call name) references).bind _ = some final at checked

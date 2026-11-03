@@ -129,17 +129,6 @@ def scalarRelation : ReferenceLaw model [.vector field, .field field] [.boolean]
         simp [totalOutcome, bounded, primitiveOutcome, PIR.Process.bind]
       rfl
 
-def initial (site : String) : ReferenceLaw model [.field field] [.vector field, .field field] where
-  body := .letOp (.mark site) .nil .nil <|
-    .letOp (.exec (.vectorEmpty field)) .nil .nil <|
-      .ret (.cons .here (.cons (.there .here) .nil))
-  Requires _ _ := True
-  reference args := .returned (.cons [] (.cons (args.get .here) .nil))
-  valid _ args _ := by cases args with | cons scalar rest => cases rest; rfl
-
-def identity : ReferenceLaw model [.vector field, .field field] [.vector field, .field field] :=
-  projection model (.cons .here (.cons (.there .here) .nil))
-
 /-- The source's explicit maximum is part of its formula, not a global law. -/
 def inputShape (maximum : Nat) : ReferenceLaw model [.vector field, .index] [.boolean] where
   body := .letOp (.vectorLength field) (.cons .here .nil) .nil <|

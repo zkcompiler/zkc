@@ -194,9 +194,13 @@ loop nesting, header/yield pairing, and identical loop site/maximum across roles
 Every static loop site must appear in exactly one segment with **all** candidate
 headers at that site. Splitting a shared loop into per-role segments is refused.
 Only participating roles appear in its body. Ordinary exchange/group rules apply
-recursively. Typed visitors bound depth to 64 loop levels and the global step
-count across all segments. Positional array substitutes for step/loop objects
-are refused; raw outer JSON depth remains separately bounded.
+recursively. Typed visitors bound control nesting and the global step count
+across all segments. Control nesting counts loop and branch segments only: a
+control segment directly in `steps` is level 1, and a control segment in the
+body of a level-n loop or in an arm of a level-n branch is level n + 1. Level 64
+is admitted and level 65 is refused, by the producer and by independent bundle
+admission alike; step segments add no level. Positional array substitutes for
+step/loop objects are refused; raw outer JSON depth remains separately bounded.
 
 At a reached loop, the driver executes necessary count calculations and validates
 each participant's actual count and local bound. A local failure stops with that
@@ -212,16 +216,18 @@ destination stores names, not another retained payload. Live service leases
 belong to the entry and survive inner frame return.
 
 Reports, transfer hooks and cancellation checks include the complete outer-to-inner
-iteration path. Reached headers record `loop_count` and whether `loop_started`;
+iteration path. A report stores each distinct dynamic path, with its loop
+iteration numbers, once: every reached step of one region references that
+shared storage instead of copying it. Reached headers record `loop_count` and whether `loop_started`;
 failed validation/agreement does not claim body entry. Ordinary runner polling at
 a loop header or yield stops with `program-control-cut`; only explicit program control
 methods may cross those boundaries after host agreement. Misapplied action or
 delivery methods return `WrongAction` without polling or advancing such a cut.
 `enter_loop` retains a local count-bound failure as a stopped outcome,
 just as `loop_count` does. Count disagreement is
-reported as `DriverFailed(Contract)` with detail `loop-count-disagreement`. Dynamic dispatches and
-reports obey the ordinary driver budget; compact code does not authorize
-unbounded runtime work. Stops/cancellation preserve completed messages and draws,
+reported as `DriverFailed(Contract)` with detail `loop-count-disagreement`. Dynamic dispatches
+obey the ordinary driver budget, and report storage obeys the report allowance;
+compact code does not authorize unbounded runtime work or storage. Stops/cancellation preserve completed messages and draws,
 then release all endpoint leases through normal finalization.
 
 ## Wire and receive contract
@@ -297,18 +303,62 @@ receiver exposure stop or decoder Limit/Backend leaves the slot occupied. An
 accepted `complete_receive`, including Decode or runtime Limit, clears it once;
 an API refusal preserves it. The report owns any payload still pending at exit.
 
-Default driver caps are 32768 dispatches, 4096 bytes per wire payload or hook
-replacement, and 16 MiB accumulated original plus replacement bytes. Hosts may
-lower these caps. `ValueBudget` separately controls runner retention; the joint
-driver requires its live and cumulative charges to fit 64 MiB and 256 MiB.
-`RunLimits.work` separately selects instruction, iteration and logical-work
-ceilings, the last at most 4 GiB. Requests above
-any installed driver ceiling refuse before entry and preserve caller-owned inputs.
-`Report.limits` records the requested policy without silent clamping. The lower-level
-`Runner` refuses instruction, iteration and logical-work allowances above its hard
-ceilings but permits configurable live and cumulative retained-value budgets. Its 64 MiB
-individual-value ceiling remains independent of those aggregate budgets.
-The driver reserves reached-step and result-port capacity before any entry.
+The driver allowances in `RunLimits` are:
+
+| Allowance | Unit | Default | Maximum | Scope |
+|---|---|---|---|---|
+| `steps` | Dispatched occurrences, including returns and repeated loop steps | 32,768 | 32,768 | Invocation |
+| `wire_bytes` | Bytes of one wire payload or hook replacement | 4,096 | 4,096 | Operation (one message) |
+| `total_wire_bytes` | Accumulated original plus replacement bytes | 16 MiB | 16 MiB | Invocation |
+| `report_bytes` | Retained report storage | 64 MiB | 64 MiB | Invocation |
+| `values` | Live and cumulative fresh payload bytes | 64 MiB, 256 MiB | 64 MiB, 256 MiB | Invocation with a runner ledger; each runner without one |
+| `work` | Instructions and iterations; logical-work bytes | 1,000,000, 100,000; 4 GiB | 2^32, 2^32; 4 GiB | Runner; logical work as `values` |
+
+Hosts may lower the allowances whose default is their maximum. The report
+allowance charges every reached step's fixed record and, when the first step of
+a region references it, that region's shared path: its elements, their site
+and alternative strings, its iteration numbers and both allocation headers.
+`Report.report_bytes` records the charge. A step that would exceed the
+allowance fails as `DriverFailed(Limit)` with detail `joint-report-limit`
+before it is exposed; a region no step reaches retains and charges nothing.
+The dispatch, message and cumulative wire allowances fail with detail
+`joint-limit`.
+Requests above any installed driver maximum refuse before entry and preserve
+caller-owned inputs. `Report.limits` records the requested policy without
+silent clamping. The lower-level `Runner` refuses instruction, iteration and
+logical-work allowances above those maxima but permits configurable live and
+cumulative retained-value budgets. Its 64 MiB individual-value ceiling remains
+independent of those aggregate budgets. The driver reserves result-port
+capacity before any entry.
+
+`run_with_ledgers` takes two optional ledgers. A runner ledger, when present,
+is shared by every runner, which charges every byte to it as it executes:
+logical work, fresh allocation, live retention and withheld output capacity.
+Each runner then keeps only the selected instructions and iterations as its
+own fuel, charging the ledger's meter too when the ledger pools fuel and
+checking that meter before each instruction; `values` and the logical-work
+budget bound no runner on its own. A Host whose ledger pools fuel, as a
+Function does for its children, selects the interpreter's hard ceilings, so
+the meter is the runners' only fuel limit. A runner the ledger cannot afford
+stops with its own limit stop. A Host ledger is the
+[invocation root](capacity.md#invocation-ledgers): it charges wire transport,
+the logical work and decoding reservation of every received payload, and
+report storage. A transport charge the root cannot afford fails as
+`joint-transport-work-limit` or `joint-transport-bytes-limit`. Each record,
+with its region's shared path when it is the region's first, is charged to the
+root before it is stored, so the report holds exactly `Report.report_bytes`
+live in the root; a record the root cannot afford fails as
+`joint-record-work-limit` or `joint-record-bytes-limit` before its step is
+exposed ([root refusals](capacity.md#root-refusals)).
+`Report::invocation_ledger` exposes the root, and the report keeps those live
+allowances until it is dropped. A runner
+without a shared ledger keeps its separate budgets from `values` and `work`.
+`Report::unreserved_output_bytes` names the returned values whose runner shared
+no ledger, which a Host retaining the report reserves in its root; a runner
+that shared one moved its values' live hold there with them.
+`Report::release_outputs` drops
+returned values a Host does not keep. `run_with_ledger` passes one ledger as
+both.
 Cancellation includes the bounded host reason and can occur between send and
 receive; the committed message remains in the resulting report. This policy has no asynchronous queue or readiness
 scheduler.
@@ -439,7 +489,8 @@ budgets at most one million. A resource row's `index` names the original input
 position for a capability or service position for a service, as shown in `layout`.
 Names/session are 1–128 ASCII alphanumeric or
 `_.-` characters. The entire input document is bounded to 16 MiB; key loading
-and retained values share an invocation-wide admission ledger across roles.
+and retained values of every role charge the run's
+[invocation root](capacity.md#invocation-ledgers).
 Each planned resource reserves the backend's conservative capability byte charge.
 The installed host refuses transcript-typed entry inputs; it does not invent
 an authenticated transcript root from caller bytes. Custom interpreter clients
@@ -471,7 +522,10 @@ The dispatch/wire file is
 `["zkc.bundle-limits/0", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
 Defaults/hard ceilings are 32768 dispatched occurrences, 4096 bytes per message
 and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work units
-per role. Both API and CLI refuse requests above these ceilings without clamping.
+per role. `HostLimits` also selects Ring and sequence work per role; external,
+Ring and sequence work take their defaults and maxima from the
+[Host allowances](capacity.md#host-allowances). Both API and CLI refuse requests
+above these ceilings without clamping.
 Structural bundle and native-capacity requests likewise refuse above their own
 installed bounds. Reports retain the requested admission, capacity and execution
 limits. Per-runner instruction, iteration, logical-work and retained-value
@@ -479,7 +533,9 @@ budgets are separate from structural schedule size and runtime dispatch
 occurrences.
 
 `zkc.bundle-result/0` retains the primary outcome, reached schedule, pending-wire
-metadata, role states before/after cancellation, outputs, usage and backend work.
+metadata, role states before/after cancellation, outputs, each role's usage,
+the invocation root's usage as `invocation`
+([reported usage](capacity.md#reported-usage)) and backend work.
 After issuance begins, ordinary failures return a report and retire every issued
 capability and managed service, including partial initialization. Retirement or
 output encoding errors are separate diagnostics; they do not erase the primary
@@ -505,3 +561,36 @@ The CLI succeeds only on completed execution without reporting/cleanup errors.
 A returned `false` is an ordinary output; application acceptance must select and
 interpret the intended result. See the [bundle walkthrough](../../runtime/bundles.md)
 and [named Entry execution](../../runtime/entries.md).
+
+## Selected participant branches
+
+A compact segment also has the exact shape
+`{"branch": [Step, ...], "arms": [Arm, ...]}`, where each arm is exactly
+`{"alternative": label, "body": [Segment, ...], "yield": [Step, ...]}`.
+Unknown, duplicate or missing fields refuse. Labels and their order must equal
+all corresponding admitted participant branch alternatives. Boolean order is
+`then`, `else`; variant order is declaration order. Entries use the same optional
+Local selector prefix and ordered role headers as loop entries. All arms occur
+exactly once in static preorder, including dormant arms. Each has a separate
+lexical scope, exact yield boundary and complete exchange coverage. An arm
+cannot be substituted for its sibling by editing a schedule coordinate.
+
+The Host validates every reached selector before entering any selected arm.
+Different Boolean choices or enum tags fail with `branch-selector-disagreement`;
+no arm frame, action, query, message, allocation or yield has then executed.
+Equal enum tags do not imply equal payloads. Event-free branches still have
+headers and comparison. Runtime occurrence paths append
+`["branch", site, alternative]`; reports retain that complete path, the checked
+selector and whether entry completed. A returned participant skips only its own
+suffix. Peer obligations remain independently scheduled.
+
+This reached check is scoped execution evidence, separate from derived source
+requirements, public proof bindings and security request correspondence.
+Source-certified independent execution requires the same externally pinned,
+trusted input-binding context at every participating process. Availability,
+public/type/name equality and producer-authored agreement records cannot supply
+that context. Generic independent Program execution continues to establish only
+its own participant behavior. Current native proof request/record-codec
+reconstruction refuses selected participant branches with
+`native-proof-selected-control`; it does not flatten dormant arms or claim full
+selected transcript support.

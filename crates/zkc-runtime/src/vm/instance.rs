@@ -42,8 +42,20 @@ pub(crate) struct Instance<B: Backend> {
     counts: Counts,
     backend: BackendOwner<B>,
     operations: Vec<Option<B::Operation>>,
+    /// The invocation root that charges this runner's bytes as they occur:
+    /// logical work, fresh allocation, live retention and withheld output
+    /// capacity. The runner's own budgets are sublimits beside it.
     shared: Option<ExecutionLedger>,
+    /// Whether the root also pools this runner's instruction and iteration
+    /// fuel; otherwise the fuel is the runner's own.
+    pooled_fuel: bool,
+    /// This runner's live retention in the root: its live bytes, plus bytes
+    /// released while their payloads may still exist.
     live_reservation: Option<LiveReservation>,
+    /// Released live bytes not yet returned to the root.
+    deferred_release: usize,
+    /// Open windows that defer returning released live bytes to the root.
+    deferring: usize,
     calls: Vec<Option<B::Call>>,
     arguments: Vec<B::Value>,
     usage: Usage,
@@ -92,12 +104,16 @@ fn charge_logical(
 }
 
 impl<B: Backend> Instance<B> {
+    /// The output a kernel may newly allocate: the per-value ceiling and what
+    /// remains of the runner's own budgets and of the root's live allowance.
+    /// Withholding it from the root clips it to the root's fresh and logical
+    /// allowances too.
     fn output_allowance(&self) -> usize {
         let logical = self
             .work_budget
             .logical_bytes
             .saturating_sub(self.usage.logical_bytes);
-        (self
+        let own = (self
             .value_budget
             .live_bytes
             .saturating_sub(self.usage.live_value_bytes))
@@ -107,7 +123,10 @@ impl<B: Backend> Instance<B> {
                 .saturating_sub(self.usage.total_value_bytes),
         )
         .min(usize::try_from(logical).unwrap_or(usize::MAX))
-        .min(Limits::VALUE_BYTES)
+        .min(Limits::VALUE_BYTES);
+        self.shared
+            .as_ref()
+            .map_or(own, |root| own.min(root.live_remaining()))
     }
 
     fn operand_bytes(values: &[B::Value]) -> u64 {
@@ -120,7 +139,7 @@ impl<B: Backend> Instance<B> {
         if self.usage.instructions >= self.work_budget.instructions {
             return Err(RuntimeError::Limit);
         }
-        if let Some(shared) = &self.shared {
+        if let Some(shared) = self.shared.as_ref().filter(|_| self.pooled_fuel) {
             shared.charge(
                 WorkBudget {
                     instructions: 1,
@@ -139,7 +158,7 @@ impl<B: Backend> Instance<B> {
         if self.usage.iterations >= self.work_budget.iterations {
             return Err(RuntimeError::Limit);
         }
-        if let Some(shared) = &self.shared {
+        if let Some(shared) = self.shared.as_ref().filter(|_| self.pooled_fuel) {
             shared.charge(
                 WorkBudget {
                     instructions: 0,
@@ -256,18 +275,41 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn has_backend(&self) -> bool {
         self.backend.0.is_some()
     }
+    /// Move this runner's live hold out of the instance, with the released
+    /// bytes it still holds: successful terminal values take it with them.
     pub(crate) fn take_live_reservation(&mut self) -> Option<LiveReservation> {
+        self.deferred_release = 0;
         self.live_reservation.take()
     }
-    pub(crate) fn restore_live_reservation(&mut self, reservation: Option<LiveReservation>) {
-        debug_assert!(
-            self.live_reservation.is_none(),
-            "one live reservation owner"
-        );
-        self.live_reservation = reservation;
+    /// Keep released live bytes in the root until the matching
+    /// [`Self::finish_deferred_release`]: payloads that an action still owns,
+    /// such as values no scope or backing pin represents any more, are
+    /// destroyed before the root sees their storage released.
+    pub(crate) fn defer_release(&mut self) {
+        self.deferring += 1;
+    }
+    /// Close a deferral window; the outermost returns the deferred bytes.
+    pub(crate) fn finish_deferred_release(&mut self) {
+        self.deferring -= 1;
+        if self.deferring == 0 {
+            let bytes = std::mem::take(&mut self.deferred_release);
+            if let Some(held) = &mut self.live_reservation {
+                held.release(bytes);
+            }
+        }
+    }
+    /// Return released live bytes to the root, or keep them until the open
+    /// deferral window closes.
+    fn release_live(&mut self, bytes: usize) {
+        if self.deferring > 0 {
+            self.deferred_release += bytes;
+        } else if let Some(held) = &mut self.live_reservation {
+            held.release(bytes);
+        }
     }
     pub(crate) fn take_backend(&mut self) -> B {
         self.unwind(FrameExit::Cancelled, |_, _| {});
+        self.deferred_release = 0;
         self.live_reservation = None;
         self.backend
             .0
@@ -283,8 +325,16 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn counts(&self) -> &Counts {
         &self.counts
     }
+    /// Whether one more instruction fits: the runner's own fuel, and the
+    /// root's meter when the root pools this runner's fuel, which is then the
+    /// only fuel limit a Host selects for it.
     pub(crate) fn has_instruction_capacity(&self) -> bool {
         self.usage.instructions < self.work_budget.instructions
+            && self
+                .shared
+                .as_ref()
+                .filter(|_| self.pooled_fuel)
+                .is_none_or(|root| root.affords_fuel(1, 0))
     }
     pub(crate) fn query(
         &mut self,

@@ -14,6 +14,6 @@ open ZkcExamples.Structured
 
 set_option maxRecDepth 50000 in
 protocol_call inputCall from Generated.Presentations.Gkr.Root.gkrBody
-  to GkrSourceBodies.sourceProtocol80Signature
+  to GkrSourceBodies.inputSignature
 
 end ZkcSecurity.Realizations.Gkr.SourceCalls

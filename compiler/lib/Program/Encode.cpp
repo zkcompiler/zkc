@@ -22,6 +22,9 @@ class Encoder {
     return list(values,
                 [](const auto &p) -> V { return A{p.first, p.second}; });
   }
+  // Local control lists captured names; participant control binds formals.
+  A captures(const Names &values) { return names(values); }
+  A captures(const protocol::Assignments &values) { return pairs(values); }
   A parameters(const std::vector<Parameter> &values) {
     return list(values,
                 [](const Parameter &p) -> V { return A{p.name, p.type}; });
@@ -67,22 +70,24 @@ class Encoder {
           } else if constexpr (std::is_same_v<T, VariantConstruct>) {
             return A{"variant",         i.site,   op.type, op.alternative,
                      names(op.payload), op.output};
-          } else if constexpr (std::is_same_v<T, Match>) {
+          } else if constexpr (std::is_same_v<T, Match> ||
+                               std::is_same_v<T, ParticipantMatch>) {
             return A{"match",
                      i.site,
                      op.input,
-                     names(op.captures),
+                     captures(op.captures),
                      list(op.arms,
                           [&](const MatchArm &arm) -> V {
                             return A{arm.alternative, names(arm.payload),
                                      body(arm.body)};
                           }),
                      names(op.outputs)};
-          } else if constexpr (std::is_same_v<T, Conditional>) {
+          } else if constexpr (std::is_same_v<T, Conditional> ||
+                               std::is_same_v<T, ParticipantConditional>) {
             return A{"if",
                      i.site,
                      op.condition,
-                     names(op.captures),
+                     captures(op.captures),
                      body(op.thenBody),
                      body(op.elseBody),
                      names(op.outputs)};
@@ -97,6 +102,7 @@ class Encoder {
                      body(op.body),
                      names(op.outputs)};
           } else {
+            static_assert(std::is_same_v<T, Loop>);
             V count = A{"value", op.count.value,
                         std::to_string(op.count.maximum), op.count.induction};
             return A{"loop",

@@ -11,6 +11,8 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Compiler/StructuredSource.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
@@ -29,6 +31,7 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -62,22 +65,36 @@ std::optional<unsigned> number(const json::Value &v) {
     return {};
   return n;
 }
+bool verifierKey(const protocol::BoundType &type) {
+  return protocol::setupKey(type.kind) == protocol::SetupKey::Verifier;
+}
+// The catalog's input-only frames: a codec frame of layout Table, the
+// standalone public table input.
+bool inputOnlyFrame(const protocol::BoundType &type) {
+  const auto *codec =
+      protocol::installedDomains().defaultCodec(type.kind, type.identity);
+  const auto *row =
+      codec ? protocol::instances::codec(codec->identity) : nullptr;
+  const auto *tag = row && row->frame
+                        ? protocol::instances::frameTag(row->frame->tag)
+                        : nullptr;
+  return tag && tag->layout == protocol::instances::FrameLayout::Table;
+}
 Expected<protocol::BoundType> wire(Type type, bool input = false) {
   auto logical = protocol::encodeBoundType(type, false);
   if (!logical)
     return logical.takeError();
+  // Inputs also admit the catalog's input-only frames and verifier keys,
+  // which exist only over commitments whose scheme requires a setup.
   if (protocol::nativeMessageData(*logical) ||
-      (input && logical->kind == "table" &&
-       logical->identity == "bls12-381.fr") ||
-      (input && logical->kind == "verifier_key" &&
-       logical->identity == "multilinear.kzg.bls12-381/0"))
+      (input && (inputOnlyFrame(*logical) || verifierKey(*logical))))
     return *logical;
   return error("native-proof-wire-type");
 }
 StringRef wireCodec(const protocol::BoundType &type) {
   if (protocol::nativeDataFrame(type))
     return "zkc.native-data/0";
-  if (type.kind == "verifier_key")
+  if (verifierKey(type))
     return "zkc.native-verifier-key/0";
   return type.kind == "field_array" ? "zkc.native-field-array/0"
                                     : protocol::defaultCodec(type);
@@ -304,7 +321,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         consumeError(logical.takeError());
         continue;
       }
-      if (logical->kind == "verifier_key" &&
+      if (verifierKey(*logical) &&
           !owns(cast<ArrayAttr>(source.getInputRoles()[i]), policy.validator))
         return error("native-proof-verifier-key-port");
     }
@@ -317,7 +334,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       auto logical = protocol::encodeBoundType(signature.getInput(i), false);
       if (!logical)
         return logical.takeError();
-      keys += logical->kind == "verifier_key";
+      keys += verifierKey(*logical);
     }
     if (keys > 64 || (needsKey && !keys))
       return error("native-proof-setup-coverage");
@@ -748,8 +765,59 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
                      p.construction,
                      std::move(gates)};
 }
+Error checkNativeProofPolicy(const NativeProofPolicy &p, bool selection) {
+  auto identifier = [](StringRef s) {
+    return name(s) && s.size() <= 128 && all_of(s, [](unsigned char c) {
+             return llvm::isAlnum(c) || c == '_' || c == '.' || c == '-';
+           });
+  };
+  // The suite is checked below against the installed challenge fields.
+  if (!identifier(p.entry) || !identifier(p.producer) ||
+      !identifier(p.validator) ||
+      (!p.construction.empty() && !identifier(p.construction)))
+    return error("native-proof-policy");
+  if (p.acceptance >= maxPorts || p.services.size() > maxPorts ||
+      p.publicInputs.size() > maxPorts || p.draws.size() > 64 ||
+      (selection && !p.draws.empty()) || p.producer == p.validator)
+    return error("native-proof-policy");
+  auto increasing = [](ArrayRef<unsigned> ports) {
+    for (auto [i, port] : enumerate(ports))
+      if (port >= maxPorts || (i && ports[i - 1] >= port))
+        return false;
+    return true;
+  };
+  if (!increasing(p.services))
+    return error("native-proof-policy");
+  if (p.format == protocol::ProofFormat::RawBytes && p.construction.empty() &&
+      !p.suite.empty())
+    return error("native-proof-format");
+  if (!p.construction.empty()
+          ? p.services.empty() ||
+                (!p.suite.empty() &&
+                 protocol::nativeChallengeField(p.suite).empty())
+      : p.suite.empty()
+          ? !p.services.empty() || !p.draws.empty()
+          : protocol::nativeChallengeField(p.suite).empty() ||
+                p.services.size() != 1 || (!selection && p.draws.empty()))
+    return error("native-proof-policy");
+  if (!increasing(p.publicInputs))
+    return error("native-proof-policy");
+  std::set<StringRef> sites;
+  for (const auto &[query, delivery] : p.draws)
+    if (!name(query) || !name(delivery) || !sites.insert(query).second ||
+        !sites.insert(delivery).second)
+      return error("native-proof-policy");
+  if (p.gates.size() > 64 || (!p.gates.empty() && p.suite.empty()))
+    return error("native-proof-policy");
+  std::set<StringRef> gatedSites;
+  for (const auto &[site, bits] : p.gates)
+    if (!name(site) || bits > 64 || !gatedSites.insert(site).second)
+      return error("native-proof-policy");
+  return Error::success();
+}
 namespace {
-Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
+// Decode the JSON shape only; every policy rule is the typed check's.
+Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selection) {
   if (text.size() > 1024 * 1024 || !mlirNestingWithinLimit(text))
     return error("native-proof-policy-limit");
   auto parsed = parseJson(text);
@@ -772,75 +840,49 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
                            {5u, &p.suite},
                            {10u, &p.construction}}) {
     auto s = (*a)[i].getAsString();
-    bool optional = i == 5 || (i == 10 && s && s->empty());
-    if (!s || (!optional && !name(*s)))
-      return error("native-proof-policy");
-    if (!optional && (s->size() > 128 || !all_of(*s, [](unsigned char c) {
-                        return llvm::isAlnum(c) || c == '_' || c == '.' ||
-                               c == '-';
-                      })))
+    if (!s)
       return error("native-proof-policy");
     *target = s->str();
   }
   auto acceptance = number((*a)[4]);
-  auto *services = (*a)[6].getAsArray();
-  auto *inputs = (*a)[7].getAsArray(), *draws = (*a)[8].getAsArray();
-  if (!acceptance || !services || services->size() > maxPorts || !inputs ||
-      inputs->size() > maxPorts || !draws || draws->size() > 64 ||
-      (selectDraws && !draws->empty()) || p.producer == p.validator)
+  auto *services = (*a)[6].getAsArray(), *inputs = (*a)[7].getAsArray();
+  auto *draws = (*a)[8].getAsArray(), *gates = (*a)[11].getAsArray();
+  if (!acceptance || !services || !inputs || !draws || !gates)
     return error("native-proof-policy");
   p.acceptance = *acceptance;
-  for (const auto &value : *services) {
-    auto service = number(value);
-    if (!service || (!p.services.empty() && p.services.back() >= *service))
-      return error("native-proof-policy");
-    p.services.push_back(*service);
-  }
-  if (p.format == protocol::ProofFormat::RawBytes && p.construction.empty() &&
-      !p.suite.empty())
-    return error("native-proof-format");
-  if (!p.construction.empty()
-          ? p.services.empty() ||
-                (!p.suite.empty() &&
-                 protocol::nativeChallengeField(p.suite).empty())
-      : p.suite.empty()
-          ? !p.services.empty() || !draws->empty()
-          : protocol::nativeChallengeField(p.suite).empty() ||
-                p.services.size() != 1 || (!selectDraws && draws->empty()))
+  auto ports = [](const json::Array &values, std::vector<unsigned> &out) {
+    for (const auto &value : values) {
+      auto port = number(value);
+      if (!port)
+        return false;
+      out.push_back(*port);
+    }
+    return true;
+  };
+  if (!ports(*services, p.services) || !ports(*inputs, p.publicInputs))
     return error("native-proof-policy");
-  for (const auto &input : *inputs) {
-    auto port = number(input);
-    if (!port || (!p.publicInputs.empty() && p.publicInputs.back() >= *port))
-      return error("native-proof-policy");
-    p.publicInputs.push_back(*port);
-  }
-  std::set<std::string> sites;
+  auto pair = [](const json::Value &value) -> const json::Array * {
+    auto *items = value.getAsArray();
+    return items && items->size() == 2 ? items : nullptr;
+  };
   for (const auto &item : *draws) {
-    auto *d = item.getAsArray();
-    if (!d || d->size() != 2)
-      return error("native-proof-policy");
-    auto query = (*d)[0].getAsString(), delivery = (*d)[1].getAsString();
-    if (!query || !delivery || !name(*query) || !name(*delivery) ||
-        !sites.insert(query->str()).second ||
-        !sites.insert(delivery->str()).second)
+    auto *draw = pair(item);
+    auto query = draw ? (*draw)[0].getAsString() : std::nullopt;
+    auto delivery = draw ? (*draw)[1].getAsString() : std::nullopt;
+    if (!query || !delivery)
       return error("native-proof-policy");
     p.draws.emplace_back(query->str(), delivery->str());
   }
-  auto *gates = (*a)[11].getAsArray();
-  if (!gates || gates->size() > 64 || (!gates->empty() && p.suite.empty()))
-    return error("native-proof-policy");
-  std::set<std::string> gatedSites;
   for (const auto &item : *gates) {
-    auto *gate = item.getAsArray();
-    if (!gate || gate->size() != 2)
-      return error("native-proof-policy");
-    auto site = (*gate)[0].getAsString();
-    auto bits = number((*gate)[1]);
-    if (!site || !name(*site) || !bits || *bits > 64 ||
-        !gatedSites.insert(site->str()).second)
+    auto *gate = pair(item);
+    auto site = gate ? (*gate)[0].getAsString() : std::nullopt;
+    auto bits = gate ? number((*gate)[1]) : std::nullopt;
+    if (!site || !bits)
       return error("native-proof-policy");
     p.gates.emplace_back(site->str(), *bits);
   }
+  if (auto e = checkNativeProofPolicy(p, selection))
+    return std::move(e);
   return p;
 }
 } // namespace
@@ -1696,6 +1738,22 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   auto original = unit(source);
   if (!original || original.getProfile() != pir::Profile::Protocol)
     return error("native-proof-source");
+  // The selected entry and construction execute; unrelated declarations,
+  // such as an uncalled helper or protocol, do not take part in this check.
+  auto entry = dyn_cast_or_null<pir::MathematicalOp>(
+      SymbolTable::lookupSymbolIn(original, policy.entry));
+  if (!entry)
+    return error("native-proof-entry");
+  SmallVector<Operation *> selected{entry};
+  if (!policy.construction.empty()) {
+    auto *record = SymbolTable::lookupSymbolIn(original, policy.construction);
+    if (!isa_and_nonnull<pir::ConstructionOp>(record))
+      return error("native-proof-construction-selection");
+    selected.push_back(record);
+  }
+  if (auto e = requireUnconditionalProtocolControl(
+          selected, "native-proof-control-profile"))
+    return std::move(e);
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
   SymbolTableCollection constructionSymbols;
@@ -1726,9 +1784,6 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   } else if (!records.empty())
     return error("native-proof-construction-selection");
   SymbolTable originalSymbols(original);
-  auto entry = originalSymbols.lookup<pir::MathematicalOp>(policy.entry);
-  if (!entry)
-    return error("native-proof-entry");
   auto occurrenceMap = origins(entry, originalSymbols, invocations);
   if (!occurrenceMap)
     return occurrenceMap.takeError();
@@ -1834,18 +1889,17 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
     ModuleOp source, const NativeProofPolicy &selection,
     MathematicalSelectionPolicy mathematicalSelection,
     const protocol::OracleRealizationPolicy &oracleSelection) {
-  auto policy =
-      readProofPolicy(printJson(encodeNativeProofPolicy(selection)), true);
-  if (!policy)
-    return policy.takeError();
+  if (auto e = checkNativeProofPolicy(selection, true))
+    return std::move(e);
+  auto policy = selection;
   auto prepared =
-      prepareProof(source, *policy, mathematicalSelection, oracleSelection);
+      prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!prepared)
     return prepared.takeError();
   SymbolTable symbols(unit(*prepared->module));
-  auto program = symbols.lookup<pir::MathematicalOp>(policy->entry);
+  auto program = symbols.lookup<pir::MathematicalOp>(policy.entry);
   auto admitted =
-      admit(program, *policy, prepared->origins, DrawSelection::Service,
+      admit(program, policy, prepared->origins, DrawSelection::Service,
             prepared->construction ? &*prepared->construction : nullptr);
   if (!admitted)
     return admitted.takeError();
@@ -1853,7 +1907,7 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
     if (auto e = admitConstruction(program, *prepared->construction,
                                    admitted->events))
       return std::move(e);
-  policy->draws = std::move(admitted->draws);
+  policy.draws = std::move(admitted->draws);
   // Every paired loop needs actual count correspondence, including loops
   // without events. Reverse requests additionally need a deterministic
   // source relation. Construction checks the emitted candidate separately;
@@ -1862,10 +1916,12 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
   if (!projected)
     return error("native-proof-projection");
   auto requests = detail::planNativeRequests(
-      unit(*projected), *policy, admitted->events, prepared->realization.get());
+      unit(*projected), policy, admitted->events, prepared->realization.get());
   if (!requests)
     return requests.takeError();
-  return parseNativeProofPolicy(printJson(encodeNativeProofPolicy(*policy)));
+  if (auto e = checkNativeProofPolicy(policy))
+    return std::move(e);
+  return policy;
 }
 static Expected<NativeProofConstruction> constructNativeProofChecked(
     ModuleOp source, const NativeProofPolicy &policy,
@@ -1875,10 +1931,8 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
     NativeProofBindingProfile bindingProfile =
         NativeProofBindingProfile::NativeHistory) {
   // Validate public API callers too; policy structs are not admission tokens.
-  auto checked =
-      parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
-  if (!checked)
-    return checked.takeError();
+  if (auto e = checkNativeProofPolicy(policy))
+    return std::move(e);
   auto preparedSource =
       prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!preparedSource)
@@ -2062,6 +2116,48 @@ std::string printedText(Operation *value) {
 }
 std::string sha256Identity(StringRef text) {
   return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(text)), true);
+}
+// The catalogue identities an exported logical type or binding names: its
+// installed domain arguments at any depth and its random-service types, with
+// the fields those services sample. Resource slots are not catalogue rows.
+void collectIdentities(const json::Value &value, llvm::StringSet<> &domains,
+                       llvm::StringSet<> &services) {
+  const auto *array = value.getAsArray();
+  if (!array)
+    return;
+  if (array->size() == 3 && (*array)[0].getAsString() == StringRef("domain")) {
+    auto sort = (*array)[1].getAsString();
+    auto identity = (*array)[2].getAsString();
+    if (sort && identity &&
+        protocol::installedDomains().identitySort(*identity) == *sort)
+      domains.insert(*identity);
+    return;
+  }
+  if (array->size() == 2 && (*array)[0].getAsString() == StringRef("service")) {
+    if (auto contract = (*array)[1].getAsString()) {
+      services.insert(*contract);
+      domains.insert(protocol::randomServiceField(*contract));
+    }
+    return;
+  }
+  for (const auto &child : *array)
+    collectIdentities(child, domains, services);
+}
+// Identities of exported instruction rows: bindings, result types and loop
+// block arguments, nested bodies included. Attributes are not type positions.
+void collectInstructionIdentities(const json::Array &instructions,
+                                  llvm::StringSet<> &domains,
+                                  llvm::StringSet<> &services) {
+  for (const auto &value : instructions) {
+    const auto &row = *value.getAsArray();
+    collectIdentities(row[2], domains, services);
+    collectIdentities(row[4], domains, services);
+    for (const auto &region : *row[5].getAsArray()) {
+      const auto &parts = *region.getAsArray();
+      collectIdentities(parts[0], domains, services);
+      collectInstructionIdentities(*parts[1].getAsArray(), domains, services);
+    }
+  }
 }
 // Reads the supplied, independently checked candidate. It never reconstructs an
 // expected participant or substitutes a mathematical reference. References are
@@ -2383,11 +2479,28 @@ public:
     auto outputs = exportLogicalTypesData(type.getResults());
     if (!outputs)
       return outputs.takeError();
+    // The rows of every catalogue identity the participant names: its types
+    // and bindings, the policy's transcript suite and its ports' services.
+    llvm::StringSet<> domains, contracts;
+    for (const auto &value : *inputs)
+      collectIdentities(value, domains, contracts);
+    for (const auto &value : *outputs)
+      collectIdentities(value, domains, contracts);
+    collectInstructionIdentities(instructions, domains, contracts);
+    if (!policy.suite.empty())
+      domains.insert(policy.suite);
+    for (const auto &port : services) {
+      StringRef contract = *(*port.getAsArray())[4].getAsString();
+      contracts.insert(contract);
+      domains.insert(protocol::randomServiceField(contract));
+    }
+    json::Value catalogue = protocol::exportCatalogueRows(domains, contracts);
     json::Value record(json::Array{
         "zkc.constructed-participant/0", sha256Identity(source),
         sha256Identity(candidate), encodeNativeProofPolicy(policy),
         participant.getSymName().str(), std::move(*inputs), std::move(*outputs),
-        std::move(instructions), std::move(results), std::move(services)});
+        std::move(instructions), std::move(results), std::move(services),
+        std::move(catalogue)});
     if (printJson(record).size() > 1024 * 1024)
       return error("constructed-participant-limit");
     return record;

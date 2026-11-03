@@ -115,9 +115,9 @@ struct PolicyInspection {
                 protocol::installedDomains().defaultCodec(kind, identity);
     if (kind == "field_array") {
       // Logical formation has already checked Domain/Nat argument kinds and
-      // extent bounds. This is the existing native frame's exact field.
-      wire = cast<StringAttr>(application->arguments[0]).getValue() ==
-             "bls12-381.fr";
+      // extent bounds. The catalog's aggregate frame names the exact field.
+      wire = protocol::nativeFieldArrayFrame(
+          cast<StringAttr>(application->arguments[0]).getValue());
       message = wire;
     }
     return TypeFacts{

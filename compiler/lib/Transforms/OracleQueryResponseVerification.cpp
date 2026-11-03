@@ -25,7 +25,8 @@ bool layout(const OracleVerificationContext &context,
   auto unit = context.getUnit();
   auto *ctx = unit.getContext();
   auto index = IntegerType::get(ctx, 64, IntegerType::Unsigned);
-  if (model.arms.empty() || model.arms.size() > 32 ||
+  if (model.arms.empty() ||
+      model.arms.size() > oracleExchangeConstructorLimit ||
       model.state.size() < Controller::HeaderSize || model.state.size() > 505 ||
       model.receiverStores.size() > 505 ||
       !all_of(ArrayRef<Type>(model.state).take_front(Controller::HeaderSize),

@@ -57,7 +57,10 @@ for label, mutate, code in [
         mutate(candidate)
         check(candidate, code)
 
-for depth, code in [(29, None), (30, "interactive-json-depth"), (65, "interactive-body")]:
+# Serialized nesting reaches the JSON nesting bound long before the body nesting
+# bound, which program-artifact checks on a directly built program.
+for depth, code in [(29, None), (30, "interactive-json-depth"),
+                    (65, "interactive-json-depth")]:
     with case(f"nested local bodies: {depth}"):
         candidate = copy.deepcopy(original)
         boolean = "bool@native.bool/0"

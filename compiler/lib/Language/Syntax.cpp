@@ -315,13 +315,7 @@ private:
   using Position = NotationDescriptor::Position;
   using Association = NotationDescriptor::Association;
   static bool operatorSymbol(StringRef symbol) {
-    if (llvm::any_of(syntax::defaultNotations(), [&](const auto &notation) {
-          return notation.symbol == symbol;
-        }))
-      return true;
-    auto scalar = decodeSourceScalar(symbol, 0);
-    return scalar && scalar->bytes == symbol.size() &&
-           isMathematicalSymbol(scalar->value);
+    return admittedOperatorSymbol(symbol);
   }
   static bool delimiter(StringRef symbol) {
     auto scalar = decodeSourceScalar(symbol, 0);
@@ -1021,8 +1015,8 @@ private:
           return false;
         if (!at("}"))
           do {
-            SyntaxName port;
-            if (!named(port))
+            SyntaxInputSelector port;
+            if (!inputSelector(port))
               return false;
             value.publicInputs.push_back(std::move(port));
           } while (take(",") && !at("}"));
@@ -2232,6 +2226,7 @@ private:
         } else {
           Expression product;
           product.kind = Expression::Kind::DomainProduct;
+          product.synthesized = true;
           product.span = {span.source, decl.expressions[*domain].span.begin,
                           previousEnd};
           product.children = {*domain, *nextDomain};
@@ -2259,6 +2254,7 @@ private:
         region.span.end = previousEnd;
         Expression lambda;
         lambda.kind = Expression::Kind::Lambda;
+        lambda.synthesized = true;
         lambda.span = {span.source, binding.span.begin, previousEnd};
         lambda.payloads = {{binding}};
         lambda.regions.push_back(decl.bodies.size());
@@ -2512,12 +2508,19 @@ private:
       if (!condition)
         return {};
       value.children.push_back(*condition);
-      auto first = body(decl, false, true, depth + 1);
+      if (take("roles")) {
+        value.roles.emplace();
+        if (!roleList(*value.roles, true))
+          return {};
+      }
+      auto first =
+          body(decl, decl.kind == Declaration::Kind::Protocol, true, depth + 1);
       if (!first)
         return {};
       value.regions.push_back(*first);
       if (take("else")) {
-        auto second = body(decl, false, true, depth + 1);
+        auto second = body(decl, decl.kind == Declaration::Kind::Protocol, true,
+                           depth + 1);
         if (!second)
           return {};
         value.regions.push_back(*second);
@@ -2536,6 +2539,11 @@ private:
       if (!subject)
         return {};
       value.children.push_back(*subject);
+      if (take("roles")) {
+        value.roles.emplace();
+        if (!roleList(*value.roles, true))
+          return {};
+      }
       if (!expect("{"))
         return {};
       if (!at("}"))
@@ -2553,7 +2561,8 @@ private:
             } while (take(",") && !at(")"));
           if (!expect(")") || !expect("=>"))
             return {};
-          auto arm = body(decl, false, true, depth + 1);
+          auto arm = body(decl, decl.kind == Declaration::Kind::Protocol, true,
+                          depth + 1);
           if (!arm)
             return {};
           value.labels.push_back(std::move(label));
@@ -2799,6 +2808,9 @@ private:
           projection.kind = Expression::Kind::MethodCall;
           if (!at(")"))
             do {
+              if (!argumentLabel(projection.callLabels,
+                                 projection.children.size()))
+                return {};
               auto arg = expression(decl, depth + 1);
               if (!arg)
                 return {};
@@ -3296,6 +3308,15 @@ Expected<EntrySelector> parseEntrySelector(StringRef text, Work &work) {
                    "in Entry selector: " + diagnostic->message);
   }
   return result;
+}
+bool admittedOperatorSymbol(StringRef symbol) {
+  if (llvm::any_of(syntax::defaultNotations(), [&](const auto &notation) {
+        return notation.symbol == symbol;
+      }))
+    return true;
+  auto scalar = decodeSourceScalar(symbol, 0);
+  return scalar && scalar->bytes == symbol.size() &&
+         isMathematicalSymbol(scalar->value);
 }
 Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId sourceId,
                                   ArrayRef<Token> tokens, Work &work) {

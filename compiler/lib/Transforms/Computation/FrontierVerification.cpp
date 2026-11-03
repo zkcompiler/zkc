@@ -1,6 +1,7 @@
 #include "FrontierVerification.h"
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -250,11 +251,31 @@ class FrontierReader {
   }
   bool signature(Operation *source, Operation *target,
                  ArrayRef<uint64_t> expected, ArrayRef<uint64_t> actual) {
-    return source->getName() == target->getName() &&
-           source->getAttrDictionary() == target->getAttrDictionary() &&
-           source->getResultTypes() == target->getResultTypes() &&
-           expected == actual && !target->getNumRegions() &&
-           !target->getNumSuccessors();
+    if (!(source->getName() == target->getName() &&
+          source->getAttrDictionary() == target->getAttrDictionary() &&
+          source->getResultTypes() == target->getResultTypes() &&
+          expected == actual &&
+          source->getNumRegions() == target->getNumRegions() &&
+          !target->getNumSuccessors()))
+      return false;
+    if (!source->getNumRegions())
+      return true;
+    if (!isa<data::BranchOp>(source))
+      return false;
+    for (Operation *root : {source, target})
+      if (root->walk([&](Operation *op) {
+                return work.charge(op) ? WalkResult::advance()
+                                       : WalkResult::interrupt();
+              })
+              .wasInterrupted())
+        return false;
+    for (auto [before, after] :
+         zip(source->getRegions(), target->getRegions())) {
+      if (!OperationEquivalence::isRegionEquivalentTo(
+              &before, &after, OperationEquivalence::IgnoreLocations))
+        return false;
+    }
+    return true;
   }
   FailureOr<SmallVector<uint64_t>>
   operands(Operation *op, const llvm::DenseMap<Value, uint64_t> &values) {
@@ -283,7 +304,8 @@ class FrontierReader {
       return false;
     for (; &*position != sourceReturn.getOperation(); ++position) {
       auto &op = *position;
-      if (op.getNumRegions() || op.getNumSuccessors())
+      if ((op.getNumRegions() && !isa<data::BranchOp>(op)) ||
+          op.getNumSuccessors())
         return false;
       auto inputs = operands(&op, original);
       if (failed(inputs))
@@ -540,7 +562,8 @@ public:
       for (auto *op : origin.polynomialGenerated)
         if (!op || !work.charge(op) ||
             op->getBlock() != &origin.entry.front() ||
-            op->hasTrait<OpTrait::IsTerminator>() || op->getNumRegions() ||
+            op->hasTrait<OpTrait::IsTerminator>() ||
+            (op->getNumRegions() && !isa<data::BranchOp>(op)) ||
             op->getNumSuccessors() || !op->getNumResults() ||
             !mathematical::isTotal(op) || isa<func::CallOp>(op) ||
             !membership.insert(op).second)

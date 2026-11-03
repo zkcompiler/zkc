@@ -12,10 +12,12 @@ public:
     ExpressionTypes::Callable target;
     std::vector<std::optional<Type>> arguments;
     Span binding;
+    DeclarationId provider;
   };
   struct Selection {
     CallableConstraints constraints;
     Span binding;
+    DeclarationId provider;
   };
   OperatorInference(TypeInference &, Semantics &,
                     const std::vector<Declaration> &);

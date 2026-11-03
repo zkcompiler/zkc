@@ -1,0 +1,53 @@
+{
+  "format": "zkc.entry-json-node-fixtures/0",
+  "cases": [
+    {
+      "name": "interface_scalars_at_bound",
+      "reader": "interface",
+      "expected": "within",
+      "wire": ["[", {"repeat": "0", "count": 199999, "separator": ","}, "]"]
+    },
+    {
+      "name": "interface_scalars_over_bound",
+      "reader": "interface",
+      "expected": "node-limit",
+      "wire": ["[", {"repeat": "0", "count": 200000, "separator": ","}, "]"]
+    },
+    {
+      "name": "interface_mixed_at_bound",
+      "reader": "interface",
+      "expected": "within",
+      "wire": ["[", {"repeat": "{\"k{i}\":[true,null,\"v\"]}", "count": 33333, "separator": ","}, ",0]"]
+    },
+    {
+      "name": "interface_mixed_over_bound",
+      "reader": "interface",
+      "expected": "node-limit",
+      "wire": ["[", {"repeat": "{\"k{i}\":[true,null,\"v\"]}", "count": 33333, "separator": ","}, ",0,0]"]
+    },
+    {
+      "name": "host_scalars_at_bound",
+      "reader": "host",
+      "expected": "within",
+      "wire": ["[", {"repeat": "0", "count": 799999, "separator": ","}, "]"]
+    },
+    {
+      "name": "host_scalars_over_bound",
+      "reader": "host",
+      "expected": "node-limit",
+      "wire": ["[", {"repeat": "0", "count": 800000, "separator": ","}, "]"]
+    },
+    {
+      "name": "host_mixed_at_bound",
+      "reader": "host",
+      "expected": "within",
+      "wire": ["[", {"repeat": "{\"k{i}\":[true,null,\"v\"]}", "count": 133333, "separator": ","}, ",0]"]
+    },
+    {
+      "name": "host_mixed_over_bound",
+      "reader": "host",
+      "expected": "node-limit",
+      "wire": ["[", {"repeat": "{\"k{i}\":[true,null,\"v\"]}", "count": 133333, "separator": ","}, ",0,0]"]
+    }
+  ]
+}

@@ -35,8 +35,9 @@ records retain their logical-origin definition and argument assignments. The
 `services` field contains `[name, contract, input_index]` rows, including an empty
 list for participants without services. Indices are canonical nonnegative
 decimal strings. Entry maps and instruction records retain their positional
-shapes. Participant-loop capture rows name both the local formal and its parent
-value, preserving distinct Copy aliases and their storage bindings.
+shapes. Participant control capture rows (`loop`, `if` and `match`) name both
+the local formal and its parent value, preserving distinct Copy aliases and their
+storage bindings.
 
 Each operation binding has exactly five fields:
 
@@ -85,34 +86,26 @@ Unknown tags and wrong record arities refuse independently. See the
 
 ## Carrier size
 
-Ordinary decoded strings are bounded to 4096 UTF-8 bytes. An entry in an
-operation's parameter array is bounded to 16384 bytes; its declared parameter
-contract imposes any smaller semantic bound. This separate parameter ceiling
-admits the complete [physical numerical plan](../runtime/numerical-plans.md),
-whose nested Ring expression remains bounded to 4096 bytes. It does not enlarge
-names, sites, nominal identities, type spellings, message payloads or hook data.
-The version-zero root and operation record shapes are unchanged.
+The program byte language's [bounds table](program-bytes.md#bounds-and-admission)
+owns every carrier bound. An entry in an operation's parameter array has its own
+attribute ceiling there; its declared parameter contract imposes any smaller
+semantic bound. This separate parameter ceiling admits the complete
+[physical numerical plan](../runtime/numerical-plans.md), whose nested Ring
+expression remains bounded to 4096 bytes. It does not enlarge names, sites,
+nominal identities, type spellings, message payloads or hook data. The
+version-zero root and operation record shapes are unchanged.
 
-Raw participant JSON and its compact encoding are each bounded to 4 MiB.
-C++ `program::parse` applies this ceiling before array parsing, and
-`program::checkStructure` checks compact size and the 400,000-node ceiling
-for programmatic producers.
-Rust admission independently checks raw size and a 400,000-node JSON ceiling
-before decoding. Arrays, strings and Boolean literals each count as one node. The native
-proof producer and joint Host use the same participant ceiling; their outer
-file and proof limits remain separate. Node, array, definition, instruction,
-name and depth bounds still apply independently.
+The native proof producer and joint Host apply the same raw byte bound to a
+participant program; their outer file and proof limits remain separate.
 
-The complete program admits at most 65,536 static instructions across all
-definitions, including storage releases, nested bodies and returns. Each array
-retains its separate 32,768-element ceiling. C++ and Rust enforce the same
-instruction limit. The allowance includes the validation and release bookkeeping
-of checked library contexts; it does not increase execution work budgets.
+The static instruction allowance includes the validation and release
+bookkeeping of checked library contexts; it does not increase execution work
+budgets.
 
 The byte allowance supports composition of protocol libraries whose specialized
-local definitions remain within those structural bounds. It changes capacity,
-not the program grammar or instruction meanings. Generic array-JSON consumers
-retain their own default 1 MiB ceiling.
+local definitions remain within the table's structural bounds. It changes
+capacity, not the program grammar or instruction meanings. Generic array-JSON
+consumers retain their own default 1 MiB ceiling.
 
 ## Local domain binding
 
@@ -186,10 +179,16 @@ separately from installed bound-kernel roles.
 
 ## Closed participant behavior
 
-Programs admit compact value-count loops and nested service queries. They refuse
-composition calls, parameters and family selectors, recursively inside loop
-bodies. Participant programs contain ordered local invocations, typed sends
-and receives, declared service queries, and a final return. Direct participant
+Programs admit compact value-count loops, selected Boolean/ordinary-variant
+arms and nested service queries. They refuse composition calls, parameters and
+family selectors recursively inside every retained body. Participant programs
+contain ordered local invocations, typed sends and receives, declared service
+queries, closed selected arms with exact captures/payloads/yields, and a final
+return. All arms admit before execution; only the selected arm enters a frame,
+performs actions or charges execution work. Generic admission supplies no common
+input provenance. The [joint Host](../runtime/joint.md#selected-participant-branches)
+checks reached selectors before arm work; independent input agreement uses an
+[externally pinned context](input-bindings.md). Direct participant
 `stop` and `incomplete` records are refused; stopping work belongs to a local call.
 Closed local bodies retain their existing admitted conditional, loop, variant,
 bound-kernel, release and explicit-stop grammar. Installed bound-kernel contracts

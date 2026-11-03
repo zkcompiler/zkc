@@ -116,10 +116,11 @@ belongs in the pull request body, which is what survives the squash.
   [formal support](../lean/docs/support.md).
 - **Shared contracts.** Update the [contract register](../docs/spec/contracts.md)
   when changing a cross-component contract. Name the checked producer/consumer
-  boundaries and record missing integrations explicitly. During the native
-  foundation cutover, publish shared specifications before broad migration;
-  independent consumers adapt from them. The Lean component owns all changes
-  under `lean/`; this native unit does not supply patches or require Lean builds.
+  boundaries and record missing integrations explicitly. Publish shared
+  specifications before broad migration; independent consumers adapt from
+  them. Changes under `lean/` require the affected formal checks. A native-only
+  change records any unimplemented formal consumer migration without claiming
+  formal correspondence.
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, all zkc-owned formats
   stay at version `0`, including new foundation formats. Publish schema changes

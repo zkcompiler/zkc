@@ -1,5 +1,5 @@
 #include "mlir/IR/Verifier.h"
-#include "support/NativeCases.h"
+#include "support/Formation.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
@@ -110,7 +110,7 @@ int main() {
   });
 #ifdef NDEBUG
   cases.run(
-      "native requests refuse missing value ports before inspection", [&] {
+      "release-only out-of-contract null ports fail native inspection", [&] {
         for (bool missingInput : {false, true}) {
           NativeBindingApplication request;
           request.contract = "field.add";
@@ -333,16 +333,23 @@ int main() {
                 {state})));
         acceptInstallation(declaration);
       });
-  cases.run("native admission rechecks forged represented children", [&] {
+  cases.run("malformed represented children fail storage formation", [&] {
     auto sequence = data::SequenceType::get(&context, field);
-    auto ordinary = defaultPhysicalType(emit, field);
-    auto forged = runtime::RepresentedType::get(
-        &context, sequence, "logical.sequence/0", ArrayRef<Type>{vector});
-    auto declaration =
-        binding("sequence.append", {TypeAttr::get(field)},
-                "native/sequence.append", {forged, ordinary}, {forged});
-    refuseInstallation(declaration, "represented-type-formation");
+    refusesFormation<runtime::RepresentedType>(
+        &context, "represented-type-formation", Type(sequence),
+        StringRef("logical.sequence/0"), ArrayRef<Type>{vector});
   });
+  cases.run(
+      "native admission checks formed represented children against ports", [&] {
+        auto sequence = data::SequenceType::get(&context, field);
+        auto ordinary = defaultPhysicalType(emit, field);
+        auto selected = represented(sequence, "logical.sequence/0",
+                                    {represented(field, "blst/fr")});
+        auto declaration =
+            binding("sequence.append", {TypeAttr::get(field)},
+                    "native/sequence.append", {selected, ordinary}, {selected});
+        refuseInstallation(declaration, "binding-signature");
+      });
   cases.run("observation frames check inactive variant payloads", [&] {
     auto identity = data::IdentityAttr::get(
         &context, builder.getArrayAttr({builder.getStringAttr("atom"),

@@ -67,7 +67,7 @@ def test_one_fri_subject_under_clear_poseidon_and_keccak(toolchain, journal, dir
     subjects, interfaces, pins = [], [], set()
     for name, selection in profiles:
         package = directory / f'{name}.zkpkg'
-        compiled = journal.json([toolchain.runtime, '--json', 'compile',
+        compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                                  f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                                  *library_modules('protocols/polynomial/fri', 'core/encoding'),
                                  'sample::Proof', f'--output={package}', selection])

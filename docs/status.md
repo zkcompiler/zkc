@@ -8,6 +8,53 @@ Links identify maintained checks, not a claim that they ran for this revision.
 The [EVM verifier target](spec/targets/evm.md) branches from checked closed Exec
 to EVM word/slice operations, Yul and pinned solc bytecode.
 
+## Native selected-control boundary
+
+Registered `protocol.branch`, `protocol.participant_branch` and `data.branch`
+retain closed typed arms, captures and selected yields. Native admission checks
+all arms, exact role containment and affine usage. Participant `if` and `match`
+records bind every capture as an explicit `[local, parent]` row, as participant
+loops do, so Copy captures aliased by expanded applications keep distinct
+formals and storage; the C++ and Rust byte readers share the
+[program byte controls](../common/tests/fixtures/program/bytes.json). Bounded interaction edges,
+resource-origin joins, common-input requirement derivation, participant
+projection and actual-candidate comparison consume the registered forms.
+Participant mathematics outlining and its independent reader recurse through
+each Protocol arm, retaining selected control in the native `exec` profile.
+Selected `data.branch` mathematics now lowers through recursive computation
+recipes into the existing scoped conditional/match execution. Independent readers
+check helper expansion, arm-local normalization, demand extraction and actual
+scoped recipe bodies. Native fixtures cover nested helpers, enum payloads,
+structural products and installed finite work. Program/CPU execution coverage is
+recorded by the [selected Math integration tests](../common/tests/protocol/test_selected_math.py).
+Selected polynomial observations retain their existing admission restriction.
+Checked source-selected Math emission, actual native comparison and CPU
+execution are covered by the [selected source tests](../common/tests/protocol/test_selected_source.py).
+Common-input requirements remain obligations on entry admission; no public bit,
+availability set or native formation result supplies input agreement.
+[Native control fixtures](../compiler/test/protocol_control.cpp) exercise this
+boundary independently of source emission.
+The [native recurrence controls](../compiler/test/common_control_recurrence.cpp)
+exercise demanded base/transition induction, separate tag/payload/extent
+requirements, nested invocation identity, zero/one paths and exact work
+exhaustion. The [source recurrence tests](../compiler/test/language_common_recurrence.cpp)
+independently derive source requirements and compare complete inventories with
+the emitted native original. Recursive schema/component mapping and actual
+SDK input admission are covered separately below.
+
+Oracle capacity, observation and storage inventories retain alternative arm
+coordinates. The existing oracle realization recipe refuses selected control
+with `oracle-realization-control-profile`; native transcript construction,
+reverse requests and codecs likewise refuse their unsupported selected Protocol
+profiles before mutation. Checked source syntax, emission, structured-source and
+application-map carriers retain selected arms. Common-input derivation,
+publication and native SDK admission are integrated for the supported profile.
+The integrated Program and Rust runtime execute the selected native forms;
+independent formal interpretation remains separately owned. This boundary does
+not establish complete 4.1 control support through oracle/security realization.
+The [contract](spec/ir/control.md#selected-protocol-and-mathematical-regions)
+keeps the intended semantics separate from these limitations.
+
 ## Current public interfaces
 
 Artifacts use one current schema with exact tags, record shapes and unknown-field
@@ -16,6 +63,27 @@ contents together with native producers, readers and fixtures. The
 [format policy](development/maintenance.md#format-versions) and
 [interface change list](spec/formats/foundation-interfaces.md) define this cutover.
 A matching `/0` tag does not establish compatibility between development builds.
+
+The [common-input binding utility](spec/formats/input-bindings.md) checks externally
+pinned exact Program/entry inventories and actual value, tag or extent observations.
+The SDK strictly requires a canonical inventory on every retained Protocol and
+derives mapped requirements from the authenticated selected original and actual
+Program. Portable participant checks precede Runner loading; named RunEntry
+checks every prepared joint input before issuance. Native publication derives
+every closed concrete Protocol inventory; independent reading compares the actual
+original through its recursive schema/component map, and source comparison
+separately replays the complete source inventories. The
+[inventory tests](../compiler/test/common_interface.cpp) cover exact mutations,
+typed conditional paths, collection axes and bounded normalization.
+Inventory work accounting covers borrowed declaration setup, nested semantic
+layout queries, repeated Protocol inventories and native component mapping with
+one enclosing allowance, including charges preceding refusals. Natural operations
+admit work before normalization; placement and alias helper errors retain their
+performed debits. Coherent
+fresh compiler/SDK pairing covers Boolean, tag, payload, role permutation and
+extent admission, including zero and multiple loop iterations. SDK/package hashes alone cannot establish source
+coverage or detect omissions chosen by an attacker editing both package and
+context. No new formal authority is claimed.
 
 The [native foundation](spec/ir/native-foundation.md) uses the landed checked
 frontend and Common-export retirement. Checked Entry bodies lower directly to
@@ -83,8 +151,12 @@ association. The original is retained through preparation and realization.
 `zkc.program/0` bytes, reached invocation order, outcomes, stops, charging and
 cleanup keep their existing meanings. The foundation changes internal carriers
 and shared export schemas, not the execution backend. Native support and formal
-interpretation remain separate: Lean adaptation and validation are outside this
-unit, and native checks do not establish a formal connection for the new schemas.
+interpretation remain separate. The maintained Lean readers and retained subjects
+use the current source, declaration, numerical and participant contracts; their
+exact supported profiles and connection theorems are recorded in
+[formal support](../lean/docs/support.md). Native admission does not establish
+formal correspondence, and these selected connections do not prove the whole
+native compiler correct.
 
 | Interface | Contract |
 |---|---|
@@ -109,15 +181,24 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 The EVM foundation supports installed prime/binomial-extension arithmetic,
 checked indices, finite folds/collects and typed structured value transport on
-Cancun or Prague. Authored empty transcripts and the managed BLS Fr Keccak
-construction use the common framed proof format. The maintained
+Cancun or Prague. One declaration,
+[`zkc.evm-target/0`](spec/targets/evm.md#target-declaration), states the forks,
+solc pin, verifier ABI, deployment ceilings and revert classes. The compiler,
+SDK and CLI read its generated tables, and the deployed runner and harness read
+and check the declaration itself. Authored empty transcripts and managed
+constructions over a transcript suite whose facts the target realizes, the BLS
+Fr Keccak hash chain among the installed suites, use the common framed proof
+format. The maintained
 [Sumcheck project](../examples/projects/sumcheck-keccak/README.md) uses the native
 prover and EVM verifier over identical framed proof bytes. The
 [deployed tests](../common/tests/evm/README.md) compare complete primitive traces
 and failure frontiers. Root/path envelopes can be transported without
-authentication; cryptographic Merkle operations, curve operations, new transcript
-suites and full STARK verifier deployment need additional target support. These checks are
-bounded execution evidence, not a formal lowering or cryptographic theorem.
+authentication, and every path envelope is bounded by the declared path ceiling,
+whose maximum admits every path native admits; cryptographic Merkle operations, curve operations, transcript
+families and decoders other than the realized ones and full STARK verifier
+deployment need additional target support. Conditional participant completion
+in the verifier refuses with `evm.completion`. These checks are bounded
+execution evidence, not a formal lowering or cryptographic theorem.
 
 `zkc-cpu` composes the five compiled providers through an immutable
 `CpuInstallation`. Reduced installations restrict operation, layout, codec,
@@ -353,6 +434,28 @@ the closed wire profile. Application identity, setup, public inputs and prepared
 computation authority remain in `zkc`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
+Participant Programs also admit selected Boolean and ordinary-variant arms
+through closed `if`/`match` records. Independent C++ and Rust admission checks
+all arms; the interpreter enters only the selected frame and retains its actual
+resource tuple. Compact joint schedules retain explicit arm scopes and compare
+all reached selectors before arm work, including event-free branches; enum tag
+agreement supplies no payload agreement. Reports retain actual arm paths.
+Source requirement derivation, canonical inventory publication and exact Entry
+component binding feed SDK input admission. Generic independent execution
+supplies no peer agreement. Selected native transcript request/codec reconstruction explicitly
+refuses its unsupported profile; these execution checks establish no formal or
+security coverage.
+
+C++ source/function Entry producers and strict Rust readers share recursive
+placements, components and complete field metadata. The
+[fresh compiler inventory tests](../crates/zkc/tests/common_inventory_compiler.rs)
+exercise actual source-derived value, tag and extent requirements through named
+CPU runs, including role permutations and zero/multiple loop iterations. The
+[fresh Entry component tests](../crates/zkc/tests/entry_components.rs)
+execute current C++ packages through Run, Proof and Host, including transport of
+a home-constructed sealed witness. These checks establish the supported native
+producer/consumer connection; they add no independent formal correspondence.
+
 Logical [numerical units](spec/ir/computation.md) use named `builtin.module` with
 `exec.computation` and standard functions. Stage admission checks every retained
 definition; the marker alone is not admission evidence. `exec.compute` retains
@@ -425,7 +528,20 @@ fixture exercises static/shared linkage and Unicode dependency discovery.
 The explicit development entry `--source-format=zkc-layout` now connects the
 [new syntax to native execution](spec/language/layout-execution.md). It reuses
 name/type/role/resource/effect checking, specialization, actual IR comparison and
-the Rust Host. The maintained new-syntax Schnorr fixture executes valid and
+the Rust Host. Project manifests and explicit SDK and CLI module maps state their
+source format, so a `zkc-layout` project builds through `zkc.toml`; the Lean
+bridges take a package's format from the SDK's project inspection. Nominal home-module methods, including generic aliases, use the
+ordinary invocation binder and resolved mode/effects. Imports do not extend
+method eligibility. Protocol methods derive their complete role substitution
+from an exact fixed-roster receiver map; legacy direct logical families still
+require a unique complete roster. Managed Random signatures
+still use the existing service adapter rather than the callable index.
+Invocation checking now reconstructs source child values, named destinations,
+protocol roles and exact managed-service roots from immutable source occurrences
+in every body and callback. Coordinated action/binding swaps and balanced
+equal-type record-inspection swaps are rejected; specialization rechecks the
+source and preserves its lexical authority and value mapping.
+The maintained new-syntax Schnorr fixture executes valid and
 invalid witnesses, extra unused random draws and reached guards. Optional specs
 retain their authored source and resolved protocol attachment, with assurance
 reported as open and unresolved; every declared postcondition and request remains
@@ -509,7 +625,7 @@ helper result inference, expression-wide structural type constraints, partial
 static arguments with positional or named binding, named value/service arguments,
 Unicode 17 NFC names, scoped mathematical operators and paired-delimiter calls
 with import activation, explicit fixity and local module bindings, catalog-checked
-primitive definitions and an embedded scalar prelude,
+primitive definitions and a scalar prelude read from catalog declaration rows,
 local short-circuit Boolean operators and total Boolean formulas, inferred usage, catalog
 and natural preconditions with explicit contract checking, derived boundary admission, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
@@ -537,6 +653,20 @@ admitted program and checks every reachable asset reference before any
 invocation. It trusts compiler publication
 for source correspondence; it does not interpret retained MLIR. Maintained
 [Schnorr and Sumcheck projects](../examples/projects/README.md) exercise this path.
+
+Rust Entry admission reconstructs exact ordinary Product role intersections,
+semantic zero-storage public coverage and indivisible setup-bearing variants.
+Supply reconstruction and public classification share a bounded work allowance.
+Proof operation admission checks the consumed participant; retained Host calls
+can transport typed ordinary values with private constructors, including whole
+sealed values under their export policy. External construction and projection
+remain restricted. Native closure distinguishes checked Host invocations from
+external Entry selection and semantic subject closure. Independent generated
+signature validation admits whole typed opaque data while preserving split
+ancestor and setup authority. Fresh compiler/SDK controls exercise home-constructed
+sealed witnesses through Prove, Verify and Run, including verifier rejection,
+empty ordinary fields and external child-admission refusal. These are native
+artifact and execution checks, not a formal security correspondence.
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
@@ -574,7 +704,10 @@ selector reconstruction and mutation refusal. Inner conditions preserve outer
 catalog/natural inference. Labels and canonical maps are exposed separately in
 declaration inspection; they add no runtime closure or finite IR attributes.
 Retained witnesses also check formal callback slots and authored invocation
-identities through nested regions. Total index literals, static natural index construction and comparisons now
+identities through nested regions. Filtered notation preserves distinct predicate
+and term parameter identities at shared written binder spans; source and closure
+controls cover nested patterns, captures and dormant call mutations.
+Total index literals, static natural index construction and comparisons now
 support mathematical ranges and filters through ordinary realization. Total
 access now uses exact item/container bounds, declared Math input conditions and
 callee-first closure requirements. Native checks independently discharge each
@@ -819,9 +952,91 @@ refusals. Source oracle ports retain their explicit holder, receivers and static
 maximum through paired input, call and return elaboration. The independent
 source interface readers check logical kind descriptors, restricted record and
 sequence metadata, exact component slot counts and actual input pairs. Native
-Entry binding still refuses logical values at selected external ports; internal
-metadata does not create a graph-import codec. Source correspondence checks the
-complete role substitution and result mapping.
+Entry binding accepts transparent distributed roots made entirely of admitted
+ordinary fields through exact field-and-role selections. Units and empty products
+retain supply obligations independently of native slots. Selected public fields
+expand to the existing flat native proof indices. Private or sealed assembly,
+custody, and unprovided handles or anchors refuse. Setup-key selections preserve
+ordinary siblings. The [component boundary controls](../compiler/test/language_entry_components.cpp)
+and [source/native comparisons](../compiler/test/language_entry_components_translation.cpp)
+cover these rules; [fresh source fixtures](../compiler/test/fixtures/entry-components/README.md)
+support independent Rust Run, proof and generated Host-family checks. Public
+classification and availability do not establish common-value agreement.
+No closure claims external supply: the SDK's Entry admission judges it per
+operation and supply mode, so Verify admits a proof whose sealed prover witness
+it never consumes. Source correspondence checks the complete role substitution
+and result mapping. These native checks establish no Lean correspondence.
+Protocol rosters and record role telescopes are separate contracts with
+separate catalog limits, `protocol.roles` and `record.roles`, both 1,024 roles.
+The source checker refuses a longer roster or telescope, including a
+role-abstract alias, with its own `source.limit` diagnostic, and the C++ and
+Rust interface readers each refuse a longer roster or schema telescope by its
+own limit ([role bound controls](../compiler/test/language_role_bounds.cpp)).
+Both readers keep a nominal record's role arguments in telescope order. The
+Rust supply reconstruction decides role membership by schema category, through
+one sorted index of each telescope substitution, so a permuted telescope of any
+length supplies each field at its substituted role. The structured-source
+export accepts the full `protocol.roles` roster within its 1 MiB file ceiling
+and refuses a larger publication with `structured-source-limit` "publication
+exceeds 1 MiB"; its measured roster profile is the
+[structured-source publication row](spec/contracts.md#current-producers-and-consumers)
+([structured-source controls](../compiler/test/structured_source.py)).
+Application maps, oracle obligations, source correspondence and source claims
+read the exporter's source view, so they accept the same rosters and refuse a
+subject that exceeds only that ceiling
+([contract register](spec/contracts.md#current-producers-and-consumers)).
+The independent Lean structured reader accepts rosters through the same
+`protocol.roles` bound of 1,024 and rejects the next value in both decoding
+and semantic admission ([formal reader status](spec/contracts.md#formal-reader-status)). Retained
+declaration telescopes accept up to `record.roles` names, and their
+participant lists and placements up to `protocol.roles`; product arguments keep
+telescope order.
+Published schema identities, custody slots and nominal descriptor preimages
+bind each nominal's defining source authority
+([nominal authority](spec/language/definitions.md#nominal-authority)): equal
+paths from different library bytes, a changed private dependency and a comment
+edit in the defining closure change them, while an unrelated client declaration
+does not, and lookup keys, instance symbols and companion keys stay unchanged
+([transport controls](../compiler/test/language_record_source_transport.cpp)).
+Across every maintained package and compiler fixture the largest canonical key
+is 398 bytes, at most 202 bytes longer than its lookup key, against the
+131,072-byte preimage bound.
+The source correspondence export publishes emission's record of every generated
+definition, with its purpose, part and origins, and one occurrence row per
+published site with its written nodes; the producer refuses a definition row
+outside the instance and generated inventory
+([correspondence controls](../compiler/test/source_correspondence.cpp)).
+Application maps take that correspondence with `--source-correspondence`:
+each root and expansion gets the written link of its occurrence, null for an
+occurrence with zero or several nodes, and the check reports the links as
+conditional on the supplied bytes, or checked when the checked original's own
+export is those bytes
+([application-map controls](../compiler/test/application_map.cpp)).
+Generated Entry families walk their roster once per phase and each port only at
+its placed roles, so a trivial 1,024-role Protocol closes and publishes its
+interface within the 32,000,000-unit phase work ceiling, with work growing
+linearly in roles ([roster capacity controls](../compiler/test/language_roster_capacity.cpp)).
+Work limits and output-size limits are separate: an admitted roster size does
+not guarantee that every program of that size fits every output budget. The
+generated Host package of a direct Protocol selection restates its role-indexed
+families at each signature, block argument and child deployment; its carrier
+node ceiling admits the full roster
+([Host control artifact](spec/formats/entry.md#host-control-artifact)). Its Host
+structure validation needs more interface work than the default allowance
+([Host allowances](spec/runtime/capacity.md#host-allowances)), so a Rust Host
+admits it by raising its interface work selection within the maximum, and the
+CLI by `--interface-limits`; under the default it refuses with
+`entry-interface-work-limit`. A distributed record's fields are expanded once per instance and
+each placed role visits only the fields placed at it, so a 1,024-role record
+with one field per role checks in about 16.9 million units, growing linearly
+with its fields. Mathematical participant projection separately bounds roles
+times SSA nodes per common body ([limits](spec/ir/limits.md)). The common-input
+inventory has its own frontend-owned bounds, refused with `source.limit`
+"common inventory limit exceeded" ([Entry carrier](spec/formats/entry.md)).
+The rosters each bound admits, including where mathematical admission's
+common-control allowance refuses before the inventory limit, are the measured
+profiles of their
+[register rows](spec/contracts.md#current-producers-and-consumers).
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Layout role assembly explicitly selects existing components of ordinary shared
@@ -853,6 +1068,24 @@ set 4096 descriptor keys per environment including fixed Boolean descriptors,
 64 delimiter holes and 8 MiB output; lowered SDK limits are rechecked on retained
 projects. The separate layout authoring service uses retained syntax and typed
 queries; this inspection artifact itself does not authorize source rewriting.
+
+The [distributed record source contract](spec/language/records.md) has focused
+[inference and capture controls](../compiler/test/language_record_inference.cpp)
+for nested alias category admission, constructor field evidence, structural role
+equations including empty arrays, receiver ambiguity and projected repeat
+captures. These checked-source controls do not establish complete native record
+transport, external ingress, Entry selection or formal-consumer support.
+The [distributed succession controls](../compiler/test/language_distributed_succession.cpp)
+exercise home-authorized consuming inspection and repacking through closed source,
+native originals, independently decoded interfaces, actual-candidate comparison
+and CPU Run compilation. [Native bundle execution](../common/tests/protocol/test_distributed_succession.py)
+checks scalar results at zero, one and multiple trips with simplification enabled
+and disabled, without fabricated resource ingress. The function Entry Host schema
+gap described above remains separate. Fixed-roster fragments retain exact roots across helper
+calls and existing repeats, including zero trips, private/sealed payloads and
+non-identity role maps. Consume plus fresh construction remains an invalid
+repeat successor. Source-selected control integration and independent formal
+resource-unit consumption remain separate work.
 
 Source Entry originals use checked Func/CF control with explicit Data/Exec
 boundaries. Fallible operations expose return-or-stop outcomes; their independent
@@ -914,6 +1147,7 @@ entries, integration and protocol-specific theorems.
 | General finite IR | [Typed domains and total/scoped fold and collect](spec/ir/finite.md) retain static helpers, complete entry admission, exact bound provenance and state dependency closure. Declaration-owned laws, structural SSA views, separate transient equation matches and shared producer emission support checked loop fallback, native sum/product/dot/MSM, elementwise fields and sum/product reductions of accumulator-independent pointwise field expressions. Selected matrix rows and columns use scalar contractions; admitted nested collections use one whole matvec, preserving empty-outer admission. Total callbacks expose ordinary helper calls and fixed pack/projection pairs remaining after canonicalization before optional bulk selection, while retaining the source of that selection for comparison. Nested indexed helpers preserve callback extent/bound premises and exact positional argument identities, including selected matrix axes. Independent readers check actual candidates, including checked original-helper normalization for total finite recipes and `exec.compute`. Bounded DAG sizing and a per-callback structural ceiling preserve later small opportunities without refunding spent work. Optional lane or payload-comparison capacity retains checked ordered fallback; required-reader exhaustion is diagnosed separately. Checked candidate publication is shared. Opt-in decision records distinguish missing evidence, actual capacity, policy and recipe restrictions, ordered retries and nested publication boundaries; preparation and total Math lowering also expose remarks and IR dumps. These observations supply no checking evidence. Generic canonicalization/CSE preserve domain admission. [Handwritten controls](../compiler/test/fixtures/finite/README.md) cover mutations, failures and 2^17 field workloads. Full fixed-array/matrix fallback additionally requires the native checked-access contracts; the source frontend now uses checked adapters into this IR. No Lean-to-native bridge is claimed. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget scoped collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
+| Restricted records | Explicit linear/affine ordinary and fixed-roster distributed wrappers retain nominal native custody even with empty or entirely Copy/Drop payloads. Consuming home-authorized inspection and repacking preserve every original fragment across helpers and existing zero-trip repeats, with exact nominal/static and placed payload identity; independent source/native comparison checks actual fragment operands. Source-selected control integration remains separate. Structured native export retains typed Slot bindings; the independent formal consumer admits exact-slot local custody under its closed interpretation. Runtime ledger freshness and nested-frame correspondence remain separate obligations. |
 | Affine resources and services | Scoped helpers use the shared native execution exact-origin analysis through the Protocol adapter. Directly authored scoped controls and fresh native bundles cover exact roots, state successors, participant-local stops, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | FRI source library | [Binary FRI](../examples/projects/fri/README.md) has one logical `Commit` and private checker shared by `Query`, `QueryAssociated`, `ScalarLowDegree` and `BlockLowDegree`. Commitment state contains no positions; an explicit scalar or product sampler and checked binding produce query state before opening verification. Its private state retains bounded actual/virtual handle sequences and exact coset geometry. Terminal coefficients have exact length after checked padding, with strict degree below `2^(TerminalLog+Rounds)`. [Same-source execution tests](../common/tests/protocol/test_fri_realizations.py) select clear tables, quartic Poseidon2 individual leaves and quartic Keccak paired/reversed leaves while preserving the retained source and interface. Authentication packets preserve all logical child reads and verify complete selected leaves. The AIR caller consumes the authenticated positions and initial values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with one key for the query block, with [commitments read in the clear](../lean/docs/spec/fri-security.md#fiatshamir-transfer) and with [words committed](../lean/docs/spec/fri-security.md#committed-words) by Merkle trees with one field element per hashed leaf, in one random oracle with the hash calls. The committed bound covers acceptance together with the initial word being far from the code for the extraction at a verifier checkpoint, completed with zero at the entries the extraction misses. The model targets an independently transcribed FRI verifier; correspondence to the current shared source and its compiled code is not established. The implication from an application's bad event to that checkpoint event, the installed schemes' leaf encoding (tag, codec, width and height) and the source's sequential position draws remain separate obligations. |
 | Pairing groups | BN254 and BLS12-381 each install G1, G2 and a prime-order target with group arithmetic, `pairing.check`, `pairing.apply`, canonical compressed codecs and native frames; [contract](spec/domains/values.md#pairing-field-capabilities). BLS12-381 G2 uses the 96-byte compressed encoding of the Ethereum consensus specifications. Independent arkworks comparisons and Ethereum ceremony points check arithmetic and encodings; no native adequacy proof. |
@@ -932,7 +1166,7 @@ entries, integration and protocol-specific theorems.
 | Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed scoped handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
 | Structured participant comparison | The optional [source-bound native probe](../lean/bridges/structured/participant.md) compares both actual Interactive Schnorr endpoints and generic service fixtures with original-SSA and Lean replay. It checks sampled generator-multiple G1 values, independent inputs/receives, pending prefixes, canonical codec failures and provider residual state. Native cleanup and failure adapters are explicit additional observations; this is bounded evidence, not Rust refinement or arbitrary-point decoding correctness. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
-| Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
+| Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. The [invocation root](spec/runtime/capacity.md#invocation-ledgers) bounds the bytes of the Host and of every participant runner together in Run, Proof and Function invocations, and each of its charges reports its item's own [refusal code](spec/runtime/capacity.md#root-refusals); each Run and Proof runner keeps its own instruction and iteration fuel, a Function's children charge only its pooled meter, and every execution report renders the root's [usage](spec/runtime/capacity.md#reported-usage) as `invocation`. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
 | Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/construction.md). Source libraries have bounded `Bytes`, repetition and fragment joining, private copyable SHAKE128 snapshots and shortest unsigned LEB128 index encoding, scalar/collection BLS12-381 Fr/G1/G2 and Edwards/scalar byte codecs, whole-vector big-endian BLS12-381 Fr decoding, plus raw Keccak-256 and SHA-256. A format-only construction selects native framing or one raw `Bytes` message. Pinned Spongefish Schnorr tests cover both directions, the fixed 80-byte vector and ordered decoder failures; they do not establish complete parser equivalence or soundness. Admission does not prove transcript completeness or snapshot reachability. |
 | KoalaBear quartic extension | [`koala-bear.ext4-binomial3`](spec/domains/values.md#nominal-field-extensions), `F_p[X]/(X^4 - 3)`, is installed alongside the octic extension: field, vector, polynomial, round and sparse-matrix kernels, base embedding, coset evaluation, interpolation and folding on base-field subgroups, Ring and relation-bundle carriers, canonical wire frames (field 21, vector 22, matrix 28) and the word codecs. The extension-field, matrix, checked-access, numerical and pointwise kernel families run on it against degree-parametrized [integer arithmetic](../common/tests/support/binomial_reference.py), and C++, Rust admission and backend signatures agree in the contract conformance probes. Its rows are committed by the [Poseidon2 row instance](spec/domains/oracles.md#poseidon2-instances) or the distinct [Keccak row instance](spec/domains/oracles.md#installed-binary-merkle-schemes). Its random service and Keccak hash-chain transcript support field draws and `IndexRandomness`; the [parameterized STARK configurations](../libraries/arguments/stark/README.md#configurations) select either direct quartic Keccak challenges or the explicit first-four-coordinate conversion of octic Merlin draws for Poseidon2. |
 | BabyBear and Goldilocks | The [registered residue family](spec/domains/values.md#registered-residue-fields) includes `baby-bear`, `baby-bear.ext4-binomial11`, `goldilocks` and `goldilocks.ext2-binomial7`: exact characteristic and base facts, five value representations, full-width canonical literals, scalar/vector/matrix message eligibility, Ring and Bundle carriers, canonical coordinate words, and base-subgroup cosets through logs 27 and 32. Goldilocks uses eight-byte coordinates and has no Montgomery32 byte operations. Explicit extension RNG/Merlin suites and field-appropriate Poseidon2 row commitments support the generic AIR/FRI library. Independent C++ inventory/root controls and [source integration controls](../common/tests/kernels/test_plonky3_fields.py) cover nonbase coordinates, high constants, malformed inputs and cross-family refusal. Native and source tests exercise the complete path, including identical proof bytes at one and four workers and refusal of changed statements or claims. |
@@ -1054,11 +1288,12 @@ the second draw, is accepted through normalization, and compiled with `--no-calc
 computes values where the source defines them, by equality. That fixture's
 theorems stop at the constructed validator, since the participant projection
 rule is not applied to it. For Sumcheck the program's helper functions are proved to
-implement the source's checked helpers: the empty point and the point extension
-by the general helper rule, whose soundness is proved once, and the terminal
+implement the source's checked helpers: the Pending constructor, openClaim,
+point extension and atPrefix by the general helper rule, whose soundness is
+proved once, and the terminal
 check, whose body iterates and is outside the rule's recipes, by a proof of its
 own. Honest-prover completeness of the executable holds for every round count up
-to the Entry's static maximum, at every budget of at least `72 + 59 · rounds`
+to the Entry's static maximum, at every budget of at least `76 + 59 · rounds`
 instructions, a charge derived from the program's reading, which at two rounds
 is the runtime's acceptance threshold; the proofs are the Sumcheck family's and
 do not depend on the value of the maximum. A current limitation: the compiler
@@ -1281,6 +1516,47 @@ consumer; this adds no independent acceptance of authored mathematics or
 protocol security result. Root generator and protocol-library migration is
 separate integration work.
 
+
+The native declaration foundation retains one immutable canonical declaration
+index with catalog-owned record intrinsic associations, managed service signature
+rules and builtin constructor homes. Ordinary source homonyms resolve first;
+record custody actions retain the authored caller's constructor authority through
+closure and independent checking, including fixed-roster distributed succession.
+This does not implement View/family syntax or the independent formal
+resource-unit consumer.
+The checked source [selected-control profile](spec/language/selected-control.md)
+admits Math and Protocol if/match with closed captures, exact placed joins,
+service aliases, role-local rosters and independently derived common-input
+requirements. Source closure rechecks specialized arms and zero-trip state.
+Source common-control recurrence completes the immutable graph before checking
+demands and independently grounds each demanded carry observation in its base
+and yielded transition. Dedicated source tests compare complete canonical
+inventories with actual emitted and admitted native originals, including
+retained helpers, role permutations, conditional payloads and collection
+extents. Canonical Entry inventories are published and independently compared;
+the fresh compiler/SDK tests above exercise actual input admission through the
+recursive source schema and component mapping.
+Original comparison and the retained structured-source/application-map carriers
+compare every actual arm. Registered native selection and executable Math scopes
+are exercised through actual 4.1 source, native comparison and CPU execution for
+Boolean branches and enum matches under simplification and storage policies.
+Independent native recurrence analysis checks demanded initial and transition
+observations. The source recurrence correction and automatic Entry/SDK
+input-requirement binding are integrated. Selected oracle/security realization
+remains outside the supported profile. These native checks supply no formal correspondence
+claim. Missing registered operations refuse explicitly.
+
+
+Native SDK ordinary outputs retain private/sealed subtrees in opaque owners.
+Schema-checked public getters and whole-value FunctionEntry transport preserve
+nominal identity and constructor restrictions, including empty fields and array
+elements. Generated opaque bindings keep private storage. Named Run/proof reports
+remove duplicate raw returns; inaccessible JSON exports and the physical
+BackendRun output seam refuse explicitly. This is source encapsulation coverage,
+not a confidentiality or proof-soundness claim. Fresh source outputs and generated consumers execute with the paired native
+compiler. Selecting an external root Entry with an opaque parameter still
+requires native constructor authority; retained SDK schema transport and native
+Host child closure are separate surfaces.
 ## Represented arithmetic development
 
 The represented-execution unit consolidates collection ownership in Data. Its

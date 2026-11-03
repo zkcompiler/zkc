@@ -21,6 +21,7 @@ from hash_chain_reference import BLS12_381_R as PRIME, BLS_SUITE, Chain, fr64be 
 from logical_tree import decode_tree, encode_tree  # noqa: E402
 from oracle import chain_trace, check_trace  # noqa: E402
 from probe import PROFILES, check_solc, compile_request, execute  # noqa: E402
+import target  # noqa: E402
 
 
 def source(expression, *, ordered=False, outputs="accepted:bool@V", returns=None):
@@ -51,7 +52,7 @@ def compile_source(compiler, text):
 def artifact(solc, yul, fork):
     return compile_request(solc, {
         "language": "Yul", "sources": {"scalar.yul": {"content": yul}},
-        "settings": {"evmVersion": fork, "optimizer": PROFILES["colon"],
+        "settings": {"evmVersion": target.fork(fork)["solc"], "optimizer": PROFILES["colon"],
                      "outputSelection": {"*": {"*": ["evm.bytecode.object",
                          "evm.deployedBytecode.object"]}}}})
 
@@ -61,7 +62,7 @@ def invocation(compiled, values):
     descriptor, policy = compiled["descriptor"], compiled["policy"]
     rows = [[*r[:3], v.hex()] for r, v in zip(descriptor[4], public, strict=True)]
     tree = ["zkc.native-proof-binding/0", "sha256", descriptor[2],
-            compiled["source_sha256"], *policy[1:4], descriptor, rows, ""]
+            compiled["original"], *policy[1:4], descriptor, rows, ""]
     root = encode_tree(tree)
     digest = hashlib.sha256(root).digest()
     proof = b"ZKCPRF00" + digest
@@ -131,17 +132,17 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     for name, text, inputs in cases:
         compiled = compile_source(args.compiler, text)
-        built = artifact(args.solc, compiled["yul"], compiled["manifest"]["fork"])
+        built = artifact(args.solc, compiled["yul"], compiled["fork"])
         (args.output / f"{name}.zkc").write_text(text)
         (args.output / f"{name}.json").write_text(json.dumps(compiled, indent=2))
         (args.output / f"{name}.solc.json").write_text(json.dumps(built, indent=2))
         for a, b, c, accepted in inputs:
             public, proof, trace = invocation(compiled, (a, b, c))
             result = execute(args.runner, built, encode_verify(public, b"", proof),
-                             gas=20_000_000, repeat_count=2)
+                             repeat_count=2)
             expected_status = "return" if accepted is not None else "revert"
             expected_output = (int(accepted).to_bytes(32, "big").hex()
-                               if accepted is not None else "5a4b4353" + f"{2:064x}")
+                               if accepted is not None else (target.REVERT_CLASSES["source"] + (2).to_bytes(32, "big")).hex())
             for call in result["calls"]:
                 assert call["status"] == expected_status, (name, call)
                 assert call["output"] == expected_output, (name, call)
@@ -151,10 +152,10 @@ def main():
             if accepted is not None and name in ("nonfirst-bool", "extra-fr"):
                 trailing = execute(args.runner, built,
                     encode_verify(public, b"", proof+b"\x00"),
-                    gas=20_000_000, repeat_count=2)
+                    repeat_count=2)
                 for call in trailing["calls"]:
                     assert call["status"] == "revert"
-                    assert call["output"] == "5a4b4344" + f"{13:064x}"
+                    assert call["output"] == (target.REVERT_CLASSES["decode"] + (13).to_bytes(32, "big")).hex()
                     check_trace(call["trace"], trace)
                 receipts.append({"name": name+"-trailing-proof",
                                  "accepted": accepted, "execution": trailing})
@@ -162,13 +163,13 @@ def main():
             changed, count = re.subn(r"if iszero\(eq\((v\d+), mload\(0xc0\)\)\)",
                 r"if iszero(eq(add(\1, 1), mload(0xc0)))", compiled["yul"])
             assert count == 1, "managed generation check missing"
-            mutant = artifact(args.solc, changed, compiled["manifest"]["fork"])
+            mutant = artifact(args.solc, changed, compiled["fork"])
             public, proof, trace = invocation(compiled, (2, 3, 6))
             result = execute(args.runner, mutant, encode_verify(public, b"", proof),
-                             gas=20_000_000, repeat_count=2)
+                             repeat_count=2)
             for call in result["calls"]:
                 assert call["status"] == "revert"
-                assert call["output"] == "5a4b4354" + f"{5:064x}"
+                assert call["output"] == (target.REVERT_CLASSES["fault"] + (5).to_bytes(32, "big")).hex()
                 check_trace(call["trace"], trace)
             receipts.append({"name": "stale-transcript-control", "execution": result})
         print(name, "passed", flush=True)

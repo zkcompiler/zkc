@@ -46,6 +46,9 @@ theorem scalarPayload_of_sort (value : Domain.Value (Structured.uniformCarriers 
     ∃ payload : Payload F G, value = .data (DomainAdapter.embedPayload payload) ∧ payloadType payload = ty := by
   cases value with
   | transcript | indices => cases sorted
+  | custody slot token =>
+    cases ValueSort.data.inj sorted
+    cases eligible
   | data payload =>
     rcases payload with ⟨actual, supported, contents⟩
     simp only [Domain.Value.sort, ValueSort.data.injEq] at sorted

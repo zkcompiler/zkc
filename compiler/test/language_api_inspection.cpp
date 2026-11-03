@@ -113,6 +113,31 @@ int main() {
                       "client::private_helper",
                   "private helper became a public declaration");
       });
+  cases.run("installed declarations report their association kind", [] {
+    auto view = report(check({{"m",
+                               R"(module m;
+      pub use zkc::records::{unpack};
+      pub use zkc::prelude::{field_add,group_scale,index_add};
+    )",
+                               {}}}));
+    const auto &declarations = array(view, "declarations");
+    const auto &unpack = find(declarations, "name", "zkc::records::unpack");
+    require(unpack.getString("definition") == "installed" &&
+                unpack.getString("association") == "record.unpack",
+            "a rule declaration is not reported as installed");
+    // Installed primitives keep today's primitive contracts.
+    for (StringRef name : {"field_add", "group_scale", "index_add"}) {
+      const auto &primitive =
+          find(declarations, "name", ("zkc::prelude::" + name).str());
+      require(primitive.getString("definition") == "primitive" &&
+                  !primitive.get("association") &&
+                  primitive.getArray("requirements")->empty(),
+              "installed primitive contract changed: " + name.str());
+      bool stops = *primitive.getObject("effects")->getBoolean("stop");
+      require(stops == (name == "index_add"),
+              "installed primitive stop contract changed: " + name.str());
+    }
+  });
   cases.run("facade provider and canonical target remain distinct", [] {
     auto view = report(check(sources()));
     const auto &reference =

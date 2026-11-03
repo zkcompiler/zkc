@@ -17,8 +17,8 @@ open CollectionGoals CollectionCompanion
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
-  [helper20 := GkrSourceBodies.helper20, helper35 := GkrSourceBodies.helper35,
-    helper36 := GkrSourceBodies.helper36]
+  [helper20 := GkrSourceBodies.helper14, helper35 := GkrSourceBodies.helper52,
+    helper36 := GkrSourceBodies.helper66]
 
 set_option maxRecDepth 20000 in
 theorem collection_bodies : CollectionGoals.Bodies unit.definitions := by
@@ -38,7 +38,7 @@ theorem collection_laws : CollectionCompanion.Laws (ringModel F G)
 /-- The original arbitrary-table repeat equation, with its original telescope. -/
 theorem repeat_body (table : Meanings F G) (xs : List F) (value : F) (count : Nat)
     (_small : count < indexLimit) :
-    GkrSourceBodies.helper20Body.denote (meaning F G table)
+    GkrSourceBodies.helper14Body.denote (meaning F G table)
       (Repeat.Inputs.pack { initial := xs, value, count }).get =
         .done (Repeat.encode (ringModel F G) ⟨xs ++ List.replicate count value⟩) := by
   rw [Evaluation.denote_meaning_eq_meaningOn]
@@ -47,7 +47,7 @@ theorem repeat_body (table : Meanings F G) (xs : List F) (value : F) (count : Na
 
 theorem replicate_equation (source : List F) (count : Nat)
     (sourceBound : source.length < indexLimit) (small : count < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper25Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper60Helper
       (Replicate.Inputs.pack { source, count }) =
         .done (Replicate.encode (ringModel F G) ⟨source.flatMap (List.replicate count)⟩) := by
   have _countBound := small
@@ -58,7 +58,7 @@ theorem replicate_equation (source : List F) (count : Nat)
 
 theorem tile_equation (source : List F) (count : Nat) (small : count < indexLimit)
     (sourceBound : source.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper30Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper63Helper
       (Replicate.Inputs.pack { source, count }) =
         .done (Tile.encode (ringModel F G) ⟨(List.replicate count source).flatten⟩) := by
   have _countBound := small
@@ -72,7 +72,7 @@ theorem prefix_equation (xs point : List F) (dimension : Nat)
     (shape : HasShape xs dimension 1)
     (xsBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
     (pointBound : point.length < indexLimit) (inside : point.length ≤ dimension) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper35Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper52Helper
       (Prefix.Inputs.pack { source := xs, dimension, point }) =
         .done (Prefix.encode (ringModel F G) ⟨restrictPrefixValues xs point⟩) := by
   rw [helper35_association.invoke unit.linked, Evaluation.denote_meaning_eq_meaningOn]
@@ -94,7 +94,7 @@ theorem layout_equation (add mul below point : List F) (width : Nat)
     (addBound : add.length < indexLimit) (mulBound : mul.length < indexLimit)
     (belowBound : below.length < indexLimit)
     (dimensionBound : point.length + width + width < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper36Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper66Helper
       (Layout.Inputs.pack { add, mul, point, below, width }) =
         .done (Layout.encode (ringModel F G)
           { addValues := restrictPrefixValues add point,

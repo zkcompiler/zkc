@@ -186,9 +186,13 @@ def test_nominal_ring_identity_and_constructor_authority(toolchain, journal, dir
         body = f'fn invalid(a:Indices)->qr::Polynomial<{params}>{{return qr::polynomial<{params}>(a);}}'
         diagnostic = 'source.bound'
     elif case == 'entry':
+        # Retained opaque values may enter an Entry, so the source check admits
+        # the port; caller-supplied data is refused when the SDK decodes it.
         body = '''protocol Run roles(P)(a:qr::Polynomial<17,4>@P)->(result:Indices@P){return qr::coefficients(a);}
         entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}'''
-        diagnostic = 'source.ingress'
+        entry = Entry(toolchain, journal, directory, prefix + body, MODULES)
+        entry.run('external', {'a': {}}, refuses='entry-input-constructor')
+        return
     else:
         body = '''protocol Run roles(P,V)(a:Indices@P)->(result:Indices@V){
           let local=qr::polynomial<17,4>(a); let received=send P -> V(local);
@@ -196,7 +200,6 @@ def test_nominal_ring_identity_and_constructor_authority(toolchain, journal, dir
         }'''
         diagnostic = 'source.ingress'
     path = directory / 'invalid.zkc'; path.write_text(prefix + body)
-    report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-                           f'--module=sample={path}', *MODULES,
-                           *(['sample::Demo'] if case == 'entry' else [])], refuses='source-compilation')
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
+                           f'--module=sample={path}', *MODULES], refuses='source-compilation')
     assert report['diagnostics'].startswith(diagnostic), report

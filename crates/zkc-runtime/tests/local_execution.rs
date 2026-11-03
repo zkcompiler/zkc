@@ -639,31 +639,42 @@ fn cumulative_instructions_logical_and_fresh_exhaust_across_runners() {
 }
 
 #[test]
-fn live_allowance_counts_parent_child_and_retained_outputs_until_drop() {
+fn live_retention_counts_parent_child_and_retained_outputs_until_drop() {
     let program = program();
-    let ledger = ExecutionLedger::new(values(128, 4096), work(100, 100, 4096));
-    let mut parent = local(&program, &ledger);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 128);
-    assert!(
+    // The root holds 40 live bytes, one runner's peak: its two 8-byte inputs,
+    // their transfer into the local frame and the 8-byte result.
+    let ledger = ExecutionLedger::new(values(40, 4096), work(100, 100, 4096));
+    let child = |session: &str| {
         LocalRunner::new_with_ledger(
             &program,
             "add_root",
-            "child",
+            session,
             Arithmetic::default(),
             vec![Number::Field(1), Number::Field(1)],
             values(128, 1024),
             WorkBudget::default(),
-            Some(ledger.clone())
+            Some(ledger.clone()),
         )
-        .is_err()
-    );
+        .map_err(|refusal| refusal.error)
+    };
+    let mut parent = local(&program, &ledger);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 16);
+    // A child's inputs count beside the parent's, while the parent waits.
+    let waiting = child("child").ok().unwrap();
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 32);
+    // A third runner's own budget would hold its inputs; the root does not.
+    assert_eq!(child("third").err().unwrap(), RuntimeError::Limit);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 32);
+    drop(waiting);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 16);
     assert!(matches!(parent.execute(), Action::Returned(_)));
     let (backend, outputs) = parent.into_retained_outputs();
     assert!(backend.frames.is_empty());
     let outputs = outputs.unwrap();
     assert_eq!(&*outputs, [Number::Field(7)]);
-    assert_eq!(outputs.reservation_bytes(), 128);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 128);
+    // The returned value's live bytes leave with it.
+    assert_eq!(outputs.reservation_bytes(), 8);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 8);
     let used = ledger.snapshot();
     drop(outputs);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
@@ -739,9 +750,11 @@ fn failed_loading_drops_inputs_before_releasing_live_allowance() {
                 refusal.usage.total_value_bytes,
                 if failure == "entry" { 8 } else { 0 }
             );
+            // An input that entry retained is still held in the root when it
+            // is dropped; one refused before retention was never charged.
             assert_eq!(
                 *observations.lock().unwrap(),
-                [128],
+                [if failure == "entry" { 8 } else { 0 }],
                 "{participant} {failure}"
             );
             assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
@@ -861,8 +874,9 @@ fn pending_action_payloads_drop_before_releasing_live_allowance() {
                     assert_eq!(runner.backend().leaves[0].0.get(), 1);
                     assert_eq!(runner.backend().leaves[0].1, FrameExit::Cancelled);
                     assert_eq!(runner.usage().live_value_bytes, 0);
-                    // The last payload is gone before cancel returns, even while the runner lives.
-                    assert_eq!(*observations.lock().unwrap(), [128]);
+                    // The last payload is gone before cancel returns, even while
+                    // the runner lives, and the root held its bytes until then.
+                    assert_eq!(*observations.lock().unwrap(), [8]);
                     runner.cancel();
                 }
                 "drop" => drop(runner),
@@ -874,11 +888,7 @@ fn pending_action_payloads_drop_before_releasing_live_allowance() {
                 }
                 _ => unreachable!(),
             }
-            assert_eq!(
-                *observations.lock().unwrap(),
-                [128],
-                "{query} {destination}"
-            );
+            assert_eq!(*observations.lock().unwrap(), [8], "{query} {destination}");
             let after = ledger.snapshot();
             assert_eq!(after.live_reserved_bytes, 0);
             assert_eq!(after.total_value_bytes, used.total_value_bytes);
@@ -966,9 +976,17 @@ fn failed_return_payloads_drop_before_releasing_live_allowance() {
                 assert!(outputs.is_none());
                 assert!(backend.frames.is_empty());
                 assert_eq!((usage.live_values, usage.live_value_bytes), (0, 0));
+                // Each binding of an inline value owns its storage: a
+                // participant's entry binding and its returned binding are
+                // both still held when the payload is destroyed.
+                let held = if participant && !shared_backing && failure == "cleanup" {
+                    16
+                } else {
+                    8
+                };
                 assert_eq!(
                     *observations.lock().unwrap(),
-                    [128],
+                    [held],
                     "{participant} {shared_backing} {failure}"
                 );
                 assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
@@ -1010,7 +1028,10 @@ fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal
         json!([["entry", "main", [["P", "sender"], ["V", "receiver"]]]]),
     ));
     for native_receive in [false, true] {
-        let ledger = ExecutionLedger::new(values(128, 4096), work(0, 100, 4096));
+        let ledger = ExecutionLedger::new(
+            values(128, 4096),
+            work(u64::from(native_receive), 100, 4096),
+        );
         let observations = Arc::new(Mutex::new(Vec::new()));
         let mut runner = Runner::new_for_role_with_ledger(
             &program,
@@ -1034,7 +1055,12 @@ fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal
             observations: observations.clone(),
         }));
         if native_receive {
+            // The pooled meter affords the exposed receive; another runner of
+            // the root then takes its last instruction before completion.
             let cut = runner.poll_ref().cut().unwrap();
+            ledger
+                .charge(work(1, 0, 0), 0)
+                .expect("the last pooled instruction");
             assert_eq!(
                 runner.complete_receive(&cut, Ok(input)).unwrap(),
                 ReceiveCompletion::Stopped
@@ -1056,9 +1082,85 @@ fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal
         assert_eq!(runner.stop().unwrap().kind, StopKind::Limit);
         assert!(runner.backend().frames.is_empty());
         assert_eq!(runner.usage(), Usage::default());
-        assert_eq!(*observations.lock().unwrap(), [128], "{native_receive}");
+        // The refused payload was never retained, so the root held nothing
+        // for it when it was destroyed.
+        assert_eq!(*observations.lock().unwrap(), [0], "{native_receive}");
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
     }
+}
+
+#[test]
+fn a_runner_of_a_pooled_root_has_one_fuel_limit_the_pooled_meter() {
+    // The receiver's first instruction exposes a receive; it has ample fuel
+    // of its own, so only the root's pooled meter can refuse it.
+    let program = decode(module(
+        json!([]),
+        json!([
+            [
+                "participant",
+                "receiver",
+                "root",
+                "V",
+                [],
+                [FIELD],
+                [
+                    ["receive", "message", "scalar", "P", "x", FIELD],
+                    ["return", ["x"]]
+                ],
+                []
+            ],
+            [
+                "participant",
+                "sender",
+                "root",
+                "P",
+                [],
+                [],
+                [["return", []]],
+                []
+            ]
+        ]),
+        json!([["entry", "main", [["P", "sender"], ["V", "receiver"]]]]),
+    ));
+    let start = |ledger: &ExecutionLedger| {
+        Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "V",
+            "session",
+            Arithmetic::default(),
+            vec![],
+            ValueBudget::UNBOUNDED,
+            WorkBudget::fuel(Limits::MAX_INSTRUCTIONS, Limits::MAX_ITERATIONS),
+            Some(ledger.clone()),
+        )
+        .ok()
+        .unwrap()
+    };
+    // Another runner of the root has taken every pooled instruction: the
+    // receiver stops with its own limit stop before exposing the receive.
+    let exhausted = ExecutionLedger::new(values(128, 4096), work(2, 100, 4096));
+    exhausted.charge(work(2, 0, 0), 0).unwrap();
+    let mut runner = start(&exhausted);
+    let Action::Stopped(stop) = runner.poll_ref() else {
+        panic!("the pooled meter refuses before an action is exposed");
+    };
+    assert_eq!(stop.kind, StopKind::Limit);
+    assert_eq!(runner.usage().instructions, 0);
+    assert_eq!(exhausted.snapshot().instructions, 2);
+    // One pooled instruction left: the receive is exposed and completes on
+    // it, and the receiver stops exactly when the meter is exhausted.
+    let remaining = ExecutionLedger::new(values(128, 4096), work(2, 100, 4096));
+    remaining.charge(work(1, 0, 0), 0).unwrap();
+    let mut runner = start(&remaining);
+    let cut = runner.poll_ref().cut().unwrap();
+    assert_eq!(
+        runner.complete_receive(&cut, Ok(Number::Field(7))).unwrap(),
+        ReceiveCompletion::Delivered
+    );
+    assert!(matches!(runner.poll_ref(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
+    assert_eq!(runner.usage().instructions, 1);
+    assert_eq!(remaining.snapshot().instructions, 2);
 }
 
 #[test]
@@ -1117,7 +1219,9 @@ fn loop_arguments_drop_before_releasing_live_allowance_on_iteration_refusal() {
     assert_eq!(runner.usage().total_value_bytes, 16);
     assert_eq!(ledger.snapshot().instructions, 1);
     assert_eq!(ledger.snapshot().iterations, 0);
-    assert_eq!(*observations.lock().unwrap(), [128]);
+    // Both 8-byte entry arguments were still held when the watched one was
+    // destroyed.
+    assert_eq!(*observations.lock().unwrap(), [16]);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 }
 
@@ -1154,12 +1258,14 @@ fn participant_output_guard_keeps_payloads_and_allowance_until_destruction() {
         assert!(backend.frames.is_empty());
         let outputs = outputs.unwrap();
         assert_eq!(outputs.len(), 1);
-        assert_eq!(outputs.reservation_bytes(), 128);
+        // The guard holds exactly the returned value's live bytes.
+        assert_eq!(outputs.reservation_bytes(), 8);
         assert!(observations.lock().unwrap().is_empty());
-        assert!(matches!(ledger.reserve_live(1), Err(RuntimeError::Limit)));
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 8);
+        assert!(matches!(ledger.reserve_live(121), Err(RuntimeError::Limit)));
         let used = ledger.snapshot();
         drop(outputs);
-        assert_eq!(*observations.lock().unwrap(), [128]);
+        assert_eq!(*observations.lock().unwrap(), [8]);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
         assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
     }
@@ -1226,7 +1332,7 @@ fn terminal_payloads_drop_before_releasing_live_allowance() {
             }
             _ => unreachable!(),
         }
-        assert_eq!(*observations.lock().unwrap(), [128]);
+        assert_eq!(*observations.lock().unwrap(), [8]);
         assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
     }
 }
@@ -1276,7 +1382,8 @@ fn shared_backing_never_bypasses_a_second_backends_validation() {
     assert!(
         matches!(refusal.error,RuntimeError::Backend(e) if e.code=="independent-value-refusal")
     );
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 128);
+    // Only the first runner's returned value stays live in the root.
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 8);
     drop(first);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 }
@@ -1646,7 +1753,8 @@ fn participant_runners_share_policy_and_refuse_independently_retained_preparatio
     let preparation = PreparedComputations::new(&program, PreparationLimits::default());
     assert!(matches!(first.prepare_computations(preparation,&[0,1]),
         Err(RuntimeError::Backend(e)) if e.code=="computation-preparation-context"));
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 256);
+    // Each runner holds its two 8-byte inputs in the shared root.
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 32);
     let Action::Local(action) = first.poll() else {
         panic!("local")
     };
@@ -1658,11 +1766,14 @@ fn participant_runners_share_policy_and_refuse_independently_retained_preparatio
     second.execute_local(&action.cut).unwrap();
     assert!(matches!(second.poll(),Action::Stopped(s) if s.kind==StopKind::Limit));
     assert_eq!(ledger.snapshot().instructions, 7);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 128);
+    // The stopped runner released its live bytes; the returned value of the
+    // first runner is all the root still holds.
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 8);
     let (backend, outputs) = first.into_retained_outputs();
     assert!(backend.frames.is_empty());
     assert_eq!(outputs.as_deref().unwrap(), &[Number::Field(3)]);
-    assert_eq!(ledger.snapshot().live_reserved_bytes, 128);
+    assert_eq!(outputs.as_ref().unwrap().reservation_bytes(), 8);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 8);
     drop(outputs);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 }

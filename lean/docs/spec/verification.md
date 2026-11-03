@@ -192,7 +192,10 @@ values; state- or trace-dependent events need a corresponding stronger rule.
 
 The maintained Sumcheck caller uses this rule on its actual linked child and
 terminal, without unfolding the child's body. Its terminal law covers arbitrary
-returned tuples, including missing values, malformed lengths and capacity stops.
+returned tuples, including missing values or custody, malformed lengths and
+capacity stops. The terminal is checked against the actual source continuation
+for every returned tuple. Present local custody is consumed independently of
+its coordinate; missing custody stops before the mathematical checker.
 The child implementation proves its own residual bound separately. A replacement
 child satisfying that same bound can reuse the caller theorem unchanged.
 

@@ -8,7 +8,7 @@ fn digest(bytes: &[u8]) -> String {
 }
 fn schema(kind: &str, spelling: &str) -> Value {
     json!({"kind":kind,"type":spelling,"identity":digest(spelling.as_bytes()),
-        "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+        "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,"permissions":["Copy","Drop"],
         "fields":[],"alternatives":[],"leaves":[spelling]})
 }
 fn document(schema: Value) -> Value {
@@ -16,7 +16,7 @@ fn document(schema: Value) -> Value {
         "original":digest(b"original source"),"toolchain":"test","entry":"example::Main",
         "selection":{"kind":"function","function":"example::Main"},
         "functions":[{"symbol":"example::Main","parameters":[{"name":"value","schema":schema}],
-            "result":{"kind":"unit","type":"()","identity":digest(b"()"),"custody":false,
+            "result":{"kind":"unit","type":"()","identity":digest(b"()"),"generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
                 "constructible":true,"permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":[]}}],
         "protocols":[],"relations":[],"setups":[]})
 }
@@ -30,7 +30,7 @@ fn read(document: Value) -> Result<FunctionInterface> {
         &Sha256::digest(bytes.as_bytes()).into(),
         Package::MAX_BYTES,
     )?;
-    FunctionInterface::read(&package)
+    FunctionInterface::read(&package, crate::entry::InterfaceLimits::DEFAULT)
 }
 
 #[test]
@@ -66,7 +66,9 @@ fn source_inspection_keeps_identity_permissions_and_constructor_checks() {
     }
     let mut bad = document(schema("boolean", "bool"));
     bad["original"] = json!(digest(b"another source"));
-    assert_eq!(read(bad).unwrap_err().code(), "entry-host-identity");
+    let error = read(bad).unwrap_err();
+    assert_eq!(error.code(), "entry-interface-identity");
+    assert_eq!(error.phase, EntryPhase::Interface);
     let mut bad = document(schema("boolean", "bool"));
     bad["functions"][0]["parameters"][0]["schema"]["permissions"] = json!(["Copy"]);
     assert_eq!(read(bad).unwrap_err().code(), "entry-interface-schema");
@@ -91,7 +93,8 @@ fn host_signatures_refuse_logical_handles_sequences_and_records() {
             logical = schema(kind, "State");
             logical["constructible"] = json!(false);
             logical["leaves"] = json!([]);
-            logical["fields"] = json!([{"name":"word","offset":0,"schema":child}]);
+            logical["roles"] = json!(["H", "R"]);
+            logical["fields"] = json!([{"name":"word","offset":0,"public":true,"placement":{"kind":"oracle","holder":0,"receivers":[1]},"schema":child}]);
         }
         for output in [false, true] {
             let mut d = document(logical.clone());
@@ -106,4 +109,48 @@ fn host_signatures_refuse_logical_handles_sequences_and_records() {
             );
         }
     }
+}
+
+#[test]
+fn host_schemas_require_sealing_and_generated_metadata_in_every_position() {
+    let original = document(schema("boolean", "bool"));
+    for path in ["/functions/0/parameters/0/schema", "/functions/0/result"] {
+        for member in ["sealed", "generated"] {
+            let mut bad = original.clone();
+            bad.pointer_mut(path)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(member);
+            assert_eq!(
+                read(bad).unwrap_err().code(),
+                "entry-interface-format",
+                "{path}/{member}"
+            );
+        }
+        for malformed in [json!(null), json!(0), json!("false")] {
+            let mut bad = original.clone();
+            bad.pointer_mut(path).unwrap()["sealed"] = malformed;
+            assert_eq!(read(bad).unwrap_err().code(), "entry-interface-format");
+        }
+        let mut bad = original.clone();
+        bad.pointer_mut(path).unwrap()["sealed"] = json!(true);
+        assert_eq!(read(bad).unwrap_err().code(), "entry-interface-schema");
+    }
+}
+
+#[test]
+fn generated_path_aliases_keep_the_source_field_identifier_limit() {
+    let alias = format!("{}_{}", "x".repeat(48), "a".repeat(64));
+    let mut record = schema("record", "example::Demo::Public");
+    record["generated"] = json!(digest(b"generated family"));
+    record["leaves"] = json!(["bool"]);
+    record["fields"] = json!([{"name":alias,"offset":0,"public":true,"placement":null,"schema":schema("boolean","bool")}]);
+    let view = read(document(record.clone())).unwrap();
+    view.check_input(&view.signature().parameters[0].schema)
+        .unwrap();
+    record["fields"][0]["name"] = json!("x".repeat(129));
+    assert!(read(document(record.clone())).is_err());
+    record["generated"] = Value::Null;
+    assert!(read(document(record)).is_err());
 }

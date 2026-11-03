@@ -2,7 +2,9 @@
 #define ZKC_COMPILER_STRUCTUREDSOURCE_H
 
 #include "mlir/IR/BuiltinOps.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/JSON.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -45,5 +47,12 @@ llvm::Expected<StructuredSource> exportStructuredSource(
     llvm::StringRef originalBytes, llvm::StringRef symbol,
     mlir::MLIRContext &context,
     StructuredSourceProfile profile = StructuredSourceProfile::Original);
+/// The catalogue slot the formal exports share, `[nominal-rows, service-rows]`:
+/// the installed rows of `domains` closed under associated members, in
+/// catalogue order, and the installed random services in `services`, in
+/// registry order, each with its installed methods. An identity without an
+/// installed row has none; readers refuse what they cannot resolve.
+llvm::json::Value exportCatalogueRows(const llvm::StringSet<> &domains,
+                                      const llvm::StringSet<> &services);
 } // namespace zkc::protocol
 #endif

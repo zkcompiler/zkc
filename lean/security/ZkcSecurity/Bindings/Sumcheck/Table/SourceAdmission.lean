@@ -51,37 +51,38 @@ def shapeOverflow : ReferenceLaw model (triple domain) [.boolean] where
             overflow, ↓reduceIte, PIR.Process.bind, Values.get_cons, get_cons_here, get_cons_there,
             Values.get, Environment.prepend, Environment.push, Values.split]
 
-def checkOverflow : ReferenceLaw model [.vector domain, .vector domain, .field domain] [.boolean] where
-  body := checkBody domain bindings
-  Requires table args := (args.get (.there .here)).length < indexLimit ∧
+def checkOverflow (slot : String) : ReferenceLaw model [.vector domain, .resourceUnit slot, .vector domain, .field domain] [.boolean] where
+  body := checkBody domain slot bindings
+  Requires table args := (args.get (.there (.there .here))).length < indexLimit ∧
     invoke table (shapeHelper domain bindings)
-      (tableValues model domain (args.get .here) (args.get (.there .here)).length 1) = .halt .exhausted
+      (tableValues model domain (args.get .here) (args.get (.there (.there .here))).length 1) = .halt .exhausted
   reference _ := .stopped .exhausted
   valid table args premises := by
     cases args with
     | cons xs rest => cases rest with
-      | cons point rest => cases rest with
-        | cons claim rest =>
-          cases rest
-          obtain ⟨pointBound, shape⟩ := premises
-          change point.length < indexLimit at pointBound
-          change invoke table (shapeHelper domain bindings) (tableValues model domain xs point.length 1) = .halt .exhausted at shape
-          simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, Region.denote,
-            Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
-            Values.get_cons, get_cons_here, get_cons_there, Values.get, Environment.prepend,
-            Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-            Evaluation.invokeCallbackOn, Values.split]
-          simp only [Primitive.evaluateOn, pointBound, show 1 < indexLimit by decide +kernel,
-            ↓reduceIte, primitiveOutcome, PIR.Process.bind, Values.get_cons, get_cons_here,
-            get_cons_there, Values.get, Environment.prepend, Environment.push]
-          change (invoke table (shapeHelper domain bindings)
-            (tableValues model domain xs point.length 1)).bind _ = _
-          rw [shape]
-          rfl
+      | cons token rest => cases rest with
+       | cons point rest => cases rest with
+         | cons claim rest =>
+           cases rest
+           obtain ⟨pointBound, shape⟩ := premises
+           change point.length < indexLimit at pointBound
+           change invoke table (shapeHelper domain bindings) (tableValues model domain xs point.length 1) = .halt .exhausted at shape
+           simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, Region.denote,
+             Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+             Values.get_cons, get_cons_here, get_cons_there, Values.get, Environment.prepend,
+             Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+             Evaluation.invokeCallbackOn, Values.split]
+           simp only [Primitive.evaluateOn, pointBound, show 1 < indexLimit by decide +kernel,
+             ↓reduceIte, primitiveOutcome, PIR.Process.bind, Values.get_cons, get_cons_here,
+             get_cons_there, Values.get, Environment.prepend, Environment.push]
+           change (invoke table (shapeHelper domain bindings)
+             (tableValues model domain xs point.length 1)).bind _ = _
+           rw [shape]
+           rfl
 
-variable {definitions : List CheckedDefinition} {checker : String}
+variable {definitions : List CheckedDefinition} {slot checker : String}
   (linked : DeclarationsLinked [] definitions)
-  (bodies : Multilinear.Admission.Bodies definitions domain bindings checker)
+  (bodies : Multilinear.Admission.Bodies definitions domain bindings slot checker)
 include linked bodies
 
 theorem shape_overflow (xs : List (model.Field domain)) (n : Nat)
@@ -99,14 +100,14 @@ theorem shape_overflow (xs : List (model.Field domain)) (n : Nat)
       Nat.lt_trans small (show 64 < indexLimit by decide +kernel), show 64 < indexLimit by decide +kernel]
       using less_eq model linked bodies.toBodies n 64
 
-theorem check_overflow (xs point : List (model.Field domain)) (claim : model.Field domain)
+theorem check_overflow (xs : List (model.Field domain)) (token : CustodyToken) (point : List (model.Field domain)) (claim : model.Field domain)
     (overflow : ¬ xs.length < indexLimit) (small : point.length < 64) :
     invoke (closed model (definitions := definitions))
-      ⟨checker, .local, [.vector domain, .vector domain, .field domain], [.boolean]⟩
-      (checkInputs model domain xs point claim) = .halt .exhausted := by
+      ⟨checker, .local, [.vector domain, .resourceUnit slot, .vector domain, .field domain], [.boolean]⟩
+      (terminalInputs model domain slot xs token point claim) = .halt .exhausted := by
   apply ReferenceLaw.invoke (model := model)
-    (helper := ⟨checker, .local, [.vector domain, .vector domain, .field domain], [.boolean]⟩)
-    (checkOverflow model domain bindings) definitions linked bodies.check
+    (helper := ⟨checker, .local, [.vector domain, .resourceUnit slot, .vector domain, .field domain], [.boolean]⟩)
+    (checkOverflow model domain bindings slot) definitions linked bodies.check
   exact ⟨Nat.lt_trans small (by decide +kernel), shape_overflow model domain bindings linked bodies xs point.length overflow small⟩
 
 #print axioms check_overflow

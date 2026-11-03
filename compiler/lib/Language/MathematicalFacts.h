@@ -38,6 +38,9 @@ public:
   facts::Status resultExtent(const ValueOrigin &, const ValueOrigin &, unsigned,
                              Span);
   facts::Status assume(const SourceDataFact &, Span);
+  /// Only the checked control adapter calls this after an installed reached
+  /// guard bridge; this never admits an arbitrary Boolean premise.
+  facts::Status reached(const SourceDataFact &, Span);
   facts::Status prove(const SourceDataFact &, Span);
 };
 } // namespace zkc::language::detail

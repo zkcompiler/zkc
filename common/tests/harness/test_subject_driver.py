@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from harness import load
+from harness import PROOF_POLICY, language_interface, load
 
 
 @pytest.fixture
@@ -362,13 +362,13 @@ def test_pair_validator_matches_complete_independent_export(driver_module, tmp_p
     capture = driver_module.pipeline_compile
     source = "original source"
     identity = capture.digest(source.encode())
-    policy = ["policy", "entry"]
+    policy = PROOF_POLICY
     participant = ["participant", "sha256:" + identity, "candidate", policy, "V", ["body"]]
     paired = json.loads(json.dumps(participant))
     if changed_body:
         paired[-1] = ["different-body"]  # All digest fields still match.
     outputs = {"language-emit": source,
-               "language-interface": json.dumps({"original": identity}),
+               "language-interface": json.dumps(language_interface("test::Proof", "protocol", identity)),
                "language-bundle": json.dumps(["deployment", identity, ["policy", policy]]),
                "protocol-construct-proof": "candidate",
                "protocol-constructed-participant": json.dumps(participant),
@@ -376,7 +376,9 @@ def test_pair_validator_matches_complete_independent_export(driver_module, tmp_p
                "protocol-structured": json.dumps(["original", None, "sha256:" + identity])}
     driver, _ = recording(driver_module, tmp_path)
     driver.run = lambda arguments, **_: SimpleNamespace(stdout=outputs[arguments[1]])
+    # A fixture source whose directory declares its source format.
     subject = SimpleNamespace(name="test", compiler_options=[], module_arguments=lambda: [],
+        project=None, modules={"fixture": "lean/bridges/common/fixtures/schnorr-forms.zkc"},
         get=lambda table, key, default=None: "entry" if (table, key) == ("entries", "proof") else default,
         generated=lambda key: key == "pair")
     monkeypatch.setattr(capture.pair, "decode", lambda data: (data[1], data[2]))
@@ -388,3 +390,71 @@ def test_pair_validator_matches_complete_independent_export(driver_module, tmp_p
         result = capture.proof_artifacts(driver, subject, "compiler", tmp_path / "capture")
         assert result["pair"][2] == result["exported"]
         assert (tmp_path / "capture/pair.json").read_text() == result["pair_text"]
+
+
+@pytest.mark.parametrize(("exit_code", "reason", "accepted"), [
+    (1, "native-proof-correspondence", True),
+    (1, "native-proof-correspondence: native-transcript-correspondence: query", True),
+    (1, "native-proof-correspondence-extra: query", False),
+    (1, "other: native-proof-correspondence", False),
+    (1, "path/native-proof-correspondence", False),
+    (0, "native-proof-correspondence: query", False),
+])
+def test_native_mutations_require_the_exact_primary_diagnostic(
+        driver_module, tmp_path, monkeypatch, exit_code, reason, accepted):
+    from bridges.common.lean_render import CheckFailed
+
+    driver, _ = recording(driver_module, tmp_path)
+    driver.args.compiler = "compiler"
+    subject = SimpleNamespace(name="example", get=lambda *_: [])
+    kind = SimpleNamespace(stage="native", property="query identity",
+                           expected="native-proof-correspondence")
+    monkeypatch.setattr(driver_module.mutations, "kinds_for",
+                        lambda _: [("query-site", kind, lambda *_: ["mutated"])])
+    monkeypatch.setattr(driver, "run", lambda *_, **__: SimpleNamespace(
+        returncode=exit_code, stderr=reason + "\n"))
+    record = {}
+    if accepted:
+        driver.native_refusals(subject, {"candidate": "original", "exported": []}, record)
+        assert record["mutations"]["query-site"]["sites"][0]["reason"] == reason
+    else:
+        with pytest.raises(CheckFailed, match="native-refusal"):
+            driver.native_refusals(subject, {"candidate": "original", "exported": []}, record)
+
+
+@pytest.mark.parametrize("library", [None, "Example.Connections.sourceLibrary"])
+def test_fresh_connection_and_mutations_use_the_same_library(driver_module, tmp_path, monkeypatch, library):
+    driver, _ = recording(driver_module, tmp_path)
+    configuration = {("construction", "library"): library,
+                     ("construction", "library_module"): "Example.Connections" if library else None}
+    subject = SimpleNamespace(
+        name="example", construction_namespace="Example",
+        get=lambda table, key, default=None: configuration.get((table, key), default),
+        module_name=lambda key: "Example." + key)
+    kind = SimpleNamespace(stage="connection", property="schedule", expected="refused",
+                           construction_accepts=False, refusing_rule="alignment-")
+    monkeypatch.setattr(driver_module.mutations, "kinds_for",
+                        lambda _: [("changed-schedule", kind, lambda _: [["mutation"]])])
+    monkeypatch.setattr(driver_module.structured, "render", lambda *_: "original")
+    monkeypatch.setattr(driver_module.constructed, "render", lambda _, namespace: namespace)
+    emitted = []
+
+    class Captured(Exception):
+        pass
+
+    def capture(_subject, name, source):
+        assert name == "FreshExport.lean"
+        emitted.append(source)
+        raise Captured
+
+    monkeypatch.setattr(driver, "lean", capture)
+    with pytest.raises(Captured):
+        driver.construction_rule(subject, {"exported": [None] * 7 + [[]], "original": []}, {})
+    source, = emitted
+    method = "derive_source_connection" + (f" with_library {library}" if library else "")
+    assert source.count(method + "\n") == 2
+    assert ("import Example.Connections\n" in source) == bool(library)
+    assert "set_option Elab.async false" in source
+    assert "freshImported.program Example.context .validator Fresh.Actual.participant" in source
+    assert "freshImported.program Example.context .validator Fresh.Mutation0.participant" in source
+    assert 'expect_connection_refusal "mutation 0" because "alignment-"' in source

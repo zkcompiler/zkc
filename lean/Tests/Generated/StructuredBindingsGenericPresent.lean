@@ -24,7 +24,7 @@ noncomputable def rootForm : (Form [] [] [(.value .index), (.value .index)] [.in
 
 noncomputable def rootProcess  (b0 : Nat) (b1 : Nat) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers program.payload) (program.payload.plainProtocolTable F G) {} 0).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) ((some (b0))) (.cons ((some (b1))) .nil) .nil ((Runs.uniform (helpers program.payload) (program.payload.plainProtocolTable F G) {} 0).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.ret (.cons (.there .here) .nil)))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers program.payload) (program.payload.plainProtocolTable F G) {} 0).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) ((some (b0))) (.cons ((some (b1))) .nil) .nil ((Runs.uniform (helpers program.payload) (program.payload.plainProtocolTable F G) {} 0).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.ret (.cons (.there .here) .nil))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem root_calls : rootForm.CallsMatch := by

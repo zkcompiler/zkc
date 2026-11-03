@@ -244,9 +244,10 @@ def test_catalog_preserves_old_cases_and_keeps_new_panels_bounded(bench):
     # Preserve the original snapshot independently of later operation panels.
     vector_additions = {f'field-vector-{short}-{operation}-{size}' for short in ('kb', 'fr')
                         for operation, size in (('add', 1024), ('hadamard', 8192))}
+    later_cases = vector_additions | {'stark-h256-w1-b2-q100'}
     old = [case for case in cases if case.name not in FAMILIES
            and case.name not in ('coefficient_batch', 'vector_literal')
-           and case.identifier not in vector_additions
+           and case.identifier not in later_cases
            and not (case.name == 'stark' and case.shape.get('field') in ('baby-bear', 'goldilocks'))]
     assert len(old) == 456
     assert hashlib.sha256(json.dumps([vars(case) for case in old], sort_keys=True).encode()).hexdigest() == \

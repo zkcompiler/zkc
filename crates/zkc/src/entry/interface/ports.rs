@@ -31,8 +31,8 @@ pub(in crate::entry) struct ProofPorts {
 #[derive(Clone, Copy, Debug, Default)]
 struct Input {
     key: Option<&'static str>,
-    /// Offset and length in the native public argument vector, including units.
-    public: Option<(usize, usize)>,
+    /// Semantic public membership, including zero-storage selections.
+    public: bool,
 }
 #[derive(Debug)]
 pub(super) struct Ports {
@@ -40,13 +40,18 @@ pub(super) struct Ports {
     pub public: Vec<usize>,
     pub proof: Option<ProofPorts>,
     inputs: Vec<Input>,
+    views: Vec<super::boundary::View>,
+    outputs: Vec<super::boundary::View>,
+    pub residual: Vec<super::BoundaryRequirement>,
 }
 /// A checked input's definition and its already resolved source of supply.
 #[derive(Clone, Copy)]
 pub(in crate::entry) struct InputPort<'a> {
     pub definition: &'a raw::Port,
+    pub path: &'a [u32],
+    pub role: u32,
     pub key: Option<&'static str>,
-    pub public: Option<(usize, usize)>,
+    pub public: bool,
 }
 impl std::ops::Deref for InputPort<'_> {
     type Target = raw::Port;
@@ -59,7 +64,7 @@ impl InputPort<'_> {
         self.key != Some("verifier_key")
     }
     pub fn private(&self) -> bool {
-        self.named() && self.public.is_none()
+        self.named() && !self.public
     }
 }
 impl Ports {
@@ -68,6 +73,22 @@ impl Ports {
         selected: usize,
         types: &BTreeMap<String, Leaf>,
         setups: &[super::Setup],
+        limits: super::InterfaceLimits,
+    ) -> Result<Self> {
+        Self::with_work(
+            document,
+            selected,
+            types,
+            setups,
+            &mut super::boundary::Work::new(limits),
+        )
+    }
+    pub(super) fn with_work(
+        document: &raw::Interface,
+        selected: usize,
+        types: &BTreeMap<String, Leaf>,
+        setups: &[super::Setup],
+        work: &mut super::boundary::Work,
     ) -> Result<Self> {
         let protocol = &document.protocols[selected];
         let indices: BTreeMap<_, _> = protocol
@@ -92,13 +113,53 @@ impl Ports {
             .iter()
             .flat_map(|s| s.inputs.iter().copied())
             .collect();
-        let mut inputs = Vec::new();
-        for (i, port) in protocol.inputs.iter().enumerate() {
-            for role in &port.roles {
-                roles[indices[role.as_str()]].inputs.push(i);
+        let public = match &document.job {
+            raw::Job::Proof { public, .. } => public.as_slice(),
+            _ => &[],
+        };
+        let (views, mut residual) = super::boundary::views(protocol, false, public, setups, work)?;
+        let (outputs, output_residual) = super::boundary::views(protocol, true, &[], &[], work)?;
+        residual.extend(output_residual);
+        // Native and semantic completion are separate checks. Even a fully
+        // constructible plan must supply every role-local original coordinate
+        // exactly once; shared coordinates belong to separate participants.
+        // Views, residual requirements and original components are bucketed
+        // by role once, so this check grows with their counts, not with the
+        // roster times each of them.
+        for (originals, roster, output) in [
+            (&protocol.inputs, &views, false),
+            (&protocol.outputs, &outputs, true),
+        ] {
+            let count = protocol.roles.len();
+            work.charge(count + roster.len() + residual.len())?;
+            let mut supplied = vec![Vec::new(); count];
+            for view in roster {
+                work.charge(view.definition.native.len())?;
+                supplied[view.role as usize].extend(view.definition.native.iter().copied());
             }
+            let mut blocked = vec![false; count];
+            for requirement in residual.iter().filter(|r| r.output == output) {
+                work.lookup(indices.len())?;
+                blocked[indices[requirement.role.as_str()]] = true;
+            }
+            work.charge(originals.iter().map(|p| p.components.len()).sum())?;
+            let mut expected = vec![BTreeSet::new(); count];
+            for component in originals.iter().flat_map(|p| &p.components) {
+                expected[component.role as usize].insert(component.native);
+            }
+            for (role, supplied) in supplied.iter().enumerate() {
+                let unique: BTreeSet<_> = supplied.iter().copied().collect();
+                super::require(unique.len() == supplied.len(), E::Schema)?;
+                if !blocked[role] {
+                    super::require(unique == expected[role], E::Schema)?;
+                }
+            }
+        }
+        let mut inputs = Vec::new();
+        for (i, view) in views.iter().enumerate() {
+            let port = &view.definition;
+            roles[view.role as usize].inputs.push(i);
             let key = if port.schema.kind == raw::Kind::Builtin
-                && !port.schema.custody
                 && port.native.len() == 1
                 && slots.contains(&(port.native[0] as usize))
             {
@@ -107,12 +168,16 @@ impl Ports {
             } else {
                 None
             };
-            inputs.push(Input { key, public: None });
+            work.charge(1)?;
+            let is_public = view.public;
+            super::require(!is_public || key != Some("prover_key"), E::Selection)?;
+            inputs.push(Input {
+                key,
+                public: is_public,
+            });
         }
-        for (i, port) in protocol.outputs.iter().enumerate() {
-            for role in &port.roles {
-                roles[indices[role.as_str()]].outputs.push(i);
-            }
+        for (i, view) in outputs.iter().enumerate() {
+            roles[view.role as usize].outputs.push(i);
         }
         let mut public_ports = Vec::new();
         let proof = match &document.job {
@@ -120,22 +185,18 @@ impl Ports {
             raw::Job::Proof {
                 prover,
                 verifier,
-                public,
                 acceptance,
                 completion,
                 construction,
                 gates: _gates,
                 ..
             } => {
-                let mut offset = 0;
-                for &i in public {
-                    let i = i as usize;
-                    // Public statement data cannot import private key custody.
-                    super::require(inputs[i].key != Some("prover_key"), E::Selection)?;
-                    let len = protocol.inputs[i].native.len();
-                    inputs[i].public = Some((offset, len));
-                    offset += len;
-                    public_ports.push(i);
+                let verifier_index = indices[verifier.as_str()] as u32;
+                for (i, view) in views.iter().enumerate() {
+                    work.charge(1)?;
+                    if view.role == verifier_index && view.public {
+                        public_ports.push(i);
+                    }
                 }
                 let (suite, replaced_services, format, _selected) = match construction.as_ref() {
                     raw::Construction::Authored { format } => (None, Vec::new(), *format, None),
@@ -204,6 +265,9 @@ impl Ports {
             public: public_ports,
             proof,
             inputs,
+            views,
+            outputs,
+            residual,
         })
     }
 }
@@ -238,7 +302,9 @@ impl Interface {
     pub(in crate::entry) fn input(&self, index: usize) -> InputPort<'_> {
         let facts = self.ports.inputs[index];
         InputPort {
-            definition: &self.selected_protocol().inputs[index],
+            definition: &self.ports.views[index].definition,
+            path: &self.ports.views[index].path,
+            role: self.ports.views[index].role,
             key: facts.key,
             public: facts.public,
         }
@@ -280,7 +346,7 @@ impl Interface {
     ) -> impl Iterator<Item = &'a raw::Port> {
         role.outputs
             .iter()
-            .map(|&i| &self.selected_protocol().outputs[i])
+            .map(|&i| &self.ports.outputs[i].definition)
     }
     pub(in crate::entry) fn services<'a>(
         &'a self,
@@ -289,5 +355,93 @@ impl Interface {
         role.services
             .iter()
             .map(|&i| &self.selected_protocol().services[i])
+    }
+}
+
+impl Interface {
+    /// Every role's sorted original input coordinates, in roster order, from
+    /// one pass over the components rather than one pass per role.
+    #[cfg_attr(not(feature = "cpu"), allow(dead_code))]
+    pub(in crate::entry) fn native_inputs_by_role(&self) -> Vec<Vec<u32>> {
+        let mut roles = vec![BTreeSet::new(); self.roles().len()];
+        for component in self
+            .selected_protocol()
+            .inputs
+            .iter()
+            .flat_map(|p| &p.components)
+        {
+            roles[component.role as usize].insert(component.native);
+        }
+        roles
+            .into_iter()
+            .map(|natives| natives.into_iter().collect())
+            .collect()
+    }
+    pub(in crate::entry) fn role_native_inputs(&self, role: &RolePorts) -> Vec<u32> {
+        let index = self
+            .roles()
+            .iter()
+            .position(|r| std::ptr::eq(r, role))
+            .expect("checked role") as u32;
+        self.selected_protocol()
+            .inputs
+            .iter()
+            .flat_map(|p| &p.components)
+            .filter(|c| c.role == index)
+            .map(|c| c.native)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+    #[cfg(feature = "cpu")]
+    pub(in crate::entry) fn public_native(&self) -> Vec<u32> {
+        self.public_ports()
+            .flat_map(|p| p.definition.native.iter().copied())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+}
+
+impl Interface {
+    pub(in crate::entry) fn generated_input_names(&self, ports: &[InputPort<'_>]) -> Vec<String> {
+        let coordinates: Vec<_> = ports
+            .iter()
+            .map(|p| (&self.selected_protocol().inputs[p.index as usize], p.path))
+            .collect();
+        super::boundary::family_aliases(&coordinates)
+    }
+    pub(in crate::entry) fn generated_output_names(&self, ports: &[&raw::Port]) -> Vec<String> {
+        let coordinates: Vec<_> = ports
+            .iter()
+            .map(|p| {
+                let view = self
+                    .ports
+                    .outputs
+                    .iter()
+                    .find(|v| std::ptr::eq(&v.definition, *p))
+                    .expect("checked output view");
+                (
+                    &self.selected_protocol().outputs[p.index as usize],
+                    view.path.as_slice(),
+                )
+            })
+            .collect();
+        super::boundary::family_aliases(&coordinates)
+    }
+}
+
+impl Interface {
+    /// Resolve an original native coordinate to its participant ABI position.
+    /// This is an association only; it supplies no common-control agreement.
+    pub fn native_input_position(&self, role: &str, original: u32) -> Result<usize> {
+        let role = self
+            .roles()
+            .iter()
+            .find(|r| r.name == role)
+            .ok_or(E::Selection)?;
+        self.role_native_inputs(role)
+            .binary_search(&original)
+            .map_err(|_| E::Selection)
     }
 }

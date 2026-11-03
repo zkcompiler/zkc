@@ -63,7 +63,7 @@ theorem round_process {n : Nat} (ctx : ProtocolContext) (raw : RawState F)
   simp only [PIR.Process.bind]
   congr 1; funext _; congr 1; funext _; congr 1; funext _; congr 1; funext challenge
   rw [show invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper45Helper
+      GkrSourceBodies.helper78Helper
       (HonestHelpers.RestrictionArguments.pack (Value := assignment F G)
         { add := raw.add, mul := raw.mul, left := raw.left, right := raw.right, challenge }) = _ from
     HonestHelpers.round_restriction raw state decoded capacity challenge]

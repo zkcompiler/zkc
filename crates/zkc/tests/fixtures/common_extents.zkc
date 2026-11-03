@@ -1,0 +1,14 @@
+module m;
+domain Fr = field("koala-bear");
+type Vector<F: Field> = builtin("vector", F);
+math fn length(values: Vector<Fr>) -> index {
+  return intrinsic<Fr>("vector.length", values);
+}
+protocol Extent roles(P,V)(values: Vector<Fr> @(P,V)) -> (result: bool @(P,V)) {
+  let n = length(values);
+  let mut result = true;
+  for _ in 0..n roles(P,V) max 4 {
+    result = result;
+  }
+  return (result = result);
+}

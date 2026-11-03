@@ -688,8 +688,11 @@ int main() {
           "Demo(inputs: Run::Inputs) { return Run::run(inputs); }")));
     };
     auto a = make("a", "b"), b = make("c", "d");
+    // The record's identity binds its defining source revision, so the
+    // renaming edit also changes the schema identity; the relation key does
+    // not.
     require(a.interface().relations[0].key == b.interface().relations[0].key &&
-                a.interface().relations[0].inputs[0].schema->identity ==
+                a.interface().relations[0].inputs[0].schema->identity !=
                     b.interface().relations[0].inputs[0].schema->identity &&
                 a.interface().relations[0].revision !=
                     b.interface().relations[0].revision,

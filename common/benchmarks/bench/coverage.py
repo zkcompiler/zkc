@@ -99,6 +99,16 @@ def cases():
         add(f'stark-h{height}-w{width}-b{blowup}', 'stark', {'height': height, 'width': width, 'evaluation_size': height*blowup, 'queries': 8},
             'protocol', ('trace extension', 'quadratic AIR', 'quotients', 'FRI', 'Merkle multi-opening', 'transcript'),
             'The air cases\' AIR and sizes through the parameterized library; quartic challenges, Poseidon2 Merkle trees.')
+    # The maintained 256-row, 100-query library client of the STARK controls
+    # (common/tests/protocol/test_stark_library.py): LogFinal 1, LogBlowup 1,
+    # octic Merlin challenges and its atomic-block table realization. Its
+    # execution counts keep the verifier's trend against the default budget.
+    add('stark-h256-w1-b2-q100', 'stark',
+        {'field': 'koala-bear', 'height': 256, 'width': 1, 'evaluation_size': 512, 'queries': 100,
+         'final': 1, 'authentication': 'atomic-blocks'},
+        'protocol', ('trace extension', 'quadratic AIR', 'quotients', 'FRI', 'Merkle multi-opening', 'transcript'),
+        'The scale control client with the benchmark recurrence\'s trace values; sampled positions, and so pruned '
+        'openings, follow those values. Default capacities; same-stack proof verification.')
     for n in (1, 3, 8, 16):
         add(f'bulletproofs-{n}', 'bulletproofs', {'commitments': n}, 'protocol', ('vector scale', 'MSM', 'transcript'),
             'Retained fixture amounts/masks; includes non-power-of-two aggregation. Not a sampled wallet workload.')

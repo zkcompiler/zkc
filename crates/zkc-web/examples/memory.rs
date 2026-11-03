@@ -12,7 +12,7 @@ fn observation(result: Result<ProofResult, String>) -> Json {
             None => json!({"error":e}),
         },
         Ok(result) => {
-            json!({"report":serde_json::from_str::<Json>(&result.report()).unwrap(), "proof_bytes":result.proof().len(), "has_outputs":result.outputs().is_some()})
+            json!({"report":serde_json::from_str::<Json>(&result.report().unwrap()).unwrap(), "proof_bytes":result.proof().unwrap().len(), "has_outputs":result.outputs().unwrap().is_some()})
         }
     }
 }
@@ -73,15 +73,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let result = session.prove(&public, &witness, &[], None)?;
     let prove_ms = start.elapsed().as_secs_f64() * 1000.;
-    let produced: Json = serde_json::from_str(&result.report())?;
+    let produced: Json = serde_json::from_str(&result.report()?)?;
     if produced["success"] != true {
         return Err(format!("proof production failed: {produced}").into());
     }
-    fs::write(out.join("native.proof"), result.proof())?;
+    // Each getter call is a charged copy; take the proof once.
+    let proof = result.proof()?;
+    fs::write(out.join("native.proof"), &proof)?;
     let start = Instant::now();
-    let verified = session.verify(&public, &result.proof(), &[], None)?;
+    let verified = session.verify(&public, &proof, &[], None)?;
     let verify_ms = start.elapsed().as_secs_f64() * 1000.;
-    let checked: Json = serde_json::from_str(&verified.report())?;
+    let checked: Json = serde_json::from_str(&verified.report()?)?;
     if checked["success"] != true || checked["accepted"] != true {
         return Err(format!("proof verification failed: {checked}").into());
     }
@@ -90,20 +92,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(
             session
                 .verify(&public, &fs::read(browser)?, &[], None)?
-                .report(),
+                .report()?,
         )
     } else {
         None
     };
     let mut controls = json!({
         "malformed": observation(session.prove(b"{", &witness, &[], None)),
-        "truncated": observation(session.verify(&public, &result.proof()[..result.proof().len().min(5)], &[], None)),
+        "truncated": observation(session.verify(&public, &proof[..proof.len().min(5)], &[], None)),
         "limited": observation(session.prove(&public, &witness, &[], Some(0))),
     });
-    let mut trailing = result.proof();
+    let mut trailing = proof.clone();
     trailing.push(0);
     controls["trailing"] = observation(session.verify(&public, &trailing, &[], None));
-    controls["context"] = observation(session.verify(&public, &result.proof(), &[1], None));
+    controls["context"] = observation(session.verify(&public, &proof, &[1], None));
     let mut unfilled: Json = serde_json::from_slice(&witness)?;
     if let Some(first) = unfilled
         .as_object()

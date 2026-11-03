@@ -16,7 +16,8 @@ The complete logical message grammar is:
 
 - `bool`, `index`, `indices`, `bytes`;
 - scalar fields BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear base,
-  KoalaBear ext8, KoalaBear ext4, and the [binary fields](../domains/values.md#binary-fields)
+  KoalaBear ext8, KoalaBear ext4, BabyBear base and quartic, Goldilocks base
+  and quadratic, and the [binary fields](../domains/values.md#binary-fields)
   GF(2^64) and its cubic extension; groups BLS12-381 G1/G2/GT, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
 - field `vector` and sparse `matrix` in each installed scalar domain;
 - `groups` in BLS12-381 G1/G2, BN254 G1/G2, Ristretto and prime-order Edwards25519;
@@ -60,70 +61,58 @@ a record of vectors is not an implicit sequence of records.
 ## Canonical value frames
 
 All integers below are unsigned little-endian. All frames begin with ASCII
-`ZKCV`, byte `0`, and one tag byte. Aggregate frames are:
+`ZKCV`, byte `0`, and one tag byte. The tag numbers are the rows of the
+catalog's [frame-tag table](contract-declarations.md#frame-tags-and-codecs);
+each codec row names its tag and its element or digest widths. This chapter
+specifies the layouts those rows select. Every frame-bearing codec has its own
+tag, except the digest-generic Merkle frames, whose tags the catalog marks as
+shared and which decode under the expected type.
 
-| Tag | Expected type | Bytes after the header |
+| Layout | Bytes after the header | Complete frame bytes |
 |---|---|---|
-| 65 | Nominal variant | `alternative:u32`, then each active payload's `frame_length:u32` and complete frame, in declaration order |
-| 66 | BLS scalar vector | `count:u32`, then exactly `count` canonical 32-byte scalars |
-| 67 | BLS G1 vector | `count:u32`, then exactly `count` canonical compressed 48-byte subgroup points |
-| 68 | Indices | `count:u32`, then exactly `count` unsigned 64-bit indices |
-| 70 | Bytes | `count:u32`, then exactly `count` uninterpreted bytes |
+| `Scalar` | one canonical element of `elementBytes` | `6 + w` |
+| `Vector` | `count:u32`, then exactly `count` canonical elements | `10 + n*w` |
+| `SparseMatrix` | `rows:u32`, `columns:u32`, `nonzeros:u32`, then each entry as `row:u32`, `column:u32`, canonical element | `18 + n*(8+w)` |
+| `MerkleRoot` | one digest of the scheme's `digestBytes` | `6 + d` |
+| `MerklePath` | `count:u32`, then `count` digests, ordered full-path or pruned multi-opening siblings | `10 + d*n` |
+| `DigestRoot` | one digest of the expected scheme's width | `6 + d` |
+| `DigestProof` | `count:u32`, then `count` digests of the expected scheme's width | `10 + d*n` |
+| `PcsCommitment`, `PcsProof` | the [PCS message bytes](proof.md#pcs-message-bytes) | fixed, or fixed plus a width per arity |
+| `Table` | `arity:u32`, then exactly `2^arity` canonical scalars in logical MSB order | `10 + 2^arity*w` |
+| `FieldArray` | exactly the type-declared number of canonical scalars | `6 + N*w` |
+| `Sequence` | `count:u32`, then each element's `frame_length:u32` and complete frame | variable |
+| `Variant` | `alternative:u32`, then each active payload's `frame_length:u32` and complete frame, in declaration order | variable |
 
-The expected descriptor determines alternative bounds and active payload count;
-there is no additional payload-count field. Empty variants and collections use
-the same framing rules. Every child frame has its own header. Existing scalar,
-Boolean, group, index, field-array and PCS leaf frames retain their exact bytes.
-Nested child frames and the outer frame must be consumed completely. Noncanonical
-Boolean, field and group representations refuse. Canonical infinity is valid.
-Additional leaf frames reuse the installed ZKCV encodings exactly:
+`w` is the codec's `elementBytes` and `d` the commitment's `digestBytes`.
+`Scalar` frames carry fields, groups, Booleans (one byte, 0 or 1) and u64
+indices (eight bytes). `Vector` frames carry field vectors, source-group
+vectors, `indices` (eight-byte u64 elements) and `bytes` (uninterpreted
+one-byte elements). The expected descriptor determines alternative bounds and
+active payload count; there is no additional payload-count field. Empty
+variants and collections use the same framing rules. Every child frame has its
+own header. Nested child frames and the outer frame must be consumed
+completely. Noncanonical Boolean, field and group representations refuse.
+Canonical infinity is valid.
 
-| Type | Tag | Complete frame bytes |
-|---|---:|---:|
-| BN254 Fr | 40 | 38 |
-| BN254 G1 | 46 | 38 |
-| BN254 G2 | 48 | 70 |
-| BN254 GT | 50 | 390 |
-| BLS12-381 G2 | 51 | 102 |
-| BLS12-381 GT | 53 | 582 |
-| KoalaBear base | 19 | 10 |
-| KoalaBear ext8 | 26 | 38 |
-| KoalaBear ext4 | 21 | 22 |
-| BabyBear base | 90 | 10 |
-| BabyBear quartic | 93 | 22 |
-| Goldilocks base | 96 | 14 |
-| Goldilocks quadratic | 99 | 22 |
-| Binary GF(2^64) | 73 | 14 |
-| Binary cubic extension GF(2^192) | 76 | 30 |
-| Ristretto scalar | 13 | 38 |
-| Ristretto group | 16 | 38 |
-| Prime-order Edwards25519 group | 68 | 38 |
-
-A binary-field element is its little-endian bit pattern: eight bytes for
-GF(2^64) and, for the cubic extension, the three base coordinates in basis
-order. Every pattern of the exact width is canonical.
+A prime-field element is its canonical integer in `elementBytes`
+little-endian bytes. An extension element is its coordinates in the ascending
+basis, each in its base's own encoding, so the width is the degree times the
+base width. A binary-field element is its little-endian bit pattern: eight
+bytes for GF(2^64) and, for the cubic extension, the three base coordinates in
+basis order. Every pattern of the exact width is canonical. Group elements use
+each group's canonical compressed encoding of the codec's `elementBytes`.
 
 Wrong width/header, noncanonical scalar and invalid group encoding retain the
-`Length`, `Header`, `Scalar` and `Group` decode classes. Each scalar leaf counts
-as one element and each group leaf as one group in aggregate accounting.
+`Length`, `Header`, `Scalar` and `Group` decode classes. A frame whose tag is
+not the expected type's tag refuses with `Header`, even when another type uses
+that tag. Each scalar leaf counts as one element and each group leaf as one
+group in aggregate accounting. In bulk leaves, `n` is the count read at byte
+offset 6, except sparse matrices, whose nonzero count is at offset 14; their
+rows and columns occupy offsets 6 and 10. Field vectors, sparse matrices and
+Merkle paths charge `n` elements, source-group vectors `n` groups, and a
+Merkle root one element.
 
-Bulk leaves have the following canonical layouts. `n` is the count read at byte
-offset 6, except sparse matrices, whose nonzero count is at offset 14. Their
-rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
-
-| Leaf | Tags by domain | Complete frame bytes | Aggregate charge |
-|---|---|---|---|
-| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27, ext4 22, BabyBear 91, ext4 94, Goldilocks 97, ext2 100, GF(2^64) 74, GF(2^192) 77 | `10 + n*w`; scalar width `w=4` for KoalaBear/BabyBear, 16 for their quartics and Goldilocks ext2, 8 for Goldilocks/GF(2^64), 24 for GF(2^192), otherwise 32 | `n` elements |
-| Source-group vector | BLS 67, BLS G2 52, BN254 G1 47, G2 49, Ristretto 17, Edwards25519 69 | `10 + n*w`; point widths 48, 96, 32, 64, 32, 32 respectively | `n` groups |
-| Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30, ext4 28, GF(2^64) 75, GF(2^192) 78 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
-| Registered residue vector | BabyBear 91, BabyBear quartic 94, Goldilocks 97, Goldilocks quadratic 100 | `10 + n*w`; element widths 4, 16, 8, 16 respectively | `n` elements |
-| Registered residue matrix | BabyBear 92, BabyBear quartic 95, Goldilocks 98, Goldilocks quadratic 101 | `18 + n*(8+w)`; element widths 4, 16, 8, 16 respectively | `n` elements |
-| Merkle root | KoalaBear 33, ext8 35, ext4 79 | 38 | one element |
-| Merkle path | KoalaBear 34, ext8 36, ext4 80 | `10 + 32*n`, ordered full-path or pruned multi-opening siblings | `n` elements |
-| Digest-generic Merkle root | 71 | `6 + w` | one element |
-| Digest-generic Merkle proof | 72 | `10 + w*n` | `n` elements |
-
-Digest-generic Merkle frames carry digests of the scheme's width `w` in its
+Digest-generic Merkle frames carry digests of the scheme's width in its
 canonical encoding: `w = 32`, with eight canonical four-byte words for
 KoalaBear/BabyBear or four canonical eight-byte words for Goldilocks, all
 little-endian, for the [Poseidon2 instances](../domains/oracles.md#poseidon2-instances); the
@@ -144,7 +133,7 @@ matrices, indices, bytes and recursive containers. Fixed scalar/group, PCS and M
 root/path leaves retain their installed ZKCV codec identities. Matching public ZKCV bytes do not equate descriptor codec identities:
 the descriptor separately binds the exact type, representation and consumer.
 Types are authenticated by the deployment/descriptor binding, not encoded again
-into each value frame. The BLS vector/group native tags remain 66/67.
+into each value frame.
 
 ### Admission and resource bounds
 

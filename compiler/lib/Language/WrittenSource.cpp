@@ -91,6 +91,29 @@ Error retainWrittenBodies(WrittenSources &written,
       return error;
   return Error::success();
 }
+StringRef referenceRouteName(ReferenceRoute route) {
+  switch (route) {
+  case ReferenceRoute::Path:
+    return "path";
+  case ReferenceRoute::Import:
+    return "import";
+  case ReferenceRoute::ImportName:
+    return "import-name";
+  case ReferenceRoute::Method:
+    return "method";
+  case ReferenceRoute::ModuleMember:
+    return "module-member";
+  case ReferenceRoute::Implicit:
+    return "implicit";
+  case ReferenceRoute::Service:
+    return "service";
+  case ReferenceRoute::Notation:
+    return "notation";
+  case ReferenceRoute::Construction:
+    return "construction";
+  }
+  llvm_unreachable("reference route");
+}
 } // namespace zkc::language::detail
 
 namespace zkc::language {
@@ -300,18 +323,23 @@ public:
          WrittenIndex *addresses = nullptr)
       : project(project), work(work), addresses(addresses) {}
   Expected<json::Value> run(const WrittenSources &written) {
+    // Installed declarations are catalog rows, not written syntax.
+    auto installed = [&](Span span) {
+      return project.sources()[span.source.index].origin ==
+             SourceOrigin::Installation;
+    };
     for (const auto &module : written.modules)
-      declaration(module, module.name);
+      if (!installed(module.span))
+        declaration(module, module.name);
     if (error)
       return std::move(error);
     json::Array sources;
     for (const auto &source : project.sources())
-      sources.push_back(json::Object{
-          {"module", source.module},
-          {"origin", source.origin == SourceOrigin::Captured ? "captured"
-                                                             : "installation"},
-          {"bytes", source.text.size()},
-          {"sha256", digest(source.text)}});
+      if (source.origin == SourceOrigin::Captured)
+        sources.push_back(json::Object{{"module", source.module},
+                                       {"origin", "captured"},
+                                       {"bytes", source.text.size()},
+                                       {"sha256", digest(source.text)}});
     return json::Object{{"format", "zkc.source-ast/0"},
                         {"capture", project.capture().identity()},
                         {"installation", project.installationIdentity()},
@@ -387,12 +415,19 @@ private:
     return result;
   }
   json::Value type(const SyntaxType &value) {
-    return emit(
-        ("type." + syntaxKind(value.kind)).str(), value.span,
-        json::Object{{"name", value.name},
-                     {"arguments", list("argument", value.arguments,
-                                        [&](auto &arg) { return type(arg); })},
-                     {"labels", labels(value.labels)}});
+    json::Object fields{
+        {"name", value.name},
+        {"arguments", list("argument", value.arguments,
+                           [&](auto &arg) { return type(arg); })},
+        {"labels", labels(value.labels)}};
+    if (value.components)
+      fields["components"] = strings(*value.components);
+    if (value.oracleHolder)
+      fields["oracle_holder"] = *value.oracleHolder;
+    if (value.roles)
+      fields["role_arguments"] = strings(*value.roles);
+    return emit(("type." + syntaxKind(value.kind)).str(), value.span,
+                std::move(fields));
   }
   json::Array labels(ArrayRef<ArgumentLabel> values) {
     json::Array result;
@@ -956,7 +991,7 @@ private:
                 {"prover", p.prover.name},
                 {"verifier", p.verifier.name},
                 {"public", list("public", p.publicInputs,
-                                [&](auto &n) { return named(n); })},
+                                [&](auto &n) { return inputSelector(n); })},
                 {"acceptance", child("acceptance", 0,
                                      [&] { return selector(p.acceptance); })},
                 {"completion",
@@ -1251,8 +1286,13 @@ Expected<json::Value> sourceBindingsData(const CheckedProject &project,
   };
   auto declaration = [&](DeclarationId id) {
     const auto &decl = project.declarations()[id.index];
-    return json::Object{{"name", decl.qualifiedName},
-                        {"source", source(decl.span)}};
+    // An installed declaration has no written source.
+    return json::Object{
+        {"name", decl.qualifiedName},
+        {"source", project.sources()[decl.span.source.index].origin ==
+                           SourceOrigin::Installation
+                       ? json::Value(nullptr)
+                       : json::Value(source(decl.span))}};
   };
   // Preserve resolver observations, including repeated observations of a node.
   // Exact-span candidates help the checker find a written occurrence; they do
@@ -1275,6 +1315,7 @@ Expected<json::Value> sourceBindingsData(const CheckedProject &project,
       return candidates.takeError();
     declarations.push_back(json::Object{
         {"owner", owner.qualifiedName},
+        {"route", referenceRouteName(reference.route)},
         {"written", reference.written},
         {"provider", declaration(reference.provider)},
         {"target", declaration(reference.target)},
@@ -1282,13 +1323,32 @@ Expected<json::Value> sourceBindingsData(const CheckedProject &project,
         {"source", source(reference.span)},
         {"candidates", std::move(*candidates)}});
   }
+  // Each captured unit's revision and its direct dependency units. The
+  // closure and its edges follow from these rows.
+  const auto &authorities = project.storage->authorities;
+  if (!authorities.computed)
+    return detail::failure("source.authority",
+                           "source authorities were not computed");
+  json::Array units;
+  for (const auto &unit : authorities.units) {
+    if (auto error = work.charge(unit.module.size() + unit.revision.size() +
+                                 unit.dependencies.size() + 1))
+      return std::move(error);
+    json::Array dependencies;
+    for (auto dependency : unit.dependencies)
+      dependencies.push_back(authorities.units[dependency].module);
+    units.push_back(json::Object{{"module", unit.module},
+                                 {"revision", unit.revision},
+                                 {"dependencies", std::move(dependencies)}});
+  }
   json::Value value =
       json::Object{{"format", "zkc.source-bindings/0"},
                    {"capture", project.capture().identity()},
                    {"installation", project.installationIdentity()},
                    {"locals", std::move(references)},
                    {"unassociated_locals", std::move(unassociated)},
-                   {"declarations", std::move(declarations)}};
+                   {"declarations", std::move(declarations)},
+                   {"units", std::move(units)}};
   if (!jsonWithinByteLimit(value, limits.apiInspectionBytes))
     return detail::failure("source.limit",
                            "source binding export byte limit exceeded");

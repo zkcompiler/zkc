@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "zkc/Support/Refusal.h"
 
 using namespace llvm;
 namespace zkc::editor {
@@ -197,15 +198,38 @@ void Server::diagnostics(Job &job) {
     if (doc.open)
       diagnostics.emplace(doc.uri, json::Array{});
   if (failure) {
-    auto message = toString(std::move(failure));
+    // A capture refusal keeps its own code and detail; only a failure without
+    // one is reported as the project's.
+    std::optional<std::string> code;
+    std::string message;
+    handleAllErrors(
+        std::move(failure),
+        [&](const language::DiagnosticError &error) {
+          if (!code) {
+            code = error.diagnostic().code;
+            message = error.diagnostic().message;
+          }
+        },
+        [&](const Refusal &error) {
+          if (!code) {
+            code = error.code;
+            message = error.detail;
+          }
+        },
+        [&](const ErrorInfoBase &error) {
+          if (!code && message.empty())
+            message = error.message();
+        });
     for (const auto &doc : job.snapshot->documents)
       if (doc.open)
-        diagnostics[doc.uri].push_back(json::Object{
-            {"range", range(doc.revision, {{0}, 0, 0}, encoding)},
-            {"severity", 1},
-            {"code", doc.synchronized ? "source.project" : "source.sync"},
-            {"source", "zkc"},
-            {"message", message}});
+        diagnostics[doc.uri].push_back(
+            json::Object{{"range", range(doc.revision, {{0}, 0, 0}, encoding)},
+                         {"severity", 1},
+                         {"code", code               ? *code
+                                  : doc.synchronized ? "source.project"
+                                                     : "source.sync"},
+                         {"source", "zkc"},
+                         {"message", message}});
   } else {
     const auto &analysis = *job.snapshot->analysis;
     for (const auto &diagnostic : analysis.diagnostics()) {

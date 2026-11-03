@@ -31,7 +31,7 @@ abbrev model : DomainModel := ringModel Scalar Scalar
 
 /-- Exact nominal identity retained by the fixture's typed source export. -/
 def openingIdentity : String :=
-  "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e67313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"
+  "[\"zkc.language.pack\",\"373a303a32323a62617463685f6f70656e696e673a3a4f70656e696e6736343a31303462613033366637316166353564636336373163613231373437396161643861393166646635333937663339666438623839623731373165623638623031313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"
 
 abbrev openingTy : Ty :=
   .product openingIdentity "case00000000" (.cons (.field "koala-bear") (.cons (.field "koala-bear") .nil))

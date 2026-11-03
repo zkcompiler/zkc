@@ -14,6 +14,7 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import Refused, require  # noqa: E402
+from bridges.common import interface as language_interface, policy as native_policy  # noqa: E402
 
 
 def digest(data):
@@ -74,7 +75,7 @@ def resolve_sites(original, policy, bindings):
     entry = original[3]
     require(entry in definitions, "site attribution lacks original Entry")
     block(definitions[entry][9], [], None, {entry})
-    draws = policy[8]
+    draws = native_policy.decode(policy).draws
     result = []
     labels, occurrences = set(), set()
     for binding in bindings:
@@ -122,11 +123,9 @@ def bind_export(export, *, entry, source, interface_text, original_text,
     # interface payload, before that terminator. Preserve all other bytes.
     require(admission.get("interface_sha256") == digest(interface_text.removesuffix("\n").encode()),
             "source claims bind another native interface")
-    interface = decode(interface_text)
-    require(isinstance(interface, dict) and interface.get("format") == "zkc.language-interface/0",
-            "source claims lack a native entry interface")
-    require(interface.get("entry") == entry, "native interface names another Entry")
-    require(interface.get("original") == admission["original_sha256"].removeprefix("sha256:"),
+    interface = language_interface.loads(interface_text)
+    require(interface["entry"] == entry, "native interface names another Entry")
+    require(interface["original"] == admission["original_sha256"].removeprefix("sha256:"),
             "native interface binds another original")
     original = decode(original_text)
     require(isinstance(original, list) and len(original) >= 4, "malformed admitted snapshot export")
@@ -134,7 +133,7 @@ def bind_export(export, *, entry, source, interface_text, original_text,
             "source claims bind another snapshot format")
     require(original[2] == admission["original_sha256"], "admitted snapshot binds another original")
     require(original[3] == admission.get("protocol_symbol"), "source claims bind another protocol")
-    require(interface.get("protocol") == original[3],
+    require(interface["protocol"] == original[3],
             "native interface maps Entry to another protocol")
     for field in ("proposals", "seams"):
         require(isinstance(export[field], list), f"component {field} must be an array")

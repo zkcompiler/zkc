@@ -202,9 +202,9 @@ int main(int argc, char **argv) {
   cases.run(
       "owned selection captures preparation diagnostics and locations", [&] {
         // Builtin module attributes pass MLIR formation, but protocol
-        // preparation must refuse preexisting projection metadata.
+        // preparation must refuse every attribute it does not own.
         StringRef text =
-            R"(module attributes {pir.mathematical_interfaces = true} {
+            R"(module attributes {test.unowned = true} {
           "protocol.module"() ({
             "protocol.func"() ({^entry(%ok:i1):
               "protocol.return"(%ok):(i1)->()
@@ -220,8 +220,7 @@ int main(int argc, char **argv) {
         NativeProofOptions options{NativeProofSelection{policy}};
         auto result =
             compileNativeProof(text, "selection.mlir", options, registry);
-        require(!result,
-                "preexisting projection metadata reached construction");
+        require(!result, "unowned module metadata reached construction");
         bool captured = false;
         std::string diagnostic;
         auto remaining =

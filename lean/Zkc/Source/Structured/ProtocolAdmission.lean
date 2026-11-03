@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Checked
+public import Zkc.Source.Structured.CustodyAdmission
 
 @[expose] public section
 
@@ -16,7 +17,7 @@ def resolveScope (roles scope : List String) : Except String (List Nat) := do
 
 def ProtocolInterface.resolve (interface : ProtocolInterface) (inputs outputs : List Ty) :
     Except String (List (List Nat) × List (List Nat)) := do
-  if interface.roles.isEmpty || interface.roles.length > 16 ||
+  if interface.roles.isEmpty || interface.roles.length > Limits.protocolRoles ||
       !interface.roles.all validProtocolIdentifier ||
       interface.roles.eraseDups.length != interface.roles.length then throw "structured-roster"
   if interface.inputScopes.length != inputs.length ||
@@ -25,6 +26,8 @@ def ProtocolInterface.resolve (interface : ProtocolInterface) (inputs outputs : 
   let outputScopes ← interface.outputScopes.mapM (resolveScope interface.roles)
   for (type, scope) in inputs.zip inputScopes do
     if type.isService && scope.length != 1 then throw "structured-service-owner"
+  for (type, scope) in inputs.zip inputScopes ++ outputs.zip outputScopes do
+    if type.isCustody && scope.length != 1 then throw "structured-custody-holder"
   return (inputScopes, outputScopes)
 
 /-- Resolve every original protocol header before any body is lowered. -/

@@ -69,28 +69,33 @@ preserves its native encounter order. Private computation declarations derived
 from scoped bodies follow the native declarations in reader encounter order.
 There is no cross-category declaration-order field.
 
+Types are inline [logical type](logical-types.md) trees, the general type
+grammar of this format: a declared type constructor is applied as
+`["apply", constructor, [arguments...]]`, and variants, oracle handles and
+services have their own tags. This profile admits these types:
+
 | Type | Native interpretation |
 |---|---|
-| `["bool"]` | `i1` |
-| `["index"]` | unsigned 64-bit index |
-| `["field", domain]` | nominal scalar field |
-| `["vector", domain]` | immutable vector over that field |
-| `["group", domain]` | nominal group |
-| `["groups", domain]` | immutable vector over that group |
-| `["indices"]` | immutable ordered unsigned indices |
+| `["apply", "bool", []]` | `i1` |
+| `["apply", "index", []]` | unsigned 64-bit index |
+| `["apply", "field", [["domain", "Field", domain-id]]]` | nominal scalar field |
+| `["apply", "vector", [["domain", "Field", domain-id]]]` | immutable vector over that field |
+| `["apply", "group", [["domain", "Group", domain-id]]]` | nominal group |
+| `["apply", "groups", [["domain", "Group", domain-id]]]` | immutable vector over that group |
+| `["apply", "indices", []]` | immutable ordered unsigned indices |
 | `["oracle", kind-id, arguments]` | logical occurrence anchor, with associated Data/Query/Answer |
 | `["oracle_sequence", kind-id, arguments, maximum]` | bounded ordered logical handles; `maximum` is a uint64 decimal string |
 | `["service", contract]` | owner-local reusable service reference |
-| `["sequence", element-type]` | ordered immutable `data.sequence` |
-| `["product", identity, constructor, component-types]` | one-constructor packed product, with ordered components |
+| `["apply", "sequence", [["type", element-type]]]` | ordered immutable `data.sequence` |
+| `["variant", identity, [[alternative, payload-types]...]]` | nominal variant with ordered alternatives; a one-constructor packed product has one alternative with its ordered components |
 
-A product retains the complete canonical JSON encoding of its native nominal
-descriptor, its single constructor label, and all flattened component types in
-order. Equal shapes do not identify different products. This represented identity
-does not replace the frontend schema that associates source fields with ports.
+A product retains its complete structured nominal identity, its single
+constructor label, and all flattened component types in order. Equal shapes do
+not identify different products. This represented identity does not replace the
+frontend schema that associates source fields with ports.
 Types nest at most 64 levels; a product has at most 512 components. Every nested
 domain is checked, including in dormant declarations. Nested service handles
-and multi-constructor variants are outside this profile.
+are outside this profile. Ordinary variants retain their complete ordered alternatives and payload types.
 
 A domain is a native catalogue identity: field and vector types name a `Field`
 identity admitted for that logical kind, group types a `Group` identity admitted
@@ -121,34 +126,94 @@ The native
 [service contract](../runtime/services.md) requires singleton ownership and
 permits same-owner root aliases; services cannot be selected, restricted,
 exchanged, returned, passed to Math/Local helpers, or bound as statement data.
-Affine resources, multi-constructor variants, matrices, general arrays, arbitrary kernels and other
+Consuming resources other than the nominal units specified below,
+matrices, general arrays, arbitrary kernels and other
 unlisted operations require a separately specified extension.
 
 ## Retained source declarations
 
-The last slot is `[records, protocols]`, or `[[], []]` when no reachable source
-protocol port contains a linear record. The frontend retains closed typed source
-terms and field order before flattening:
+The last slot is `[records, protocols, authorities]`, or `[[], [], []]` when no
+retained source resource or distributed record requires declaration context.
+The frontend retains closed typed source terms, field order, role telescopes,
+placements and custody slots before flattening:
 
 ```text
-record := [closed-record-type, "ordinary" | "affine" | "linear", sealed, [[field-name, closed-type]...]]
-protocol := [native-symbol, input-ports, output-ports]
-port := [source-name, closed-type, [holder...], native-offset, native-count]
+record    := [closed-record-or-logical-record-type, "ordinary" | "affine" | "linear",
+              sealed, [member...], [role...], slot | null]
+member    := [field-name, closed-type, placement | null]       # record fields
+           | [alternative, [member...]]                        # variant payloads
+protocol  := [native-symbol, input-ports, output-ports]
+port      := [source-name, closed-type, [participant...], native-offset, native-count, placement]
+authority := [nominal-path, revision | null]
+placement := ["data", [role...]] | ["oracle", holder, [receiver...]]
+           | ["product", [argument...], [placement...]]
 ```
 
+- A record's roles are its role telescope in declaration order, at most
+  `record.roles` names. Only a logical record has one.
+- A slot is the `zkl_resource_<digest>` identity of an affine or linear row's
+  resource units, exactly as its layout's custody prefix names them. An
+  ordinary row has none.
+- A member placement is the field's formula specialized over its row's
+  telescope. It is present exactly for the members of a logical record with a
+  telescope; ordinary rows, telescope-free logical records and variant payloads
+  carry none.
+- A port placement is the port's full placement tree over its protocol's native
+  role names. Product arguments are the role substitution in telescope order
+  and are never sorted; set roles follow roster order; a logical array has one
+  element template. Placements name roles, not ordinals, as participant lists
+  do.
+- The participant list is a derived summary: it lists exactly the top-level
+  roles of the port's placement, in roster order.
+- Authorities have one row per distinct record, logical-record, variant and
+  module path in any term of the carrier, including nested and phantom
+  arguments and the module argument of associated terms, sorted by path. A
+  revision is that path's [source authority](../language/definitions.md#source-authority)
+  as 64 lowercase hexadecimal digits; null marks a generated declaration. The
+  carrier's node budget bounds this table.
+
+The shared shape check refuses wrong arities; a slot missing from a resource
+row or present on an ordinary row; repeated or over-limit telescope names; a
+member placement absent or present against the rule above; a formula role
+outside its telescope; non-injective product arguments; a participant list that
+differs from its placement; and authorities that are unsorted, repeated,
+missing, extra or not a revision. The structured exporter also requires every
+port placement role to be in its protocol function's roster. The interface
+reader joins each row to its schema: the telescope equals the schema's roles,
+member placements equal the schema's field placements with names translated to
+ordinals, and the slot names the schema's custody units. Only frontend
+correspondence, which recomputes the whole carrier from the checked source,
+checks revision values against source bytes.
+
+Resource restriction and sealing are independent: a linear or affine record
+may expose public observations while retaining its custody and home-only
+construction/destruction. The `sealed` Boolean records explicit source access
+restriction; it is not inferred from the resource tag. Candidate/source
+correspondence checks its exact authored value. The
+[formal reader status](../contracts.md#formal-reader-status) records how the
+independent Lean consumer reads this carrier.
+
 The terms use the existing typed origin grammar, including closed static
-arguments. This is declaration context, not a new claim keyword or a routing
-language. The original module's optional `source_declarations` inherent
-attribute stores it as a structured MLIR `ArrayAttr` tree. The boundary exporter
-projects that tree to these JSON rows; a JSON string attribute is refused.
-Frontend correspondence recomputes the structured attribute exactly from the
-checked closed source. A standalone MLIR export
+arguments. Placements carry the per-field participant authority; participant
+lists only summarize them.
+Every referenced nominal record or variant is retained, including zero-array and
+phantom children. Distributed records may contain nested distributed or ordinary
+resource records; ordinary carriers cannot erase logical category. Sealing and
+resource restrictions are independent. This is declaration context, not a new
+claim keyword or a routing language. The original module's optional
+`source_declarations` inherent attribute stores it as a structured MLIR
+`ArrayAttr` tree. The boundary exporter projects that tree to these JSON rows; a
+JSON string attribute is refused. Frontend correspondence recomputes the
+structured attribute exactly from the checked closed source. A standalone MLIR export
 cannot establish its frontend provenance. Projection removes this context
 with the other original-only contracts; provenance uses the retained original.
 
-The bounded Lean reader reconstructs Boolean/index/field/group, tuple, bounded
+The independent Lean consumer profile reconstructs Boolean/index/field/group, tuple, bounded
 array, field-vector and recursively declared record layouts, then compares
-exact native types, offsets and role scopes. It checks a single holder for each
+exact native types, offsets and role scopes. Distributed records are outside
+that profile; the [formal reader status](../contracts.md#formal-reader-status)
+records the carriers it refuses, and native publication does not depend on
+it. The following describes that narrower formal profile. It checks a single holder for each
 linear source port. A protocol with any retained clauses must associate every
 linear port with one relation, with consistent relation identity for repeated
 uses of the same closed type. The relation comes from actual checked
@@ -210,11 +275,15 @@ Admission of the complete sequence precedes the first callback. Matrix domains
 and other collection types remain outside this export profile.
 
 Function `kind` is `protocol`, `math` or `local`; visibility is `public` or
-`private`. Each protocol has 1 to 16 unique nonempty native role strings. Every
+`private`. Each protocol has 1 to `protocol.roles` (1,024) unique nonempty
+native role strings, the [roster limit](../ir/limits.md) that formation
+enforces; the export imposes no smaller bound. Every
 port has a nonempty scope drawn from that protocol's own roster; scope counts
 match the signature. Owner references are local to that roster, including in
 unused protocols. The writer retains native names without reconstructing
 authored names or imposing the selected root's roster on other definitions.
+A full roster publishes only within the 1 MiB file ceiling below: each
+port scope that lists all 1,024 native role names adds about 15 KB.
 
 Relations are non-callable metadata, retained even when unused. The declaration's
 `kind`, `key` and `revision` are exact strings. `static-arguments` is a required
@@ -345,7 +414,7 @@ by this profile; no origin is inferred from its symbol. Local and protocol
 origins are decoded by definition kind and do not share a binding-value grammar.
 
 Math helpers are private.
-Native protocol formation currently permits no explicit `sym_visibility`
+Native protocol formation permits no explicit `sym_visibility`
 attribute, including an explicit `public`; its retained visibility is the
 default `public`. The general function record does not override that formation
 restriction or impose the Math helper's private-only rule on protocol calls.
@@ -502,9 +571,10 @@ Ownership is checked independently of operand types:
 | Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
-The descriptor can represent selection of any admitted value type. The current
-native mathematical verifier admits Boolean, scalar-field and group selection in this
-profile; vector and index selection are not yet native export paths.
+The descriptor can represent selection of any admitted value type. The native
+mathematical verifier admits Boolean, index, scalar-field and group selection in
+this profile, and each exports as `["select", type]`; it refuses vector
+selection (`mathematical-dependencies`).
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected participant guards are outside this source
@@ -525,9 +595,10 @@ output scopes never erase preceding effects or stops.
 
 These rows describe the original oracle-level subject, before semantic
 realization. The native exporter checks the common protocol formation rules,
-including dormant declarations. Integration of these rows into the independent
-Lean wire reader is pending under the Lean owner. The existing Lean profile
-refuses logical oracle execution; decoding will not by itself extend its
+including dormant declarations. The
+[contract register](../contracts.md#current-producers-and-consumers) records
+which of these rows the independent Lean wire reader decodes. That reader
+refuses logical oracle execution, and decoding does not by itself extend its
 participant theorems.
 Component seam derivation also refuses logical oracle instructions when linear
 component analysis is active. An empty proposal set asserts no oracle seam.
@@ -646,8 +717,9 @@ security.
 condition templates and ordered virtual footprints from the verified original.
 `protocol-check-oracle-obligations ORIGINAL.mlir REPORT.json --symbol=NAME`
 checks the complete report against a fresh derivation. The independent Lean
-derivation from the decoded structured snapshot is supplied for Lean-owned
-integration; it is not part of the currently landed reader profile.
+derivation from the decoded structured snapshot is a Lean-owned consumer outside
+the Lean structured reader profile; the
+[contract register](../contracts.md#current-producers-and-consumers) records it.
 The exact array grammar is:
 
 ```text
@@ -847,7 +919,10 @@ arguments, full ordered data operand and successful payload types, parameters,
 and Local ownership. Native scope/outcome ports belong to the admitted CFG;
 they are not logical value ports in this descriptor. Binding names confer no
 semantics by themselves. The exporter reuses the native logical catalogue for
-these ABI checks; Lean independently admits this closed table. There is no
+these ABI checks. The independent Lean consumer admits its documented subset,
+which excludes nominal resource-unit rows; the
+[contract register](../contracts.md#foundation-interfaces) records that missing
+consumer. There is no
 reader for retired per-primitive MLIR operation names.
 
 Here `I` is index, `B` Boolean, `F` the binding's nominal field, and `V` an
@@ -871,6 +946,18 @@ ordered vector over that field. Every row uses the same `exec.apply` operation.
 | `vector.equal` | `[V,V] → [B]` | `[]` |
 | `field.equal` | `[F,F] → [B]` | `[]` |
 | `field.embed` | `[field:base] → [field:extension]` | `[]` |
+| `resource_unit.create` | `[] → [U]` | `[]` |
+| `resource_unit.pass` | `[U] → [U]` | `[]` |
+| `resource_unit.consume` | `[U] → []` | `[]` |
+
+`U` is the exact nominal `resource_unit` type with one `Slot` argument. Its
+structured type is `["apply", "resource_unit", [["domain", "Slot", identity]]]`;
+the binding argument is the same typed Slot value. Slot identities follow the
+[resource-unit contract](../domains/values.md#logical-resource-units), not the
+installed algebraic-domain catalogue. They add no catalogue nominal row. The
+three operations preserve actual custody and sites, including zero-storage
+records. Native export and the independent native test reader support these
+rows; no independent Lean interpretation is claimed by this extension.
 
 The `field.embed` binding takes one domain argument, the extension. Its
 `BaseField` member fixes the operand's domain. The existing `exec` descriptor
@@ -989,6 +1076,12 @@ record := ["request", reply-position, request]
         | ["stop", reason, site, reply-position]
 ```
 
+A request's `type` is an inline [logical type](logical-types.md) tree, the
+general type grammar of this format: Boolean, index, field, group and vector
+types are applications such as `["apply", "bool", []]` and
+`["apply", "field", [["domain", "Field", identity]]]`. Request and replay
+records carry the same trees.
+
 Inputs occupy the original ordered ports; `null` is an absent component. The
 selected participant's input scopes mask inputs, and output scopes filter results
 after execution. Boolean values are JSON Booleans; field, group, index and service
@@ -1041,7 +1134,8 @@ The observer's finite vector bound makes the logical unrepresentable-length
 exhaustion branch unreachable; it does not replace it with source refusal.
 
 The writer bounds source bytes to 16 MiB, the complete exported file (including
-its final newline) to 1 MiB, strings
+its final newline) to 1 MiB, refused as `structured-source-limit` "publication
+exceeds 1 MiB", strings
 to 512 UTF-8 bytes (protocol template paths to 2048 bytes, binding names to 256 ASCII bytes), domains, relations,
 bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. Operand references index the lexical
@@ -1105,9 +1199,9 @@ site, parameters or regions. Their all-input meanings are fixed by the
 including zero for a shift count of at least 64. An extra descriptor slot,
 wrong carrier, unexpected attribute or Local spelling is refused.
 
-These descriptors extend the native producer's `/0` vocabulary. Independent
-readers with a closed operation inventory must refuse them until their own
-interpretation is installed; native export does not establish formal support.
+These descriptors extend the native producer's `/0` vocabulary. An independent
+reader with a closed operation inventory refuses each of them that its installed
+interpretation does not cover; native export does not establish formal support.
 
 ### Total vector prefix restriction
 
@@ -1138,7 +1232,8 @@ positions are obtained from that actual row rather than a second semantic graph.
 Associations also cover relation, binding and domain declarations, domain
 constructors and results, contracts, nested regions and block terminators.
 Retained source-declaration rows use `[10,table,index]`, where table zero is
-records and table one is protocol ports. Their producer is the `protocol.module`
+records, table one is protocol ports and table two is authorities. Their
+producer is the `protocol.module`
 carrying the checked `source_declarations` attribute; this does not invent an
 executable declaration operation or assert an exact authored-node match.
 Catalogue rows are installed meaning, not emitted source operations.
@@ -1161,3 +1256,31 @@ input, depth, instruction and byte limits. Failure returns no partial result.
 These coordinates renew when the export changes. Source-level binding,
 specialization and role proposals still require their own retained checking
 facts; a lexical range is not an authored AST identity or semantic evidence.
+
+## Selected source regions
+
+The current `/0` descriptor vocabulary adds:
+
+```text
+["data_branch", [alternative...]]
+["protocol_branch", [role...], [alternative...], [[output-role...]...]]
+["variant.make", alternative]
+```
+
+Boolean alternatives are exactly `then`, `else`; enum alternatives are the
+native declared labels in order. The ordinary instruction row retains selector
+then captures (including actual service-root aliases), ordered closed regions,
+result types and the Protocol site. Each region retains its exact payload types
+before capture types and its explicit typed `yield`. Math yields use the same
+logical terminator row while retaining actual `data.yield` associations.
+Variant types use the shared logical `variant` carrier with every alternative;
+one-constructor products keep their existing carrier and descriptor.
+
+Every dormant arm is exported. Region array ordinals are lexical arm
+coordinates; neither source-field paths nor dynamic loop iterations substitute
+for them. Branch sites scope nested event labels by their exact alternative.
+Application-map verification substitutes the branch roster and every output
+scope, then checks actual arm bodies and yields with independent SSA terms.
+Neither a producer association row nor successful export establishes execution
+or independent formal admission. Formal consumers must adopt these exact
+extensions separately; existing single-constructor/Local proofs do not do so.

@@ -20,6 +20,7 @@ class DomainCheck {
   std::vector<unsigned> depths;
   using Factory = std::tuple<unsigned, std::vector<std::string>,
                              std::vector<ValueOrigin>, std::vector<unsigned>>;
+  /// Keyed by lookup keys; confined to this one witness pass.
   std::map<Factory, unsigned> checkedFactories;
   std::set<Factory> activeFactories;
   struct Context {

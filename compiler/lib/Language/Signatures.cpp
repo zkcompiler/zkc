@@ -1,7 +1,9 @@
 #include "Checker.h"
 #include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
@@ -176,7 +178,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   if (decl.logical && decl.kind != Declaration::Kind::Record)
     return types.fail("source.oracle-aggregate",
                       "logical annotation requires a struct", decl.span);
-  if (decl.logical && decl.resource)
+  if (decl.logical && decl.resource && source.roles.empty())
     return types.fail("source.resource",
                       "logical records require Copy and Drop", decl.span);
   std::map<std::string, const SyntaxOracleShape *> shapes;
@@ -191,6 +193,22 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       return types.fail("source.oracle-shape", "invalid or duplicate row bound",
                         shape.span);
   }
+  decl.roles = source.roles;
+  std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
+  if (roster.size() != decl.roles.size())
+    return types.fail("source.roles", "duplicate participant", decl.span);
+  // A record's role telescope, or a role-abstract alias of one, and a
+  // protocol roster are separate contracts with their own catalog limits.
+  bool telescope = decl.kind == Declaration::Kind::Record ||
+                   decl.kind == Declaration::Kind::Alias;
+  if (telescope && decl.roles.size() > protocol::instances::recordRoleLimit)
+    return types.fail("source.limit",
+                      "record role telescope exceeds the record.roles limit",
+                      decl.span);
+  if (!telescope && decl.roles.size() > protocol::instances::protocolRoleLimit)
+    return types.fail("source.limit",
+                      "participant roster exceeds the protocol.roles limit",
+                      decl.span);
   std::set<std::string> usedShapes;
   if ((decl.resource || decl.sealed) &&
       decl.kind == Declaration::Kind::Associated &&
@@ -334,7 +352,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     decl.staticArguments = std::move(*selected);
   }
   if (source.definition) {
-    auto def = type(decl, *source.definition, depth + 1);
+    std::optional<PlacedType> placed;
+    if (decl.kind == Declaration::Kind::Alias)
+      placed = placedType(decl, *source.definition, depth + 1);
+    else if (auto ordinary = type(decl, *source.definition, depth + 1))
+      placed = PlacedType{*ordinary};
+    auto def = placed ? std::optional<Type>(placed->type) : std::nullopt;
     if (!def)
       return false;
     if (decl.kind == Declaration::Kind::Module) {
@@ -360,6 +383,13 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
             "source.type",
             "associated representation has a different domain sort", decl.span);
       decl.domain = *def;
+      if (decl.kind == Declaration::Kind::Alias)
+        decl.placement = placed->placement;
+      if (decl.kind == Declaration::Kind::Alias && !decl.roles.empty() &&
+          !decl.placement)
+        return types.fail("source.roles",
+                          "role-abstract alias requires a placed target",
+                          decl.span);
     }
   }
   if (decl.kind == Declaration::Kind::Associated &&
@@ -371,13 +401,19 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   auto fieldList = [&](ArrayRef<SyntaxPort> from, std::vector<TypeField> &to) {
     std::set<std::string> fields;
     for (auto &src : from) {
-      if (!src.roles.empty() || src.oracleHolder)
+      if ((!decl.logical || decl.roles.empty()) &&
+          (!src.roles.empty() || src.oracleHolder))
         return types.fail(
             "source.roles",
             "ordinary fields cannot carry participant annotations", src.span);
       if (!fields.insert(src.name).second)
         return types.fail("source.duplicate", "duplicate field", src.span);
-      auto t = type(decl, src.type, depth + 1);
+      std::optional<PlacedType> placed;
+      if (decl.logical)
+        placed = placedType(decl, src.type, depth + 1);
+      else if (auto ordinary = type(decl, src.type, depth + 1))
+        placed = PlacedType{*ordinary};
+      auto t = placed ? std::optional<Type>(placed->type) : std::nullopt;
       if (!t)
         return false;
       if (!valueType(*t))
@@ -389,6 +425,29 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                           "their bounded sequence",
                           src.span);
       TypeField field{src.name, *t, src.isPublic, src.span};
+      if (decl.logical && !decl.roles.empty()) {
+        field.placement = placed->placement;
+        if (field.placement && (!src.roles.empty() || src.oracleHolder))
+          return types.fail("source.placement",
+                            "nested product cannot have an outer placement",
+                            src.span);
+        if (!field.placement) {
+          auto set = roles(decl, src.roles, src.span);
+          if (!set)
+            return false;
+          if (src.oracleHolder) {
+            auto holder = roleArguments(decl, {*src.oracleHolder}, src.span);
+            if (!holder)
+              return false;
+            field.placement = OraclePlacement{holder->front(), *set};
+          } else
+            field.placement = DataPlacement{*set};
+          field.placement = types.placement(*t, *field.placement,
+                                            decl.roles.size(), src.span);
+          if (!field.placement)
+            return false;
+        }
+      }
       if (decl.logical) {
         auto shape = shapes.find(src.name);
         if (shape != shapes.end()) {
@@ -398,16 +457,21 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
           usedShapes.insert(src.name);
         }
         if (!types.oracleField(field) ||
-            (!isOracleHandle(*t) && !types.sharedData(*t, src.span, &decl)))
+            (decl.roles.empty() && !isOracleHandle(*t) &&
+             !types.sharedData(*t, src.span, &decl)))
           return false;
       }
+      if (field.placement &&
+          !types.admitPlaced({field.type, field.placement}, field.span, &decl))
+        return false;
       to.push_back(std::move(field));
     }
     return true;
   };
   if (!fieldList(source.fields, decl.fields))
     return false;
-  if (decl.logical && llvm::none_of(decl.fields, [](const auto &field) {
+  if (decl.logical && decl.roles.empty() &&
+      llvm::none_of(decl.fields, [](const auto &field) {
         return isOracleHandle(field.type);
       }))
     return types.fail(
@@ -429,10 +493,19 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
     decl.alternatives.push_back(std::move(alt));
   }
-  if (decl.kind == Declaration::Kind::Variant &&
-      (decl.alternatives.empty() || decl.alternatives.size() > 32))
-    return types.fail("source.type", "variant requires one to 32 alternatives",
+  if (decl.kind == Declaration::Kind::Variant && decl.alternatives.empty())
+    return types.fail("source.type", "variant requires an alternative",
                       decl.span);
+  // Emission forms every runtime variant from its portable descriptor, so a
+  // source variant has at most the descriptor's alternatives.
+  if (decl.kind == Declaration::Kind::Variant &&
+      decl.alternatives.size() > protocol::VariantDescriptorAlternatives)
+    return types.fail(
+        "source.limit",
+        "variant exceeds " +
+            Twine(uint64_t(protocol::VariantDescriptorAlternatives)) +
+            " alternatives",
+        decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
       decl.kind == Declaration::Kind::EntryFunction ||
@@ -446,13 +519,6 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       signatureState[id.index] = 2;
       return true;
     }
-    decl.roles = source.roles;
-    std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
-    if (roster.size() != decl.roles.size())
-      return types.fail("source.roles", "duplicate participant", decl.span);
-    if (decl.roles.size() > 1024)
-      return types.fail("source.limit",
-                        "participant roster exceeds target limit", decl.span);
     for (bool input : {true, false}) {
       std::set<std::string> names;
       for (auto &src : input ? source.inputs : source.outputs) {
@@ -466,6 +532,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         if (input && !bindingName(decl, src.name, src.span))
           return false;
         std::optional<Type> t;
+        std::optional<ValuePlacement> placed;
         if (input && src.binding) {
           const auto &owner = output.declarations[decl.parent->index];
           auto selected = selector(owner, *src.binding);
@@ -473,10 +540,18 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
             return false;
           t = types.selectedType(owner, *selected);
           inlineBindings[decl.id.index].push_back(std::move(*selected));
-        } else
-          t = type(decl, src.type, depth + 1);
+        } else {
+          auto resolved = placedType(decl, src.type, depth + 1);
+          if (resolved) {
+            t = resolved->type;
+            placed = resolved->placement;
+          }
+        }
         if (!t)
           return false;
+        if (decl.kind != Declaration::Kind::Protocol && placed)
+          return types.fail("source.oracle-boundary",
+                            "placed products require protocol ports", src.span);
         if (!valueType(*t))
           return types.fail("source.type", "port cannot contain a static term",
                             src.span);
@@ -497,12 +572,24 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                                 "domain operands require Copy"))
           return false;
         Port p{src.name, *t, {}, src.span};
-        if (decl.kind == Declaration::Kind::Protocol) {
+        if (decl.kind == Declaration::Kind::Protocol && placed) {
+          if (!src.roles.empty() || src.oracleHolder)
+            return types.fail("source.placement",
+                              "product port cannot have an outer placement",
+                              src.span);
+          p.placement = std::move(placed);
+          p.roles = placementRoles(*p.placement);
+        } else if (decl.kind == Declaration::Kind::Protocol) {
           auto set = roles(decl, src.roles, src.span);
           if (!set)
             return false;
           p.roles = std::move(*set);
           if (src.oracleHolder) {
+            if (!isLogicalValue(*t))
+              return types.fail(
+                  "source.oracle-port",
+                  "holder and receiver arrows require an oracle port",
+                  src.span);
             auto holder = roles(decl, {*src.oracleHolder}, src.span);
             if (!holder)
               return false;
@@ -530,9 +617,27 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
               usedShapes.insert(src.name);
             }
           }
-          if (!types.oraclePort(p))
-            return false;
+          const auto *nominal = types.typeDeclaration(p.type);
+          if (!(p.type.kind == Type::Kind::LogicalRecord && nominal &&
+                nominal->roles.empty())) {
+            if (p.oracle) {
+              auto receivers = p.roles;
+              receivers.erase(std::remove(receivers.begin(), receivers.end(),
+                                          p.oracle->holder),
+                              receivers.end());
+              p.placement = OraclePlacement{p.oracle->holder, receivers};
+            } else
+              p.placement = DataPlacement{p.roles};
+            p.placement = types.placement(p.type, *p.placement,
+                                          decl.roles.size(), p.span);
+            if (!p.placement)
+              return false;
+          }
         }
+        if (decl.kind == Declaration::Kind::Protocol &&
+            (!types.oraclePort(p) ||
+             !types.admitPlaced({p.type, p.placement}, p.span, &decl)))
+          return false;
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }
     }
@@ -771,6 +876,7 @@ bool Checker::representations() {
           return false;
         if (type.kind == Type::Kind::Parameter || type.symbolic)
           return true;
+        // Cycle sets are keyed by lookup key; local to this one expansion.
         auto key = typeIdentity(type);
         if (complete.count(key))
           return true;

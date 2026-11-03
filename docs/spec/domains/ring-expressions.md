@@ -246,6 +246,6 @@ judgment; field identities and embeddings are outside that model.
 formula over rows of evaluations computes the evaluations of the substituted
 polynomial, and when interpolating such rows does and does not recover it.
 `Zkc.Relation.AIR.RingExpression` preserves
-finite-AIR expression evaluation and its public/read degree weights. Those
-independent models do not yet prove the native DAG decoder, the native sharing
-checker or the provider correct.
+finite-AIR expression evaluation and its public/read degree weights. The native
+DAG decoder, the native sharing checker and the provider are trusted native
+components: those independent models do not prove them correct.

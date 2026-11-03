@@ -1,9 +1,11 @@
+#include "Names.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Transforms/RegionUtils.h"
+#include "support/InterfaceSupply.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
@@ -67,12 +69,37 @@ void closureRefuses(StringRef source, StringRef code,
   auto message = toString(selected.takeError());
   require(StringRef(message).contains(code), message);
 }
+// A retained Host argument may be forwarded without being externally
+// constructible. A fresh native closure of the same call selects no external
+// operation: it publishes the withheld authority at exact coordinates, and the
+// SDK's Entry admission refuses fresh supply for an operation consuming it.
+void nativeIngressPublishes(StringRef source,
+                            std::vector<std::string> expected) {
+  auto project = check(source);
+  auto retained = must(closeEntry(project, "m::Demo"));
+  require(retained.invocations().size() == 1,
+          "retained wrapper must contain one native invocation");
+  const auto &call = retained.invocations().front();
+  auto external = must(prepareOriginal(must(
+      closeInvocation(project, {call.kind, call.target, call.arguments, {}}))));
+  zkc::test::requireWithheld(
+      zkc::test::withheldSupply(external.interface()), expected,
+      "fresh native closure published other supply marks: ");
+}
 void nativeClosureRefuses(StringRef source, StringRef code,
                           StringRef protocol = "m::Run") {
   auto selected = zkc::test::closeNativeRun(check(source), protocol);
   require(!selected, "native Run closure unexpectedly accepted");
   auto message = toString(selected.takeError());
   require(StringRef(message).contains(code), message);
+}
+void nativeClosurePublishes(StringRef source, StringRef protocol,
+                            std::vector<std::string> expected) {
+  auto selected = must(prepareOriginal(
+      must(zkc::test::closeNativeRun(check(source), protocol))));
+  zkc::test::requireWithheld(
+      zkc::test::withheldSupply(selected.interface()), expected,
+      "native Run closure published other supply marks: ");
 }
 CheckedOriginal original(StringRef source) {
   return must(prepareOriginal(
@@ -234,9 +261,9 @@ protocol Run roles(P)(point:G@P,value:F@P)->(r:bool@P) {
 entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(encoding));
-  closureRefuses(R"(module m;type State=builtin("shake128_state");
+  nativeIngressPublishes(R"(module m;type State=builtin("shake128_state");
 protocol Run roles(P)(s:State@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
-                 "source.ingress");
+                         {"s"});
   refuses(R"(module m;type State=builtin("shake128_state");
 protocol Run roles(P,V)(s:State@P)->(){let r=send P->V(s);return();})",
           "source.ingress");
@@ -271,11 +298,11 @@ enum Choice{Some(Fr),None()}
                        "entry fn Demo(inputs: Relay<Secret>::Inputs) { return "
                        "Relay<Secret>::run(inputs); }",
                    "source.ingress");
-  closureRefuses(prefix +
-                     "struct Secret{value:Fr}protocol Run "
-                     "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
-                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
-                 "source.ingress");
+  nativeIngressPublishes(
+      prefix + "struct Secret{value:Fr}protocol Run "
+               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+      {"x", "x.value"});
   refuses(prefix + "interface I{type State:Invent;}", "source.type");
   auto emitted = nativeOriginal(prefix + R"(
 struct Secret{value:Fr}
@@ -534,19 +561,21 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
       prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
                "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry fn "
                "Demo(inputs: Run::Inputs) { return Run::run(inputs); }")));
-  nativeClosureRefuses(prefix +
-                           "#[sealed] struct Secret {pub x:bool}protocol "
-                           "Run<T:Type+Copy+Drop> "
-                           "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
-                           "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@P)"
-                           "{let result=Run<Secret>(x);return(r=result);}",
-                       "source.ingress", "m::Inspect");
-  nativeClosureRefuses(
+  // Direct selection publishes the restricted input; the SDK's Entry
+  // admission refuses its fresh supply.
+  nativeClosurePublishes(prefix +
+                             "#[sealed] struct Secret {pub x:bool}protocol "
+                             "Run<T:Type+Copy+Drop> "
+                             "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
+                             "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@"
+                             "P){let result=Run<Secret>(x);return(r=result);}",
+                         "m::Inspect", {"x"});
+  nativeClosurePublishes(
       prefix + "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop> "
                "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
                "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@P)"
                "{let result=Run<Secret>(x);return(r=result);}",
-      "source.ingress", "m::Inspect");
+      "m::Inspect", {"x", "x.x"});
   auto libraryCapture = must(capture({{"lib", R"(module lib;
         pub interface Boxed<F:Field>{type State;fn make(x:F)->State effects(stop, opaque);fn open(x:State)->F effects(stop, opaque);}
         pub module Box<F:Field>:Boxed<F>{type State: Type =F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
@@ -624,11 +653,11 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
                "=nested(x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { "
                "return Run::run(inputs); }");
   must(compileEntry(nestedConstructor));
-  closureRefuses(prefix +
-                     "#[sealed] enum Secret {A(bool)}protocol Run "
-                     "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
-                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
-                 "source.ingress");
+  nativeIngressPublishes(
+      prefix + "#[sealed] enum Secret {A(bool)}protocol Run "
+               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+      {"x"});
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(prefix +
               "#[sealed] enum Secret {A(bool)}fn "
@@ -983,6 +1012,18 @@ void bounds() {
   require(StringRef(toString(oversizedNominal.takeError()))
               .contains("source.limit"),
           "nominal expansion escaped its byte bound");
+  // Every runtime variant is laid out through its portable descriptor, so a
+  // source variant has at most the descriptor's 64 alternatives.
+  auto variant = [](unsigned count) {
+    std::string arms;
+    for (unsigned i = 0; i < count; ++i)
+      arms += (i ? ",A" : "A") + std::to_string(i) + "()";
+    return "module m;enum Wide{" + arms + "}";
+  };
+  auto wideProject = check(variant(64));
+  Layouts wideLayouts(wideProject);
+  must(wideLayouts.get(Type(Type::Kind::Variant, "m::Wide")));
+  refuses(variant(65), "source.limit");
   Limits termLimits;
   termLimits.typeNodes = 2;
   check("module m;type A=bool;type B=bool;type C=bool;type D=bool;",
@@ -1003,12 +1044,23 @@ void bounds() {
     expanded += "type A" + std::to_string(i) + "=(A" + std::to_string(i - 1) +
                 ",A" + std::to_string(i - 1) + ");";
   refuses(expanded, "source.limit");
-  auto fanout = check(
-      "module m;protocol Run "
-      "roles(P)(z:[[[[();1024];1024];1024];1024]@P)->(){return("
-      ");}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
-  auto exploded = prepareOriginal(
-      must(zkc::test::closeProtocolDeployment(fanout, "m::Demo")));
+  // Observation checking may reach the capacity boundary before native
+  // layout expansion. Both stages must reject the same zero-leaf fanout.
+  auto exploded = [&]() -> Expected<CheckedOriginal> {
+    auto captured = must(capture(
+        {{"m",
+          "module m;protocol Run "
+          "roles(P)(z:[[[[();1024];1024];1024];1024]@P)->(){return("
+          ");}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+          "fanout.zkc"}}));
+    auto project = analyze(captured).checkedProject();
+    if (!project)
+      return project.takeError();
+    auto selected = zkc::test::closeProtocolDeployment(*project, "m::Demo");
+    if (!selected)
+      return selected.takeError();
+    return prepareOriginal(*selected);
+  }();
   require(!exploded, "zero-leaf schema fanout escaped the work bound");
   require(StringRef(toString(exploded.takeError())).contains("source.limit"),
           "wrong schema fanout failure");

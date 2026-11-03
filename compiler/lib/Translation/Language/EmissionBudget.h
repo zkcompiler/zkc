@@ -3,6 +3,7 @@
 
 #include "mlir/IR/Builders.h"
 #include <cstdint>
+#include <functional>
 #include <limits>
 
 namespace zkc::language {
@@ -18,12 +19,16 @@ public:
     return !overflow && inserted <= limit && additional <= limit - inserted;
   }
   uint64_t count() const { return inserted; }
-  void notifyOperationInserted(mlir::Operation *,
+  /// Optional observer of every insertion, for emission records.
+  std::function<void(mlir::Operation *)> observer;
+  void notifyOperationInserted(mlir::Operation *operation,
                                mlir::OpBuilder::InsertPoint) override {
     if (inserted == std::numeric_limits<uint64_t>::max())
       overflow = true;
     else
       ++inserted;
+    if (observer)
+      observer(operation);
   }
 
 private:

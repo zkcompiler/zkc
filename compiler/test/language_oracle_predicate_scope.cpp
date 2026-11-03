@@ -8,13 +8,14 @@ using namespace zkc::test;
 using zkc::MathematicalIdentity;
 namespace {
 constexpr StringLiteral proof = R"(
-proof Proof=Run{prover P;verifier V;public{source,rows,other};accept ok;construction authored;}
+proof Proof=Run{prover P;verifier V;public{rows,other};accept ok;construction authored;}
 )";
 std::string source(bool early = true, bool forwarded = false) {
   std::string text = R"(module m;
 domain F=field("koala-bear");
 type Table<T:Type+Copy+Drop>=builtin("oracle.table",T);
 type Oracle<K:OracleKind>=builtin("oracle",K);
+type Vector=builtin("vector",F);
 )";
   if (early)
     text += proof;
@@ -46,9 +47,9 @@ protocol Forward<T:Field,Max:nat> roles(P,V)
 }
 )";
   text += R"(
-#[shape(source.rows,bound=16)]
 protocol Run roles(P,V)
-    (source:Oracle<Table<F>>@P->V,rows:index@(P,V),other:index@(P,V))->(ok:bool@V) {
+    (values:Vector@P,rows:index@(P,V),other:index@(P,V))->(ok:bool@V) {
+  let source=send P->V(values) as oracle<Table<F>>(rows=rows) max 16;
 )";
   text +=
       forwarded
@@ -90,6 +91,18 @@ const Declaration &oracle(const ClosedEntry &entry) {
   return *found;
 }
 void verify(const ClosedEntry &entry) {
+  const auto *proof = entry.entry().proof();
+  require(proof && proof->publicInputs.size() == 2 &&
+              proof->publicInputs[0].port == 1 &&
+              proof->publicInputs[1].port == 2 &&
+              entry.root().inputs[0].type.domain == "vector" &&
+              entry.root().inputs[0].roles == std::vector<unsigned>{0} &&
+              llvm::any_of(entry.root().body->operations,
+                           [](const Operation &operation) {
+                             return std::holds_alternative<OracleSend>(
+                                 operation.action);
+                           }),
+          "proof must select ordinary public captures and deliver source data");
   const auto &decl = oracle(entry);
   const auto &definition = *decl.oracleDefinition;
   const auto &predicate = entry.declarations()[definition.admissibility.index];
@@ -167,6 +180,12 @@ int main() {
             [] { verify(close(source(false))); });
   cases.run("forwarded field and bound statics retain canonical capture slots",
             [] { verify(close(source(true, true))); });
+  cases.run("proof public selection refuses raw oracle handles", [] {
+    auto text = replace(source(), "values:Vector@P",
+                        "raw:Oracle<Table<F>>@P->V max 16,values:Vector@P");
+    text = replace(text, "public{rows,other}", "public{raw,rows,other}");
+    refuses(check(text), "source.entry");
+  });
   cases.run("a predicate block shadows its capture only within the block", [] {
     auto text = replace(source(), "requires true;", R"(
 requires {let rows=other;intrinsic("index.equal",rows,other)};

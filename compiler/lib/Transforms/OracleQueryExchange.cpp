@@ -87,7 +87,7 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
                        toHex(receiver.role, true), toHex(holder.role, true),
                        json::Array(constructors)};
   };
-  if (alternatives.size() > 32)
+  if (alternatives.size() > oracleExchangeConstructorLimit)
     return refuse();
   auto *context = receiver.state.front().getContext();
   auto requestIdentity = data::importVariantIdentity(

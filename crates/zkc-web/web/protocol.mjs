@@ -67,24 +67,32 @@ function dataArray(value, code, expectedLength) {
   return out;
 }
 
-function capacity(value) {
-  value = dataArray(value, 'web-options-capacity', 7);
-  if (value[0] !== 'zkc.native-capacity/0') fail('web-options-capacity');
-  const work = dataArray(value[5], 'web-options-capacity', 3);
-  const sizes = dataArray(value[6], 'web-options-capacity', 2);
-  const natural = (v, wasm32) => {
-    if (typeof v !== 'string') fail('web-options-capacity');
-    return (wasm32 ? BigInt(size(v, 'web-wasm32-capacity')) : u64(v, 'web-options-capacity')).toString();
-  };
-  return [value[0], ...value.slice(1, 5).map(v => natural(v, true)),
-    work.map(v => natural(v, false)), sizes.map(v => natural(v, true))];
+// The SDK's `capacity` and `interface_limits` records are opaque JSON data
+// here: Rust is their only reader and refuses a malformed record with its own
+// code. The copy keeps caller accessors, prototypes and custom methods out of
+// serialization, and bounds its work by the options size limit.
+function opaque(value, budget = { nodes: 65536 }, depth = 0) {
+  if (--budget.nodes < 0 || depth > 64) fail('web-options-limit');
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) {
+    if (Object.getOwnPropertyDescriptor(value, 'length').value > budget.nodes) fail('web-options-limit');
+    return dataArray(value, 'web-options').map(item => opaque(item, budget, depth + 1));
+  }
+  if (!value || typeof value !== 'object') fail('web-options');
+  const keys = Reflect.ownKeys(value);
+  record(value, keys, 'web-options');
+  const out = Object.create(null);
+  for (const key of keys) out[key] = opaque(Object.getOwnPropertyDescriptor(value, key).value, budget, depth + 1);
+  return out;
 }
 
 export function options(value = {}) {
-  record(value, ['capacity', 'package_bytes', 'allow_authored', 'operation', 'external_work', 'providers'], 'web-options');
+  record(value, ['capacity', 'interface_limits', 'package_bytes', 'allow_authored', 'operation',
+    'external_work', 'providers'], 'web-options');
   const out = {};
   for (const [key, v] of Object.entries(value)) {
-    if (key === 'capacity') out[key] = capacity(v);
+    if (key === 'capacity' || key === 'interface_limits') out[key] = opaque(v);
     if (key === 'package_bytes') out[key] = size(v, 'web-wasm32-package-bytes');
     if (key === 'external_work') out[key] = u64(v, 'web-options-external-work');
     if (key === 'allow_authored') {

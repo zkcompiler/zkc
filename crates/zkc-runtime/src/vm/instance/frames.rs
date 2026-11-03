@@ -86,6 +86,37 @@ impl<B: Backend> Instance<B> {
         data.services = self.frames.last().expect("loop parent").services().to_vec();
         self.propose_frame(data)
     }
+    pub(crate) fn branch_frame(
+        &mut self,
+        origin: Origin,
+        site: &str,
+        arm: usize,
+        alternative: &str,
+    ) -> Frame {
+        let inputs = self
+            .admitted
+            .branch_inputs(
+                &self.participant.as_ref().expect("participant root").symbol,
+                site,
+                arm,
+            )
+            .clone();
+        let mut data = self.frame_data(
+            origin,
+            Arc::new(FrameKind::Branch {
+                site: site.into(),
+                alternative: alternative.into(),
+            }),
+            inputs,
+        );
+        data.services = self
+            .frames
+            .last()
+            .expect("branch parent")
+            .services()
+            .to_vec();
+        self.propose_frame(data)
+    }
     fn propose_frame(&mut self, data: FrameData) -> Frame {
         let frame: Frame = data.into();
         self.pending_frame = Some(frame.clone());

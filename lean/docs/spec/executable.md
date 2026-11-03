@@ -28,15 +28,30 @@ by a transcript operation is decoded; other parameters stay text.
 Bindings retain the complete list of physical specialization arguments from the
 five-field native binding record. The bridge never erases that list.
 
-Participant instructions are typed receives, local calls, counted loops, the
-yield that ends a loop body and the final return. A loop names its count, which
-must not exceed a static maximum, its induction variable, its carried values
-with their initial values, its captured values, its body and the names bound to
-what the last iteration yields. Local function bodies are operations on declared
-bindings, Boolean constants, conditional regions on captured values, counted
-iterations over an index range, explicit stops, region yields and the final
-return. Any other instruction is kept as unsupported, which the rule refuses.
-The carrier fixes no meaning.
+Participant instructions are typed receives, local calls, counted loops,
+selected conditionals and matches, the yield that ends a loop body or an arm,
+and the final return. A loop names its count, which must not exceed a static
+maximum, its induction variable, its carried values with their initial values,
+its capture rows, its body and the names bound to what the last iteration
+yields. A conditional names its Boolean condition, its capture rows, its two
+arms (true first) and its outputs; a match names its variant input, its capture
+rows, its arms in declaration order, each with its alternative, its payload
+bindings and its body, and its outputs. A capture row `[formal, parent]` binds
+a formal of the body to a parent value of the enclosing body; rows are kept as
+rows, so two formals may share one parent. Local function bodies are operations
+on declared bindings, Boolean constants, conditional regions on captured values,
+counted iterations over an index range, explicit stops, region yields and the
+final return; local control keeps capture names. The bridge decodes capture
+fields by body kind and refuses a participant name list or a local row list.
+Any other instruction is kept as unsupported, which the rule refuses. The
+carrier fixes no meaning.
+
+A participant loop body and every arm is a nested lexical environment: it sees
+its formals only (induction, carried and capture formals, or payload bindings
+and capture formals), and its bindings are not visible after it. Sites, message
+schemas and service ports stay participant-wide. `ProgramArtifact` carries a
+whole program in the same vocabulary: bindings, functions, participant
+definitions with their service ports, and entries.
 
 ## Meaning
 
@@ -45,12 +60,19 @@ initial transcript and the proof's message bytes, with the deployment's
 occurrence `Context`, a challenge function in any monad, a decoder and an
 instruction budget.
 
-- Work. Every receive, local call, loop, yield and return of the participant
-  and every instruction of a local body is charged one instruction. A local call
-  enters a frame and runs the function's body; every loop iteration runs the
-  loop body in a frame of its own, holding the index, the carried values and the
-  captures. The budget is checked before each charge, so a budget of `b`
-  executes exactly the first `b` charged steps.
+- Work. Every receive, local call, loop, branch, yield and return of the
+  participant and every instruction of a local body is charged one instruction.
+  A local call enters a frame and runs the function's body; every loop
+  iteration runs the loop body in a frame of its own, holding the index, the
+  carried values and the capture formals; a branch runs only its selected arm,
+  in a frame named by the branch site and the arm's alternative, holding the
+  capture formals. That frame, `FrameId.branch`, is the runner's runtime
+  occurrence step `["branch", site, alternative]`; the four-field
+  occurrence-template step `["branch", protocol, site, alternative]`
+  (`Construction.Step.branch`) is a different record. Each row binds its own
+  formal to its parent's value; the native runner's per-row storage charge is
+  an unmodelled resource. The budget is checked before each charge, so a budget
+  of `b` executes exactly the first `b` charged steps.
 - Framing. A receive reads an eight-byte little-endian length and that many
   bytes. A missing message cancels the run; a message that does not decode at
   the receive's physical type stops it after charging the receive. A decoded
@@ -70,16 +92,28 @@ instruction budget.
   crossed payload sort or additional physical argument does not resolve.
 - Numerical calls. A `numerical.map`, `numerical.sum` or `numerical.product`
   binding names its field and an operand mask, and its operation carries one
-  `zkc.ring/0` expression as text. `Numerical.decode` reads that text into a
-  `Zkc.Algebra.RingExpression.Expr` with natural literals and slot inputs,
-  refusing with a named reason exactly the payloads the runtime's program
-  admission refuses: a body over 4096 bytes, text other than the canonical
-  encoding of an arena, an input or constant outside the call's field, a literal
-  that is not a canonical decimal below the characteristic, an input node outside
-  the declared inputs, an operand that does not point backward, an embedding,
-  declared inputs other than the mask's positions, other than one output, and a
-  node the output does not reach. A mask has at most 1023 positions. A refused
-  payload or mask does not resolve. One vocabulary row serves every mask: the
+  [physical plan](../../../docs/spec/runtime/numerical-plans.md)
+  `["zkc.numerical-plan/0", expression, lanes, slots, locations]` as text, whose
+  expression is a nested `zkc.ring/0` arena. `Numerical.decode` reads that text
+  into the plan's expression, a `Zkc.Algebra.RingExpression.Expr` with natural
+  literals and slot inputs, refusing with a named reason exactly the payloads the
+  runtime's program admission refuses: a plan over 16384 bytes or an expression
+  over 4096, text other than the canonical encoding of a plan (a bare expression
+  included), an input or constant outside the call's field, a literal that is
+  not a canonical decimal below the characteristic, an input node outside the
+  declared inputs, an operand that does not point backward, an embedding,
+  declared inputs other than the mask's positions, other than one output, a node
+  the output does not reach, lanes outside 1 through 256, a slot count outside 1
+  through the node count, locations other than one slot below the count for
+  every node, an unused slot, and an invalid slot schedule. The schedule is the
+  plan contract's: an input varies exactly when its mask position is a vector, a
+  node varies when an operand does, invariant nodes run once before the varying
+  ones, and the output (when invariant) and every invariant operand of a varying
+  node persist. Every node must read its operands from slots that still hold
+  them, no write may replace a persistent value, and the output's slot must keep
+  the output. Lanes and locations are a storage proposal: a valid plan computes
+  its expression at every row, so its meaning is the expression's. A mask has at
+  most 1023 positions. A refused payload or mask does not resolve. One vocabulary row serves every mask: the
   mask is the binding's last static argument. The call reads the row count and
   then one scalar for each `0` and one vector of exactly that many values for
   each `1`; another operand count, kind, field or length is a refusal of the
@@ -94,8 +128,18 @@ instruction budget.
 - Control. A conditional runs the region its Boolean selects; an iteration runs
   its region for every index of its range, carrying what each iteration yields
   into the next; a participant loop runs its body for every index below its
-  count. A count above the static maximum, a missing name or a yield of the
-  wrong length is a contract failure. An explicit stop names its reason.
+  count. A participant conditional runs only the arm its Boolean selects and
+  binds its outputs to what that arm yields; the other arm is a static
+  inventory, not an executed trace. A count above the static maximum, a
+  non-Boolean condition, a missing name or a yield of the wrong length is a
+  contract failure. An explicit stop names its reason; a stop inside an arm
+  leaves the arm's frame with the others.
+- Unsupported instructions. The executable value model has no variant values,
+  so a participant match is outside the profile: reaching it stops with the
+  explicit refusal `Cause.unsupported "participant-match"`, uncharged, as
+  reaching an instruction kept as unsupported stops with its name. Such a stop
+  is a refusal of the profile, not a failure of the program; its outcome class
+  is `refused`.
 - Custody. The transcript is one affine unit. An observation or challenge must
   consume its live state; a stale state is a contract failure.
 - Stops. A stop leaves every active frame, innermost first, and retires the live
@@ -107,13 +151,32 @@ instruction budget.
 must be the framing magic and the expected invocation binding, the run must
 return normally with the selected Boolean true, and every proof byte must be
 read. `installed` is the vocabulary of the native BLS12-381 deployments: the
-arkworks scalar-field, G1, scalar-vector and numerical expression kernels, the
-native index kernels and the Merlin transcript kernels of
-`merlin3.bls12-381.fr64be/0`.
+arkworks scalar-field, G1, scalar-vector, Boolean and numerical expression
+kernels, the native index kernels, the Merlin transcript kernels of
+`merlin3.bls12-381.fr64be/0` and the logical custody rows.
 Its observation rows require the exact arkworks field or group specialization;
 an absent, different or additional physical argument has no installed meaning.
 Other installed rows require an empty specialization list. Native implementation
 correctness remains an assumption; matching a row is not a proof of a kernel.
+
+The custody rows `logical/resource_unit.create`, `pass` and `consume` take the
+slot as their one static argument, any valid slot identity, and the custody sort
+of a valid slot is admitted at `logical.resource_unit/0`
+(`Vocabulary.custodyRepresentations`). They select logical bookkeeping whose
+operational meaning is the custody ledger (`PIR.Custody`). Local helper
+correspondence uses its closed, payload-erased projection, matching
+`SiteObservations.closed`: create and pass return token zero, and consume
+returns no value. The local decoder checks the exact nominal slot and operand
+shape. This interpretation proves neither runtime token freshness nor nested
+ledger ownership. Successful native runs are related to this projection by the
+explicit runtime acceptance-inclusion boundary; checked ledger refusal is never
+asserted to be a successful native run. The structured custody-erasure and
+frame-soundness theorems retain their stated admission premises.
+
+Custody coordinates may occur in local helper arguments and results, but never
+in public inputs, proof messages or transcript payloads. The constructed
+instruction profile has no standalone custody transfer: reading a transfer
+outside a checked local helper refuses with `unsupported "resource_unit"`.
 
 `evalSteps` is the unbounded meaning of a local body that applies no transcript
 operation: the values it hands back, or the cause it stops for, after the
@@ -129,7 +192,8 @@ validator calls by name.
 
 - A local call to a function the constructed validator calls by name is a
   helper call. Its body must apply no transcript operation, its operands must
-  have the sorts of its formals and its results must be data. The reading keeps
+  have the sorts of its formals and its results must be local scalar data or
+  exact-slot custody coordinates. The reading keeps
   the call, and its charge is what the body's evaluation charges.
 - Any other local call is transparent: formals denote actual operands and the
   results denote the operands of the return, as the constructed-participant
@@ -138,9 +202,12 @@ validator calls by name.
   with `reject`) read as a guard instruction.
 - A participant loop must count with an index data input, carry values whose
   sorts it keeps, hand on the live transcript in custody, carry at most one
-  transcript, capture data only, and yield its carried sorts; the reading is a
-  constructed loop with the same maximum, whose body is the reading of the loop
-  body.
+  transcript, capture copyable data only (never the transcript or a custody
+  permission), and yield its carried sorts; the reading is a constructed loop
+  with the same maximum, whose body is the reading of the loop body in the
+  scope of its formals, each capture formal denoting its parent.
+- The constructed instructions have no participant branch: a participant
+  conditional or match refuses with `unsupported "participant-branch"`.
 - Each operation is read through the vocabulary's meaning, with checked operand
   sorts, consumption of the live transcript and the live transcript as the only
   returned transcript. Function and binding symbols must be distinct, and every
@@ -377,26 +444,27 @@ reader and runtime links remain the separate assumptions below.
 `ZkcExamples.Executable.SumcheckProof` applies the rule to the validator of the
 `zkc.program/0` candidate of the Sumcheck example's `example::Proof`
 (`SumcheckProofProgramData`). The rule accepts it against the constructed
-validator of `ZkcExamples.Construction.SumcheckProof`: a helper call for the
-empty point, a loop over the round count of at most the Entry's static maximum
+validator of `ZkcExamples.Construction.SumcheckProof`: the Pending constructor
+and claim-opening helper calls, a loop over the round count of at most the Entry's static maximum
 of rounds (`maximum`, two for this Entry), each receiving its two message
 coordinates, observing them, checking the round sum, drawing and delivering the
 challenge, extending the point by a helper call and updating the claim, and
-finally the terminal check as a helper call. Its receive plan gives two scalar
+finally prefix repacking and the terminal check as helper calls. Its receive plan gives two scalar
 messages per admitted round (`plan_types`).
 
-`ZkcExamples.Executable.SumcheckHelpers` proves the three helpers prepared
+`ZkcExamples.Executable.SumcheckHelpers` proves the five helpers prepared
 against the admitted source's closed helper table. The helper rule accepts the
-empty point and the point extension (`rule_accepted`). The terminal check
+Pending constructor, claim opening, point extension and prefix repacking
+(`rule_accepted`). The terminal check
 iterates and is outside the rule's table (`check_outside`); its preparation
 (`check_prepared`) evaluates its body, which checks the authored table shape
 with a doubling loop and then folds the table over the point one coordinate at
 a time, interpolating its low and high halves with one numerical map call
-(`map_returns`), whose decoded expression is `low + (high - low) r`. The fold is
+(`map_returns`), whose decoded expression is `low + r (high - low)`. The fold is
 `Zkc.Polynomial.Multilinear.restrictPrefixValues`, and the source contract of
 the check (`SumcheckSourceContracts.check_equation` and the stop contracts for
 out-of-range lengths) gives the same result in every case. The same evaluation
-gives the check's charge, `62 + 20 · n` on a well-shaped table and a point of
+gives the check's charge, `63 + 20 · n` on a well-shaped table and a point of
 `n` coordinates (`check_cost`).
 
 `ZkcExamples.Executable.SumcheckFamily.honest_accepted` proves actual byte
@@ -411,8 +479,8 @@ correspondence premise.
 The family derives round and loop correspondence, the restricted-table
 invariant, successful terminal execution, sufficient resources and exact
 message decoding. With append-helper price bounded by `a`, its sufficient
-charge is `72 + (a + 57) * rounds`; the terminal helper uses the selected
-`62 + 20 * point.length` price law. This is a reusable cost method for this
+charge is `76 + (a + 57) * rounds`; the terminal helper uses the selected
+`63 + 20 * point.length` price law. This is a reusable cost method for this
 shape, not a universal backend cost model. Generic family modules do not import
 the retained Entry; `SumcheckCharges` and `SumcheckDomainHonest` discharge its
 concrete local obligations.
@@ -441,7 +509,7 @@ the loop's entry, the rounds and their yields, the consuming terminal check and
 its helper body, and the return. The Pending boundary adds four fixed
 instructions relative to the earlier scalar-only root. The loop is bounded by `DomainVM.FitsK.loop_invariant` with the
 invariant that the carried point has one coordinate per completed round. For
-this Entry `charge rounds = 72 + 59 · rounds` (`charge_eq`): per round, 38
+this Entry `charge rounds = 76 + 59 · rounds` (`charge_eq`): per round, 38
 instructions in the loop body, the point extension's body included, its yield,
 and 20 in the terminal check: 14 in its fold and 3 in each of its two shape
 checks' doubling loops. It is `DomainVM.Sufficient` for every proof and
@@ -457,7 +525,7 @@ draws, sending the sums of the low and high halves of its current table in each
 round and then restricting the table at the challenge. Each honest round passes
 by the round statement with the challenge function's answers and no stop, and
 the rounds compose by the fold invariant: the claim is the sum of the table
-restricted at the point. At two rounds the bound is 186 instructions, the
+restricted at the point. At two rounds the bound is 194 instructions, the
 runtime's measured threshold.
 
 `ZkcArkLibExamples.ExecutableSumcheckFiatShamir` transfers the compiled
@@ -524,8 +592,8 @@ native-correctness assumptions are replaced by the following.
   needs the whole-proof cap, not just those per-message bounds.
 - Installed kernels implement the meanings of `installed`, at the admitted
   representations and within the runtime's capacity limits. For a numerical
-  call this includes that the kernel evaluates the expression as
-  `Numerical.decode` reads its payload.
+  call this includes that the kernel evaluates the plan's expression as
+  `Numerical.decode` reads it.
 - The native codec is a function of a message's bytes and type. Soundness needs
   no other property of it.
 - The managed transcript absorbs the invocation's public values injectively.

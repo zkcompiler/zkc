@@ -58,14 +58,14 @@ theorem actual_input_shape (xs : List (model.Field field)) (n : Nat) :
 
 theorem actual_initial (scalar : model.Field field) :
     invoke (Multilinear.closed model (definitions := (source selection).payload.definitions))
-      SmallSumcheckInputs.helper9Helper (.cons scalar .nil) = .done (.cons [] (.cons scalar .nil)) :=
-  (Sum.initial model field "s0").invoke (model := model) (helper := SmallSumcheckInputs.helper9Helper)
+      SmallSumcheckInputs.helper9Helper (.cons scalar .nil) = .done (.cons 0 (.cons [] (.cons scalar .nil))) :=
+  (SumcheckReductionReference.pendingLaw model).invoke (model := model) (helper := SmallSumcheckInputs.helper9Helper)
     _ (source selection).payload.linked (wrappers model selection).initial _ trivial
 
-theorem actual_identity (point : List (model.Field field)) (scalar : model.Field field) :
+theorem actual_atPrefix (point : List (model.Field field)) (scalar : model.Field field) :
     invoke (Multilinear.closed model (definitions := (source selection).payload.definitions))
-      TwoSumsInputs.helper24Helper (.cons point (.cons scalar .nil)) = .done (.cons point (.cons scalar .nil)) :=
-  (Sum.identity model field).invoke (model := model) (helper := TwoSumsInputs.helper24Helper)
+      TwoSumsInputs.helper24Helper (.cons point (.cons scalar .nil)) = .done (.cons 0 (.cons point (.cons scalar .nil))) :=
+  (SumcheckReductionReference.atPrefixLaw model).invoke (model := model) (helper := TwoSumsInputs.helper24Helper)
     _ (source selection).payload.linked (wrappers model selection).atPrefix _ trivial
 
 theorem actual_both (a b : Bool) :
@@ -76,19 +76,19 @@ theorem actual_both (a b : Bool) :
 
 /-- Actual complete reduction bodies, selected once, share the nominal theorem. -/
 theorem actual_reduction (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2)
-    (point : Option (List (model.Field field))) (scalar : Option (model.Field field))
+    (custody : Option CustodyToken) (point : Option (List (model.Field field))) (scalar : Option (model.Field field))
     (count service : Option Nat) :
     (reduction selection).denote
       (participantMeaningWithOn model (.silent _) Occurrence.actions
         (SumcheckReferenceInstallation.tables model (source selection).payload.definitions)
         (ctx.roles 1) (Occurrence.table model (source selection).payload) ctx Occurrence.iterations)
       (SumcheckReductionReference.pattern.environment model
-        (SumcheckReductionReference.inputs model point scalar count service)).get =
+        (SumcheckReductionReference.inputs model custody point scalar count service)).get =
       SumcheckReductionReference.reference model (source selection).payload.definitions
-        (Occurrence.table model (source selection).payload) (maximum selection) ctx point scalar count service := by
+        (Occurrence.table model (source selection).payload) (maximum selection) ctx custody point scalar count service := by
   rw [reduction_selected]
   exact SumcheckReductionReference.body_reference model _ (source selection).payload.linked
-    (SumcheckReductionReference.actual_bodies model selection) _ _ ctx distinct point scalar count service
+    (SumcheckReductionReference.actual_bodies model selection) _ _ ctx distinct custody point scalar count service
 
 /-- Shape rejection is a returned false, independent of any scalar claim. -/
 theorem bad_table (xs : List (model.Field field)) (n w : Nat) (bad : w ≠ 1 ∨ xs.length ≠ 2^n) :

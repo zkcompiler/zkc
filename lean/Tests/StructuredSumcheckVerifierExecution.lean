@@ -17,7 +17,7 @@ def reduceInputs (claim : Option F) (count service : Option Nat) :
 
 def reduceResult (values : Values (Component (assignment F F))
     SumcheckReduceBodies.runSignature.outputs) : Option (List F) × Option F :=
-  (values.get (.there (.there .here)), values.get (.there (.there (.there .here))))
+  (values.get (.there (.there (.there .here))), values.get (.there (.there (.there (.there .here)))))
 
 def reduceRun (claim : Option F) (count service : Option Nat) (state : State F) :=
   ((SumcheckReduceViews.program.participant F F 1 (reduceInputs claim count service)).bind
@@ -102,11 +102,14 @@ def run : IO Unit := do
       SumcheckReduceBodies.runSignature.inputs :=
     .cons (some [0, 1]) (.cons (some 1) (.cons none (.cons (some 1) (.cons none .nil))))
   let prover := ((SumcheckReduceViews.program.participant (ZMod 5) (ZMod 5) 0 proverInputs).bind
-    fun values => .done (values.get .here, values.get (.there .here),
-      values.get (.there (.there .here)), values.get (.there (.there (.there .here))))).run
+    fun values => .done (((values.get .here, values.get (.there .here)),
+      (values.get (.there (.there .here)), values.get (.there (.there (.there .here))),
+        values.get (.there (.there (.there (.there .here)))))) :
+        (Option (List (ZMod 5)) × Option (List (ZMod 5))) ×
+          (Option Nat × Option (List (ZMod 5)) × Option (ZMod 5)))).run
         handler ⟨[.ack, .ack, .value 2], 0⟩
   test "independent cp differs from cv without changing the V point"
-    (sameExecution prover ⟨.returned (some [2], some [2], none, none), ⟨[], 3⟩,
+    (sameExecution prover ⟨.returned ((some [2], some [2]), (none, none, none)), ⟨[], 3⟩,
       [.send (lowSite reduceContext) 1 0, .send (highSite reduceContext) 1 1,
         .receive (deliverySite reduceContext) 1 2]⟩ &&
       (reduceRun (some 1) (some 1) (some 7) replies).outcome == .returned (some [1], some 1))

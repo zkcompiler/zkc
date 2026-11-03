@@ -70,16 +70,16 @@ theorem operationOn_table_congr (left right : HelperTable model.Value interface)
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | fieldEmbed | vectorLength =>
+  | fieldEmbed | vectorLength | passUnit | consumeUnit =>
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark =>
+  | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark | createUnit =>
     funext arguments callbacks
     cases arguments
     cases callbacks
     rfl
-  | indexEqual | indexLess | indexPowerOfTwo | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | boundedAt | groupAdd | groupScale | groupEqual =>
     funext arguments callbacks
     cases arguments with

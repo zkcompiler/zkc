@@ -35,19 +35,19 @@ structure Dependencies (table : Meanings F G) : Prop where
       (Goals.BlockArguments.pack (Value := assignment F G) ⟨source, position, width⟩) =
       .done (Goals.BlockResult.pack (Value := assignment F G) ⟨block source position size⟩)
   power : ∀ width, width < 64 →
-    invoke table GkrSourceBodies.helper18Helper
+    invoke table GkrSourceBodies.helper4Helper
       (Goals.PowerArguments.pack (Value := assignment F G) ⟨width⟩) =
       .done (Goals.PowerResult.pack (Value := assignment F G) ⟨2 ^ width⟩)
   replicate : ∀ (source : List F) count, source.length < indexLimit → count < indexLimit →
-    invoke table GkrSourceBodies.helper25Helper
+    invoke table GkrSourceBodies.helper60Helper
       (Goals.RepeatArguments.pack (Value := assignment F G) ⟨source, count⟩) =
       .done (Goals.RepeatResult.pack (Value := assignment F G) ⟨source.flatMap (List.replicate count)⟩)
   tile : ∀ (source : List F) count, count < indexLimit → source.length < indexLimit →
-    invoke table GkrSourceBodies.helper30Helper
+    invoke table GkrSourceBodies.helper63Helper
       (Goals.RepeatArguments.pack (Value := assignment F G) ⟨source, count⟩) =
       .done (Goals.RepeatResult.pack (Value := assignment F G) ⟨(List.replicate count source).flatten⟩)
   gates : ∀ {n : Nat} (add mul left right : Table F n), 2 ^ n < indexLimit →
-    invoke table GkrSourceBodies.scopedHelper44Helper
+    invoke table GkrSourceBodies.helper57Helper
       (GkrGateGoals.Map.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode add, mulWeights := GkrRoundsLayout.encode mul,
           lefts := GkrRoundsLayout.encode left, rights := GkrRoundsLayout.encode right }) =

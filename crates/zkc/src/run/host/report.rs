@@ -14,11 +14,17 @@ pub struct HostReport {
     session: String,
     limits: Json,
     layout: Json,
+    invocation: zkc_runtime::vm::ExecutionLedger,
+    /// The root's usage when this invocation's execution ended, which every
+    /// rendering reports; renderings and encodings charge the root beyond it.
+    invocation_usage: zkc_runtime::vm::ExecutionLedgerUsage,
 }
 impl HostReport {
-    pub(super) fn new(host: &RunHost, session: &str) -> Self {
-        let mut limits = host.limits.record();
-        limits["execution"]["ring_work_per_role"] = json!(host.ring_work_limit);
+    pub(super) fn new(
+        host: &RunHost,
+        session: &str,
+        invocation: zkc_runtime::vm::ExecutionLedger,
+    ) -> Self {
         Self {
             execution: None,
             unstarted: Vec::new(),
@@ -29,9 +35,26 @@ impl HostReport {
             cleanup_errors: Vec::new(),
             identity: host.identity.clone(),
             session: session.into(),
-            limits,
+            limits: host.limits.record(),
             layout: host.layout(),
+            invocation,
+            invocation_usage: Default::default(),
         }
+    }
+    /// The ledger that charged this invocation's Host-side inspection; result
+    /// encoding charges it too.
+    pub fn invocation_ledger(&self) -> &zkc_runtime::vm::ExecutionLedger {
+        &self.invocation
+    }
+    /// The root's usage when this invocation's execution ended: the Host's
+    /// work and storage and every runner's bytes, and, for an Entry, its
+    /// result reconstruction. Every rendering reports this figure.
+    pub fn invocation_usage(&self) -> zkc_runtime::vm::ExecutionLedgerUsage {
+        self.invocation_usage
+    }
+    /// Record the root's usage as the end of this invocation's execution.
+    pub(crate) fn record_invocation_usage(&mut self) {
+        self.invocation_usage = self.invocation.snapshot();
     }
     pub(super) fn finalize(
         &mut self,
@@ -95,6 +118,7 @@ impl HostReport {
                     .push(json!({"role":role,"code":"bundle-incomplete-cleanup"}));
             }
         }
+        self.record_invocation_usage();
     }
     /// Bounded, payload-free child receipt without materializing the whole trace.
     pub fn diagnostics_summary(&self) -> Json {
@@ -110,6 +134,7 @@ impl HostReport {
                 .map(|r| json!({"role":text(&r.role),"after":state_summary(&r.after)}))
         });
         json!({"phase":self.phase,"session":self.session,"failure":self.failure.as_deref().map(text),
+            "invocation":crate::host::diagnostics::invocation(&self.invocation, &self.invocation_usage),
             "cleanup_errors":values(self.cleanup_errors.iter()),
             "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),
             "resources":values(self.resources.iter()),
@@ -123,14 +148,17 @@ impl HostReport {
             "roles":execution.map(|e|e.roles.iter().take(16).map(|r| {
                 let backend=&e.backends.iter().find(|(name,_)|name==&r.role).expect("role custody").1;
                 json!({"role":text(&r.role),"before":state_summary(&r.before),"after":state_summary(&r.after),"cancelled":r.cancelled,
-                    "usage":r.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
-                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,"logical_bytes":u.logical_bytes})),
+                    "usage":r.usage.as_ref().map(crate::host::diagnostics::usage),
                     "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),
                     "sequence_work":backend.sequence_work_spent(),"active_frames":backend.active_frames(),
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&r.outputs)})
             }).collect::<Vec<_>>())})
     }
-    /// Materialize readable native outputs without consuming returned resources.
+    /// Materialize readable native outputs without consuming returned
+    /// resources. Each encoding is a new allocation: its conservative bound is
+    /// charged to the invocation root before encoding, and the returned
+    /// encoding holds its live allowance. An encoding the root cannot afford
+    /// is `Unavailable` with `bundle-output-limit`.
     pub fn encode_outputs(&self) -> Vec<RoleOutputEncoding> {
         self.execution
             .as_ref()
@@ -146,56 +174,140 @@ impl HostReport {
                     .find(|(name, _)| name == &role.role)
                     .expect("role custody")
                     .1;
+                let mut retained = Vec::new();
+                let values = role
+                    .outputs
+                    .iter()
+                    .map(|value| {
+                        let ty = value.physical_type();
+                        if !backend.installation().supports_wire(&ty) {
+                            return EncodedOutput::Private {
+                                physical_type: ty.spelling(),
+                            };
+                        }
+                        match zkc_runtime::host::wire::reserve_allocation(
+                            Some(&self.invocation),
+                            zkc_cpu::native_encoding_bound(value),
+                        ) {
+                            Ok(live) => retained.extend(live),
+                            Err(_) => {
+                                return EncodedOutput::Unavailable {
+                                    code: "bundle-output-limit".into(),
+                                };
+                            }
+                        }
+                        match backend.encode_native_value(value) {
+                            Ok(bytes) => EncodedOutput::Wire {
+                                physical_type: ty.spelling(),
+                                bytes,
+                            },
+                            Err(error) => EncodedOutput::Unavailable {
+                                code: error.to_string(),
+                            },
+                        }
+                    })
+                    .collect();
                 RoleOutputEncoding {
                     role: role.role.clone(),
-                    values: role
-                        .outputs
-                        .iter()
-                        .map(|value| {
-                            let ty = value.physical_type();
-                            if !backend.installation().supports_wire(&ty) {
-                                EncodedOutput::Private {
-                                    physical_type: ty.spelling(),
-                                }
-                            } else {
-                                match backend.encode_native_value(value) {
-                                    Ok(bytes) => EncodedOutput::Wire {
-                                        physical_type: ty.spelling(),
-                                        bytes,
-                                    },
-                                    Err(error) => EncodedOutput::Unavailable {
-                                        code: error.to_string(),
-                                    },
-                                }
-                            }
-                        })
-                        .collect(),
+                    values,
+                    _retained: retained,
                 }
             })
             .collect()
     }
+    /// A bound of the rendered diagnostics: a fixed allowance for each reached
+    /// row, role, resource and cleanup record, plus the strings and iteration
+    /// numbers that each row's rendered control path repeats, and the retained
+    /// layout and limit records.
+    fn diagnostics_bound(&self) -> usize {
+        const RECORD: usize = 2048;
+        const ELEMENT: usize = 256;
+        const ITERATION: usize = 64;
+        let json = |value: &Json| value.to_string().len().saturating_mul(4);
+        let rows = self.execution.as_ref().map_or(0, |execution| {
+            execution
+                .reached
+                .iter()
+                .map(|row| {
+                    let path = row
+                        .path
+                        .iter()
+                        .map(|element| {
+                            use zkc_runtime::vm::PathElement;
+                            ELEMENT
+                                + match element {
+                                    PathElement::Branch { site, alternative }
+                                    | PathElement::Match { site, alternative } => {
+                                        site.len() + alternative.len()
+                                    }
+                                    PathElement::Conditional { site, .. }
+                                    | PathElement::For { site, .. }
+                                    | PathElement::Loop { site, .. } => site.len(),
+                                }
+                        })
+                        .fold(0usize, usize::saturating_add);
+                    RECORD
+                        .saturating_add(path)
+                        .saturating_add(row.iterations.len().saturating_mul(ITERATION))
+                })
+                .fold(0usize, usize::saturating_add)
+                .saturating_add(execution.roles.len().saturating_mul(RECORD))
+        });
+        let records = self
+            .resources
+            .len()
+            .saturating_add(self.cleanup_errors.len())
+            .saturating_add(self.unstarted.len())
+            .saturating_mul(RECORD);
+        rows.saturating_add(records)
+            .saturating_add(json(&self.layout))
+            .saturating_add(json(&self.limits))
+            .saturating_add(crate::host::diagnostics::INVOCATION_BOUND)
+            .saturating_add(RECORD)
+    }
     /// Resource and control observations, without a command envelope or values.
+    /// Rendering repeats each row's control path, so its bound is charged to
+    /// the invocation root first. When the root cannot afford it, the result is
+    /// the bounded summary with `"diagnostics": "omitted"`.
     pub fn diagnostics(&self) -> Json {
+        let bound = self.diagnostics_bound();
+        if self
+            .invocation
+            .charge(
+                zkc_runtime::vm::WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: bound as u64,
+                },
+                bound,
+            )
+            .is_err()
+        {
+            let mut summary = self.diagnostics_summary();
+            summary["diagnostics"] = json!("omitted");
+            return summary;
+        }
         let diagnostics = self.cleanup_errors.clone();
         let mut result = json!({"phase":self.phase,
             "bundle_sha256":self.identity,"session":self.session,"limits":self.limits,"layout":self.layout,
+            "invocation":crate::host::diagnostics::invocation(&self.invocation, &self.invocation_usage),
             "failure":self.failure,"resources":self.resources,"roles":[],"outcome":null});
         if let Some(execution) = &self.execution {
             result["outcome"] = outcome(&execution.outcome);
             result["wire"] = json!({"sends":execution.wire.sends,"receives":execution.wire.receives,
                 "sent_bytes":execution.wire.sent_bytes,"replacement_bytes":execution.wire.replacement_bytes});
             result["reached"] = json!(execution.reached.iter().map(|r|json!({"role":r.step.role,"instruction":r.step.instruction,
-                "anchor":r.step.anchor,"iterations":r.iterations,"progress":format!("{:?}",r.progress),
-                "loop_count":r.loop_count,"loop_started":r.loop_started,"sent_bytes":r.sent_bytes,
+                "anchor":r.step.anchor,"iterations":&*r.iterations,"progress":format!("{:?}",r.progress),
+                "loop_count":r.loop_count,"loop_started":r.loop_started,
+                "branch_alternative":r.branch_alternative,"branch_started":r.branch_started,
+                "control_path":r.path.iter().map(path_element).collect::<Vec<_>>(),"sent_bytes":r.sent_bytes,
                 "receive_completion":r.receive_completion.as_ref().map(|v|format!("{v:?}"))})).collect::<Vec<_>>());
             result["pending"] = json!(execution.pending.as_ref().map(|p|json!({"send_step":p.send_step,
                 "receive_step":p.receive_step,"original_bytes":p.original_bytes,"bytes":p.bytes.len()})));
             result["roles"] = json!(execution.roles.iter().map(|role| {
                 let backend = &execution.backends.iter().find(|(name,_)|name==&role.role).expect("role custody").1;
                 json!({"role":role.role,"before":state(&role.before),"after":state(&role.after),"cancelled":role.cancelled,
-                    "usage":role.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
-                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,
-                        "logical_bytes":u.logical_bytes})),
+                    "usage":role.usage.as_ref().map(crate::host::diagnostics::usage),
                     "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),"active_frames":backend.active_frames(),
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&role.outputs),"outputs":null,
                     "return_at":role.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s}))})
@@ -211,9 +323,11 @@ impl HostReport {
     }
 }
 /// Per-role semantic output encoding, independent of command presentation.
+/// It holds the encodings' live allowance in the invocation root.
 pub struct RoleOutputEncoding {
     pub role: String,
     pub values: Vec<EncodedOutput>,
+    _retained: Vec<zkc_runtime::vm::LiveReservation>,
 }
 pub enum EncodedOutput {
     Wire {
@@ -343,4 +457,17 @@ pub(super) fn check_units(
         }
     }
     Ok(())
+}
+
+fn path_element(element: &zkc_runtime::vm::PathElement) -> serde_json::Value {
+    use zkc_runtime::vm::PathElement;
+    match element {
+        PathElement::Branch { site, alternative } => json!(["branch", site, alternative]),
+        PathElement::Match { site, alternative } => json!(["match", site, alternative]),
+        PathElement::Conditional { site, taken } => {
+            json!(["if", site, if *taken { "then" } else { "else" }])
+        }
+        PathElement::For { site, index } => json!(["for", site, index.to_string()]),
+        PathElement::Loop { site, iteration } => json!(["loop", site, iteration.to_string()]),
+    }
 }

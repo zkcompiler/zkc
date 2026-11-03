@@ -23,6 +23,7 @@ bool BodyChecker::oracleExpression(const Expression &expr) {
   case K::And:
   case K::Or:
   case K::Call:
+  case K::MethodCall:
   case K::NotationCall:
   case K::Subscript:
   case K::Intrinsic:

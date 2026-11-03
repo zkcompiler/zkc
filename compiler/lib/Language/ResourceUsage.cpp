@@ -82,7 +82,11 @@ bool BodyChecker::finishValue(ValueId value, Span span, bool prefixOnly) {
           if (prefix(used, path))
             return true;
         }
-        if (!restricted(t) &&
+        const auto *nominal = checker.types.typeDeclaration(t);
+        const bool transparentAffine = nominal && !nominal->sealed &&
+                                       nominal->resource == Resource::Affine &&
+                                       !nominal->roles.empty();
+        if ((!restricted(t) || transparentAffine) &&
             (t.kind == Type::Kind::Record ||
              t.kind == Type::Kind::LogicalRecord ||
              t.kind == Type::Kind::Tuple ||

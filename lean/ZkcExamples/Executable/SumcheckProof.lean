@@ -168,7 +168,7 @@ theorem nominal_accepting (result : PIR.Outcome (DomainVM.Environment F G) × Pr
     | none => cases unread <;> rfl
     | some value =>
       cases value with
-      | transcript | indices => cases unread <;> rfl
+      | transcript | indices | custody => cases unread <;> rfl
       | data payload =>
         rcases payload with ⟨ty, allowed, contents⟩
         cases ty <;> cases unread <;> try rfl

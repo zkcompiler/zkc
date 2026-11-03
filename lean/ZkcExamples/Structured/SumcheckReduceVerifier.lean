@@ -57,7 +57,7 @@ def reduceRootInputs (xs : Option (List F)) (dimension : Option Nat)
 
 def reduceRootResults (pc : Option (List F) × Option F) :
     Values (Component (assignment F G)) SumcheckReduceBodies.runSignature.outputs :=
-  .cons none (.cons none (.cons pc.1 (.cons pc.2 .nil)))
+  .cons none (.cons none (.cons (some 0) (.cons pc.1 (.cons pc.2 .nil))))
 
 /-- Contextual equation for the complete imported Reduction root. The child
 uses the real s5 application prefix and the caller's mapped participant roles. -/
@@ -93,14 +93,14 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
       ctx self (reduceRootInputs xs dimension claim count service) =
       (invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.reduceSignature
         (ctx.enter "s5" [0, 1]) self
-        (reduceArguments none none none (some []) claim count service)).bind
+        (reduceArguments none none none (some 0) (some []) claim count service)).bind
         (fun result => .done (reduceRootResults
-          (result.get (.there (.there (.there (.there .here)))),
-            result.get (.there (.there (.there (.there (.there .here)))))))) := by
+          (result.get (.there (.there (.there (.there (.there .here))))),
+            result.get (.there (.there (.there (.there (.there (.there .here))))))))) := by
   rw [verifier_context_optional ctx self verifier separate,
-    reduce_invoke_plain (ctx.enter "s5" [0, 1]) self (reduceArguments none none none (some []) claim count service),
+    reduce_invoke_plain (ctx.enter "s5" [0, 1]) self (reduceArguments none none none (some 0) (some []) claim count service),
     reduce_optional unit helperBodies claimBodies (ctx.enter "s5" [0, 1]) self verifier separate
-      SumcheckReductionNormalForms.reduceMaximum none none none (some []) claim count service]
+      SumcheckReductionNormalForms.reduceMaximum none none none (some 0) (some []) claim count service]
   refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
   rfl
 

@@ -2,29 +2,34 @@
 use crate::{Result, Value, refused};
 use p3_field::{BasedVectorSpace, PrimeField64};
 use zkc_kernels::plonky3::residue::{PrimeWord, Residue};
-use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Representation, Type};
+use zkc_runtime::vm::Identity;
 
 macro_rules! inventory {
     ([$($callback:tt)+], $context:tt) => {
         $($callback)+! { $context;
-            (crate::KoalaBear, KoalaBear, KoalaBear, KoalaBearField, KoalaBearVector, KoalaBearMatrix, KoalaBearPolynomial, KoalaBearRound, KoalaBearSparseCoo, 19, 20, 25),
-            (crate::KoalaBearExt4, KoalaBearExt4, KoalaBear, KoalaBearExt4Field, KoalaBearExt4Vector, KoalaBearExt4Matrix, KoalaBearExt4Polynomial, KoalaBearExt4Round, KoalaBearExt4SparseCoo, 21, 22, 28),
-            (crate::KoalaBearExt8, KoalaBearExt8, KoalaBear, KoalaBearExt8Field, KoalaBearExt8Vector, KoalaBearExt8Matrix, KoalaBearExt8Polynomial, KoalaBearExt8Round, KoalaBearExt8SparseCoo, 26, 27, 30),
-            (crate::BabyBear, BabyBear, BabyBear, BabyBearField, BabyBearVector, BabyBearMatrix, BabyBearPolynomial, BabyBearRound, BabyBearSparseCoo, 90, 91, 92),
-            (crate::BabyBearExt4, BabyBearExt4, BabyBear, BabyBearExt4Field, BabyBearExt4Vector, BabyBearExt4Matrix, BabyBearExt4Polynomial, BabyBearExt4Round, BabyBearExt4SparseCoo, 93, 94, 95),
-            (crate::Goldilocks, Goldilocks, Goldilocks, GoldilocksField, GoldilocksVector, GoldilocksMatrix, GoldilocksPolynomial, GoldilocksRound, GoldilocksSparseCoo, 96, 97, 98),
-            (crate::GoldilocksExt2, GoldilocksExt2, Goldilocks, GoldilocksExt2Field, GoldilocksExt2Vector, GoldilocksExt2Matrix, GoldilocksExt2Polynomial, GoldilocksExt2Round, GoldilocksExt2SparseCoo, 99, 100, 101),
+            (crate::KoalaBear, KoalaBear, KoalaBear, KoalaBearField, KoalaBearVector, KoalaBearMatrix, KoalaBearPolynomial, KoalaBearRound),
+            (crate::KoalaBearExt4, KoalaBearExt4, KoalaBear, KoalaBearExt4Field, KoalaBearExt4Vector, KoalaBearExt4Matrix, KoalaBearExt4Polynomial, KoalaBearExt4Round),
+            (crate::KoalaBearExt8, KoalaBearExt8, KoalaBear, KoalaBearExt8Field, KoalaBearExt8Vector, KoalaBearExt8Matrix, KoalaBearExt8Polynomial, KoalaBearExt8Round),
+            (crate::BabyBear, BabyBear, BabyBear, BabyBearField, BabyBearVector, BabyBearMatrix, BabyBearPolynomial, BabyBearRound),
+            (crate::BabyBearExt4, BabyBearExt4, BabyBear, BabyBearExt4Field, BabyBearExt4Vector, BabyBearExt4Matrix, BabyBearExt4Polynomial, BabyBearExt4Round),
+            (crate::Goldilocks, Goldilocks, Goldilocks, GoldilocksField, GoldilocksVector, GoldilocksMatrix, GoldilocksPolynomial, GoldilocksRound),
+            (crate::GoldilocksExt2, GoldilocksExt2, Goldilocks, GoldilocksExt2Field, GoldilocksExt2Vector, GoldilocksExt2Matrix, GoldilocksExt2Polynomial, GoldilocksExt2Round),
         }
     };
 }
 pub(crate) use inventory;
 
 pub(crate) trait Registered: Residue + crate::operations::field::StructuredFamily {
+    /// The catalog frame tags of the field, vector and matrix codecs.
     const TAGS: [u8; 3];
-    fn representation(kind: Type) -> Option<Representation>;
+}
+/// The frame tag of the installed codec of `kind` over `field`; a codec
+/// without a frame fails the build.
+pub(crate) const fn tag(kind: &str, field: Identity) -> u8 {
+    zkc_runtime::catalog::instance_tag(kind, field.catalog())
 }
 macro_rules! register {
-    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => { $(
+    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident),)*) => { $(
         impl crate::operations::field::Family for $s {
             fn field(v: &Value) -> Result<Self> { if let Value::$f(x) = v { Ok(*x) } else { Err(refused("kernel-operands")) } }
             fn vector(v: &Value) -> Result<&[Self]> { if let Value::$v(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
@@ -44,23 +49,17 @@ macro_rules! register {
         }
         impl crate::matrix::Wire for $s {
             const WIDTH: usize = <$s as Residue>::Base::WORD_BYTES * <$s as BasedVectorSpace<crate::$base>>::DIMENSION;
-            const TAG: u8 = $mt;
+            const TAG: u8 = tag("matrix", Identity::$id);
             fn decode(bytes: &[u8]) -> Result<Self> { zkc_kernels::plonky3::residue::decode(bytes).map_err(crate::field_error) }
             fn encode(self, out: &mut Vec<u8>) -> Result<()> { zkc_kernels::plonky3::residue::encode_into(&self, out); Ok(()) }
             fn value(m: crate::matrix::SparseCoo<Self>) -> Value { Value::$m(m) }
         }
         impl Registered for $s {
-            const TAGS: [u8; 3] = [$ft, $vt, $mt];
-            fn representation(kind: Type) -> Option<Representation> {
-                Some(match kind {
-                    Type::Field => Representation::$id,
-                    Type::Vector => Representation::$v,
-                    Type::Polynomial => Representation::$p,
-                    Type::Round => Representation::$r,
-                    Type::Matrix => Representation::$sparse,
-                    _ => return None,
-                })
-            }
+            const TAGS: [u8; 3] = [
+                tag("field", Identity::$id),
+                tag("vector", Identity::$id),
+                tag("matrix", Identity::$id),
+            ];
         }
         impl From<[$s; 3]> for Value {
             fn from(value: [$s; 3]) -> Self { Value::$r(value.into()) }
@@ -136,7 +135,7 @@ fn canonical<S: Residue>(value: S) -> String {
     result.to_string()
 }
 macro_rules! dispatch {
-    (($identity:expr, $s:ident, $body:expr); $(($t:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
+    (($identity:expr, $s:ident, $body:expr); $(($t:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident),)*) => {
         match $identity { $(zkc_runtime::vm::Identity::$id => { type $s = $t; $body })* _ => Err($crate::refused("kernel-operands")) }
     };
 }
@@ -217,7 +216,7 @@ pub(crate) fn encode_vector(value: &Value, policy: &crate::Policy) -> Result<Vec
 }
 
 macro_rules! dispatch_or {
-    (($identity:expr, $fallback:expr, $s:ident, $body:expr); $(($t:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
+    (($identity:expr, $fallback:expr, $s:ident, $body:expr); $(($t:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident),)*) => {
         match $identity { $(zkc_runtime::vm::Identity::$id => { type $s = $t; $body })* _ => $fallback }
     };
 }
@@ -231,12 +230,3 @@ macro_rules! with_residue_or {
     };
 }
 pub(crate) use with_residue_or;
-
-/// Native's installed storage facts come from the same typed registration as
-/// its value adapters. Runtime admission keeps its independent catalogue.
-pub(crate) fn physical(identity: Identity, kind: Type) -> Option<PhysicalType> {
-    with_residue_or!(identity, None, |S| {
-        let representation = S::representation(kind)?;
-        PhysicalType::new(LogicalType::new(kind, identity).ok()?, representation).ok()
-    })
-}

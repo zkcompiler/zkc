@@ -7,7 +7,7 @@ mod execution;
 use super::{
     FunctionInterface, FunctionSignature, Result, Schema, SchemaKind, carrier, error, require,
 };
-use crate::entry::{EntryError, EntryPhase, NamedValues, Package, SetupAuthority};
+use crate::entry::{EntryCondition, EntryError, EntryPhase, NamedValues, Package, SetupAuthority};
 use crate::execution::CpuExecution;
 use crate::run::HostLimits;
 pub use data::TypedValue;
@@ -16,22 +16,32 @@ pub use execution::{
 };
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{LogicalType, Program};
+/// Function policy. `limits` is the same Host policy record a standalone run
+/// admits, including its Ring, sequence and external work allowances; each
+/// child receives what remains of them.
 #[derive(Clone, Debug)]
 pub struct FunctionOptions {
     pub limits: HostLimits,
     pub binding: crate::entry::BindingPolicy,
-    /// Maximum retained child call receipts, including failed calls.
+    /// Maximum retained child call receipts, including failed calls
+    /// ([`Allowances::JOURNAL_EVENTS`](crate::host::capacity::Allowances)).
     pub journal_events: usize,
-    /// Invocation-wide service allowances, reserved before issuing child roots.
+    /// Invocation-wide service allowances, reserved before issuing child roots
+    /// ([`Allowances::FUNCTION_SERVICE_DRAWS`](crate::host::capacity::Allowances)).
     pub service_draws: u64,
+    /// Explicit retry authorization for producing proof children, by static
+    /// deployment, as `ProofEntry::prove_attempts` takes it. Other children
+    /// make one attempt.
+    pub attempts: BTreeMap<String, crate::entry::AttemptOptions>,
 }
 impl Default for FunctionOptions {
     fn default() -> Self {
         Self {
             limits: HostLimits::default(),
             binding: crate::entry::BindingPolicy::default(),
-            journal_events: 256,
-            service_draws: 64 * crate::entry::DEFAULT_DRAW_BUDGET,
+            journal_events: crate::host::capacity::Allowances::JOURNAL_EVENTS.default as usize,
+            service_draws: crate::host::capacity::Allowances::FUNCTION_SERVICE_DRAWS.default,
+            attempts: BTreeMap::new(),
         }
     }
 }

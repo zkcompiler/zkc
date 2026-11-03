@@ -9,15 +9,10 @@ pub struct Invocation<'a> {
     pub proof: &'a [u8],
 }
 
-pub(super) fn abi() -> Value {
-    serde_json::json!([{
-        "type":"function", "name":"verify", "stateMutability":"view",
-        "inputs":[{"name":"publicInputs","type":"bytes[]"},
-                  {"name":"context","type":"bytes"},
-                  {"name":"proof","type":"bytes"}],
-        "outputs":[{"name":"accepted","type":"bool"}]
-    }])
-}
+/// The declared verifier ABI.
+pub(super) static ABI: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    serde_json::from_str(crate::evm_target::ABI_JSON).expect("generated ABI JSON")
+});
 
 fn word(out: &mut Vec<u8>, value: usize) {
     out.extend_from_slice(&[0; 24]);
@@ -42,10 +37,15 @@ impl Artifact {
     pub fn calldata(&self, invocation: Invocation<'_>) -> Result<Vec<u8>> {
         let source = self.source()?;
         let limits = &source.metadata()["limits"];
-        let cap = |key: &str, maximum: u64| -> Result<usize> {
+        // The deployment's ceiling, within its declared range.
+        let cap = |key: &str| -> Result<usize> {
+            let limit = crate::evm_target::LIMITS
+                .iter()
+                .find(|limit| limit.name == key)
+                .expect("declared deployment ceiling");
             limits[key]
                 .as_u64()
-                .filter(|v| *v > 0 && *v <= maximum)
+                .filter(|v| (limit.minimum..=limit.maximum).contains(v))
                 .and_then(|v| usize::try_from(v).ok())
                 .ok_or_else(|| "evm-source-limits".into())
         };
@@ -54,9 +54,9 @@ impl Artifact {
             .iter()
             .try_fold(0usize, |n, value| n.checked_add(value.len()))
             .ok_or("evm-calldata-limit")?;
-        if public_bytes > cap("public_bytes", 131072)?
-            || invocation.context.len() > cap("context_bytes", 4096)?
-            || invocation.proof.len() > cap("proof_bytes", 65536)?
+        if public_bytes > cap("public_bytes")?
+            || invocation.context.len() > cap("context_bytes")?
+            || invocation.proof.len() > cap("proof_bytes")?
         {
             return Err("evm-calldata-limit".into());
         }
@@ -81,12 +81,12 @@ impl Artifact {
             .and_then(|n| n.checked_add(context_size))
             .and_then(|n| n.checked_add(proof_size))
             .ok_or("evm-calldata-limit")?;
-        if size > cap("calldata_bytes", 262144)? {
+        if size > cap("calldata_bytes")? {
             return Err("evm-calldata-limit".into());
         }
         let mut out = Vec::with_capacity(size);
-        // First four bytes of Keccak-256("verify(bytes[],bytes,bytes)").
-        out.extend_from_slice(&[0xa4, 0x88, 0xe1, 0xe4]);
+        // The declared selector of the declared verifier signature.
+        out.extend_from_slice(&crate::evm_target::ABI_SELECTOR);
         word(&mut out, 96);
         word(&mut out, 96 + array_size);
         word(&mut out, 96 + array_size + context_size);

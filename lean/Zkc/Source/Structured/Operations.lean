@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.Structured.Primitives
 public import Zkc.Source.Structured.NaturalPowerOfTwo
+public import Zkc.Source.Structured.IndexWords
 
 @[expose] public section
 
@@ -146,6 +147,8 @@ inductive Op where
   | indexEqual
   | indexLess
   | indexPowerOfTwo
+  /-- The total word operations of the index contract (`IndexWords`). -/
+  | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
   | fieldConstant (domain : String) (value : Nat)
@@ -171,6 +174,10 @@ inductive Op where
   | loop (state captures : List Ty)
   | loopCondition (state captures : List Ty)
   | guard
+  /-- The custody transfers of one exact slot: create a fresh occurrence, pass
+  the current occurrence to its successor, or consume it without a successor.
+  Their meaning is a configurable effect (`SiteObservations`). -/
+  | createUnit (slot : String) | passUnit (slot : String) | consumeUnit (slot : String)
   /-- Internal observation only; erased by the ordinary closed interpretation. -/
   | mark (site : String)
 
@@ -178,6 +185,7 @@ def Op.arguments : Op → List Ty
   | .exec primitive => primitive.arguments
   | .indexConstant _ => []
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.index, .index]
+  | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => [.index, .index]
   | .multilinearRestrictPrefix d => [.vector d, .vector d]
   | .vectorLength d => [.vector d]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
@@ -197,11 +205,14 @@ def Op.arguments : Op → List Ty
   | .branch captures _ => .boolean :: captures
   | .loop state captures | .loopCondition state captures => .index :: .index :: (state ++ captures)
   | .guard => [.boolean]
+  | .createUnit _ => []
+  | .passUnit slot | .consumeUnit slot => [.resourceUnit slot]
 
 def Op.results : Op → List Ty
   | .exec primitive => primitive.results
   | .indexConstant _ => [.index]
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.boolean]
+  | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => [.index]
   | .multilinearRestrictPrefix d => [.vector d]
   | .vectorLength _ => [.index]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
@@ -218,7 +229,8 @@ def Op.results : Op → List Ty
   | .map spec => [.vector spec.field]
   | .branch _ outputs => outputs
   | .loop state _ | .loopCondition state _ => state
-  | .guard | .mark _ => []
+  | .createUnit slot | .passUnit slot => [.resourceUnit slot]
+  | .guard | .mark _ | .consumeUnit _ => []
 
 def Op.regions : Op → List (List Ty × List Ty)
   | .branch captures outputs => [(captures, outputs), (captures, outputs)]
@@ -237,11 +249,13 @@ def Op.helpers : Op → List Helper
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .makeProduct .. | .getProduct .. |
     .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |
-    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => []
+    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. |
+    .createUnit .. | .passUnit .. | .consumeUnit .. => []
 
 abbrev dialect : Dialect := ⟨Ty, Op, Op.arguments, Op.results, Op.regions⟩
 

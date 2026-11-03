@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 import snapshot
+from bridges.common import source_format
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "lean/bridges/structured/fixtures"
@@ -26,9 +27,9 @@ def main():
     args = parser.parse_args()
     compiler = args.compiler.resolve()
     original = run([
-        str(compiler), "language-emit", "--source-format=zkc",
-        f"--module=opaque_example={FIXTURES / 'generic-opaque.zkc'}",
-        "--subject=opaque_example::Run",
+        str(compiler), "language-emit",
+        *source_format.with_option([f"--module=opaque_example={FIXTURES / 'generic-opaque.zkc'}",
+                                    "--subject=opaque_example::Run"]),
     ])
     symbols = re.findall(r'"protocol\.func"\(\) <\{.*?sym_name = "([^"]+)"', original, re.DOTALL)
     if len(symbols) != 1:

@@ -6,14 +6,16 @@ import json
 import subprocess
 from pathlib import Path
 
+import target
 from abi import keccak256
 from oracle import check_trace
 
 SOLC_SHA256 = "65c3180a336eabb6bdc4bbd49cc405aeb233976964ae6c11fba2a6c8be8f3243"
+# `colon` is the declared release setting; the others are probe comparisons.
 PROFILES = {
     "disabled": {"enabled": False},
     "enabled": {"enabled": True},
-    "colon": {"enabled": True, "details": {"yulDetails": {"optimizerSteps": ":"}}},
+    "colon": target.optimizer(),
 }
 
 
@@ -21,14 +23,13 @@ def check_solc(solc):
     if hashlib.sha256(solc.read_bytes()).hexdigest() != SOLC_SHA256:
         raise ValueError("unexpected solc identity")
     version = subprocess.check_output([str(solc), "--version"], text=True)
-    if "0.8.38+commit.1835d247" not in version:
+    if target.SOLC_VERSION not in version:
         raise ValueError("unexpected solc version")
     return version
 
 
 def compile_request(solc, request):
-    if request["settings"]["evmVersion"] not in ("cancun", "prague"):
-        raise ValueError("unsupported-fork")
+    target.solc_fork(request["settings"]["evmVersion"])
     process = subprocess.run([str(solc), "--standard-json"], input=json.dumps(request),
                              text=True, capture_output=True, check=True, timeout=90)
     output = json.loads(process.stdout)
@@ -43,7 +44,7 @@ def compile_request(solc, request):
             "runtime": evm["deployedBytecode"]["object"]}
 
 
-def compile_yul(solc, body, optimizer, *, fork="cancun"):
+def compile_yul(solc, body, optimizer, *, fork=target.DEFAULT_FORK):
     source = '''object "Probe" {
       code {
         datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
@@ -52,19 +53,20 @@ def compile_yul(solc, body, optimizer, *, fork="cancun"):
       object "Runtime" { code { BODY } }
     }'''.replace("BODY", body)
     request = {"language": "Yul", "sources": {"probe.yul": {"content": source}},
-               "settings": {"evmVersion": fork, "optimizer": optimizer,
+               "settings": {"evmVersion": target.fork(fork)["solc"], "optimizer": optimizer,
                             "outputSelection": {"*": {"*": ["evm.bytecode.object",
                                                                "evm.deployedBytecode.object"]}}}}
     return compile_request(solc, request)
 
 
-def execute(runner, artifact, calldata, gas=1_000_000, *, repeat_count=1):
-    fork = artifact["request"]["settings"]["evmVersion"]
-    if fork not in ("cancun", "prague"):
-        raise ValueError("unsupported-fork")
+def execute(runner, artifact, calldata, gas=None, *, repeat_count=1):
+    """Deploy and call on the artifact's fork; gas defaults to the fork's budget."""
+    fork = target.solc_fork(artifact["request"]["settings"]["evmVersion"])["name"]
+    budget = target.transaction_gas(fork)
     request = {"creation_bytecode": artifact["creation"], "calldata": calldata.hex(),
-               "expected_runtime_bytecode": artifact["runtime"], "gas_limit": gas,
-               "deployment_gas_limit": 5_000_000, "fork": fork, "repeat_count": repeat_count}
+               "expected_runtime_bytecode": artifact["runtime"],
+               "gas_limit": budget if gas is None else gas,
+               "deployment_gas_limit": budget, "fork": fork, "repeat_count": repeat_count}
     process = subprocess.run([str(runner)], input=json.dumps(request), text=True,
                              capture_output=True, timeout=30)
     result = json.loads(process.stdout)
@@ -110,7 +112,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--solc", type=Path, required=True)
     parser.add_argument("--runner", type=Path)
-    parser.add_argument("--evm-version", choices=("cancun", "prague"), default="cancun")
+    parser.add_argument("--evm-version", choices=target.FORK_NAMES, default=target.DEFAULT_FORK)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     version = check_solc(args.solc)
@@ -126,7 +128,7 @@ def main():
             artifact = compile_yul(args.solc, body, optimizer, fork=args.evm_version)
             case = {"name": name, "profile": profile, **artifact}
             if args.runner:
-                execution = execute(args.runner, artifact, calldata)
+                execution = execute(args.runner, artifact, calldata, 1_000_000)
                 case["execution"] = execution
                 try:
                     check_trace(execution["trace"], expected)

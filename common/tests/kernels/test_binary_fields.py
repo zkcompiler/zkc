@@ -155,7 +155,7 @@ def test_prime_and_odd_characteristic_operations_refuse(toolchain, journal, dire
                                                          field, result, body, code):
     path = directory / 'refused.zkc'
     path.write_text(REFUSED.format(field=field, result=result, body=body))
-    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                  f'--module=sample={path}', *library_modules(*core_packages()), 'sample::Demo',
                  f'--output={directory / "refused.zkpkg"}'], refuses=code)
 
@@ -165,6 +165,6 @@ def test_refusal_source_compiles_with_admitted_operations(toolchain, journal, di
     path = directory / 'admitted.zkc'
     path.write_text(REFUSED.format(field=CUBIC, result='K',
                                    body='return kernel<K>("field.constant"; "0x1b") * a;'))
-    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                  f'--module=sample={path}', *library_modules(*core_packages()), 'sample::Demo',
                  f'--output={directory / "admitted.zkpkg"}'])

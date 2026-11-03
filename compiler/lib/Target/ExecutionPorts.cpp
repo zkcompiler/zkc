@@ -88,7 +88,7 @@ Expected<ExecutionPorts> ExecutionPorts::read(ModuleOp module) {
     }
     result.bodies.try_emplace(entry, std::move(body));
   }
-  // Participant actions and repetition retain their own protocol-owned data
+  // Participant actions and selected control retain protocol-owned data
   // ports. No administrative operation inside a scoped function enters here.
   for (auto *op : result.ordered) {
     if (isa<func::FuncOp>(op) || op->getParentOfType<func::FuncOp>())
@@ -101,7 +101,8 @@ Expected<ExecutionPorts> ExecutionPorts::read(ModuleOp module) {
     // exposes data ports here; scoped Func bodies are handled above.
     if (auto participant = dyn_cast<protocol_ir::ParticipantOp>(op))
       node.callable = participant.getFunctionType();
-    if (!isa<protocol_ir::ParticipantOp, protocol_ir::ProtocolLoopOp>(op))
+    if (!isa<protocol_ir::ParticipantOp, protocol_ir::ProtocolLoopOp,
+             protocol_ir::ParticipantBranchOp>(op))
       continue;
     for (auto &region : op->getRegions())
       for (auto &block : region) {

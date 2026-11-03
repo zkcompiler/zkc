@@ -20,6 +20,7 @@ file(GLOB_RECURSE zkc_identity_inputs CONFIGURE_DEPENDS
 list(APPEND zkc_identity_inputs "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
 list(APPEND zkc_identity_inputs ${zkc_unicode_inputs})
 list(APPEND zkc_identity_inputs ${zkc_catalog_inputs})
+list(APPEND zkc_identity_inputs ${zkc_evm_target_inputs})
 list(SORT zkc_identity_inputs)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${zkc_identity_inputs})
 set(zkc_identity_material "zkc.compiler-build\n")

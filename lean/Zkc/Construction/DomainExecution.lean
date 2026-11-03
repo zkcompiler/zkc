@@ -17,6 +17,8 @@ open Zkc.Source
 
 inductive Value (carriers : Structured.Carriers) where
   | data (payload : Payload carriers)
+  /-- Nominal local custody, excluded from message and transcript payloads. -/
+  | custody (slot : String) (token : Structured.CustodyToken)
   | transcript (suite : String) (history : History carriers)
   | indices (coordinates : List Nat)
 
@@ -26,13 +28,19 @@ namespace Value
 variable {carriers : Structured.Carriers}
 def sort : Value carriers → ValueSort
   | .data payload => .data payload.ty
+  | .custody slot _ => .data (.resourceUnit slot)
   | .transcript suite _ => .transcript suite
   | .indices _ => .indices
 
-def encode (ty : Structured.Ty) (value : carriers.Value ty) : Option (Value carriers) :=
-  (Payload.ofValue ty value).map .data
+/-- Local encoding preserves custody coordinates without turning them into payloads. -/
+def encode : (ty : Structured.Ty) → carriers.Value ty → Option (Value carriers)
+  | .resourceUnit slot, token => some (.custody slot token)
+  | ty, value => (Payload.ofValue ty value).map .data
 
 def decode (ty : Structured.Ty) : Value carriers → Option (carriers.Value ty)
+  | .custody actual token => match ty with
+    | .resourceUnit slot => if slot = actual then some token else none
+    | _ => none
   | .data payload => payload.value ty
   | _ => none
 end Value
@@ -166,8 +174,23 @@ def localCoordinates (env : Environment carriers) (references : List Nat) : Opti
     | some (.data (.index value)) => some value
     | _ => none
 
-/-- One structural capability check, shared with source admission. -/
+/-- Types allowed on the wire. Local custody never satisfies this predicate. -/
 def dataType (ty : Structured.Ty) : Bool := !ty.isHandle
+
+/-- Values a local frame can transport: ordinary data or one nominal custody coordinate.
+Compound handles, services and logical oracles need separate execution rules. -/
+def localType (ty : Structured.Ty) : Bool := ty.isCustody || dataType ty
+
+theorem localType_of_data {ty : Structured.Ty} (data : dataType ty = true) :
+    localType ty = true := by simp [localType, data]
+
+theorem localTypes_of_data {types : List Structured.Ty} (data : types.all dataType = true) :
+    types.all localType = true := by
+  induction types with
+  | nil => rfl
+  | cons ty rest ih =>
+    simp only [List.all_cons, Bool.and_eq_true] at data ⊢
+    exact ⟨localType_of_data data.1, ih data.2⟩
 
 def sortsMatch (declared : List ValueSort) (values : Environment carriers) : Bool :=
   values.map Value.sort == declared
@@ -338,5 +361,6 @@ run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.decodeValues
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.encodeValues
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.dataType
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.localType
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.step
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.evaluate

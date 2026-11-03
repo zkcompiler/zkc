@@ -174,7 +174,7 @@ theorem constant_message_ground :
     cbv
 
 theorem coefficient_message_ground :
-    (routing 0).message [⟨"s57", 0⟩, ⟨"s91", 0⟩]
+    (routing 0).message [⟨"s57", 0⟩, ⟨"s93", 0⟩]
       "label_6c696e655f636f656666696369656e74_0" 0 1 =
       some (Domain.atCoordinates (context.message "label_6c696e655f636f656666696369656e74_0" 0 1) [0, 0]) := by
     simp only [routing, Original.Routing.message, OccurrenceResolution.resolve]

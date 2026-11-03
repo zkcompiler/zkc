@@ -24,11 +24,11 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 noncomputable abbrev shiftFold : FoldSpec := Goals.shiftSpec
 
 theorem shift_step_body (table : Meanings F G)
-    (zero : invoke table GkrSourceBodies.scopedHelper74Helper .nil = .done (.cons 0 .nil))
+    (zero : invoke table GkrSourceBodies.helper87Helper .nil = .done (.cons 0 .nil))
     (xs : List F) (previous value : F) (offset count : Nat)
     (bound : offset + 1 < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
-    GkrSourceBodies.helper62Body.denote (meaning F G table)
+    GkrSourceBodies.helper91Body.denote (meaning F G table)
       (Goals.ShiftStep.Inputs.pack (Value := assignment F G) { initial := xs, previous, offset, value, count }).get =
       .done (Goals.ShiftStep.encode (ringModel F G)
         { values := xs ++ [if offset % count = 0 then 0 else previous],
@@ -52,7 +52,7 @@ theorem shift_step (xs : List F) (previous value : F) (offset count : Nat) (sour
       .done (Goals.ShiftStep.encode (ringModel F G)
         { values := xs ++ [if offset % count = 0 then 0 else previous],
           previous := value, offset := offset + 1 }) := by
-  change invoke (helpers (G := G)) GkrSourceBodies.helper63Helper _ = _
+  change invoke (helpers (G := G)) GkrSourceBodies.helper92Helper _ = _
   rw [helper63_association.invoke unit.linked]
   named_equation Goals.ShiftCallback over F G
   rw [helper62_association.invoke unit.linked,
@@ -63,7 +63,7 @@ theorem shift_step (xs : List F) (previous value : F) (offset count : Nat) (sour
 theorem shift_fold (values xs : List F) (previous : F) (offset count : Nat)
     (bound : offset + values.length < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper86Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper99Helper
       (Goals.ShiftFold.Inputs.pack (Value := assignment F G) { source := values, initial := xs, previous, offset, count }) =
       .done (Goals.ShiftFold.encode (ringModel F G)
         { values := xs ++ shiftAux count offset previous values,
@@ -74,7 +74,7 @@ theorem shift_fold (values xs : List F) (previous : F) (offset count : Nat)
     (Value := assignment F G) { values := state.values, previous := state.previous, offset := state.offset }
   have admitted : shiftFold.domain.admit (Goals.ShiftDomain.pack (Value := assignment F G) ⟨values⟩) =
       .returned (values.map fun value => Goals.ShiftItem.pack ⟨value⟩) := by
-    simp [shiftFold, Goals.shiftSpec, Goals.ShiftFold.body, GkrSourceLaws.fold?, GkrSourceBodies.scopedHelper86Body,
+    simp [shiftFold, Goals.shiftSpec, Goals.ShiftFold.body, GkrSourceLaws.fold?, GkrSourceBodies.helper99Body,
       DomainSpec.admit, DomainBody.admit, DomainNode.admit, Collection.values,
       Goals.ShiftDomain.pack, Goals.ShiftItem.pack, Values.get,
       show values.length < indexLimit by omega, Finite.continueWith]
@@ -98,7 +98,7 @@ theorem shift_fold (values xs : List F) (previous : F) (offset count : Nat)
 theorem shift_rows (values : List F) (count : Nat)
     (bound : values.length < indexLimit) (countBound : count < indexLimit)
     (positive : 0 < count) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper66Helper (Goals.Shift.Inputs.pack (Value := assignment F G) { source := values, count }) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper101Helper (Goals.Shift.Inputs.pack (Value := assignment F G) { source := values, count }) =
       .done (Goals.Shift.encode (ringModel F G) ⟨shiftAux count 0 0 values⟩) := by
   rw [helper66_association.invoke unit.linked]
   named_equation Goals.Shift over F G

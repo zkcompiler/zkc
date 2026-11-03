@@ -1,6 +1,9 @@
 #include "TableGen/Declarations.h"
+#include "TableGen/Fields.h"
+#include "TableGen/Instances.h"
 #include "TableGen/Mathematical.h"
 #include "TableGen/Recipes.h"
+#include "TableGen/Roles.h"
 #include "TableGen/TypeBindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/CommandLine.h"
@@ -21,15 +24,23 @@ namespace {
 enum class Action {
   Declarations,
   Inventory,
+  InstalledInstances,
+  NativeInstallation,
   TypeBindings,
   Mathematics,
-  Recipes
+  Recipes,
+  RoleAttributes,
+  FieldInventory
 };
 cl::opt<Action> action(
     cl::desc("Generation action (required):"), cl::Required,
     cl::values(
         clEnumValN(Action::Recipes, "gen-mathematical-recipes",
                    "Generate checked private realization recipes"),
+        clEnumValN(Action::RoleAttributes, "gen-role-attributes",
+                   "Generate the Protocol role attribute table"),
+        clEnumValN(Action::FieldInventory, "gen-field-inventory",
+                   "Generate the zkc operation field inventory"),
         clEnumValN(Action::Mathematics, "gen-mathematical-declarations",
                    "Generate mathematical identities, intrinsics and laws"),
         clEnumValN(Action::TypeBindings, "gen-type-bindings",
@@ -37,11 +48,20 @@ cl::opt<Action> action(
         clEnumValN(Action::Declarations, "gen-contract-declarations",
                    "Generate neutral contract descriptors"),
         clEnumValN(Action::Inventory, "dump-contract-declarations",
-                   "Inspect neutral declarations as JSON")));
+                   "Inspect neutral declarations as JSON"),
+        clEnumValN(Action::InstalledInstances, "gen-installed-instances",
+                   "Generate installed-instance and native installation "
+                   "tables"),
+        clEnumValN(Action::NativeInstallation, "dump-native-installation",
+                   "Inspect the native installation as JSON")));
 bool generate(raw_ostream &os, const RecordKeeper &records) {
   switch (action) {
   case Action::Recipes:
     return emitMathematicalRecipes(os, records);
+  case Action::RoleAttributes:
+    return emitRoleAttributes(os, records);
+  case Action::FieldInventory:
+    return emitFieldInventory(os, records);
   case Action::Mathematics:
     return emitMathematicalDeclarations(os, records);
   case Action::TypeBindings:
@@ -50,6 +70,10 @@ bool generate(raw_ostream &os, const RecordKeeper &records) {
     return emitContractDeclarations(os, records);
   case Action::Inventory:
     return emitContractInventory(os, records);
+  case Action::InstalledInstances:
+    return emitInstalledInstances(os, records);
+  case Action::NativeInstallation:
+    return emitNativeInstallationInventory(os, records);
   }
   llvm_unreachable("unknown generation action");
 }

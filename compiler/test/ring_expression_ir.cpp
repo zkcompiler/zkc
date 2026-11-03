@@ -1,11 +1,14 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
+#include "support/Formation.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 using namespace zkc;
+using namespace zkc::test;
 int main() {
   DialectRegistry registry;
   registry.insert<algebra::AlgebraDialect, func::FuncDialect>();
@@ -80,10 +83,12 @@ int main() {
                                     body->getArgument(0), body->getArgument(1));
   refuse("ring-formula-operation");
   equality.erase();
+  refusesFormation<algebra::FieldLiteralAttr>(&context, "field-literal", field,
+                                              builder.getI64IntegerAttr(0));
+  // The literal is formed; its association with this SSA result is not.
+  auto other = algebra::FieldType::get(&context, "baby-bear");
   auto malformed = algebra::ConstantFieldOp::create(
-      builder, location, field,
-      algebra::FieldLiteralAttr::get(&context, cast<algebra::FieldType>(field),
-                                     builder.getI64IntegerAttr(0)));
+      builder, location, field, take(algebra::decodeFieldLiteral(other, "0")));
   refuse("ring-literal");
   malformed.erase();
   product->setAttr("unreviewed", builder.getUnitAttr());

@@ -38,6 +38,23 @@ def checkInputs (xs point : List F) (claim : F) :
     Values (assignment F G) [vector, vector, scalar] :=
   .cons xs (.cons point (.cons claim .nil))
 
+/-- The complete current terminal ABI, including its consumed nominal custody. -/
+def terminalInputs (xs : List F) (custody : CustodyToken) (point : List F) (claim : F) :
+    Values (assignment F G) checkHelper.inputs :=
+  .cons xs (.cons custody (.cons point (.cons claim .nil)))
+
+set_option backward.isDefEq.respectTransparency false in
+/-- The closed helper interpretation erases the token after consuming it.
+This is a local helper equation, not an operational custody-ledger theorem. -/
+theorem check_custody_irrelevant (table : Meanings F G)
+    (xs : List F) (custody : CustodyToken) (point : List F) (claim : F) :
+    checkBody.denote (meaning F G table) (terminalInputs xs custody point claim).get =
+      checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get := by
+  simp only [checkBody, terminalInputs, Region.denote, meaning, Evaluation.meaning,
+    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons,
+    prepend_empty, prepend_one, Environment.push, SiteObservations.closed,
+    SiteObservations.silent, PIR.Process.bind]
+
 def messageResult (low high : F) : Values (assignment F G) [scalar, scalar] :=
   .cons low (.cons high .nil)
 
@@ -88,13 +105,13 @@ theorem checkTable_expansion (table : Meanings F G) {bindings : MultilinearPrefi
 set_option backward.isDefEq.respectTransparency false in
 /-- Actual Local.if only invokes check_table in its true callback. -/
 theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
-    checkBody.denote (meaning F G table) (checkInputs xs point claim).get =
+    checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get =
       if point.length < indexLimit then
         (invoke table shapeHelper (inputs xs point.length 1)).bind fun valid =>
           if valid.get .here then invoke table checkTableHelper (checkInputs xs point claim)
           else .done (boolResult false)
       else .halt .exhausted := by
-  simp only [checkBody, MultilinearBodies.checkBody, MultilinearBodies.checkTrueBody, MultilinearBodies.checkFalseBody, checkInputs, inputs, boolResult,
+  simp only [checkBody, terminalInputs, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,

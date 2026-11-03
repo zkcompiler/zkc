@@ -3,24 +3,30 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/ErrorHandling.h"
 using namespace llvm;
 namespace zkc::language {
 namespace {
 using K = Type::Kind;
-bool dataConstructor(StringRef name) {
-  // Managed services and source nominal representations have separate owners.
-  // These are native data representations, including runtime polynomial data;
-  // formal polynomials are a distinct mathematical type.
-  return name == "vector" || name == "matrix" || name == "groups" ||
-         name == "transcript" || name == "shake128_state" ||
-         name == "quotient_matrix" || name == "indices" || name == "bytes" ||
-         name == "polynomial" || name == "table" || name == "point" ||
-         name == "round" || name == "sequence" || name == "field_array" ||
-         name == "commitment" || name == "commitments" || name == "proof" ||
-         name == "prover_key" || name == "verifier_key" ||
-         name == "opening_state" || name == "opening_states";
+// A catalog type with source data is a builtin data constructor, except the
+// four whose values have their own source kinds. Managed services and source
+// nominal representations have separate owners; runtime polynomial data is
+// native data, distinct from the formal mathematical polynomial type.
+bool dataConstructor(const protocol::TypeDeclaration &declared) {
+  return declared.sourceData && declared.name != "bool" &&
+         declared.name != "index" && declared.name != "field" &&
+         declared.name != "group";
 }
 } // namespace
+bool isBuiltinDataConstructor(StringRef constructor) {
+  const auto *declared = protocol::typeDeclaration(constructor);
+  return declared && dataConstructor(*declared);
+}
+bool isOrdinaryBuiltinData(StringRef constructor) {
+  const auto *permissions = protocol::typePermissions(constructor);
+  return isBuiltinDataConstructor(constructor) && permissions &&
+         permissions->copy && permissions->drop;
+}
 bool isDomainSort(StringRef sort) {
   return llvm::is_contained(protocol::domainSorts(), sort);
 }
@@ -146,6 +152,36 @@ Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
   result.arguments.assign(arguments.begin(), arguments.end());
   return result;
 }
+Type::Kind logicalHeadKind(protocol::FrontendConstructorForm form) {
+  switch (form) {
+  case protocol::FrontendConstructorForm::OracleHandle:
+    return K::Oracle;
+  case protocol::FrontendConstructorForm::OracleHandleSequence:
+    return K::OracleSequence;
+  }
+  llvm_unreachable("unknown frontend constructor form");
+}
+Expected<Type> logicalHeadType(protocol::FrontendConstructorForm form,
+                               ArrayRef<Type> arguments) {
+  bool sequence = logicalHeadKind(form) == K::OracleSequence;
+  if (arguments.size() != (sequence ? 2u : 1u) ||
+      arguments[0].kind != K::OracleKind ||
+      (sequence && arguments[1].kind != K::Natural))
+    return error(
+        "source.oracle-kind",
+        "oracle handle needs a kind; its sequence also needs a maximum");
+  const auto &kind = arguments[0];
+  if (!kind.symbolic) {
+    if (kind.domain != "table")
+      return error("source.oracle-kind", "unknown oracle kind");
+    auto formed = builtinType("oracle.table", kind.arguments);
+    if (!formed)
+      return formed.takeError();
+  }
+  Type result(logicalHeadKind(form));
+  result.arguments.assign(arguments.begin(), arguments.end());
+  return result;
+}
 Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
   if (name == "oracle.table") {
     if ((arguments.size() != 1 && arguments.size() != 2) ||
@@ -159,26 +195,10 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
     result.arguments.assign(arguments.begin(), arguments.end());
     return result;
   }
-  if (name == "oracle" || name == "oracle_sequence") {
-    bool sequence = name == "oracle_sequence";
-    if (arguments.size() != (sequence ? 2u : 1u) ||
-        arguments[0].kind != K::OracleKind ||
-        (sequence && arguments[1].kind != K::Natural))
-      return error(
-          "source.oracle-kind",
-          "oracle handle needs a kind; its sequence also needs a maximum");
-    const auto &kind = arguments[0];
-    if (!kind.symbolic) {
-      if (kind.domain != "table")
-        return error("source.oracle-kind", "unknown oracle kind");
-      auto formed = builtinType("oracle.table", kind.arguments);
-      if (!formed)
-        return formed.takeError();
-    }
-    Type result(sequence ? K::OracleSequence : K::Oracle);
-    result.arguments.assign(arguments.begin(), arguments.end());
-    return result;
-  }
+  // A logical head is recognized only by the frontend constructor row that
+  // spells it.
+  if (const auto *head = protocol::frontendConstructor(name))
+    return logicalHeadType(head->form, arguments);
   if (name == "bool" && arguments.empty())
     return Type{};
   if (name == "index" && arguments.empty())
@@ -188,7 +208,7 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
        (name == "group" && arguments[0].kind == K::Group)))
     return arguments[0];
   const auto *constructor = protocol::typeDeclaration(name);
-  if (!dataConstructor(name) || !constructor)
+  if (!constructor || !dataConstructor(*constructor))
     return error("source.builtin",
                  "constructor is not an admitted native data type");
   if (arguments.size() != constructor->parameters.size())

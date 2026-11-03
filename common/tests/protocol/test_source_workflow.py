@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import tomllib
 
-from project import project_text, project_arguments
+from project import project_text, project_arguments, project_source_format
 from input_files import input_files
 
 import pytest
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_example_project_declarations_match_explicit_inputs(toolchain, journal, directory, project):
     command = [toolchain.runtime, '--json', 'inspect', '--view=placement', f'--compiler={toolchain.compiler}']
     checked = journal.json([*command, f'--project={project}'], cwd=directory)
-    explicit = project_arguments(project)
+    explicit = [f'--source-format={project_source_format(project)}', *project_arguments(project)]
     assert checked.pop("project") == str(project)
     assert checked == journal.json([*command, *explicit], cwd=directory)
     assert checked['status'] == 'inspected' and 'entry' not in checked['checked']
@@ -44,7 +44,7 @@ protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,r:F@P)->(out:Vector<F>@P){
 }
 entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
-    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'modules': {
+    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'source-format': 'zkc', 'modules': {
         'main': source.name, 'formula': library.name,
         **{name: str(path) for name, path in library_inputs(*core_packages()).items()},
         'zkc::vector': str(ROOT / 'libraries/core/collections/vector.zkc')}, 'assets': {}})
@@ -100,7 +100,7 @@ math fn identity<T:Type+Copy+Drop>(value:T){return value;}
 protocol Run roles(P)(x:bool@P)->(out:bool@P){return identity(x);}
 entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
-    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0',
+    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'source-format': 'zkc',
                      'modules': {'main': 'main.zkc'}, 'assets': {}})
     return source, project
 
@@ -110,7 +110,7 @@ def test_source_only_check_and_selected_entry(toolchain, journal, directory):
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}']
     report = journal.json([*command, f'--project={project}'], cwd=directory.parent)
     assert report['status'] == 'checked' and report['scope'] == 'definitions'
-    explicit = journal.json([*command, f'--module=main={source}'])
+    explicit = journal.json([*command, '--source-format=zkc', f'--module=main={source}'])
     assert report.pop("project") == str(project)
     assert explicit == report
     selected = journal.json([*command, f'--project={project}', 'main::Job'])
@@ -151,7 +151,7 @@ def test_api_inventory_preserves_source_and_entry_identities(toolchain, journal,
     assert {key: checked[key] for key in identity} == {key: baseline[key] for key in identity}
     assert inspected['project_graph']['format'] == 'zkc.project-graph/0'
     assert inspected['project_graph']['packages'][0]['modules'].keys() == {'main'}
-    explicit = journal.json([toolchain.runtime, '--json', 'inspect', '--view=api',
+    explicit = journal.json([toolchain.runtime, '--json', 'inspect', '--source-format=zkc', '--view=api',
                              f'--compiler={toolchain.compiler}',
                              f'--module=main={directory / "main.zkc"}'])
     assert 'project_graph' not in explicit
@@ -228,7 +228,7 @@ def test_project_compilation_is_exact_and_inputs_are_protected(toolchain, journa
     package = directory / 'project.zkpkg'
     explicit = directory / 'explicit.zkpkg'
     first = journal.json([*command, f'--project={project}', f'--output={package}'])
-    second = journal.json([*command, f'--module=main={source}', f'--output={explicit}'])
+    second = journal.json([*command, '--source-format=zkc', f'--module=main={source}', f'--output={explicit}'])
     assert first['package_sha256'] == second['package_sha256']
     assert package.read_bytes() == explicit.read_bytes()
     for path in (project, source):
@@ -267,9 +267,9 @@ def test_project_ambiguity_duplicates_and_io_refuse(toolchain, journal, director
     journal.run([*command, f'--module=main={source}', f'--module=main={source}'], refuses='source-project-duplicate')
     journal.run([*command, f'--project={directory}/missing'], refuses='source-project-io')
     for text in [
-        'format="zkc.project/0"\n[modules]\nmain="main.zkc"\nmain="missing"',
-        'format="zkc.project/0"\n[modules]\nmain="main.zkc"\n[assets.a]\nformat="ring-json"\nformat="air-json"\npath="missing"',
-        'format="zkc.project/0"\n[modules]\nmain="main.zkc"\nfalse',
+        'format="zkc.project/0"\nsource-format="zkc"\n[modules]\nmain="main.zkc"\nmain="missing"',
+        'format="zkc.project/0"\nsource-format="zkc"\n[modules]\nmain="main.zkc"\n[assets.a]\nformat="ring-json"\nformat="air-json"\npath="missing"',
+        'format="zkc.project/0"\nsource-format="zkc"\n[modules]\nmain="main.zkc"\nfalse',
         '{"format":"zkc.project/0","modules":{"main":"main.zkc"}}',
     ]:
         project.write_text(text)
@@ -284,12 +284,12 @@ def test_relative_project_and_module_paths_share_the_callers_directory(toolchain
                             f'--compiler={toolchain.compiler}', '--project=zkc.toml', 'main::Job'], cwd=directory)
     assert checked['checked']['entry'] == 'main::Job'
     assert 'declarations' in checked['checked']
-    explicit = journal.json([toolchain.runtime, '--json', 'inspect', '--view=placement',
+    explicit = journal.json([toolchain.runtime, '--json', 'inspect', '--source-format=zkc', '--view=placement',
                             f'--compiler={toolchain.compiler}', '--module=main=main.zkc', 'main::Job'], cwd=directory)
     assert checked.pop("project") == str(directory / "zkc.toml")
     assert checked == explicit
     before = source.read_bytes()
-    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                  '--module=main=main.zkc', 'main::Job', '--output=main.zkc'],
                 cwd=directory, refuses='entry-output-path')
     assert source.read_bytes() == before
@@ -340,7 +340,7 @@ pub math fn zero<F:Field>()->F{return 0;}
 pub fn identity(value:bool)->bool{return value;}
 ''')
     source = directory / 'main.zkc'
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                f'--module=library={library}', f'--module=main={source}']
     source.write_text('''module main;
 use library::{zero};
@@ -432,8 +432,8 @@ def test_discovery_selection_and_default_output(toolchain, journal, directory):
     assert journal.json([*command, 'main::Job'], cwd=child)['entry'] == 'main::Job'
     assert journal.json([*command, 'main::Run'], cwd=child)['entry'] == 'main::Run'
     # Explicit input mode never discovers the surrounding manifest.
-    journal.run([*compile, f'--module=main={source}'], cwd=child, refuses='source-output-required')
-    report = journal.json([*command, f'--module=main={source}'], cwd=child)
+    journal.run([*compile, '--source-format=zkc', f'--module=main={source}'], cwd=child, refuses='source-output-required')
+    report = journal.json([*command, '--source-format=zkc', f'--module=main={source}'], cwd=child)
     assert 'project' not in report and len(report['entries']) == 3
 
 
@@ -487,7 +487,7 @@ def test_toml_comments_order_and_omitted_assets_preserve_capture(toolchain, jour
     project.write_text(project_text(config))
     command = [toolchain.runtime, '--json', 'compile', 'Job', f'--compiler={toolchain.compiler}']
     first = journal.json(command, cwd=directory)
-    project.write_text('# The module map is authored.\nformat="zkc.project/0"\n\n'
+    project.write_text('# The module map is authored.\nformat="zkc.project/0"\nsource-format="zkc"\n\n'
                       '[modules]\nlib="lib.zkc"\nmain="./main.zkc"\n')
     second = journal.json(command, cwd=directory)
     assert first['package_sha256'] == second['package_sha256']
@@ -498,7 +498,7 @@ def test_default_output_requires_a_portable_filename(toolchain, journal, directo
     source, project = source_project(directory)
     source.write_text(source.read_text().replace('module main;', f'module {module};')
                       .replace('entry fn Job(', f'entry fn {entry}('))
-    project.write_text(project_text({'format': 'zkc.project/0', 'modules': {module: source.name}}))
+    project.write_text(project_text({'format': 'zkc.project/0', 'source-format': 'zkc', 'modules': {module: source.name}}))
     command = [toolchain.runtime, '--json', 'compile', entry, f'--compiler={toolchain.compiler}']
     journal.run(command, cwd=directory, refuses='source-output-name')
     assert journal.json([*command, '--output=short.zkpkg'], cwd=directory)['entry'] == f'{module}::{entry}'
@@ -526,7 +526,7 @@ def test_default_output_directory_and_regeneration(toolchain, journal, directory
 def test_default_output_uses_the_entire_module_name(toolchain, journal, directory):
     source, project = source_project(directory)
     source.write_text(source.read_text().replace('module main;', 'module zkc::sample;'))
-    project.write_text(project_text({'format': 'zkc.project/0',
+    project.write_text(project_text({'format': 'zkc.project/0', 'source-format': 'zkc',
                                     'modules': {'zkc::sample': source.name}}))
     report = journal.json([toolchain.runtime, '--json', 'compile', 'Job', f'--compiler={toolchain.compiler}'],
                           cwd=directory)
@@ -537,16 +537,16 @@ def test_local_dependency_capture_matches_explicit_and_protects_manifests(toolch
     family = directory / 'family'
     family.mkdir()
     source, leaf = source_project(family)
-    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0',
+    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'source-format': 'zkc',
                     'dependencies': {'family': 'family'}})
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}', 'main::Job']
     indirect = journal.json([*command, f'--project={project}', f'--output={directory}/indirect.zkpkg'])
-    direct = journal.json([*command, f'--module=main={source}', f'--output={directory}/direct.zkpkg'])
+    direct = journal.json([*command, '--source-format=zkc', f'--module=main={source}', f'--output={directory}/direct.zkpkg'])
     assert indirect['package_sha256'] == direct['package_sha256']
     original = leaf.read_bytes()
     journal.run([*command, f'--project={project}', f'--output={leaf}'], refuses='entry-output-path')
     assert leaf.read_bytes() == original
-    leaf.write_text(project_text({'format': 'zkc.project/0', 'dependencies': {'root': '..'}}))
+    leaf.write_text(project_text({'format': 'zkc.project/0', 'source-format': 'zkc', 'dependencies': {'root': '..'}}))
     journal.run([*command, f'--project={project}', f'--output={directory}/cycle.zkpkg'],
                 refuses='source-project-cycle')
     assert not (directory / 'cycle.zkpkg').exists()

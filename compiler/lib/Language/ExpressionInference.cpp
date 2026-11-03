@@ -3,8 +3,11 @@
 #include "CallableConstraints.h"
 #include "DataRequirements.h"
 #include "OperatorInference.h"
+#include "RecordIntrinsics.h"
 #include "TypeInference.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
 #include <cassert>
 #include <numeric>
@@ -226,8 +229,8 @@ class ExpressionInference {
   void constrain(Variable variable, const Type &type, Span span) {
     types.equal(variable, known(type, span), span);
   }
-  Variable annotation(const SyntaxType &term) {
-    auto type = checker.type(decl, term);
+  Variable annotation(const SyntaxType &term, bool placed = false) {
+    auto type = checker.type(decl, term, 1, placed);
     return type ? known(*type, term.span) : types.fresh(term.span);
   }
   Variable binding(BindingId id, Span span) {
@@ -272,6 +275,16 @@ class ExpressionInference {
         return owner.body.services[it->second.index].field;
     fail("source.service", "expected a managed service binding", expr.span);
     return {};
+  }
+  /// An operator or notation use records its route once its callee is fixed.
+  bool recordNotation(uint32_t id, DeclarationId provider,
+                      const CallableReference &target) {
+    const auto &expr = syntax.expressions[id];
+    return checker.recordReference(
+        decl, ReferenceRoute::Notation, provider, target.declaration,
+        expr.notation->symbol + expr.notation->closing, expr.span,
+        target.module ? std::optional(formatType(*target.module))
+                      : std::nullopt);
   }
   bool finishCalls(unsigned begin, unsigned firstExpression, Span span) {
     std::optional<Diagnostic> incompleteCall;
@@ -322,6 +335,8 @@ class ExpressionInference {
           checker.output.declarations[signature.target.declaration.index];
       output.callees.emplace(id, signature.target);
       output.operators.at(id).binding = selection.binding;
+      if (!recordNotation(id, selection.provider, signature.target))
+        return false;
       std::vector<unsigned> inputs(signature.inputs.size());
       std::iota(inputs.begin(), inputs.end(), 0);
       output.inputs.emplace(id, std::move(inputs));
@@ -579,7 +594,8 @@ class ExpressionInference {
           types, checker.types, checker.output.declarations);
       auto value = expression(statement.expression, depth + 1);
       if (statement.type)
-        types.equal(value.type, annotation(*statement.type), statement.span);
+        types.equal(value.type, annotation(*statement.type, true),
+                    statement.span);
       if (statement.kind == Statement::Kind::Assign)
         types.equal(value.type,
                     binding(*statement.pattern.binding, statement.span),
@@ -640,33 +656,30 @@ class ExpressionInference {
       constrain(result.type, Type(T::Index), expr.span);
       return;
     }
-    if (expr.text == "unpack" && expr.kind == K::Call) {
-      if (expr.children.size() != 1 || !expr.callLabels.empty() ||
-          !expr.arguments.empty()) {
-        fail("source.call", "unpack requires one positional value", expr.span);
+    std::optional<ExpressionTypes::Callable> target;
+    if (expr.kind == K::MethodCall) {
+      auto receiver = child(0);
+      if (!types.solve(expr.span))
+        return;
+      auto structure = types.structure(receiver, expr.span);
+      if (!structure) {
+        // Match and indexing use this same signature-only propagation to
+        // obtain a constructor from notation without selecting by body success.
+        if (!operators->propagate(expr.span))
+          return;
+        structure = types.structure(receiver, expr.span);
+      }
+      if (!structure) {
+        if (!checker.types.diagnostic)
+          fail("source.inference", "method receiver needs a known nominal type",
+               expr.span);
         return;
       }
-      auto base = child(0);
-      types.defer([this, base, result, span = expr.span] {
-        auto type = types.get(base, span);
-        if (!type)
-          return false;
-        auto fields = checker.types.structuralFields(*type, span);
-        if (fields) {
-          Type unpacked(fields->empty() ? T::Unit : T::Tuple);
-          for (const auto &field : *fields)
-            unpacked.arguments.push_back(field.type);
-          constrain(result.type,
-                    type->kind == T::Associated ? fields->front().type
-                                                : unpacked,
-                    span);
-        }
-        return fields.has_value() || checker.types.diagnostic.has_value();
-      });
-      return;
-    }
-    std::optional<ExpressionTypes::Callable> target;
-    if (expr.kind != K::Record) {
+      target = checker.method(decl, structure->head, expr.text, expr.span);
+      if (!target)
+        return;
+      output.callees.emplace(id, *target);
+    } else if (expr.kind != K::Record) {
       target = owner.callable(expr);
       if (!target)
         return;
@@ -679,6 +692,48 @@ class ExpressionInference {
         return;
       }
     }
+    if (target) {
+      const auto *association =
+          checker.output.declarationIndex->association(target->declaration);
+      if (isRecordIntrinsic(association)) {
+        const bool repack = association->rule ==
+                            protocol::FrontendSignature::RecordRepack,
+                   inspect = association->rule ==
+                             protocol::FrontendSignature::RecordInspect;
+        if (expr.children.size() != (repack ? 2u : 1u) ||
+            !expr.callLabels.empty() || !expr.arguments.empty()) {
+          fail("source.call", "invalid product operation arguments", expr.span);
+          return;
+        }
+        auto base = child(0);
+        auto payload = repack ? std::optional(child(1)) : std::nullopt;
+        types.defer([this, base, result, payload, inspect, span = expr.span] {
+          auto type = types.get(base, span);
+          if (!type)
+            return false;
+          auto fields = checker.types.structuralFields(*type, span);
+          if (fields) {
+            Type unpacked(fields->empty() ? T::Unit : T::Tuple);
+            for (const auto &field : *fields)
+              unpacked.arguments.push_back(field.type);
+            if (payload) {
+              constrain(*payload, unpacked, span);
+              constrain(result.type, *type, span);
+            } else if (inspect) {
+              Type observed(T::Tuple);
+              observed.arguments = {*type, unpacked};
+              constrain(result.type, observed, span);
+            } else
+              constrain(result.type,
+                        type->kind == T::Associated ? fields->front().type
+                                                    : unpacked,
+                        span);
+          }
+          return fields.has_value() || checker.types.diagnostic.has_value();
+        });
+        return;
+      }
+    }
     auto split = StringRef(expr.text).rsplit("::");
     if (expr.kind == K::Record ||
         checker.output.declarations[target->declaration.index].kind ==
@@ -688,7 +743,7 @@ class ExpressionInference {
       term.arguments = expr.arguments;
       term.labels = expr.staticLabels;
       term.span = expr.span;
-      auto type = checker.type(decl, term);
+      auto type = checker.type(decl, term, 1, true);
       if (!type)
         return;
       constrain(result.type, *type, expr.span);
@@ -733,7 +788,7 @@ class ExpressionInference {
       term.arguments = expr.arguments;
       term.labels = expr.staticLabels;
       term.span = expr.span;
-      auto type = checker.type(decl, term);
+      auto type = checker.type(decl, term, 1, true);
       if (!type)
         return;
       constrain(result.type, *type, expr.span);
@@ -928,6 +983,8 @@ class ExpressionInference {
                     {operatorBindingKey(binding, checker.output.declarations)},
                     binding.span});
         output.callees.emplace(id, target);
+        if (!recordNotation(id, binding.module, target))
+          break;
         const auto &callee =
             checker.output.declarations[target.declaration.index];
         types.equal(
@@ -945,8 +1002,8 @@ class ExpressionInference {
       for (auto &binding : *visible) {
         witness.family.push_back(
             operatorBindingKey(binding, checker.output.declarations));
-        candidates.push_back(
-            {binding.target, std::move(binding.arguments), binding.span});
+        candidates.push_back({binding.target, std::move(binding.arguments),
+                              binding.span, binding.module});
       }
       output.operators.emplace(id, std::move(witness));
       operators->add(id, expr.span, std::move(inputs), result.type,
@@ -1056,7 +1113,8 @@ class ExpressionInference {
       }
       if (checker.types.diagnostic)
         break;
-      auto type = builtinType("oracle_sequence", arguments);
+      auto type = logicalHeadType(
+          protocol::FrontendConstructorForm::OracleHandleSequence, arguments);
       if (!type)
         checker.types.accept(type.takeError(), expr.span);
       else
@@ -1194,13 +1252,28 @@ class ExpressionInference {
       break;
     }
     case K::MethodCall: {
-      auto field = service(expr.children.front());
-      if (field)
-        constrain(result.type,
-                  expr.text == "index"     ? Type(T::Index)
-                  : expr.text == "indices" ? *builtinType("indices", {})
-                                           : *field,
-                  expr.span);
+      const auto &receiver = syntax.expressions[expr.children.front()];
+      if (receiver.binding && (services.count(*receiver.binding) ||
+                               owner.services.count(*receiver.binding))) {
+        auto field = service(expr.children.front());
+        auto methods = protocol::serviceMethodDeclarations();
+        auto method = llvm::find_if(
+            methods, [&](const auto &row) { return row.name == expr.text; });
+        if (method == methods.end()) {
+          fail("source.service", "unknown installed service member", expr.span);
+          break;
+        }
+        if (field)
+          constrain(result.type,
+                    method->signature == protocol::ServiceSignature::RandomIndex
+                        ? Type(T::Index)
+                    : method->signature ==
+                            protocol::ServiceSignature::RandomIndices
+                        ? *builtinType("indices", {})
+                        : *field,
+                    expr.span);
+      } else
+        call(id, depth, result);
       break;
     }
     case K::Kernel:

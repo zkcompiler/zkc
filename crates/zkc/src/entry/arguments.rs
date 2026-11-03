@@ -1,6 +1,6 @@
 //! Exact named argument admission shared by run and independent proof jobs.
 use super::{
-    Interface, NamedValues, Value,
+    EntryCondition as C, EntryError, Interface, NamedValues, Value,
     interface::{
         InputPort, RolePorts,
         raw::{Schema, Service},
@@ -10,18 +10,38 @@ use super::{
 use crate::host::request::InputValue;
 use std::collections::BTreeMap;
 
-pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
-    interface
-        .check_executable_ports()
-        .map_err(|e| e.to_string())?;
-    for i in 0..interface.selected_protocol().inputs.len() {
-        let port = interface.input(i);
-        if port.key.is_none() {
-            check_input(&port.schema)?;
+pub(super) fn check_boundary(interface: &Interface) -> Result<(), String> {
+    check_role_boundary(interface, None)
+}
+fn check_role_boundary(interface: &Interface, role: Option<&str>) -> Result<(), String> {
+    if let Some(r) = interface
+        .outstanding_requirements()
+        .iter()
+        .find(|r| role.is_none_or(|role| r.role == role))
+    {
+        return Err(if matches!(
+            r.reason,
+            "constructor" | "element-constructor" | "hidden" | "sealed"
+        ) {
+            "entry-input-constructor"
+        } else {
+            "entry-interface-native-binding"
         }
+        .into());
     }
-    for port in &interface.selected_protocol().outputs {
-        crate::entry::interface::schemas::check_export(&port.schema)?;
+    Ok(())
+}
+pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
+    check_boundary(interface)?;
+    for role in interface.roles() {
+        for port in interface.input_ports(role) {
+            if port.key.is_none() {
+                check_input(interface, &port.schema)?;
+            }
+        }
+        for port in interface.output_ports(role) {
+            crate::entry::interface::schemas::check_export(&port.schema)?;
+        }
     }
     Ok(())
 }
@@ -29,9 +49,6 @@ pub(super) fn check_host_ports(
     interface: &Interface,
     operation: Option<super::ProofOperation>,
 ) -> Result<(), String> {
-    interface
-        .check_executable_ports()
-        .map_err(|e| e.to_string())?;
     let roles = interface.roles().iter().filter(|role| {
         operation.is_none_or(|operation| {
             let proof = interface.proof().expect("proof operation");
@@ -45,10 +62,9 @@ pub(super) fn check_host_ports(
         })
     });
     for role in roles {
+        check_role_boundary(interface, Some(&role.name))?;
         for port in interface.input_ports(role) {
-            if port.key.is_none() {
-                crate::entry::interface::schemas::check_export(&port.schema)?;
-            }
+            check_host_input(interface, port)?;
         }
         for port in interface.output_ports(role) {
             crate::entry::interface::schemas::check_export(&port.schema)?;
@@ -57,9 +73,21 @@ pub(super) fn check_host_ports(
     // Public binding must still have the native owner's canonical codec.
     if operation.is_some() {
         for port in interface.public_ports() {
+            check_host_input(interface, port)?;
             if port.key.is_none() {
-                check_input(&port.schema)?;
+                check_codec(interface, &port.schema)?;
             }
+        }
+    }
+    Ok(())
+}
+fn check_host_input(interface: &Interface, port: InputPort<'_>) -> Result<(), String> {
+    if port.key.is_none() {
+        crate::entry::interface::schemas::check_export(&port.schema)?;
+        // Setup-bearing context values arrive through the external context map,
+        // while source data comes from retained typed operands.
+        if !interface.is_source_data(port) {
+            check_input(interface, &port.schema)?;
         }
     }
     Ok(())
@@ -68,18 +96,16 @@ pub(super) fn check_proof_ports(
     interface: &Interface,
     operation: super::ProofOperation,
 ) -> Result<(), String> {
-    interface
-        .check_executable_ports()
-        .map_err(|e| e.to_string())?;
     let proof = interface.proof().ok_or("entry-job-kind")?;
     let role = &interface.roles()[if operation == super::ProofOperation::Prove {
         proof.prover
     } else {
         proof.verifier
     }];
+    check_role_boundary(interface, Some(&role.name))?;
     for port in interface.public_ports().chain(interface.input_ports(role)) {
         if port.key.is_none() {
-            check_input(&port.schema)?;
+            check_input(interface, &port.schema)?;
         }
     }
     for port in interface.output_ports(role) {
@@ -87,22 +113,26 @@ pub(super) fn check_proof_ports(
     }
     Ok(())
 }
-pub(super) fn check_input(schema: &Schema) -> Result<(), String> {
+fn check_input(interface: &Interface, schema: &Schema) -> Result<(), String> {
     super::interface::schemas::check_import(schema)?;
-    if !schema.leaves.iter().all(|leaf| {
-        zkc_runtime::vm::LogicalType::parse(leaf).is_ok_and(|ty| ty.is_native_message_data())
-    }) {
+    check_codec(interface, schema)
+}
+/// The interface's leaf facts are the published codec permission.
+fn check_codec(interface: &Interface, schema: &Schema) -> Result<(), String> {
+    if !super::interface::schemas::message_data(&interface.types, schema) {
         return Err("entry-input-codec".into());
     }
     Ok(())
 }
 pub(super) fn values<'a>(
+    interface: &Interface,
     ports: impl Iterator<Item = InputPort<'a>>,
     mut values: NamedValues,
     public_keys: Option<&BTreeMap<u32, &[u8]>>,
 ) -> Result<Vec<InputValue>, String> {
-    let mut inputs = Vec::new();
+    let mut assigned = BTreeMap::new();
     for port in ports {
+        let mut inputs = Vec::new();
         match port.key {
             Some("verifier_key") => {
                 inputs.push(if let Some(keys) = public_keys {
@@ -117,27 +147,35 @@ pub(super) fn values<'a>(
                 });
             }
             Some("prover_key") => {
-                let value = values.remove(&port.name).ok_or("entry-input-names")?;
+                let value = values.remove(&port.name).ok_or(C::InputNames)?;
                 let Value::Leaf(
                     value @ (InputValue::ProverKey(_)
                     | InputValue::ProverKeyFile { .. }
                     | InputValue::ProverKeyInput { .. }),
                 ) = value
                 else {
-                    return Err("entry-input-key".into());
+                    return Err(C::InputKey.into());
                 };
                 inputs.push(value);
             }
             _ => {
-                let value = values.remove(&port.name).ok_or("entry-input-names")?;
-                value::flatten(&port.schema, value, &mut inputs)?;
+                let value = values.remove(&port.name).ok_or(C::InputNames)?;
+                value::flatten(&interface.types, &port.schema, value, &mut inputs)?;
+            }
+        }
+        if inputs.len() != port.native.len() {
+            return Err("entry-input-shape".into());
+        }
+        for (&coordinate, value) in port.native.iter().zip(inputs) {
+            if assigned.insert(coordinate, value).is_some() {
+                return Err("entry-input-overlap".into());
             }
         }
     }
     if !values.is_empty() {
-        return Err("entry-input-names".into());
+        return Err(C::InputNames.into());
     }
-    Ok(inputs)
+    Ok(assigned.into_values().collect())
 }
 pub(super) fn services<'a>(
     ports: impl Iterator<Item = &'a Service>,
@@ -152,14 +190,29 @@ pub(super) fn services<'a>(
         );
     }
     if !values.is_empty() {
-        return Err("entry-service-names".into());
+        return Err(C::ServiceNames.into());
     }
     Ok(budgets)
+}
+/// Refuse a service or selected transcript draw allowance above the installed
+/// maximum, with the same code and phase in every Entry kind.
+pub(super) fn check_draw_budgets(budgets: impl IntoIterator<Item = u64>) -> Result<(), EntryError> {
+    if budgets
+        .into_iter()
+        .any(|budget| budget > super::MAX_DRAW_BUDGET)
+    {
+        return Err(C::ServiceBudget.into());
+    }
+    Ok(())
 }
 
 /// Supply public statement data once at the source boundary. Only immutable data
 /// is duplicated, after native constructor/shape checks and before native byte
-/// admission independently checks the complete invocation.
+/// admission independently checks the complete invocation. The statement's
+/// wire bytes, counted at every role operand they initialize, are bounded by
+/// `public_bytes`
+/// ([`Allowances::PUBLIC_BYTES`](crate::host::capacity::Allowances::PUBLIC_BYTES)).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn proof_inputs(
     interface: &Interface,
     role: &RolePorts,
@@ -167,32 +220,67 @@ pub(super) fn proof_inputs(
     public_types: &[zkc_runtime::vm::PhysicalType],
     private: NamedValues,
     capacity: crate::host::capacity::Capacity,
+    public_bytes: usize,
     installation: &zkc_cpu::CpuInstallation,
 ) -> Result<Vec<InputValue>, String> {
-    let private = values(interface.named_inputs(role), private, None)?;
-    let mut private = private.into_iter();
-    let mut inputs = Vec::new();
+    let private = values(interface, interface.named_inputs(role), private, None)?;
+    let private_coordinates: Vec<_> = interface
+        .named_inputs(role)
+        .flat_map(|p| p.definition.native.iter().copied())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let mut assigned: BTreeMap<_, _> = private_coordinates.into_iter().zip(private).collect();
+    let public_coordinates = interface.public_native();
+    if public.len() != public_coordinates.len() || public_types.len() != public.len() {
+        return Err("entry-input-public".into());
+    }
     let mut public_wire_bytes = 0usize;
     for port in interface.input_ports(role) {
         if port.key == Some("verifier_key") {
-            inputs.push(InputValue::VerifierKey);
-        } else if let Some((start, len)) = port.public {
-            for (input, physical) in public[start..start + len]
-                .iter()
-                .zip(&public_types[start..start + len])
+            if assigned
+                .insert(port.native[0], InputValue::VerifierKey)
+                .is_some()
             {
-                crate::host::admission::check_native_data(physical, input, capacity, installation)?;
-                inputs.push(duplicate(input, capacity, &mut public_wire_bytes)?);
+                return Err("entry-input-overlap".into());
             }
-        } else {
-            inputs.extend(private.by_ref().take(port.native.len()));
+        } else if port.public {
+            for original in &port.native {
+                let index = public_coordinates
+                    .binary_search(original)
+                    .map_err(|_| "entry-input-public")?;
+                let input = &public[index];
+                crate::host::admission::check_native_data(
+                    &public_types[index],
+                    input,
+                    capacity,
+                    installation,
+                )?;
+                if assigned
+                    .insert(
+                        *original,
+                        duplicate(input, public_bytes, &mut public_wire_bytes)?,
+                    )
+                    .is_some()
+                {
+                    return Err("entry-input-overlap".into());
+                }
+            }
         }
     }
-    Ok(inputs)
+    if !assigned
+        .keys()
+        .copied()
+        .eq(interface.role_native_inputs(role))
+    {
+        return Err("entry-input-coverage".into());
+    }
+    Ok(assigned.into_values().collect())
 }
+
 fn duplicate(
     input: &InputValue,
-    capacity: crate::host::capacity::Capacity,
+    public_bytes: usize,
     public_wire_bytes: &mut usize,
 ) -> Result<InputValue, String> {
     Ok(match input {
@@ -201,7 +289,7 @@ fn duplicate(
             *public_wire_bytes = public_wire_bytes
                 .checked_add(bytes.len())
                 .ok_or("entry-input-limit")?;
-            if *public_wire_bytes > capacity.values.live_bytes.min(capacity.values.total_bytes) {
+            if *public_wire_bytes > public_bytes {
                 return Err("entry-input-limit".into());
             }
             InputValue::Wire(bytes.clone())
@@ -219,7 +307,7 @@ fn duplicate(
             alternative: *alternative,
             payload: payload
                 .iter()
-                .map(|p| duplicate(p, capacity, public_wire_bytes))
+                .map(|p| duplicate(p, public_bytes, public_wire_bytes))
                 .collect::<Result<_, _>>()?,
         },
         _ => return Err("entry-input-public".into()),

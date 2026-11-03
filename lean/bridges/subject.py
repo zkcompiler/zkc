@@ -54,6 +54,7 @@ sys.path.append(str(ROOT / "scripts"))
 from bridges.common.lean_render import (  # noqa: E402
     ALLOWED_AXIOMS, Refused, Runner, axioms_allowed, digest, encode_tree, file_digest, now, printed_axioms,
     regenerate, require, strip_header)
+from bridges.common import policy as native_policy  # noqa: E402
 from bridges.construction import pair, render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
@@ -172,7 +173,7 @@ class Driver(Runner):
             self.build(data)
             text, helpers, protocols = printer.printed_module(data, bodies, subject.get("bodies", "closed", False),
                                                               names, self, self.args.lake,
-                                                              fresh=self.args.fresh_bodies)
+                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"])
             self.generated(subject, "interactive_bodies", text, modules)
             views = subject.module_name("interactive_views")
             if views:
@@ -201,19 +202,25 @@ class Driver(Runner):
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
         if subject.generated("pair"):
             self.generated(subject, "pair", pair.render(artifacts["pair"], subject.module_name("pair")), modules)
-        # Presentations read the refreshed source and precede every consumer.
-        self.source_views(subject, record)
         entry = glue.Entry(artifacts["original"], artifacts["exported"], artifacts["interface"])
         names = {"glue": subject.construction_namespace, "data": data, "participant": participant}
         admission = subject.get("construction", "admission", "views")
         if subject.generated("bodies"):
             bodies = subject.module_name("bodies")
-            body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"))
+            body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"),
+                                         artifacts["source_inventory"], subject.get("bodies", "owners", {}))
             self.build(data)
             text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake,
-                                                              fresh=self.args.fresh_bodies)
+                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"])
             self.generated(subject, "bodies", text, modules)
             names.update(bodies=bodies, helpers=helpers, protocols=protocols)
+            views = subject.module_name("views")
+            if views:
+                self.generated(subject, "views", glue.views_module(views, data, bodies, helpers, protocols,
+                    max_rec_depth=50000, max_heartbeats=4000000), modules)
+                self.build(views)
+        # Presentations consume refreshed source, literal bodies and admission.
+        self.source_views(subject, record)
         if admission != "views":
             names.pop("bodies", None)
         if subject.generated("glue"):
@@ -246,14 +253,20 @@ class Driver(Runner):
     def construction_rule(self, subject, artifacts, record):
         """Structural admission and checked source connections on fresh exports.
 
-        Negative connection cases test the default proof method. They do not
-        claim that every refused candidate is semantically inequivalent.
+        Negative connection cases test the same proof method and library as the
+        valid connection. They do not claim that every refused candidate is
+        semantically inequivalent.
         """
         exported, original = artifacts["exported"], artifacts["original"]
         rule = subject.get("construction", "rule", "compiled")
         glue_module = subject.module_name("glue")
         glue_namespace = subject.construction_namespace
         data = subject.module_name("data")
+        library = subject.get("construction", "library")
+        library_module = subject.get("construction", "library_module")
+        connection_method = "derive_source_connection"
+        if library:
+            connection_method += f" with_library {library}"
         kinds = [item for item in mutations.kinds_for(subject.get("mutations", "kinds", []))
                  if item[1].stage in {"construction", "connection"}]
 
@@ -262,11 +275,16 @@ class Driver(Runner):
                 if mutations.bound(item, mutations.OBSERVE) or mutations.bound(item, mutations.CHALLENGE):
                     yield list(encode_tree(mutations.template_tree(item)))
 
-        parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
+        imports = [f"import {glue_module}"]
+        if library_module:
+            imports.append(f"import {library_module}")
+        parts = [*imports, "import Zkc.Construction.Encoding",
+                 "import Zkc.Construction.CatalogueAdmission",
                  "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
                  "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm",
                  "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
                  "set_option linter.unusedTactic false",
+                 "set_option Elab.async false",
                  strip_header(structured.render(original, "Fresh.Original")),
                  strip_header(constructed.render(exported, "Fresh.Actual")),
                  "/-- Whether a check refuses with a code of the given rule. -/\n"
@@ -275,6 +293,9 @@ class Driver(Runner):
         evaluations = []
         encoded = json.dumps(list(templates(exported[7])))
         proofs = [f"theorem original_retained : Fresh.Original.snapshot = {data}.snapshot := rfl",
+                  # The exported rows are producer data until Lean's catalogue admits them.
+                  "theorem actual_catalogue : Fresh.Actual.participant.checkCatalogue Fresh.Actual.catalogue "
+                  "constructionCatalogue = .ok () := by decide +kernel",
                   "theorem templates_encoded : (Zkc.Construction.Instruction.templatesList "
                   "Fresh.Actual.participant.instructions).map (fun template => "
                   f"(Zkc.Construction.templateTree template).encode) = {encoded} := by decide +kernel"]
@@ -290,7 +311,7 @@ class Driver(Runner):
                        "selection.check freshImported Fresh.Actual.participant) = true := by decide +kernel",
                        "theorem actual_connected : Zkc.Construction.ConnectionAdmission.Required "
                        f"freshImported.program {glue_namespace}.context .validator Fresh.Actual.participant := by\n"
-                       "  derive_source_connection",
+                       f"  {connection_method}",
                        "#print axioms actual_connected"]
         else:
             proofs.append("theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
@@ -320,12 +341,12 @@ class Driver(Runner):
                                   "= .ok () := by decide +kernel")
                 if kind.stage == "connection":
                     proofs.append(
-                        f"/-- {name}: refusal of the default method, not an attack theorem. -/\n"
+                        f"/-- {name}: refusal of the selected method, not an attack theorem. -/\n"
                         "example : True := by\n"
                         f'  expect_connection_refusal "mutation {index}" because "{kind.refusing_rule}"\n'
                         "    have rejected : Zkc.Construction.ConnectionAdmission.Required "
                         f"freshImported.program {glue_namespace}.context .validator {namespace}.participant := by\n"
-                        "      derive_source_connection\n  trivial")
+                        f"      {connection_method}\n  trivial")
                     sites.append(dict(site=len(sites), applicable=True, control=f"mutation {index}", index=index,
                                       refusing_rule=kind.refusing_rule, construction_accepts=kind.construction_accepts,
                                       evidence="builder-refusal"))
@@ -362,11 +383,13 @@ class Driver(Runner):
                        result.stdout[-400:])
             connection_axioms = printed_axioms(result.stdout).get("actual_connected")
             record["kernel"]["source_connection"] = dict(file="FreshExport.lean", accepted=True,
-                                                         axioms=connection_axioms)
+                                                         axioms=connection_axioms, library=library,
+                                                         library_module=library_module)
             record_accepted(record, "source-connection", axioms=connection_axioms)
         if rule == "compiled":
             record_accepted(record, "selection")
         record_accepted(record, "occurrence-encoding")
+        record_accepted(record, "catalogue-admission")
         record.setdefault("mutations", {}).update(outcomes)
 
     def native_refusals(self, subject, artifacts, record):
@@ -386,7 +409,8 @@ class Driver(Runner):
                                   name=f"{subject.name}:native-refusal:{name}")
                 reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
                 self.check(f"{subject.name}:native-refusal:{name}:{index}",
-                           result.returncode > 0 and reason == kind.expected, result.stderr[-400:])
+                           result.returncode > 0 and reason.partition(":")[0] == kind.expected,
+                           result.stderr[-400:])
                 sites.append(dict(site=index, applicable=True, reason=reason))
             record.setdefault("mutations", {})[name] = dict(
                 stage=kind.stage, property=kind.property, expected=kind.expected, sites=sites,
@@ -588,16 +612,17 @@ class Driver(Runner):
     def role_selection(deployment):
         """The validator's role-map row, which the runtime uses for inputs and acceptance, and
         whether it takes the policy's public inputs in order and selects its acceptance output."""
-        policy = deployment[2][1]
-        rows = [row for row in deployment[6] if row[0] == policy[3]]
+        policy = native_policy.decode(deployment[2][1])
+        rows = [row for row in deployment[6] if row[0] == policy.validator]
         if len(rows) != 1:
             return None
         _, symbol, inputs, outputs, _, acceptance = rows[0]
         data_inputs = [port for port, _ in inputs]
         selects = (acceptance.isdigit() and int(acceptance) < len(outputs)
-                   and outputs[int(acceptance)][0] == policy[4])
+                   and outputs[int(acceptance)][0] == str(policy.acceptance))
         return dict(symbol=symbol, data_inputs=data_inputs, acceptance=acceptance,
-                    inputs_match=data_inputs == policy[7], acceptance_match=selects)
+                    inputs_match=data_inputs == [str(index) for index in policy.public],
+                    acceptance_match=selects)
 
     def role_map(self, subject, deployment):
         prefix = subject.name
@@ -611,11 +636,17 @@ class Driver(Runner):
         other[2][1][4] = str(int(other[2][1][4]) + 1)
         reordered = copy.deepcopy(deployment)
         inputs = reordered[2][1][7]
-        reordered[2][1][7] = list(reversed(inputs)) if len(inputs) > 1 else []
+        reordered[2][1][7] = list(reversed(inputs)) if len(inputs) > 1 else ([] if inputs else ["0"])
         self.check(f"{prefix}:role-map-refuses-other-acceptance",
                    not self.role_selection(other)["acceptance_match"])
-        self.check(f"{prefix}:role-map-refuses-other-inputs",
-                   not self.role_selection(reordered)["inputs_match"])
+        try:
+            changed_selection = self.role_selection(reordered)
+            refused_inputs = changed_selection is None or not changed_selection["inputs_match"]
+        except Refused:
+            # Reordering multiple public inputs violates the canonical policy
+            # before role selection; that is the expected refusal of this edit.
+            refused_inputs = True
+        self.check(f"{prefix}:role-map-refuses-other-inputs", refused_inputs)
         return dict(symbol=selection["symbol"], data_inputs=selection["data_inputs"],
                     acceptance=selection["acceptance"])
 

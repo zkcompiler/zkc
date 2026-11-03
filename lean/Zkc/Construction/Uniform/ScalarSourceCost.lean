@@ -70,7 +70,8 @@ private theorem continues_with_yields {A : Type}
     | localService => trivial
 
 def scalarSort : ValueSort → Bool
-  | .data .boolean | .data (.field _) | .data (.group _) | .data .index | .data (.vector _) | .indices => true
+  | .data .boolean | .data (.field _) | .data (.group _) | .data .index | .data (.vector _) |
+      .data (.resourceUnit _) | .indices => true
   | _ => false
 
 /-- Finite operand-schema checks; charge items have no physical results. -/
@@ -89,7 +90,8 @@ private theorem scalar_exists (value : Domain.Value (Structured.uniformCarriers 
   | data payload =>
     rcases payload with ⟨ty, supportedTy, value⟩
     cases ty <;> simp_all [scalarSort, Domain.Value.sort, DomainAdapter.readbackData]
-  | indices => exact ⟨_, rfl⟩
+    cases supportedTy
+  | indices | custody => exact ⟨_, rfl⟩
   | transcript => cases supported
 
 private theorem arguments_of_schema (environment : Environment F G) :

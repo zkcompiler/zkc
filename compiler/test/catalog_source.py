@@ -10,24 +10,39 @@ from tools import records, tool
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "common/catalog"))
-from generate import unique, validate  # noqa: E402
+from generate import unique, validate, validate_installation  # noqa: E402
 from tablegen import project  # noqa: E402
 from test_deterministic_data import COVERAGE  # noqa: E402
+import validation_cases  # noqa: E402
 
 
 def main():
     source = json.loads((ROOT / "common/catalog/declarations.json").read_text(), object_pairs_hook=unique)
+    installation = json.loads((ROOT / "common/catalog/installation.json").read_text(),
+                              object_pairs_hook=unique)
     directory = Path(records()) / "include/zkc/Contracts"
     directory.mkdir(parents=True)
     generator = tool("tablegen")
 
-    def native(value, expected=None, check_source=True, composed=False, extra=""):
+    def native(value, expected=None, check_source=True, composed=False, extra="", physical=None):
+        """Dump the declarations, or with `physical` the native installation
+        checked together with them."""
         if check_source:
             validate(value)
-        declarations, mathematical = project(value)
+            if physical is not None:
+                validate_installation(physical, value)
+        declarations, mathematical, installed = project(
+            value, installation if physical is None else physical)
         (directory / "Catalog.td").write_text(declarations + extra)
         (directory / "Mathematical.td").write_text(mathematical)
+        (directory / "NativeInstallation.td").write_text(installed)
         input_path = directory / "Catalog.td"
+        action = "--dump-contract-declarations"
+        if physical is not None:
+            input_path = directory / "Complete.td"
+            input_path.write_text('include "zkc/Contracts/Catalog.td"\n'
+                                  'include "zkc/Contracts/NativeInstallation.td"\n')
+            action = "--dump-native-installation"
         if composed:
             input_path = directory / "Installation.td"
             input_path.write_text('''include "zkc/Contracts/Declarations/Schema.td"
@@ -38,7 +53,7 @@ def Base : ZKC_Contribution<"base", [], BaseRecords>;
 def Extra : ZKC_Operation<"example.unenrolled", [], [], []>;
 def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
 ''')
-        result = subprocess.run([generator, "--dump-contract-declarations",
+        result = subprocess.run([generator, action,
                                  "-I", directory.parents[1], "-I", ROOT / "compiler/include",
                                  input_path], text=True, capture_output=True)
         if expected:
@@ -49,7 +64,87 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
 
     with case("every section survives independent native projection"):
         assert native(source) == source
-        assert project(source) == project(source)
+        assert native(source, physical=installation) == installation
+        assert project(source, installation) == project(source, installation)
+
+    # The shared validation cases: the generator and zkc-tblgen each accept the
+    # accepted edits and refuse every refused edit on their own, with their own
+    # diagnostics. The Rust build runs the same cases.
+    def run_native(value, physical, expected=None):
+        """zkc-tblgen over the declarations alone, then with the installation."""
+        if expected is None:
+            assert native(value, check_source=False) == value
+            assert native(value, check_source=False, physical=physical) == physical
+            return
+        try:
+            native(value, check_source=False)
+        except AssertionError:
+            native(value, expected, check_source=False)
+            return
+        native(value, expected, check_source=False, physical=physical)
+
+    cases = validation_cases.load()
+    for shared in cases["accepted"]:
+        with case("both native validators accept " + shared["name"]):
+            value, other = validation_cases.apply(shared["edits"], source, installation)
+            validate(value)
+            validate_installation(other, value)
+            run_native(value, other)
+    for shared in cases["refused"]:
+        with case("both native validators refuse " + shared["name"]):
+            value, other = validation_cases.apply(shared["edits"], source, installation)
+            try:
+                validate(value)
+                validate_installation(other, value)
+            except ValueError as error:
+                assert shared["diagnostics"]["generator"] in str(error), error
+            else:
+                raise AssertionError("generator accepted " + shared["name"])
+            run_native(value, other, shared["diagnostics"]["native"])
+
+    for section, field, replacement, diagnostic in [
+        ("frontendDeclarations", "association", {"kind": "rule", "target": "RecordUnpack"},
+         "frontend rule signature mismatch"),
+        ("frontendDeclarations", "association", {"kind": "rule", "target": "RecordUnknown"},
+         "frontend rule signature mismatch"),
+        ("frontendHomes", "constructor", "Vector", "invalid frontend home"),
+        ("frontendHomes", "module", "foreign", "invalid frontend home"),
+        ("serviceMethods", "signature", "Unknown", "service method capability mismatch"),
+        ("serviceMethods", "capability", "IndexRandomness", "service method capability mismatch"),
+    ]:
+        with case(f"independent frontend refusal {section}.{field}"):
+            value = copy.deepcopy(source)
+            value[section][0][field] = replacement
+            try:
+                validate(value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("source accepted invalid frontend association")
+            native(value, diagnostic, check_source=False)
+    for section, diagnostic in [("frontendDeclarations", "duplicate frontend identity"),
+                                ("frontendRules", "invalid or duplicate frontend rule"),
+                                ("frontendNotations", "duplicate frontend notation"),
+                                ("frontendHomes", "duplicate frontend home"),
+                                ("serviceSignatures", "invalid or duplicate service signature"),
+                                ("serviceMethods", "invalid or duplicate service method")]:
+        with case("independent duplicate " + section):
+            value = copy.deepcopy(source)
+            value[section].append(copy.deepcopy(value[section][0]))
+            native(value, diagnostic, check_source=False)
+    with case("source spelling is separate from installed identity"):
+        value = copy.deepcopy(source)
+        value["frontendDeclarations"][0]["name"] = "OpenService"
+        assert native(value)["frontendDeclarations"] == value["frontendDeclarations"]
+    with case("unknown frontend authority fields refuse"):
+        value = copy.deepcopy(source)
+        value["frontendDeclarations"][0]["authority"] = "all-records"
+        try:
+            validate(value)
+        except ValueError as error:
+            assert "unknown fields" in str(error)
+        else:
+            raise AssertionError("source accepted unknown association authority")
 
     with case("installed contribution cannot enroll itself into the selected consumer"):
         inventory = native(source, composed=True)

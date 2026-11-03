@@ -147,7 +147,8 @@ struct Formation {
           failed(data::IdentityAttr::verify(emit, identity.getTerm())))
         return refuse("invalid nominal variant identity");
       auto alternatives = variant.getAlternatives();
-      if (alternatives.empty() || alternatives.size() > 512)
+      if (alternatives.empty() ||
+          alternatives.size() > data::VariantType::maximumAlternatives)
         return refuse("invalid variant alternative count");
       llvm::SmallDenseSet<StringAttr, 8> labels;
       for (auto arm : alternatives) {

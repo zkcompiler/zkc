@@ -9,6 +9,9 @@ transcript-construction rule alone accepts it; the checked connection method
 refuses the changed computation. A method refusal is not an attack theorem. The second group exercises the
 transcript-construction rule's deployment checks inside the loop. -/
 
+-- Each mutation restores the proposer state; serialize these expensive trials
+-- so independent theorem tasks do not retain several candidate graphs at once.
+set_option Elab.async false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 set_option linter.unusedTactic false
@@ -36,10 +39,10 @@ def editList (instructions : List Instruction) (index : Nat) (edit : Instruction
 def changeBody (participant : Participant) (index : Nat) (edit : Instruction → Instruction) : Participant :=
   changeAt participant 2 fun loop => { loop with body := editList loop.body index edit }
 
-/-! The first two instructions construct and open Pending at slots 4--7.
-The loop at instruction 2 captures eight values, carries point/claim/transcript,
-and yields [29,34,28]. The suffix consumes [8,9] through atPrefix; the terminal
-check at instruction 4 then reads [0,11,12]. -/
+/-! The first two instructions construct and open Pending at slots 4--8.
+The loop at instruction 2 captures nine values, carries point/claim/transcript,
+and yields [30,35,29]. The suffix repacks custody/point/claim through atPrefix;
+the terminal check at instruction 4 then reads [0,12,13,14]. -/
 
 /-- The round check is dropped. -/
 def roundCheckDropped : Participant := (changeAt actual 2 fun loop => { loop with body := loop.body.eraseIdx 10 })
@@ -50,11 +53,11 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator roundCheckDropped := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The round check compares the sum with the claim: equal in algebra, but not the
 original comparison, so the guard's condition is not held. -/
-def roundCheckSwapped : Participant := (changeBody actual 9 fun instruction => { instruction with operands := [20, 10] })
+def roundCheckSwapped : Participant := (changeBody actual 9 fun instruction => { instruction with operands := [21, 11] })
 
 example : checkExport original roundCheckSwapped = .ok () := by decide +kernel
 example : True := by
@@ -62,10 +65,10 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator roundCheckSwapped := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The updated claim adds the low term twice. -/
-def claimUpdateMutated : Participant := (changeBody actual 22 fun instruction => { instruction with operands := [32, 32] })
+def claimUpdateMutated : Participant := (changeBody actual 22 fun instruction => { instruction with operands := [33, 33] })
 
 example : checkExport original claimUpdateMutated = .ok () := by decide +kernel
 example : True := by
@@ -73,10 +76,10 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator claimUpdateMutated := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The challenge term scales the low message instead of the high one. -/
-def challengeTermMutated : Participant := (changeBody actual 21 fun instruction => { instruction with operands := [24, 12] })
+def challengeTermMutated : Participant := (changeBody actual 21 fun instruction => { instruction with operands := [25, 13] })
 
 example : checkExport original challengeTermMutated = .ok () := by decide +kernel
 example : True := by
@@ -84,11 +87,11 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator challengeTermMutated := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The loop yields the claim it started the iteration with. -/
 def staleClaimYielded : Participant := (changeAt actual 2 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s18" 2 [29, 10, 28] })
+        { loop with operation := .loop "apply_18_label_726564756365_s18" 2 [30, 11, 29] })
 
 example : checkExport original staleClaimYielded = .ok () := by decide +kernel
 example : True := by
@@ -96,11 +99,11 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator staleClaimYielded := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The loop admits three rounds where the source repeat admits two. -/
 def loopBoundChanged : Participant := (changeAt actual 2 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 [29, 34, 28] })
+        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 [30, 35, 29] })
 
 example : checkExport original loopBoundChanged = .ok () := by decide +kernel
 example : True := by
@@ -108,10 +111,10 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator loopBoundChanged := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The loop names the repeat site without its application path. -/
-def loopSiteUnqualified : Participant := (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 [29, 34, 28] })
+def loopSiteUnqualified : Participant := (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 [30, 35, 29] })
 
 example : checkExport original loopSiteUnqualified = .ok () := by decide +kernel
 -- The loop's display label does not enter its Domain meaning. The actual
@@ -123,7 +126,7 @@ theorem loopDisplayLabel_connected :
     ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
 
 /-- The loop starts from the table values instead of the empty point. -/
-def loopStartsFromTable : Participant := (changeAt actual 2 fun loop => { loop with operands := [2, 0, 7, 3] })
+def loopStartsFromTable : Participant := (changeAt actual 2 fun loop => { loop with operands := [2, 0, 8, 3] })
 
 example : checkExport original loopStartsFromTable = .ok () := by decide +kernel
 example : True := by
@@ -131,10 +134,10 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator loopStartsFromTable := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-- The terminal check reads the final claim and point in the other order. -/
-def terminalOperandsSwapped : Participant := (changeAt actual 4 fun call => { call with operands := [0, 12, 11] })
+def terminalOperandsSwapped : Participant := (changeAt actual 4 fun call => { call with operands := [0, 12, 14, 13] })
 
 example : checkExport original terminalOperandsSwapped = .ok () := by decide +kernel
 example : True := by
@@ -142,7 +145,7 @@ example : True := by
     have rejected : ConnectionAdmission.Required program SumcheckProof.context .validator terminalOperandsSwapped := by
       derive_source_connection with_library
         ZkcExamples.Structured.Generated.Connections.SmallSumcheck.sourceLibrary
-  trivial
+  exact True.intro
 
 /-! Deployment checks of the transcript-construction rule inside the loop, which
 `check_sound` does not use. -/
@@ -157,14 +160,14 @@ instance (participant : Participant) (code : String) : Decidable (RefusedByConst
 /-- The first round observation reads coordinates built without the induction
 index; the observation's coordinate condition fails. -/
 theorem coordinatesWithoutIndex_refused :
-    RefusedByConstruction (changeBody actual 3 fun instruction => { instruction with operands := [11, 12, 13] })
+    RefusedByConstruction (changeBody actual 3 fun instruction => { instruction with operands := [12, 13, 14] })
       "construction-observe" := by
   decide +kernel
 
 /-- The first coordinate vector appends the carried point instead of the
 induction index. -/
 theorem coordinatesFromPoint_refused :
-    RefusedByConstruction (changeBody actual 2 fun instruction => { instruction with operands := [13, 9] })
+    RefusedByConstruction (changeBody actual 2 fun instruction => { instruction with operands := [14, 10] })
       "construction-coordinates" := by
   decide +kernel
 
@@ -183,19 +186,19 @@ theorem templateWithoutRepeat_refused :
 
 /-- The loop count reads the claim. -/
 theorem loopCountFromClaim_refused :
-    RefusedByConstruction (changeAt actual 2 fun loop => { loop with operands := [1, 6, 7, 3] })
+    RefusedByConstruction (changeAt actual 2 fun loop => { loop with operands := [1, 7, 8, 3] })
       "construction-loop" := by
   decide +kernel
 
 /-- The round check guards on the transcript. -/
 theorem guardOnTranscript_refused :
-    RefusedByConstruction (changeBody actual 10 fun instruction => { instruction with operands := [11] })
+    RefusedByConstruction (changeBody actual 10 fun instruction => { instruction with operands := [12] })
       "construction-guard" := by
   decide +kernel
 
 /-- The terminal check reads the final transcript. -/
 theorem callOnTranscript_refused :
-    RefusedByConstruction (changeAt actual 4 fun call => { call with operands := [0, 11, 10] }) "construction-call" := by
+    RefusedByConstruction (changeAt actual 4 fun call => { call with operands := [0, 12, 13, 11] }) "construction-call" := by
   decide +kernel
 
 /-- Premise satisfiability: the actual export is accepted. -/

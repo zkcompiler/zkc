@@ -88,8 +88,9 @@ All external format tags remain `/0`; executable program bytes are unchanged.
 
 ## Constructed participants
 
-The participant envelope retains its ten slots, hashes, policy and service-port
-rules. Its tag remains `zkc.constructed-participant/0`. The pair is exactly
+The participant envelope has eleven slots: the hashes, policy and service-port
+rules are retained, and a final catalogue slot carries the rows of the
+identities the participant names in the structured-source catalogue encoding. Its tag remains `zkc.constructed-participant/0`. The pair is exactly
 `["zkc.constructed-pair/0", producer-record, validator-record]`, with matching
 source, candidate and policy. The [construction contract](constructed-participant.md)
 continues to require checking the supplied actual candidate first.

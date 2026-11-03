@@ -10,8 +10,9 @@
 #include <vector>
 namespace zkc::protocol {
 struct NativeOriginStep {
-  enum class Kind { Apply, Repeat } kind = Kind::Apply;
+  enum class Kind { Apply, Repeat, Branch } kind = Kind::Apply;
   std::string protocol, site;
+  std::string alternative = {};
 };
 struct NativeQueryOrigin {
   std::string protocol, site;

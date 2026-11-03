@@ -3,10 +3,12 @@ use super::*;
 use crate::entry::{FunctionEntry, FunctionOptions, FunctionRequest};
 use crate::project::CheckedInterface;
 
+#[allow(clippy::too_many_arguments)] // The command's one interface selection stays explicit.
 pub(super) fn execute(
     package: Package,
     interface: &CheckedInterface,
     args: &Arguments<'_>,
+    selection: zkc::entry::InterfaceLimits,
     invocation: invocation::Invocation,
     mut destinations: Outputs,
     cpu: &CpuExecution,
@@ -16,18 +18,21 @@ pub(super) fn execute(
     let CheckedInterface::Function(interface) = interface else {
         return Err("source-entry-selection".into());
     };
-    let options = Options::parse(args)?;
+    let options = Options::parse(args, selection)?;
     let capacity = options.run.capacity;
     report["capacity"] = capacity.record();
+    report["material_limits"] = options.run.material.record();
     report["phase"] = json!("invocation");
     let output_setups = invocation.results.is_some() && interface.result_requires_setup();
     let mut bindings = files::Invocations::load(
         args.value("--invocations").map(std::path::Path::new),
-        capacity,
+        &options.run,
         output_setups,
     )?;
     bindings.protect(&mut destinations)?;
-    let deployments = crate::entry::FunctionInterface::deployment_interfaces(&package)?;
+    // Children are read under the same interface selection that admits them.
+    let deployments =
+        crate::entry::FunctionInterface::deployment_interfaces(&package, options.run.interface)?;
     let requirements = json!(
         deployments
             .iter()
@@ -118,14 +123,18 @@ pub(super) fn execute(
         if let Some(failure) = &result.failure {
             return Err(failure.code.clone());
         }
-        let value = result.value.ok_or("entry-function-incomplete")?;
+        if result.value.is_none() {
+            return Err("entry-function-incomplete".into());
+        }
         if invocation.results.is_some() {
             measured(args, report, "output_encoding_and_publication", |report| {
                 report["phase"] = json!("results");
-                let encoded = result_encoder.encode_with_cpu(&value.into_value(), cpu.clone())?;
+                // The invocation ledger that charged execution also charges
+                // the encoded buffer, which stays live through publication.
+                let encoded = result_encoder.encode_report(&result, cpu.clone())?;
                 report["phase"] = json!("publication");
                 crate::files::publication(
-                    destinations.publish(&[("results", &encoded)]),
+                    destinations.publish(&[("results", encoded.as_bytes())]),
                     report,
                     true,
                 )

@@ -1,5 +1,6 @@
 #include "BindingWitness.h"
 #include "Checker.h"
+#include "RecordIntrinsics.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
@@ -534,7 +535,8 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
 }
 
 bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
-                     const Body &body, const Operation &operation) {
+                     const Body &body, const Operation &operation,
+                     const DeclarationIndex *index) {
   auto refuse = [&] {
     return types.fail("source.binding-witness",
                       "resolved call differs from its native action",
@@ -545,6 +547,13 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
+  if (binding.installedSignature || binding.lexicalOwner ||
+      binding.intrinsicSource ||
+      (index && index->ruleAssociation(binding.target.declaration)))
+    return index ? checkRecordInvocation(types, declarations, *index, body,
+                                         operation)
+                 : refuse();
+
   if ((body.mode == Body::Mode::Math || body.mode == Body::Mode::Oracle) &&
       callee.kind == Declaration::Kind::Local)
     return refuse();
@@ -569,6 +578,109 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
              binding.origin || binding.filteredReduction) {
     return refuse();
   }
+  if (callee.kind == Declaration::Kind::Protocol) {
+    const auto *action = std::get_if<ProtocolApplication>(&operation.action);
+    if (!action || body.mode != Body::Mode::Protocol ||
+        action->callee.index != callee.id.index ||
+        action->arguments != binding.arguments ||
+        !sameOperands(action->operands, binding.operands) ||
+        action->roles != binding.roles ||
+        action->services.size() != binding.services.size() ||
+        binding.arguments.size() != callee.parameters.size() ||
+        binding.operands.size() != callee.inputs.size() ||
+        binding.services.size() != callee.services.size() ||
+        binding.roles.size() != callee.roles.size() ||
+        operation.results.size() != callee.outputs.size() ||
+        !binding.scopedArguments.empty() || !binding.domainArguments.empty() ||
+        binding.notation ||
+        !checkCallInputMapping(
+            types, binding.argumentOrder,
+            callee.inputOrder.empty()
+                ? callee.inputs.size() + callee.services.size() +
+                      callee.scopedInputs.size() + callee.domainInputs.size()
+                : callee.inputOrder.size(),
+            operation.span))
+      return refuse();
+    std::set<unsigned> distinctRoles(binding.roles.begin(),
+                                     binding.roles.end());
+    if (distinctRoles.size() != binding.roles.size())
+      return refuse();
+    auto subst = types.substitution(callee, binding.arguments);
+    auto mapped = [&](const Port &port) {
+      std::vector<unsigned> roles;
+      for (auto role : port.roles)
+        if (role < binding.roles.size())
+          roles.push_back(binding.roles[role]);
+      llvm::sort(roles);
+      return roles;
+    };
+    auto portMatches = [&](const Port &port, ValueId id, bool input) {
+      if (id.index >= body.values.size())
+        return false;
+      const auto &value = body.values[id.index];
+      auto type = types.substitute(port.type, subst, operation.span);
+      auto roles = mapped(port);
+      if (!type || value.type != *type || roles.size() != port.roles.size() ||
+          (input ? !std::includes(value.components.begin(),
+                                  value.components.end(), roles.begin(),
+                                  roles.end())
+                 : value.components != roles))
+        return false;
+      if (port.placement) {
+        if (std::holds_alternative<DataPlacement>(port.placement->value)) {
+          if (isLogicalValue(PlacedType{value.type, value.placement}))
+            return false;
+        } else {
+          unsigned participants = 0;
+          for (auto role : binding.roles)
+            participants = std::max(participants, role + 1);
+          auto expected = types.placement(*type, *port.placement,
+                                          callee.roles.size(), operation.span);
+          if (!expected)
+            return false;
+          expected = types.remapPlacement(*expected, binding.roles,
+                                          participants, operation.span);
+          if (!expected)
+            return false;
+          expected =
+              types.placement(*type, *expected, participants, operation.span);
+          if (!expected || value.placement != expected)
+            return false;
+        }
+      }
+      return !port.oracle ||
+             (port.oracle->holder < binding.roles.size() &&
+              value.oracleHolder == binding.roles[port.oracle->holder]);
+    };
+    for (unsigned i = 0; i < binding.operands.size(); ++i)
+      if (!portMatches(callee.inputs[i], binding.operands[i], true))
+        return refuse();
+    for (unsigned i = 0; i < operation.results.size(); ++i)
+      if (!portMatches(callee.outputs[i], operation.results[i], false))
+        return refuse();
+    for (unsigned i = 0; i < binding.services.size(); ++i) {
+      auto id = binding.services[i].index;
+      const auto &port = callee.services[i];
+      auto field = types.substitute(port.field, subst, operation.span);
+      if (action->services[i].index != id || id >= body.services.size() ||
+          port.owner >= binding.roles.size() || !field ||
+          body.services[id].field != *field ||
+          body.services[id].owner != binding.roles[port.owner])
+        return refuse();
+    }
+    return true;
+  }
+  if (!binding.roles.empty() || !binding.services.empty())
+    return refuse();
+  if (!binding.argumentOrder.empty() &&
+      !checkCallInputMapping(
+          types, binding.argumentOrder,
+          callee.inputOrder.empty()
+              ? callee.inputs.size() + callee.services.size() +
+                    callee.scopedInputs.size() + callee.domainInputs.size()
+              : callee.inputOrder.size(),
+          operation.span))
+    return false;
   if (binding.arguments.size() != callee.parameters.size() ||
       binding.operands.size() != callee.inputs.size() ||
       binding.scopedArguments.size() != callee.scopedInputs.size() ||

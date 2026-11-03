@@ -25,8 +25,8 @@ bool layout(const OracleVerificationContext &context,
   auto *ctx = unit.getContext();
   auto index = IntegerType::get(ctx, 64, IntegerType::Unsigned);
   if (!capacity || capacity >= 1048576 || model.arms.empty() ||
-      model.arms.size() > 32 || model.receiverStores.size() > 480 ||
-      model.holderStores.size() > 480)
+      model.arms.size() > oracleExchangeConstructorLimit ||
+      model.receiverStores.size() > 480 || model.holderStores.size() > 480)
     return false;
   for (auto types : {ArrayRef<Type>(model.receiverStores),
                      ArrayRef<Type>(model.holderStores)})

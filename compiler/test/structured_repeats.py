@@ -12,7 +12,7 @@ from tools import compiler, records
 commands = Commands(records())
 root = Path(__file__).resolve().parents[2]
 reference = Path(compiler).parent / 'test/zkc-structured_reference-test'
-field = ['field', 'bls12-381.fr']
+field = ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]
 service = 'random.bls12-381.fr/0'
 P, V, W = (f'role{i:08x}' for i in range(3))
 serial = 0
@@ -385,11 +385,15 @@ for label, path, entry, maximum in [
         [(reduction, loop)] = loops
         assert loop[0] == ['protocol_repeat', 6, maximum, [P, V], [[P], [P], [P], [P], [V], [V]]]
         assert len(loop[3][0][0]) == 8 and loop[3][0][0][-1] == ['service', service]
-        # Reduce now repacks the verifier's two fields through at_prefix after
-        # the repeat. Keep the exact public-point/table/Pending output order.
-        assert reduction[9][2] == ['return', [5, 2, 3, 4, 0, 1]]
+        # at_prefix returns nominal custody plus the verifier's two fields.
+        # Keep the exact public-point/table/custody/Pending payload order.
+        unit = reduction[4][3]
+        assert unit[:2] == ['apply', 'resource_unit']
+        assert unit[2][0][:2] == ['domain', 'Slot']
+        assert unit == reduction[5][4]
+        assert reduction[9][2] == ['return', [6, 3, 4, 5, 0, 1, 2]]
         assert reduction[9][1][-1][0][0] == 'local_call'
-        assert reduction[9][1][-1][2] == [['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]],
+        assert reduction[9][1][-1][2] == [unit, ['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]],
                                               ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]
         # Admission validates every dormant declaration before optional zero
         # execution. Full symbolic Sumcheck equations are a subsequent package.
@@ -652,6 +656,38 @@ with case('same-labelled-component-at-two-repeat-sites'):
     assert run(source, ['2', '0'], role, [replies[0], stop, *replies[2:]], symbol) == stopped(
         'abort', actions[1][1], [replies[0], stop])
     native(source, 'same-labelled-component')
+
+with case('ordinary-record-custody-in-independent-zero-trip-and-successor-execution'):
+    path = commands.directory / 'record-custody.zkc'
+    path.write_text('''module sample;
+#[linear] struct State<N:nat>{value:bool,empty:()}
+fn make()->State<7>{return State<7>{value:true,empty:()};}
+fn advance(x:State<7>,go:bool)->State<7>{
+ let opened=inspect_record(x);
+ return if go{repack_record(opened.0,(false,()))}else{stop "reject";};
+}
+fn local_loop(x:State<7>,n:index,go:bool)->State<7>{
+ let mut current=x;for _ in 0..n{current=advance(current,go);}return current;
+}
+fn finish(x:State<7>)->bool{let fields=unpack(x);return fields.0;}
+protocol Run roles(P)(n:index@P,inner:index@P,go:bool@P)->(result:bool@P){
+ let mut current@P=make();
+ for _ in 0..n roles(P) max 3{let next@P=local_loop(current,inner,go);current=next;}
+ return finish(current);
+}
+entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}
+''')
+    source, symbol, snapshot = frontend(path)
+    units = [row for row in snapshot[6] if row[2].startswith('resource_unit.')]
+    assert {row[2] for row in units} == {
+        'resource_unit.create', 'resource_unit.pass', 'resource_unit.consume'}
+    assert all(row[3][0][:2] == ['domain', 'Slot'] for row in units)
+    for outer, inner in [(0, 3), (1, 0), (1, 1), (2, 1), (3, 3)]:
+        assert run(source, [str(outer), str(inner), True], P, symbol=symbol) == returned(
+            [outer * inner == 0])
+    assert run(source, ['0', '3', False], P, symbol=symbol) == returned([True])
+    assert run(source, ['2', '0', False], P, symbol=symbol) == returned([True])
+    assert run(source, ['1', '1', False], P, symbol=symbol)[1][:2] == ['stopped', 'reject']
 
 commands.save()
 print(f'{counted()} structured repeat cases; evidence: {commands.directory}')

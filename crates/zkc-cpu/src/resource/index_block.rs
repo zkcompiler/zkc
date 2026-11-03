@@ -1,7 +1,9 @@
 //! Authenticated block transitions. Numerical snapshots never leave Resources.
 use super::{Capability, Resources, Slot, State};
 use crate::{Policy, Result, Value, exhausted, numerical::Call, refused};
-use zkc_kernels::transcript::{KeccakChain, search::NonceInput};
+use zkc_kernels::transcript::{
+    KeccakChain, absorbed_bytes, request_block_bytes, search::NonceInput,
+};
 use zkc_runtime::vm::{Identity, Invocation, Type};
 
 #[derive(Clone, Copy)]
@@ -74,21 +76,14 @@ impl Parameters {
     }
 }
 
-fn permutations(parts: &[usize]) -> Result<u64> {
-    let length = parts
-        .iter()
-        .try_fold(0usize, |sum, part| sum.checked_add(*part))
-        .ok_or_else(|| exhausted("numerical-work"))?;
+// The kernel counts the bytes each digest frames; Keccak-256 absorbs 136
+// bytes per permutation.
+fn permutations(bytes: Option<usize>) -> Result<u64> {
+    let length = bytes.ok_or_else(|| exhausted("numerical-work"))?;
     u64::try_from(length / 136 + 1).map_err(|_| exhausted("numerical-work"))
 }
 fn absorb_work(label: &[u8], length: usize) -> Result<u64> {
-    permutations(&[
-        b"zkc.hash-chain.absorb/0\0".len(),
-        32,
-        17,
-        label.len(),
-        length,
-    ])
+    permutations(absorbed_bytes(label.len(), length))
 }
 
 // Same refusal order as transition, without changing any authoritative field.
@@ -167,15 +162,7 @@ impl Resources {
             } else {
                 0
             }
-            + (request_bytes as u64).div_ceil(32)
-                * permutations(&[
-                    b"zkc.hash-chain.request/0\0".len(),
-                    32,
-                    17,
-                    label.len(),
-                    8,
-                    8,
-                ])?
+            + (request_bytes as u64).div_ceil(32) * permutations(request_block_bytes(label.len()))?
             + absorb_work(label, 8)?;
 
         // Authority, frame view, custody and generation precede numerical

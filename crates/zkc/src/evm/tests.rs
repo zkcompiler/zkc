@@ -4,10 +4,12 @@ use std::fs;
 
 pub(crate) fn source_record(entry: &str, body: &str) -> Value {
     let identity = "00".repeat(32);
-    let limits = json!({"rounds":10,"public_elements":1024,"frame_bytes":65536,
-        "public_bytes":131072,"context_bytes":4096,"proof_bytes":65536,
-        "calldata_bytes":262144,"root_bytes":262144,"memory_bytes":2097152,
-        "transcript_transitions":64,"practical_gas":20000000});
+    // A compilation at every declared maximum, on the declared default fork.
+    let limits: serde_json::Map<_, _> = crate::evm_target::LIMITS
+        .iter()
+        .map(|limit| (limit.name.to_owned(), json!(limit.maximum)))
+        .collect();
+    let fork = EvmFork::default();
     let policy = json!([
         "zkc.native-proof-policy/0",
         "main",
@@ -55,25 +57,19 @@ pub(crate) fn source_record(entry: &str, body: &str) -> Value {
         [],
         "{\"authentication\":\"per-query\",\"format\":\"zkc.oracle-selection/0\",\"order\":\"unrestricted\",\"roots\":{\"entries\":[],\"kind\":\"exact\"}}"
     ]);
-    let mut options = serde_json::to_value(Options::default().compile).unwrap();
-    options["numerical_expressions"] = json!("prefer-native");
-    let manifest = json!({"format":"zkc.evm-source-manifest/0", "target":"evm", "fork":"cancun", "options":options,
-        "entry":entry, "capture":identity, "installation":identity,
-        "original":identity, "source_sha256":identity, "source_format":"zkc.original-mlir/0",
-        "producer":"P", "validator":"V", "compiler":identity,
-        "yul_sha256":hash(body.as_bytes()), "limits":limits, "solc_version":"0.8.38",
-        "optimizer_steps":":", "release_validation":"pending-deployment-and-dynamic-trace"});
-    json!({"format":"zkc.evm-source/0", "target":"evm", "fork":"cancun",
-        "yul":body, "abi":super::calldata::abi(),"entry":entry,
-        "capture":identity,"installation":identity,"original":identity,"source_sha256":identity,
-        "manifest":manifest,"limits":limits,"descriptor":descriptor,"policy":policy,"options":options})
+    let options = serde_json::to_value(Options::default().compile).unwrap();
+    json!({"format":"zkc.evm-source/0", "declaration":crate::evm_target::IDENTITY,
+        "fork":fork, "options":options, "limits":limits, "entry":entry,
+        "capture":identity, "installation":identity, "original":identity,
+        "source_format":"zkc.original-mlir/0", "compiler":identity,
+        "policy":policy, "descriptor":descriptor, "yul":body})
 }
 fn source(body: &str) -> Source {
     Source::capture(&serde_json::to_vec(&source_record("Main::Proof", body)).unwrap()).unwrap()
 }
 
-// Keep malformed JSON at the selected location, including identical objects
-// repeated in the response and its manifest. Value cannot retain duplicate keys.
+// Keep malformed JSON at the selected location. Value cannot retain duplicate
+// keys.
 fn with_raw_json(value: &Value, path: &str, raw: &str) -> String {
     if path.is_empty() {
         return raw.into();
@@ -130,58 +126,56 @@ fn fake_tool(directory: &Path, response: &str) -> Solc {
 const RESPONSE: &str = r#"{"contracts":{"verifier.yul":{"Verifier":{"evm":{"bytecode":{"object":"60006000f3"},"deployedBytecode":{"object":"00"}}}}}}"#;
 #[test]
 fn source_transport_is_explicit_and_bounded() {
-    assert!(Source::capture(br#"{"format":"zkc.native-package/0","yul":"x","abi":[]}"#).is_err());
-    assert!(Source::capture(br#"{"format":"zkc.evm-source/0","yul":"","abi":[]}"#).is_err());
+    assert!(Source::capture(br#"{"format":"zkc.native-package/0","yul":"x"}"#).is_err());
+    assert!(Source::capture(br#"{"format":"zkc.evm-source/0","yul":""}"#).is_err());
     let s = source("object \"Verifier\" { code {} }");
     assert_eq!(s.entry(), "Main::Proof");
     let mut missing = s.metadata().clone();
     missing.as_object_mut().unwrap().remove("capture");
     assert!(Source::capture(&serde_json::to_vec(&missing).unwrap()).is_err());
-    let mut mismatch = s.metadata().clone();
-    mismatch["entry"] = json!("Other::Proof");
-    assert!(Source::capture(&serde_json::to_vec(&mismatch).unwrap()).is_err());
 }
 
 #[test]
 fn forks_are_exact_typed_and_repeated() {
+    use crate::evm_target::{DEFAULT_FORK, Fork};
     let valid = source_record("Main::Proof", "fork control");
-    for fork in [EvmFork::Cancun, EvmFork::Prague] {
+    assert_eq!(EvmFork::default(), DEFAULT_FORK);
+    assert_eq!(super::Options::default().fork, DEFAULT_FORK);
+    for fork in Fork::ALL {
+        // Every declared fork is spelled by its declared lowercase name.
+        assert_eq!(json!(fork), json!(fork.row().name));
+        assert_eq!(fork.row().name.parse::<EvmFork>().unwrap(), fork);
         let mut record = valid.clone();
         record["fork"] = json!(fork);
-        record["manifest"]["fork"] = json!(fork);
         let source = Source::capture(&encode(&record).unwrap()).unwrap();
         assert_eq!(source.fork(), fork);
-        assert_eq!(solc::input(&source)["settings"]["evmVersion"], json!(fork));
-        record["manifest"]["fork"] = json!(if fork == EvmFork::Cancun {
-            EvmFork::Prague
-        } else {
-            EvmFork::Cancun
-        });
         assert_eq!(
-            Source::capture(&encode(&record).unwrap()).unwrap_err().0,
-            "evm-source-identity"
+            solc::input(&source)["settings"]["evmVersion"],
+            json!(fork.row().solc)
         );
     }
-    for wrong in [
+    let mut refused: Vec<_> = Fork::ALL
+        .iter()
+        .map(|fork| json!(fork.row().hardfork))
+        .collect();
+    refused.extend([
         json!(""),
-        json!("Cancun"),
-        json!("Prague"),
         json!("shanghai"),
+        json!("latest"),
         json!(0),
         Value::Null,
-        json!({"prague": null}),
-        json!(["cancun"]),
-    ] {
+        json!({DEFAULT_FORK.row().name: null}),
+        json!([DEFAULT_FORK.row().name]),
+    ]);
+    for wrong in refused {
         assert!(serde_json::from_value::<EvmFork>(wrong.clone()).is_err());
         let mut record = valid.clone();
-        record["fork"] = wrong.clone();
-        record["manifest"]["fork"] = wrong;
+        record["fork"] = wrong;
         assert_eq!(
             Source::capture(&encode(&record).unwrap()).unwrap_err().0,
             "evm-fork"
         );
     }
-    assert_eq!("Cancun".parse::<EvmFork>().unwrap_err().0, "evm-fork");
 }
 
 #[test]
@@ -254,7 +248,6 @@ fn requested_and_normalized_oracle_selections_must_agree() {
     let capture = |requested: &OracleSelection, normalized: &Value| {
         let mut record = source_record("Main::Proof", "oracle selection control");
         record["options"]["oracle_realization"] = json!(requested);
-        record["manifest"]["options"] = record["options"].clone();
         record["descriptor"][8] = json!(serde_json::to_string(normalized).unwrap());
         Source::capture(&encode(&record).unwrap())
     };
@@ -308,7 +301,6 @@ fn fork_and_effective_options_seal_artifact_identity_and_reuse() {
         .unwrap();
     let mut record = source.metadata().clone();
     record["fork"] = json!(EvmFork::Prague);
-    record["manifest"]["fork"] = json!(EvmFork::Prague);
     let mut selections = vec![record];
     for field in [
         "simplify",
@@ -320,7 +312,6 @@ fn fork_and_effective_options_seal_artifact_identity_and_reuse() {
         let mut record = source.metadata().clone();
         let flipped = !record["options"][field].as_bool().unwrap();
         record["options"][field] = json!(flipped);
-        record["manifest"]["options"][field] = json!(flipped);
         selections.push(record);
     }
     for record in selections {
@@ -374,11 +365,8 @@ fn source_objects_require_every_current_field_and_refuse_unknown_fields() {
     assert_eq!(Source::capture(&bytes).unwrap().bytes(), bytes);
     for (path, code) in [
         ("", "evm-source-format"),
-        ("/manifest", "evm-source-format"),
         ("/limits", "evm-source-limits"),
-        ("/manifest/limits", "evm-source-limits"),
         ("/options", "evm-source-options"),
-        ("/manifest/options", "evm-source-options"),
     ] {
         let fields = valid.pointer(path).unwrap().as_object().unwrap();
         for field in fields.keys() {
@@ -418,34 +406,41 @@ fn source_objects_require_every_current_field_and_refuse_unknown_fields() {
             );
         }
     }
-    for path in ["/abi/0", "/abi/0/inputs/0", "/abi/0/outputs/0"] {
+    // Former keys of the response: the target, tool facts and the verifier
+    // ABI belong to the declaration and the SDK; the source digest is
+    // `original`; no inner record restates the response.
+    for key in [
+        "target",
+        "abi",
+        "source_sha256",
+        "manifest",
+        "yul_sha256",
+        "solc_version",
+        "optimizer_steps",
+        "release_validation",
+    ] {
         let mut changed = valid.clone();
-        changed.pointer_mut(path).unwrap()["unknown"] = json!(0);
+        changed[key] = json!("former");
         assert_eq!(
             Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
             "evm-source-format",
-            "{path}"
+            "{key}"
         );
     }
+    // The CPU-only numerical expression mode is not a published option.
+    let mut changed = valid;
+    changed["options"]["numerical_expressions"] = json!("prefer-native");
+    assert_eq!(
+        Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
+        "evm-source-options"
+    );
 }
 
 #[test]
 fn source_duplicate_keys_refuse_even_when_equal_escaped_or_nested() {
     let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
     let serialized = serde_json::to_string(&valid).unwrap();
-    for path in [
-        "",
-        "/manifest",
-        "/limits",
-        "/manifest/limits",
-        "/options",
-        "/manifest/options",
-        "/options/oracle_realization",
-        "/manifest/options/oracle_realization",
-        "/abi/0",
-        "/abi/0/inputs/0",
-        "/abi/0/outputs/0",
-    ] {
+    for path in ["", "/limits", "/options", "/options/oracle_realization"] {
         let object = valid.pointer(path).unwrap();
         let original = serde_json::to_string(object).unwrap();
         for (key, value) in object.as_object().unwrap() {
@@ -467,19 +462,27 @@ fn source_duplicate_keys_refuse_even_when_equal_escaped_or_nested() {
 }
 
 #[test]
-fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
+fn source_declaration_identity_is_checked() {
     let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
-    for path in [
-        "/format",
-        "/target",
-        "/yul",
-        "/entry",
-        "/manifest/format",
-        "/manifest/source_format",
-        "/manifest/solc_version",
-        "/manifest/optimizer_steps",
-        "/manifest/release_validation",
-    ] {
+    Source::capture(&encode(&valid).unwrap()).unwrap();
+    let mut other = valid.clone();
+    other["declaration"] = json!(format!("zkc.evm-target/0:{}", "0".repeat(64)));
+    assert_eq!(
+        Source::capture(&encode(&other).unwrap()).unwrap_err().0,
+        "evm-target-declaration"
+    );
+    let mut missing = valid;
+    missing.as_object_mut().unwrap().remove("declaration");
+    assert_eq!(
+        Source::capture(&encode(&missing).unwrap()).unwrap_err().0,
+        "evm-source-format"
+    );
+}
+
+#[test]
+fn source_formats_and_digests_are_checked_at_capture() {
+    let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
+    for path in ["/format", "/source_format", "/yul", "/entry"] {
         let mut changed = valid.clone();
         *changed.pointer_mut(path).unwrap() = json!("");
         assert_eq!(
@@ -488,48 +491,7 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
             "{path}"
         );
     }
-    for key in [
-        "capture",
-        "installation",
-        "original",
-        "source_sha256",
-        "entry",
-        "target",
-        "fork",
-        "options",
-        "limits",
-    ] {
-        let mut changed = valid.clone();
-        changed["manifest"][key] = match key {
-            "entry" => json!("Other::Proof"),
-            "target" => json!("cpu"),
-            "fork" => json!("other"),
-            "options" => {
-                let mut options = valid["options"].clone();
-                options["simplify"] = json!(false);
-                options
-            }
-            "limits" => {
-                let mut limits = valid["limits"].clone();
-                limits["rounds"] = json!(9);
-                limits
-            }
-            _ => json!("ab".repeat(32)),
-        };
-        assert_eq!(
-            Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
-            "evm-source-identity",
-            "repeated {key}"
-        );
-    }
-    for path in [
-        "/capture",
-        "/installation",
-        "/original",
-        "/source_sha256",
-        "/manifest/compiler",
-        "/manifest/yul_sha256",
-    ] {
+    for path in ["/capture", "/installation", "/original", "/compiler"] {
         for bad in [
             json!("aa"),
             json!("GG".repeat(32)),
@@ -545,25 +507,61 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
             );
         }
     }
-    let mut changed = valid.clone();
-    changed["original"] = json!("ab".repeat(32));
-    changed["manifest"]["original"] = changed["original"].clone();
+}
+
+#[test]
+fn source_entry_and_policy_entry_are_distinct_keys() {
+    // `entry` is the selected source Entry; the policy keeps the protocol's
+    // entry symbol, and neither stands for the other.
+    let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
+    let source = Source::capture(&encode(&valid).unwrap()).unwrap();
+    assert_eq!(source.entry(), "Main::Proof");
+    assert_eq!(source.metadata()["policy"][1], "main");
+    let mut renamed = valid;
+    renamed["entry"] = json!("Other::Proof");
+    let source = Source::capture(&encode(&renamed).unwrap()).unwrap();
+    assert_eq!(source.entry(), "Other::Proof");
+    assert_eq!(source.metadata()["policy"][1], "main");
+}
+
+#[test]
+fn source_limits_follow_declared_rows() {
+    let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
+    Source::capture(&encode(&valid).unwrap()).unwrap();
+    // The inert gas ceiling and the former round ceiling are not declared
+    // deployment ceilings; every declared one, the path ceiling included, is
+    // required.
+    let declared = |name: &str| {
+        crate::evm_target::LIMITS
+            .iter()
+            .any(|limit| limit.name == name)
+    };
+    assert!(!declared("practical_gas") && !declared("rounds"));
+    assert!(declared("participant_loop_maximum") && declared("path_siblings"));
+    for (added, value) in [("practical_gas", 20_000_000), ("rounds", 10)] {
+        let mut changed = valid.clone();
+        changed["limits"][added] = json!(value);
+        assert_eq!(
+            Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
+            "evm-source-limits",
+            "{added}"
+        );
+    }
+    let mut missing = valid;
+    missing["limits"]
+        .as_object_mut()
+        .unwrap()
+        .remove("path_siblings");
     assert_eq!(
-        Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
-        "evm-source-identity"
-    );
-    let mut changed = valid;
-    changed["yul"] = json!("changed Yul with an unchanged digest");
-    assert_eq!(
-        Source::capture(&encode(&changed).unwrap()).unwrap_err().0,
-        "evm-source-identity"
+        Source::capture(&encode(&missing).unwrap()).unwrap_err().0,
+        "evm-source-limits"
     );
 }
 
 #[test]
 fn source_limits_are_positive_bounded_integers_with_the_complete_current_shape() {
     let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
-    for path in ["/limits", "/manifest/limits"] {
+    for path in ["/limits"] {
         for (key, ceiling) in valid["limits"].as_object().unwrap() {
             for bad in [
                 json!(0),
@@ -593,19 +591,25 @@ fn source_limits_are_positive_bounded_integers_with_the_complete_current_shape()
             }
         }
     }
+    // Every ceiling may be lowered to its declared minimum, never below it.
     let mut lowered = valid;
-    for path in ["/limits", "/manifest/limits"] {
-        for (key, value) in lowered.pointer_mut(path).unwrap().as_object_mut().unwrap() {
-            *value = json!(if key == "memory_bytes" { 4096 } else { 1 });
-        }
+    for limit in &crate::evm_target::LIMITS {
+        lowered["limits"][limit.name] = json!(limit.minimum);
     }
     Source::capture(&encode(&lowered).unwrap()).unwrap();
-    lowered["limits"]["memory_bytes"] = json!(4095);
-    lowered["manifest"]["limits"] = lowered["limits"].clone();
-    assert_eq!(
-        Source::capture(&encode(&lowered).unwrap()).unwrap_err().0,
-        "evm-source-limits"
-    );
+    for limit in crate::evm_target::LIMITS
+        .iter()
+        .filter(|limit| limit.minimum > 1)
+    {
+        let mut below = lowered.clone();
+        below["limits"][limit.name] = json!(limit.minimum - 1);
+        assert_eq!(
+            Source::capture(&encode(&below).unwrap()).unwrap_err().0,
+            "evm-source-limits",
+            "{}",
+            limit.name
+        );
+    }
 }
 
 #[test]
@@ -639,6 +643,14 @@ fn source_descriptor_and_policy_keep_the_current_carriers_and_associations() {
         (4, json!("01")),
         (4, json!("1024")),
         (5, json!("other")),
+        // Installed suites whose family, decoder or binding the target does
+        // not realize.
+        (5, json!("merlin3.bls12-381.fr64be/0")),
+        (5, json!("spongefish0.8.0.keccak.bls12-381.fr64be/0")),
+        (
+            5,
+            json!("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"),
+        ),
         (6, json!([])),
         (6, json!(["1", "1"])),
         (7, json!(["0", "0"])),
@@ -662,13 +674,7 @@ fn source_descriptor_and_policy_keep_the_current_carriers_and_associations() {
             "policy {slot}"
         );
     }
-    for path in [
-        "/descriptor/1/1",
-        "/descriptor/4/0/0",
-        "/descriptor/4/0/1",
-        "/manifest/producer",
-        "/manifest/validator",
-    ] {
+    for path in ["/descriptor/1/1", "/descriptor/4/0/0", "/descriptor/4/0/1"] {
         let mut changed = valid.clone();
         *changed.pointer_mut(path).unwrap() = json!("different");
         let code = if path == "/descriptor/1/1" {
@@ -715,10 +721,10 @@ fn artifact_import_rechecks_source_shape_even_with_matching_file_hashes_and_pin(
     missing.as_object_mut().unwrap().remove("limits");
     let duplicate = with_raw_json(
         source.metadata(),
-        "/manifest",
+        "/options",
         &format!(
-            "{{\"target\":\"cpu\",{}",
-            &source.metadata()["manifest"].to_string()[1..]
+            "{{\"simplify\":false,{}",
+            &source.metadata()["options"].to_string()[1..]
         ),
     );
     for (bytes, code) in [
@@ -951,7 +957,9 @@ fn calldata_has_the_exact_context_before_proof_order_and_padding() {
             proof: b"proof",
         })
         .unwrap();
-    assert_eq!(&calldata[..4], &[0xa4, 0x88, 0xe1, 0xe4]);
+    // The declared selector, which the SDK build checked against the
+    // Keccak-256 of the declared signature.
+    assert_eq!(calldata[..4], crate::evm_target::ABI_SELECTOR);
     let number =
         |at: usize| u64::from_be_bytes(calldata[at + 24..at + 32].try_into().unwrap()) as usize;
     assert_eq!(number(4), 96);
@@ -964,13 +972,33 @@ fn calldata_has_the_exact_context_before_proof_order_and_padding() {
     assert_eq!(&calldata[420..425], b"proof");
     assert_eq!(calldata.len(), 452);
     assert!(calldata[425..].iter().all(|b| *b == 0));
+    let context_ceiling = crate::evm_target::LIMITS
+        .iter()
+        .find(|limit| limit.name == "context_bytes")
+        .unwrap()
+        .maximum as usize;
     assert!(
         artifact
             .calldata(Invocation {
                 public_inputs: &[],
-                context: &vec![0; 4097],
+                context: &vec![0; context_ceiling + 1],
                 proof: &[]
             })
             .is_err()
     );
+}
+
+#[test]
+fn the_realized_suites_are_selected_by_installed_transcript_facts() {
+    let realized = zkc_catalog::CATALOG
+        .domains
+        .iter()
+        .map(|row| row.identity.name())
+        .filter(|suite| super::realized_suite(suite))
+        .collect::<Vec<_>>();
+    assert_eq!(realized, ["hash-chain.keccak256.bls12-381.fr64be/0"]);
+    assert!(!super::realized_suite("bls12-381.fr"));
+    assert!(!super::realized_suite(
+        "hash-chain.keccak256.bls12-381.fr64be/1"
+    ));
 }

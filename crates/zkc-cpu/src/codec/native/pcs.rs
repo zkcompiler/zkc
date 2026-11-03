@@ -12,13 +12,13 @@ pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
         return None;
     }
     match logical.kind() {
-        Type::Commitment => Some(6),
-        Type::Proof => Some(7),
+        Type::Commitment => Some(super::tags::KZG_COMMITMENT),
+        Type::Proof => Some(super::tags::KZG_PROOF),
         _ => None,
     }
 }
 fn width(tag: u8, arity: usize) -> Result<usize, NativeWireError> {
-    if tag == 6 {
+    if tag == super::tags::KZG_COMMITMENT {
         Ok(135)
     } else {
         arity
@@ -126,7 +126,12 @@ pub(super) fn preflight<'a>(
     }
     if bytes[15..23] != (key.metadata().arity() as u64).to_le_bytes()
         || &bytes[6..14] != b"ZKCAR000"
-        || bytes[14] != if tag == 6 { 2 } else { 3 }
+        || bytes[14]
+            != if tag == super::tags::KZG_COMMITMENT {
+                2
+            } else {
+                3
+            }
         || bytes[23..55] != key.metadata().setup_id()
         || bytes[55..87] != key.metadata().key_id()
     {
@@ -155,11 +160,11 @@ pub(super) fn decode(
         )
         .map_err(|_| Limit)?;
     let value = match tag {
-        6 => Value::Commitment(std::sync::Arc::new(
+        super::tags::KZG_COMMITMENT => Value::Commitment(std::sync::Arc::new(
             key.decode_commitment(&bytes[6..], &policy.ark_bounds())
                 .map_err(error)?,
         )),
-        7 => Value::Proof(std::sync::Arc::new(
+        super::tags::KZG_PROOF => Value::Proof(std::sync::Arc::new(
             key.decode_proof(&bytes[6..], &policy.ark_bounds())
                 .map_err(error)?,
         )),

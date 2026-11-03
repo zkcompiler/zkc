@@ -29,7 +29,7 @@ noncomputable def process (initial add mul : List F) (layers selector width : Na
     (.cons none (.cons (some (empty.get .here)) .nil)) (.cons none .nil)
     (outputFn {} 0)).bind fun output =>
   (denoteRepeat layerSpec {} 0 (some layers)
-    (.cons (output.get (.there .here)) (.cons none (.cons none .nil)))
+    (.cons (output.get (.there .here)) (.cons none (.cons none (.cons none .nil))))
     (.cons (some initial) (.cons (some add) (.cons (some mul) (.cons (some layers)
       (.cons (some selector) (.cons (some width) (.cons none .nil)))))))
     (layerFn {} 0)).bind fun _ =>

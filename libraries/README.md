@@ -44,6 +44,7 @@ For a project at `examples/projects/my-project`:
 
 ```toml
 format = "zkc.project/0"
+source-format = "zkc"
 [modules]
 example = "main.zkc"
 [workspace]

@@ -1,0 +1,25 @@
+domain C = commitment("multilinear.kzg.bls12-381/0")
+type VK = builtin("verifier_key", C)
+type PK = builtin("prover_key", C)
+type Commitment = builtin("commitment", C)
+
+struct State roles(P, V):
+    pub vk: VK @V
+    pub pk: PK @P
+    pub commitment: Commitment @(P, V)
+    pub nonce: index @P
+
+pub protocol Round roles(P, V)(state: State roles(P, V)) -> bool @V:
+    return true
+
+scheme Demo = Round:
+    prover P
+    verifier V
+    setup pcs {state.vk, state.pk, state.commitment}
+    public state.vk, state.commitment
+    accept result
+    construction authored
+
+entry def Produce(public: Demo::Public, witness: Demo::Witness) -> Demo::Proof:
+    result <- Demo::prove(public, witness)
+    return result.proof

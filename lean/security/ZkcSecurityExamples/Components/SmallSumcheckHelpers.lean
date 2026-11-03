@@ -29,7 +29,8 @@ theorem call_check (raw point : List F) (claim : F)
     (rawBound : raw.length < indexLimit) (pointBound : point.length < indexLimit) :
     Domain.callHelper (ringModel F G) Generated.Bindings.SmallSumcheckInputs.imported.program
       SumcheckHelperBodies.checkHelper.name [.data .boolean]
-      [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" point),
+      [.data (.vector "bls12-381.fr" raw),
+         .custody ZkcExamples.Structured.SumcheckPendingBodies.custodySlot 0, .data (.vector "bls12-381.fr" point),
         .data (.field "bls12-381.fr" claim)] =
       .returned [.data (.boolean (decide (PrimitiveLibrary.HasShape raw point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim)))] :=

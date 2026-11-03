@@ -44,7 +44,7 @@ def prepare(output, cli, compiler):
                         ('checked', 'Checked'), ('withhold', 'Withhold')]:
         package = output / f'{name}.zkpkg'
         result = json.loads(run([cli, '--json', 'compile', f'application::{entry}',
-                                 f'--module=application={source}', f'--compiler={compiler}',
+                                 f'--module=application={source}', f'--compiler={compiler}', '--source-format=zkc',
                                  f'--output={package}'], cwd=output))
         assert result['status'] == 'compiled', result
         result = json.loads(run([cli, '--json', 'bindings', f'--package={package}',
@@ -65,8 +65,9 @@ def stage(output, sdk_source, prepared):
         shutil.copytree(sdk_source / 'crates' / name, staged / 'crates' / name)
     shutil.copytree(sdk_source / 'common/unicode', staged / 'common/unicode')
     (staged / 'common/catalog').mkdir()
-    shutil.copyfile(sdk_source / 'common/catalog/declarations.json',
-                    staged / 'common/catalog/declarations.json')
+    # One catalog package: the installation document references the declarations.
+    for name in ('declarations.json', 'installation.json'):
+        shutil.copyfile(sdk_source / 'common/catalog' / name, staged / 'common/catalog' / name)
     for name in ('Cargo.lock', 'rust-toolchain.toml'):
         shutil.copyfile(sdk_source / name, staged / name)
     # Preserve owning manifests and exact pins; select only the installed SDK closure.

@@ -48,17 +48,9 @@ impl Argument {
     }
 }
 
+/// An installed domain of the declared sort.
 fn domain(sort: &'static str, identity: Identity) -> Result<Argument> {
-    let admitted = match sort {
-        "Field" => identity.field_characteristic().is_some(),
-        "Group" => identity.group() == Some(identity),
-        "Transcript" => identity.transcript() == Some(identity),
-        "Commitment" => {
-            identity.is_row_commitment() || identity == Identity::MultilinearKzgBls12381
-        }
-        _ => false,
-    };
-    if !admitted {
+    if identity.sort() != Some(sort) {
         return Err(support::failure());
     }
     Ok(Argument::Domain { sort, identity })
@@ -84,30 +76,11 @@ fn project(parent: &Argument, member: &str) -> Result<Argument> {
     let Kind::Domain(sort) = declaration.result else {
         return Err(support::failure());
     };
-    let owner = parent.identity()?;
-    let value = match member {
-        "BaseField" => owner.base_field(),
-        "Scalar" | "ChallengeField" | "ValueField" | "PointField" | "EvaluationField" => {
-            owner.scalar_field()
-        }
-        "PairingG1" => match owner {
-            Identity::Bn254Fr => Some(Identity::Bn254G1),
-            Identity::Bls12381Fr => Some(Identity::Bls12381G1),
-            _ => None,
-        },
-        "PairingG2" => match owner {
-            Identity::Bn254Fr => Some(Identity::Bn254G2),
-            Identity::Bls12381Fr => Some(Identity::Bls12381G2),
-            _ => None,
-        },
-        "PairingGT" => match owner {
-            Identity::Bn254Fr => Some(Identity::Bn254Gt),
-            Identity::Bls12381Fr => Some(Identity::Bls12381Gt),
-            _ => None,
-        },
-        _ => None,
-    }
-    .ok_or_else(support::failure)?;
+    // The installed association of the owner's row.
+    let value = parent
+        .identity()?
+        .member(member)
+        .ok_or_else(support::failure)?;
     domain(sort, value)
 }
 
@@ -151,38 +124,23 @@ fn apply(name: &str, indices: &[usize], scope: &[Argument]) -> Result<LogicalTyp
     }
 }
 
-/// Installed capabilities are not inferred from a declaration's requirements.
+/// Installed capabilities are not inferred from a declaration's requirements:
+/// a domain argument holds exactly the capabilities its installed row declares.
 /// Unknown predicates fail closed, including declared but uninstalled codecs.
 fn capability(name: &str, args: &[&Argument]) -> bool {
     let [Argument::Domain { sort, identity }] = args else {
         return false;
     };
-    match (*sort, name) {
-        ("Field", "CommRing" | "Field") => identity.field_characteristic().is_some(),
-        ("Field", "PrimeField") => identity.is_prime_field(),
-        ("Field", "ExtensionField") => identity.base_field().is_some(),
-        ("Field", "CharacteristicNotTwo") => identity.has_characteristic_not_two(),
-        ("Field", "TwoAdicField") => {
-            *identity == Identity::Bn254Fr || identity.is_plonky3_residue()
+    identity.sort() == Some(*sort) && identity.holds(name)
+}
+
+pub(super) fn natural_parameter_bound(contract: &str) -> u64 {
+    use ParameterValidator as V;
+    match zkc_catalog::operation(contract).map(|row| row.parameters.validator) {
+        Some(V::Extent | V::MatrixVector | V::GatherIndices) => {
+            super::super::NATURAL_ARGUMENT_LIMIT
         }
-        ("Field", "PairingField") => matches!(identity, Identity::Bn254Fr | Identity::Bls12381Fr),
-        ("Field", "IndexRandomness" | "IndexBlockRandomness") => matches!(
-            identity,
-            Identity::KoalaBearExt8
-                | Identity::KoalaBearExt4
-                | Identity::BabyBearExt4
-                | Identity::GoldilocksExt2
-        ),
-        ("Group", "Group" | "ScalarAction") => identity.group() == Some(*identity),
-        ("Transcript", "Transcript" | "FieldTranscript") => {
-            identity.transcript() == Some(*identity)
-        }
-        ("Transcript", "IndexTranscript") => identity.has_index_transcript(),
-        ("Transcript", "IndexBlockTranscript") => identity.has_index_block_transcript(),
-        ("Commitment", "VectorCommitment") => identity.is_row_commitment(),
-        ("Commitment", "MultiOpening") => identity.has_multi_opening(),
-        ("Commitment", "MultilinearOpening") => *identity == Identity::MultilinearKzgBls12381,
-        _ => false,
+        _ => u64::MAX,
     }
 }
 

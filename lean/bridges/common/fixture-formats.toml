@@ -1,0 +1,13 @@
+# Source formats of the authored fixture sources that the Lean bridges compile
+# through explicit module maps and that no package manifest lists, by
+# directory. The nearest enclosing directory decides. A source that a package
+# lists takes the selection the SDK's project inspection reports for that
+# package instead (`bridges/common/source_format.py`).
+
+[directories]
+"compiler/test/fixtures" = "zkc"
+"lean/bridges/common/fixtures" = "zkc"
+"lean/bridges/construction/fixtures" = "zkc"
+"lean/bridges/structured/fixtures" = "zkc"
+"lean/security/fixtures" = "zkc"
+"lean/subjects/fixtures" = "zkc"

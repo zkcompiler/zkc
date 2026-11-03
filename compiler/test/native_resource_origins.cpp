@@ -26,6 +26,33 @@ void expect(const exec::ResourceOriginSummary &summary,
 } // namespace
 int main() {
   Cases cases;
+  for (bool fresh : {false, true})
+    cases.run(
+        fresh ? "consume/create cannot establish a nominal successor"
+              : "installed nominal pass preserves the exact input root",
+        [&] {
+          Source source;
+          source.binding("pass", "resource_unit.pass", {"Slot.A"});
+          source.binding("create", "resource_unit.create", {"Slot.A"});
+          source.binding("consume", "resource_unit.consume", {"Slot.A"});
+          auto fn = source.function("step", source.unit, source.unit);
+          exec::ScopedExecutionBuilder body(source.builder, fn);
+          Value next;
+          if (fresh) {
+            source.invoke(body, "consume", fn.getArgument(1), {}, "consume");
+            next = source.invoke(body, "create", {}, source.unit, "create")[0];
+          } else
+            next = source.invoke(body, "pass", fn.getArgument(1), source.unit,
+                                 "pass")[0];
+          body.returned(next);
+          require(succeeded(verify(*source.module)),
+                  "unit source must be formed");
+          uint64_t work = 100000;
+          auto roots = analysis(source, work);
+          expect(take(roots->get(fn)),
+                 fresh ? std::map<unsigned, unsigned>{}
+                       : std::map<unsigned, unsigned>{{0, 0}});
+        });
   for (StringRef name :
        {"apply", "calls80", "draw80", "if", "if-stop", "for", "for-stop",
         "match", "match-stop", "unknown-slot", "stop-call"})

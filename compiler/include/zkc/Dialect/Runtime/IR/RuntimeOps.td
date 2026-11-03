@@ -19,8 +19,8 @@ def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol, CallableOpInterfa
   let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$contract,
     ArrayAttr:$arguments, StrAttr:$implementation,
     TypeAttrOf<FunctionType>:$function_type,
-    OptionalAttr<DictArrayAttr>:$arg_attrs,
-    OptionalAttr<DictArrayAttr>:$res_attrs);
+    OptionalAttr<CallMetadataAttr<DictArrayAttr>>:$arg_attrs,
+    OptionalAttr<CallMetadataAttr<DictArrayAttr>>:$res_attrs);
   let builders = [OpBuilder<(ins "::llvm::StringRef":$name,
     "::llvm::StringRef":$contract, "::mlir::ArrayAttr":$arguments,
     "::llvm::StringRef":$implementation)>];

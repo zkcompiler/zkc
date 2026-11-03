@@ -287,7 +287,7 @@ def test_fusion_preserves_values_and_guards_with_different_resource_charges(
         report = run_report(entry, f'{name}-usage', inputs)
         assert report['status'] == 'executed'
         usage[name] = joint_execution(report)['roles'][0]['usage']
-        outer_allocations[name] = report['execution']['usage']['fresh_bytes']
+        outer_allocations[name] = report['execution']['invocation']['total_value_bytes']
         assert entry.run(f'{name}-value', inputs)['result'] == decimal_values(6*n*repetitions)
         for case, changed in [('ignored', {'unused': decimal_values([7])}),
                                ('used', {'b': decimal_values([])})]:
@@ -383,7 +383,7 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         verified = journal.json([toolchain.runtime, '--json', 'verify', f'--package={entry.package}',
                                 f'--sha256={entry.pin}', *request, f'--proof={proof}'])
         assert verified['status'] == 'accepted' and verified['binding_scope'] == 'transcript'
-        source = [f'--compiler={toolchain.compiler}',
+        source = [f'--compiler={toolchain.compiler}', '--source-format=zkc',
                   f'--module=sample={entry.directory / "kernels.zkc"}', *flags]
         direct_proof = entry.directory / 'direct.proof.bin'
         produced = journal.json([toolchain.runtime, '--json', 'prove', *source, *request,
@@ -460,7 +460,7 @@ def test_mathematical_flag_requires_source_compilation(toolchain, journal, direc
     source.write_text(MAP_SUM)
     journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
                  f'--module=sample={source}', flag], refuses='source.options')
-    journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', flag], refuses='cli-option')
     for operation in ('run', 'prove', 'verify', 'bindings'):
         refused = journal.json([toolchain.runtime, '--json', *operation.split(),

@@ -16,6 +16,11 @@ struct VariantDescriptor {
   std::vector<VariantAlternative> alternatives;
 };
 inline constexpr size_t VariantSpellingBytes = 256 * 1024;
+/// The portable descriptor's own alternative limit: the largest power of two
+/// for which a variant with that many alternatives can still be spelled within
+/// the program format's 4,096-byte type string. MLIR formation admits wider
+/// variants; spelling one refuses here.
+inline constexpr size_t VariantDescriptorAlternatives = 64;
 /// Logical, self-contained nominal identity. Both directions check formation,
 /// canonical spelling and bounded recursive payloads; physical types are
 /// refused.

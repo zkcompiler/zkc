@@ -1,7 +1,9 @@
 # One build-only tool, with independent actions for neutral declarations and ODS.
 add_executable(zkc-tblgen tools/zkc-tblgen.cpp tools/TableGen/Declarations.cpp
   tools/TableGen/Contributions.cpp tools/TableGen/TypeBindings.cpp
-  tools/TableGen/Mathematical.cpp tools/TableGen/Recipes.cpp)
+  tools/TableGen/Mathematical.cpp tools/TableGen/Recipes.cpp
+  tools/TableGen/Roles.cpp tools/TableGen/Fields.cpp
+  tools/TableGen/Instances.cpp)
 target_include_directories(zkc-tblgen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 separate_arguments(zkc_tablegen_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 target_compile_options(zkc-tblgen PRIVATE ${zkc_tablegen_definitions}
@@ -21,8 +23,22 @@ tablegen(ZKC include/zkc/Contracts/Declarations.cpp.inc
 tablegen(ZKC include/zkc/Contracts/Mathematical.inc
   -gen-mathematical-declarations EXTRA_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}/include ${ZKC_CONTRIBUTION_INCLUDES})
+# Installed instances are checked together with the native installation of the
+# same catalog package. The logical Installation.td stays free of physical
+# records; this input names both documents.
+file(CONFIGURE OUTPUT
+  "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/CompleteInstallation.td"
+  CONTENT "include \"zkc/Contracts/Installation.td\"\ninclude \"zkc/Contracts/NativeInstallation.td\"\n"
+  @ONLY)
+set(LLVM_TARGET_DEFINITIONS
+  ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/CompleteInstallation.td)
+tablegen(ZKC include/zkc/Contracts/Instances.inc
+  -gen-installed-instances EXTRA_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_BINARY_DIR}/include ${ZKC_CONTRIBUTION_INCLUDES})
 add_public_tablegen_target(ZkcContractDeclarationsGen)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/Mathematical.inc"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/Instances.inc"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/CompleteInstallation.td"
   DESTINATION include/zkc/Contracts)
 set(TABLEGEN_OUTPUT)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated/Transforms)

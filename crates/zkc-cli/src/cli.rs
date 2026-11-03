@@ -7,9 +7,12 @@ pub use render::human;
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
+const MATERIAL_LIMITS: Opt = Opt::new("--material-limits=LIMITS");
+const INTERFACE_LIMITS: Opt = Opt::new("--interface-limits=LIMITS");
 const THREADS: Opt = Opt::new("--threads=COUNT").unsigned_range(1, 256);
 const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
+const SOURCE_FORMAT: Opt = Opt::new("--source-format=zkc|zkc-layout");
 const INVOCATIONS: Opt = Opt::new("--invocations=FILE");
 const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-authored.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).";
 // Source and pinned package modes share spelling, but cannot be combined.
@@ -19,9 +22,11 @@ macro_rules! entry_options {
             Opt::new("--project=FILE"),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            SOURCE_FORMAT,
             Opt::new("--compiler=PATH"),
             Opt::new("--package=FILE"),
             Opt::new("--sha256=PIN").hex(Some(32)),
+            INTERFACE_LIMITS,
             $($extra),*
         ]
     };
@@ -32,6 +37,7 @@ macro_rules! entry_options {
     };
 }
 const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.
+Explicit modules and assets require --source-format; a manifest states its own.
 Generic protocol runs take closed arguments, e.g. 'Schnorr<G>'. Proofs require a proof declaration.
 Pinned execution uses --package and --sha256 together and no source options.
 Project inputs default to inputs/<entry-stem>/. Proofs default to
@@ -41,6 +47,10 @@ Outside a project, input and proof paths must be explicit unless the input group
 Function arguments use one parameter-named arguments.json map. Static child context
 uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip result publication.
 --threads=COUNT selects 1..=256 shared CPU workers (default: 1), including with --dry-run.
+--capacity=LIMITS selects the native capacity record. --material-limits=LIMITS selects the
+material allowances; setup material may be raised from 64 MiB up to 256 MiB.
+--interface-limits=LIMITS selects the interface admission allowances; interface work may be
+raised from 1,000,000 up to 2^24 units, as the Host of a large role roster needs.
 Dry-run validates inputs without executing numerical work.";
 const COMMANDS: &[Command] = &[
     Command {
@@ -56,11 +66,13 @@ const COMMANDS: &[Command] = &[
             Opt::new("--project=FILE"),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            SOURCE_FORMAT,
             Opt::new("--report=DIRECTORY"),
             Opt::new("--compiler=PATH"),
         ],
         description:
             "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
+Explicit modules and assets require --source-format; a manifest states its own.
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
 Select an Entry by unique short name or qualified module::Name, with closed arguments
 for generic runs, e.g. 'Schnorr<G>'. Discovery does not enumerate generic instances.
@@ -82,36 +94,47 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--reuse-sha256=PIN").hex(Some(32)),
             Opt::new("--compiler=PATH"),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            SOURCE_FORMAT,
             Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"),
+            INTERFACE_LIMITS,
         ],
-        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
+        description: concat!(
+            "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nExplicit modules and assets require --source-format; a manifest states its own.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
 --target=cpu is the default. --target=evm requires --solc and --solc-sha256;
 it publishes a fresh verifier directory, defaulting to build/zkc/<entry-stem>.evm.
---evm-version=cancun|prague selects the EVM deployment fork (default cancun).
+--evm-version=",
+            zkc::evm_target_forks!(),
+            " selects a declared EVM deployment fork (default ",
+            zkc::evm_target_default_fork!(),
+            ").
 The report supplies the manifest SHA-256 for independent artifact authentication.
 --reuse and --reuse-sha256 reuse an authenticated EVM artifact only on an exact build match.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 CPU project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
 Named Entry stems replace :: with dots; generic runs append a full selector digest.
-Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
+Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.
+--interface-limits=LIMITS selects the allowances under which a CPU package's interface is read."
+        ),
     },
     Command {
         name: "new",
         summary: "Create a project in a new directory",
         positional: "DIRECTORY",
-        options: &[Opt::new("--compiler=PATH")],
-        description: "Create a minimal source project and its input templates. The directory must not exist.",
+        options: &[Opt::new("--compiler=PATH"), INTERFACE_LIMITS],
+        description: "Create a minimal source project and its input templates. The directory must not exist.
+--interface-limits=LIMITS selects the allowances under which Entry interfaces are read.",
     },
     Command {
         name: "init",
         summary: "Initialize a project in an existing directory",
         positional: "[DIRECTORY]",
-        options: &[Opt::new("--compiler=PATH")],
+        options: &[Opt::new("--compiler=PATH"), INTERFACE_LIMITS],
         description: "Initialize the current or selected directory with source and input templates.
-Existing projects and conflicting files refuse; use prepare for an existing project.",
+Existing projects and conflicting files refuse; use prepare for an existing project.
+--interface-limits=LIMITS selects the allowances under which Entry interfaces are read.",
     },
     Command {
         name: "prepare",
@@ -122,7 +145,8 @@ Existing projects and conflicting files refuse; use prepare for an existing proj
 Generic protocols require an explicit selector with closed arguments, e.g. 'Schnorr<G>'.
 Package and explicit-module modes require --output. Existing regular files are preserved.
 Values, dynamic lengths and variant cases must be filled by the user.
-Use run, prove or verify --dry-run to validate inputs without protocol execution.",
+Use run, prove or verify --dry-run to validate inputs without protocol execution.
+--interface-limits=LIMITS selects the allowances under which Entry interfaces are read.",
     },
     Command {
         name: "inspect",
@@ -133,7 +157,8 @@ Use run, prove or verify --dry-run to validate inputs without protocol execution
 placement, notation or toolchain metadata. Notation visibility options require --view=notations.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 Source inventories check definitions and optionally a selected Entry; they do not execute it.
-Pinned packages support only the Entry view.",
+Pinned packages support only the Entry view. --interface-limits=LIMITS selects the allowances
+under which the Entry view reads interfaces, including a Function's child deployments.",
     },
     Command {
         name: "run",
@@ -147,6 +172,7 @@ Pinned packages support only the Entry view.",
             INVOCATIONS,
             AUTHORED,
             CAPACITY,
+            MATERIAL_LIMITS,
             Opt::new("--limits=LIMITS"),
             RESULTS,
             Opt::new("--no-results"),
@@ -171,6 +197,7 @@ Pinned packages support only the Entry view.",
             Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
+            MATERIAL_LIMITS,
             AUTHORED,
             Opt::new("--attempts=COUNT").unsigned(),
             RESULTS,
@@ -194,10 +221,28 @@ Pinned packages support only the Entry view.",
             Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
+            MATERIAL_LIMITS,
             AUTHORED,
             RESULTS,
         ),
         description: ENTRY,
+    },
+    Command {
+        name: "common-inputs",
+        summary: "Produce the pinned common-input context of a Run deployment",
+        positional: "[ENTRY]",
+        options: entry_options!(
+            THREADS,
+            Opt::new("--deployment=ID"),
+            Opt::new("--input=ROLE=FILE").repeated(),
+            Opt::new("--key=SLOT=FILE").repeated(),
+            Opt::new("--output=FILE"),
+            SETUPS,
+            CAPACITY,
+            MATERIAL_LIMITS,
+            Opt::new("--limits=LIMITS"),
+        ),
+        description: "Prepare the selected Function Entry's static Run deployment ID with one named input\nFILE per role, and write the canonical zkc.input-bindings/0 context those inputs determine.\nEvery observed common component must agree. The report gives the context SHA-256;\nthe application distributes that pin through its own trusted context. Producing a\ncontext confers no trust, and nothing is issued or executed.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).",
     },
     Command {
         name: "bindings",
@@ -329,6 +374,12 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
             "phase":"arguments", "code":"cli-option",
             "message":"notation visibility options require --view=notations"});
     }
+    // Only the Entry view reads a Host interface.
+    if args.has("--interface-limits") && args.value("--view").is_some_and(|view| view != "entry") {
+        return serde_json::json!({"format":"zkc.tool-inspection/0", "status":"refused",
+            "phase":"arguments", "code":"cli-option",
+            "message":"--interface-limits applies to the Entry view"});
+    }
     if args.has("--dry-run") && args.has("--instrument") {
         return serde_json::json!({"status":"refused", "phase":"arguments", "code":"cli-option",
             "message":"--dry-run does not execute; remove --instrument"});
@@ -343,7 +394,13 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
     let started = std::time::Instant::now();
     let cpu = if matches!(
         name,
-        "run" | "prove" | "verify" | "bundle run" | "bundle prove" | "bundle verify"
+        "run"
+            | "prove"
+            | "verify"
+            | "common-inputs"
+            | "bundle run"
+            | "bundle prove"
+            | "bundle verify"
     ) {
         let result = match args.value("--threads") {
             Some(count) => {
@@ -440,10 +497,15 @@ mod tests {
 
     #[test]
     fn evm_version_is_unique_documented_and_requires_the_evm_target() {
+        use zkc::evm_target::{DEFAULT_FORK, Fork};
         let spec = command("compile").unwrap();
-        assert!(spec.help().contains("--evm-version=cancun|prague"));
-        assert!(spec.help().contains("default cancun"));
-        for fork in ["cancun", "prague"] {
+        let forks: Vec<_> = Fork::ALL.iter().map(|fork| fork.row().name).collect();
+        assert!(spec.help().contains(&format!(
+            "--evm-version={} selects a declared EVM deployment fork (default {}).",
+            forks.join("|"),
+            DEFAULT_FORK.row().name
+        )));
+        for fork in forks.iter().copied() {
             let values = args(&["--target=evm", &format!("--evm-version={fork}")]);
             assert_eq!(
                 spec.parse(&values).unwrap().value("--evm-version"),
@@ -457,13 +519,13 @@ mod tests {
         assert!(
             spec.parse(&args(&[
                 "--target=evm",
-                "--evm-version=cancun",
-                "--evm-version=prague"
+                &format!("--evm-version={}", forks[0]),
+                &format!("--evm-version={}", forks[forks.len() - 1])
             ]))
             .is_err()
         );
         assert_eq!(
-            run("check", &args(&["--evm-version=prague"]))["code"],
+            run("check", &args(&[&format!("--evm-version={}", forks[0])]))["code"],
             "cli-option"
         );
     }
@@ -474,6 +536,7 @@ mod tests {
             "run",
             "prove",
             "verify",
+            "common-inputs",
             "bundle run",
             "bundle prove",
             "bundle verify",

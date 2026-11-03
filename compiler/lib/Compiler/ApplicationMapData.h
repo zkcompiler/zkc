@@ -6,6 +6,7 @@
 #include "zkc/Support/Json.h"
 #include <deque>
 #include <map>
+#include <set>
 #include <vector>
 
 namespace zkc::protocol::application_map {
@@ -34,7 +35,39 @@ struct View {
   std::string identity, entry;
   std::vector<Definition> definitions;
   std::map<std::string, unsigned> names;
+  /// The structured export of these exact bytes.
+  llvm::json::Value publication = nullptr;
   const Definition *find(llvm::StringRef name) const;
+};
+/// The written links a supplied `zkc.source-correspondence/0` grants. It is
+/// read strictly against the exact original view; a malformed or mismatched
+/// document refuses with `application-map-written` and is never treated as
+/// absent. Links come from its occurrences and inventory only, never from
+/// spans or symbol spellings.
+class WrittenLinks {
+public:
+  static llvm::Expected<WrittenLinks> read(llvm::StringRef bytes,
+                                           const View &source,
+                                           llvm::StringRef originalBytes);
+  /// `{format, digest}` of the exact supplied bytes.
+  llvm::json::Value reference() const;
+  /// The written link of an application: the root of a protocol definition
+  /// when `call` is null, otherwise the expansion of `call` in `caller`. Null
+  /// when the occurrence has zero or several written nodes.
+  llvm::Expected<llvm::json::Value> link(const Definition &callee,
+                                         llvm::StringRef caller,
+                                         const Instruction *call) const;
+
+private:
+  std::string digest;
+  llvm::json::Object subject;
+  /// Closed instance symbol to its template owner.
+  std::map<std::string, std::string> instances;
+  /// Generated symbol to its origins.
+  std::map<std::string, std::set<std::pair<std::string, std::string>>>
+      generated;
+  /// `(definition, site)` to its written nodes.
+  std::map<std::pair<std::string, std::string>, llvm::json::Array> nodes;
 };
 struct Value {
   std::string definition;
@@ -53,7 +86,8 @@ llvm::Expected<llvm::json::Value> parseRecord(llvm::StringRef bytes);
 // Implemented by the independent reader, also used to reject an invalid
 // proposal before returning it. It never calls the producer.
 llvm::Error checkRecord(View &source, View &candidate,
-                        const llvm::json::Value &record, Budget &budget);
+                        const llvm::json::Value &record, Budget &budget,
+                        const WrittenLinks *links);
 llvm::json::Array encodePath(llvm::ArrayRef<unsigned> path);
 llvm::json::Value encodeValue(const Value &value);
 Path instructionPath(const Path &region, unsigned instruction);

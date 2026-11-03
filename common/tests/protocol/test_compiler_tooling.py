@@ -171,7 +171,7 @@ def test_cache_invalidations_corruption_quota_and_concurrency(toolchain, journal
 def test_generic_protocol_cache_keeps_specializations_distinct(toolchain, journal, directory):
     root = directory / 'project'
     root.mkdir()
-    (root / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (root / 'zkc.toml').write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\nexample="main.zkc"\n')
     (root / 'main.zkc').write_text('''module example;
 protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
 ''')

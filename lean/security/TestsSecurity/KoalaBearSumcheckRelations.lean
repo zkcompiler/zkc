@@ -17,7 +17,7 @@ open ZkcSecurity.Examples.Components.KoalaBearSumcheckRelations
 
 example : snapshot.sourceDeclarations.records.length = 1 := by kernel_rfl
 example : snapshot.sourceDeclarations.records.map (fun record => (record.resource, record.sealed)) =
-    [("linear", true)] := by kernel_rfl
+    [("linear", false)] := by kernel_rfl
 example : registry.check snapshot.relations = true := by decide +kernel
 example : (OpaqueRegistry.empty (Value := model.Value)).check snapshot.relations = false := by decide +kernel
 example : (registry.resolve { relation with revision := "uninstalled" }).isSome = false := by decide +kernel

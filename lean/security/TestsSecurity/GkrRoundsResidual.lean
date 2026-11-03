@@ -107,15 +107,15 @@ theorem missing_point_after_delivery :
 
 def verifier (count : Nat) :=
   protocol0Role1Process (F := ℚ) (G := ℚ) {} (some [101]) (some [102]) (some [103]) (some [104])
-    (some []) (some 2) (some count) (some 83)
+    (some 37) (some []) (some 2) (some count) (some 83)
 
 /-- Two malicious non-honest triples both pass; exact source loop count,
 point append and every private runtime output are checked. -/
 theorem two_arbitrary_rounds :
     ((script 0 3 (-1) 2).run (verifier 2)).outcome =
-      .returned (runtime (G := ℚ) [2, 2] 2) := by
+      .returned (returned (G := ℚ) [2, 2] 2) := by
   rw [show verifier 2 = _ from verifier_binding {} (RosterDistinct.root 1 2)
-    _ _ _ _ (2 : ℚ) 83 2 (by decide) (n := 0)
+    _ _ _ _ 37 (2 : ℚ) 83 2 (by decide) (n := 0)
     TestsSecurity.GkrRoundsRealization.raw
     (GkrRoundsLayout.state (x := 1) (y := 1) TestsSecurity.GkrRoundsRealization.wiringAdd
       TestsSecurity.GkrRoundsRealization.wiringMul
@@ -123,7 +123,7 @@ theorem two_arbitrary_rounds :
   dsimp only [GkrRoundsBinding.program, GkrRoundsBinding.query, participantInterface,
     Participant.interface, services, assignment]
   norm_num [ZkcSecurity.Families.Sumcheck.Program.remaining, GkrRoundsBinding.program, receive, delivery, GkrRoundsBinding.query,
-    initial, advance, GkrRoundsBinding.carried, runtime, script, ReplyScript.run, ReplyScript.handler,
+    initial, advance, returnedState, returned, script, ReplyScript.run, ReplyScript.handler,
     PIR.Process.bind, PIR.Process.run, PIR.Execution.follow,
     ZkcSecurity.Families.Sumcheck.Message.coefficientTriples,
     ZkcSecurity.Families.Sumcheck.Message.ofTriple,
@@ -132,18 +132,24 @@ theorem two_arbitrary_rounds :
 
 theorem source_maximum (count : Nat) (large : 4 < count) :
     verifier count = .halt .refused :=
-  above_maximum {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _ count large
+  above_maximum {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _ _ count large
 
 theorem zero_missing_optional :
-    protocol0Role1Process (F := ℚ) (G := ℚ) {} (some [1]) none (some [3]) none (some []) none (some 0) none =
+    protocol0Role1Process (F := ℚ) (G := ℚ) {} (some [1]) none (some [3]) none (some 37) (some []) none (some 0) none =
       .halt .incomplete :=
-  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _
+  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _ _
 
 theorem zero_present_without_service (point : List ℚ) (claim : ℚ) :
-    protocol0Role1Process (F := ℚ) (G := ℚ) {} none none none none (some point) (some claim) (some 0) none =
+    protocol0Role1Process (F := ℚ) (G := ℚ) {} none none none none (some 37) (some point) (some claim) (some 0) none =
       .done (.cons none (.cons none (.cons none (.cons none (.cons none
-        (.cons (some point) (.cons (some claim) .nil))))))) :=
-  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _
+        (.cons (some 0) (.cons (some point) (.cons (some claim) .nil)))))))) :=
+  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _ _
+
+/-- Ordinary fields cannot supply an absent custody coordinate, even at zero rounds. -/
+theorem zero_missing_custody (point : List ℚ) (claim : ℚ) :
+    protocol0Role1Process (F := ℚ) (G := ℚ) {} none none none none none
+      (some point) (some claim) (some 0) none = .halt .incomplete :=
+  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _ _
 
 /-- A perfectly decoded cubic input cannot instantiate the residual's layout
 premise. This reuses the existing actual-helper independence refusal. -/
@@ -258,7 +264,7 @@ def concrete_residual {E P : Type} {Raw : E → Type}
     {charge : List E → E → ENNReal}
     (queries : ZkcSecurity.Families.Sumcheck.QueryInterface (GkrRoundsBinding.program 83) absorb)
     (sampling : queries.ConditionalBound (representation 83) 2 2 charge) (history : List E) :=
-  verifier_residual 83 2 (by decide) {} (RosterDistinct.root 1 2) none none none none
+  verifier_residual 83 2 (by decide) {} (RosterDistinct.root 1 2) none none none none 37
     (n := 0) TestsSecurity.GkrRoundsRealization.raw
     (GkrRoundsLayout.state (x := 1) (y := 1) TestsSecurity.GkrRoundsRealization.wiringAdd
       TestsSecurity.GkrRoundsRealization.wiringMul

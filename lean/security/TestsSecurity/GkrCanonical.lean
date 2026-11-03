@@ -60,6 +60,7 @@ private def zeroOracle : Domain.Oracle Id model.toCarriers Nat
   | _, .challenge ⟨_, _, some ⟨_, _, .vector _⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, some ⟨_, _, .sequence _⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, some ⟨_, _, .product _ _ _⟩⟩, state => (.returned (), state)
+  | _, .challenge ⟨_, _, some ⟨_, _, .resourceUnit _⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, none⟩, state => (.returned (), state)
   | _, .message _ _, state => (.returned (), state)
   | _, .publicBinding _, state => (.returned (), state)

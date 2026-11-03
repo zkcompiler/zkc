@@ -1,6 +1,6 @@
 //! Bounded outer-object decoder. The embedded participant text has one owner:
 //! Runtime admission; this parser never interprets its positional records.
-use super::bundle::Segment;
+use super::bundle::{BranchArm, CONTROL_LEVELS, Segment};
 use super::{BundleError, BundleLimits, Step};
 use serde::{
     Deserialize, Deserializer,
@@ -23,24 +23,96 @@ struct RawStep {
 }
 enum RawSegment {
     Action(RawStep),
+    Branch {
+        entries: Vec<RawStep>,
+        arms: Vec<RawArm>,
+    },
     Loop {
         entries: Vec<RawStep>,
         body: Vec<RawSegment>,
         exits: Vec<RawStep>,
     },
 }
+struct RawArm {
+    alternative: String,
+    body: Vec<RawSegment>,
+    exits: Vec<RawStep>,
+}
+#[derive(Clone, Copy)]
+struct ArmSeed<'a>(SegmentSeed<'a>);
+impl<'de> DeserializeSeed<'de> for ArmSeed<'_> {
+    type Value = RawArm;
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<RawArm, D::Error> {
+        d.deserialize_map(self)
+    }
+}
+impl<'de> Visitor<'de> for ArmSeed<'_> {
+    type Value = RawArm;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("exact branch arm")
+    }
+    fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<RawArm, A::Error> {
+        let (mut alternative, mut body, mut exits) = (None, None, None);
+        while let Some(key) = a.next_key_seed(Text(self.0.limits.string_bytes, self.0.exceeded))? {
+            match key.as_str() {
+                "alternative" if alternative.is_none() => {
+                    alternative = Some(a.next_value_seed(Text(128, self.0.exceeded))?)
+                }
+                "body" if body.is_none() => {
+                    body = Some(a.next_value_seed(List {
+                        seed: SegmentSeed {
+                            depth: self.0.depth + 1,
+                            ..self.0
+                        },
+                        limit: self.0.limits.steps,
+                        exceeded: self.0.exceeded,
+                    })?)
+                }
+                "yield" if exits.is_none() => {
+                    let values = a.next_value_seed(List {
+                        seed: SegmentSeed {
+                            action_only: true,
+                            ..self.0
+                        },
+                        limit: self.0.limits.steps,
+                        exceeded: self.0.exceeded,
+                    })?;
+                    exits = Some(
+                        values
+                            .into_iter()
+                            .map(|v| match v {
+                                RawSegment::Action(s) => s,
+                                _ => unreachable!("action seed"),
+                            })
+                            .collect(),
+                    );
+                }
+                _ => return Err(de::Error::custom("unknown or duplicate branch arm field")),
+            }
+        }
+        Ok(RawArm {
+            alternative: alternative.ok_or_else(|| de::Error::custom("missing alternative"))?,
+            body: body.ok_or_else(|| de::Error::custom("missing arm body"))?,
+            exits: exits.ok_or_else(|| de::Error::custom("missing arm yield"))?,
+        })
+    }
+}
 #[derive(Clone, Copy)]
 struct SegmentSeed<'a> {
     limits: BundleLimits,
     exceeded: &'a Cell<bool>,
     steps: &'a Cell<usize>,
+    /// Control segments enclosing this one: a control segment here is at
+    /// level depth + 1, while a step segment adds no level.
     depth: usize,
     action_only: bool,
 }
 impl<'de> DeserializeSeed<'de> for SegmentSeed<'_> {
     type Value = RawSegment;
     fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<RawSegment, D::Error> {
-        if self.depth >= crate::vm::Limits::STACK_DEPTH {
+        // A level-65 control segment refuses at its first control field, so
+        // no segment is read more than one step below the deepest level.
+        if self.depth > CONTROL_LEVELS {
             return Err(limit_error(self.exceeded));
         }
         d.deserialize_map(self)
@@ -54,7 +126,8 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
     fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
         let (mut role, mut instruction, mut anchor) = (None, None, None);
         let (mut entries, mut body, mut exits) = (None, None, None);
-        let mut seen = 0u8;
+        let (mut branches, mut arms) = (None, None);
+        let mut seen = 0u16;
         while let Some(key) = a.next_key_seed(Text(self.limits.string_bytes, self.exceeded))? {
             let bit = match key.as_str() {
                 "role" => 1,
@@ -63,6 +136,8 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                 "loop" => 8,
                 "body" => 16,
                 "yield" => 32,
+                "branch" => 64,
+                "arms" => 128,
                 _ => return Err(de::Error::custom("unknown schedule field")),
             };
             if seen & bit != 0 {
@@ -71,12 +146,17 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
             if bit >= 8 && self.action_only {
                 return Err(de::Error::custom("expected schedule action"));
             }
+            // A control field makes this a control segment at level depth + 1;
+            // refuse one beyond the deepest level before reading its body.
+            if bit >= 8 && self.depth >= CONTROL_LEVELS {
+                return Err(limit_error(self.exceeded));
+            }
             seen |= bit;
             match bit {
                 1 => role = Some(a.next_value()?),
                 2 => instruction = Some(a.next_value()?),
                 4 => anchor = Some(a.next_value()?),
-                8 | 32 => {
+                8 | 32 | 64 => {
                     let values = a.next_value_seed(List {
                         seed: Self {
                             action_only: true,
@@ -89,14 +169,23 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                         .into_iter()
                         .map(|v| match v {
                             RawSegment::Action(step) => step,
-                            RawSegment::Loop { .. } => unreachable!("action-only seed"),
+                            _ => unreachable!("action-only seed"),
                         })
                         .collect();
                     if bit == 8 {
                         entries = Some(steps);
-                    } else {
+                    } else if bit == 32 {
                         exits = Some(steps);
+                    } else {
+                        branches = Some(steps);
                     }
+                }
+                128 => {
+                    arms = Some(a.next_value_seed(List {
+                        seed: ArmSeed(self),
+                        limit: 32,
+                        exceeded: self.exceeded,
+                    })?);
                 }
                 16 => {
                     body = Some(a.next_value_seed(List {
@@ -123,6 +212,10 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
                     anchor: anchor.unwrap(),
                 }))
             }
+            192 => Ok(RawSegment::Branch {
+                entries: branches.unwrap(),
+                arms: arms.unwrap(),
+            }),
             56 => Ok(RawSegment::Loop {
                 entries: entries.unwrap(),
                 body: body.unwrap(),
@@ -132,15 +225,14 @@ impl<'de> Visitor<'de> for SegmentSeed<'_> {
         }
     }
 }
+/// `depth` counts the control segments enclosing `nodes`, as in
+/// [`SegmentSeed`].
 fn flatten(
     nodes: Vec<RawSegment>,
     steps: &mut Vec<Step>,
     limit: usize,
     depth: usize,
 ) -> Result<Vec<Segment>, BundleError> {
-    if depth >= crate::vm::Limits::STACK_DEPTH {
-        return Err(BundleError::Limit);
-    }
     fn append(raw: RawStep, steps: &mut Vec<Step>, limit: usize) -> Result<usize, BundleError> {
         if steps.len() >= limit {
             return Err(BundleError::Limit);
@@ -159,8 +251,31 @@ fn flatten(
         .try_reserve_exact(nodes.len())
         .map_err(|_| BundleError::Limit)?;
     for node in nodes {
+        if !matches!(node, RawSegment::Action(_)) && depth >= CONTROL_LEVELS {
+            return Err(BundleError::Limit);
+        }
         result.push(match node {
             RawSegment::Action(step) => Segment::Action(append(step, steps, limit)?),
+            RawSegment::Branch { entries, arms } => Segment::Branch {
+                entries: entries
+                    .into_iter()
+                    .map(|s| append(s, steps, limit))
+                    .collect::<Result<_, _>>()?,
+                arms: arms
+                    .into_iter()
+                    .map(|arm| {
+                        Ok(BranchArm {
+                            alternative: arm.alternative,
+                            body: flatten(arm.body, steps, limit, depth + 1)?,
+                            exits: arm
+                                .exits
+                                .into_iter()
+                                .map(|s| append(s, steps, limit))
+                                .collect::<Result<_, _>>()?,
+                        })
+                    })
+                    .collect::<Result<_, BundleError>>()?,
+            },
             RawSegment::Loop {
                 entries,
                 body,
@@ -410,4 +525,105 @@ pub(super) fn bundle(bytes: &[u8], limits: BundleLimits) -> Result<RawBundle, Bu
         })?;
     decoder.end().map_err(|_| BundleError::Json)?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Value as Json, json};
+
+    fn step(instruction: u32) -> Json {
+        json!({"role":0,"instruction":instruction,"anchor":null})
+    }
+    /// A schedule of `levels` control segments, each in the body of the one
+    /// before, whose innermost body holds one step. The innermost segment is a
+    /// branch when `branch` is set; the outer ones are loops, which keep the
+    /// outer JSON within its own, separate depth bound.
+    fn nested(levels: usize, branch: bool) -> Vec<u8> {
+        let mut body = json!([step(0)]);
+        for level in (1..=levels).rev() {
+            body = if branch && level == levels {
+                json!([{"branch":[step(1)],
+                    "arms":[{"alternative":"then","body":body,"yield":[step(2)]}]}])
+            } else {
+                json!([{"loop":[step(1)],"body":body,"yield":[step(2)]}])
+            };
+        }
+        serde_json::to_vec(&json!({"format":"zkc.run/0","candidate":"","entry":"main",
+            "roles":["P"],"steps":body}))
+        .unwrap()
+    }
+    fn deepest(segments: &[Segment]) -> usize {
+        segments
+            .iter()
+            .map(|segment| match segment {
+                Segment::Action(_) => 0,
+                Segment::Loop { body, .. } => 1 + deepest(body),
+                Segment::Branch { arms, .. } => {
+                    1 + arms.iter().map(|arm| deepest(&arm.body)).max().unwrap_or(0)
+                }
+            })
+            .max()
+            .unwrap_or(0)
+    }
+    #[test]
+    fn control_nesting_admits_level_64_with_a_body_and_refuses_level_65() {
+        for branch in [false, true] {
+            // Steps add no level: the step in the level-64 body is admitted.
+            let admitted = bundle(&nested(CONTROL_LEVELS, branch), BundleLimits::default())
+                .unwrap_or_else(|e| panic!("level {CONTROL_LEVELS} refused: {e}"));
+            assert_eq!(deepest(&admitted.segments), CONTROL_LEVELS);
+            assert_eq!(admitted.steps.len(), 2 * CONTROL_LEVELS + 1);
+            assert!(matches!(
+                bundle(&nested(CONTROL_LEVELS + 1, branch), BundleLimits::default()),
+                Err(BundleError::Limit)
+            ));
+        }
+        // A level-65 control segment refuses even with an empty body.
+        let mut body = json!([{"loop":[step(1)],"body":[],"yield":[step(2)]}]);
+        for _ in 0..CONTROL_LEVELS {
+            body = json!([{"loop":[step(1)],"body":body,"yield":[step(2)]}]);
+        }
+        let bytes = serde_json::to_vec(&json!({"format":"zkc.run/0","candidate":"",
+            "entry":"main","roles":["P"],"steps":body}))
+        .unwrap();
+        assert!(matches!(
+            bundle(&bytes, BundleLimits::default()),
+            Err(BundleError::Limit)
+        ));
+    }
+    #[test]
+    fn flattening_counts_control_segments_only() {
+        fn raw(levels: usize) -> Vec<RawSegment> {
+            let action = |instruction| {
+                RawSegment::Action(RawStep {
+                    role: 0,
+                    instruction,
+                    anchor: Anchor(None),
+                })
+            };
+            let mut body = vec![action(0)];
+            for _ in 0..levels {
+                body = vec![RawSegment::Loop {
+                    entries: vec![RawStep {
+                        role: 0,
+                        instruction: 1,
+                        anchor: Anchor(None),
+                    }],
+                    body,
+                    exits: vec![],
+                }];
+            }
+            body
+        }
+        let mut steps = Vec::new();
+        let flat = flatten(raw(CONTROL_LEVELS), &mut steps, 32768, 0).unwrap();
+        assert_eq!(deepest(&flat), CONTROL_LEVELS);
+        assert_eq!(steps.len(), CONTROL_LEVELS + 1);
+        let mut steps = Vec::new();
+        assert!(matches!(
+            flatten(raw(CONTROL_LEVELS + 1), &mut steps, 32768, 0),
+            Err(BundleError::Limit)
+        ));
+    }
 }

@@ -98,7 +98,7 @@ def loops {routing : Original.Routing} {context : ProtocolContext} {definitions 
   | .inlineMissingCalculation _ _ _ _ _ tail => loops tail
   | .calculation _ _ _ _ _ _ _ tail => loops tail
   | .receive _ _ _ _ _ _ _ tail => loops tail
-  | .send _ _ _ _ _ _ _ _ _ tail => loops tail
+  | .send (tail := tail) .. => loops tail
   | .observedSend (tail := tail) .. => loops tail
   | .observedReceive (tail := tail) .. => loops tail
   | .delivery (tail := tail) .. => loops tail

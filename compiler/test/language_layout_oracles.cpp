@@ -27,7 +27,7 @@ Expected<CheckedProject> check(StringRef code) {
 CheckedOriginal original(StringRef code) {
   auto project = take(check(code));
   take(inspectWrittenSource(project));
-  return take(prepareOriginal(take(closeNativeRun(project, "m::Run"))));
+  return take(prepareOriginal(take(closeSubject(project, "m::Run"))));
 }
 unsigned occurrenceCount(StringRef text, StringRef value) {
   unsigned n = 0;
@@ -132,7 +132,7 @@ pub protocol Run roles(P, V)(word: Oracle<Table<F>> @P -> V) -> F @V:
               require(written.find("oracle_shapes") != std::string::npos &&
                           written.find("oracle_shape") != std::string::npos,
                       "authored shape constraint was lost");
-              take(prepareOriginal(take(closeNativeRun(project, "m::Run"))));
+              take(prepareOriginal(take(closeSubject(project, "m::Run"))));
             });
   for (StringRef attribute :
        {"#[shape(missing.rows, bound = 32)]",

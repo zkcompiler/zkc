@@ -25,13 +25,31 @@ struct AssociatedMemberDeclaration {
   std::string name;
   StaticParameter owner, result;
 };
+/// The element of a source collection: the value type of the first parameter,
+/// an index, or a byte.
+enum class CollectionElement { Parameter, Index, Byte };
+struct TypeCollection {
+  unsigned rank;
+  CollectionElement element;
+};
+enum class SetupKey { Prover, Verifier };
 struct TypeDeclaration {
   std::string name;
   std::vector<StaticParameter> parameters;
   bool nativeLocal, mathematical, participants, constructible, message;
+  /// Source vocabulary: native source data, the collection view and the
+  /// setup-key role. These grant no codec, transport or execution authority.
+  bool sourceData = false;
+  std::optional<TypeCollection> collection = {};
+  std::optional<SetupKey> setup = {};
 };
 llvm::ArrayRef<TypeDeclaration> typeDeclarations();
 const TypeDeclaration *typeDeclaration(llvm::StringRef name);
+/// The setup-key role of a type constructor: its catalog row's `setup`.
+inline std::optional<SetupKey> setupKey(llvm::StringRef constructor) {
+  const auto *declared = typeDeclaration(constructor);
+  return declared ? declared->setup : std::nullopt;
+}
 llvm::ArrayRef<std::string> domainSorts();
 llvm::ArrayRef<CapabilityDeclaration> capabilityDeclarations();
 llvm::ArrayRef<AssociatedMemberDeclaration> associatedMemberDeclarations();
@@ -58,6 +76,81 @@ llvm::ArrayRef<SourceTypeFamilyCase> sourceTypeFamilies();
 llvm::ArrayRef<SourceAssociatedType> sourceAssociatedTypes();
 llvm::ArrayRef<SourceCapabilityExport> sourceCapabilityExports();
 llvm::ArrayRef<SourceTypeExport> sourceTypeExports();
+
+/// Source signature rules this frontend implements. The catalog's rule rows
+/// declare each rule's shape. Presence grants no executable authority.
+enum class FrontendSignature {
+  RecordUnpack,
+  RecordInspect,
+  RecordRepack,
+  RandomConstructor
+};
+enum class SourceDeclarationKind { Math, Local, Interface };
+/// A static parameter, optionally its associated member, or a parameterless
+/// constructor.
+struct SourceTerm {
+  std::optional<unsigned> index;
+  std::string member, constructor;
+};
+struct SourceStatic {
+  std::string name, kind, sort;
+};
+struct SourceInput {
+  std::string name;
+  SourceTerm type;
+};
+/// One installed source declaration with exactly one association: a rule, or
+/// a primitive mathematical intrinsic (Math) or operation (Local). It grants
+/// source resolution and elaboration facts, never execution authority.
+struct FrontendDeclaration {
+  std::string identity, module, name;
+  SourceDeclarationKind kind;
+  std::vector<SourceStatic> statics;
+  std::vector<SourceInput> inputs;
+  std::optional<SourceTerm> output;
+  std::optional<FrontendSignature> rule;
+  std::string primitive;
+  bool implicit;
+};
+/// An installed notation of a declaration of its module. An empty fixity keeps
+/// the symbol's fixed syntax.
+struct FrontendNotation {
+  std::string module, symbol, fixity;
+  unsigned precedence;
+  std::string target;
+  bool isPublic;
+};
+/// The logical meanings the frontend gives its own type heads: one logical
+/// oracle handle over an oracle kind, and a bounded ordered sequence of such
+/// handles with a static maximum.
+enum class FrontendConstructorForm { OracleHandle, OracleHandleSequence };
+/// A logical type head the source language owns that is not a catalog type
+/// constructor. The row owns the head's spelling; the frontend owns the
+/// meaning of its form. Exactly one row spells each form.
+struct FrontendConstructor {
+  std::string name;
+  FrontendConstructorForm form;
+};
+struct FrontendHome {
+  std::string constructor, module;
+  std::vector<std::string> members;
+};
+enum class ServiceSignature { RandomDraw, RandomIndex, RandomIndices };
+struct ServiceMethodDeclaration {
+  std::string name;
+  ServiceSignature signature;
+  std::string capability;
+};
+llvm::ArrayRef<FrontendDeclaration> frontendDeclarations();
+llvm::ArrayRef<FrontendNotation> frontendNotations();
+/// The logical type heads the source language owns that are not catalog type
+/// constructors. A frontend home names a catalog constructor or one of these.
+llvm::ArrayRef<FrontendConstructor> frontendConstructors();
+llvm::ArrayRef<FrontendHome> frontendHomes();
+llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations();
+const FrontendDeclaration *frontendDeclaration(llvm::StringRef qualifiedName);
+/// The frontend constructor row with this spelling, if any.
+const FrontendConstructor *frontendConstructor(llvm::StringRef spelling);
 
 enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 struct TypePermissions {

@@ -126,6 +126,10 @@ class Outliner {
         return failure();
     }
     for (auto *cut : cuts) {
+      if (auto branch = dyn_cast<protocol_ir::ParticipantBranchOp>(cut))
+        for (Region &arm : branch.getArms())
+          if (failed(block(participant, arm.front(), sites, nextSite)))
+            return failure();
       if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(cut))
         if (failed(block(participant, loop.getBody().front(), sites, nextSite)))
           return failure();

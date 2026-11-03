@@ -36,7 +36,7 @@ def outputFrame (outputs : List F) (service : Nat)
     (point : Values (Component (assignment F G)) outputSpec.state)
     (claim : Values (Component (assignment F G)) [.field "bls12-381.fr"])
     (layerClaim : Values (Component (assignment F G))
-      [.vector "bls12-381.fr", .field "bls12-381.fr"]) :
+      ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.layerOpenHelper.inputs) :
     protocol2Role1Frame (F := F) (G := G) :=
   protocol2Role1MakeFrame layerClaim claim point (.cons (some []) .nil)
     false (.cons (some false) .nil) (.cons (some 2) .nil)
@@ -53,20 +53,21 @@ def outputFrame (outputs : List F) (service : Nat)
 def frame (outputs : List F) (rho claim : F) (service : Nat) :
     protocol2Role1Frame (F := F) (G := G) :=
   outputFrame outputs service (.cons (some [rho]) (.cons none .nil))
-    (.cons (some claim) .nil) (.cons (some [rho]) (.cons (some claim) .nil))
+    (.cons (some claim) .nil) (.cons (some 0) (.cons (some [rho]) (.cons (some claim) .nil)))
 
 /-- The complete generated frame after opening the layer claim and constructing
 its Pending input; both original inputs and produced components are retained. -/
 def leftFrame (rho claim : F) (service : Nat) :
     protocol2Role1Callback1SetupFrame (F := F) (G := G) :=
   protocol2Role1Callback1MakeSetupFrame
-    (.cons (some []) (.cons (some claim) .nil))
-    (.cons (some [rho]) (.cons (some claim) .nil))
-    (some 0) none (some [rho]) (some claim) (some inputs)
+    (.cons (some 0) (.cons (some []) (.cons (some claim) .nil)))
+    (.cons (some 0) (.cons (some [rho]) (.cons (some claim)
+      (.cons (some [rho]) (.cons (some claim) .nil)))))
+    (some 0) none (some 0) (some [rho]) (some claim) (some inputs)
     (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service)
 
 theorem left_setup (ctx : ProtocolContext) (rho claim : F) (service : Nat) :
-    protocol2Role1Callback1Setup (F := F) (G := G) ctx (some 0) none (some [rho]) (some claim)
+    protocol2Role1Callback1Setup (F := F) (G := G) ctx (some 0) none (some 0) (some [rho]) (some claim)
       (some inputs) (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service) =
       .done (leftFrame rho claim service) := by
   unfold protocol2Role1Callback1Setup
@@ -84,7 +85,7 @@ theorem left_distinct (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2
   · exact distinct 0 (by decide) (by decide)
   · decide
 
-abbrev leftReturn := Values (Component (assignment F G)) GkrRoundsBinding.spec.state
+abbrev leftReturn := Values (Component (assignment F G)) definition0.outputs
 abbrev layerReturn := Values (Component (assignment F G)) layerSpec.state
 abbrev finalReturn := Values (Component (assignment F G)) definition2.outputs
 
@@ -104,7 +105,7 @@ def continuation (ctx : ProtocolContext) (outputs : List F) (rho claim : F) (ser
 theorem first_callback (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (outputs : List F) (rho claim : F) (service : Nat) :
     protocol2Role1First (F := F) (G := G) ctx (frame outputs rho claim service) =
-      firstLeft ctx (some 0) none (some [rho]) (some claim) (some inputs)
+      firstLeft ctx (some 0) none (some 0) (some [rho]) (some claim) (some inputs)
         (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service) := by
   change ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx
     (ctx.roles 1)).callback layerSpec protocol2Role1Callback1Body)
@@ -120,7 +121,7 @@ theorem first_left_call (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1
     (outputs : List F) (rho claim : F) (service : Nat) :
     (protocol2Role1Loop (F := F) (G := G) ctx (frame outputs rho claim service)).bind
       (protocol2Role1After ctx (frame outputs rho claim service)) =
-    (protocol0Role1Process (leftContext ctx) none none none none (some [])
+    (protocol0Role1Process (leftContext ctx) none none none none (some 0) (some [])
       (some claim) (some 1) (some service)).bind (continuation ctx outputs rho claim service) := by
   rw [protocol2Role1_first ctx _ 1 rfl (by simp) (by decide), first_callback ctx distinct]
   unfold firstLeft

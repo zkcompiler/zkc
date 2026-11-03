@@ -48,19 +48,23 @@ pub(in crate::entry::function) fn check_schema<'a>(
     crate::entry::interface::schemas::check_export(s)
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))
 }
+/// A parameter is an input: one that cannot be copied is refused with the
+/// input custody condition every Entry kind shares.
+fn check_parameter<'a>(s: &'a Schema, schemas: &mut Schemas<'a>) -> Result<()> {
+    schemas
+        .check(s, 0)
+        .map_err(|e| EntryError::new(EntryPhase::Interface, e))?;
+    crate::entry::interface::schemas::check_export(s)
+        .map_err(|_| crate::entry::EntryCondition::InputCustody.into())
+}
 pub(in crate::entry::function) fn structure<'a>(
     document: &'a Document,
     interface: &'a FunctionInterface,
+    limits: crate::entry::InterfaceLimits,
 ) -> Result<Validator<'a>> {
     let original = interface.original();
-    require(
-        interface.document.format == "zkc.language-interface/0" && document.format == "zkc.host/0",
-        "entry-host-format",
-    )?;
-    require(
-        interface.document.original == original && document.original == original,
-        "entry-host-identity",
-    )?;
+    require(document.format == "zkc.host/0", "entry-host-format")?;
+    require(document.original == original, "entry-host-identity")?;
     require(
         interface.document.selection.kind == "function"
             && interface.document.selection.function == document.entry,
@@ -105,11 +109,11 @@ pub(in crate::entry::function) fn structure<'a>(
             "entry-host-signature",
         )?;
     }
-    let mut schemas = Schemas::new();
+    let mut schemas = Schemas::with_limits(limits);
     for s in &interface.document.functions {
         signature(s)?;
         for p in &s.parameters {
-            check_schema(&p.schema, &mut schemas)?;
+            check_parameter(&p.schema, &mut schemas)?;
         }
         check_schema(&s.result, &mut schemas)?;
     }
@@ -237,7 +241,7 @@ impl<'a> Validator<'a> {
                 Construct { alternative, .. } => {
                     require(results.len() == 1, "entry-host-signature")?;
                     let s = results[0];
-                    require(s.constructible && !s.custody, "entry-host-constructor")?;
+                    require(s.constructible && s.custody == 0, "entry-host-constructor")?;
                     let fields = if s.kind == SchemaKind::Variant {
                         &s.alternatives
                             .iter()
@@ -453,12 +457,50 @@ impl<'a> Validator<'a> {
     }
 }
 
-/// Inspect static invocation requirements without importing setup authority.
-/// Native code admission remains FunctionEntry::admit's separate obligation.
-pub(super) fn interfaces(package: &Package) -> Result<Vec<super::DeploymentInterface>> {
-    let interface = FunctionInterface::read(package)?;
-    let document: Document = decode(package.artifact().as_bytes(), 16 * 1024 * 1024)?;
-    let mut validator = structure(&document, &interface)?;
+/// The authenticated child package of one Run deployment, after checking the
+/// host structure under the Host's selected interface allowances. Native code
+/// admission remains the caller's obligation.
+pub(super) fn run_deployment(
+    package: &Package,
+    id: &str,
+    limits: crate::entry::InterfaceLimits,
+) -> Result<Package> {
+    let interface = FunctionInterface::read(package, limits)?;
+    let document: Document = decode(
+        package.artifact().as_bytes(),
+        crate::entry::package::ARTIFACT_BYTES,
+    )?;
+    structure(&document, &interface, limits)?;
+    let deployment = document
+        .deployments
+        .iter()
+        .find(|d| d.id == id)
+        .ok_or_else(|| error("entry-host-deployment"))?;
+    require(
+        deployment.operation == "run",
+        "entry-host-context-operation",
+    )?;
+    let pin = Sha256::digest(deployment.package.as_bytes()).into();
+    Ok(Package::capture(
+        deployment.package.as_bytes(),
+        &pin,
+        Package::MAX_BYTES,
+    )?)
+}
+/// Inspect static invocation requirements without importing setup authority,
+/// under the Host's selected interface allowances: the host structure and
+/// each child interface are read as FunctionEntry::admit reads them. Native
+/// code admission remains FunctionEntry::admit's separate obligation.
+pub(super) fn interfaces(
+    package: &Package,
+    limits: crate::entry::InterfaceLimits,
+) -> Result<Vec<super::DeploymentInterface>> {
+    let interface = FunctionInterface::read(package, limits)?;
+    let document: Document = decode(
+        package.artifact().as_bytes(),
+        crate::entry::package::ARTIFACT_BYTES,
+    )?;
+    let mut validator = structure(&document, &interface, limits)?;
     let mut families = BTreeMap::new();
     let mut result = Vec::new();
     for c in &document.calculations {
@@ -472,7 +514,7 @@ pub(super) fn interfaces(package: &Package) -> Result<Vec<super::DeploymentInter
         }
         let pin = Sha256::digest(d.package.as_bytes()).into();
         let child = Package::capture(d.package.as_bytes(), &pin, Package::MAX_BYTES)?;
-        let view = crate::entry::BoundInterface::read(&child)
+        let view = crate::entry::BoundInterface::read(&child, limits)
             .map_err(|e| EntryError::new(EntryPhase::Interface, e))?;
         super::deployment::check_interface(d, &view, &mut families)?;
         result.push(super::DeploymentInterface {

@@ -368,7 +368,7 @@ def test_named_profiles_reuse_scheduler_and_preserve_resolved_request(monkeypatc
     requests = []
     monkeypatch.setattr(module, 'run', lambda args, prepare: requests.append(args) or 0)
     manifest = tmp_path/'zkc.toml'
-    manifest.write_text('format="zkc.project/0"')
+    manifest.write_text('format="zkc.project/0"\nsource-format="zkc"\n')
     output = tmp_path/'study'
     assert module.main(['run', '--compiler=/bin/true','--runtime=/bin/true','--worker=/bin/true',
         f'--output={output}', f'--profile-project={manifest}', f'--profile={name}']) == 0
@@ -397,7 +397,7 @@ def test_invalid_profile_panel_refuses_before_any_measurement(monkeypatch, tmp_p
     launches = []
     monkeypatch.setattr(module, 'run', lambda *args: launches.append(args) or 0)
     manifest = tmp_path/'zkc.toml'
-    manifest.write_text('format="zkc.project/0"')
+    manifest.write_text('format="zkc.project/0"\nsource-format="zkc"\n')
     assert module.main(['run', '--compiler=/bin/true','--runtime=/bin/true','--worker=/bin/true',
         f'--output={tmp_path/"study"}', f'--profile-project={manifest}',
         '--profile=default', '--profile=absent']) == 2

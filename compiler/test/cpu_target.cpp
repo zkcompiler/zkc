@@ -1,10 +1,12 @@
 #include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/Cpu/LanguageSelection.h"
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/NativePlanTypes.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/Formation.h"
 #include "support/NativeBindings.h"
-#include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "support/ScopedFixture.h"
 #include "support/VariantFixture.h"
 #include "zkc/Compiler/Diagnostics.h"
@@ -441,32 +443,54 @@ int main() {
     reject(small.checkType(physical));
     accept(installation("\"arkworks\"").checkType(physical));
     auto represented = cast<runtime::RepresentedType>(physical);
-    auto broken = runtime::RepresentedType::get(
-        &context, logical, represented.getRepresentation(), ArrayRef<Type>{});
-    reject(CpuTarget().checkType(broken), "binding-representation");
+    refusesFormation<runtime::RepresentedType>(
+        &context, "represented-type-formation", Type(logical),
+        represented.getRepresentation(), ArrayRef<Type>{});
     // CPU contributions cannot declare a new logical domain or a layout law.
-    auto field = algebra::FieldType::get(&context, "forged.field");
-    auto forged = runtime::RepresentedType::get(&context, field, "blst/fr",
-                                                ArrayRef<Type>{});
-    reject(CpuTarget().checkType(forged), "binding-representation");
+    refusesFormation<algebra::FieldType>(&context, "unknown-domain",
+                                         StringRef("forged.field"));
+    auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+    refusesFormation<runtime::RepresentedType>(
+        &context, "represented-type-formation", Type(field),
+        StringRef("foreign/layout"), ArrayRef<Type>{});
   });
   cases.run(
       "native formation and CPU availability do not impose the byte profile",
       [&] {
         MLIRContext context(registry);
         context.loadAllAvailableDialects();
-        SmallVector<data::AlternativeAttr> alternatives;
-        for (unsigned i = 0; i < 33; ++i)
-          alternatives.push_back(data::AlternativeAttr::get(
-              &context, StringAttr::get(&context, "arm" + std::to_string(i)),
-              ArrayRef<Type>{IntegerType::get(&context, 1)}));
+        auto identity =
+            data::importVariantIdentity(&context, json::Value("NativeWide"));
+        auto flag = IntegerType::get(&context, 1);
+        // The byte profile bounds immediate payload entries more tightly than
+        // native formation does.
         auto logical = data::VariantType::get(
-            &context,
-            data::importVariantIdentity(&context, json::Value("NativeWide")),
-            alternatives);
+            &context, identity,
+            {data::AlternativeAttr::get(&context,
+                                        StringAttr::get(&context, "arm"),
+                                        SmallVector<Type>(129, flag))});
         auto physical = take(defaultPlanType(logical));
         accept(empty.checkType(physical));
         refuses(encodeBoundType(physical, true), "variant-type");
+        // The portable spelling admits fewer alternatives than formation: a
+        // variant one beyond the descriptor limit forms and is available, but
+        // has no portable spelling.
+        SmallVector<data::AlternativeAttr> alternatives;
+        for (unsigned i = 0; i < 64; ++i)
+          alternatives.push_back(data::AlternativeAttr::get(
+              &context, StringAttr::get(&context, "arm" + std::to_string(i)),
+              ArrayRef<Type>{flag}));
+        auto spelled = take(defaultPlanType(
+            data::VariantType::get(&context, identity, alternatives)));
+        accept(empty.checkType(spelled));
+        take(encodeBoundType(spelled, true));
+        alternatives.push_back(data::AlternativeAttr::get(
+            &context, StringAttr::get(&context, "beyond"),
+            ArrayRef<Type>{flag}));
+        auto wide = take(defaultPlanType(
+            data::VariantType::get(&context, identity, alternatives)));
+        accept(empty.checkType(wide));
+        refuses(encodeBoundType(wide, true), "variant-type");
       });
   cases.run(
       "native bindings retain provider and hidden numerical dependencies", [&] {
@@ -527,9 +551,8 @@ int main() {
       return success();
     });
     auto field = algebra::FieldType::get(&context, "bls12-381.fr");
-    auto malformed = runtime::RepresentedType::get(
-        &context, field, "foreign/layout", ArrayRef<Type>{});
-    reject(CpuTarget().checkType(malformed), "binding-representation");
+    reject(CpuTarget().checkType(field),
+           "binding-logical-type-at-physical-stage");
     refuses(formPhysicalType(field, "foreign/layout", {}),
             "binding-representation");
     refuses(planLogicalChildren(Float32Type::get(&context)), "binding-type");
@@ -559,6 +582,49 @@ int main() {
     refuses(compileRun(arithmetic("bls12-381.fr"), "omitted.mlir", options,
                        registry),
             "cpu-target-unavailable");
+  });
+  // The source-language boundary pins a compilation by its typed source
+  // identity, policy and entry; it does not read the artifact bytes again.
+  cases.run("language boundary compares typed compilation results", [&] {
+    constexpr StringLiteral source = R"(module sample;
+      protocol Work roles(P,V)(x:bool@(P,V),y:bool@P)->(value:bool@P,ok:bool@V){
+        let ok@V=x;return(value=y,ok=ok);
+      }
+      pub proof Family=Work{prover P;verifier V;public{x};accept ok;construction authored;})";
+    auto proof = original(source, "sample::Family");
+    auto selection = take(language::proofPolicy(proof));
+    NativeProofOptions native;
+    native.policy = NativeProofSelection{selection};
+    auto compiled = take(
+        compileNativeProof(proof.bytes(), "boundary.mlir", native, registry));
+    require(compiled.identity == proof.identity(),
+            "compiled proof lost its source identity");
+    compiled.deployment = "not an artifact";
+    accept(language::detail::checkCompiledProof(proof, selection, compiled));
+    auto identity = compiled.identity;
+    compiled.identity = std::string(64, '0');
+    reject(language::detail::checkCompiledProof(proof, selection, compiled),
+           "source.entry");
+    compiled.identity = identity;
+    std::swap(compiled.policy.producer, compiled.policy.validator);
+    reject(language::detail::checkCompiledProof(proof, selection, compiled),
+           "source.entry");
+    auto project = take(
+        language::analyze(
+            take(language::capture({{"sample", source.str(), "sample.zkc"}})))
+            .checkedProject());
+    auto run = take(language::prepareOriginal(
+        take(closeNativeRun(project, "sample::Work"))));
+    RunOptions options;
+    options.entry = run.interface().selectedProtocol().symbol;
+    auto bundle =
+        take(compileRun(run.bytes(), "boundary.mlir", options, registry));
+    require(bundle.entry == options.entry && bundle.identity == run.identity(),
+            "compiled run lost its entry or source identity");
+    bundle.bundle = "not an artifact";
+    accept(language::detail::checkCompiledRun(run, options.entry, bundle));
+    reject(language::detail::checkCompiledRun(run, "other", bundle),
+           "source.entry");
   });
   cases.run(
       "withholding preferred resident implementation uses canonical fallback",

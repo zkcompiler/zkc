@@ -335,11 +335,10 @@ def run : IO Unit := do
     ("complete original service wrapper", accepted ZkcExamples.Structured.RepeatServiceWrapperData.snapshot),
     ("complete original Reduction with linear library ports", accepted
       ZkcExamples.Structured.SumcheckReduceData.snapshot),
-    ("unsealed linear Pending declaration refuses", refuses
+    ("sealing is independent of the linear Pending resource tag", accepted
       (let source := ZkcExamples.Structured.SumcheckReduceData.snapshot
        { source with sourceDeclarations.records := source.sourceDeclarations.records.map fun record =>
-           if record.resource == "linear" then { record with sealed := false } else record })
-      "component-declaration-record"),
+           if record.resource == "linear" then { record with sealed := !record.sealed } else record })),
     ("entire original Sumcheck", accepted ZkcExamples.Structured.SumcheckSourceData.snapshot),
     ("ordinary retained repeat", accepted (unit [root])),
     ("maximum zero", accepted (unit [root (repeatInstruction 0)])),

@@ -1,5 +1,6 @@
 #include "BindingWitness.h"
 #include "BodyCheck.h"
+#include "ScopedWitness.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
@@ -78,6 +79,12 @@ std::optional<ValueId> BodyChecker::instantiateOracle(const Expression &expr,
   auto &operation = body.operations.back();
   operation.binding = CallBinding{target, arguments, operands, {}, {}, {}, {}};
   operation.binding->argumentOrder = order;
+  operation.binding->scopedSource = witnesses.calls.size();
+  witnesses.calls.push_back(std::make_shared<ScopedCallSource>(ScopedCallSource{
+      {decl.id, target.declaration, id, {}, target.module, arguments},
+      scoped,
+      domains,
+      {}}));
   placement->oracleInstantiations.push_back(body.operations.size() - 1);
   return result;
 }

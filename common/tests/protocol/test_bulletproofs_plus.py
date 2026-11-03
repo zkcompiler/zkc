@@ -144,7 +144,7 @@ def test_zero_challenges_stop_without_publishing_partial_proofs(toolchain, journ
     assert before in source.read_text()
     source.write_text(source.read_text().replace(before, after))
     (directory / 'main.zkc').write_text((ROOT / PROJECT / 'main.zkc').read_text())
-    (directory / 'zkc.toml').write_text('format = "zkc.project/0"\n[modules]\nexample = "main.zkc"\n'
+    (directory / 'zkc.toml').write_text('format = "zkc.project/0"\nsource-format = "zkc"\n[modules]\nexample = "main.zkc"\n'
                                        '[dependencies]\nbulletproofs = "bulletproofs"\n')
     package, pin = build_project(toolchain, journal, directory, directory)
     case = CASES[0]

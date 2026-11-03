@@ -307,7 +307,8 @@ int main(int argc, char **argv) {
         auto &declarations = *(*snapshot.getAsArray())[10].getAsArray();
         declarations[0].getAsArray()->push_back(
             A{A{"nominal", "record", "tests::Pending", A{}}, "linear", true,
-              A{}});
+              A{}, A{}, "zkl_resource_" + std::string(64, 'a')});
+        declarations[2].getAsArray()->push_back(A{"tests::Pending", nullptr});
         if (auto error = zkc::language::checkComponentDeclarations(
                 (*snapshot.getAsArray())[10]))
           require(false, toString(std::move(error)));

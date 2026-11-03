@@ -119,7 +119,77 @@ class RunCorrespondence {
     for (auto &op : block) {
       if (!charge())
         return false;
-      if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
+      if (isa<protocol_ir::BranchOp>(op)) {
+        size_t source = anchor++;
+        auto *group = cursor.next();
+        auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+        auto roster = op.getAttrOfType<ArrayAttr>("roles");
+        auto site = op.getAttrOfType<StringAttr>("site");
+        if (!group || group->size() != 2 || !group->getArray("branch") ||
+            !group->getArray("arms") || !alternatives || !roster || !site ||
+            group->getArray("arms")->size() != op.getNumRegions() ||
+            alternatives.size() != op.getNumRegions())
+          return false;
+        Cursor enter{*group->getArray("branch")};
+        SmallVector<unsigned> owners;
+        for (unsigned role = 0; role < roles.size(); ++role) {
+          if (!charge())
+            return false;
+          if (!llvm::is_contained(
+                  roster,
+                  StringAttr::get(op.getContext(), roles[role].program->role)))
+            continue;
+          if (!prefix(enter, role, source))
+            return false;
+          auto *instruction = next(role);
+          auto conditional =
+              instruction ? instruction->get<program::ParticipantConditional>()
+                          : nullptr;
+          auto match = instruction
+                           ? instruction->get<program::ParticipantMatch>()
+                           : nullptr;
+          if ((!conditional && !match) ||
+              instruction->site != site.getValue() ||
+              alternatives.size() != (conditional ? 2 : match->arms.size()))
+            return false;
+          for (auto [arm, alternative] : enumerate(alternatives)) {
+            StringRef expected = conditional
+                                     ? (arm ? "else" : "then")
+                                     : StringRef(match->arms[arm].alternative);
+            if (!charge() ||
+                cast<StringAttr>(alternative).getValue() != expected)
+              return false;
+          }
+          if (!step(enter, role, source))
+            return false;
+          owners.push_back(role);
+        }
+        if (owners.empty() || !enter.done())
+          return false;
+        for (auto [index, region] : enumerate(op.getRegions())) {
+          auto *arm = (*group->getArray("arms"))[index].getAsObject();
+          if (!charge() || !arm || arm->size() != 3 ||
+              arm->getString("alternative") !=
+                  cast<StringAttr>(alternatives[index]).getValue() ||
+              !arm->getArray("body") || !arm->getArray("yield") ||
+              !llvm::hasSingleElement(region))
+            return false;
+          Cursor inner{*arm->getArray("body")};
+          if (!body(region.front(), inner, depth + 1) || !inner.done())
+            return false;
+          Cursor exit{*arm->getArray("yield")};
+          for (auto role : owners) {
+            if (!prefix(exit, role, std::nullopt))
+              return false;
+            auto *instruction = next(role);
+            if (!instruction || !instruction->get<program::Yield>() ||
+                !step(exit, role, std::nullopt))
+              return false;
+          }
+          if (!exit.done())
+            return false;
+        }
+      } else if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
         size_t source = anchor++;
         auto *group = cursor.next();
         if (!group || group->size() != 3 || !group->getArray("loop") ||

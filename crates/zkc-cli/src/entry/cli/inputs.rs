@@ -50,7 +50,9 @@ pub(super) struct Options {
     pub transcript_budget: Option<u64>,
 }
 impl Options {
-    pub fn parse(args: &Arguments<'_>) -> Result<Self> {
+    /// `interface` is the command's one interface selection, which every
+    /// Entry it admits takes.
+    pub fn parse(args: &Arguments<'_>, interface: zkc::entry::InterfaceLimits) -> Result<Self> {
         let mut options = Self {
             setups: Default::default(),
             proof: Default::default(),
@@ -61,10 +63,19 @@ impl Options {
             context: vec![],
             transcript_budget: None,
         };
+        options.proof.interface = interface;
+        options.run.interface = interface;
         if let Some(file) = args.value("--capacity") {
             let capacity = crate::execution::Capacity::parse(&read(file, 4096)?)?;
             options.proof.capacity = capacity;
             options.run.capacity = capacity;
+        }
+        // The material allowances bound the setup material that `--key`
+        // reads below, so they are selected first.
+        if let Some(file) = args.value("--material-limits") {
+            let material = crate::execution::MaterialLimits::parse(&read(file, 4096)?)?;
+            options.proof.material = material;
+            options.run.material = material;
         }
         if let Some(file) = args.value("--limits") {
             options.run = options.run.with_work_limits(&read(file, 4096)?)?;
@@ -87,9 +98,14 @@ impl Options {
             match key {
                 "--key" => {
                     let (name, path) = assignment(value)?;
-                    let capacity = options.proof.capacity;
-                    let remaining = capacity.values.total_bytes.saturating_sub(material_bytes);
-                    let bytes = read(path, capacity.wire_bytes.min(remaining))?;
+                    // The keys together are one call's setup material, bounded
+                    // by its own allowance rather than the runner's capacity.
+                    let bytes = zkc::entry::files::read_setup_material(
+                        std::path::Path::new(path),
+                        options.proof.capacity,
+                        options.proof.material.setup_bytes,
+                        material_bytes,
+                    )?;
                     material_bytes += bytes.len();
                     if options.material.insert(name.into(), bytes).is_some() {
                         return Err("entry-setup-material".into());
@@ -104,8 +120,8 @@ impl Options {
                     let count = count
                         .parse::<u64>()
                         .ok()
-                        .filter(|n| *n <= super::super::DEFAULT_DRAW_BUDGET)
-                        .ok_or("entry-service-budget")?;
+                        .filter(|n| *n <= super::super::MAX_DRAW_BUDGET)
+                        .ok_or(super::super::EntryCondition::ServiceBudget)?;
                     if options
                         .services
                         .entry(role.into())
@@ -117,7 +133,7 @@ impl Options {
                     }
                 }
                 "--context" => {
-                    if value.len() > 8192 {
+                    if value.len() > 2 * zkc::proof::MAX_CONTEXT_BYTES {
                         return Err("native-proof-context-limit".into());
                     }
                     options.context = crate::files::unhex(&json!(value))?;
@@ -128,8 +144,8 @@ impl Options {
                 }
                 "--transcript-budget" => {
                     let n = value.parse::<u64>().expect("admitted count");
-                    if n > super::super::DEFAULT_DRAW_BUDGET {
-                        return Err("native-proof-budget".into());
+                    if n > super::super::MAX_DRAW_BUDGET {
+                        return Err(super::super::EntryCondition::ServiceBudget.into());
                     }
                     options.transcript_budget = Some(n);
                 }

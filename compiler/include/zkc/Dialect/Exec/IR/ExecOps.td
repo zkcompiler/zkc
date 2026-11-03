@@ -45,8 +45,8 @@ def Exec_ApplyOp : Op<ExecDialect, "apply", [
     DeclareOpInterfaceMethods<DiagonalContractionInterface>]> {
   let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$inputs,
     FlatSymbolRefAttr:$binding, ArrayAttr:$parameters, StrAttr:$site,
-    OptionalAttr<DictArrayAttr>:$arg_attrs,
-    OptionalAttr<DictArrayAttr>:$res_attrs);
+    OptionalAttr<CallMetadataAttr<DictArrayAttr>>:$arg_attrs,
+    OptionalAttr<CallMetadataAttr<DictArrayAttr>>:$res_attrs);
   let results = (outs ExecOutcome:$outcome);
   let extraClassDeclaration = [{
     ::mlir::CallInterfaceCallable getCallableForCallee() { return getBindingAttr(); }

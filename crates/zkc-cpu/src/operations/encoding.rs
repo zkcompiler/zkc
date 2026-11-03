@@ -19,7 +19,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
             let provider = crate::domains::INSTALLED
                 .iter()
                 .find(|domain| domain.field == identity || domain.group == Some(identity))?
-                .provider;
+                .provider();
             (identity, provider)
         }
         _ => return None,

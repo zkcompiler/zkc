@@ -15,6 +15,7 @@ using source::isSourceNFC;
 using source::matchingSourceDelimiter;
 using source::nativeAlternativeName;
 using source::nativeRoleName;
+using source::nativeSelectedSite;
 using source::nativeSetupName;
 using source::nativeSiteName;
 using source::sourceIdentifierContinue;

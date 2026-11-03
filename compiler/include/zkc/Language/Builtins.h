@@ -1,12 +1,20 @@
 #ifndef ZKC_LANGUAGE_BUILTINS_H
 #define ZKC_LANGUAGE_BUILTINS_H
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Types.h"
 #include <functional>
 namespace zkc::language {
 /// Library-facing native data types. Constructor formation is catalog-owned;
 /// source nominals and managed service roots cannot be erased through this API.
 bool isNativeData(const Type &);
+/// A catalog source-data type constructor with its own builtin source kind:
+/// every source-data row except bool, index, field and group.
+bool isBuiltinDataConstructor(llvm::StringRef constructor);
+/// A builtin data constructor whose catalog permissions are Copy and Drop.
+/// Only these are leaves of interface builtin schemas; affine managed state,
+/// such as a transcript, never crosses an interface.
+bool isOrdinaryBuiltinData(llvm::StringRef constructor);
 bool isDomainSort(llvm::StringRef);
 bool matchesStaticSort(const Type &, llvm::StringRef);
 /// Only sequence contracts adapt source products at native Type ports.
@@ -24,7 +32,17 @@ llvm::Expected<Type> oracleMember(const Type &, llvm::StringRef member);
 llvm::Expected<std::string> kernelArgument(const Type &, llvm::StringRef sort);
 /// Formal values are eliminated before execution and have no native data codec.
 llvm::Expected<Type> formalType(llvm::StringRef, llvm::ArrayRef<Type>);
+/// Forms native data from its catalog constructor, the `oracle.table` kind, or
+/// a logical head that a frontend constructor row spells. Any other spelling
+/// is not a constructor head.
 llvm::Expected<Type> builtinType(llvm::StringRef, llvm::ArrayRef<Type>);
+/// The type kind the frontend gives a frontend constructor form. The catalog
+/// row owns only the head's spelling.
+Type::Kind logicalHeadKind(protocol::FrontendConstructorForm);
+/// A logical head of this form over its static arguments: an oracle kind, and
+/// for a handle sequence also its maximum.
+llvm::Expected<Type> logicalHeadType(protocol::FrontendConstructorForm,
+                                     llvm::ArrayRef<Type>);
 llvm::Expected<protocol::BoundType>
 builtinLayout(const Type &, const NativeLayoutResolver & = {});
 /// Encode the explicitly supplied roots using the installed contract's kinds.

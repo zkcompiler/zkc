@@ -119,32 +119,35 @@ theorem owned_append (self : Nat) (point : Option (List F)) (r : F) :
     rw [append linked bodies]
     rfl
 
-/-- The linear Pending boundaries retain both components and require both
-inputs, including when the source repeat has zero iterations. -/
-theorem owned_rounds_open (self : Nat) (point : Option (List F)) (claim : Option F) :
+/-- The linear Pending boundaries retain custody and both fields, requiring every
+input, including when the source repeat has zero iterations. -/
+theorem owned_rounds_open (self : Nat) (token : Option Nat) (point : Option (List F)) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) (I := I) definitions) roundsOpenHelper)
-      (.cons point (.cons claim .nil)) =
-      match point, claim with
-      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
-      | _, _ => .halt .incomplete := by
+      (.cons token (.cons point (.cons claim .nil))) =
+      match token, point, claim with
+      | some _, some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | _, _, _ => .halt .incomplete := by
   rw [Participant.owned, ite_eq_left (Eq.refl self)]
-  cases point with
+  cases token with
   | none => rfl
-  | some point =>
-    cases claim with
+  | some token =>
+    cases point with
     | none => rfl
-    | some claim =>
-      change (invoke (helpers (I := I) definitions) roundsOpenHelper (.cons point (.cons claim .nil))).bind _ = _
-      rw [roundsOpen_body linked bodies]
-      rfl
+    | some point =>
+      cases claim with
+      | none => rfl
+      | some claim =>
+        change (invoke (helpers (I := I) definitions) roundsOpenHelper (.cons token (.cons point (.cons claim .nil)))).bind _ = _
+        rw [roundsOpen_body linked bodies]
+        rfl
 
 theorem owned_rounds_close (self : Nat) (point : Option (List F)) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) (I := I) definitions) roundsCloseHelper)
       (.cons point (.cons claim .nil)) =
       match point, claim with
-      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | some point, some claim => .done (.cons (some 0) (.cons (some point) (.cons (some claim) .nil)))
       | _, _ => .halt .incomplete := by
   rw [Participant.owned, ite_eq_left (Eq.refl self)]
   cases point with
@@ -157,30 +160,34 @@ theorem owned_rounds_close (self : Nat) (point : Option (List F)) (claim : Optio
       rw [roundsClose_body linked bodies]
       rfl
 
-theorem owned_layer_open (self : Nat) (point : Option (List F)) (claim : Option F) :
+theorem owned_layer_open (self : Nat) (token : Option Nat) (point : Option (List F)) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) (I := I) definitions) layerOpenHelper)
-      (.cons point (.cons claim .nil)) =
-      match point, claim with
-      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
-      | _, _ => .halt .incomplete := by
+      (.cons token (.cons point (.cons claim .nil))) =
+      match token, point, claim with
+      | some token, some point, some claim => .done (.cons (some token) (.cons (some point) (.cons (some claim)
+          (.cons (some point) (.cons (some claim) .nil)))))
+      | _, _, _ => .halt .incomplete := by
   rw [Participant.owned, ite_eq_left (Eq.refl self)]
-  cases point with
+  cases token with
   | none => rfl
-  | some point =>
-    cases claim with
+  | some token =>
+    cases point with
     | none => rfl
-    | some claim =>
-      change (invoke (helpers (I := I) definitions) layerOpenHelper (.cons point (.cons claim .nil))).bind _ = _
-      rw [layerOpen_body linked bodies]
-      rfl
+    | some point =>
+      cases claim with
+      | none => rfl
+      | some claim =>
+        change (invoke (helpers (I := I) definitions) layerOpenHelper (.cons token (.cons point (.cons claim .nil)))).bind _ = _
+        rw [layerOpen_body linked bodies]
+        rfl
 
 theorem owned_pending (self : Nat) (claim : Option F) :
     Participant.owned self self
       (invoke (helpers (F := F) (G := G) (I := I) definitions) pendingHelper)
       (.cons claim .nil) =
       match claim with
-      | some claim => .done (.cons (some []) (.cons (some claim) .nil))
+      | some claim => .done (.cons (some 0) (.cons (some []) (.cons (some claim) .nil)))
       | none => .halt .incomplete := by
   rw [Participant.owned, ite_eq_left (Eq.refl self)]
   cases claim with

@@ -78,6 +78,7 @@ class Admission {
   std::map<std::string, std::string> families;
   Error failure = Error::success();
   uint64_t operations = 0;
+  uint64_t boundaryRemaining;
   using Types = std::vector<const json::Value *>;
   using Scope = std::map<int64_t, const json::Value *>;
   bool fail(StringRef code, StringRef message) {
@@ -98,17 +99,20 @@ class Admission {
     if (depth > limits.typeDepth)
       return fail("source.limit", "Host schema depth limit");
     auto *s = value.getAsObject();
-    if (!s || s->size() != 9 || !s->getString("kind") ||
+    if (!s || s->size() != 13 || !s->getString("kind") ||
         !s->getString("identity") || !s->getString("type") ||
-        !s->getBoolean("custody") || !s->getBoolean("constructible") ||
-        !s->getArray("permissions") || !s->getArray("fields") ||
-        !s->getArray("alternatives") || !s->getArray("leaves"))
+        !s->getInteger("custody") || !s->getBoolean("sealed") ||
+        !s->getBoolean("constructible") || !s->getArray("permissions") ||
+        !s->getArray("fields") || !s->getArray("alternatives") ||
+        !s->getArray("leaves") || !s->getArray("roles") ||
+        !s->getArray("roles")->empty() || !s->get("element") ||
+        !s->get("generated"))
       return fail("entry.schema", "invalid logical schema");
     auto id = s->getString("identity")->str();
     if (id.size() != 64 ||
         !all_of(id,
                 [](char c) { return isDigit(c) || (c >= 'a' && c <= 'f'); }) ||
-        *s->getBoolean("custody") ||
+        *s->getInteger("custody") != 0 ||
         s->getArray("leaves")->size() > limits.aggregateLeaves ||
         !is_contained(*s->getArray("permissions"), json::Value("Copy")))
       return fail("entry.schema", "Host schema is not ordinary copyable data");
@@ -128,13 +132,17 @@ class Admission {
     auto children = [&](const json::Array &fs) {
       for (const auto &f : fs) {
         auto *o = f.getAsObject();
-        if (!o || o->size() != 3 || !o->getString("name") ||
-            !o->getInteger("offset") || !o->get("schema") ||
-            !schema(*o->get("schema"), depth + 1))
+        if (!o || o->size() != 5 || !o->getBoolean("public") ||
+            !o->get("placement") || !o->get("placement")->getAsNull() ||
+            !o->getString("name") || !o->getInteger("offset") ||
+            !o->get("schema") || !schema(*o->get("schema"), depth + 1))
           return false;
       }
       return true;
     };
+    if (!s->get("element")->getAsNull() &&
+        !schema(*s->get("element"), depth + 1))
+      return fail("entry.schema", "invalid array element schema");
     if (!children(*s->getArray("fields")))
       return fail("entry.schema", "invalid product fields");
     for (const auto &a : *s->getArray("alternatives")) {
@@ -210,7 +218,8 @@ class Admission {
       auto actual = *s.getString("type");
       if (!actual.consume_front(expected) ||
           (!actual.empty() && !actual.starts_with("<")) ||
-          *s.getBoolean("constructible") != constructible)
+          *s.getBoolean("constructible") != constructible ||
+          *s.getBoolean("sealed"))
         return fail("entry.deployment",
                     "generated nominal schema differs from child family");
       if (arguments != actual)
@@ -226,62 +235,38 @@ class Admission {
                     "one generated family was rebound to a different child");
     }
     const auto &protocol = child.selectedProtocol();
-    for (const auto &port :
-         llvm::concat<const InterfacePort>(protocol.inputs, protocol.outputs))
-      if (port.oracle)
-        return fail(
-            "entry.signature",
-            "logical oracle interfaces require realization before Host use");
-    auto ordinary = [&](unsigned index) {
-      const auto &port = protocol.inputs[index];
-      for (const auto &setup : child.setups)
-        for (const auto &input : setup.inputs)
-          if (input.port == index)
+    auto record =
+        [&](const json::Value &value,
+            Expected<std::vector<detail::InterfaceEntryField>> selected) {
+          if (!selected) {
+            failure = selected.takeError();
             return false;
-      for (const auto &leaf : port.schema->leaves) {
-        auto type = protocol::parseBoundType(leaf, false);
-        if (!type) {
-          consumeError(type.takeError());
-          return false;
-        }
-        if (type->kind == "prover_key" || type->kind == "verifier_key")
-          return false;
-      }
-      return true;
-    };
-    auto record = [&](const json::Value &value,
-                      ArrayRef<const InterfacePort *> ports) {
-      const auto &s = *value.getAsObject();
-      const auto &fields = *s.getArray("fields");
-      if (s.getString("kind") != "record" || fields.size() != ports.size())
-        return fail("entry.signature",
-                    "generated record fields differ from child ports");
-      for (auto [i, p] : enumerate(ports)) {
-        const auto &f = *fields[i].getAsObject();
-        if (f.getString("name") != p->name ||
-            *f.get("schema") != detail::encodeInterfaceSchema(*p->schema))
-          return fail("entry.signature", "generated child port schema differs");
-      }
-      return true;
-    };
+          }
+          const auto &s = *value.getAsObject();
+          const auto &fields = *s.getArray("fields");
+          if (s.getString("kind") != "record" ||
+              fields.size() != selected->size())
+            return fail(
+                "entry.signature",
+                "generated record fields differ from selected child fields");
+          for (auto [i, field] : enumerate(*selected)) {
+            const auto &actual = *fields[i].getAsObject();
+            if (actual.getString("name") != field.name ||
+                *actual.get("schema") !=
+                    detail::encodeInterfaceSchema(*field.schema))
+              return fail("entry.signature",
+                          "generated child selection association differs");
+          }
+          return true;
+        };
     auto inputs = [&](std::optional<unsigned> role, bool publicOnly,
-                      bool privateOnly) {
-      SmallVector<const InterfacePort *> ports;
-      for (auto [i, p] : enumerate(protocol.inputs)) {
-        bool isPublic =
-            child.proof && is_contained(child.proof->publicInputs, i);
-        if (ordinary(i) && (!role || is_contained(p.roles, *role)) &&
-            (!publicOnly || isPublic) && (!privateOnly || !isPublic))
-          ports.push_back(&p);
-      }
-      return ports;
+                      bool witness) {
+      return detail::interfaceEntryFields(child, true, role, publicOnly,
+                                          witness, boundaryRemaining, limits);
     };
     auto outputs = [&](unsigned role) {
-      SmallVector<const InterfacePort *> ports;
-      for (const auto &p : protocol.outputs)
-        if (is_contained(p.roles, role))
-          ports.push_back(&p);
-      return ports;
+      return detail::interfaceEntryFields(child, false, role, false, false,
+                                          boundaryRemaining, limits);
     };
     auto candidate = [&](const json::Value &s) {
       const auto &o = *s.getAsObject();
@@ -680,7 +665,7 @@ class Admission {
 
 public:
   Admission(const LanguageInterface &interface, const Limits &limits)
-      : interface(interface), limits(limits) {
+      : interface(interface), limits(limits), boundaryRemaining(limits.work) {
     (void)!!failure;
   }
   Error original(const json::Array &definitions, mlir::ModuleOp module) {
@@ -816,7 +801,7 @@ Error checkHostArtifact(StringRef bytes, const LanguageInterface &interface,
                         const Limits &limits) {
   auto parsed = detail::parseEntryJson(
       bytes, std::min<uint64_t>(limits.irBytes, 16 * 1024 * 1024),
-      16 * 1024 * 1024, "entry.artifact");
+      16 * 1024 * 1024, detail::HostArtifactJsonNodes, "entry.artifact");
   if (!parsed)
     return parsed.takeError();
   return Admission(interface, limits).run(*parsed);

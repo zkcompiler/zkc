@@ -18,14 +18,14 @@ namespace Zkc.Construction.Original
 open Zkc.Source
 variable {carriers : Structured.Carriers}
 
-/-- Source-owned data sorts, in source output order. Malformed scope lists and
-visible capabilities cannot be represented as physical data outputs. -/
+/-- Source-owned local sorts, in source output order. Malformed scope lists and
+service and oracle capabilities cannot be returned as local values. -/
 def roleOutputSorts (role : Nat) : List (List Nat) → List Structured.Ty → Option (List ValueSort)
   | [], [] => some []
   | scope :: scopes, ty :: types => do
       let rest ← roleOutputSorts role scopes types
       if role ∈ scope then
-        if ty.isHandle then none else some (.data ty :: rest)
+        if Domain.localType ty then some (.data ty :: rest) else none
       else some rest
   | _, _ => none
 
@@ -70,11 +70,7 @@ theorem roleOutputValues_sorts (role : Nat) {scopes : List (List Nat)}
             cases head : Domain.Value.encode ty value with
             | none => simp [roleOutputValues, tail, visible, head] at found
             | some actual =>
-              have data : ty.isHandle = false := by
-                unfold Domain.Value.encode Domain.Payload.ofValue at head
-                split at head
-                · assumption
-                · simp at head
+              have data : Domain.localType ty = true := Domain.Value.encode_localType head
               simp only [roleOutputValues, tail, visible, ↓reduceIte,
                 bind, Option.bind, head, Option.some.injEq] at found
               subst encoded

@@ -1,6 +1,7 @@
 #include "zkc/Analysis/ProtocolConstants.h"
 #include "mlir/IR/Matchers.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;
@@ -70,7 +71,34 @@ struct Observation {
       }
       return common ? Result{Status::Proven, common} : unknown();
     }
+    if (auto result = dyn_cast<OpResult>(value);
+        result && isSelectedControl(result.getOwner())) {
+      auto *branch = result.getOwner();
+      auto condition = read(branch->getOperand(0), depth + 1);
+      if (condition.status == Status::Capacity)
+        return unknown();
+      std::optional<unsigned> selected;
+      if (branch->getOperand(0).getType().isSignlessInteger(1) &&
+          condition.value)
+        selected = *condition.value ? 0 : 1;
+      std::optional<uint64_t> common;
+      for (auto [index, region] : enumerate(branch->getRegions())) {
+        if (selected && *selected != index)
+          continue;
+        auto observed =
+            read(region.front().back().getOperand(result.getResultNumber()),
+                 depth + 1);
+        if (observed.status != Status::Proven || !observed.value)
+          return observed;
+        if (common && common != observed.value)
+          return unknown();
+        common = observed.value;
+      }
+      return common ? Result{Status::Proven, common} : unknown();
+    }
     if (auto argument = dyn_cast<BlockArgument>(value)) {
+      if (auto capture = selectedCapture(argument))
+        return read(capture, depth + 1);
       auto repeat = dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
       if (repeat && includes(repeat.getRoles()) &&
           argument.getArgNumber() > uint64_t(repeat.getCarried()))

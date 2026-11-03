@@ -6,10 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
-use zkc_runtime::{
-    attempt::Limits,
-    vm::{ValueBudget, WorkBudget},
-};
+use zkc_runtime::attempt::Limits;
 use zkc_test_support::hex;
 
 fn data(len: usize) -> (Vec<Scalar>, Vec<G1>) {
@@ -96,8 +93,8 @@ fn policy() -> AttemptPolicy {
             attempts: 4,
             proof_bytes: 16 * 1024 * 1024,
         },
-        work: WorkBudget::default(),
-        values: ValueBudget::default(),
+        instructions: zkc_runtime::vm::Limits::INSTRUCTIONS,
+        iterations: zkc_runtime::vm::Limits::ITERATIONS,
     }
 }
 fn tape(salts: &[u64], rounds: u64) -> BTreeMap<usize, Vec<Scalar>> {
@@ -287,17 +284,31 @@ fn adversarial(
     assert_eq!(exhausted.resources[0]["transitions"], 4 * (n + 1));
     for kind in ["instructions", "iterations", "values", "proof"] {
         let mut limited = policy();
+        let mut deployment = d.clone();
         match kind {
-            "instructions" => {
-                limited.work.instructions = successful.attempts[0].usage.instructions + 1
+            "instructions" => limited.instructions = successful.attempts[0].usage.instructions + 1,
+            "iterations" => limited.iterations = successful.attempts[0].usage.iterations,
+            // The call's root bounds the attempts' fresh bytes cumulatively:
+            // a root that affords exactly the first attempt refuses the next.
+            "values" => {
+                let mut once = policy();
+                once.limits.attempts = 1;
+                let first = zkc_test_drivers::execute_test(
+                    d,
+                    p,
+                    zkc::proof::Invocation::Attempts(&once),
+                    tape(&[0, 3], n),
+                )
+                .unwrap();
+                let mut capacity = d.capacity();
+                capacity.values.total_bytes = first.invocation_usage().unwrap().total_value_bytes;
+                deployment = d.clone().with_capacity(capacity).unwrap();
             }
-            "iterations" => limited.work.iterations = successful.attempts[0].usage.iterations,
-            "values" => limited.values.total_bytes = successful.attempts[0].usage.total_value_bytes,
             "proof" => limited.limits.proof_bytes = successful.attempts[0].bytes - 1,
             _ => unreachable!(),
         }
         let r = zkc_test_drivers::execute_test(
-            d,
+            &deployment,
             p,
             zkc::proof::Invocation::Attempts(&limited),
             tape(&[0, 3], n),

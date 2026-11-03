@@ -21,7 +21,7 @@ theorem coefficients_plain (width : Nat) (values start finish : List F)
     (startSize : start.length = width) (finishSize : finish.length = width)
     (capacity : 2 ^ width * (width + 1) < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper69Helper
+      GkrSourceBodies.helper102Helper
       (Goals.Line.Inputs.pack (Value := assignment F G) { values, start, finish, width }) =
       .done (Goals.Line.encode (ringModel F G) ⟨row (width + 1)
         (linePolynomial width table (coordinates width start) (coordinates width finish))⟩) := by
@@ -36,7 +36,7 @@ theorem actual_line_polynomial (width : Nat) (values start finish : List F)
     (capacity : 2 ^ width * (width + 1) < indexLimit) :
     ∃ coefficients : List F,
       invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-        GkrSourceBodies.helper69Helper
+        GkrSourceBodies.helper102Helper
         (Goals.Line.Inputs.pack (Value := assignment F G) { values, start, finish, width }) =
           .done (Goals.Line.encode (ringModel F G) ⟨coefficients⟩) ∧
       coefficients.length = width + 1 ∧
@@ -57,7 +57,7 @@ theorem coefficients_component (width : Nat) (values start finish : List F)
     (startSize : start.length = width) (finishSize : finish.length = width)
     (capacity : 2 ^ width * (width + 1) < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper69Helper
+      GkrSourceBodies.helper102Helper
       (Goals.Line.Inputs.pack (Value := Component (assignment F G)) { values := some values, start := some start, finish := some finish, width := some width }) =
       .done (Goals.Line.encode (ringModel F G) ⟨row (width + 1)
         (linePolynomial width table (coordinates width start) (coordinates width finish))⟩).present := by

@@ -47,7 +47,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_unicode_entry_names_survive_execution(toolchain, journal, directory, flags):
     source = '''module sample;
-#[sealed] enum 状態 { 完了(index), 未完了() }
+enum 状態 { 完了(index), 未完了() }
 fn 計算(α:index,β₂:index)->状態{return 状態::完了(α+β₂);}
 protocol 実行 roles(参加者)(α:index@参加者,β₂:index@参加者)->(結果:状態@参加者){
   return 計算(α,β₂);
@@ -120,7 +120,7 @@ pub operator infixl(60) ⊕=合成;
 pub fn 公開(α:index,β:index)->index{return α⊕β;}
 fn 内部(α:index,β:index)->index{return α⊕β;}
 ''', encoding='utf-8')
-    command = [toolchain.runtime, '--json', 'inspect', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'inspect', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                f'--module=数学={source}', '--view=notations']
     public = journal.json(command)['checked']['notations']
     assert public['format'] == 'zkc.notations/0'

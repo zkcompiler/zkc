@@ -113,7 +113,11 @@ struct ResourceOriginAnalysis::Impl {
         at->second.reset();
       return true;
     };
-    if ((facts->history &&
+    // A declared succession transfers that exact capability. Fresh
+    // create/consume operations deliberately supply no successor equation.
+    if ((facts->succession && !pair(facts->succession->stateInput,
+                                    facts->succession->stateOutput)) ||
+        (facts->history &&
          !pair(facts->history->stateInput, facts->history->stateOutput)) ||
         (facts->sampling &&
          !pair(facts->sampling->stateInput, facts->sampling->stateOutput)) ||

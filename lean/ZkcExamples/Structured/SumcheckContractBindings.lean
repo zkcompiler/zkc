@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Protocols.Sumcheck.Source.PendingBodies
 public import Zkc.Source.Structured.ContractMeaning
 public import Zkc.Source.DeriveRegion
 public import Zkc.Source.Structured.ContractElaboration
@@ -33,19 +34,19 @@ def reductionOwner : ContractBinding SumcheckReduceViews.imported where
 def reductionRoot : ContractBinding SumcheckReduceViews.imported := by bind_contract
 
 def residualRootPoint : BoundarySelector reductionRoot.protocol.signature vector :=
-  ⟨.output (.there (.there .here)), ⟨1, by decide⟩, by decide⟩
-def residualRootValue : BoundarySelector reductionRoot.protocol.signature scalar :=
   ⟨.output (.there (.there (.there .here))), ⟨1, by decide⟩, by decide⟩
+def residualRootValue : BoundarySelector reductionRoot.protocol.signature scalar :=
+  ⟨.output (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
 
 /-- The retained wrapper calls Reduce after constructing its P-owned Table.
 The occurrence proof traverses the actual body, with its exact ordered operands. -/
 def reductionCall : CheckedApplication reductionOwner
-    [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
+    [SumcheckPendingBodies.custodyType, vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
       .service "random.bls12-381.fr/0"] where
   caller := reductionRoot
   roles := [0, 1]
   site := "s5"
-  operands := (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))))))
+  operands := (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .nil))))))))
   occurrence := by
     iterate 7 apply ApplicationOccurrence.next
     exact ApplicationOccurrence.here _
@@ -95,9 +96,9 @@ def reductionInitialPoint : BoundarySelector reductionOwner.protocol.signature v
 def reductionClaim : BoundarySelector reductionOwner.protocol.signature scalar :=
   reductionApplication.selectors.get (.there (.there (.there (.there .here))))
 def reductionPoint : BoundarySelector reductionOwner.protocol.signature vector :=
-  ⟨.output (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
-def reductionValue : BoundarySelector reductionOwner.protocol.signature scalar :=
   ⟨.output (.there (.there (.there (.there (.there .here))))), ⟨1, by decide⟩, by decide⟩
+def reductionValue : BoundarySelector reductionOwner.protocol.signature scalar :=
+  ⟨.output (.there (.there (.there (.there (.there (.there .here)))))), ⟨1, by decide⟩, by decide⟩
 
 def inputShapeFormula : FormulaBinding SumcheckSourceViews.imported inputShapeApplication.relation := by bind_contract
 
@@ -395,12 +396,12 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 fixed table remains a logical parameter and is not inferred from P's operand. -/
 theorem reduction_claim_at_call
     (environment : Nat → Environment (Component (assignment F G))
-      [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
+      [SumcheckPendingBodies.custodyType, vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
         .service "random.bls12-381.fr/0"])
     (returned : Nat → Values (Component (assignment F G)) reductionOwner.protocol.outputs) :
     reductionClaim.read (ProtocolContext.enter {} "s5" [0, 1])
       (reductionCall.boundary {} environment returned) =
-      environment 1 (.there .here) := by
+      environment 1 (.there (.there .here)) := by
   exact reductionCall.input_substitution {} environment returned reductionClaim _ rfl
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -409,13 +410,13 @@ The result uses the callee's actual V tuple at the entered role, with no new
 table and no equality between P and V components. -/
 theorem residual_at_call (remaining count : Nat) (table : Table F (remaining + count))
     (environment : Nat → Environment (Component (assignment F G))
-      [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
+      [SumcheckPendingBodies.custodyType, vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
         .service "random.bls12-381.fr/0"])
     (returned : Nat → Values (Component (assignment F G)) reductionOwner.protocol.outputs) :
     ResidualAt remaining count table (ProtocolContext.enter {} "s5" [0, 1])
       (reductionCall.boundary {} environment returned) ↔
-      ∃ point claim, (returned 1).get (.there (.there (.there (.there .here)))) = some point ∧
-        (returned 1).get (.there (.there (.there (.there (.there .here))))) = some claim ∧
+      ∃ point claim, (returned 1).get (.there (.there (.there (.there (.there .here))))) = some point ∧
+        (returned 1).get (.there (.there (.there (.there (.there (.there .here)))))) = some claim ∧
         Residual remaining count table point claim := by
   unfold ResidualAt
   erw [reductionCall.output_substitution {} environment returned reductionPoint _ rfl,

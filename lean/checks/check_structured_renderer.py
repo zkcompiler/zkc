@@ -14,6 +14,8 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
+from bridges.common import catalogue as catalogue_rows  # noqa: E402
+from bridges.common.lean_render import Refused  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("structured_snapshot", HERE / "bridges/structured/snapshot.py")
 renderer = importlib.util.module_from_spec(spec)
@@ -55,7 +57,7 @@ def check(output, lake, artifact_root=HERE):
                  ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []],
                  ["block", [[["call", name], [0], [["apply", "bool", []]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                "main", [], [], [], [helper, entry], [["main", []]], NO_ROWS, [[], []]]
+                "main", [], [], [], [helper, entry], [["main", []]], NO_ROWS, [[], [], []]]
         namespace = f"RenderedCase{index}"
         if index == 4:
             # Exercise the actual CLI under an ASCII locale as well as the
@@ -102,7 +104,7 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
             [["relation", name, "public", name, name, name, [], [group], [["apply", "bool", []]], ["statement"], None]], [],
             [["function", "main", "protocol", "public", [group, field, service], [["apply", "bool", []]],
               ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], ["main", []],
-              ["block", operations, ["return", [1]]]]], [["main", []]], BLS_SERVICE_ROWS, [[], []]]
+              ["block", operations, ["return", [1]]]]], [["main", []]], BLS_SERVICE_ROWS, [[], [], []]]
     source = renderer.render(data, "RenderedOpen").replace("module\n\n", "", 1)
     points = str([ord(char) for char in name])
     source += f'''
@@ -227,7 +229,7 @@ example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false :=
     entry = ["function", "main", "protocol", "public", [nested], [nested],
              ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []], ["block", [], ["return", [0]]]]
     aggregate_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                      "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS, [[], []]]
+                      "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS, [[], [], []]]
     source = renderer.render(aggregate_data, "RenderedAggregates").replace("module\n\n", "", 1)
     identity_points = str([ord(char) for char in json.dumps(
         [aggregate_identity, ["bls12-381.fr", "phantom.F"]], ensure_ascii=False, separators=(",", ":"))])
@@ -296,8 +298,9 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
     declaration_data = copy.deepcopy(contract_data)
     declaration_data[5][0][6] = [["field", "bls12-381.fr"], ["nat", "7"]]
     declaration_data[10] = [[[["nominal", "record", "sample::Pending", [["field", "bls12-381.fr"]]],
-                             "linear", True, [[contract_name, ["field", "bls12-381.fr"]]]]],
-                            [["main", [[contract_name, ["bool"], ["V"], 1, 1]], []]]]
+                             "linear", True, [[contract_name, ["field", "bls12-381.fr"], None]], [], "zkl_resource_pending"]],
+                            [["main", [[contract_name, ["bool"], ["V"], 1, 1, ["data", ["V"]]]], []]],
+                            [["sample::Pending", None]]]
     source = renderer.render(declaration_data, "RenderedDeclarations").replace("module\n\n", "", 1)
     source += f'''
 open Zkc.Source.Structured in
@@ -305,8 +308,8 @@ example : (RenderedDeclarations.snapshot.relations[0]?.map (·.staticArguments))
     some [.field "bls12-381.fr", .natural "7"] := by rfl
 open Zkc.Source.Structured in
 example : (RenderedDeclarations.snapshot.sourceDeclarations.records.map fun record =>
-    (record.type, record.resource, record.sealed, record.fields.map fun (name, type) =>
-      (name.toList.map Char.toNat, type))) =
+    (record.type, record.resource, record.sealed, record.members.allFields.map fun field =>
+      (field.name.toList.map Char.toNat, field.type))) =
     [(.nominal .record "sample::Pending" [.field "bls12-381.fr"], "linear", true,
       [({contract_points}, .field "bls12-381.fr")])] := by rfl
 open Zkc.Source.Structured in
@@ -364,6 +367,14 @@ example : (RenderedAnchor.snapshot.contracts[0]?.bind fun owner =>
         except ValueError:
             continue
         raise AssertionError("renderer accepted malformed contract metadata")
+    # Only the current three-table carrier is rendered; no compatibility path.
+    renderer.source_declarations([[], [], []])
+    for invalid in [[[]], [[], []], [[], [], None], [[], [], [], []]]:
+        try:
+            renderer.source_declarations(invalid)
+        except Refused:
+            continue
+        raise AssertionError("renderer accepted a malformed declarations carrier")
     # Parse the full u64 endpoint through Lean's own string/constructor syntax.
     # Admission, rather than the renderer, checks the primitive contract.
     maximum = "18446744073709551615"
@@ -381,7 +392,7 @@ example : (RenderedAnchor.snapshot.contracts[0]?.bind fun owner =>
                  [["index.equal"], [0, 1], [["apply", "bool", []]], [], ""],
              ], ["return", [0]]]]
     primitive_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                      "main", [], [], binding_rows, [limit, entry], [["main", []]], BLS_ROWS, [[], []]]
+                      "main", [], [], binding_rows, [limit, entry], [["main", []]], BLS_ROWS, [[], [], []]]
     source = renderer.render(primitive_data, "RenderedPrimitives").replace("module\n\n", "", 1)
     source += '''
 example : (RenderedPrimitives.snapshot.bindings.map fun binding =>
@@ -415,14 +426,14 @@ example : (RenderedPrimitives.snapshot.catalogue.nominals.map fun row =>
 '''
     modules.append(source)
     malformed_rows = [
-        (renderer.nominal, BLS_NOMINALS[0][:-1]),
-        (renderer.nominal, ["nominal", "x", "Ring", [], [], None]),
-        (renderer.nominal, ["nominal", "x", "Field", [], [], "012"]),
-        (renderer.nominal, ["nominal", "x", "Field", [], [], 5]),
-        (renderer.nominal, ["nominal", "x", "Field", [["BaseField"]], [], None]),
-        (renderer.service_row, ["service", "random.x/0", "x"]),
-        (renderer.service_row, ["draw", "random.x/0", "x", ["draw"]]),
-        (renderer.catalogue, [[]]),
+        (catalogue_rows.nominal, BLS_NOMINALS[0][:-1]),
+        (catalogue_rows.nominal, ["nominal", "x", "Ring", [], [], None]),
+        (catalogue_rows.nominal, ["nominal", "x", "Field", [], [], "012"]),
+        (catalogue_rows.nominal, ["nominal", "x", "Field", [], [], 5]),
+        (catalogue_rows.nominal, ["nominal", "x", "Field", [["BaseField"]], [], None]),
+        (catalogue_rows.service_row, ["service", "random.x/0", "x"]),
+        (catalogue_rows.service_row, ["draw", "random.x/0", "x", ["draw"]]),
+        (catalogue_rows.catalogue, [[]]),
     ]
     for render, invalid in malformed_rows:
         try:
@@ -458,7 +469,7 @@ example : (RenderedPrimitives.snapshot.catalogue.nominals.map fun row =>
               ["return", [0]]]]
     preparation_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                         "main", [], [], [], [identity, formula, realization, mapping, local, entry], [["main", []]],
-                        BLS_ROWS, [[], []]]
+                        BLS_ROWS, [[], [], []]]
     source = renderer.render(preparation_data, "RenderedPreparations").replace("module\n\n", "", 1)
     source += '''
 example : (RenderedPreparations.snapshot.definitions[2]?.bind fun definition =>
@@ -494,7 +505,7 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
              ["block", [[["protocol_apply", "child", ["V", "P"]], [0],
                          [["apply", "bool", []]], [], "nested"]], ["return", [0]]]]
     application = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                   "main", [], [], [], [entry, child], [["main", []], ["child", []]], NO_ROWS, [[], []]]
+                   "main", [], [], [], [entry, child], [["main", []], ["child", []]], NO_ROWS, [[], [], []]]
     source = renderer.render(application, "RenderedApplication").replace("module\n\n", "", 1)
     source += '''
 open Zkc.Source.Structured in

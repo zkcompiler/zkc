@@ -292,6 +292,7 @@ pub(super) fn prepare<'a>(
     host: &'a RunHost,
     request: &RunInputs,
     imports: &mut crate::host::setups::VerifierKeys,
+    invocation: zkc_runtime::vm::ExecutionLedger,
 ) -> Result<PreparedRun<'a>> {
     let session = &request.session;
     if !valid_identifier(session) {
@@ -327,9 +328,10 @@ pub(super) fn prepare<'a>(
         }
     }
     let policy = host.limits.capacity.backend();
-    let mut admission = Admission::new(host.limits.capacity.loading())?
+    // Loading, its file reads and setup cache hits charge the invocation root.
+    let mut admission = Admission::new(host.limits.loading())?
         .with_material(imports.material())
-        .with_shared_ledger(host.shared_ledger.clone())
+        .with_shared_ledger(Some(invocation.clone()))
         .with_retained_inputs(host.retained_inputs);
     // Charge setup scans before importing even receive-only material.
     for bytes in request.setups.values() {
@@ -397,9 +399,9 @@ pub(super) fn prepare<'a>(
         .map_err(|e| e.to_string())?
         .with_relation_assets(host.relation_assets.clone())
         .map_err(|e| e.to_string())?
-        .with_ring_work_limit(host.ring_work_limit)
+        .with_ring_work_limit(host.limits.ring_work)
         .with_external_work_limit(host.limits.external_work)
-        .with_sequence_work_limit(host.sequence_work_limit);
+        .with_sequence_work_limit(host.limits.sequence_work);
         let mut pending = Vec::new();
         for (i, (value, (_, ty))) in row.inputs.iter().zip(&role.entry.inputs).enumerate() {
             let selected = host
@@ -451,12 +453,7 @@ pub(super) fn prepare<'a>(
     // Charge the entire invocation, not a separate resettable budget per role.
     // Key files are frozen and imported only after every declaration is checked.
     // All roles share this native codec policy and authorized key registry.
-    let (loaded, loading) = if let Some(ledger) = &host.shared_ledger {
-        let (values, guard) = admission.load_shared(&roles[0].1, &policy, ledger, 0)?;
-        (values, Some(guard))
-    } else {
-        (admission.load(&roles[0].1, &policy)?, None)
-    };
+    let (loaded, loading) = admission.load_shared(&roles[0].1, &policy, &invocation, 0)?;
     let roles = roles
         .into_iter()
         .map(
@@ -479,5 +476,6 @@ pub(super) fn prepare<'a>(
         roles,
         loaded,
         loading,
+        invocation,
     })
 }

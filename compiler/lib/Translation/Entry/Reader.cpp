@@ -4,9 +4,12 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/SHA256.h"
 using namespace llvm;
 namespace zkc::language::entry_detail {
 namespace {
@@ -34,14 +37,10 @@ class Reader {
     metadata -= amount;
     return true;
   }
-  static bool bare(mlir::Operation *op) {
-    return op && op->getDiscardableAttrDictionary().empty();
-  }
-  static bool attributes(mlir::Operation *op, ArrayRef<StringRef> allowed) {
-    return op && all_of(op->getAttrs(), [&](mlir::NamedAttribute attr) {
-             return is_contained(allowed, attr.getName().getValue());
-           });
-  }
+  // The operation's decided semantic fields are admitted, and the typed reads
+  // below restrict them; this reader names no discardable attribute or call
+  // metadata.
+  static bool bare(mlir::Operation *op) { return op && admitsFields(op); }
   Expected<json::Value> schema(data::LayoutAttr layout, unsigned depth = 0) {
     if (!layout || depth > limits.typeDepth || !charge())
       return fail("Host layout exceeds bounded structural export");
@@ -57,6 +56,8 @@ class Reader {
         result.push_back(
             json::Object{{"name", field.getName().getValue().str()},
                          {"offset", field.getOffset()},
+                         {"public", field.getIsPublic()},
+                         {"placement", nullptr},
                          {"schema", std::move(*nested)}});
       }
       return result;
@@ -88,21 +89,37 @@ class Reader {
     }
     if (!bytes(layout.getKind().getValue().size() +
                layout.getIdentity().getValue().size() +
-               layout.getDisplayType().getValue().size()))
+               layout.getDisplayType().getValue().size() +
+               (layout.getGenerated() ? layout.getGenerated().getValue().size()
+                                      : 0)))
       return fail("Host layout exceeds metadata allowance");
     if (layout.getCopy())
       permissions.push_back("Copy");
     if (layout.getDrop())
       permissions.push_back("Drop");
-    return json::Object{{"kind", layout.getKind().getValue().str()},
-                        {"identity", layout.getIdentity().getValue().str()},
-                        {"type", layout.getDisplayType().getValue().str()},
-                        {"custody", layout.getCustody()},
-                        {"constructible", layout.getConstructible()},
-                        {"permissions", std::move(permissions)},
-                        {"fields", std::move(*members)},
-                        {"alternatives", std::move(alternatives)},
-                        {"leaves", std::move(leaves)}};
+    json::Value element = nullptr;
+    if (layout.getElement()) {
+      auto nested = schema(layout.getElement(), depth + 1);
+      if (!nested)
+        return nested.takeError();
+      element = std::move(*nested);
+    }
+    return json::Object{
+        {"kind", layout.getKind().getValue().str()},
+        {"identity", layout.getIdentity().getValue().str()},
+        {"type", layout.getDisplayType().getValue().str()},
+        {"generated", layout.getGenerated()
+                          ? json::Value(layout.getGenerated().getValue())
+                          : json::Value(nullptr)},
+        {"custody", unsigned(layout.getCustody())},
+        {"sealed", layout.getSealed()},
+        {"roles", json::Array{}},
+        {"element", std::move(element)},
+        {"constructible", layout.getConstructible()},
+        {"permissions", std::move(permissions)},
+        {"fields", std::move(*members)},
+        {"alternatives", std::move(alternatives)},
+        {"leaves", std::move(leaves)}};
   }
   Expected<json::Value> schema(mlir::Type type) {
     if (auto native = mlir::dyn_cast<data::ValueType>(type))
@@ -116,6 +133,10 @@ class Reader {
     Layout layout;
     layout.type = Type(type.isSignlessInteger(1) ? Type::Kind::Boolean
                                                  : Type::Kind::Index);
+    // A scalar has no nominal node, so its canonical key is its lookup key.
+    layout.identity.key = typeIdentity(layout.type);
+    layout.identity.digest =
+        toHex(SHA256::hash(arrayRefFromStringRef(layout.identity.key)), true);
     layout.permissions = {true, true};
     layout.constructible = true;
     layout.leaves = {type.isSignlessInteger(1) ? "bool" : "index"};
@@ -201,7 +222,7 @@ class Reader {
       if (++operations > limits.operations)
         return fail("Host operation inventory exceeds limits");
       if (auto stop = mlir::dyn_cast<exec::StopOp>(raw)) {
-        if (!attributes(stop, {"reason"}) || !bytes(stop.getReason().size()) ||
+        if (!bare(stop) || !bytes(stop.getReason().size()) ||
             !branch(take(), failure, stop->getResults()) ||
             cursor != current->end())
           return fail("Host stop does not propagate terminal failure");
@@ -291,10 +312,7 @@ class Reader {
         append_range(outputs, next->getArguments());
       } else if (auto match = mlir::dyn_cast<data::MatchOp>(raw)) {
         auto *next = takeBlock();
-        if (!next ||
-            !attributes(match,
-                        {"alternatives", "successor_operand_segments"}) ||
-            match.getArms().empty() ||
+        if (!next || !bare(match) || match.getArms().empty() ||
             match.getForwarded().size() != match.getArms().size() ||
             cursor != current->end())
           return fail("Host match has invalid control metadata");
@@ -359,9 +377,7 @@ class Reader {
           operation["op"] = "drop";
         else
           return fail("Host original contains an unsupported operation");
-        if (!attributes(raw, attribute.empty()
-                                 ? ArrayRef<StringRef>{}
-                                 : ArrayRef<StringRef>{attribute}))
+        if (!bare(raw))
           return fail("Host operation has unexpected metadata");
         if (attribute == "path") {
           auto path = raw->getAttrOfType<mlir::DenseI64ArrayAttr>(attribute);

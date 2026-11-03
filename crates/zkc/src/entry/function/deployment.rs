@@ -10,7 +10,8 @@ fn nominal(s: &Schema, family: &str, member: &str, constructible: bool) -> Resul
     require(
         s.display_type == format!("{base}::{member}{args}")
             && s.constructible == constructible
-            && !s.custody,
+            && s.custody == 0
+            && !s.sealed,
         "entry-host-nominal",
     )
 }
@@ -34,23 +35,46 @@ fn input_record<'a>(
     interface: &super::super::Interface,
     ports: impl Iterator<Item = InputPort<'a>>,
 ) -> Result<()> {
+    let ports: Vec<_> = ports.filter(|p| ordinary(interface, *p)).collect();
+    let names = interface.generated_input_names(&ports);
     record(
         s,
-        ports
-            .filter(|p| ordinary(interface, *p))
-            .map(|p| (p.definition.name.as_str(), &p.definition.schema)),
+        names
+            .iter()
+            .zip(&ports)
+            .map(|(name, p)| (name.as_str(), &p.definition.schema)),
     )
 }
-fn output_record<'a>(s: &Schema, ports: impl Iterator<Item = &'a Port>) -> Result<()> {
-    record(s, ports.map(|p| (p.name.as_str(), &p.schema)))
+fn output_record<'a>(
+    s: &Schema,
+    interface: &crate::entry::Interface,
+    ports: impl Iterator<Item = &'a Port>,
+) -> Result<()> {
+    let ports: Vec<_> = ports.collect();
+    let names = interface.generated_output_names(&ports);
+    record(
+        s,
+        names
+            .iter()
+            .zip(ports)
+            .map(|(name, p)| (name.as_str(), &p.schema)),
+    )
 }
+
 pub(super) fn check_interface(
     d: &carrier::Deployment,
     interface: &super::super::Interface,
     families: &mut BTreeMap<String, String>,
 ) -> Result<()> {
+    let role = interface
+        .proof()
+        .and_then(|proof| match d.operation.as_str() {
+            "prove" => Some(interface.roles()[proof.prover].name.as_str()),
+            "verify" => Some(interface.roles()[proof.verifier].name.as_str()),
+            _ => None,
+        });
     interface
-        .check_executable_ports()
+        .check_executable_role(role)
         .map_err(|e| EntryError::new(EntryPhase::Interface, e))?;
     require(d.results.len() == 1, "entry-host-deployment-signature")?;
     let r = &d.results[0];
@@ -149,7 +173,7 @@ pub(super) fn check_interface(
                 false,
             )?;
             input_record(&input.schema, interface, interface.input_ports(role))?;
-            output_record(&output.schema, interface.output_ports(role))?;
+            output_record(&output.schema, interface, interface.output_ports(role))?;
         }
     } else {
         require(d.parameters.len() == 2, "entry-host-deployment-signature")?;
@@ -170,7 +194,7 @@ pub(super) fn check_interface(
             )?;
             candidate(&r.fields[0].schema, family)?;
             nominal(&r.fields[1].schema, family, "ProverOutputs", false)?;
-            output_record(&r.fields[1].schema, interface.output_ports(role))?;
+            output_record(&r.fields[1].schema, interface, interface.output_ports(role))?;
         } else {
             require(d.operation == "verify", "entry-host-stage")?;
             candidate(&d.parameters[1], family)?;
@@ -192,6 +216,7 @@ pub(super) fn check_interface(
             nominal(&accepted.fields[0].schema, family, "VerifierOutputs", false)?;
             output_record(
                 &accepted.fields[0].schema,
+                interface,
                 interface.output_ports(&interface.roles()[proof.verifier]),
             )?;
         }

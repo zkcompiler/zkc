@@ -51,7 +51,9 @@ For each subject with the construction profile:
 4. A generated Lean file runs `Construction.checkCompiled` and the selection
    check on the fresh export against the admitted original. Their proofs may
    use only `propext`, `Classical.choice` and `Quot.sound`. The fresh original
-   snapshot must be the retained one (`original_retained`, by `rfl`). The file
+   snapshot must be the retained one (`original_retained`, by `rfl`), and the
+   fresh export's catalogue rows must be admitted against Lean's catalogue
+   (`actual_catalogue`, `Participant.checkCatalogue`). The file
    also checks that the Lean occurrence encoding (`templateTree`) gives every
    exported template exactly its native bytes. These are artifact identity and
    structural checks. Source-model equations and actual execution bindings
@@ -74,7 +76,13 @@ mutation outcomes.
 set, including `arith.andi` on Booleans as the Boolean conjunction. For
 `exec.apply`, the explicit runtime contract selects the operation; there are no
 per-contract execution operation names. Binding arguments, implementation,
-parameters and data ports must match the supported contract. Retained
+parameters and data ports must match the supported contract. The signature's
+associated members (an embedding's `BaseField`, a suite's `ChallengeField`) and
+the capability facts it requires are read from the export's catalogue slot, as
+the structured bridge reads its own; a binding whose member the rows do not
+supply refuses. The renderer keeps the rows with the participant, and Lean's
+`Participant.checkCatalogue`, not the renderer, admits them: rows for an
+identity outside Lean's catalogue refuse with `structured-catalogue-unknown`. Retained
 `protocol.local_call` and borrowed `func.call` instructions both name the
 original helper while preserving their actual attribute shapes. An
 unrecognized operation is retained as unsupported for the rule to refuse; a
@@ -93,14 +101,16 @@ capturing its enclosing induction index). Native exporter correctness, this
 rendering, and the meanings of native kernels are tested boundaries, not
 theorems.
 
-The participant reader requires the current ten-field envelope and the
-separate service-port interface, including unused ports. Local queries retain
+The participant reader requires the current eleven-field envelope, the
+separate service-port interface, including unused ports, and the catalogue
+slot. Local queries retain
 a seventh source-annotation field with their canonical origin template and
 enclosing induction references; these references are metadata, not request
 operands. `Operation.localService` is separate from transcript challenges.
 The producer rule supports only owner-local field draws; source admission
 checks their original root, alias map, contract, method, nominal result and
-occurrence. The Fiat–Shamir validator rule remains coin-free.
+occurrence. The field a draw samples is read from its service's catalogue row,
+not from the contract's spelling. The Fiat–Shamir validator rule remains coin-free.
 
 Run the focused actual-producer and alias/repeat controls with existing builds:
 
@@ -119,8 +129,11 @@ native entropy realization or compiled completeness.
 `plain.py --compiler PATH --output DIRECTORY` reproduces the actual
 `libraries/relations/table` CheckMembership source and its plain constructed pair,
 and the `fixtures/batch-opening.zkc` nominal record-sequence message client.
-It compares exact generated constructor data and typed bodies; `--write`
-regenerates them through the same producers. `Tests.PlainConstruction` checks
+It also covers the reusable two-batch client. It compares exact generated
+constructor data, typed bodies, both whole constructed views and their shared
+root connection; `--write` regenerates them through the same producers. The
+views and connection use `checks/GenerateReusableAggregate.lean` and the common
+connection generator, then the complete connection module is kernel-checked. `Tests.PlainConstruction` checks
 admission, retained real outputs, successful and false-input execution,
 wrong nominal and differently typed empty messages, and refused plain queries.
 The library-root theorems are in `ZkcExamples.Construction.TableMembership`;

@@ -51,7 +51,7 @@ FIELDS = {
     "source": {"modules": TABLE, "project": STRING, "compiler_options": STRINGS},
     "entries": {"proof": STRING, "interactive": STRING, "instantiation": STRING},
     "profiles": {"structured": BOOLEAN, "construction": BOOLEAN, "executable": BOOLEAN, "scalar": BOOLEAN},
-    "generated": {"data": STRING, "bodies": STRING, "participant": STRING, "pair": STRING, "glue": STRING,
+    "generated": {"data": STRING, "bodies": STRING, "views": STRING, "participant": STRING, "pair": STRING, "glue": STRING,
                   "program": STRING, "facts": STRING, "interactive_data": STRING,
                   "interactive_bodies": STRING, "interactive_views": STRING,
                   "interactive_export": STRING, "interactive_source": STRING,
@@ -66,8 +66,9 @@ FIELDS = {
     # Optional extensions (lean/subjects/README.md).
     "construction": {"namespace": STRING, "connection": STRING, "admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
                      "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING,
+                     "library": STRING, "library_module": STRING,
                      "omit": STRINGS},
-    "bodies": {"entry": STRING, "interactive_entry": STRING, "closed": BOOLEAN},
+    "bodies": {"entry": STRING, "interactive_entry": STRING, "closed": BOOLEAN, "owners": TABLE},
     "interactive": {"views_doc": STRING},
     "receipt": {"theorem": STRING, "security_module": STRING, "completeness_module": STRING,
                 "chain": STRINGS, "used": STRINGS, "unused": STRINGS},
@@ -98,6 +99,12 @@ def _validate(data, path):
             require(choices is None or value in choices, f"{path}: {table}.{key} must be one of {choices}")
         for key in REQUIRED.get(table, ()):
             require(key in values, f"{path}: missing field {key}")
+    owners = data.get("bodies", {}).get("owners", {})
+    require(all(isinstance(owner, str) and isinstance(name, str) for owner, name in owners.items()),
+            f"{path}: body owner aliases must map source owners to presentation names")
+    require(len(set(owners.values())) == len(owners), f"{path}: repeated body presentation name")
+    require(data.get("generated", {}).get("views") is None or data.get("generated", {}).get("bodies"),
+            f"{path}: generated.views requires generated.bodies")
     require(data["schema"] == SCHEMA, f"{path}: schema must be {SCHEMA}")
 
 
@@ -197,11 +204,15 @@ def load(path):
                 f"{path}: generated.{key} must be a repository path")
         require(subject.generated(key).is_relative_to(ROOT),
                 f"{path}: generated.{key} must resolve inside the repository")
-    for key in ("glue", "data", "participant", "pair", "program", "facts", "bodies", "interactive_data",
+    for key in ("glue", "data", "participant", "pair", "program", "facts", "bodies", "views", "interactive_data",
                 "interactive_bodies", "interactive_views", "artifacts", "claims", "lowering"):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: generated.{key} is not a Lean module path")
+    if subject.generated("views"):
+        require(subject.get("construction", "admission") == "external" and
+                subject.get("construction", "views") == subject.module_name("views"),
+                f"{path}: generated.views must be the construction admission module")
     paths = [subject.generated(key) for key in subject.table("generated")]
     require(len(paths) == len(set(paths)), f"{path}: generated output paths must be distinct")
     require(not (subject.generated("claims") and subject.profile("executable")
@@ -215,10 +226,17 @@ def load(path):
     namespace = subject.get("lean", "namespace")
     require(namespace is None or __import__("re").fullmatch(NAMESPACE, namespace) is not None,
             f"{path}: lean.namespace must be a Lean namespace")
-    for key in ("namespace", "connection"):
+    for key in ("namespace", "connection", "library", "library_module"):
         value = subject.get("construction", key)
         require(value is None or __import__("re").fullmatch(NAMESPACE, value) is not None,
                 f"{path}: construction.{key} must be a Lean name")
+    connection_library = subject.get("construction", "library")
+    connection_library_module = subject.get("construction", "library_module")
+    require((connection_library is None) == (connection_library_module is None),
+            f"{path}: construction.library and construction.library_module must be supplied together")
+    require(connection_library is None or
+            (subject.profile("construction") and subject.get("construction", "rule", "compiled") == "compiled"),
+            f"{path}: construction.library requires the compiled construction profile")
     connection = subject.get("construction", "connection")
     require(not subject.generated("claims") or connection,
             f"{path}: generated.claims requires a maintained construction.connection module")

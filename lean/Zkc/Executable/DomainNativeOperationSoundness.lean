@@ -197,6 +197,6 @@ theorem native_operation_metered
       apply continues [.data (.field field answer), .transcript live] nominal _ rfl newReached newHolds
       all_goals rfl
     · cases reading
-  | compute => simp [readOperation] at reading
+  | compute | custody => simp [readOperation] at reading
 
 end Zkc.Executable.DomainVM

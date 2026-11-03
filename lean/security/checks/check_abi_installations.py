@@ -15,6 +15,9 @@ from pathlib import Path
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from bridges.common.request_support import check_lean_resources  # noqa: E402
+
 
 LABELS = (
     "Ordered", "Permuted", "Repeated", "Heterogeneous", "WitnessOnly", "NoData",
@@ -47,6 +50,7 @@ def main() -> None:
         result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
         log = result.stdout + result.stderr
         (logs / (name + ".log")).write_text(log)
+        check_lean_resources(result, str(logs / (name + ".log")))
         passed = result.returncode > 0 if failure else result.returncode == 0
         if failure:
             passed = passed and failure in log

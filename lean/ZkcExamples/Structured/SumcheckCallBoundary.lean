@@ -21,9 +21,65 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 def terminal (raw : List F)
     (outputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs) :
     PIR.Process (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
-  SumcheckVerifierTerminal.actualOwnedCheck (G := G) SumcheckSourceViews.unit 1 (some raw)
+  SumcheckVerifierTerminal.ownedCheck (G := G) SumcheckSourceViews.unit 1 (some raw)
     (outputs.get (.there (.there (.there (.there .here)))))
     (outputs.get (.there (.there (.there (.there (.there .here))))))
+    (outputs.get (.there (.there (.there (.there (.there (.there .here)))))))
+
+set_option smartUnfolding true in
+set_option backward.isDefEq.respectTransparency false in
+/-- The terminal is the actual source suffix for every returned tuple, including
+absent custody. This equation does not inspect or execute the child body. -/
+theorem terminal_continuation (raw : List F) (claim : F) (count handle : Nat)
+    (outputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs) :
+    SumcheckSourceVerifier.reduceCall.continuation.2.denote
+      (participantMeaningWith (.silent _) (participantActions F G)
+        (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit) 1
+        (SumcheckSourceViews.unit.plainProtocolTable F G) {})
+      (Environment.prepend
+        (SumcheckSourceVerifier.callEnvironment (some raw) (some claim)
+          (some count) (some handle)) outputs) = terminal raw outputs := by
+  have body : SumcheckSourceVerifier.reduceCall.continuation.2 =
+      (.letOp (.mark "s9") .nil .nil <|
+       .letOp (.localCall SumcheckHelperBodies.checkHelper rfl 1 "s9")
+         (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
+       .ret (.cons .here .nil)) := by kernel_rfl
+  have exposed : SumcheckSourceVerifier.reduceCall.continuation.2.denote
+      (participantMeaningWith (.silent _) (participantActions F G)
+        (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit) 1
+        (SumcheckSourceViews.unit.plainProtocolTable F G) {})
+      (Environment.prepend
+        (SumcheckSourceVerifier.callEnvironment (some raw) (some claim)
+          (some count) (some handle)) outputs) =
+      (terminal raw outputs).bind (fun result => .done (.cons (result.get .here) .nil)) := by
+    rw [body]
+    cases outputs with
+    | cons x0 tail => cases tail with
+      | cons x1 tail => cases tail with
+        | cons x2 tail => cases tail with
+          | cons x3 tail => cases tail with
+            | cons token tail => cases tail with
+              | cons point tail => cases tail with
+                | cons value tail =>
+                  cases tail
+                  simp only [Region.denote.eq_1, Region.denote.eq_3, Regions.denote.eq_1,
+                    participantMeaningWith, protocolOperationWith, SiteObservations.silent,
+                    PIR.Process.bind.eq_1, Operands.eval.eq_1, Operands.eval.eq_2,
+                    Environment.prepend.eq_1, Environment.prepend.eq_2,
+                    Environment.push.eq_1, Environment.push.eq_2,
+                    Values.get.eq_1, Values.get.eq_2,
+                    SumcheckSourceVerifier.callEnvironment,
+                    SumcheckSourceVerifier.sourceRootInputs,
+                    Values.absent.eq_1, Values.absent.eq_2,
+                    terminal, SumcheckVerifierTerminal.ownedCheck]
+                  apply congrArg (PIR.Process.bind _)
+                  funext result
+                  cases result with | cons decision rest => cases rest; rfl
+  rw [exposed]
+  conv_rhs => rw [← PIR.Process.bind_done (terminal raw outputs)]
+  apply congrArg (PIR.Process.bind _)
+  funext result
+  cases result with | cons value rest => cases rest; rfl
 
 /-- No callee-body equation is used: this is the actual linked root boundary. -/
 theorem source_linked (raw : List F) (claim : F) (count handle : Nat) :
@@ -52,7 +108,7 @@ theorem child_excess (raw : List F) (claim : F) (count handle : Nat) (large : Su
     (SumcheckSourceVerifier.childInputs (some claim) (some count) (some handle))).interpret forgetSites = _
   rw [SumcheckSourceViews.unit.protocolTable_forgetSites, SumcheckSourceVerifier.reduce_invoke_plain (F := F) (G := G)]
   exact SumcheckVerifierPrelude.reduce_excess (G := G) SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies SumcheckSourceVerifier.claimBodies
-    SumcheckSourceVerifier.childContext 1 rfl (by decide) SumcheckSourceNormalForms.reduceMaximum count large none none none [] claim (some handle)
+    SumcheckSourceVerifier.childContext 1 rfl (by decide) SumcheckSourceNormalForms.reduceMaximum count large none none none 0 [] claim (some handle)
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The actual shape guard and fixed-table decoding determine the point length. -/
@@ -87,7 +143,7 @@ theorem terminal_present (n : Nat) (raw : List F) (table : Table F n)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 set_option backward.isDefEq.respectTransparency false in
-/-- All six slots are arbitrary. Only the actual selected V point/value outputs
+/-- All seven slots are arbitrary. Only the actual selected V point/value outputs
 can discharge the inherited fixed-table request. -/
 theorem child_request_iff (raw : List F) (claim : F) (count handle : Nat)
     (table : Table F (0 + count)) (decoded : ofList? (0 + count) raw = some table)
@@ -95,22 +151,22 @@ theorem child_request_iff (raw : List F) (claim : F) (count handle : Nat)
     (childTerminal (G := G) 0 count).Holds SumcheckSourceVerifier.childContext
       (childBoundary raw claim count handle (.returned outputs))
       (childAssignments raw claim count handle) ↔
-    match outputs.get (.there (.there (.there (.there .here)))),
-        outputs.get (.there (.there (.there (.there (.there .here))))) with
+    match outputs.get (.there (.there (.there (.there (.there .here))))),
+        outputs.get (.there (.there (.there (.there (.there (.there .here)))))) with
     | some point, some value => Residual 0 count table point value
     | _, _ => False := by
   refine (residual_terminal_iff (.parameter childTable) 0 count childPoint childValue rfl rfl
     _ _ _ raw rfl table decoded).trans ?_
   have pointRead := publicReductionCall.boundaryOfOutcome_returned_output {} 1
     (publicCallEnvironment (G := G) raw claim count handle) outputs childPoint
-    (.there (.there (.there (.there .here)))) rfl rfl
+    (.there (.there (.there (.there (.there .here))))) rfl rfl
   have valueRead := publicReductionCall.boundaryOfOutcome_returned_output {} 1
     (publicCallEnvironment (G := G) raw claim count handle) outputs childValue
-    (.there (.there (.there (.there (.there .here))))) rfl rfl
+    (.there (.there (.there (.there (.there (.there .here)))))) rfl rfl
   change (∃ p v, _ = some p ∧ _ = some v ∧ Residual 0 count table p v) ↔ _
   erw [pointRead, valueRead]
-  generalize outputs.get (.there (.there (.there (.there .here)))) = point
-  generalize outputs.get (.there (.there (.there (.there (.there .here))))) = value
+  generalize outputs.get (.there (.there (.there (.there (.there .here))))) = point
+  generalize outputs.get (.there (.there (.there (.there (.there (.there .here)))))) = value
   cases point <;> cases value <;> simp
 
 end ZkcExamples.Structured.SumcheckCallBoundary

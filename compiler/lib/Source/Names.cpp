@@ -11,6 +11,12 @@ std::string nativeSiteName(StringRef label, uint64_t ordinal) {
   return label.empty() ? "s" + std::to_string(ordinal)
                        : "label_" + encodeNominalIdentity(label);
 }
+std::string nativeSelectedSite(StringRef branch, StringRef alternative,
+                               StringRef site) {
+  return "branch_" + std::to_string(branch.size()) + "_" + branch.str() +
+         "_arm_" + std::to_string(alternative.size()) + "_" +
+         alternative.str() + "_" + site.str();
+}
 namespace {
 struct Range {
   uint32_t first, last;

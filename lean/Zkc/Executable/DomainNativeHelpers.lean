@@ -46,7 +46,7 @@ helper always stops. Native Prepared is used separately for execution/cost. -/
 theorem nativeHelper_call (program : Structured.Program) (name : String)
     {helper : Structured.Helper}
     (checked : (nativeHelperSignatures program).find? (fun found => found.name == name) = some helper)
-    (eligible : helper.outputs.all dataType = true)
+    (eligible : helper.outputs.all localType = true)
     {values : List (Value F G)} {encoded : Environment F G}
     (embedded : Uniform.DomainAdapter.embedValues values = some encoded) :
     Domain.callHelper (Structured.ringModel F G) program name (helper.outputs.map ValueSort.data) encoded =

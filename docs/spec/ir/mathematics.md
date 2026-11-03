@@ -402,9 +402,10 @@ the compiler report does not enforce it in arbitrary host code.
 Exec/physical lowering remains trusted and tested. The report is neither a Lean
 proof nor a cryptographic security certificate. Quantitative Sumcheck bounds
 additionally require a declared challenge experiment; action order alone does
-not establish uniformity. New native Lean interpretation, private PCS terminals
-and dynamic protocol composition are deferred. Static native applications and
-selected composed entry checking are specified in [composition](composition.md).
+not establish uniformity. Native Lean interpretation, private PCS terminals
+and dynamic protocol composition are outside this checked compilation scope.
+Static native applications and selected composed entry checking are specified
+in [composition](composition.md).
 
 ### Scalar selection realization
 

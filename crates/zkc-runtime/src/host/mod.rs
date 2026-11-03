@@ -1,5 +1,6 @@
 //! Reusable Host execution mechanics consuming VM actions. Applications own
 //! artifact authentication, setup and public inputs, acceptance and publication.
+pub mod input_binding;
 pub mod joint;
 pub mod proof;
 pub mod wire;

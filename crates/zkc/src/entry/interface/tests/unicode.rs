@@ -8,18 +8,11 @@ use crate::run::HostLimits;
 use crate::source_names::encode_nominal_identity;
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{LogicalType, PhysicalType};
+const SETUP_BYTES: usize = crate::execution::MaterialLimits::DEFAULT.setup_bytes;
 
 fn package(document: &Value, artifact: &str) -> Package {
-    let bytes =
-        json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},"assets":[]})
-        .to_string();
-    Package::capture(
-        bytes.as_bytes(),
-        &Sha256::digest(bytes.as_bytes()).into(),
-        Package::MAX_BYTES,
-    )
-    .unwrap()
+    let (bytes, pin) = crate::entry::testing::package(document, artifact);
+    Package::capture(&bytes, &pin, Package::MAX_BYTES).unwrap()
 }
 fn physical(logical: &str) -> String {
     PhysicalType::default_for(LogicalType::parse(logical).unwrap())
@@ -105,7 +98,7 @@ fn variant_schema(key: &str, names: [&str; 2], encoded: &str, labels: [&str; 2])
     let mut ty = schema("variant", key, json!([spelling]));
     ty["alternatives"] = json!([
         {"name":names[0],"fields":[]},
-        {"name":names[1],"fields":[{"name":"値","offset":0,"schema":boolean}]}
+        {"name":names[1],"fields":[{"name":"値","offset":0,"public":true,"placement":null,"schema":boolean}]}
     ]);
     ty
 }
@@ -119,7 +112,7 @@ fn nominal_enum_identity_hashes_decoded_original_utf8_and_rejects_tampering() {
             "選択",
             0,
             json!([0]),
-            json!(["P"]),
+            json!([0]),
             variant_schema(key, ["Empty", "Flag"], hex, labels),
         ))
     };
@@ -196,8 +189,8 @@ pub(in crate::entry) fn run_fixture(
     let artifact = json!({"format":"zkc.run/0","candidate":carrier.to_string(),"entry":"main","roles":native_names,"steps":steps}).to_string();
     let doc = json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"数学::実行₂","protocol":"main","relations":[],"job":{"kind":"run"},
-        "protocols":[{"symbol":"main","roles":names,"inputs":[port("入力",0,json!([0]),json!(names),ty.clone())],
-        "outputs":[port("結果",0,json!([0]),json!(names),ty.clone())],"services":[],"clauses":[]}]});
+        "protocols":[{"symbol":"main","roles":names,"inputs":[port("入力",0,json!([0]),json!((0..names.len()).collect::<Vec<_>>()),ty.clone())],
+        "outputs":[port("結果",0,json!([0]),json!((0..names.len()).collect::<Vec<_>>()),ty.clone())],"services":[],"common_input_requirements":[],"clauses":[]}]});
     (doc, artifact)
 }
 #[test]
@@ -345,7 +338,7 @@ fn unicode_setup_authority_and_material_translate_together() {
     assert_eq!(native.inputs[&("role00000001".into(), 0)], "setup00000000");
     let material = [("鍵₂".into(), vec![1, 2, 3])].into();
     let native_material =
-        entry::setups::run_material(&interface, material, Default::default()).unwrap();
+        entry::setups::run_material(&interface, material, Default::default(), SETUP_BYTES).unwrap();
     assert_eq!(
         native_material,
         [("setup00000000".into(), vec![1, 2, 3])].into()
@@ -355,7 +348,7 @@ fn unicode_setup_authority_and_material_translate_together() {
     assert_eq!(proof.inputs, [(1, 0), (2, 0)].into());
     let material = [("鍵₂".into(), vec![1, 2, 3])].into();
     assert_eq!(
-        entry::setups::public_keys(&interface, &material, Default::default()).unwrap(),
+        entry::setups::public_keys(&interface, &material, Default::default(), SETUP_BYTES).unwrap(),
         [(0, &[1, 2, 3][..])].into()
     );
     for key in ["setup00000000", "鍵₃", "鍵₂\u{200d}"] {
@@ -369,7 +362,8 @@ fn unicode_setup_authority_and_material_translate_together() {
         assert!(entry::setups::proof_authority(&interface, authority).is_err());
         let material = [(key.into(), vec![1])].into();
         assert_eq!(
-            entry::setups::run_material(&interface, material, Default::default()).unwrap_err(),
+            entry::setups::run_material(&interface, material, Default::default(), SETUP_BYTES)
+                .unwrap_err(),
             "entry-setup-material"
         );
     }
@@ -411,7 +405,7 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
     let outputs = report.outputs.unwrap();
     entry::outputs::output_setups(&material, &authority, capacity).unwrap();
     let entry::Value::Leaf(crate::execution::InputValue::Native(returned)) =
-        &outputs["受信者"]["結果"]
+        outputs["受信者"]["結果"].leaf().unwrap()
     else {
         panic!("native key");
     };
@@ -458,7 +452,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
         doc["protocols"][0][direction]
             .as_array_mut()
             .unwrap()
-            .push(port(name, 1, json!([1]), json!(["受信者"]), ty.clone()));
+            .push(port(name, 1, json!([1]), json!([0]), ty.clone()));
     }
     doc["setups"] = json!([
         {"name":"setup00000001","inputs":[{"port":0,"path":[]}]},
@@ -537,7 +531,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     let outputs = report.outputs.unwrap();
     for (name, identity) in [("結果", identities[0]), ("結果₂", identities[1])] {
         let entry::Value::Leaf(crate::execution::InputValue::Native(value)) =
-            &outputs["受信者"][name]
+            outputs["受信者"][name].leaf().unwrap()
         else {
             panic!("native key");
         };
@@ -552,113 +546,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     );
 }
 
-pub(in crate::entry) fn proof_fixture() -> (Value, String) {
-    let boolean = physical("bool");
-    let candidate = json!([
-        "zkc.program/0",
-        [],
-        [],
-        [
-            [
-                "participant",
-                "v",
-                "root",
-                "role00000000",
-                [["x", boolean]],
-                [boolean],
-                [["return", ["x"]]],
-                []
-            ],
-            [
-                "participant",
-                "p",
-                "root",
-                "role00000001",
-                [["x", boolean], ["w", boolean]],
-                [boolean],
-                [["return", ["w"]]],
-                []
-            ]
-        ],
-        [[
-            "entry",
-            "main",
-            [["role00000000", "v"], ["role00000001", "p"]]
-        ]]
-    ])
-    .to_string();
-    let descriptor = json!([
-        "zkc.native-proof-descriptor/0",
-        [
-            "zkc.native-proof-policy/0",
-            "main",
-            "role00000001",
-            "role00000000",
-            "0",
-            "",
-            [],
-            ["0"],
-            [],
-            "zkc.framed/0",
-            "",
-            []
-        ],
-        "zkc.native-origin/0",
-        [],
-        [["role00000000", "0", "bool", "zkcv.bool/0"]],
-        [],
-        [],
-        [],
-        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
-    ]);
-    let artifact = json!([
-        "zkc.native-proof/0",
-        digest("original"),
-        descriptor,
-        crate::io::bytes::hash(&zkc_format::logical::encode_tree(&descriptor).unwrap()),
-        candidate,
-        digest(&candidate),
-        [
-            [
-                "role00000000",
-                "v",
-                [["0", "bool"]],
-                [["0", "bool"]],
-                [],
-                "0"
-            ],
-            [
-                "role00000001",
-                "p",
-                [["0", "bool"], ["1", "bool"]],
-                [["1", "bool"]],
-                [],
-                ""
-            ]
-        ],
-        [
-            "true",
-            "false",
-            "false",
-            "true",
-            "false",
-            "true",
-            crate::entry::OracleSelection::default()
-                .canonical_json()
-                .unwrap()
-        ],
-        []
-    ])
-    .to_string();
-    let boolean = schema("boolean", "bool", json!(["bool"]));
-    let doc = json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
-        "toolchain":"test-toolchain","entry":"数学::証明₂","protocol":"main","relations":[],
-        "protocols":[{"symbol":"main","roles":["検証者","証明者"],"services":[],"clauses":[],
-            "inputs":[port("公開",0,json!([0]),json!(["検証者","証明者"]),boolean.clone()),port("秘密",1,json!([1]),json!(["証明者"]),boolean.clone())],
-            "outputs":[port("受理",0,json!([0]),json!(["検証者"]),boolean.clone()),port("結果",1,json!([1]),json!(["証明者"]),boolean)]}],
-        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"gates":[], "construction":{"kind":"authored", "format": "zkc.framed/0"}}});
-    (doc, artifact)
-}
+pub(in crate::entry) use crate::entry::testing::authored_proof as proof_fixture;
 fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {
     let groups = interface.input_groups();
     let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();
@@ -729,7 +617,7 @@ fn prepared_public_data_uses_the_named_entry_schema_and_fresh_invocations() {
 #[test]
 fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices() {
     let (doc, artifact) = proof_fixture();
-    let code = entry::bindings::rust(&package(&doc, &artifact)).unwrap();
+    let code = entry::bindings::rust(&package(&doc, &artifact), InterfaceLimits::DEFAULT).unwrap();
     assert!(code.contains("PROVER: &::core::primitive::str = \"証明者\""));
     assert!(code.contains("VERIFIER: &::core::primitive::str = \"検証者\""));
     let options = ProofOptions {
@@ -770,7 +658,16 @@ fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices()
         let mut bad = doc.clone();
         if swapped {
             bad["protocols"][0]["roles"] = json!(["証明者", "検証者"]);
-            bad["protocols"][0]["inputs"][0]["roles"] = json!(["証明者", "検証者"]);
+            for direction in ["inputs", "outputs"] {
+                for p in bad["protocols"][0][direction].as_array_mut().unwrap() {
+                    let roles = p["placement"]["roles"].as_array_mut().unwrap();
+                    for role in roles.iter_mut() {
+                        *role = json!(1 - role.as_u64().unwrap());
+                    }
+                    roles.sort_by_key(|r| r.as_u64().unwrap());
+                    refresh_components(p);
+                }
+            }
         } else {
             rename(&mut bad, "証明者", "role00000000");
             rename(&mut bad, "検証者", "role00000001");
@@ -824,8 +721,9 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()
-        .push(port("検証鍵", 2, json!([2]), json!(["検証者"]), key_schema));
-    doc["job"]["public"] = json!([0, 2]);
+        .push(port("検証鍵", 2, json!([2]), json!([0]), key_schema));
+    doc["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"検証者"},{"port":2,"path":[],"role":"検証者"}]);
     doc["setups"] = json!([{"name":"鍵₂","inputs":[{"port":2,"path":[]}]}]);
     let options = ProofOptions {
         binding: BindingPolicy::AllowAuthored,
@@ -1121,18 +1019,13 @@ fn proof_file_preparation_checks_selected_codecs_before_setup_material() {
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()
-        .push(port(
-            "key",
-            2,
-            json!([2]),
-            json!(["検証者"]),
-            key_schema.clone(),
-        ));
+        .push(port("key", 2, json!([2]), json!([0]), key_schema.clone()));
     doc["protocols"][0]["outputs"]
         .as_array_mut()
         .unwrap()
-        .push(port("key", 2, json!([2]), json!(["検証者"]), key_schema));
-    doc["job"]["public"] = json!([0, 2]);
+        .push(port("key", 2, json!([2]), json!([0]), key_schema));
+    doc["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"検証者"},{"port":2,"path":[],"role":"検証者"}]);
     doc["setups"] = json!([{"name":"key","inputs":[{"port":2,"path":[]}]}]);
     let host = ProofEntry::admit(
         package(&doc, &artifact.to_string()),
@@ -1461,8 +1354,13 @@ fn memory_bindings_share_digest_checks_and_document_budgets() {
     );
     let groups = host.interface().input_groups();
     let empty = Default::default();
-    let mut documents =
-        Documents::new(Default::default(), host.installation().clone(), &empty).unwrap();
+    let mut documents = Documents::new(
+        Default::default(),
+        host.material_limits().reference_bytes,
+        host.installation().clone(),
+        &empty,
+    )
+    .unwrap();
     assert_eq!(
         documents.load(&groups[0], None).unwrap_err().code,
         "entry-input-missing"
@@ -1472,4 +1370,291 @@ fn memory_bindings_share_digest_checks_and_document_budgets() {
         documents.load(&groups[0], Some(&large)).unwrap_err().code,
         "entry-request-limit"
     );
+}
+#[test]
+fn memory_references_are_bounded_by_their_own_allowance() {
+    use crate::entry::memory::{Documents, ProofCallOptions};
+    use crate::execution::MaterialLimits;
+    use std::{collections::BTreeMap, sync::Arc};
+    let (doc, artifact) = proof_fixture();
+    let typed = proof_request(
+        ProofEntry::admit(
+            package(&doc, &artifact),
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .unwrap()
+        .interface(),
+        true,
+    );
+    let entry::Value::Leaf(crate::execution::InputValue::Wire(bytes)) = &typed.public["公開"]
+    else {
+        panic!()
+    };
+    let reference =
+        json!({"公開":{"file":"statement","sha256":crate::io::bytes::hash(bytes)}}).to_string();
+    let bindings: BTreeMap<String, Arc<Vec<u8>>> = [("statement".into(), bytes.clone())].into();
+    let call = |reference_bytes: usize| {
+        let host = ProofEntry::admit(
+            package(&doc, &artifact),
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                material: MaterialLimits {
+                    reference_bytes,
+                    ..MaterialLimits::DEFAULT
+                },
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .unwrap();
+        host.preflight_memory_call(
+            ProofOperation::Prove,
+            Some(reference.as_bytes()),
+            Some(r#"{"秘密":false}"#.as_bytes()),
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .map(drop)
+        .map_err(|error| error.code().to_owned())
+    };
+    // The references one request binds are bounded by their own allowance.
+    call(bytes.len()).unwrap();
+    assert_eq!(call(bytes.len() - 1).unwrap_err(), "entry-request-limit");
+    // A runner's capacity too small to hold them does not bound them, and an
+    // allowance above its maximum refuses rather than being clamped.
+    let mut capacity = crate::execution::Capacity::default();
+    capacity.values.live_bytes = 0;
+    capacity.values.total_bytes = 0;
+    let installation = zkc_cpu::CpuInstallation::default();
+    Documents::new(capacity, bytes.len(), installation.clone(), &bindings).unwrap();
+    for (reference_bytes, code) in [
+        (bytes.len() - 1, "entry-request-limit"),
+        (
+            MaterialLimits::MAXIMUM.reference_bytes + 1,
+            "entry-reference-bytes-limit",
+        ),
+    ] {
+        assert_eq!(
+            Documents::new(capacity, reference_bytes, installation.clone(), &bindings)
+                .err()
+                .unwrap(),
+            code
+        );
+    }
+    assert_eq!(
+        ProofEntry::admit(
+            package(&doc, &artifact),
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                material: MaterialLimits {
+                    reference_bytes: MaterialLimits::MAXIMUM.reference_bytes + 1,
+                    ..MaterialLimits::DEFAULT
+                },
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .err()
+        .unwrap()
+        .code(),
+        "entry-reference-bytes-limit"
+    );
+}
+#[test]
+fn full_roster_run_with_one_ordinary_port_is_admitted_and_runs() {
+    // Every participant supplies and receives the one ordinary port. Admission
+    // and binding grow with ports times placed roles, so the 1,024-role
+    // roster ceiling is reachable under the default Host policy.
+    let ty = schema("boolean", "bool", json!(["bool"]));
+    let names: Vec<_> = (0..1024).map(|i| format!("R{i}")).collect();
+    let native: Vec<_> = (0..1024)
+        .map(crate::source_names::native_role_name)
+        .collect();
+    let (doc, artifact) = run_fixture(
+        &ty,
+        &names.iter().map(String::as_str).collect::<Vec<_>>(),
+        &native.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let entry = RunEntry::admit(
+        package(&doc, &artifact),
+        HostLimits::default(),
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    assert_eq!(entry.interface().roles().len(), 1024);
+    let roles = names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            (
+                name.clone(),
+                RoleInputs {
+                    inputs: [("入力".into(), (i % 2 == 0).into())].into(),
+                    ..Default::default()
+                },
+            )
+        })
+        .collect();
+    let report = entry
+        .prepare(RunRequest {
+            session: "roster".into(),
+            roles,
+            setups: Default::default(),
+        })
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{:?}", report.output_error);
+    let outputs = report.outputs.unwrap();
+    assert_eq!(outputs.len(), 1024);
+    for (name, expected) in [("R2", true), ("R3", false)] {
+        assert!(matches!(
+            outputs[name]["結果"],
+            crate::entry::Value::Leaf(crate::execution::InputValue::Native(ref v))
+                if matches!(**v, zkc_cpu::Value::Bool(value) if value == expected)
+        ));
+    }
+}
+/// Bindings generation and checked inspection read a proof interface under
+/// the Host's selected allowances: a lowered selection refuses each path that
+/// the default admits.
+#[test]
+fn proof_interface_read_paths_take_the_selected_allowances() {
+    let (doc, artifact) = proof_fixture();
+    let proof = package(&doc, &artifact);
+    let lowered = InterfaceLimits {
+        work: 64,
+        ..InterfaceLimits::DEFAULT
+    };
+    let generate = |limits| entry::bindings::rust(&proof, limits).map(drop);
+    assert_eq!(generate(InterfaceLimits::DEFAULT), Ok(()));
+    assert_eq!(generate(lowered), Err("entry-interface-work-limit".into()));
+    #[cfg(feature = "project")]
+    {
+        use crate::project::CheckedInterface;
+        let read = |limits| CheckedInterface::read(&proof, limits).map(drop);
+        let bytes = doc.to_string();
+        let compiled = |limits| CheckedInterface::from_compiler(bytes.as_bytes(), limits).map(drop);
+        for path in [&read as &dyn Fn(InterfaceLimits) -> _, &compiled] {
+            assert_eq!(path(InterfaceLimits::DEFAULT), Ok(()));
+            assert_eq!(path(lowered), Err("entry-interface-work-limit".into()));
+        }
+    }
+}
+#[test]
+fn interface_admission_allowances_are_host_policy() {
+    let ty = schema("boolean", "bool", json!(["bool"]));
+    let (doc, artifact) = run_fixture(&ty, &["P"], &["role00000000"]);
+    let run = |interface| {
+        RunEntry::admit(
+            package(&doc, &artifact),
+            HostLimits {
+                interface,
+                ..HostLimits::default()
+            },
+            SetupAuthority::default(),
+        )
+        .map(drop)
+        .map_err(|e| (e.phase, e.code().to_owned()))
+    };
+    let (proof_doc, proof_artifact) = proof_fixture();
+    let proof = |interface| {
+        ProofEntry::admit(
+            package(&proof_doc, &proof_artifact),
+            ProofOptions {
+                interface,
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            SetupAuthority::default(),
+        )
+        .map(drop)
+        .map_err(|e| (e.phase, e.code().to_owned()))
+    };
+    let refused = |phase, code: &str| Err((phase, code.to_owned()));
+    let work = "entry-interface-work-limit";
+    let descriptors = "entry-interface-descriptor-bytes-limit";
+    for admit in [&run as &dyn Fn(InterfaceLimits) -> _, &proof] {
+        assert_eq!(admit(InterfaceLimits::DEFAULT), Ok(()));
+        // A lowered allowance refuses the same interface while reading it,
+        // with the code of the allowance it exhausts.
+        for (lowered, code) in [
+            (
+                InterfaceLimits {
+                    work: 64,
+                    ..InterfaceLimits::DEFAULT
+                },
+                work,
+            ),
+            (
+                InterfaceLimits {
+                    descriptor_bytes: 64,
+                    ..InterfaceLimits::DEFAULT
+                },
+                descriptors,
+            ),
+        ] {
+            assert_eq!(admit(lowered), refused(EntryPhase::Interface, code));
+        }
+        // The work allowance can be raised above its default, up to the
+        // installed maximum.
+        for work in [
+            InterfaceLimits::DEFAULT.work + 1,
+            InterfaceLimits::MAXIMUM.work,
+        ] {
+            assert_eq!(
+                admit(InterfaceLimits {
+                    work,
+                    ..InterfaceLimits::DEFAULT
+                }),
+                Ok(())
+            );
+        }
+        // A selection above an installed maximum is refused as policy, with
+        // that allowance's code.
+        for (raised, code) in [
+            (
+                InterfaceLimits {
+                    work: InterfaceLimits::MAXIMUM.work + 1,
+                    ..InterfaceLimits::DEFAULT
+                },
+                work,
+            ),
+            (
+                InterfaceLimits {
+                    descriptor_bytes: InterfaceLimits::MAXIMUM.descriptor_bytes + 1,
+                    ..InterfaceLimits::DEFAULT
+                },
+                descriptors,
+            ),
+        ] {
+            assert_eq!(admit(raised), refused(EntryPhase::Admission, code));
+        }
+    }
+    // A ceiling of the interface document keeps its own code, which no
+    // allowance selection changes: a protocol symbol above 4,096 bytes.
+    let mut long = doc.clone();
+    let symbol = "p".repeat(4097);
+    long["protocol"] = json!(symbol);
+    long["protocols"][0]["symbol"] = json!(symbol);
+    for interface in [InterfaceLimits::DEFAULT, InterfaceLimits::MAXIMUM] {
+        assert_eq!(
+            RunEntry::admit(
+                package(&long, &artifact),
+                HostLimits {
+                    interface,
+                    ..HostLimits::default()
+                },
+                SetupAuthority::default(),
+            )
+            .map(drop)
+            .map_err(|e| (e.phase, e.code().to_owned())),
+            refused(EntryPhase::Interface, "entry-interface-limit")
+        );
+    }
 }

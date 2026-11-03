@@ -31,6 +31,10 @@ def Op.evalTotal (model : DomainModel) : (op : Op) → op.total = true →
   | .indexEqual, _, .cons a (.cons b .nil) => .cons (decide (a = b)) .nil
   | .indexLess, _, .cons a (.cons b .nil) => .cons (decide (a < b)) .nil
   | .indexPowerOfTwo, _, .cons n (.cons r .nil) => .cons (naturalPowerOfTwo n r) .nil
+  | .indexWrappingAdd, _, .cons a (.cons b .nil) => .cons (wrappingAdd a b) .nil
+  | .indexWrappingSubtract, _, .cons a (.cons b .nil) => .cons (wrappingSubtract a b) .nil
+  | .indexBitAnd, _, .cons a (.cons b .nil) => .cons (bitAnd a b) .nil
+  | .indexLogicalShiftRight, _, .cons a (.cons b .nil) => .cons (logicalShiftRight a b) .nil
   | .multilinearRestrictPrefix _, _, .cons values (.cons point .nil) =>
       .cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil
   | .vectorLength _, _, .cons values .nil => .cons values.length .nil
@@ -321,7 +325,7 @@ def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Val
   | .group _, _ => none
   | .service _, _ => none
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
-  | .sequence _, _ | .product .., _ => none
+  | .sequence _, _ | .product .., _ | .resourceUnit _, _ => none
 
 /-- The arguments a law covers: each argument pinned to an input is that
 input's present value, and each argument pinned to a literal is that literal. A

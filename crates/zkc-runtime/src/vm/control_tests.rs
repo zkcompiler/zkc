@@ -46,6 +46,7 @@ struct Store {
     entered: Vec<Frame>,
     leaves: Vec<(u64, FrameExit, Vec<u64>)>,
     fail: Option<u64>,
+    queries: Vec<(String, String, Origin)>,
 }
 impl Backend for Store {
     type Call = ();
@@ -77,6 +78,30 @@ impl Backend for Store {
         } else {
             Ok(())
         }
+    }
+    fn service_support(&self, contract: ServiceContract, method: &str) -> Option<ServiceSupport> {
+        if contract != ServiceContract::RandomBls12381Field || method != "draw" {
+            return None;
+        }
+        Some(ServiceSupport {
+            signature: ServiceSignature {
+                inputs: vec![],
+                outputs: vec![PhysicalType::parse("field:bls12-381.fr@arkworks.fr/0").unwrap()],
+            },
+            max_retained_bytes: 1,
+        })
+    }
+    fn query(
+        &mut self,
+        invocation: &ServiceInvocation<'_>,
+        _: &[Datum],
+    ) -> Result<Vec<Datum>, BackendError> {
+        self.queries.push((
+            invocation.port.name.clone(),
+            invocation.site.into(),
+            invocation.frame.origin().clone(),
+        ));
+        Ok(vec![Datum::new("field:bls12-381.fr@arkworks.fr/0", 99)])
     }
     fn apply(
         &mut self,
@@ -676,4 +701,202 @@ fn extra_participant_fields_and_malformed_instructions_refuse() {
             .is_err()
         );
     }
+}
+
+#[test]
+fn participant_branch_transfers_exact_resources_and_cleanup_outcomes() {
+    let body = json!([
+        [
+            "if",
+            "selected",
+            "c",
+            [["c", "c"], ["r", "r"], ["s", "s"]],
+            [["yield", ["c", "s", "r"]]],
+            [["yield", ["c", "r", "s"]]],
+            ["b", "first", "second"]
+        ],
+        ["return", ["b", "first", "second"]]
+    ]);
+    let artifact = json!([
+        "zkc.program/0",
+        [],
+        [],
+        [[
+            "participant",
+            "p",
+            "root",
+            "P",
+            [["c", BOOL], ["r", RNG], ["s", RNG]],
+            [BOOL, RNG, RNG],
+            body,
+            []
+        ]],
+        [["entry", "main", [["P", "p"]]]]
+    ]);
+    let program = Program::decode(
+        artifact.to_string().as_bytes(),
+        &Contracts::standard(ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
+    // Capture rows transfer an affine parent at most once; only Copy parents
+    // may bind several formals.
+    let mut repeated = artifact.clone();
+    repeated[3][0][6][0][3] = json!([["c", "c"], ["r", "r"], ["s", "r"]]);
+    let refused = Program::decode(
+        repeated.to_string().as_bytes(),
+        &Contracts::standard(ExecutionPolicy::general_purpose()),
+    )
+    .unwrap_err();
+    assert!(
+        refused.detail.contains("interactive-resource-reuse"),
+        "{refused:?}"
+    );
+    for selected in [false, true] {
+        for cleanup_failure in [false, true] {
+            let store = Store {
+                fail: cleanup_failure.then_some(2),
+                ..Store::default()
+            };
+            let mut runner = Runner::new(
+                &program,
+                "main",
+                "P",
+                "resource_branch",
+                store,
+                vec![
+                    Datum::new(BOOL, u64::from(selected)),
+                    Datum::new(RNG, 7),
+                    Datum::new(RNG, 9),
+                ],
+            )
+            .unwrap();
+            assert!(runner.advance_local_control().unwrap());
+            assert!(runner.advance_local_control().unwrap());
+            if cleanup_failure {
+                assert!(runner.stop().is_some());
+                assert!(runner.returned_values().is_none());
+                let leaves = runner.backend().leaves.len();
+                assert!(matches!(runner.poll(), Action::Stopped(_)));
+                assert_eq!(runner.backend().leaves.len(), leaves);
+            } else {
+                let Action::Returned(values) = runner.poll() else {
+                    panic!("selected tuple")
+                };
+                assert_eq!(
+                    values.iter().map(|v| v.value).collect::<Vec<_>>(),
+                    if selected {
+                        vec![1, 9, 7]
+                    } else {
+                        vec![0, 7, 9]
+                    }
+                );
+            }
+            assert_eq!(runner.backend().entered.len(), 2);
+            assert!(
+                matches!(runner.backend().entered[1].kind(),FrameKind::Branch {alternative,..} if alternative==if selected {"then"} else {"else"})
+            );
+        }
+    }
+    let mut malformed = artifact;
+    malformed[3][0][6][0][5][0][1] = json!(["c", "r", "r"]);
+    assert_eq!(
+        Program::decode(
+            malformed.to_string().as_bytes(),
+            &Contracts::standard(ExecutionPolicy::general_purpose())
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::Ssa
+    );
+}
+
+#[test]
+fn dormant_participant_query_stop_and_allocation_are_never_reached() {
+    let artifact = json!([
+        "zkc.program/0",
+        [],
+        [[
+            "function",
+            "poison",
+            [],
+            [],
+            [["stop", "reject_here", "reject"]],
+            ["poison", []]
+        ]],
+        [[
+            "participant",
+            "p",
+            "root",
+            "P",
+            [["c", BOOL]],
+            [],
+            [
+                [
+                    "if",
+                    "selected",
+                    "c",
+                    [],
+                    [
+                        ["query", "draw_here", "random", "draw", [], ["drawn"]],
+                        ["local", "poison_here", "poison", [], []],
+                        ["yield", []]
+                    ],
+                    [["yield", []]],
+                    []
+                ],
+                ["return", []]
+            ],
+            [["random", "random.bls12-381.fr/0", "1"]]
+        ]],
+        [["entry", "main", [["P", "p"]]]]
+    ]);
+    let program = Program::decode(
+        artifact.to_string().as_bytes(),
+        &Contracts::standard(ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
+    for selected in [false, true] {
+        let mut runner = Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "P",
+            "query_branch",
+            Store::default(),
+            vec![Datum::new(BOOL, u64::from(selected))],
+            ValueBudget::default(),
+            WorkBudget::default(),
+            None,
+        )
+        .unwrap();
+        assert!(runner.advance_local_control().unwrap());
+        if selected {
+            let Action::Query(query) = runner.poll() else {
+                panic!("selected query")
+            };
+            runner.execute_query(&query.cut).unwrap();
+            let Action::Local(local) = runner.poll() else {
+                panic!("selected local")
+            };
+            runner.execute_local(&local.cut).unwrap();
+            assert!(matches!(runner.stop().unwrap().kind, StopKind::Explicit(_)));
+            assert_eq!(runner.backend().queries.len(), 1);
+            assert_eq!(runner.backend().queries[0].0, "random");
+        } else {
+            assert!(runner.advance_local_control().unwrap());
+            assert!(matches!(runner.poll(), Action::Returned(_)));
+            assert!(runner.backend().queries.is_empty());
+            assert_eq!(runner.backend().entered.len(), 2); // no dormant Local frame
+        }
+    }
+    let mut bad = artifact;
+    bad[3][0][6][0][4][0][2] = json!("manufactured_root");
+    assert_eq!(
+        Program::decode(
+            bad.to_string().as_bytes(),
+            &Contracts::standard(ExecutionPolicy::general_purpose())
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::Symbol
+    );
 }

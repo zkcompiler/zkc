@@ -58,8 +58,10 @@ The application obtains the expected SHA-256 pin and setup authority independent
 of downloaded candidate data. Public/witness JSON documents use the SDK's input
 schemas and readable values. `admit` accepts optional `authority` bytes in
 `zkc.entry-setups/0`; `setSetup(slot, materialBytes)` supplies material for a
-declared, independently pinned slot. Material never grants authority. Setup
-and named input copies share the selected SDK byte budgets. `setInput(name,
+declared, independently pinned slot. Material never grants authority. Every
+call binds all retained setups and named inputs, so setup copies stay within
+the SDK's setup material allowance and named input copies within its named
+reference allowance; neither derives from the `capacity` record. `setInput(name,
 materialBytes, callOptions)` binds opaque bytes to an exact name for the existing
 SDK input-reference decoder. For an admitted package with setup authority:
 
@@ -75,22 +77,44 @@ The SDK imports and checks the material fingerprint and setup association.
 `setSetup` supplies a verifier key for an authorized slot; `setInput` supplies
 named input bytes without granting setup authority. Both use the same queue,
 snapshot/consuming-transfer rules and per-call controls as proof calls. Rust
-retains immutable input bytes, bounds aggregate setup and input storage, and
-allows at most 1,024 input names of at most 4,096 UTF-8 bytes each. A rejected
+retains immutable input bytes, bounds each copy by one wire frame and each kind
+of copy by its allowance, refusing more with `web-setup-limit`, and allows at
+most 1,024 input names of at most 4,096 UTF-8 bytes each. A rejected
 replacement in Rust invalidates the previous binding. Supply a valid replacement
 before retrying; there is no fallback to previous material.
 Replacing a named input clears cached prover imports before validation; replacing
 a setup clears its verifier and prover imports. The SDK bounds retained numerical
-material separately by the admitted value-byte ceiling. Cache pressure evicts or
+material separately by its retained-import allowance. Cache pressure evicts or
 bypasses retention while each call still authenticates, charges and authorizes
 its own inputs.
 
 The constructor options accepted by the generated `ProofSession` also include
 `operation` (`both`, `prove`,
-`verify`), the existing SDK `capacity` record, `package_bytes`, `external_work`,
-and `allow_authored`. The provider set is fixed at admission; a different
+`verify`), the existing SDK `capacity` record of per-operation, runner and
+invocation limits, the SDK's `interface_limits` record of interface admission
+allowances, `package_bytes`, `external_work`, and `allow_authored`. The
+`capacity` record's byte selections bound each call's invocation root, and the
+session keeps the default material allowances. The provider set is fixed at admission; a different
 installation requires a fresh Worker and admission. The SDK checks actual
 compiled provider support and exact package bindings without reselection.
+
+Admission reads the package's interface under the `interface_limits`
+selection, in the same record the CLI's `--interface-limits` reads:
+
+```js
+await client.admit({ package: packageBytes, pin: authorizedPin,
+  options: { interface_limits: ['zkc.interface-limits/0', '2000000', '16777216'] } });
+```
+
+The fields are the interface work and descriptor allowances. A lowered
+selection refuses an interface that exhausts it, and a raised work selection,
+up to its maximum, admits an interface the default refuses. A selection above
+a maximum refuses with that allowance's code, `entry-interface-work-limit` or
+`entry-interface-descriptor-bytes-limit`. The client and Worker forward the
+`capacity` and `interface_limits` records as opaque JSON data; the generated
+`ProofSession` is their only reader and refuses a malformed record with the
+SDK's code, such as `interface-limits-format` for another tag. Without the
+option the session takes the defaults.
 
 `ready` resolves after module initialization; callers may queue admission before
 it resolves. Every method returns a promise except the immediate lifecycle
@@ -101,9 +125,10 @@ resolves with its diagnostics. Require `report.success` and, for verification,
 `report.accepted === true`. Keep `reportText` for lossless diagnostic integers:
 parsed JSON numbers may exceed JavaScript's exact range. Pass `budget` and
 `external_work` as `bigint`, canonical decimal strings or safe integer numbers.
-The client preserves the complete unsigned 64-bit range. Byte lengths,
-`package_bytes` and capacity size fields must fit wasm32. SDK capacity semantics
-and hard ceilings remain independently enforced by Rust.
+The client preserves the complete unsigned 64-bit range. Byte lengths and
+`package_bytes` must fit wasm32. The SDK enforces capacity and interface
+allowance semantics and hard ceilings, including capacity size fields that do
+not fit wasm32.
 
 Inputs are borrowed by default: the client snapshots the supplied byte views at
 enqueue, leaving caller buffers reusable. For an explicit consuming transfer:
@@ -120,6 +145,15 @@ Shared and detached buffers are refused. Transport uses owned transferable
 buffers; crossing the JS/Wasm ABI still copies bytes. Returned proof/output
 arrays are owned copies. The Worker holds the generated result through getter
 copies and successful transferable publication, then calls `result.free()`.
+The result keeps the call's invocation root and every reservation in it: the
+proof, the encoded outputs and the retained report text. Each `proof`,
+`outputs` and `report` getter call takes a new copy in Wasm memory; it is
+charged to that root before copying and refuses with `entry-output-limit` when
+the root cannot afford another copy. Rendering the native diagnostics is charged
+to that root first; when the root cannot afford it, `diagnostics` is the bounded
+summary marked `"diagnostics": "omitted"`. When the rendered report text does
+not fit the root, the report keeps the outcome and replaces `diagnostics` with
+`{"omitted":"entry-output-limit"}`.
 Publication does not guarantee delivery to the client.
 
 The client dispatches at most one call at a time. Defaults allow eight queued
@@ -226,8 +260,9 @@ This facade exposes proof calls. Input documents resolve existing SDK reference
 forms through the explicitly supplied `setInput` name map. Missing names are
 refused; a `file` field grants no network or filesystem capability. JavaScript
 passes opaque bytes and the shared SDK owns decoding and key import. Managed
-capacities bound their documented payload/work scopes, not the entire Wasm heap, JS byte
-copies or provider-private allocations. `wasm32` address space and `usize`
+capacities bound their documented payload/work scopes, including result getter
+copies, not the entire Wasm heap, JavaScript-side copies or provider-private
+allocations. `wasm32` address space and `usize`
 limits also apply; native capacities need not all fit a browser. The default artifact
 uses portable target features. A separately deployed SIMD artifact is selected
 only before initialization; browser numerical threading is not provided.

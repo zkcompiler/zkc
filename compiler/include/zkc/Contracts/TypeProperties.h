@@ -43,55 +43,50 @@ inline bool programPort(const BoundType &type) {
            programPort(*argument.type);
   });
 }
+// The catalog's field_array frame over `field`: an aggregate frame row.
+// Encoding stays separate from formation: an array over another field is a
+// valid logical type without a message frame.
+bool nativeFieldArrayFrame(llvm::StringRef field);
+// A canonical applied field_array representation over `field` admitting
+// `size` elements: its value bytes are the field's array frame.
+bool nativeFieldArrayRepresentation(llvm::StringRef field, uint64_t size,
+                                    llvm::StringRef representation);
 // Native arrays have a frame determined by their complete type. This
 // profile fact does not install a codec in older artifact formats.
 inline bool nativeMessageData(const BoundType &type);
 inline bool nativeFieldArrayWire(const BoundType &type, bool physical = false) {
-  return type.kind == "field_array" && type.identity.empty() &&
-         type.arguments.size() == 2 &&
-         type.arguments[0].kind == TypeArgument::Kind::Domain &&
-         type.arguments[0].domain == "bls12-381.fr" &&
-         type.arguments[1].kind == TypeArgument::Kind::Nat &&
-         type.arguments[1].natural <= 1048576 &&
-         (physical
-              ? ((type.representation == "arkworks.field-array/0" ||
-                  type.representation == "blst/field-array") &&
-                 type.physicalChildren && type.physicalChildren->size() == 1 &&
-                 nativeMessageData(type.physicalChildren->front()))
-              : type.representation.empty());
+  if (type.kind != "field_array" || !type.identity.empty() ||
+      type.arguments.size() != 2 ||
+      type.arguments[0].kind != TypeArgument::Kind::Domain ||
+      type.arguments[1].kind != TypeArgument::Kind::Nat ||
+      type.arguments[1].natural > 1048576 ||
+      !nativeFieldArrayFrame(type.arguments[0].domain))
+    return false;
+  if (!physical)
+    return type.representation.empty();
+  return nativeFieldArrayRepresentation(type.arguments[0].domain,
+                                        type.arguments[1].natural,
+                                        type.representation) &&
+         type.physicalChildren && type.physicalChildren->size() == 1 &&
+         nativeMessageData(type.physicalChildren->front());
 }
 // Complete closed native message grammar. Local copy permission alone is
 // insufficient: keys, setup handles and unsupported leaves stay local.
 // Atomic profile lookup is also used by native MLIR structural inspection.
-// The caller must establish nominal formation; this installs no codec.
-inline bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity) {
-  return (kind == "group" &&
-          (identity == "bn254.gt" || identity == "bls12-381.gt")) ||
-         ((kind == "bool" || kind == "index" || kind == "indices" ||
-           kind == "bytes") &&
-          identity.empty()) ||
-         ((kind == "field" || kind == "vector" || kind == "matrix") &&
-          (identity == "bn254.fr" || identity == "ristretto255.scalar" ||
-           plonky3Field(identity) || identity == "gf2-64.pentanomial-4-3-1" ||
-           identity == "gf2-64.pentanomial-4-3-1.ext3-trinomial1" ||
-           identity == "bls12-381.fr")) ||
-         ((kind == "group" || kind == "groups") &&
-          (identity == "bn254.g1" || identity == "bn254.g2" ||
-           identity == "ristretto255.group" ||
-           identity == "edwards25519.prime" || identity == "bls12-381.g1" ||
-           identity == "bls12-381.g2")) ||
-         ((kind == "commitment" || kind == "proof") &&
-          (identity == "multilinear.kzg.bls12-381/0" ||
-           identity == "rows.merkle-keccak256.koala-bear/0" ||
-           identity == "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
-           identity == "rows.merkle-keccak256.koala-bear.ext4-binomial3/0" ||
-           identity == "rows.merkle-poseidon2-16.baby-bear/0" ||
-           identity == "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0" ||
-           identity == "rows.merkle-poseidon2-8.goldilocks/0" ||
-           identity == "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0" ||
-           identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
-           identity == "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));
-}
+// An atom is a catalog message constructor whose instance has a framed
+// codec. The caller must establish nominal formation; this installs no codec
+// and grants no handler.
+bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity);
+// An installation representation row of the instance whose value bytes are the
+// instance's codec frame.
+bool canonicalRepresentation(llvm::StringRef kind, llvm::StringRef identity,
+                             llvm::StringRef representation);
+// The instance's resident representation: its one nondefault installation row
+// whose value bytes are the codec frame, or empty.
+llvm::StringRef residentRepresentation(llvm::StringRef kind,
+                                       llvm::StringRef identity);
+// A commitment domain whose declared scheme requires an authorized setup.
+bool setupCommitment(llvm::StringRef identity);
 inline bool nativeMessageData(const BoundType &type) {
   if (!type.representation.empty()) {
     // The closed installation grants sequence/variant frame families and
@@ -117,14 +112,11 @@ inline bool nativeMessageData(const BoundType &type) {
       llvm::consumeError(selected.takeError());
       return false;
     }
-    // These exact installed resident owners positively supply the existing
-    // canonical field/group frames. Other nondefault layouts remain local.
-    return *selected == type || type.representation == "blst/fr" ||
-           type.representation == "blst/g1" ||
-           type.representation == "blst/g2" ||
-           type.representation == "halo2curves-axiom/bn254.fr" ||
-           type.representation == "halo2curves-axiom/bn254.g1" ||
-           type.representation == "halo2curves-axiom/bn254.g2";
+    // A nondefault representation supplies the canonical frame only where its
+    // installation row says so; other nondefault layouts remain local.
+    return *selected == type ||
+           canonicalRepresentation(type.kind, type.identity,
+                                   type.representation);
   }
   if (type.kind == "sequence")
     return type.arguments.size() == 1 &&
@@ -158,8 +150,7 @@ inline bool nativeDataFrame(const BoundType &type) {
          nativeMessageData(type);
 }
 inline bool nativeSetupType(const BoundType &type) {
-  if (type.kind == "prover_key" || type.kind == "verifier_key" ||
-      type.identity == "multilinear.kzg.bls12-381/0")
+  if (setupKey(type.kind) || setupCommitment(type.identity))
     return true;
   if (type.kind == "variant") {
     auto descriptor = decodeVariant(erasePhysicalType(type).spelling());

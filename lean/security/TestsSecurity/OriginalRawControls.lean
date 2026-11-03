@@ -60,17 +60,17 @@ example (model : DomainModel) (selection : Selection)
     (small : point.length < 64) (overflow : ¬ raw.length < indexLimit) :
     invoke (SumcheckReferenceInstallation.tables model (source selection).payload.definitions).closed
       Generated.Bindings.SmallSumcheckInputs.helper33Helper
-      (ReferenceLibrary.Multilinear.Admission.checkInputs model field raw point scalar) = .halt .exhausted :=
+      (ReferenceLibrary.Multilinear.Admission.terminalInputs model field SumcheckPendingBodies.custodySlot raw 0 point scalar) = .halt .exhausted :=
 by
   rw [Evaluation.closed_invoke_componentTablesOn]
   rw [SourceAdmission.check_overflow model field _ (source selection).payload.linked
-    (admissionBodies selection) raw point scalar overflow small]
+    (admissionBodies selection) raw 0 point scalar overflow small]
   rfl
 
 /-- The actual output tuple preserves the absent private producer coordinates. -/
 example (model : DomainModel) (point : List (model.Field field)) (scalar : model.Field field) :
-    SumcheckVerifierBodies.reduceReturnValues (SumcheckReferenceInstallation.state model (some point) (some scalar)) =
-      .cons none (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) .nil))))) := rfl
+    SumcheckVerifierBodies.reduceReturnValues (some 0) (SumcheckReferenceInstallation.state model (some point) (some scalar)) =
+      .cons none (.cons none (.cons none (.cons none (.cons (some 0) (.cons (some point) (.cons (some scalar) .nil)))))) := rfl
 
 /-- A single actual source round, retaining both iteration observations. -/
 def oneRound (selection : Selection) (site : String) (raw : List ℚ) (scalar : ℚ) :
@@ -79,7 +79,7 @@ def oneRound (selection : Selection) (site : String) (raw : List ℚ) (scalar : 
   PIR.Process.call (.enter ⟨SourceIteration.repeatSite ctx, 0⟩) fun _ =>
   (SumcheckReferenceInstallation.reference model ctx (some 0) (some []) (some scalar)).bind fun returned =>
   .call (.leave ⟨SourceIteration.repeatSite ctx, 0⟩) fun _ =>
-  SourceIteration.terminalCheck model selection raw (SumcheckVerifierBodies.reduceReturnValues returned)
+  SourceIteration.terminalCheck model selection raw (SumcheckVerifierBodies.reduceReturnValues (some 0) returned)
 
 theorem one_round (selection : Selection) (site : String) (raw : List ℚ) (scalar : ℚ) :
     SourceRootReference.one model selection {} site (some raw) (some scalar) (some 1) (some 0) =

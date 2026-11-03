@@ -116,8 +116,8 @@ def CheckedBody.prependCalculation {payload : UnitPayload} {key : CalleeKey}
     {selection : Selection payload.definitions entry.earlierKeys}
     (placement : Placement key) (operation : Calculation) (total : operation.op.total = true)
     (terms : Terms [] placement.scope operation.op.arguments) (references : List Nat)
-    (inputsData : operation.op.arguments.all Domain.dataType = true)
-    (outputsData : operation.op.results.all Domain.dataType = true)
+    (inputsData : operation.op.arguments.all Domain.localType = true)
+    (outputsData : operation.op.results.all Domain.localType = true)
     (readback : Readback placement.layout (ConnectionComputation.components terms)
       (references.map Original.Location.data))
     (body : CheckedBody entry routing selection (placement.afterCalculation operation total terms)) :

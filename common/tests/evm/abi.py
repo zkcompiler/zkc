@@ -10,9 +10,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
 from hash_chain_reference import keccak256  # noqa: E402
+import target  # noqa: E402
 
-SELECTOR = keccak256(b"verify(bytes[],bytes,bytes)")[:4]
-MAX_CALLDATA = 256 * 1024
+# The declared signature's selector, recomputed with the independent Keccak.
+SELECTOR = keccak256(target.SIGNATURE.encode())[:4]
+if SELECTOR != target.SELECTOR:
+    raise ValueError("declared selector differs from the Keccak-256 of its signature")
+MAX_CALLDATA = target.LIMITS["calldata_bytes"]
 
 
 def word(value):

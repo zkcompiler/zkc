@@ -7,7 +7,7 @@ fn digest(s: &str) -> String {
     crate::io::bytes::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, name: &str, leaves: Json) -> Json {
-    json!({"kind":kind,"type":name,"identity":digest(name),"custody":false,"constructible":true,
+    json!({"kind":kind,"type":name,"identity":digest(name),"generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,
         "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
 fn boolean() -> Json {
@@ -24,7 +24,7 @@ fn record(name: &str, fields: Vec<(&str, Json)>, constructible: bool) -> Json {
     let mut leaves = Vec::new();
     let mut result = Vec::new();
     for (name, s) in fields {
-        result.push(json!({"name":name,"offset":offset,"schema":s}));
+        result.push(json!({"name":name,"offset":offset,"public":true,"placement":null,"schema":s}));
         let children = s["leaves"].as_array().unwrap();
         offset += children.len();
         leaves.extend(children.iter().cloned());
@@ -145,11 +145,13 @@ fn compact_source_schemas_cannot_exceed_the_native_descriptor_cache_limit() {
         }]);
         let doc = document(parameters, unit(), operations, json!([count]));
         // Source inspection remains independent of native cache layout.
-        FunctionInterface::read(&capture(&doc)).unwrap();
+        FunctionInterface::read(&capture(&doc), crate::entry::InterfaceLimits::DEFAULT).unwrap();
         if count == 6 {
             admit(&doc).unwrap();
         } else {
-            refusal(&doc, "entry-interface-limit");
+            // The cache's retained descriptors exhaust the selected
+            // descriptor allowance, not a ceiling of the document.
+            refusal(&doc, "entry-interface-descriptor-bytes-limit");
         }
     }
 }
@@ -753,6 +755,109 @@ fn repeated_children_exhaust_one_cumulative_meter_and_suppress_return() {
     assert!(r.usage.execution.instructions > 1);
 }
 #[test]
+fn a_child_has_one_fuel_limit_the_pooled_meter() {
+    let run = |instructions| {
+        let mut options = FunctionOptions::default();
+        options.limits.capacity.work.instructions = instructions;
+        let entry =
+            FunctionEntry::admit(capture(&numeric_document()), options, BTreeMap::new()).unwrap();
+        entry
+            .prepare(request(vec![
+                (
+                    "a",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(7u64)).into(),
+                ),
+                (
+                    "b",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(9u64)).into(),
+                ),
+            ]))
+            .unwrap()
+            .execute()
+    };
+    let complete = run(1_000_000);
+    assert!(complete.is_success(), "{}", complete.diagnostics());
+    // The receipt keeps the child's own usage and the root's when it ended,
+    // and no fuel figure of the child's own: its limit is the pooled meter.
+    let receipt = &complete.calls[0].native;
+    assert_eq!(
+        receipt.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["invocation", "stop", "usage"]
+    );
+    assert_eq!(receipt["stop"], Json::Null);
+    let child = receipt["usage"]["instructions"].as_u64().unwrap();
+    let total = complete.usage.execution.instructions;
+    assert_eq!(receipt["invocation"]["instructions"], json!(total));
+    assert_eq!(
+        complete.diagnostics()["invocation"]["instructions"],
+        json!(total)
+    );
+    // The Function's own charges precede the child, which is its last work.
+    let before = total - child;
+    assert!(child > 1 && before > 0);
+    // A selection that is exactly the invocation's work completes it: the
+    // child runs to the end of the pooled meter, with no figure of its own.
+    assert!(run(total).is_success());
+    // One instruction less stops the child with its own limit stop exactly
+    // when the pooled meter is exhausted, with both usages kept.
+    let stopped = run(total - 1);
+    assert_eq!(stopped.failure.unwrap().code, "entry-host-numeric-stopped");
+    let receipt = &stopped.calls[0].native;
+    assert_eq!(receipt["stop"]["kind"], "Limit");
+    assert_eq!(receipt["usage"]["instructions"], json!(child - 1));
+    assert_eq!(receipt["invocation"]["instructions"], json!(total - 1));
+    assert_eq!(stopped.usage.execution.instructions, total - 1);
+    assert!(!stopped.calls[0].completed);
+}
+#[test]
+fn the_interpreters_own_charges_name_the_exhausted_meter() {
+    let c = calculation();
+    let f = c["results"][0].clone();
+    let mut d = document(
+        vec![
+            ("a", f.clone()),
+            ("b", f.clone()),
+            ("lo", index()),
+            ("hi", index()),
+        ],
+        f.clone(),
+        json!([{"op":"for","carried":1,"operands":[2,3,0,1],"results":[definition(8,f.clone())],
+        "regions":[block(json!([definition(4,index()),definition(5,f.clone()),definition(6,f.clone())]),json!([{"op":"numeric","calculation":"sum","operands":[5,6],"results":[definition(7,f.clone())]}]),json!([7]))]}]),
+        json!([8]),
+    );
+    d["calculations"] = json!([c]);
+    let run = |instructions, iterations| {
+        let mut options = FunctionOptions::default();
+        options.limits.capacity.work.instructions = instructions;
+        options.limits.capacity.work.iterations = iterations;
+        let entry = FunctionEntry::admit(capture(&d), options, BTreeMap::new()).unwrap();
+        entry
+            .prepare(request(vec![
+                (
+                    "a",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
+                ),
+                (
+                    "b",
+                    zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
+                ),
+                ("lo", 0u64.into()),
+                ("hi", 20u64.into()),
+            ]))
+            .unwrap()
+            .execute()
+    };
+    // Entering the function takes the only instruction; its first operation
+    // finds none left.
+    let report = run(1, 100);
+    assert_eq!(report.failure.unwrap().code, "entry-host-instruction-limit");
+    assert_eq!(report.usage.execution.instructions, 1);
+    // No iteration is left for the loop's first step.
+    let report = run(1000, 0);
+    assert_eq!(report.failure.unwrap().code, "entry-host-iteration-limit");
+    assert_eq!(report.usage.execution.iterations, 0);
+}
+#[test]
 fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
     let input = || {
         request(vec![
@@ -776,14 +881,16 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
     let field = d["calculations"][0]["results"][0].clone();
     d["functions"][0]["body"]["operations"].as_array_mut().unwrap().push(json!({"op":"numeric","calculation":"sum","operands":[0,1],"results":[definition(3,field)]}));
     d["functions"][0]["body"]["returns"] = json!([3]);
+    let logical_bound = one.usage.execution.logical_bytes + 16 * 1024;
+    let fresh_bound = one.usage.execution.total_value_bytes + 16 * 1024;
     for logical in [false, true] {
+        // The record's selection bounds the whole invocation: each child fits
+        // it, yet their sum does not, and the reported usage stays within it.
         let mut options = FunctionOptions::default();
         if logical {
-            options.limits.capacity.work.logical_bytes =
-                one.usage.execution.logical_bytes + 16 * 1024;
+            options.limits.capacity.work.logical_bytes = logical_bound;
         } else {
-            options.limits.capacity.values.total_bytes =
-                one.usage.execution.total_value_bytes + 16 * 1024;
+            options.limits.capacity.values.total_bytes = fresh_bound;
         }
         let entry = FunctionEntry::admit(capture(&d), options.clone(), BTreeMap::new()).unwrap();
         let report = entry.prepare(input()).unwrap().execute();
@@ -791,10 +898,9 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
         assert!(report.failure.is_some());
         assert_eq!(report.calls.len(), 1);
         assert!(report.calls[0].completed);
-        assert!(report.usage.execution.logical_bytes <= options.limits.capacity.work.logical_bytes);
-        assert!(
-            report.usage.execution.total_value_bytes <= options.limits.capacity.values.total_bytes
-        );
+        let selected = options.limits.capacity;
+        assert!(report.usage.execution.logical_bytes <= selected.work.logical_bytes);
+        assert!(report.usage.execution.total_value_bytes <= selected.values.total_bytes);
     }
 }
 #[test]
@@ -911,17 +1017,20 @@ fn joint_inputs_keep_independent_role_copies_and_cleanup_receipt() {
     .unwrap();
     let report = entry.prepare(joint_request()).unwrap().execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut roles) = report.value.unwrap().into_value() else {
-        panic!("record")
-    };
-    let Value::Record(mut p) = roles.remove("P").unwrap() else {
-        panic!("P")
-    };
-    let Value::Record(mut v) = roles.remove("V").unwrap() else {
-        panic!("V")
-    };
-    assert!(bool::try_from(p.remove("結果").unwrap()).unwrap());
-    assert!(!bool::try_from(v.remove("結果").unwrap()).unwrap());
+    let roles = report.value.unwrap().into_value();
+    assert!(
+        bool::try_from(
+            roles
+                .field("P")
+                .unwrap()
+                .field("結果")
+                .unwrap()
+                .leaf()
+                .unwrap()
+        )
+        .unwrap()
+    );
+    assert!(!bool::try_from(roles.field("V").unwrap().field("結果").unwrap()).unwrap());
     assert_eq!(report.usage.dispatches, 3);
     assert!(
         report.calls[0].native["cleanup_errors"]
@@ -1061,13 +1170,9 @@ fn produced_bytes() -> Vec<u8> {
         .unwrap()
         .execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut result) = report.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut proof) = result.remove("proof").unwrap() else {
-        panic!("proof")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = proof.remove("bytes").unwrap()
+    let result = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(v)) =
+        result.field("proof").unwrap().field("bytes").unwrap()
     else {
         panic!("bytes")
     };
@@ -1086,15 +1191,9 @@ fn proof_exact_bytes_round_trip_wrong_public_and_malformed_are_distinct() {
         .unwrap()
         .execute();
     assert!(accepted.is_success(), "{}", accepted.diagnostics());
-    let Value::Variant {
-        alternative,
-        fields,
-    } = accepted.value.unwrap().into_value()
-    else {
-        panic!("variant")
-    };
-    assert_eq!(alternative, "Accepted");
-    assert!(fields.contains_key("outputs"));
+    let accepted = accepted.value.unwrap().into_value();
+    assert_eq!(accepted.alternative().unwrap(), "Accepted");
+    assert!(accepted.variant_field("Accepted", "outputs").is_ok());
     let wrong = entry
         .prepare(proof_request(false, false, bytes.clone()))
         .unwrap()
@@ -1146,13 +1245,9 @@ fn verification_rejection_has_no_outputs_and_cleanup_remains_separate() {
         .unwrap()
         .execute();
     assert!(produced.is_success(), "{}", produced.diagnostics());
-    let Value::Record(mut result) = produced.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut proof) = result.remove("proof").unwrap() else {
-        panic!("proof")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = proof.remove("bytes").unwrap()
+    let result = produced.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(v)) =
+        result.field("proof").unwrap().field("bytes").unwrap()
     else {
         panic!("bytes")
     };
@@ -1164,15 +1259,12 @@ fn verification_rejection_has_no_outputs_and_cleanup_remains_separate() {
         .unwrap()
         .execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Variant {
-        alternative,
-        fields,
-    } = report.value.unwrap().into_value()
-    else {
-        panic!("variant")
-    };
-    assert_eq!(alternative, "Rejected");
-    assert!(fields.is_empty());
+    let value = report.value.unwrap().into_value();
+    assert_eq!(value.alternative().unwrap(), "Rejected");
+    assert_eq!(
+        value.variant_field("Rejected", "outputs").unwrap_err(),
+        "entry-value-projection"
+    );
     assert_eq!(
         report.calls[0].native["verification_decision"],
         json!("rejected")
@@ -1278,7 +1370,8 @@ fn native_output_retention_does_not_require_public_input_codec() {
     let ledger = ExecutionLedger::new(Default::default(), Default::default());
     let typed = data::from_output(entry.host(), schema, native.into(), &ledger).unwrap();
     assert!(ledger.snapshot().live_reserved_bytes > 0);
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = typed.into_value() else {
+    let Value::Leaf(crate::execution::InputValue::Native(v)) = typed.into_value().leaf().unwrap()
+    else {
         panic!("native polynomial")
     };
     assert!(matches!(*v, zkc_cpu::Value::Polynomial(_)));
@@ -1371,13 +1464,14 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
     );
     let report = entry.prepare(request).unwrap().execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut roles) = report.value.unwrap().into_value() else {
-        panic!("roles")
-    };
-    let Value::Record(mut outputs) = roles.remove("P").unwrap() else {
-        panic!("outputs")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(value)) = outputs.remove("結果").unwrap()
+    let roles = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(value)) = roles
+        .field("P")
+        .unwrap()
+        .field("結果")
+        .unwrap()
+        .leaf()
+        .unwrap()
     else {
         panic!("polynomial")
     };
@@ -1390,7 +1484,8 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
 fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress() {
     use zkc_runtime::vm::{LogicalType, PhysicalType};
     let vector = schema("builtin", "Vector", json!(["vector:bls12-381.fr"]));
-    let polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
+    let mut polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
+    polynomial["constructible"] = json!(false);
     let physical = |name| {
         PhysicalType::default_for(LogicalType::parse(name).unwrap())
             .unwrap()
@@ -1421,7 +1516,7 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     )
     .err()
     .expect("public ingress remains closed");
-    assert_eq!(refused.code(), "entry-input-codec");
+    assert_eq!(refused.code(), "entry-input-constructor");
     let (public, _, proof, _, _) = proof_schemas();
     let family = "数学::証明₂";
     let witness = record(
@@ -1503,13 +1598,14 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     );
     let report = entry.prepare(request).unwrap().execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut result) = report.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut outputs) = result.remove("outputs").unwrap() else {
-        panic!("outputs")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(value)) = outputs.remove("結果").unwrap()
+    let result = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(value)) = result
+        .field("outputs")
+        .unwrap()
+        .field("結果")
+        .unwrap()
+        .leaf()
+        .unwrap()
     else {
         panic!("polynomial")
     };
@@ -1563,13 +1659,9 @@ fn single_endpoint_proof_children_preserve_independent_operation_closures() {
         .unwrap()
         .execute();
     assert!(report.is_success(), "{}", report.diagnostics());
-    let Value::Record(mut result) = report.value.unwrap().into_value() else {
-        panic!("result")
-    };
-    let Value::Record(mut proof) = result.remove("proof").unwrap() else {
-        panic!("proof")
-    };
-    let Value::Leaf(crate::execution::InputValue::Native(v)) = proof.remove("bytes").unwrap()
+    let result = report.value.unwrap().into_value();
+    let Value::Leaf(crate::execution::InputValue::Native(v)) =
+        result.field("proof").unwrap().field("bytes").unwrap()
     else {
         panic!("bytes")
     };
@@ -1638,10 +1730,29 @@ fn parent_live_reservations_limit_child_construction_before_effects() {
         - prepared.ledger.snapshot().live_reserved_bytes;
     let parent = prepared.ledger.reserve_live(remaining - 1024).unwrap();
     let report = prepared.execute();
-    assert!(report.failure.is_some());
+    // The root names the allowance that refused the Function's storage.
+    assert_eq!(
+        report.failure.as_ref().unwrap().code,
+        "entry-host-bytes-limit"
+    );
     assert!(report.value.is_none());
     assert!(report.calls.is_empty());
     assert!(report.usage.execution.live_reserved_bytes >= parent.bytes());
+    drop(parent);
+    // With room for the diagnostics scratch and the interpreter's frames but
+    // not for the first child call's receipt, the child dispatch refuses with
+    // the same code before any receipt or child exists.
+    let prepared = entry.prepare(joint_request()).unwrap();
+    let remaining = entry.host.options.limits.capacity.values.live_bytes
+        - prepared.ledger.snapshot().live_reserved_bytes;
+    let room = crate::host::diagnostics::SCRATCH_BYTES + 32 * 1024;
+    let parent = prepared.ledger.reserve_live(remaining - room).unwrap();
+    let report = prepared.execute();
+    let failure = report.failure.as_ref().unwrap();
+    assert_eq!(failure.code, "entry-host-bytes-limit");
+    assert_eq!(failure.path.last().map(String::as_str), Some("operation:0"));
+    assert!(report.calls.is_empty());
+    assert_eq!(report.usage.dispatches, 0);
     drop(parent);
 }
 
@@ -2134,7 +2245,7 @@ fn nested_variant_measurement_refuses_with_exhausted_shared_work() {
             &ledger,
         )
         .unwrap_err(),
-        "Limit"
+        "entry-host-work-limit"
     );
     let usage = ledger.snapshot();
     assert_eq!(usage.logical_bytes, work);
@@ -2264,7 +2375,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
                     &ledger,
                 )
             };
-            assert_eq!(result.unwrap_err(), "Limit");
+            assert_eq!(result.unwrap_err(), "entry-host-work-limit");
             let usage = ledger.snapshot();
             assert_eq!(usage.logical_bytes, 3 * work);
             assert_eq!(usage.live_reserved_bytes, held);
@@ -2296,7 +2407,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         pair_value(&native, false),
         &ledger,
     );
-    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(result.unwrap_err(), "entry-host-work-limit");
     assert_eq!(ledger.snapshot().logical_bytes, work);
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 
@@ -2319,7 +2430,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         vec![value.clone()],
         &ledger,
     );
-    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(result.unwrap_err(), "entry-host-bytes-limit");
     assert_eq!(ledger.snapshot().logical_bytes, 0);
     assert_eq!(ledger.snapshot().live_reserved_bytes, held);
     drop(value);
@@ -2335,7 +2446,7 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         capacity.work,
     );
     let result = data::from_output(entry.host(), &entry.signature().result, output(), &ledger);
-    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(result.unwrap_err(), "entry-host-bytes-limit");
     let usage = ledger.snapshot();
     assert_eq!(usage.logical_bytes, work);
     assert_eq!(usage.live_reserved_bytes, 0);
@@ -2539,4 +2650,617 @@ fn selected_installation_reaches_nested_proof_program_decoding() {
     .unwrap();
     assert_eq!(failure.phase, EntryPhase::Admission);
     assert_eq!(failure.code(), "Backend: installation-binding");
+}
+
+fn identity_entry(options: FunctionOptions) -> FunctionEntry {
+    let doc = document(vec![("flag", boolean())], boolean(), json!([]), json!([0]));
+    FunctionEntry::admit(capture(&doc), options, BTreeMap::new()).unwrap()
+}
+#[test]
+fn result_encoding_charges_the_function_invocation_ledger() {
+    let encoder = crate::entry::outputs::FunctionResultEncoder {
+        installation: Default::default(),
+        setups: Default::default(),
+        capacity: Default::default(),
+    };
+    let cpu = CpuExecution::serial().unwrap();
+    let report = identity_entry(FunctionOptions::default())
+        .prepare(request(vec![("flag", true.into())]))
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{}", report.diagnostics());
+    let ledger = report.invocation_ledger().clone();
+    let before = ledger.snapshot();
+    assert_eq!(
+        before.total_value_bytes,
+        report.usage.execution.total_value_bytes
+    );
+    let encoded = encoder.encode_report(&report, cpu.clone()).unwrap();
+    let document: Json = serde_json::from_slice(encoded.as_bytes()).unwrap();
+    assert_eq!(
+        document,
+        json!({"format":"zkc.entry-outputs/0","value":true})
+    );
+    let held = ledger.snapshot();
+    assert!(held.live_reserved_bytes >= before.live_reserved_bytes + encoded.as_bytes().len());
+    assert!(held.total_value_bytes > before.total_value_bytes);
+    drop(encoded);
+    assert_eq!(
+        ledger.snapshot().live_reserved_bytes,
+        before.live_reserved_bytes
+    );
+    // Leave the execution's own work and less than the encoder's first
+    // 512-byte buffer reservation: execution completes, encoding refuses.
+    let mut options = FunctionOptions::default();
+    options.limits.capacity.work.logical_bytes = before.logical_bytes + 511;
+    let report = identity_entry(options)
+        .prepare(request(vec![("flag", true.into())]))
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{}", report.diagnostics());
+    assert_eq!(
+        encoder.encode_report(&report, cpu).err().unwrap(),
+        "entry-output-limit"
+    );
+}
+#[test]
+fn function_policy_owns_child_ring_sequence_and_attempt_settings() {
+    use crate::host::capacity::Allowances;
+    let defaults = FunctionOptions::default();
+    assert_eq!(defaults.limits.ring_work, Allowances::RING_WORK.default);
+    assert_eq!(
+        defaults.limits.sequence_work,
+        Allowances::SEQUENCE_WORK.default
+    );
+    assert!(defaults.attempts.is_empty());
+    for (ring, sequence, code) in [
+        (
+            Allowances::RING_WORK.maximum + 1,
+            0,
+            "bundle-ring-work-limit",
+        ),
+        (
+            0,
+            Allowances::SEQUENCE_WORK.maximum + 1,
+            "bundle-sequence-work-limit",
+        ),
+    ] {
+        let mut options = FunctionOptions::default();
+        options.limits.ring_work = ring;
+        options.limits.sequence_work = sequence;
+        let error = FunctionEntry::admit(
+            capture(&proof_document(true)),
+            options,
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.code(), code);
+    }
+    // The record's byte selections, which bound the invocation root, and
+    // the loading work refuse above their maxima too.
+    for (change, code) in [
+        (
+            (|limits: &mut crate::run::HostLimits| {
+                limits.capacity.values.live_bytes =
+                    crate::execution::Capacity::HARD_MAX.values.live_bytes + 1
+            }) as fn(&mut crate::run::HostLimits),
+            "native-capacity-limit",
+        ),
+        (
+            |limits| limits.loading_work = Allowances::LOADING_WORK.maximum + 1,
+            "bundle-loading-work-limit",
+        ),
+    ] {
+        let mut options = FunctionOptions::default();
+        change(&mut options.limits);
+        let error = FunctionEntry::admit(
+            capture(&proof_document(true)),
+            options,
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            (error.phase, error.code()),
+            (crate::entry::EntryPhase::Admission, code)
+        );
+    }
+    // Explicit retries follow the standalone proof Entry: only a producing
+    // deployment with a completion choice accepts them.
+    let attempts = |deployment: &str, producing| {
+        let options = FunctionOptions {
+            binding: crate::entry::BindingPolicy::AllowAuthored,
+            attempts: BTreeMap::from([(
+                deployment.into(),
+                crate::entry::AttemptOptions::default(),
+            )]),
+            ..FunctionOptions::default()
+        };
+        FunctionEntry::admit(
+            capture(&proof_document(producing)),
+            options,
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .unwrap()
+        .code()
+        .to_owned()
+    };
+    assert_eq!(attempts("absent", true), "entry-host-attempts");
+    assert_eq!(attempts("proof", false), "entry-attempt-operation");
+    assert_eq!(attempts("proof", true), "entry-attempt-completion");
+    // The invocation-scoped journal and draw-reservation allowances admit
+    // their maxima and refuse anything above them, without clamping.
+    assert_eq!(
+        defaults.journal_events as u64,
+        Allowances::JOURNAL_EVENTS.default
+    );
+    assert_eq!(
+        defaults.service_draws,
+        Allowances::FUNCTION_SERVICE_DRAWS.default
+    );
+    let admit = |journal_events: u64, service_draws| {
+        FunctionEntry::admit(
+            capture(&proof_document(true)),
+            FunctionOptions {
+                binding: crate::entry::BindingPolicy::AllowAuthored,
+                journal_events: journal_events as usize,
+                service_draws,
+                ..FunctionOptions::default()
+            },
+            BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+        )
+        .err()
+        .map(|error| error.code().to_owned())
+    };
+    assert_eq!(
+        admit(
+            Allowances::JOURNAL_EVENTS.maximum,
+            Allowances::FUNCTION_SERVICE_DRAWS.maximum
+        ),
+        None
+    );
+    assert_eq!(
+        admit(
+            Allowances::JOURNAL_EVENTS.maximum + 1,
+            Allowances::FUNCTION_SERVICE_DRAWS.default
+        )
+        .as_deref(),
+        Some("entry-host-journal-limit")
+    );
+    assert_eq!(
+        admit(
+            Allowances::JOURNAL_EVENTS.default,
+            Allowances::FUNCTION_SERVICE_DRAWS.maximum + 1
+        )
+        .as_deref(),
+        Some("entry-host-service-limit")
+    );
+}
+
+/// Edit one member of a captured package frame, keeping every other byte.
+fn edited_package(package: &Package, edit: impl FnOnce(&mut Json)) -> Package {
+    let mut frame: Json = serde_json::from_slice(package.bytes()).unwrap();
+    edit(&mut frame);
+    let bytes = frame.to_string();
+    Package::capture(
+        bytes.as_bytes(),
+        &Sha256::digest(bytes.as_bytes()).into(),
+        Package::MAX_BYTES,
+    )
+    .unwrap()
+}
+fn with_interface(package: &Package, edit: impl FnOnce(&mut Json)) -> Package {
+    edited_package(package, |frame| {
+        let mut interface: Json =
+            serde_json::from_str(frame["interface"].as_str().unwrap()).unwrap();
+        edit(&mut interface);
+        frame["interface"] = json!(interface.to_string());
+    })
+}
+#[test]
+fn shared_refusals_have_one_code_and_phase_in_every_entry_kind() {
+    use crate::entry::{
+        BindingPolicy, EntryCondition as C, MAX_DRAW_BUDGET, ProofEntry, ProofOptions,
+        ProofRequest, RoleInputs, RunEntry, RunRequest,
+    };
+    type Outcome = std::result::Result<(), (EntryPhase, String)>;
+    let outcome =
+        |result: Result<()>| -> Outcome { result.map_err(|e| (e.phase, e.code().to_owned())) };
+    // A Function with a run child whose role P owns a service, its standalone
+    // run package, and an authored proof package.
+    let function_doc = service_document();
+    let function_package = capture(&function_doc);
+    let run_package = Package::capture(
+        function_doc["deployments"][0]["package"]
+            .as_str()
+            .unwrap()
+            .as_bytes(),
+        &Sha256::digest(
+            function_doc["deployments"][0]["package"]
+                .as_str()
+                .unwrap()
+                .as_bytes(),
+        )
+        .into(),
+        Package::MAX_BYTES,
+    )
+    .unwrap();
+    let (proof_interface, proof_artifact) =
+        crate::entry::interface::tests::unicode::proof_fixture();
+    let proof_package = package(&proof_interface, &proof_artifact);
+    let proof_options = ProofOptions {
+        binding: BindingPolicy::AllowAuthored,
+        ..Default::default()
+    };
+    let joint = || BTreeMap::from([("joint".into(), SetupAuthority::default())]);
+
+    let run_request = |edit: &dyn Fn(&mut RunRequest)| {
+        let mut request = RunRequest {
+            session: "conditions".into(),
+            setups: BTreeMap::new(),
+            roles: [("P", true), ("V", false)]
+                .map(|(role, value)| {
+                    (
+                        role.to_owned(),
+                        RoleInputs {
+                            inputs: [("入力".into(), value.into())].into(),
+                            ..Default::default()
+                        },
+                    )
+                })
+                .into(),
+        };
+        edit(&mut request);
+        request
+    };
+    let run = |edit: &dyn Fn(&mut RunRequest)| -> Outcome {
+        let entry = RunEntry::admit(run_package.clone(), Default::default(), Default::default())
+            .map_err(|e| (e.phase, e.code().to_owned()))?;
+        outcome(entry.prepare(run_request(edit)).map(drop))
+    };
+    let proof = |edit: &dyn Fn(&mut ProofRequest)| -> Outcome {
+        let entry = ProofEntry::admit(
+            proof_package.clone(),
+            proof_options.clone(),
+            Default::default(),
+        )
+        .map_err(|e| (e.phase, e.code().to_owned()))?;
+        let mut request = ProofRequest {
+            public: [("公開".into(), true.into())].into(),
+            private: RoleInputs {
+                inputs: [("秘密".into(), false.into())].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        edit(&mut request);
+        outcome(entry.prove(request).map(drop))
+    };
+    let function = |edit: &dyn Fn(&mut FunctionRequest)| -> Outcome {
+        let entry = FunctionEntry::admit(function_package.clone(), Default::default(), joint())
+            .map_err(|e| (e.phase, e.code().to_owned()))?;
+        let mut request = joint_request();
+        edit(&mut request);
+        outcome(entry.prepare(request).map(drop))
+    };
+    let run_context = |request: &mut FunctionRequest, edit: &dyn Fn(&mut RunContext)| {
+        let Some(InvocationBinding::Run(context)) = request.context.deployments.get_mut("joint")
+        else {
+            panic!("run context")
+        };
+        edit(context);
+    };
+    let refused =
+        |condition: C| -> Outcome { Err((condition.phase(), condition.code().to_owned())) };
+    // Every kind accepts the unedited request.
+    assert_eq!(run(&|_| ()), Ok(()));
+    assert_eq!(proof(&|_| ()), Ok(()));
+    assert_eq!(function(&|_| ()), Ok(()));
+    for (condition, outcomes) in [
+        (
+            C::InputNames,
+            vec![
+                run(&|r| {
+                    r.roles
+                        .get_mut("P")
+                        .unwrap()
+                        .inputs
+                        .insert("unknown".into(), true.into());
+                }),
+                proof(&|r| {
+                    r.public.insert("unknown".into(), true.into());
+                }),
+                function(&|r| {
+                    r.arguments.insert("unknown".into(), true.into());
+                }),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles
+                            .entry("P".into())
+                            .or_default()
+                            .inputs
+                            .insert("unknown".into(), true.into());
+                    })
+                }),
+            ],
+        ),
+        (
+            C::InputRoles,
+            vec![
+                run(&|r| {
+                    r.roles.insert("unknown".into(), RoleInputs::default());
+                }),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles.insert("unknown".into(), RoleInputs::default());
+                    })
+                }),
+            ],
+        ),
+        (
+            C::ServiceNames,
+            vec![
+                run(&|r| {
+                    r.roles
+                        .get_mut("P")
+                        .unwrap()
+                        .services
+                        .insert("unknown".into(), 1);
+                }),
+                proof(&|r| {
+                    r.private.services.insert("unknown".into(), 1);
+                }),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles
+                            .entry("P".into())
+                            .or_default()
+                            .services
+                            .insert("unknown".into(), 1);
+                    })
+                }),
+            ],
+        ),
+        (
+            C::ServiceBudget,
+            vec![
+                run(&|r| {
+                    r.roles
+                        .get_mut("P")
+                        .unwrap()
+                        .services
+                        .insert("randomness".into(), MAX_DRAW_BUDGET + 1);
+                }),
+                proof(&|r| r.transcript_budget = Some(MAX_DRAW_BUDGET + 1)),
+                function(&|r| {
+                    run_context(r, &|c| {
+                        c.roles
+                            .entry("P".into())
+                            .or_default()
+                            .services
+                            .insert("randomness".into(), MAX_DRAW_BUDGET + 1);
+                    })
+                }),
+            ],
+        ),
+    ] {
+        for (kind, actual) in outcomes.into_iter().enumerate() {
+            assert_eq!(actual, refused(condition), "{condition:?} #{kind}");
+        }
+    }
+    // Interface refusals at admission.
+    let admit = |run_package: Package, proof_package: Package, function_package: Package| {
+        [
+            outcome(RunEntry::admit(run_package, Default::default(), Default::default()).map(drop)),
+            outcome(
+                ProofEntry::admit(proof_package, proof_options.clone(), Default::default())
+                    .map(drop),
+            ),
+            outcome(FunctionEntry::admit(function_package, Default::default(), joint()).map(drop)),
+        ]
+    };
+    let unparsable =
+        |p: &Package| edited_package(p, |frame| frame["interface"] = json!("{\"format\":"));
+    let unknown_member = |p: &Package| with_interface(p, |i| i["unknown"] = json!(true));
+    for packages in [
+        [
+            unparsable(&run_package),
+            unparsable(&proof_package),
+            unparsable(&function_package),
+        ],
+        [
+            unknown_member(&run_package),
+            unknown_member(&proof_package),
+            unknown_member(&function_package),
+        ],
+    ] {
+        let [r, p, f] = packages;
+        for actual in admit(r, p, f) {
+            assert_eq!(actual, refused(C::InterfaceFormat));
+        }
+    }
+    let other_original =
+        |p: &Package| with_interface(p, |i| i["original"] = json!(digest("other")));
+    for actual in admit(
+        other_original(&run_package),
+        other_original(&proof_package),
+        other_original(&function_package),
+    ) {
+        assert_eq!(actual, refused(C::InterfaceIdentity));
+    }
+    // A Function parameter that cannot be copied is an input custody refusal.
+    let mut moved = boolean();
+    moved["permissions"] = json!(["Drop"]);
+    let doc = document(
+        vec![("flag", moved.clone())],
+        boolean(),
+        json!([]),
+        json!([]),
+    );
+    let mut doc = doc;
+    doc["functions"][0]["body"]["returns"] = json!([]);
+    doc["functions"][0]["signature"]["result"] = unit();
+    assert_eq!(
+        outcome(FunctionEntry::admit(capture(&doc), Default::default(), BTreeMap::new()).map(drop)),
+        refused(C::InputCustody)
+    );
+}
+#[test]
+fn child_refusals_keep_their_phase_and_schema_path() {
+    let bytes = produced_bytes();
+    let mut options = FunctionOptions {
+        binding: crate::entry::BindingPolicy::AllowAuthored,
+        ..FunctionOptions::default()
+    };
+    // The proof child may move fewer wire bytes than the proof it verifies.
+    options.limits.total_wire_bytes = bytes.len() - 1;
+    let entry = FunctionEntry::admit(
+        capture(&proof_document(false)),
+        options,
+        BTreeMap::from([("proof".into(), SetupAuthority::default())]),
+    )
+    .unwrap();
+    let report = entry
+        .prepare(proof_request(false, true, bytes))
+        .unwrap()
+        .execute();
+    let failure = report.failure.as_ref().unwrap();
+    assert_eq!(failure.code, "native-proof-proof-limit");
+    let child = failure.entry.as_ref().unwrap();
+    assert_eq!(child.phase, EntryPhase::Preparation);
+    assert_eq!(child.code(), failure.code);
+    let diagnostics = report.diagnostics();
+    assert_eq!(diagnostics["failure"]["phase"], "Preparation");
+    assert_eq!(diagnostics["failure"]["code"], "native-proof-proof-limit");
+}
+
+/// Bindings generation and checked inspection read a Function interface under
+/// the Host's selected allowances: a lowered selection refuses each path that
+/// the default admits.
+#[test]
+fn function_interface_read_paths_take_the_selected_allowances() {
+    use crate::entry::InterfaceLimits;
+    let package = capture(&joint_document());
+    let lowered = InterfaceLimits {
+        work: 64,
+        ..InterfaceLimits::DEFAULT
+    };
+    let generate = |limits| crate::entry::bindings::rust(&package, limits).map(drop);
+    assert_eq!(generate(InterfaceLimits::DEFAULT), Ok(()));
+    assert_eq!(generate(lowered), Err("entry-interface-work-limit".into()));
+    #[cfg(feature = "project")]
+    {
+        use crate::project::CheckedInterface;
+        let read = |limits| CheckedInterface::read(&package, limits).map(drop);
+        let bytes = package.interface().as_bytes();
+        let compiled = |limits| CheckedInterface::from_compiler(bytes, limits).map(drop);
+        for path in [&read as &dyn Fn(InterfaceLimits) -> _, &compiled] {
+            assert_eq!(path(InterfaceLimits::DEFAULT), Ok(()));
+            assert_eq!(path(lowered), Err("entry-interface-work-limit".into()));
+        }
+    }
+}
+
+/// Static inspection reads the Host structure and every child interface under
+/// the Host's selected interface allowances, as admission does, so each needs
+/// the same least allowances.
+#[test]
+fn deployment_inspection_takes_the_selected_interface_allowances() {
+    use crate::entry::InterfaceLimits;
+    let package = capture(&joint_document());
+    let limits = |work| InterfaceLimits {
+        work,
+        ..InterfaceLimits::DEFAULT
+    };
+    let descriptors = |descriptor_bytes| InterfaceLimits {
+        descriptor_bytes,
+        ..InterfaceLimits::DEFAULT
+    };
+    // The least selection of one allowance under which a path succeeds; this
+    // fixture needs far less than a million of either.
+    let least = |select: &dyn Fn(usize) -> InterfaceLimits,
+                 admits: &dyn Fn(InterfaceLimits) -> bool| {
+        let (mut low, mut high) = (1, 1_000_000);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if admits(select(middle)) {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        low
+    };
+    let inspect = |l| FunctionInterface::deployment_interfaces(&package, l);
+    let context = |l| FunctionInterface::run_deployment_package(&package, "joint", l);
+    let admit = |l| {
+        FunctionEntry::admit(
+            package.clone(),
+            FunctionOptions {
+                limits: HostLimits {
+                    interface: l,
+                    ..HostLimits::default()
+                },
+                ..FunctionOptions::default()
+            },
+            BTreeMap::from([("joint".into(), SetupAuthority::default())]),
+        )
+    };
+    for select in [&limits as &dyn Fn(usize) -> InterfaceLimits, &descriptors] {
+        assert_eq!(
+            least(select, &|l| inspect(l).is_ok()),
+            least(select, &|l| admit(l).is_ok())
+        );
+    }
+    // The child interface retains the most descriptors, so inspection needs
+    // exactly what reading the child needs: it reads the child under the
+    // selection rather than the default.
+    let child = context(InterfaceLimits::DEFAULT).unwrap();
+    let needed = least(&descriptors, &|l| inspect(l).is_ok());
+    assert!(least(&descriptors, &|l| context(l).is_ok()) < needed);
+    assert_eq!(
+        least(&descriptors, &|l| {
+            crate::entry::BoundInterface::read(&child, l).is_ok()
+        }),
+        needed
+    );
+
+    let work = least(&limits, &|l| inspect(l).is_ok());
+    let refusal = |result: Result<()>| result.map_err(|e| (e.phase, e.code().to_owned()));
+    let limit = |phase| Err((phase, "entry-interface-work-limit".to_owned()));
+    for selected in [limits(work - 1), limits(64)] {
+        assert_eq!(
+            refusal(inspect(selected).map(drop)),
+            limit(EntryPhase::Interface)
+        );
+        assert_eq!(
+            refusal(admit(selected).map(drop)),
+            limit(EntryPhase::Interface)
+        );
+    }
+    assert_eq!(
+        refusal(context(limits(64)).map(drop)),
+        limit(EntryPhase::Interface)
+    );
+    // A raised selection up to the maximum is honored; above it every path
+    // refuses as policy, without clamping.
+    let maximum = limits(InterfaceLimits::MAXIMUM.work);
+    assert_eq!(inspect(maximum).unwrap().len(), 1);
+    context(maximum).unwrap();
+    admit(maximum).unwrap();
+    let above = limits(InterfaceLimits::MAXIMUM.work + 1);
+    assert_eq!(
+        refusal(inspect(above).map(drop)),
+        limit(EntryPhase::Admission)
+    );
+    assert_eq!(
+        refusal(context(above).map(drop)),
+        limit(EntryPhase::Admission)
+    );
+    assert_eq!(
+        refusal(admit(above).map(drop)),
+        limit(EntryPhase::Admission)
+    );
 }

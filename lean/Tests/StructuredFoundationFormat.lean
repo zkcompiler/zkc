@@ -159,7 +159,7 @@ def run : IO Unit := do
   let definition := arr [.str "function", .str "main", .str "protocol", .str "public",
     arr [field], arr [field], arr [.str "protocol", strs ["P"], arr [strs ["P"]], arr [strs ["P"]]],
     arr [], origin, arr [.str "block", arr [], arr [.str "return", arr [Json.num 0]]]]
-  let declarations := arr [arr [], arr []]
+  let declarations := arr [arr [], arr [], arr []]
   let envelope := [.str "zkc.structured-source/0", .str "original", .str digest,
     .str "main", arr [], arr [], arr [], arr [definition], arr [], arr [arr [], arr []], declarations]
   test "origin-source-association" (match Format.snapshot (arr envelope) with

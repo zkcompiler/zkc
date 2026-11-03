@@ -34,13 +34,14 @@ theorem Readback.payload {model : DomainModel} {scope : Scope}
     {layout : Layout scope} {environment : Domain.Environment model.toCarriers}
     {ty : Ty} {term : Term [] scope ty} {reference : Nat}
     (checked : Readback layout (.cons (.present term) .nil) [.data reference])
+    (data : ty.isHandle = false)
     (related : Holds model binders history layout environment) :
     ∃ payload, Domain.Payload.ofValue ty (term.eval (LawResults.empty model) binders) = some payload ∧
       environment[reference]? = some (.data payload) := by
   obtain ⟨value, physical, present, encoded, read⟩ := checked.component related
   have same : value = term.eval (LawResults.empty model) binders := Option.some.inj present.symm
   subst value
-  unfold Domain.Value.encode at encoded
+  rw [Domain.Value.encode_data data] at encoded
   cases found : Domain.Payload.ofValue ty (term.eval (LawResults.empty model) binders) with
   | none => simp only [found, Option.map_none] at encoded; cases encoded
   | some payload =>

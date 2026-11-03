@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use wasm_bindgen::prelude::*;
 use zkc::{
     entry::{
-        self, BindingPolicy, Package, ProofEntry, ProofOperation, ProofOptions,
+        self, BindingPolicy, InterfaceLimits, Package, ProofEntry, ProofOperation, ProofOptions,
         memory::ProofCallOptions,
     },
     execution::{Capacity, CpuInstallation, providers::Provider},
@@ -18,6 +18,7 @@ type Result<T> = std::result::Result<T, String>;
 #[serde(default, deny_unknown_fields)]
 struct Options {
     capacity: Option<Json>,
+    interface_limits: Option<Json>,
     package_bytes: Option<usize>,
     allow_authored: bool,
     operation: Operation,
@@ -47,7 +48,8 @@ pub struct ProofSession {
 #[wasm_bindgen]
 impl ProofSession {
     /// Options are bounded JSON, not a new package or proof format. `capacity`
-    /// uses the SDK's existing capacity record. Empty authority means no setups.
+    /// uses the SDK's existing capacity record and `interface_limits` its
+    /// interface allowance record. Empty authority means no setups.
     #[wasm_bindgen(constructor)]
     pub fn new(package: &[u8], pin: &[u8], options: &str, authority: &[u8]) -> Result<Self> {
         if options.len() > 64 * 1024 {
@@ -57,8 +59,10 @@ impl ProofSession {
         let installation = match options.providers {
             None => CpuInstallation::standard(),
             Some(providers) => {
+                // Each element names an installed provider; uniqueness alone
+                // bounds the selection by the installed set.
                 let unique: std::collections::BTreeSet<_> = providers.iter().copied().collect();
-                if providers.len() > 5 || unique.len() != providers.len() {
+                if unique.len() != providers.len() {
                     return Err("web-options".into());
                 }
                 providers
@@ -73,6 +77,13 @@ impl ProofSession {
         let capacity = options.capacity.map_or_else(
             || Ok(Capacity::default()),
             |v| Capacity::parse(v.to_string().as_bytes()),
+        )?;
+        // Admission reads the package's interface under this selection. A
+        // selection above a maximum refuses with that allowance's code before
+        // any package byte is read.
+        let interface = options.interface_limits.map_or_else(
+            || Ok(InterfaceLimits::DEFAULT),
+            |v| InterfaceLimits::parse(v.to_string().as_bytes()),
         )?;
         let pin = pin.try_into().map_err(|_| "entry-package-pin")?;
         let capture_started = now();
@@ -90,6 +101,7 @@ impl ProofSession {
         };
         let mut settings = ProofOptions {
             capacity,
+            interface,
             installation,
             binding: if options.allow_authored {
                 BindingPolicy::AllowAuthored
@@ -128,16 +140,24 @@ impl ProofSession {
     }
 
     /// Supply material for an independently pinned slot. SDK preflight checks
-    /// its authority before execution. Persistent copies have an aggregate cap.
+    /// its authority before execution. Each call supplies every persistent
+    /// copy, so together they are bounded by one call's setup material
+    /// allowance.
     #[wasm_bindgen(js_name = setSetup)]
     pub fn set_setup(&mut self, slot: &str, material: &[u8]) -> Result<()> {
         let entry = self.active()?;
         if !entry.interface().setup_names().any(|name| name == slot) {
             return Err("web-setup-slot".into());
         }
+        let allowance = entry.material_limits().setup_bytes;
         entry.invalidate_setup(slot)?;
         self.setups.remove(slot);
-        self.check_material_capacity(material.len())?;
+        check_material(
+            material.len(),
+            self.setups.values().map(Vec::len),
+            self.capacity.wire_bytes,
+            allowance,
+        )?;
         self.setups.insert(slot.into(), material.into());
         Ok(())
     }
@@ -146,12 +166,19 @@ impl ProofSession {
     /// grants no file access, material identity or setup authority.
     #[wasm_bindgen(js_name = setInput)]
     pub fn set_input(&mut self, name: &str, bytes: &[u8]) -> Result<()> {
-        self.active()?.invalidate_prover_inputs()?;
+        let entry = self.active()?;
+        let allowance = entry.material_limits().reference_bytes;
+        entry.invalidate_input(name)?;
         self.inputs.remove(name);
         if name.is_empty() || name.len() > 4096 || self.inputs.len() >= 1024 {
             return Err("web-input-name".into());
         }
-        self.check_material_capacity(bytes.len())?;
+        check_material(
+            bytes.len(),
+            self.inputs.values().map(|value| value.len()),
+            self.capacity.wire_bytes,
+            allowance,
+        )?;
         self.inputs.insert(name.into(), Arc::new(bytes.into()));
         Ok(())
     }
@@ -195,19 +222,6 @@ impl ProofSession {
         self.entry
             .as_ref()
             .ok_or_else(|| "web-session-disposed".into())
-    }
-    fn check_material_capacity(&self, incoming: usize) -> Result<()> {
-        let total = self
-            .setups
-            .values()
-            .map(Vec::len)
-            .chain(self.inputs.values().map(|value| value.len()))
-            .try_fold(incoming, |total, len| total.checked_add(len))
-            .ok_or("web-setup-limit")?;
-        if incoming > self.capacity.wire_bytes || total > self.capacity.values.total_bytes {
-            return Err("web-setup-limit".into());
-        }
-        Ok(())
     }
     fn execute(
         &self,
@@ -264,20 +278,53 @@ impl ProofSession {
         let started = now();
         let diagnostics = report.native.diagnostics();
         let diagnostics_ms = now() - started;
-        let text = json!({"success":success,"accepted":accepted,
-            "error":report.native.outcome.as_ref().err(), "diagnostics":diagnostics,
-            "output_error":report.output_error.as_ref().or(encoding_error.as_ref()),
-            "timings": { "memory_preflight_ms": memory_preflight_ms,
-                "execute_cleanup_ms": execute_cleanup_ms, "output_encode_ms": output_encode_ms,
-                "diagnostics_ms": diagnostics_ms }})
-        .to_string();
+        let render = |diagnostics: Json| {
+            json!({"success":success,"accepted":accepted,
+                "error":report.native.outcome.as_ref().err(), "diagnostics":diagnostics,
+                "output_error":report.output_error.as_ref().or(encoding_error.as_ref()),
+                "timings": { "memory_preflight_ms": memory_preflight_ms,
+                    "execute_cleanup_ms": execute_cleanup_ms, "output_encode_ms": output_encode_ms,
+                    "diagnostics_ms": diagnostics_ms }})
+            .to_string()
+        };
+        // The retained report text is charged to the call's invocation root.
+        // When its diagnostics do not fit, the report keeps the outcome and
+        // marks the omitted diagnostics instead.
+        let mut text = render(diagnostics);
+        let retention = match result.retain_bytes(text.len()) {
+            Ok(retention) => retention,
+            Err(_) => {
+                text = render(json!({"omitted": "entry-output-limit"}));
+                result.retain_bytes(text.len())?
+            }
+        };
         Ok(ProofResult {
             result,
             publish_proof: success && proof.is_none(),
             report: text,
             outputs,
+            _report: retention,
         })
     }
+}
+
+/// Each persistent copy is one wire frame, and the copies of one kind together
+/// stay within the allowance every call binds them under: setups within the
+/// setup material allowance, named inputs within the named reference
+/// allowance. Neither derives from the runner's capacity.
+fn check_material(
+    incoming: usize,
+    mut held: impl Iterator<Item = usize>,
+    wire_bytes: usize,
+    allowance: usize,
+) -> Result<()> {
+    let total = held
+        .try_fold(incoming, |total, len| total.checked_add(len))
+        .ok_or("web-setup-limit")?;
+    if incoming > wire_bytes || total > allowance {
+        return Err("web-setup-limit".into());
+    }
+    Ok(())
 }
 
 fn entry_refusal(error: entry::EntryError) -> String {
@@ -288,6 +335,9 @@ fn entry_refusal(error: entry::EntryError) -> String {
 }
 
 /// Returned byte arrays are copies. Absence of `accepted` is not acceptance.
+/// Every getter call takes a new copy: it is charged to the call's invocation
+/// root before copying, and a getter refuses with `entry-output-limit` once
+/// the root cannot afford another copy.
 #[wasm_bindgen]
 pub struct ProofResult {
     // Custody lasts through getter copies and Worker publication, until free.
@@ -295,30 +345,30 @@ pub struct ProofResult {
     publish_proof: bool,
     report: String,
     outputs: Option<entry::OwnedEncodedResults>,
+    // The retained report text's live allowance in the invocation root.
+    _report: entry::ResultRetention,
 }
 #[wasm_bindgen]
 impl ProofResult {
     #[wasm_bindgen(getter)]
-    pub fn proof(&self) -> Vec<u8> {
+    pub fn proof(&self) -> Result<Vec<u8>> {
         if self.publish_proof {
-            self.result
-                .report
-                .native
-                .outcome
-                .as_ref()
-                .expect("successful proof")
-                .clone()
+            self.result.copy_proof()
         } else {
-            Vec::new()
+            Ok(Vec::new())
         }
     }
     #[wasm_bindgen(getter)]
-    pub fn report(&self) -> String {
-        self.report.clone()
+    pub fn report(&self) -> Result<String> {
+        let copy = self.result.copy_bytes(self.report.as_bytes())?;
+        Ok(String::from_utf8(copy).expect("copy of UTF-8 text"))
     }
     #[wasm_bindgen(getter)]
-    pub fn outputs(&self) -> Option<Vec<u8>> {
-        self.outputs.as_ref().map(|bytes| bytes.as_bytes().to_vec())
+    pub fn outputs(&self) -> Result<Option<Vec<u8>>> {
+        self.outputs
+            .as_ref()
+            .map(entry::OwnedEncodedResults::copy)
+            .transpose()
     }
 }
 
@@ -365,6 +415,212 @@ mod tests {
         assert_eq!(
             ProofSession::new(&[], &[0; 31], "{}", &[]).err().unwrap(),
             "entry-package-pin"
+        );
+    }
+    #[test]
+    fn provider_selections_range_over_the_installed_providers() {
+        let installed = serde_json::to_value(CpuInstallation::standard().unwrap().target())
+            .unwrap()["providers"]
+            .clone();
+        let installed: Vec<Provider> = serde_json::from_value(installed).unwrap();
+        assert!(!installed.is_empty());
+        let selections = installed
+            .iter()
+            .map(|provider| vec![*provider])
+            .chain([installed.clone(), installed.iter().rev().copied().collect()]);
+        for selection in selections {
+            let options = json!({ "providers": selection }).to_string();
+            // The selection is admitted; the unpinned package refuses next.
+            assert_eq!(
+                ProofSession::new(&[], &[0; 32], &options, &[])
+                    .err()
+                    .unwrap(),
+                "entry-package-identity",
+                "{options}"
+            );
+        }
+        let mut repeated = installed.clone();
+        repeated.push(installed[0]);
+        let options = json!({ "providers": repeated }).to_string();
+        assert_eq!(
+            ProofSession::new(&[], &[0; 32], &options, &[])
+                .err()
+                .unwrap(),
+            "web-options"
+        );
+    }
+    #[test]
+    fn persistent_material_stays_within_the_allowance_each_call_binds_it_under() {
+        let limits = zkc::execution::MaterialLimits::DEFAULT;
+        let wire = Capacity::default().wire_bytes;
+        for allowance in [limits.setup_bytes, limits.reference_bytes] {
+            // Copies of one kind together fill the allowance and no more.
+            let frames = allowance / wire;
+            let held = || std::iter::repeat_n(wire, frames - 1).chain([1]);
+            let room = allowance - (frames - 1) * wire - 1;
+            assert!(room < wire);
+            check_material(room, held(), wire, allowance).unwrap();
+            assert_eq!(
+                check_material(room + 1, held(), wire, allowance).unwrap_err(),
+                "web-setup-limit"
+            );
+        }
+        // Each copy is still one wire frame.
+        assert_eq!(
+            check_material(wire + 1, std::iter::empty(), wire, usize::MAX).unwrap_err(),
+            "web-setup-limit"
+        );
+        // Setups and named inputs have separate allowances.
+        assert_ne!(limits.setup_bytes, limits.reference_bytes);
+    }
+    #[test]
+    fn interface_selections_refuse_above_their_maxima_before_any_package() {
+        let admit = |record: &Json| {
+            let options = json!({ "interface_limits": record }).to_string();
+            ProofSession::new(&[], &[0; 32], &options, &[])
+                .err()
+                .unwrap()
+        };
+        // A lowered and a raised selection are accepted; the unpinned package
+        // refuses next.
+        let lowered = InterfaceLimits {
+            work: 64,
+            descriptor_bytes: 64,
+        };
+        for selection in [lowered, InterfaceLimits::MAXIMUM] {
+            assert_eq!(admit(&selection.record()), "entry-package-identity");
+        }
+        // One above a maximum refuses with that allowance's own code.
+        for (field, code) in [
+            (1, "entry-interface-work-limit"),
+            (2, "entry-interface-descriptor-bytes-limit"),
+        ] {
+            let mut record = InterfaceLimits::MAXIMUM.record();
+            let maximum: u64 = record[field].as_str().unwrap().parse().unwrap();
+            record[field] = json!((maximum + 1).to_string());
+            assert_eq!(admit(&record), code);
+        }
+        let mut other = InterfaceLimits::DEFAULT.record();
+        other[0] = json!("zkc.material-limits/0");
+        assert_eq!(admit(&other), "interface-limits-format");
+    }
+    /// The browser transport forwards both records as opaque JSON; the session
+    /// is their only reader and refuses a malformed one with the SDK's code.
+    #[test]
+    fn malformed_capacity_and_interface_records_refuse_with_the_sdk_codes() {
+        let admit = |options: Json| {
+            ProofSession::new(&[], &[0; 32], &options.to_string(), &[])
+                .err()
+                .unwrap()
+        };
+        let mut capacity = Capacity::default().record();
+        capacity[0] = json!("zkc.material-limits/0");
+        assert_eq!(
+            admit(json!({ "capacity": capacity })),
+            "native-capacity-format"
+        );
+        assert_eq!(
+            admit(json!({ "capacity": ["zkc.native-capacity/0", "1"] })),
+            "artifact-record"
+        );
+        let mut limits = InterfaceLimits::DEFAULT.record();
+        limits[1] = json!(1);
+        assert_eq!(admit(json!({ "interface_limits": limits })), "tree-kind");
+        assert_eq!(
+            admit(json!({ "interface_limits": ["zkc.interface-limits/0", "1"] })),
+            "artifact-record"
+        );
+        assert_eq!(
+            admit(json!({ "interface_limits": { "tag": "zkc.interface-limits/0" } })),
+            "artifact-json-kind"
+        );
+    }
+    /// Admission reads the package's interface under the selected
+    /// allowances: a lowered selection refuses what the default admits, and a
+    /// raised one admits what the default refuses.
+    #[cfg(feature = "test-utils")]
+    #[test]
+    fn interface_selections_bound_the_admitted_interface_read() {
+        use zkc::entry::testing;
+        let (interface, artifact) = testing::authored_proof();
+        let admit = |interface: &Json, selection: Option<InterfaceLimits>| {
+            let (package, pin) = testing::package(interface, &artifact);
+            let mut options = json!({ "allow_authored": true });
+            if let Some(selection) = selection {
+                options["interface_limits"] = selection.record();
+            }
+            ProofSession::new(&package, &pin, &options.to_string(), &[])
+                .map(drop)
+                .map_err(|error| {
+                    let refusal: Json = serde_json::from_str(&error).unwrap();
+                    let text =
+                        |field: &str| refusal["sdk_refusal"][field].as_str().unwrap().to_owned();
+                    (text("phase"), text("code"))
+                })
+        };
+        let refused = |code: &str| Err(("interface".to_owned(), code.to_owned()));
+        let work = |work| InterfaceLimits {
+            work,
+            ..InterfaceLimits::DEFAULT
+        };
+        assert_eq!(admit(&interface, None), Ok(()));
+        assert_eq!(
+            admit(&interface, Some(work(64))),
+            refused("entry-interface-work-limit")
+        );
+        assert_eq!(
+            admit(
+                &interface,
+                Some(InterfaceLimits {
+                    descriptor_bytes: 64,
+                    ..InterfaceLimits::DEFAULT
+                })
+            ),
+            refused("entry-interface-descriptor-bytes-limit")
+        );
+        // Schema validation charges each port's display type twice, once for
+        // the port and once for its schema. Take the shortest display type
+        // at the fixture's four ports that the default work allowance
+        // refuses, then the least work selection that admits it.
+        let least = |mut low: usize, mut high: usize, admits: &dyn Fn(usize) -> bool| {
+            while low < high {
+                let middle = low + (high - low) / 2;
+                if admits(middle) {
+                    high = middle;
+                } else {
+                    low = middle + 1;
+                }
+            }
+            low
+        };
+        let padded = |length: usize| {
+            let mut padded = interface.clone();
+            let display = json!("t".repeat(length));
+            for direction in ["inputs", "outputs"] {
+                for port in padded["protocols"][0][direction].as_array_mut().unwrap() {
+                    port["type"] = display.clone();
+                    port["schema"]["type"] = display.clone();
+                }
+            }
+            padded
+        };
+        let length = least(1, 256 * 1024, &|length| {
+            admit(&padded(length), None).is_err()
+        });
+        assert_eq!(admit(&padded(length - 1), None), Ok(()));
+        let padded = padded(length);
+        assert_eq!(admit(&padded, None), refused("entry-interface-work-limit"));
+        // The least admitting selection is honored exactly, neither clamped
+        // to the default nor rounded.
+        let needed = least(
+            InterfaceLimits::DEFAULT.work + 1,
+            InterfaceLimits::MAXIMUM.work,
+            &|selected| admit(&padded, Some(work(selected))).is_ok(),
+        );
+        assert_eq!(admit(&padded, Some(work(needed))), Ok(()));
+        assert_eq!(
+            admit(&padded, Some(work(needed - 1))),
+            refused("entry-interface-work-limit")
         );
     }
 }

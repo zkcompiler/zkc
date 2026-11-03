@@ -207,7 +207,7 @@ def test_source_entry_refuses_outputs_without_host_export(toolchain, journal, di
                       'protocol Run roles(P)()->(r:Restricted@P){'
                       'let r @P =make();return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
     package = directory / 'restricted.zkpkg'
-    refused = journal.json([toolchain.runtime, '--json', 'compile',
+    refused = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                            f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                            'sample::Demo', f'--output={package}'], refuses='source-compilation')
     assert 'source.host-data' in refused['diagnostics']
@@ -226,7 +226,7 @@ def test_compilation_preserves_the_selected_executable(toolchain, journal, direc
     original = compiler.read_bytes()
     for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias),
                              (compiler, alias)]:
-        journal.run([toolchain.runtime, '--json', 'compile', 'sample::Derived',
+        journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', 'sample::Derived',
                      f'--module=sample={FIXTURES / "attempts.zkc"}', f'--compiler={selected}',
                      f'--output={output}'], refuses='entry-output-path')
         assert compiler.read_bytes() == original and alias.is_symlink()
@@ -238,7 +238,7 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
     compiler.chmod(0o755)
     output = directory / 'existing.zkpkg'
     output.write_bytes(b'unchanged')
-    args = [toolchain.runtime, '--json', 'compile', 'sample::Derived',
+    args = [toolchain.runtime, '--json', 'compile', '--source-format=zkc', 'sample::Derived',
             f'--module=sample={FIXTURES / "attempts.zkc"}', f'--output={output}']
     report = json.loads(journal.run([*args, f'--compiler={compiler}'], refuses='source-compilation'))
     assert report['diagnostics_truncated'] and len(report['diagnostics']) == 65536
@@ -268,7 +268,7 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
     write(directory / 'verifier.public.json', {'tag': False})
     journal.run(verifying, refuses='proof-header')
     original = source.read_bytes()
-    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                  f'--module=sample={source}', 'sample::Derived', f'--output={source}'],
                 refuses='entry-output-path')
     assert source.read_bytes() == original
@@ -277,7 +277,7 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
 def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory):
     source = directory / 'source.zkc'
     source.write_text('module sample; protocol Run roles(P)(b:bool@P)->(b:bool@P){return(b=b);} entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
-    args = [toolchain.runtime, '--json', 'compile', '--module=sample=source.zkc', 'sample::Demo', '--output=demo.zkpkg']
+    args = [toolchain.runtime, '--json', 'compile', '--source-format=zkc', '--module=sample=source.zkc', 'sample::Demo', '--output=demo.zkpkg']
     env = dict(os.environ, PATH=str(toolchain.compiler.parent))
     result = journal.attempt(args, cwd=directory, env=env)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -356,10 +356,13 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     source.write_text(program(9))
     refused = directory / 'oversized.zkpkg'
     result = json.loads(journal.run([
-        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+        toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
         f'--module=sample={source}', 'sample::Demo', f'--output={refused}',
     ], refuses='source-compilation'))
-    assert 'source.limit' in result['diagnostics']
+    # The SDK reports the compiler's refusal code as a field of its diagnostics.
+    refusal = result['compiler_diagnostics']['diagnostics'][0]
+    assert refusal['code'] == 'source.limit', result['compiler_diagnostics']
+    assert 'source.limit' not in refusal['message'], refusal
     assert not refused.exists()
 
 
@@ -464,7 +467,7 @@ entry fn Twice(value:index){let next=Next(value);return Next(next);}
 entry fn Checked(value:index,valid:bool){require valid;return increment(value);}
 ''')
     manifest = directory / 'zkc.toml'
-    manifest.write_text('format="zkc.project/0"\n[modules]\napplication="numerical.zkc"\n')
+    manifest.write_text('format="zkc.project/0"\nsource-format="zkc"\n[modules]\napplication="numerical.zkc"\n')
     return manifest
 
 
@@ -502,7 +505,7 @@ def test_numerical_source_value_and_execution_failure(toolchain, journal, direct
     report = journal.json([toolchain.runtime, '--json', 'run', 'Twice', *target,
                            f'--input={inputs}', f'--results={output}'])
     assert json.loads(output.read_text())['value'] == '9'
-    assert report['execution']['usage']['instructions'] > 0
+    assert report['execution']['invocation']['instructions'] > 0
     sentinel = output.read_bytes()
     write(inputs, {'value': '7', 'valid': False})
     failed = journal.json([toolchain.runtime, '--json', 'run', 'Checked', *target,

@@ -80,7 +80,7 @@ theorem nativeResults_preserves (program : Structured.Program) (context : Contex
         obtain ⟨value, indexFound, indexHolds⟩ := holds.get indexSort
         obtain ⟨decoded, decodedEq⟩ := decode_of_sort indexHolds
         cases value with
-        | transcript | indices => cases indexHolds
+        | transcript | indices | custody => cases indexHolds
         | data payload =>
           rcases payload with ⟨ty, supported, contents⟩
           simp only [NativeSlot.Holds, Domain.Value.sort, ValueSort.data.injEq] at indexHolds

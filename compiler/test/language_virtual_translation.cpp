@@ -2,7 +2,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -145,7 +144,7 @@ struct Fixture {
   ClosedEntry entry;
   CheckedOriginal original;
   explicit Fixture(StringRef source, StringRef format)
-      : entry(take(closeNativeRun(take(check(source, format)), "m::Run"))),
+      : entry(take(closeSubject(take(check(source, format)), "m::Run"))),
         original(take(prepareOriginal(entry))) {}
   const Declaration &definition(StringRef name) const {
     for (const auto &decl : entry.declarations())

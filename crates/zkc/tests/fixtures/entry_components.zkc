@@ -1,0 +1,18 @@
+struct State roles(P, V):
+    pub statement: bool @(P, V)
+    pub witness: bool @P
+    pub empty: () @V
+
+pub protocol Round roles(P, V)(state: State roles(P, V)) -> bool @V:
+    return state.statement
+
+scheme Demo = Round:
+    prover P
+    verifier V
+    public {state.statement, state.empty}
+    accept result
+    construction authored
+
+entry def Produce(public: Demo::Public, witness: Demo::Witness) -> Demo::Proof:
+    produced <- Demo::prove(public, witness)
+    return produced.proof

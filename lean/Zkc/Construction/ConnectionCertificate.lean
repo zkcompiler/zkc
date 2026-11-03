@@ -258,8 +258,8 @@ inductive Alignment (routing : Original.Routing) :
       (operation : Calculation) (terms : Terms [] scope operation.op.arguments)
       {next : Form [] callees (.results operation.op.results :: scope) out} {rest : Block}
       (references : List Nat)
-      (inputsData : operation.op.arguments.all Domain.dataType = true)
-      (outputsData : operation.op.results.all Domain.dataType = true)
+      (inputsData : operation.op.arguments.all Domain.localType = true)
+      (outputsData : operation.op.results.all Domain.localType = true)
       (readback : Readback layout (components terms) (references.map Original.Location.data))
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (resultsLayout layout operation.op.results) next rest) :
@@ -275,8 +275,8 @@ inductive Alignment (routing : Original.Routing) :
       (arguments : Terms [] scope helper.inputs)
       {next : Form [] callees (.results helper.outputs :: scope) out} {rest : Block}
       (references : List Nat)
-      (inputsData : helper.inputs.all Domain.dataType = true)
-      (outputsData : helper.outputs.all Domain.dataType = true)
+      (inputsData : helper.inputs.all Domain.localType = true)
+      (outputsData : helper.outputs.all Domain.localType = true)
       (readback : Readback layout (components arguments) (references.map Original.Location.data))
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (resultsLayout layout helper.outputs) next rest) :
@@ -291,8 +291,8 @@ inductive Alignment (routing : Original.Routing) :
       (arguments : Values (Comp [] scope) helper.inputs)
       {next : Form [] callees (.tuple helper.outputs :: scope) out} {rest : Block}
       (references : List Nat)
-      (inputsData : helper.inputs.all Domain.dataType = true)
-      (outputsData : helper.outputs.all Domain.dataType = true)
+      (inputsData : helper.inputs.all Domain.localType = true)
+      (outputsData : helper.outputs.all Domain.localType = true)
       (readback : Readback layout arguments (references.map Original.Location.data))
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (tupleLayout layout helper.outputs) next rest) :
@@ -307,8 +307,8 @@ inductive Alignment (routing : Original.Routing) :
       (arguments : Values (Comp [] scope) helper.inputs)
       {next : Form [] callees (.tuple helper.outputs :: scope) out} {rest : Block}
       (references : List Nat)
-      (inputsData : helper.inputs.all Domain.dataType = true)
-      (outputsData : helper.outputs.all Domain.dataType = true)
+      (inputsData : helper.inputs.all Domain.localType = true)
+      (outputsData : helper.outputs.all Domain.localType = true)
       (readback : Readback layout arguments (references.map Original.Location.data))
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (tupleLayout layout helper.outputs) next rest) :
@@ -358,8 +358,8 @@ inductive Alignment (routing : Original.Routing) :
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out}
       (operation : Calculation) (total : operation.op.total = true)
       (terms : Terms [] scope operation.op.arguments) (references : List Nat)
-      (inputsData : operation.op.arguments.all Domain.dataType = true)
-      (outputsData : operation.op.results.all Domain.dataType = true)
+      (inputsData : operation.op.arguments.all Domain.localType = true)
+      (outputsData : operation.op.results.all Domain.localType = true)
       (readback : Readback layout (components terms) (references.map Original.Location.data))
       {rest : Block}
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames
@@ -386,7 +386,7 @@ inductive Alignment (routing : Original.Routing) :
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} (ty : Ty) (site : String) (peer : Nat)
       (value : Term [] scope ty) {next : Form [] callees scope out} {rest : Block}
-      (reference : Nat) (readback : Readback layout (.cons (.present value) .nil) [.data reference])
+      (data : ty.isHandle = false) (reference : Nat) (readback : Readback layout (.cons (.present value) .nil) [.data reference])
       (plain : routing.context.profile = .plain) (template : Template)
       (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
@@ -402,7 +402,7 @@ inductive Alignment (routing : Original.Routing) :
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (ty : Ty) (site : String) (peer : Nat) (value : Term [] scope ty)
       {next : Form [] callees scope out} {rest : Block}
-      (replacement : Replacement) (profile : routing.context.profile = .fiatShamir replacement)
+      (data : ty.isHandle = false) (replacement : Replacement) (profile : routing.context.profile = .fiatShamir replacement)
       {prepared : Layout scope} {preparation : Block}
       (preparationProof : CoordinatePrefix layout prepared preparation)
       (reference stateRef pathRef : Nat)
@@ -778,7 +778,7 @@ def Alignment.size {routing : Original.Routing} {context : ProtocolContext} {def
   | .inlineMissingCalculation _ _ _ _ _ tail => 1 + tail.size
   | .calculation _ _ _ _ _ _ _ tail => 1 + tail.size
   | .receive _ _ _ _ _ _ _ tail => 1 + tail.size
-  | .send _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
+  | .send (tail := tail) .. => 1 + tail.size
   | .observedSend (tail := tail) .. => 1 + tail.size
   | .observedReceive (tail := tail) .. => 1 + tail.size
   | .delivery (tail := tail) .. => 1 + tail.size
@@ -915,7 +915,7 @@ private noncomputable def sound
       rfl
     rw [invoked]
     apply Original.Simulation.checkpoint environment retained
-    apply (Original.Simulation.linkedDataHelperOn model program routing helper binding.present outputsData
+    apply (Original.Simulation.linkedLocalHelperOn model program routing helper binding.present outputsData
       (Terms.eval (LawResults.empty model) arguments binders) environment references
       (read_terms readback binders related) state inputsData).bind
     · intro process frame same
@@ -941,7 +941,7 @@ private noncomputable def sound
     rw [← binding.tables bindings] at sourceEq
     rw [sourceEq, Original.fold_bind]
     refine ⟨Original.Simulation.checkpoint environment retained ?_⟩
-    apply (Original.Simulation.linkedDataHelperOn model program routing helper binding.present outputsData
+    apply (Original.Simulation.linkedLocalHelperOn model program routing helper binding.present outputsData
       values environment references read state inputsData).bind
     · intro process frame same
       subst frame
@@ -966,7 +966,7 @@ private noncomputable def sound
     rw [← binding.tables bindings] at sourceEq
     rw [sourceEq, Original.fold_bind]
     refine ⟨Original.Simulation.checkpoint environment retained ?_⟩
-    apply (Original.Simulation.linkedDataHelperOn model program routing helper binding.present outputsData
+    apply (Original.Simulation.linkedLocalHelperOn model program routing helper binding.present outputsData
       values environment references read state inputsData).bind
     · intro process frame same
       subst frame
@@ -1091,9 +1091,9 @@ private noncomputable def sound
         simp only at same
         subst final
         exact ⟨.checkpoint target kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) target extended kept)⟩
-  | @send context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest reference readback plain template route tail ih =>
+  | @send context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest data reference readback plain template route tail ih =>
     apply Classical.choice
-    obtain ⟨payload, payloadEq, read⟩ := readback.payload related
+    obtain ⟨payload, payloadEq, read⟩ := readback.payload data related
     refine ⟨?_⟩
     let qualified := qualifyProtocolSite context.applicationPrefix site
     have folded : Original.fold routing (Occurrence.actions
@@ -1120,10 +1120,10 @@ private noncomputable def sound
     · intro source target returned
       rw [returned.1, returned.2]
       exact .checkpoint environment retained (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment related retained)
-  | @observedSend context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest replacement profile
+  | @observedSend context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest data replacement profile
       prepared preparation preparationProof reference stateRef pathRef readback preparedReadback stateRead pathRead template route tail ih =>
     apply Classical.choice
-    obtain ⟨payload, encoded, read⟩ := readback.payload related
+    obtain ⟨payload, encoded, read⟩ := readback.payload data related
     refine ⟨?_⟩
     let qualified := qualifyProtocolSite context.applicationPrefix site
     let origin := Domain.atCoordinates (routing.context.message qualified routing.self (context.roles peer))
@@ -1157,7 +1157,7 @@ private noncomputable def sound
         _ _ _ _ (fun _ kept => kept)
       intro preparedEnvironment preparedRelated preparedRetained
       apply Original.Simulation.checkpoint _ preparedRetained
-      have physicalRead := preparedReadback.payload preparedRelated
+      have physicalRead := preparedReadback.payload data preparedRelated
       have samePayload := Option.some.inj (encoded.symm.trans physicalRead.choose_spec.1)
       have preparedRead := physicalRead.choose_spec.2
       rw [← samePayload] at preparedRead
@@ -1213,15 +1213,10 @@ private noncomputable def sound
     apply Original.Simulation.call
     intro value
     apply Classical.choice
-    obtain ⟨physical, encoded⟩ := Domain.Value.encode_exists (carriers := model.toCarriers)
-      (by simp only [Domain.dataType, data, Bool.not_false]) value
-    obtain ⟨payload, payloadEq, read⟩ : ∃ payload,
-        Domain.Payload.ofValue ty value = some payload ∧ physical = .data payload := by
-      unfold Domain.Value.encode at encoded
-      cases found : Domain.Payload.ofValue ty value with
-      | none => simp only [found, Option.map_none] at encoded; cases encoded
-      | some payload => exact ⟨payload, rfl, (Option.some.inj (by simpa only [found, Option.map_some] using encoded)).symm⟩
-    subst physical
+    let payload : Domain.Payload model.toCarriers := ⟨ty, data, value⟩
+    have payloadEq : Domain.Payload.ofValue ty value = some payload := by
+      simp [Domain.Payload.ofValue, data, payload]
+    have encoded := Domain.Value.encode_ofPayload payloadEq
     refine ⟨?_⟩
     simp only [payloadEq, encoded, Domain.View.append,
       show Domain.sortsMatch [.data ty] [.data payload] = true from by
@@ -1237,7 +1232,7 @@ private noncomputable def sound
     rw [PIR.Process.bind_assoc]
     have valueReadback : Readback prepared (.cons (.present (.var .here)) .nil) [.data layout.length] :=
       .data _ valueRead .nil
-    have physicalRead := valueReadback.payload preparedRelated
+    have physicalRead := valueReadback.payload data preparedRelated
     have encodedSame := Option.some.inj (payloadEq.symm.trans physicalRead.choose_spec.1)
     apply (Original.Simulation.record state origin payload routing.context template stateRef layout.length pathRef
       preparedEnvironment _ (preparedRelated.readHistory stateRead)
@@ -1312,7 +1307,7 @@ private noncomputable def sound
       simp only [PIR.Process.bind]
       have valueReadback : Readback prepared (.cons (.present (.var .here)) .nil) [.data layout.length] :=
         .data _ valueRead .nil
-      have physicalRead := valueReadback.payload preparedRelated
+      have physicalRead := valueReadback.payload rfl preparedRelated
       have encodedSame : physicalRead.choose = .field field value := Option.some.inj physicalRead.choose_spec.1.symm
       have observed := Original.Simulation.record
         (carriers := model.toCarriers) ({ state with history := state.history ++ [.challenge queryOrigin] })
@@ -1435,7 +1430,7 @@ private noncomputable def sound
       yieldData yielded initialHistory bodyHistory initialRead historyRead initialProfile bodyProfile yieldLocations
       bodyForm normalized bodyCertificate tail bodyIH tailIH =>
     apply Classical.choice
-    have encodedData := visibleState_data visible
+    have encodedData := visibleState_local visible
     obtain ⟨initialValues, initialPresent, initialReading⟩ := read_components initialRead binders related
     let data := Original.encodeHelperResult initialValues
     have encoded : Domain.encodeValues initialValues = some data := Original.encodeHelperResult_eq encodedData initialValues

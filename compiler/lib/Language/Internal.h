@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_INTERNAL_H
 
 #include "State.h"
+#include "zkc/Contracts/Declarations.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/JSON.h"
 #include <map>
@@ -37,6 +38,9 @@ struct SyntaxType {
   unsigned height = 1;
   std::vector<SyntaxType> arguments;
   std::vector<ArgumentLabel> labels;
+  std::optional<std::vector<std::string>> roles;
+  std::optional<std::vector<std::string>> components;
+  std::optional<std::string> oracleHolder;
 };
 struct EntrySelector {
   SyntaxType target;
@@ -70,6 +74,9 @@ struct OperatorBinding {
   Span span;
   std::shared_ptr<const NotationDescriptor> notation;
   std::optional<BoundNotationTarget> filtered = {};
+  /// The module whose declaration or body introduces this binding. A use
+  /// records it as the provider of its notation route.
+  DeclarationId module = {};
 };
 using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
 struct SyntaxSelector {
@@ -212,6 +219,10 @@ struct Expression {
   bool grouped = false;
   bool shorthand = false;
   bool filteredReduction = false;
+  /// Constructed by the parser's expansion or by later elaboration, so the
+  /// written tree has no node for it. Its operations originate from the
+  /// enclosing written expression.
+  bool synthesized = false;
 };
 struct Statement {
   enum class Kind {
@@ -287,7 +298,7 @@ struct SyntaxSetupSlot {
 };
 struct SyntaxProofEntry {
   SyntaxName prover, verifier;
-  std::vector<SyntaxName> publicInputs;
+  std::vector<SyntaxInputSelector> publicInputs;
   SyntaxSelector acceptance;
   std::optional<SyntaxSelector> completion;
   std::optional<SyntaxName> target, service;
@@ -470,6 +481,23 @@ staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);
 llvm::StringRef operatorSymbol(const Expression &);
+
+/// An operator spelling the parser admits in an operator declaration.
+bool admittedOperatorSymbol(llvm::StringRef);
+/// The installed module's checker input, read from the catalog's declaration
+/// and notation rows of that owner. Nothing is lexed or parsed; spans are empty
+/// and reading charges the declaration count and work parsing charges. A row
+/// the frontend cannot express refuses with `source.installation`.
+llvm::Expected<SyntaxDeclaration> readInstalledModule(const SourceBuffer &,
+                                                      SourceId, Work &);
+/// The same reader over explicit rows, for checking rows before installation.
+llvm::Expected<SyntaxDeclaration>
+readInstalledModule(const SourceBuffer &, SourceId, Work &,
+                    llvm::ArrayRef<protocol::FrontendDeclaration>,
+                    llvm::ArrayRef<protocol::FrontendNotation>);
+/// Installed module paths: the distinct owners of installed declarations, in
+/// catalog order.
+std::vector<std::string> installedModules();
 
 llvm::Error lex(const SourceBuffer &, SourceId, Work &, std::vector<Token> &);
 llvm::Expected<SyntaxDeclaration> parse(const SourceBuffer &, SourceId,

@@ -146,7 +146,7 @@ class Client:
         module.write_text(text)
         asset = journal.write('bundle.json', bundle) if bundle else MACHINE / 'bundle.json'
         self.package = directory / 'interactions.zkpkg'
-        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                                f'--module=interaction_view={module}',
                                f'--asset=machine=relation-bundle-json={asset}',
                                'interaction_view::Interactions',

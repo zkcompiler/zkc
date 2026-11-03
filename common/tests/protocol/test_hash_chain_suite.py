@@ -92,7 +92,7 @@ def compile_project(toolchain, journal, directory, project, entry, suite=None, o
                                      f'fiat_shamir("{old}"', f'fiat_shamir("{suite}"'))
         modules['example'] = source
     package = directory / f'{Path(project).name}-{entry}-{suite is not None}.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            *[f'--module={name}={path}' for name, path in sorted(modules.items())],
                            *[f'--asset={name}={kind}={path}' for name, (kind, path) in sorted(assets.items())],
                            *([FRI_REALIZATION] if project == 'examples/projects/fri' else []),
@@ -210,7 +210,7 @@ NOT_INSTALLED = 'construction requires an installed suite and matching verifier 
 def test_unsupported_suite_selections_refuse(toolchain, journal, directory, field, suite, reason):
     source = directory / 'main.zkc'
     source.write_text(SOURCE.replace('FIELD', field).replace('SUITE', suite))
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=sample={source}', 'sample::Demo',
                            f'--output={directory / "p.zkpkg"}'], refuses='source-compilation')
     assert reason in report['diagnostics']
@@ -223,7 +223,7 @@ def test_echoed_challenges_match_and_a_changed_echo_is_rejected(toolchain, journ
     source = directory / 'main.zkc'
     source.write_text(SOURCE.replace('FIELD', field).replace('SUITE', suite))
     package = directory / 'p.zkpkg'
-    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                            f'--module=sample={source}', 'sample::Demo', f'--output={package}'])
     target = [f'--package={package}', f'--sha256={report["package_sha256"]}']
     proof = prove_and_verify(toolchain, journal, directory, target, [], [])

@@ -72,11 +72,11 @@ class Readback {
 public:
   Readback(Operation *owner, uint64_t &remaining)
       : symbols(owner), remaining(remaining), builder(owner->getContext()) {}
-  FailureOr<SmallVector<Value>> copy(func::FuncOp source, ValueRange arguments,
+  FailureOr<SmallVector<Value>> copy(Block &source, ValueRange arguments,
                                      Block *target) {
-    if (!source || !source.getBody().hasOneBlock() ||
-        source.getNumArguments() != arguments.size() || active.size() >= 64 ||
-        !active.insert(source).second || !charge(source))
+    auto *owner = source.getParentOp();
+    if (source.getNumArguments() != arguments.size() || active.size() >= 64 ||
+        !active.insert(owner).second || !charge(owner))
       return failure();
     IRMapping values;
     for (auto [formal, actual] : zip(source.getArguments(), arguments)) {
@@ -84,8 +84,8 @@ public:
         return failure();
       values.map(formal, actual);
     }
-    for (auto &op : source.front().without_terminator()) {
-      if (!charge(&op) || op.getNumRegions())
+    for (auto &op : source.without_terminator()) {
+      if (!charge(&op))
         return failure();
       SmallVector<Value> inputs;
       for (auto operand : op.getOperands()) {
@@ -96,28 +96,49 @@ public:
       }
       if (auto call = dyn_cast<func::CallOp>(op)) {
         auto callee = symbols.lookup<func::FuncOp>(call.getCallee());
-        auto outputs = copy(callee, inputs, target);
+        if (!callee || !callee.getBody().hasOneBlock())
+          return failure();
+        auto outputs = copy(callee.front(), inputs, target);
         if (failed(outputs) || outputs->size() != call.getNumResults())
           return failure();
         values.map(call.getResults(), *outputs);
+      } else if (isa<data::BranchOp>(op)) {
+        builder.setInsertionPointToEnd(target);
+        auto *branch = builder.cloneWithoutRegions(op, values);
+        for (auto [before, after] :
+             zip(op.getRegions(), branch->getRegions())) {
+          auto *block = new Block;
+          after.push_back(block);
+          block->addArguments(
+              before.front().getArgumentTypes(),
+              SmallVector<Location>(before.front().getNumArguments(),
+                                    op.getLoc()));
+          auto outputs = copy(before.front(), block->getArguments(), block);
+          if (failed(outputs))
+            return failure();
+          builder.setInsertionPointToEnd(block);
+          data::YieldOp::create(builder, op.getLoc(), *outputs);
+        }
       } else {
+        if (op.getNumRegions())
+          return failure();
         if (!mathematical::isTotal(&op))
           return failure();
         builder.setInsertionPointToEnd(target);
         builder.clone(op, values);
       }
     }
-    auto returned = dyn_cast<func::ReturnOp>(source.front().back());
-    if (!returned || !charge(returned))
+    auto *returned = &source.back();
+    if (!isa<func::ReturnOp, data::YieldOp>(returned) || !charge(returned))
       return failure();
     SmallVector<Value> results;
-    for (auto value : returned.getOperands()) {
+    for (auto value : returned->getOperands()) {
       auto actual = values.lookupOrNull(value);
       if (!actual)
         return failure();
       results.push_back(actual);
     }
-    active.erase(source);
+    active.erase(owner);
     return results;
   }
 };
@@ -129,8 +150,8 @@ OwningOpRef<func::FuncOp> exactReadback(func::FuncOp source, Operation *owner,
   OwningOpRef<func::FuncOp> snapshot(
       cast<func::FuncOp>(source->cloneWithoutRegions()));
   auto *target = snapshot->addEntryBlock();
-  auto values =
-      Readback(owner, remaining).copy(source, target->getArguments(), target);
+  auto values = Readback(owner, remaining)
+                    .copy(source.front(), target->getArguments(), target);
   if (failed(values))
     return {};
   OpBuilder builder(source.getContext());

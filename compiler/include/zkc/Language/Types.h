@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_TYPES_H
 #define ZKC_LANGUAGE_TYPES_H
 #include "zkc/Language/Natural.h"
+#include "zkc/Language/ValuePlacement.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -52,8 +53,7 @@ struct Type {
     /// A forward association of a symbolic logical kind; never an injective
     /// constructor.
     OracleProjection,
-    /// A nominal protocol product with one oriented oracle family. It has no
-    /// native representation and cannot occur inside ordinary data.
+    /// A nominal protocol product whose fields have independent placements.
     LogicalRecord
   };
   Kind kind = Kind::Boolean;
@@ -77,6 +77,16 @@ struct Type {
   }
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
+/// Type identity and participant placement are separate judgments. Absence of
+/// placement denotes an ordinary unplaced mathematical/local context.
+struct PlacedType {
+  Type type;
+  std::optional<ValuePlacement> placement = {};
+  bool operator==(const PlacedType &other) const {
+    return type == other.type && placement == other.placement;
+  }
+  bool operator!=(const PlacedType &other) const { return !(*this == other); }
+};
 /// Canonical source term for an admitted catalog domain sort and identity.
 /// Only this constructor and assetType set Type::sort.
 Type domainType(llvm::StringRef sort, llvm::StringRef identity);
@@ -92,14 +102,32 @@ bool isStaticOnly(const Type &);
 /// Direct logical handle values; aggregate formation has its own recursive
 /// check.
 bool isOracleHandle(const Type &);
-/// Direct custody-bearing protocol values, including nominal logical records.
+/// Logical handles, nominal distributed records and their finite structural
+/// products. This category check does not depend on represented storage.
 bool isLogicalValue(const Type &);
+/// Placed category also recognizes a heterogeneous ordinary tuple/array.
+/// Its unplaced Type retains the ordinary structural/static identity.
+bool isLogicalValue(const PlacedType &);
 /// Library constructor spelling, distinct from native-data eligibility.
 llvm::StringRef oracleConstructor(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
-/// Injective internal key; source-facing spelling is deliberately separate.
+/// Injective lookup key within one checked snapshot; source-facing spelling is
+/// deliberately separate. It binds no source revision, so it never decides
+/// nominal equality across captures.
 std::string typeIdentity(const Type &);
+/// The defining authority of a nominal declaration path: 64 lowercase hex
+/// for an authored or installed declaration, none for a generated one.
+using NominalAuthority =
+    llvm::function_ref<llvm::Expected<std::optional<std::string>>(
+        llvm::StringRef path)>;
+/// Revision-bound nominal key. It frames exactly as typeIdentity and adds one
+/// frame after the domain of every Record, LogicalRecord, Variant and Module
+/// node that names a declaration: that path's defining authority, or an empty
+/// frame for a generated declaration. A symbolic module parameter names no
+/// declaration and adds no frame. Associated nodes are bound through their
+/// module argument.
+llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority);
 /// Bound traversal and expanded identity material before copying a term.
 llvm::Expected<uint64_t> typeComplexity(const Type &, uint64_t nodes,
                                         uint64_t depth);

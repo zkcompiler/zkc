@@ -139,6 +139,13 @@ int runLanguageCompiler(int argc, char **argv) {
         [&](const DiagnosticError &error) {
           messages.push_back(error.diagnostic());
         },
+        [&](const Refusal &refusal) {
+          // The code stays a field. A multi-line detail continues on uncoded
+          // lines, as it renders.
+          auto [line, rest] = StringRef(refusal.detail).split('\n');
+          append(refusal.code, line);
+          appendLines(rest);
+        },
         [&](const CompilationError &error) {
           for (const auto &refusal : ArrayRef(error.refusals).take_front(16))
             append(refusal.code, refusal.detail);
@@ -535,17 +542,9 @@ int runLanguageCompiler(int argc, char **argv) {
     auto compiled = compileEvmEntry(*original, evmOptions);
     if (!compiled)
       return refuse(compiled.takeError());
-    auto result = encodeEvmCompilation(*compiled);
-    auto &record = *result.getAsObject();
-    record["entry"] = selected->name();
-    record["capture"] = captured->identity();
-    record["installation"] = project->installationIdentity();
-    record["original"] = original->identity();
-    auto *manifest = record.getObject("manifest");
-    (*manifest)["entry"] = selected->name();
-    (*manifest)["capture"] = captured->identity();
-    (*manifest)["installation"] = project->installationIdentity();
-    (*manifest)["original"] = original->identity();
+    auto result = encodeEvmCompilation(
+        *compiled, {selected->name().str(), captured->identity().str(),
+                    project->installationIdentity().str()});
     std::string bytes;
     BoundedStream out(bytes, 16 * 1024 * 1024);
     out << result << '\n';

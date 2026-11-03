@@ -29,7 +29,7 @@ import sys
 import tempfile
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common.lean_render import ROOT, CheckFailed, Runner  # noqa: E402
+from bridges.common.lean_render import ROOT, CheckFailed, Runner, require  # noqa: E402
 from bridges.structured import printer_build  # noqa: E402
 
 LEAN = ROOT / "lean"
@@ -200,18 +200,23 @@ def elaborate(runner, path, lake="lake"):
     return printer_build.messages(result.stdout)
 
 
-def generate(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False):
+def generate(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False, inventory=None):
     """The printed bodies module of the admitted snapshot `data.snapshot`."""
-    return printed_module(data, namespace, closed, names, runner, lake, fresh=fresh)[0]
+    return printed_module(data, namespace, closed, names, runner, lake, fresh=fresh, inventory=inventory)[0]
 
 
-def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False):
+def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False, inventory=None):
     """The printed bodies module and the local names of its helpers and
     protocols, in the checked program's order."""
     runner = runner or Runner()
     names = names or {}
     # The independent checker owns the order of the typed definitions.
-    inventory = PRINTER.format(data=data, views="false", closed="false")
+    printer_inventory = PRINTER.format(data=data, views="false", closed="false")
+    if inventory is not None:
+        from bridges.structured import snapshot
+        data_path = LEAN.joinpath(*data.split(".")).with_suffix(".lean")
+        require(data_path.read_text(encoding="utf-8") == snapshot.render(inventory.snapshot, data),
+                "body printer data differs from bound source inventory")
     (ROOT / "build").mkdir(exist_ok=True)
     scratch = (tempfile.TemporaryDirectory(dir=ROOT / "build") if fresh else
                printer_build.workspace(data))
@@ -223,9 +228,21 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
             path.write_text(source, encoding="utf-8")
             return elaborate(runner, path, lake)
 
-        output = evaluate("Inventory", inventory)
+        output = evaluate("Inventory", printer_inventory)
         helpers = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("HELPER\t")]
         protocols = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("PROTOCOL\t")]
+        if inventory is not None:
+            for symbol, *_ in [*helpers, *protocols]:
+                inventory.definition(symbol)
+        require(set(names) <= {symbol for symbol, *_ in [*helpers, *protocols]},
+                "body presentation names select an absent definition")
+        selected_names = [names.get(symbol, f"helper{index}").strip("«»")
+                          for index, (symbol, *_) in enumerate(helpers)] + [
+                          names.get(symbol, f"protocol{index}").strip("«»")
+                          for index, (symbol, *_) in enumerate(protocols)]
+        require(len(selected_names) == len(set(selected_names)), "duplicate body presentation name")
+        require(all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) for name in selected_names),
+                "invalid body presentation name")
         output = evaluate("Bodies", PRINTER.format(data=data, views="true", closed=str(closed).lower()))
     parts = [f"module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
              f"/-! Literal typed bodies printed from the admitted snapshot of\n`{data}`. -/\n"

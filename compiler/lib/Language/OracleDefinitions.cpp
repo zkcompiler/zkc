@@ -86,6 +86,7 @@ bool Checker::prepareOraclePredicates() {
     root.notationEnvironment = source.bodies.front().notationEnvironment;
     std::optional<uint32_t> conjunction;
     auto append = [&](Expression expression) {
+      expression.synthesized = true;
       auto index = uint32_t(target.expressions.size());
       target.expressions.push_back(std::move(expression));
       return index;
@@ -109,7 +110,7 @@ bool Checker::prepareOraclePredicates() {
     for (const auto &shape : source.oracleShapes) {
       if (shape.value)
         continue;
-      if (!types.charge(8, shape.span))
+      if (!types.charge(10, shape.span))
         return false;
       Expression handle;
       handle.kind = Expression::Kind::Name;
@@ -135,7 +136,10 @@ bool Checker::prepareOraclePredicates() {
       Expression equal;
       equal.kind = Expression::Kind::Intrinsic;
       equal.text = "index.equal";
-      equal.children = {count, maximum};
+      // Each evaluation has its own source-value occurrence, including the
+      // generated repeated reads in this predicate.
+      equal.children = {append(target.expressions[count]),
+                        append(target.expressions[maximum])};
       equal.span = shape.span;
       auto atBound = append(std::move(equal));
       Expression within;
@@ -147,6 +151,7 @@ bool Checker::prepareOraclePredicates() {
     if (!conjunction) {
       Expression truth;
       truth.kind = Expression::Kind::Boolean;
+      truth.synthesized = true;
       truth.text = "true";
       truth.span = decl.span;
       conjunction = target.expressions.size();

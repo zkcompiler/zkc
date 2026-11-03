@@ -1,17 +1,6 @@
 use super::{FunctionInterface, Result, error};
 
 impl FunctionInterface {
-    pub(super) fn check_native_input(&self, schema: &super::Schema) -> Result<()> {
-        self.check_input(schema)?;
-        super::require(
-            schema.leaves.iter().all(|leaf| {
-                zkc_runtime::vm::LogicalType::parse(leaf)
-                    .is_ok_and(|ty| ty.is_native_message_data())
-            }),
-            "entry-input-codec",
-        )
-    }
-
     fn result_types(&self) -> Result<Vec<zkc_runtime::vm::PhysicalType>> {
         self.signature()
             .result
@@ -27,6 +16,8 @@ impl FunctionInterface {
     }
     /// Check result codecs against the explicitly selected CPU installation.
     pub fn check_result_encoding(&self, installation: &zkc_cpu::CpuInstallation) -> Result<()> {
+        crate::entry::value::check_readable_schema(&self.signature().result)
+            .map_err(|e| error(&e))?;
         if self
             .result_types()?
             .iter()

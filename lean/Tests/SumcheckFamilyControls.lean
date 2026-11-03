@@ -79,7 +79,7 @@ def alternateValidator : Validator :=
       | action => action }
 
 def alternateLowered : Lowered :=
-  ⟨SumcheckShape.code alternateNames 3, [13,10], [.loop 2 3 [.receive actual.coordinate, .receive actual.coordinate]]⟩
+  ⟨SumcheckShape.code alternateNames 3, [15, 11], [.loop 2 3 [.receive actual.coordinate, .receive actual.coordinate]]⟩
 
 /-- A fresh finite check, not a reused semantic equation, admits this fixture. -/
 theorem alternate_checked : DomainVM.checkNativeLowering alternateDescription.program alternateContext
@@ -152,7 +152,7 @@ theorem fixtureHelpers : SumcheckFamily.Source.Helpers (F := F) (G := G) actual.
       rw [shaped]
       exact SumcheckHelpers.indexLimit_pow pointSmall
     apply SumcheckArtifacts.DomainHelpers.call_return ZkcExamples.Construction.SumcheckProof.program
-      SumcheckHelperBodies.checkHelper (SumcheckHelperLaws.checkInputs values point claim)
+      SumcheckHelperBodies.checkHelper (SumcheckHelperLaws.terminalInputs values 0 point claim)
       (PrimitiveLibrary.boolResult (decide ((restrictPrefixValues values point).sum = claim)))
       ?_ _ _ rfl rfl
     change invoke (closedMeanings SumcheckCheckedRound.program.payload.definitions) _ _ = _
@@ -198,19 +198,19 @@ theorem alternateRealization : SumcheckFamily.Realization (F := F) (G := G) alte
     pending := by
       intro claim
       change helperCost installed alternateValidator actual.description.names.pendingHelper
-        [.data (.field actual.description.names.scalar claim)] ≤ 2
+        [.data (.field actual.description.names.scalar claim)] ≤ 3
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.pendingHelper (by simp [helperNames])) _]
       exact (fixtureRealization (F := F) (G := G)).prices.pending claim
     openClaim := by
       intro point claim
       change helperCost installed alternateValidator actual.description.names.openClaimHelper
-        [.vector actual.description.names.scalar point, .data (.field actual.description.names.scalar claim)] ≤ 1
+        [.custody actual.description.names.custodySlot 0, .vector actual.description.names.scalar point, .data (.field actual.description.names.scalar claim)] ≤ 2
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.openClaimHelper (by simp [helperNames])) _]
       exact (fixtureRealization (F := F) (G := G)).prices.openClaim point claim
     atPrefix := by
       intro point claim
       change helperCost installed alternateValidator actual.description.names.atPrefixHelper
-        [.vector actual.description.names.scalar point, .data (.field actual.description.names.scalar claim)] ≤ 1
+        [.vector actual.description.names.scalar point, .data (.field actual.description.names.scalar claim)] ≤ 2
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.atPrefixHelper (by simp [helperNames])) _]
       exact (fixtureRealization (F := F) (G := G)).prices.atPrefix point claim
     append := by
@@ -222,8 +222,8 @@ theorem alternateRealization : SumcheckFamily.Realization (F := F) (G := G) alte
     check := by
       intro values point claim small shaped
       change helperCost installed alternateValidator actual.description.names.checkHelper
-        [.vector actual.description.names.scalar values, .vector actual.description.names.scalar point,
-          .data (.field actual.description.names.scalar claim)] = 62 + 20 * point.length
+        [.vector actual.description.names.scalar values, .custody actual.description.names.custodySlot 0, .vector actual.description.names.scalar point,
+          .data (.field actual.description.names.scalar claim)] = 63 + 20 * point.length
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.checkHelper (by simp [helperNames])) _]
       exact (fixtureRealization (F := F) (G := G)).prices.check values point claim small shaped }
   prepared := by
@@ -242,11 +242,11 @@ theorem alternate_three_accepted (oracle : History F G → F)
     (roundtrip : ∀ value, decode alternate.coordinate (encode value) = some (.field alternate.description.names.scalar value))
     (bounded : ∀ value, (encode value).length ≤ proofLimit) (binding : List UInt8) (bindingLength : binding.length = 32)
     (values : List F) (shaped : values.length = 8) (initial : History F G) :
-    validate (m := Id) alternate.vocabulary alternate.validator alternate.description.context oracle decode 249 binding 0
+    validate (m := Id) alternate.vocabulary alternate.validator alternate.description.context oracle decode 253 binding 0
       (alternate.dataInputs values values.sum 3) initial
       (SumcheckMessages.honestBytes encode binding
         (SumcheckMessages.honestRounds (SumcheckFamily.Source.transcript alternate.description) oracle initial values 3)) = true := by
-  have success := SumcheckFamily.honest_accepted (F := F) (G := G) alternate 2 alternateRealization oracle decode encode roundtrip bounded 249 binding
+  have success := SumcheckFamily.honest_accepted (F := F) (G := G) alternate 2 alternateRealization oracle decode encode roundtrip bounded 253 binding
     bindingLength values 3 (by decide) (show values.length = 2 ^ 3 by simpa using shaped) initial (by decide)
   exact success
 
@@ -256,9 +256,9 @@ theorem alternate_zero_accepted (oracle : History F G → F)
     (roundtrip : ∀ value, decode alternate.coordinate (encode value) = some (.field alternate.description.names.scalar value))
     (bounded : ∀ value, (encode value).length ≤ proofLimit) (binding : List UInt8) (bindingLength : binding.length = 32)
     (value : F) (initial : History F G) :
-    validate (m := Id) alternate.vocabulary alternate.validator alternate.description.context oracle decode 72 binding 0
+    validate (m := Id) alternate.vocabulary alternate.validator alternate.description.context oracle decode 76 binding 0
       (alternate.dataInputs [value] value 0) initial (SumcheckMessages.honestBytes encode binding []) = true := by
-  have success := SumcheckFamily.honest_accepted (F := F) (G := G) alternate 2 alternateRealization oracle decode encode roundtrip bounded 72 binding
+  have success := SumcheckFamily.honest_accepted (F := F) (G := G) alternate 2 alternateRealization oracle decode encode roundtrip bounded 76 binding
     bindingLength [value] 0 (by decide) (by simp) initial (by decide)
   simpa only [List.sum_singleton, SumcheckMessages.honestRounds] using success
 

@@ -20,25 +20,33 @@ namespace ZkcExamples.Structured.GkrLayerReading
 open Zkc.Source Zkc.Source.Structured SumcheckVerifierHelpers
 open Zkc.Polynomial Zkc.Polynomial.Multilinear Zkc.Protocols.Gkr GkrRoundsReading
 
-structured_associations GkrSourceViews [sourceHelper50 := GkrSourceBodies.sourceHelper50]
+structured_associations GkrSourceViews [sourceHelper50 := GkrSourceBodies.helper27]
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 theorem tuple19_plain (point : List F) (claim : F) :
-    invoke (closed (F := F) (G := G)) GkrSourceBodies.sourceHelper19Helper
-      (.cons point (.cons claim .nil)) = .done (.cons point (.cons claim .nil)) := by kernel_rfl
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper11Helper
+      (.cons point (.cons claim .nil)) = .done (.cons 0 (.cons point (.cons claim .nil))) := by kernel_rfl
 
-theorem tuple20_plain (point : List F) (claim : F) :
-    invoke (closed (F := F) (G := G)) GkrSourceBodies.sourceHelper20Helper
-      (.cons point (.cons claim .nil)) = .done (.cons point (.cons claim .nil)) := by kernel_rfl
+theorem tuple20_plain (custody : CustodyToken) (point : List F) (claim : F) :
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper12Helper
+      (.cons custody (.cons point (.cons claim .nil))) =
+      .done (.cons custody (.cons point (.cons claim (.cons point (.cons claim .nil))))) := by kernel_rfl
 
 theorem pending_plain (claim : F) :
-    invoke (closed (F := F) (G := G)) GkrSourceBodies.sourceHelper37Helper
-      (.cons claim .nil) = .done (.cons [] (.cons claim .nil)) := by kernel_rfl
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper20Helper
+      (.cons claim .nil) = .done (.cons 0 (.cons [] (.cons claim .nil))) := by kernel_rfl
+
+/-- Refreshing the local claim uses its retained custody. The closed helper
+projection erases the token only after accepting the exact nominal slot. -/
+theorem refresh_plain (custody : CustodyToken) (point nextPoint : List F) (claim nextClaim : F) :
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper37Helper
+      (.cons custody (.cons point (.cons claim (.cons nextPoint (.cons nextClaim .nil))))) =
+      .done (.cons 0 (.cons nextPoint (.cons nextClaim .nil))) := by kernel_rfl
 
 theorem split_pending_plain (left right : List F) (sameLength : right.length = left.length)
     (bounded : (left ++ right).length < indexLimit) :
-    invoke (closed (F := F) (G := G)) GkrSourceBodies.sourceHelper50Helper
+    invoke (closed (F := F) (G := G)) GkrSourceBodies.helper27Helper
       (.cons (left ++ right) .nil) = .done (.cons left (.cons right .nil)) := by
   apply invoke_law
   rw [sourceHelper50_association.invoke GkrSourceViews.unit.linked]
@@ -51,14 +59,14 @@ theorem split_pending_plain (left right : List F) (sameLength : right.length = l
   · have le : left = [] := List.length_eq_zero_iff.mp empty
     have re : right = [] := List.length_eq_zero_iff.mp (sameLength.trans empty)
     subst left; subst right
-    simp [GkrSourceBodies.sourceHelper50Body, Region.denote, meaning, Evaluation.meaning,
+    simp [GkrSourceBodies.helper27Body, Region.denote, meaning, Evaluation.meaning,
       Evaluation.operation, Operands.eval, Regions.denote, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
       Environment.prepend, Environment.push, SiteObservations.closed,
       SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
       checkedIndices, show 0 < indexLimit by decide, Evaluation.invokeCallback]
   · have nonempty : left ≠ [] := by intro h; simp [h] at empty
     have positive : 0 < (left ++ right).length := by simp only [List.length_append]; omega
-    simp [GkrSourceBodies.sourceHelper50Body, Region.denote, meaning, Evaluation.meaning,
+    simp [GkrSourceBodies.helper27Body, Region.denote, meaning, Evaluation.meaning,
       Evaluation.operation, Operands.eval, Regions.denote, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
       Environment.prepend, Environment.push, SiteObservations.closed,
       SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
@@ -207,22 +215,22 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
     (mulDecoded : ∀ layer < layers, ofList? (width + width + width)
       (GkrSourceLaws.block mul layer (2 ^ (width + width + width))) = some (mulTables layer))
     (selectorBound : layers ≤ 2 ^ selector) (widthBound : width ≤ 4)
-    (state : GkrVerifier.State F) (inside : state.1 < layers) (pointLength : state.2.1.length = width) :
+    (state : GkrVerifier.State F) (custody : CustodyToken) (inside : state.1 < layers) (pointLength : state.2.1.length = width) :
     (Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) {} state.1 (some add) (some mul)
-        (some selector) (some width) (some handle) (some state.2.1) (some state.2.2)).interpret
+        (some selector) (some width) (some handle) (some custody) (some state.2.1) (some state.2.2)).interpret
         CommonAdapter.project =
       (GkrVerifier.layerStep {} handle width addTables mulTables state).bind
-        (fun next => .done (some next.2.1, some next.2.2)) := by
+        (fun next => .done (some 0, some next.2.1, some next.2.2)) := by
   obtain ⟨layer, point, claim⟩ := state
   dsimp only at inside pointLength ⊢
   obtain ⟨separate, leftSeparate, rightSeparate⟩ := contexts_separate
   unfold Generated.Presentations.Gkr.Root.verifierLayerProcess GkrVerifier.layerStep GkrVerifier.layerAfterLeft
   simp only [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program, Generated.Presentations.Gkr.Rounds.verifierRoundsView, Bindings.optionalPattern, NormalForm.InputPattern.environment, tuple20_plain, pending_plain, PIR.Process.bind, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, Values.get, PIR.Process.bind_assoc]
-  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ leftSeparate handle width widthBound [] claim]
+  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ leftSeparate handle width widthBound 0 [] claim]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   refine (rounds_yields _ handle width claim).bind_congr fun left leftLength => ?_
   simp only [PIR.Process.bind, GkrRoundsReading.roundsResults, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, List.nil_append]
-  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ rightSeparate handle width widthBound left.1 left.2]
+  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ rightSeparate handle width widthBound 0 left.1 left.2]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   refine (rounds_yields _ handle width left.2).bind_congr fun right rightLength => ?_
   simp only [PIR.Process.bind, GkrRoundsReading.roundsResults, Values.get, GkrVerifier.layerAfterRight,
@@ -277,7 +285,7 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
     refine congrArg (PIR.Process.call _) (funext fun challenge => congrArg (PIR.Process.call _)
       (funext fun _ => ?_))
     simp only [PIR.Process.bind]
-    simp only [points challenge, powers challenge, tuple19_plain, PIR.Process.bind, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons]
+    simp only [points challenge, powers challenge, refresh_plain, PIR.Process.bind, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons]
     rfl
   · rename_i check
     rw [lineCheck_neg {} handle width (addTables layer) (mulTables layer) (layer, point, claim) left.1 right.1
@@ -320,18 +328,18 @@ theorem layers_reads (handle layers width selector : Nat) (add mul : List F)
       (GkrSourceLaws.block mul layer (2 ^ (width + width + width))) = some (mulTables layer))
     (selectorBound : layers ≤ 2 ^ selector) (widthBound : width ≤ 4) :
     ∀ (count : Nat) (state : GkrVerifier.State F), state.1 + count ≤ layers → state.2.1.length = width →
-      (Finite.fold (fun (result : Option (List F) × Option F) index =>
+      (Finite.fold (fun (result : Option CustodyToken × Option (List F) × Option F) index =>
           Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) {} index (some add) (some mul)
-            (some selector) (some width) (some handle) result.1 result.2)
-          (List.range' state.1 count) (some state.2.1, some state.2.2)).interpret CommonAdapter.project =
+            (some selector) (some width) (some handle) result.1 result.2.1 result.2.2)
+          (List.range' state.1 count) (some 0, some state.2.1, some state.2.2)).interpret CommonAdapter.project =
         (PIR.repeatN count (GkrVerifier.layerStep {} handle width addTables mulTables) state).bind
-          (fun next => .done (some next.2.1, some next.2.2))
+          (fun next => .done (some 0, some next.2.1, some next.2.2))
   | 0, _, _, _ => rfl
   | count + 1, state, bounded, pointLength => by
       rw [List.range'_succ]
       simp only [Finite.fold, PIR.repeatN, PIR.Process.interpret_bind]
       rw [layer_reads handle layers width selector add mul addTables mulTables addShape mulShape addBound
-        mulBound addDecoded mulDecoded selectorBound widthBound state (by omega) pointLength,
+        mulBound addDecoded mulDecoded selectorBound widthBound state 0 (by omega) pointLength,
         PIR.Process.bind_assoc, PIR.Process.bind_assoc]
       refine (layerStep_yields handle width addTables mulTables state).bind_congr fun next valid => ?_
       simp only [PIR.Process.bind]

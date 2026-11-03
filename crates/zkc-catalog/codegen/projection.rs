@@ -1,6 +1,8 @@
 //! Build-time projection. No JSON parser or allocation enters the generated
 //! runtime table. Formation is checked before any Rust output is published.
 
+#[path = "installed.rs"]
+mod installed;
 #[path = "validation.rs"]
 mod validation;
 
@@ -195,6 +197,23 @@ fn term(v: &Value) -> Result<String> {
         _ => return Err("unknown scope term".into()),
     })
 }
+/// A source declaration type: a static parameter, optionally its associated
+/// member, or a parameterless constructor.
+fn source_term(v: &Value) -> Result<String> {
+    if v.get("constructor").is_some() {
+        object(v, &["constructor"], &[])?;
+        return Ok(format!(
+            "SourceTerm::Constructor({})",
+            quoted(&v["constructor"])?
+        ));
+    }
+    object(v, &["static"], &["member"])?;
+    Ok(format!(
+        "SourceTerm::Static {{ index: {}, member: {} }}",
+        count(&v["static"])?,
+        optional(v.get("member"), quoted)?
+    ))
+}
 fn application(v: &Value, ty: &str) -> Result<String> {
     Ok(record(
         ty,
@@ -294,7 +313,7 @@ fn facet(v: &Value) -> Result<String> {
             object(v, &["kind", "identity"], &[])?;
             return Ok(format!("Facet::Mathematical({})", quoted(&v["identity"])?));
         }
-        "History" => (
+        "History" | "Succession" => (
             &["stateInput", "stateOutput"],
             vec![
                 ("state_input", count(&v["stateInput"])?),
@@ -467,9 +486,13 @@ fn constructor(v: &Value) -> Result<String> {
             "participants",
             "constructible",
             "message",
+            "sourceData",
+            "collection",
+            "setup",
         ],
         &[],
     )?;
+    source_vocabulary(v)?;
     Ok(record(
         "TypeConstructor",
         &[
@@ -490,8 +513,25 @@ fn constructor(v: &Value) -> Result<String> {
             ("participants", flag(&v["participants"])?),
             ("constructible", flag(&v["constructible"])?),
             ("message", flag(&v["message"])?),
+            ("source_data", flag(&v["sourceData"])?),
         ],
     ))
+}
+// The other source-vocabulary columns are checked but not projected. None of
+// them grants codec, transport or execution authority.
+fn source_vocabulary(v: &Value) -> Result<()> {
+    let collection = &v["collection"];
+    if !collection.is_null() {
+        object(collection, &["rank", "element"], &[])?;
+        if !matches!(number(&collection["rank"])?, 1 | 2) {
+            return Err("collection rank must be 1 or 2".into());
+        }
+        choice(&collection["element"], &["parameter", "index", "byte"])?;
+    }
+    if !v["setup"].is_null() {
+        choice(&v["setup"], &["prover", "verifier"])?;
+    }
+    Ok(())
 }
 
 fn consumer_operation(v: &Value) -> Result<String> {
@@ -646,11 +686,20 @@ fn laws(v: &Value) -> Result<String> {
     ))
 }
 
-pub fn generate(bytes: &[u8]) -> Result<String> {
+fn read(bytes: &[u8]) -> Result<Value> {
     if bytes.len() > 64 * 1024 * 1024 {
         return Err("declaration byte limit".into());
     }
     let Unique(v) = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    Ok(v)
+}
+
+/// Project the declaration document after validating it together with the
+/// native installation document, which is checked but not projected.
+pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
+    let v = read(declarations)?;
+    let installation =
+        read(installation).map_err(|error| format!("native installation: {error}"))?;
     object(
         &v,
         &[
@@ -667,11 +716,168 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
             "mathematicalIdentities",
             "mathematicalIntrinsics",
             "consumerProfiles",
+            "frontendDeclarations",
+            "frontendRules",
+            "frontendNotations",
+            "frontendConstructors",
+            "frontendHomes",
+            "serviceSignatures",
+            "serviceMethods",
+            "domains",
+            "logicalTypes",
+            "frameTags",
+            "codecs",
+            "aggregateFrames",
+            "randomServices",
+            "limits",
+            "finiteDefinitions",
+            "domainConstructors",
         ],
         &[],
     )?;
     choice(&v["format"], &["zkc.contract-declarations/0"])?;
-    let fields = [
+    let mut fields = vec![
+        (
+            "frontend_declarations",
+            array(&v["frontendDeclarations"], |r| {
+                object(
+                    r,
+                    &[
+                        "identity",
+                        "owner",
+                        "name",
+                        "kind",
+                        "statics",
+                        "inputs",
+                        "output",
+                        "association",
+                        "implicit",
+                    ],
+                    &[],
+                )?;
+                object(&r["association"], &["kind", "target"], &[])?;
+                let target = quoted(&r["association"]["target"])?;
+                let association = match choice(&r["association"]["kind"], &["primitive", "rule"])? {
+                    "primitive" => format!("FrontendAssociation::Primitive({target})"),
+                    _ => format!("FrontendAssociation::Rule({target})"),
+                };
+                Ok(record(
+                    "FrontendDeclaration",
+                    &[
+                        ("identity", quoted(&r["identity"])?),
+                        ("owner", quoted(&r["owner"])?),
+                        ("name", quoted(&r["name"])?),
+                        (
+                            "kind",
+                            variant(
+                                &r["kind"],
+                                "SourceDeclarationKind",
+                                &["Math", "Local", "Interface"],
+                            )?,
+                        ),
+                        (
+                            "statics",
+                            array(&r["statics"], |s| {
+                                object(s, &["name", "parameter"], &[])?;
+                                Ok(record(
+                                    "SourceStatic",
+                                    &[
+                                        ("name", quoted(&s["name"])?),
+                                        ("kind", kind(&s["parameter"])?),
+                                    ],
+                                ))
+                            })?,
+                        ),
+                        (
+                            "inputs",
+                            array(&r["inputs"], |s| {
+                                object(s, &["name", "type"], &[])?;
+                                Ok(record(
+                                    "SourceInput",
+                                    &[
+                                        ("name", quoted(&s["name"])?),
+                                        ("term", source_term(&s["type"])?),
+                                    ],
+                                ))
+                            })?,
+                        ),
+                        ("output", optional(r.get("output"), source_term)?),
+                        ("association", association),
+                        ("implicit", flag(&r["implicit"])?),
+                    ],
+                ))
+            })?,
+        ),
+        (
+            "frontend_notations",
+            array(&v["frontendNotations"], |r| {
+                object(r, &["owner", "symbol", "fixity", "target", "public"], &[])?;
+                let fixity = optional(r.get("fixity"), |f| {
+                    object(f, &["associativity", "precedence"], &[])?;
+                    let associativity =
+                        match choice(&f["associativity"], &["left", "right", "none"])? {
+                            "left" => "Left",
+                            "right" => "Right",
+                            _ => "None",
+                        };
+                    Ok(record(
+                        "NotationFixity",
+                        &[
+                            (
+                                "associativity",
+                                format!("NotationAssociativity::{associativity}"),
+                            ),
+                            ("precedence", count(&f["precedence"])?),
+                        ],
+                    ))
+                })?;
+                Ok(record(
+                    "FrontendNotation",
+                    &[
+                        ("owner", quoted(&r["owner"])?),
+                        ("symbol", quoted(&r["symbol"])?),
+                        ("fixity", fixity),
+                        ("target", quoted(&r["target"])?),
+                        ("public", flag(&r["public"])?),
+                    ],
+                ))
+            })?,
+        ),
+        (
+            "frontend_homes",
+            array(&v["frontendHomes"], |r| {
+                object(r, &["constructor", "module", "members"], &[])?;
+                Ok(record(
+                    "FrontendHome",
+                    &[
+                        ("constructor", quoted(&r["constructor"])?),
+                        ("module", quoted(&r["module"])?),
+                        ("members", array(&r["members"], quoted)?),
+                    ],
+                ))
+            })?,
+        ),
+        (
+            "service_methods",
+            array(&v["serviceMethods"], |r| {
+                object(r, &["name", "signature", "capability"], &[])?;
+                Ok(record(
+                    "ServiceMethodDeclaration",
+                    &[
+                        ("name", quoted(&r["name"])?),
+                        (
+                            "signature",
+                            variant(
+                                &r["signature"],
+                                "ServiceSignature",
+                                &["RandomDraw", "RandomIndex", "RandomIndices"],
+                            )?,
+                        ),
+                        ("capability", quoted(&r["capability"])?),
+                    ],
+                ))
+            })?,
+        ),
         ("sorts", array(&v["sorts"], quoted)?),
         ("types", array(&v["types"], constructor)?),
         ("operations", array(&v["operations"], operation)?),
@@ -712,7 +918,7 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
         (
             "capabilities",
             array(&v["capabilities"], |v| {
-                object(v, &["name", "parameters"], &[])?;
+                object(v, &["name", "parameters", "requires", "permits"], &[])?;
                 Ok(record(
                     "Capability",
                     &[
@@ -832,9 +1038,15 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
             })?,
         ),
     ];
-    validation::validate(&v)?;
+    validation::validate(&v, &installation)?;
+    // The logical installed-instance tables join CATALOG; the physical tables
+    // are the separate INSTALLATION static, so neither surface carries the other.
+    let identities = installed::Identities::new(&v)?;
+    fields.extend(identities.logical(&v)?);
     Ok(format!(
-        "// Generated from the shared declaration source.\npub static CATALOG: Catalog = {};\n",
-        record("Catalog", &fields)
+        "// Generated from the shared declaration source.\n{}pub static CATALOG: Catalog = {};\n{}",
+        identities.enumeration(&v)?,
+        record("Catalog", &fields),
+        identities.installation(&installation)?
     ))
 }

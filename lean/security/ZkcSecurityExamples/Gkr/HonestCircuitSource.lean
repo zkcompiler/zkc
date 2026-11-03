@@ -25,7 +25,7 @@ theorem layer_plain {width : Nat} (add mul below : List F)
     (dm : ofList? (width + width + width) mul = some m)
     (dv : ofList? width below = some v) (small : width + width + width < 64) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper33Helper
+      GkrSourceBodies.helper64Helper
       (Goals.Layer.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, below, width }) =
       .done (Goals.Layer.encode (ringModel F G)
@@ -44,7 +44,7 @@ theorem values_below_plain {width : Nat} (add mul inputValues : List F) (layers 
     (small : width + width + width + selector < 64)
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper34Helper
+      GkrSourceBodies.helper65Helper
       (Goals.Traversal.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, inputValues := inputValues,
           layers, selector, width, layerIndex }) =
@@ -65,7 +65,7 @@ theorem values_below_run {width : Nat} {H E : Type} (add mul inputValues : List 
     (layersBound : layers < indexLimit) (inside : layerIndex < layers)
     (handler : PIR.Handler (participantInterface F G) H E) (initial : H) :
     (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper34Helper
+      GkrSourceBodies.helper65Helper
       (Goals.Traversal.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, inputValues := inputValues,
           layers, selector, width, layerIndex })).run handler initial =
@@ -81,7 +81,7 @@ theorem layer_component {width : Nat} (add mul below : List F)
     (dm : ofList? (width + width + width) mul = some m)
     (dv : ofList? width below = some v) (small : width + width + width < 64) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper33Helper
+      GkrSourceBodies.helper64Helper
       (Goals.Layer.Inputs.pack (Value := Component (assignment F G))
         { addWeights := some add, mulWeights := some mul, below := some below, width := some width }) =
       .done (Goals.Layer.encode (ringModel F G)
@@ -98,7 +98,7 @@ theorem values_below_component {width : Nat} (add mul inputValues : List F) (lay
     (capacity : layers ≤ 2 ^ selector) (small : width + width + width + selector < 64)
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper34Helper
+      GkrSourceBodies.helper65Helper
       (Goals.Traversal.Inputs.pack (Value := Component (assignment F G))
         { addWeights := some add, mulWeights := some mul, inputValues := some inputValues,
           layers := some layers, selector := some selector, width := some width,

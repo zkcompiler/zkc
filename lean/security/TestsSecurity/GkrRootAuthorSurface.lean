@@ -78,19 +78,19 @@ theorem arbitrary_handler {n : Nat} {H E : Type} (ctx : ProtocolContext) (count 
 inputs stay missing; a verifier service never appears in the producer view. -/
 theorem input_masks (view : SourceRows.RoundsInputs.View (Component (assignment ℚ ℚ))) :
     SourceRows.RoundsInputs.mask 0 view =
-      { view with pending := none, claim := none, service := none } ∧
+      { view with custody := none, pending := none, claim := none, service := none } ∧
     SourceRows.RoundsInputs.mask 1 view =
       { add := none, mul := none, left := none, right := none,
-        pending := view.pending, claim := view.claim, count := view.count, service := view.service } :=
+        custody := view.custody, pending := view.pending, claim := view.claim, count := view.count, service := view.service } :=
   ⟨rfl, rfl⟩
 
-/-- All seven result coordinates are retained, with complementary private
+/-- All eight result coordinates are retained, with complementary private
 components and no promotion of absent data. -/
 theorem result_masks (view : SourceRows.RoundsResults.View (Component (assignment ℚ ℚ))) :
-    SourceRows.RoundsResults.mask 0 view = { view with pending := none, claim := none } ∧
+    SourceRows.RoundsResults.mask 0 view = { view with custody := none, pending := none, claim := none } ∧
     SourceRows.RoundsResults.mask 1 view =
       { point := none, add := none, mul := none, left := none, right := none,
-        pending := view.pending, claim := view.claim } := ⟨rfl, rfl⟩
+        custody := view.custody, pending := view.pending, claim := view.claim } := ⟨rfl, rfl⟩
 
 /-- A mask at a role outside the actual roster cannot retain a service or any
 other supplied coordinate. -/
@@ -107,12 +107,12 @@ theorem aliased_roles : ¬ NormalForm.RosterDistinct { roles := fun _ => 0 } 0 2
 /-- The actual invocation returns the entire result row for zero iterations,
 while verifier-only pending data, claim and capability remain hidden. -/
 theorem source_zero (add mul left right pending : Option (List ℚ))
-    (claim : Option ℚ) (service : Option Nat) :
+    (custody : Option CustodyToken) (claim : Option ℚ) (service : Option Nat) :
     invokeProtocol (HonestProducerSource.beforeRoot (F := ℚ) (G := ℚ))
       GkrSourceBodies.roundsSignature {} 0
-      (SourceRows.RoundsInputs.pack { add, mul, left, right, pending, claim, count := some 0, service }) =
+      (SourceRows.RoundsInputs.pack { add, mul, left, right, custody, pending, claim, count := some 0, service }) =
       .done (SourceRows.RoundsResults.pack
-        { point := some [], add, mul, left, right, pending := none, claim := none }) := by
+        { point := some [], add, mul, left, right, custody := none, pending := none, claim := none }) := by
   rw [HonestProducerSource.rounds_invocation _ rfl rfl]
   dsimp only [HonestProducerSource.roundsPresentation, HonestProducerSource.roundsPresentation_certificate,
     NormalForm.runsAtOn, NormalForm.meaningAtOn]
@@ -165,17 +165,17 @@ enter/leave events surround the three payloads and history-dependent delivery. -
 theorem source_complete {n : Nat} (state : GkrRoundsReference.State ℚ (n + 1))
     (raw : RawState ℚ) (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ (n + 1) < indexLimit)
-    (pending : Option (List ℚ)) (claim : Option ℚ) (service : Option Nat) :
+    (pending : Option (List ℚ)) (custody : Option CustodyToken) (claim : Option ℚ) (service : Option Nat) :
     (invokeProtocol (HonestProducerSource.beforeRoot (F := ℚ) (G := ℚ))
       GkrSourceBodies.roundsSignature {} 0
       (SourceRows.RoundsInputs.pack
         { add := some raw.add, mul := some raw.mul, left := some raw.left,
-          right := some raw.right, pending, claim, count := some 1, service })).run
+          right := some raw.right, custody, pending, claim, count := some 1, service })).run
       (observedHandler none .abort) 10 =
       ⟨.returned (SourceRows.RoundsResults.pack
         { point := some [15], add := some (raw.restrict 15).add, mul := some (raw.restrict 15).mul,
           left := some (raw.restrict 15).left, right := some (raw.restrict 15).right,
-          pending := none, claim := none }), 16, observedPackets state⟩ := by
+          custody := none, pending := none, claim := none }), 16, observedPackets state⟩ := by
   rw [HonestProducerSource.rounds_observed _ rfl rfl 1 (by decide) state raw decoded capacity]
   rfl
 
@@ -184,13 +184,13 @@ Even a stopped leave retains its updated state and complete attempted history. -
 theorem source_stops {n : Nat} (state : GkrRoundsReference.State ℚ (n + 1))
     (raw : RawState ℚ) (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ (n + 1) < indexLimit)
-    (pending : Option (List ℚ)) (claim : Option ℚ) (service : Option Nat)
+    (pending : Option (List ℚ)) (custody : Option CustodyToken) (claim : Option ℚ) (service : Option Nat)
     (cut : Fin 6) (reason : PIR.Stop) :
     (invokeProtocol (HonestProducerSource.beforeRoot (F := ℚ) (G := ℚ))
       GkrSourceBodies.roundsSignature {} 0
       (SourceRows.RoundsInputs.pack
         { add := some raw.add, mul := some raw.mul, left := some raw.left,
-          right := some raw.right, pending, claim, count := some 1, service })).run
+          right := some raw.right, custody, pending, claim, count := some 1, service })).run
       (observedHandler (some (10 + cut.val)) reason) 10 =
       ⟨.stopped reason, 11 + cut.val, (observedPackets state).take (cut.val + 1)⟩ := by
   rw [HonestProducerSource.rounds_observed _ rfl rfl 1 (by decide) state raw decoded capacity]

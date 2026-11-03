@@ -12,12 +12,14 @@ using namespace llvm;
 using namespace mlir;
 using namespace zkc;
 
-// An ordinary source consumer, also used by deployed integration checks. Keep
-// the exact emitted original bytes; a parse/print cycle changes proof binding.
+// An ordinary consumer of exact original MLIR. Keep the exact emitted original
+// bytes; a parse/print cycle changes proof binding. A source response needs
+// the project's identities, which only a language compilation supplies, so
+// this consumer writes the Yul and the legalized target.
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal(argv[0]);
   if (argc != 5 && argc != 6) {
-    errs() << "usage: evm_target ORIGINAL.mlir POLICY.json OUTPUT.json "
+    errs() << "usage: evm_target ORIGINAL.mlir POLICY.json OUTPUT.yul "
               "TARGET.mlir [TRANSITIONS]\n";
     return 2;
   }
@@ -47,10 +49,10 @@ int main(int argc, char **argv) {
   if (failed(evm::checkTarget(*target)))
     return 1;
   std::error_code ec;
-  raw_fd_ostream json(argv[3], ec);
+  raw_fd_ostream yul(argv[3], ec);
   if (ec)
     return 2;
-  json << formatv("{0:2}\n", encodeEvmCompilation(*result));
+  yul << result->yul();
   raw_fd_ostream mlir(argv[4], ec);
   if (ec)
     return 2;

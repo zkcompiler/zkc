@@ -84,7 +84,7 @@ class PlainReader(unittest.TestCase):
                 render.policy(forged)
         fake = [render.FORMAT, "sha256:" + "0" * 64, "sha256:" + "1" * 64, plain, "V",
                 [["apply", "transcript", [["domain", "Transcript", "invented"]]]],
-                [["apply", "bool", []]], [], [], []]
+                [["apply", "bool", []]], [], [], [], [[], []]]
         with self.assertRaisesRegex(ValueError, "plain-profile-abi"):
             render.render_declaration(fake, "ForgedPlain")
 

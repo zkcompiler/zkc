@@ -12,6 +12,33 @@ const BIND_TAG: &[u8] = b"zkc.hash-chain.bind/0\0";
 const ABSORB_TAG: &[u8] = b"zkc.hash-chain.absorb/0\0";
 const REQUEST_TAG: &[u8] = b"zkc.hash-chain.request/0\0";
 
+// Tag, label length and data length around a frame's label and data.
+const FRAME_HEADER_BYTES: usize = 1 + 8 + 8;
+
+fn total(parts: &[usize]) -> Option<usize> {
+    parts
+        .iter()
+        .try_fold(0usize, |sum, part| sum.checked_add(*part))
+}
+
+/// Bytes one absorption digests: its tag, the prior state and the message
+/// frame. Work accounting reads this count instead of restating the framing.
+pub fn absorbed_bytes(label_bytes: usize, data_bytes: usize) -> Option<usize> {
+    total(&[
+        ABSORB_TAG.len(),
+        32,
+        FRAME_HEADER_BYTES,
+        label_bytes,
+        data_bytes,
+    ])
+}
+
+/// Bytes one 32-byte request block digests: its tag, the state, the framed
+/// requested length and the block counter.
+pub fn request_block_bytes(label_bytes: usize) -> Option<usize> {
+    total(&[REQUEST_TAG.len(), 32, FRAME_HEADER_BYTES, label_bytes, 8, 8])
+}
+
 fn write_frame_header(mut write: impl FnMut(&[u8]), tag: u8, label: &[u8], length: u64) {
     write(&[tag]);
     write(&(label.len() as u64).to_be_bytes());
@@ -23,6 +50,18 @@ fn write_frame_header(mut write: impl FnMut(&[u8]), tag: u8, label: &[u8], lengt
 pub fn write_frame(mut write: impl FnMut(&[u8]), tag: u8, label: &[u8], data: &[u8]) {
     write_frame_header(&mut write, tag, label, data.len() as u64);
     write(data);
+}
+
+fn write_absorption(
+    mut write: impl FnMut(&[u8]),
+    state: &[u8; 32],
+    tag: u8,
+    label: &[u8],
+    data: &[u8],
+) {
+    write(ABSORB_TAG);
+    write(state);
+    write_frame(&mut write, tag, label, data);
 }
 
 fn write_request(
@@ -71,11 +110,7 @@ impl KeccakChain {
 
     fn absorb(&mut self, tag: u8, label: &[u8], data: &[u8]) {
         let state = self.state;
-        self.state = digest(|write| {
-            write(ABSORB_TAG);
-            write(&state);
-            write_frame(&mut *write, tag, label, data);
-        });
+        self.state = digest(|write| write_absorption(write, &state, tag, label, data));
     }
 
     pub fn append_message(&mut self, label: &[u8], data: &[u8]) {
@@ -101,6 +136,25 @@ impl KeccakChain {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exported_frame_lengths_count_the_digested_bytes() {
+        for (label, data) in [(&b""[..], 0), (b"origin", 77), (b"gated-indices", 8)] {
+            let mut absorbed = 0;
+            write_absorption(
+                |bytes| absorbed += bytes.len(),
+                &[0; 32],
+                MESSAGE,
+                label,
+                &vec![0; data],
+            );
+            assert_eq!(absorbed_bytes(label.len(), data), Some(absorbed));
+            let mut requested = 0;
+            write_request(|bytes| requested += bytes.len(), &[0; 32], label, 64, 1);
+            assert_eq!(request_block_bytes(label.len()), Some(requested));
+        }
+        assert_eq!(absorbed_bytes(usize::MAX, 1), None);
+    }
 
     #[test]
     fn exact_states_and_request_blocks_match_independent_vectors() {

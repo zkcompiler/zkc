@@ -1,5 +1,7 @@
 """The public reference checker covers both owners and excludes private material."""
 
+import hashlib
+import json
 import os
 
 import pytest
@@ -84,3 +86,68 @@ def test_existing_link_outside_repository_is_refused(reference, tmp_path):
     outside.write_text("# Outside\n")
     write("docs/README.md", "# Native\n\n[Outside](../../outside.md)\n")
     assert ["docs/README.md", "../../outside.md", "outside public repository"] in checker.check()["errors"]
+
+
+SAMPLE_GUIDE = "compiler/test/fixtures/sample/README.md"
+
+
+def fixture_guide(write, *rows, path=SAMPLE_GUIDE, preamble=""):
+    return write(path, f"# Sample\n\n{preamble}## Current fixture SHA-256\n\n| File | SHA-256 |\n|---|---|\n"
+                 + "".join(row + "\n" for row in rows))
+
+
+def digest_row(name, data):
+    return f"| `{name}` | `{hashlib.sha256(data).hexdigest()}` |"
+
+
+def test_fixture_digest_tables_follow_the_retained_bytes(reference):
+    checker, write = reference
+    fixture = write("compiler/test/fixtures/sample/sample.json", '{"toolchain":"a"}')
+    # A fenced example is prose about the format, not a record.
+    example = "```md\n## Current fixture SHA-256\n\n| `sample.json` | `" + "0" * 64 + "` |\n```\n\n"
+    guide = fixture_guide(write, digest_row("sample.json", fixture.read_bytes()), preamble=example)
+    result = checker.check(True)
+    assert result["status"] == "pass" and result["fixture_digests"] == 1
+    assert checker.check()["fixture_digests"] == 0  # fixture guides are component pages
+    fixture.write_text('{"toolchain":"b"}')
+    assert [SAMPLE_GUIDE, "sample.json", "fixture digest differs"] in checker.check(True)["errors"]
+    guide = fixture_guide(write, digest_row("sample.json", fixture.read_bytes()))
+    assert checker.check(True)["status"] == "pass"
+    guide.write_text(guide.read_text().replace(digest_row("sample.json", fixture.read_bytes()),
+                                               digest_row("sample.json", b"stale")))
+    assert [SAMPLE_GUIDE, "sample.json", "fixture digest differs"] in checker.check(True)["errors"]
+
+
+def test_fixture_digest_tables_refuse_incomplete_records(reference):
+    checker, write = reference
+    write("compiler/test/fixtures/sample/present.json", "{}")
+    write("compiler/test/fixtures/other.json", "{}")
+    fixture_guide(write, digest_row("present.json", b"{}"), digest_row("present.json", b"{}"),
+                  digest_row("absent.json", b"{}"), digest_row("../other.json", b"{}"),
+                  "| `present.json` | not a digest |")
+    write("crates/example/README.md", "# Example\n\n## Current fixture SHA-256\n\nNo table.\n")
+    errors = checker.check(True)["errors"]
+    assert [SAMPLE_GUIDE, "present.json", "duplicate fixture digest row"] in errors
+    assert [SAMPLE_GUIDE, "absent.json", "fixture missing"] in errors
+    assert [SAMPLE_GUIDE, "../other.json", "fixture outside the guide's directory"] in errors
+    assert [SAMPLE_GUIDE, 11, "malformed fixture digest row"] in errors
+    assert ["crates/example/README.md", 3, "fixture digest table has no rows"] in errors
+
+
+def test_catalog_limits_table_equals_the_catalog_rows(reference):
+    checker, write = reference
+    row = {"name": "protocol.roles", "value": 1024, "unit": "roles", "owner": "IR / Protocol",
+           "scope": "Ordered role roster", "phase": "admission"}
+    write("common/catalog/declarations.json", json.dumps({"limits": [row]}))
+    table = ("| Name | Value | Unit | Owner | Scope | Phase |\n|---|---:|---|---|---|---|\n"
+             "| `protocol.roles` | {} | `roles` | IR / Protocol | Ordered role roster | `admission` |\n")
+    page = "docs/spec/formats/contract-declarations.md"
+    write("docs/README.md", "# Native\n\n[Declarations](spec/formats/contract-declarations.md)\n")
+    write(page, "# Declarations\n\n### Limits\n\n" + table.format("1,024"))
+    assert checker.check()["status"] == "pass"
+    write(page, "# Declarations\n\n### Limits\n\n" + table.format("1,025"))
+    errors = checker.check()["errors"]
+    assert [page, "`protocol.roles`", "limit row differs from the catalog"] in errors
+    assert [page, "`protocol.roles`", "catalog limit row not stated"] in errors
+    write(page, "# Declarations\n\n### Limits\n\nNo table.\n")
+    assert [page, "`protocol.roles`", "catalog limit row not stated"] in checker.check()["errors"]

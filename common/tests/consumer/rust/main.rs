@@ -21,9 +21,9 @@ mod withhold {
 }
 use std::convert::TryFrom;
 use zkc::entry::{
-    BindingPolicy, FunctionInterface, FunctionOptions, InvocationBinding, InvocationContext,
-    NamedValues, Package, ProofContext, ProofOptions, ProofRequest, RoleInputs, RunContext,
-    SetupAuthority, Value,
+    BindingPolicy, FunctionInterface, FunctionOptions, InterfaceLimits, InvocationBinding,
+    InvocationContext, NamedValues, Package, ProofContext, ProofOptions, ProofRequest, RoleInputs,
+    RunContext, SetupAuthority, Value,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bytes = include_bytes!("joint.zkpkg");
     let package = Package::capture(bytes, &joint::PACKAGE_SHA256, Package::MAX_BYTES)?;
-    let inventory = FunctionInterface::deployment_interfaces(&package)?;
+    let inventory = FunctionInterface::deployment_interfaces(&package, InterfaceLimits::DEFAULT)?;
     let authorities = inventory
         .iter()
         .map(|d| (d.id().into(), SetupAuthority::default()))
@@ -91,13 +91,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(prepared.execute().is_success());
     let result = joint::call(&host, arguments()?, context())?;
     assert!(result.report.is_success() && result.conversion_error.is_none());
-    let Value::Record(mut roles) = Value::from(result.value.unwrap()) else {
-        panic!("roles")
-    };
-    let Value::Record(mut values) = roles.remove("V").unwrap() else {
-        panic!("results")
-    };
-    assert!(bool::try_from(values.remove("received").unwrap())?);
+    let roles = Value::from(result.value.unwrap());
+    assert!(bool::try_from(roles.field("V")?.field("received")?)?);
 
     let options = ProofOptions {
         binding: BindingPolicy::AllowAuthored,
@@ -164,7 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let bytes = include_bytes!("withhold.zkpkg");
     let package = Package::capture(bytes, &withhold::PACKAGE_SHA256, Package::MAX_BYTES)?;
-    let inventory = FunctionInterface::deployment_interfaces(&package)?;
+    let inventory = FunctionInterface::deployment_interfaces(&package, InterfaceLimits::DEFAULT)?;
     let authorities = inventory
         .iter()
         .map(|d| (d.id().into(), SetupAuthority::default()))

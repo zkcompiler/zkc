@@ -6,86 +6,29 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use zkc_runtime::vm::ServiceContract;
 
-/// Native service shapes belong to the executing provider, independently of
-/// the runtime contract catalogue. These facts never authorize a root or lease.
+/// The declared method's request signature, read from the runtime's catalog
+/// projection, with this provider's reply bound. These facts never authorize a
+/// root or lease.
 pub(crate) fn support(
     contract: ServiceContract,
     method: &str,
 ) -> Option<zkc_runtime::vm::ServiceSupport> {
-    use zkc_runtime::vm::{
-        Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
-    };
-    if matches!(method, "index" | "indices") {
-        // Explicit residue RNG roots supply uniform words for the masked sampler.
-        if !matches!(
-            contract,
-            ServiceContract::RandomExtensionField
-                | ServiceContract::RandomKoalaBearExt4
-                | ServiceContract::RandomBabyBearExt4
-                | ServiceContract::RandomGoldilocksExt2
-        ) {
-            return None;
-        }
-        let index = PhysicalType::new(
-            LogicalType::new(Type::Index, Identity::None).ok()?,
-            Representation::Index,
-        )
-        .ok()?;
-        if method == "indices" {
-            let indices = PhysicalType::new(
-                LogicalType::new(Type::Indices, Identity::None).ok()?,
-                Representation::Indices,
-            )
-            .ok()?;
-            return Some(ServiceSupport {
-                signature: ServiceSignature {
-                    inputs: vec![index; 2],
-                    outputs: vec![indices],
-                },
-                // ServiceSupport has no argument-dependent bound. The runner
-                // reserves the largest installed reply, then settles its size.
-                max_retained_bytes: 8 * crate::sampling::MAX_INDEX_COUNT + 256,
-            });
-        }
-        return Some(ServiceSupport {
-            signature: ServiceSignature {
-                inputs: vec![index.clone()],
-                outputs: vec![index],
-            },
-            max_retained_bytes: 512,
-        });
-    }
-    if method != "draw" {
-        return None;
-    }
-    let (field, representation) = match contract {
-        ServiceContract::RandomBls12381Field => (Identity::Bls12381Fr, Representation::Fr),
-        ServiceContract::RandomBn254Field => (Identity::Bn254Fr, Representation::Bn254Fr),
-        ServiceContract::RandomRistrettoField => {
-            (Identity::Ristretto255Scalar, Representation::DalekScalar)
-        }
-        ServiceContract::RandomBabyBearExt4 => {
-            (Identity::BabyBearExt4, Representation::BabyBearExt4)
-        }
-        ServiceContract::RandomGoldilocksExt2 => {
-            (Identity::GoldilocksExt2, Representation::GoldilocksExt2)
-        }
-        ServiceContract::RandomKoalaBearExt4 => {
-            (Identity::KoalaBearExt4, Representation::KoalaBearExt4)
-        }
-        ServiceContract::RandomExtensionField => {
-            (Identity::KoalaBearExt8, Representation::KoalaBearExt8)
-        }
+    use zkc_runtime::vm::{ServiceSupport, Type};
+    let signature = contract.signature(method)?;
+    // ServiceSupport has no argument-dependent bound. The runner reserves the
+    // largest installed reply, then settles its size.
+    let max_retained_bytes = if signature
+        .outputs
+        .iter()
+        .any(|ty| ty.kind() == Type::Indices)
+    {
+        8 * crate::sampling::MAX_INDEX_COUNT + 256
+    } else {
+        512
     };
     Some(ServiceSupport {
-        signature: ServiceSignature {
-            inputs: vec![],
-            outputs: vec![
-                PhysicalType::new(LogicalType::new(Type::Field, field).ok()?, representation)
-                    .ok()?,
-            ],
-        },
-        max_retained_bytes: 512,
+        signature,
+        max_retained_bytes,
     })
 }
 

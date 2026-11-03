@@ -9,6 +9,24 @@ class ZKC_Contribution<string id, list<string> dependencies,
   list<string> requires = dependencies;
   list<ZKC_Declaration> declarations = records;
 }
+// A logical type head the source language owns that is not a catalog type
+// constructor: its spelling and the form, the logical meaning the frontend
+// gives it. A frontend home may name one.
+class ZKC_FrontendConstructor<string value, string meaning> : ZKC_Declaration {
+  string name = value;
+  string form = meaning;
+}
+class ZKC_FrontendHome<string head, string owner, list<string> exports = []> : ZKC_Declaration {
+  string name = head;
+  string module = owner;
+  list<string> members = exports;
+}
+class ZKC_ServiceMethod<string value, string rule, string requirement>
+    : ZKC_Declaration {
+  string name = value;
+  string signature = rule;
+  string capability = requirement;
+}
 class ZKC_ParameterKind<string value> : ZKC_Declaration { string name = value; }
 def DomainKind : ZKC_ParameterKind<"Domain">;
 def TypeKind : ZKC_ParameterKind<"Type">;
@@ -21,6 +39,71 @@ class ZKC_Parameter<ZKC_ParameterKind k, string s = ""> : ZKC_Declaration {
 class ZKC_Domain<ZKC_Sort s> : ZKC_Parameter<DomainKind, s.name>;
 def TypeParameter : ZKC_Parameter<TypeKind>;
 def NatParameter : ZKC_Parameter<NatKind>;
+// Installed source declarations, their elaboration rules and notations grant
+// source resolution and elaboration facts. They never grant execution
+// authority, physical installation or formal laws.
+// A source type: static parameter `index` or its associated `member`, or with
+// index -1 the parameterless `constructor`.
+class ZKC_SourceTerm<int position, string associated = "", string head = "">
+    : ZKC_Declaration {
+  int index = position;
+  string member = associated;
+  string constructor = head;
+}
+class ZKC_SourceStatic<string value, ZKC_Parameter p> : ZKC_Declaration {
+  string name = value;
+  ZKC_Parameter parameter = p;
+}
+class ZKC_SourceInput<string value, ZKC_SourceTerm t> : ZKC_Declaration {
+  string name = value;
+  ZKC_SourceTerm type = t;
+}
+// The declared shape a rule association requires. `output` has at most one
+// term; an interface has none.
+class ZKC_FrontendRule<string value, string declared, list<ZKC_Parameter> s,
+                       list<ZKC_SourceTerm> i, list<ZKC_SourceTerm> o>
+    : ZKC_Declaration {
+  string name = value;
+  string kind = declared;
+  list<ZKC_Parameter> statics = s;
+  list<ZKC_SourceTerm> inputs = i;
+  list<ZKC_SourceTerm> output = o;
+}
+// One installed declaration with exactly one association: a `primitive`
+// mathematical intrinsic or operation, or a `rule`.
+class ZKC_FrontendDeclaration<string id, string owner, string value,
+                              string declared, list<ZKC_SourceStatic> s,
+                              list<ZKC_SourceInput> i, list<ZKC_SourceTerm> o,
+                              string associationKind, string associated,
+                              bit fallback> : ZKC_Declaration {
+  string identity = id;
+  string module = owner;
+  string name = value;
+  string kind = declared;
+  list<ZKC_SourceStatic> statics = s;
+  list<ZKC_SourceInput> inputs = i;
+  list<ZKC_SourceTerm> output = o;
+  string association = associationKind;
+  string target = associated;
+  bit implicit = fallback;
+}
+// An installed notation names a declaration of its owner. An empty
+// associativity keeps the symbol's fixed syntax.
+class ZKC_FrontendNotation<string owner, string spelling, string associativity,
+                           int level, string value, bit visible>
+    : ZKC_Declaration {
+  string module = owner;
+  string symbol = spelling;
+  string fixity = associativity;
+  int precedence = level;
+  string target = value;
+  bit public = visible;
+}
+class ZKC_ServiceSignature<string value, string requirement>
+    : ZKC_Declaration {
+  string name = value;
+  string capability = requirement;
+}
 class ZKC_Member<string value, ZKC_Parameter from, ZKC_Parameter to> : ZKC_Declaration {
   string name = value;
   ZKC_Parameter owner = from;
@@ -45,6 +128,12 @@ def PublicValue : ZKC_Custody<"PublicValue">;
 def PrivateImmutable : ZKC_Custody<"PrivateImmutable">;
 def Affine : ZKC_Custody<"Affine">;
 class ZKC_TypeHead<string value> : ZKC_Declaration { string name = value; }
+// A source collection view: `rank` is 1 or 2 and `element` is "parameter",
+// "index" or "byte".
+class ZKC_TypeCollection<int r, string e> : ZKC_Declaration {
+  int rank = r;
+  string element = e;
+}
 class ZKC_Type<string value, list<ZKC_Parameter> ps = [],
                ZKC_Custody c = PublicValue, bit copyable = 1,
                bit droppable = 1> : ZKC_TypeHead<value> {
@@ -60,6 +149,12 @@ class ZKC_Type<string value, list<ZKC_Parameter> ps = [],
   // A message frame exists for some complete applications of this head.
   // Actual domain, shape and representation admission remains independent.
   bit message = 0;
+  // Source vocabulary. These columns grant no codec, transport or execution
+  // authority. An unset collection or setup is null; setup is "prover" or
+  // "verifier" for the setup-key constructors.
+  bit sourceData = 0;
+  ZKC_TypeCollection collection = ?;
+  string setup = ?;
 }
 class ZKC_Apply<ZKC_Type head, list<ZKC_Term> args = []>
     : ZKC_Term<TypeParameter> {
@@ -71,9 +166,16 @@ class ZKC_Natural<int value> : ZKC_Term<NatParameter> {
   let name = !strconcat("n", !cast<string>(value));
   int number = value;
 }
-class ZKC_Capability<string value, list<ZKC_Parameter> ps> : ZKC_Declaration {
+// A capability may name members of its domain sort: a domain holding it has
+// every `requires` member, and a domain may have a member that some capability
+// names only while holding such a capability.
+class ZKC_Capability<string value, list<ZKC_Parameter> ps,
+                     list<string> required = [], list<string> permitted = []>
+    : ZKC_Declaration {
   string name = value;
   list<ZKC_Parameter> parameters = ps;
+  list<string> requires = required;
+  list<string> permits = permitted;
 }
 class ZKC_Holds<ZKC_Capability cap, list<ZKC_Term> args> : ZKC_Declaration {
   ZKC_Capability capability = cap;
@@ -122,6 +224,13 @@ def Conjunction : ZKC_Facet;
 def SourceHistory : ZKC_Facet;
 def ManagedHistory : ZKC_Facet;
 class ZKC_History<int input, int output> : ZKC_Facet {
+  int stateInput = input;
+  int stateOutput = output;
+}
+// Output `stateOutput` is the successor of the exact resource received at
+// input `stateInput`. Identity transfer only: no value equality, purity or
+// reordering, and no operation acquires it from its signature shape.
+class ZKC_Succession<int input, int output> : ZKC_Facet {
   int stateInput = input;
   int stateOutput = output;
 }
@@ -279,6 +388,114 @@ class ZKC_MathematicalIntrinsic<string value, ZKC_MathematicalIdentity meaning,
 }
 class ZKC_Mathematical<ZKC_MathematicalIdentity meaning> : ZKC_Facet {
   ZKC_MathematicalIdentity identity = meaning;
+}
+
+// Installed instances: explicit rows declaring which nominal domains, logical
+// type instances, codecs and frames exist. Identities and cross-row references
+// are declared strings that zkc-tblgen resolves and checks; record names are
+// presentation only. Physical choices live in the separate native installation
+// schema. An unset optional field is a null or absent column.
+class ZKC_ReductionTerm<int e, string c> : ZKC_Declaration {
+  int exponent = e;
+  string coefficient = c;
+}
+// `kind` is "prime" or "extension"; only an extension sets the other fields.
+class ZKC_FieldStructure<string k> : ZKC_Declaration {
+  string kind = k;
+  string over = ?;
+  int degree = ?;
+  list<ZKC_ReductionTerm> reduction = ?;
+}
+class ZKC_TwoAdicConvention<string id, string root, int adicity,
+                            string order> : ZKC_Declaration {
+  string convention = id;
+  string maximalRoot = root;
+  int twoAdicity = adicity;
+  string ordering = order;
+}
+class ZKC_FieldFacts<string c, ZKC_FieldStructure s> : ZKC_Declaration {
+  string characteristic = c;
+  ZKC_FieldStructure structure = s;
+  ZKC_TwoAdicConvention twoAdic = ?;
+}
+class ZKC_TranscriptFacts<string f, string d, bit b> : ZKC_Declaration {
+  string family = f;
+  string hash = ?;
+  string decoder = d;
+  bit bindsSuite = b;
+}
+class ZKC_CommitmentFacts<string s> : ZKC_Declaration {
+  string scheme = s;
+  int digestBytes = ?;
+  string permutation = ?;
+  int digestWordBytes = ?;
+}
+// `members` holds ordered [member, identity] pairs.
+class ZKC_InstalledDomain<string id, string s, list<list<string>> m,
+                          list<string> c> : ZKC_Declaration {
+  string identity = id;
+  string sort = s;
+  list<list<string>> members = m;
+  list<string> capabilities = c;
+  ZKC_FieldFacts fieldFacts = ?;
+  ZKC_TranscriptFacts transcriptFacts = ?;
+  ZKC_CommitmentFacts commitmentFacts = ?;
+}
+class ZKC_LogicalTypeInstance<string k, string d> : ZKC_Declaration {
+  string kind = k;
+  string domain = d;
+}
+class ZKC_SharedFrame<string k, string s> : ZKC_Declaration {
+  string kind = k;
+  string scheme = s;
+}
+class ZKC_FrameTag<int t, string l> : ZKC_Declaration {
+  int tag = t;
+  string layout = l;
+  ZKC_SharedFrame shared = ?;
+}
+class ZKC_CodecFrame<int t> : ZKC_Declaration {
+  int tag = t;
+  int elementBytes = ?;
+  int bytes = ?;
+  int bytesPerArity = ?;
+}
+class ZKC_Codec<string id, string k, string d> : ZKC_Declaration {
+  string identity = id;
+  string kind = k;
+  string domain = d;
+  ZKC_CodecFrame frame = ?;
+}
+class ZKC_AggregateFrame<string c, string d, int t> : ZKC_Declaration {
+  string constructor = c;
+  string domain = d;
+  int tag = t;
+}
+class ZKC_RandomService<string c, string f> : ZKC_Declaration {
+  string contract = c;
+  string fieldDomain = f;
+}
+class ZKC_Limit<string n, int v, string u, string o, string s, string p>
+    : ZKC_Declaration {
+  string name = n;
+  int value = v;
+  string unit = u;
+  string owner = o;
+  string scope = s;
+  string phase = p;
+}
+class ZKC_FiniteDefinition<string id, string m, string o, bit f>
+    : ZKC_Declaration {
+  string identity = id;
+  string mode = m;
+  string operation = o;
+  string collection = ?;
+  bit filtered = f;
+}
+class ZKC_DomainConstructor<string id, string k, int a> : ZKC_Declaration {
+  string identity = id;
+  string kind = k;
+  int axis = a;
 }
 
 #endif

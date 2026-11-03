@@ -17,7 +17,7 @@ open Zkc.Source Zkc.Source.Structured NormalForm ConnectionComputation
 /-- A complete data state visible to this role, with an exact scope row. -/
 def visibleState (role : Nat) : List (List Nat) → List Ty → Bool
   | [], [] => true
-  | scope :: scopes, ty :: types => scope.contains role && !ty.isHandle && visibleState role scopes types
+  | scope :: scopes, ty :: types => scope.contains role && Domain.localType ty && visibleState role scopes types
   | _, _ => false
 
 theorem visibleState_mask {role : Nat} {scopes : List (List Nat)} {types : List Ty}
@@ -34,16 +34,16 @@ theorem visibleState_mask {role : Nat} {scopes : List (List Nat)} {types : List 
       simp only [maskValues, List.headD_cons, List.tail_cons, Participant.restrict, visible, ↓reduceIte,
         ih tail]
 
-theorem visibleState_data {role : Nat} {scopes : List (List Nat)} {types : List Ty}
-    (checked : visibleState role scopes types = true) : types.all Domain.dataType = true := by
+theorem visibleState_local {role : Nat} {scopes : List (List Nat)} {types : List Ty}
+    (checked : visibleState role scopes types = true) : types.all Domain.localType = true := by
   induction types generalizing scopes with
   | nil => rfl
   | cons ty types ih =>
     cases scopes with
     | nil => simp [visibleState] at checked
     | cons scope scopes =>
-      simp only [visibleState, Bool.and_eq_true_iff, Bool.not_eq_true'] at checked
-      simp only [List.all_cons, Domain.dataType, checked.1.2, Bool.not_false, Bool.true_and, ih checked.2]
+      simp only [visibleState, Bool.and_eq_true_iff] at checked
+      simp only [List.all_cons, checked.1.2, Bool.true_and, ih checked.2]
 
 theorem visibleState_schema {role : Nat} {scopes : List (List Nat)} {types : List Ty}
     (checked : visibleState role scopes types = true) :
@@ -54,7 +54,7 @@ theorem visibleState_schema {role : Nat} {scopes : List (List Nat)} {types : Lis
     cases scopes with
     | nil => simp [visibleState] at checked
     | cons scope scopes =>
-      simp only [visibleState, Bool.and_eq_true_iff, Bool.not_eq_true'] at checked
+      simp only [visibleState, Bool.and_eq_true_iff] at checked
       simp [Original.roleOutputSorts, List.contains_iff_mem.mp checked.1.1, checked.1.2, ih checked.2]
 
 /-- The complete encoder recovers actual present state values. -/
@@ -72,7 +72,7 @@ theorem visibleState_values {role : Nat} {scopes : List (List Nat)} {types : Lis
     cases scopes with
     | nil => simp [visibleState] at checked
     | cons scope scopes =>
-      simp only [visibleState, Bool.and_eq_true_iff, Bool.not_eq_true'] at checked
+      simp only [visibleState, Bool.and_eq_true_iff] at checked
       have visible := List.contains_iff_mem.mp checked.1.1
       cases rest : Original.roleOutputValues role scopes values with
       | none => simp [Original.roleOutputValues, rest] at found
@@ -103,7 +103,7 @@ theorem visibleState_encode {role : Nat} {scopes : List (List Nat)} {types : Lis
     cases scopes with
     | nil => simp [visibleState] at checked
     | cons scope scopes =>
-      simp only [visibleState, Bool.and_eq_true_iff, Bool.not_eq_true'] at checked
+      simp only [visibleState, Bool.and_eq_true_iff] at checked
       simp only [Original.roleOutputValues, Values.present, List.contains_iff_mem.mp checked.1.1,
         ↓reduceIte, ih checked.2, Domain.encodeValues, bind, Option.bind]
       cases Domain.encodeValues values <;> cases Domain.Value.encode _ value <;> rfl

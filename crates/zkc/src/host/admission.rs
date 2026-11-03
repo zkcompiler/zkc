@@ -12,8 +12,9 @@ use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
 /// cumulative loading work. Requests above the Host's installed loading ceilings refuse.
-/// Work charges each input node, wire scan or native measurement, and retained
-/// estimates, including cache hits.
+/// Work charges each input node, wire scan or native measurement, each byte
+/// read and retained estimates, including cache hits, in the units of its own
+/// [`Allowances::LOADING_WORK`](super::capacity::Allowances::LOADING_WORK).
 #[derive(Clone, Copy, Debug)]
 pub struct LoadLimits {
     pub bytes: usize,
@@ -25,7 +26,7 @@ impl Default for LoadLimits {
         Self {
             bytes: Limits::VALUE_BYTES.min(Limits::TOTAL_VALUE_BYTES),
             values: Limits::LIVE_VALUES,
-            work: Limits::TOTAL_VALUE_BYTES,
+            work: super::capacity::Allowances::LOADING_WORK.maximum as usize,
         }
     }
 }
@@ -164,6 +165,19 @@ fn add(total: &mut usize, amount: usize, limit: usize, error: &str) -> Result<()
     Ok(())
 }
 
+/// Reserve loaded input storage, such as a captured reference or imported
+/// setup material, in the invocation root when there is one: its loading work
+/// as logical work and its bytes as fresh and live allocation, together. A
+/// refusal names the loading allowance the root could not afford,
+/// `artifact-input-work-limit` or `artifact-input-bytes-limit`.
+pub(crate) fn reserve_input(
+    ledger: Option<&zkc_runtime::vm::ExecutionLedger>,
+    work: u64,
+    bytes: usize,
+) -> Result<Option<zkc_runtime::vm::LiveReservation>> {
+    super::capacity::RootCharge::LOADING.reserve(ledger, work, bytes)
+}
+
 pub(crate) struct Admission<'a> {
     limits: LoadLimits,
     inputs: Vec<(Input<'a>, usize)>,
@@ -221,16 +235,7 @@ impl<'a> Admission<'a> {
             "artifact-input-work-limit",
         )?;
         if let Some(ledger) = &self.ledger {
-            ledger
-                .charge(
-                    zkc_runtime::vm::WorkBudget {
-                        instructions: 0,
-                        iterations: 0,
-                        logical_bytes: amount as u64,
-                    },
-                    0,
-                )
-                .map_err(|e| e.to_string())?;
+            super::capacity::RootCharge::LOADING.charge(ledger, amount as u64, 0)?;
         }
         self.work = work;
         Ok(())
@@ -365,17 +370,12 @@ impl<'a> Admission<'a> {
                 .checked_add(bytes)
                 .ok_or("entry-host-loading-limit")?
         };
-        ledger
-            .charge(
-                zkc_runtime::vm::WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: work as u64,
-                },
-                bytes,
-            )
-            .map_err(|e| e.to_string())?;
-        let live = ledger.reserve_live(bytes).map_err(|e| e.to_string())?;
+        let live = super::capacity::RootCharge::LOADING.charge_and_hold(
+            ledger,
+            work as u64,
+            bytes,
+            bytes,
+        )?;
         let values = self.load(backend, policy)?;
         Ok((values, live))
     }
@@ -490,10 +490,25 @@ impl<'a> Admission<'a> {
                         #[cfg(test)]
                         IMPORT_COUNT.with(|n| n.set(n.get() + 1));
                         let key = if let Some(material) = &self.material {
-                            material
-                                .lock()
-                                .map_err(|_| "native-setup-material")?
-                                .import_prover(bytes, fingerprint, &verifier, policy.ark_bounds())?
+                            let mut material =
+                                material.lock().map_err(|_| "native-setup-material")?;
+                            // A named source records the setup pin it feeds.
+                            match &source {
+                                KeySource::File(file) if let Some(name) = file.name() => material
+                                    .import_named_prover(
+                                    name,
+                                    bytes,
+                                    fingerprint,
+                                    &verifier,
+                                    policy.ark_bounds(),
+                                )?,
+                                _ => material.import_prover(
+                                    bytes,
+                                    fingerprint,
+                                    &verifier,
+                                    policy.ark_bounds(),
+                                )?,
+                            }
                         } else {
                             zkc_cpu::material::import_prover(
                                 bytes,

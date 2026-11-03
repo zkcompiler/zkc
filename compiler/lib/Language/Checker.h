@@ -1,5 +1,6 @@
 #ifndef ZKC_LANGUAGE_CHECKER_H
 #define ZKC_LANGUAGE_CHECKER_H
+#include "CallResolution.h"
 #include "Internal.h"
 #include "Semantics.h"
 #include "UsagePlan.h"
@@ -9,6 +10,7 @@ struct BodyWitnesses {
   std::vector<std::shared_ptr<ScopedSource>> sources;
   std::vector<std::shared_ptr<ScopedCallSource>> calls;
   std::vector<std::shared_ptr<ScopedInvocationSource>> invocations;
+  std::vector<std::shared_ptr<IntrinsicCallSource>> intrinsics;
   std::map<unsigned, std::shared_ptr<NotationFamilies>> notations;
 };
 struct BodyPlan {
@@ -37,6 +39,8 @@ public:
   std::vector<Diagnostic> *recoveryDiagnostics = nullptr;
   bool recover(llvm::Error);
   bool namesReady = false;
+  bool indexDeclarations();
+  bool checkInstalledSignatures();
   CheckedStorage &output;
   Work &work;
   Semantics types;
@@ -52,14 +56,24 @@ public:
   resolve(const Declaration &, llvm::StringRef, Span, bool required = true,
           std::vector<ModuleLookup> *route = nullptr,
           std::optional<DeclarationId> *provider = nullptr);
-  bool recordReference(const Declaration &, DeclarationId, DeclarationId,
-                       llvm::StringRef, Span,
+  /// Resolve without recording a reference. A caller that keeps the result
+  /// records its route itself; a discarded lookup records nothing.
+  std::optional<DeclarationId> probe(const Declaration &, llvm::StringRef, Span,
+                                     std::optional<DeclarationId> *);
+  bool recordReference(const Declaration &, ReferenceRoute, DeclarationId,
+                       DeclarationId, llvm::StringRef, Span,
                        std::optional<std::string> abstractModule = {});
   std::optional<Type> type(const Declaration &, const SyntaxType &,
-                           unsigned = 1);
+                           unsigned = 1, bool allowPlacement = false);
+  std::optional<PlacedType> placedType(const Declaration &, const SyntaxType &,
+                                       unsigned = 1);
 
   std::optional<std::vector<unsigned>> roles(const Declaration &,
                                              llvm::ArrayRef<std::string>, Span);
+  /// Resolve an injective participant substitution in authored telescope order.
+  /// Unlike roles(), this is not an availability set and must never be sorted.
+  std::optional<std::vector<unsigned>>
+  roleArguments(const Declaration &, llvm::ArrayRef<std::string>, Span);
   std::optional<std::vector<Type>>
   arguments(const Declaration &, const Declaration &,
             llvm::ArrayRef<SyntaxType>, Span,
@@ -68,8 +82,12 @@ public:
   std::optional<std::vector<bool>>
   enclosingParameters(const Declaration &, const Declaration &, Span);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
-  std::optional<CallableReference> callable(const Declaration &,
-                                            llvm::StringRef, Span);
+  /// Resolve a callee. Without recording, the lookup only classifies the
+  /// written name and the caller records nothing.
+  std::optional<CallableReference>
+  callable(const Declaration &, llvm::StringRef, Span, bool record = true);
+  std::optional<CallableReference> method(const Declaration &, const Type &,
+                                          llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
                                                  const SyntaxOperator &,
                                                  bool filtered = false);
@@ -123,7 +141,7 @@ private:
   bool collectUsage(const Declaration &, const Type &, Usage, Span,
                     llvm::StringRef, llvm::StringRef);
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
-                                    unsigned);
+                                    unsigned, bool allowPlacement);
   std::vector<SyntaxDeclaration> syntax;
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<std::string, DeclarationId> modules;
@@ -132,8 +150,17 @@ private:
   bool externalSelection = false;
   std::map<std::string, std::set<uint32_t>> externalNames;
   bool checkingVisibility = false;
+  /// While set, references owned by this declaration are not recorded: a
+  /// placement pass resolves parts of a term whose names are already recorded.
+  std::optional<uint32_t> replayedOwner;
+  std::set<
+      std::tuple<uint32_t, ReferenceRoute, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, std::string, std::optional<std::string>>>
+      recordedReferences;
   std::function<bool(DeclarationId, llvm::StringRef)> loadBinding;
   std::map<std::string, DeclarationId> qualified;
+  /// Asset domain declaration -> the captured asset it names.
+  std::map<uint32_t, unsigned> assetDomains;
   // Keep the written interface route with its binder, including inherited
   // module parameters. Canonical interfaces alone lose facade provenance.
   std::map<std::string, DeclarationId> moduleParameterProviders;
@@ -166,8 +193,9 @@ private:
   std::vector<unsigned> entryStates;
   bool constructionsReady = false;
   bool constructions();
-  std::optional<DeclarationId> constructionMember(const Type &, llvm::StringRef,
-                                                  Span);
+  /// Select a provider's interface member and record its construction route.
+  std::optional<DeclarationId>
+  constructionMember(const Declaration &, const Type &, llvm::StringRef, Span);
   bool constructionCodec(Declaration &, const SyntaxConstruction &,
                          ConstructionDefinition &, const Substitution &);
   bool configureSetups(Declaration &, const Declaration &,
@@ -180,6 +208,11 @@ private:
   bool prepareOperators();
   std::optional<DeclarationId> member(const Declaration &, DeclarationId,
                                       llvm::StringRef, Span);
+  std::optional<DeclarationId> lookupPath(const Declaration &, llvm::StringRef,
+                                          Span, bool required,
+                                          std::vector<ModuleLookup> *,
+                                          std::optional<DeclarationId> *,
+                                          bool record);
   bool moduleContracts();
   bool retainAPI();
   bool signature(DeclarationId, unsigned = 1);

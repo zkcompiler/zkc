@@ -40,6 +40,7 @@ pub struct LoadError<B> {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PathElement {
+    Branch { site: String, alternative: String },
     Match { site: String, alternative: String },
     Conditional { site: String, taken: bool },
     For { site: String, index: u64 },
@@ -66,6 +67,8 @@ impl Origin {
             self.path
                 .iter()
                 .map(|p| match p {
+                    PathElement::Branch { site, alternative } =>
+                        serde_json::json!(["branch", site, alternative]),
                     PathElement::Match { site, alternative } =>
                         serde_json::json!(["match", site, alternative]),
                     PathElement::Conditional { site, taken } =>
@@ -270,6 +273,14 @@ impl Default for ValueBudget {
         }
     }
 }
+impl ValueBudget {
+    /// No live or fresh budget of a runner's own: a runner that charges an
+    /// invocation root is bounded by the root's byte allowances alone.
+    pub const UNBOUNDED: Self = Self {
+        live_bytes: usize::MAX,
+        total_bytes: usize::MAX,
+    };
+}
 
 /// Host work ceilings for one runner. Values above the hard limits are refused
 /// before entry initialization; zero is valid and permits no charged work.
@@ -286,6 +297,18 @@ impl Default for WorkBudget {
         Self {
             instructions: Limits::INSTRUCTIONS,
             iterations: Limits::ITERATIONS,
+            logical_bytes: Limits::LOGICAL_BYTES,
+        }
+    }
+}
+impl WorkBudget {
+    /// A runner's own instruction and iteration fuel beside an invocation
+    /// root that bounds its logical work. Its own logical work keeps only the
+    /// interpreter's hard ceiling, which no root selection exceeds.
+    pub const fn fuel(instructions: u64, iterations: u64) -> Self {
+        Self {
+            instructions,
+            iterations,
             logical_bytes: Limits::LOGICAL_BYTES,
         }
     }

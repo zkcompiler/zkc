@@ -13,5 +13,13 @@ llvm::Expected<std::string> exportSourceCorrespondence(const CheckedOriginal &,
 llvm::Error checkSourceCorrespondenceExport(const CheckedOriginal &,
                                             llvm::StringRef,
                                             const Limits & = {});
+/// The completeness invariant of a correspondence document. Every domain row
+/// and every function or oracle definition row of its snapshot is the symbol
+/// of exactly one closed instance or generated definition; every realize,
+/// finite, collect and map row has its computation association. Generated
+/// symbols are unique, as are their purpose, part and origins, and each
+/// origin names a definition of the snapshot. Every occurrence names a
+/// definition of the snapshot and a site of that definition.
+llvm::Error checkCorrespondenceInventory(const llvm::json::Value &);
 } // namespace zkc::language
 #endif

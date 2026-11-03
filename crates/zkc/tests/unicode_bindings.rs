@@ -2,18 +2,22 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, process::Command};
-use zkc::entry::{Package, bindings};
+use zkc::entry::{InterfaceLimits, Package, bindings};
 
 fn digest(s: &str) -> String {
     zkc_test_support::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, key: &str, leaves: Json) -> Json {
-    json!({"kind":kind,"identity":digest(key),"type":key,"custody":false,"constructible":true,
+    json!({"kind":kind,"identity":digest(key),"type":key,"generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,
         "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
 fn port(name: &str, index: usize, ty: &Json, native: usize) -> Json {
     json!({"name":name,"index":index,"native":(native..native + ty["leaves"].as_array().unwrap().len()).collect::<Vec<_>>(),
-        "roles":["役"],"type":ty["type"],"schema":ty})
+        "placement":{"kind":"data","roles":[0]},"components": if ty["fields"].as_array().unwrap().is_empty() {
+            (0..ty["leaves"].as_array().unwrap().len()).map(|i| json!({"path":[],"leaf":i,"role":0,"facet":"data","native":native+i})).collect::<Vec<_>>()
+        } else {
+            ty["fields"].as_array().unwrap().iter().enumerate().map(|(i,_)|json!({"path":[i],"leaf":0,"role":0,"facet":"data","native":native+i})).collect::<Vec<_>>()
+        },"type":ty["type"],"schema":ty})
 }
 fn package() -> Package {
     let boolean = schema("boolean", "bool", json!(["bool"]));
@@ -32,7 +36,7 @@ fn package() -> Package {
     record["fields"] = names
         .iter()
         .enumerate()
-        .map(|(i, name)| json!({"name":name,"offset":i,"schema":boolean}))
+        .map(|(i, name)| json!({"name":name,"offset":i,"public":true,"placement":null,"schema":boolean}))
         .collect();
     let key = "数学::Choice";
     let payload_names = [
@@ -59,7 +63,7 @@ fn package() -> Package {
     let mut variant = schema("variant", key, json!([native]));
     variant["alternatives"] = json!([
         {"name":"有値","fields":payload_names.iter().enumerate().map(|(index, name)|
-            json!({"name":name,"offset":index,"schema":boolean})).collect::<Vec<_>>()},
+            json!({"name":name,"offset":index,"public":true,"placement":null,"schema":boolean})).collect::<Vec<_>>()},
         {"name":"Self","fields":[]},{"name":"__zkc_e69c89e580a4","fields":[]}
     ]);
     let mut collision = schema("record", "Record", json!([]));
@@ -76,7 +80,7 @@ fn package() -> Package {
         port("key", 4, &key, names.len() + 1),
     ];
     let doc = json!({"format":"zkc.language-interface/0","capture":digest("capture"),"original":digest("original"),"toolchain":"test","entry":"数学::Entry","protocol":"main",
-        "protocols":[{"symbol":"main","roles":["役"],"inputs":inputs,"outputs":[],"services":[{"name":"乱数", "owner":"役", "contract":"random.bls12-381.fr/0", "native":names.len()+2}],"clauses":[]}],"relations":[],"setups":[{"name":"鍵₂", "inputs":[{"port":4,"path":[]}]}],"job":{"kind":"run"}});
+        "protocols":[{"symbol":"main","roles":["役"],"inputs":inputs,"outputs":[],"services":[{"name":"乱数", "owner":"役", "contract":"random.bls12-381.fr/0", "native":names.len()+2}],"common_input_requirements":[],"clauses":[]}],"relations":[],"setups":[{"name":"鍵₂", "inputs":[{"port":4,"path":[]}]}],"job":{"kind":"run"}});
     let frame = json!({"format":"zkc.entry/0","original":"original","interface":doc.to_string(),"artifact":"metadata-only binding fixture","options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": zkc::entry::OracleSelection::default()},"assets":[]}).to_string();
     Package::capture(
         frame.as_bytes(),
@@ -86,24 +90,59 @@ fn package() -> Package {
     .unwrap()
 }
 fn extern_library(deps: &Path) -> std::path::PathBuf {
-    // Cargo builds this integration target and its library with the same profile.
-    // Select the newest artifact when a developer retains previous feature builds.
-    std::fs::read_dir(deps)
+    // Select this test's actual Cargo dependency, including its feature set.
+    // Modification time can choose a retained no-feature library after a later
+    // feature build is reused without rebuilding it. Cargo fingerprints belong
+    // to the repository's pinned toolchain, not the SDK artifact contract.
+    let executable = std::env::current_exe().unwrap();
+    let hash = executable
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .strip_prefix("unicode_bindings-")
+        .unwrap();
+    let fingerprints = deps.parent().unwrap().join(".fingerprint");
+    let metadata: Json = serde_json::from_slice(
+        &std::fs::read(fingerprints.join(format!(
+            "zkc-{hash}/test-integration-test-unicode_bindings.json"
+        )))
+        .unwrap(),
+    )
+    .unwrap();
+    let fingerprint = metadata["deps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row[1] == "zkc")
+        .unwrap()[3]
+        .as_u64()
+        .unwrap();
+    let expected = zkc_test_support::hex(&fingerprint.to_le_bytes());
+    let matching: Vec<_> = std::fs::read_dir(deps)
         .unwrap()
         .map(Result::unwrap)
         .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .unwrap()
-                .to_str()
-                .is_some_and(|n| n.starts_with("libzkc-") && n.ends_with(".rlib"))
+        .filter(|path| {
+            let Some(hash) = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|n| n.strip_prefix("libzkc-"))
+                .and_then(|n| n.strip_suffix(".rlib"))
+            else {
+                return false;
+            };
+            std::fs::read_to_string(fingerprints.join(format!("zkc-{hash}/lib-zkc")))
+                .is_ok_and(|actual| actual.trim() == expected)
         })
-        .max_by_key(|p| p.metadata().unwrap().modified().unwrap())
-        .expect("Cargo's zkc library")
+        .collect();
+    assert_eq!(matching.len(), 1, "exact Cargo SDK dependency");
+    matching.into_iter().next().unwrap()
 }
+
 #[test]
 fn escaped_members_variants_and_colliding_types_compile_and_preserve_source_keys() {
-    let code = bindings::rust(&package()).unwrap();
+    let code = bindings::rust(&package(), InterfaceLimits::DEFAULT).unwrap();
     assert!(
         code.contains("pub struct r#Record2"),
         "generated type allocator resolves duplicate preferred names"
@@ -196,5 +235,25 @@ fn main() {
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn zero_array_bindings_use_the_retained_element_type() {
+    let mut array = schema("array", "[bool;0]", json!([]));
+    array["element"] = schema("boolean", "bool", json!(["bool"]));
+    let doc = json!({"format":"zkc.language-interface/0","capture":digest("capture"),"original":digest("original"),"toolchain":"test","entry":"sample::Main","protocol":"main",
+        "protocols":[{"symbol":"main","roles":["P"],"inputs":[port("empty",0,&array,0)],"outputs":[],"services":[],"common_input_requirements":[],"clauses":[]}],"relations":[],"setups":[],"job":{"kind":"run"}});
+    let bytes=json!({"format":"zkc.entry/0","original":"original","interface":doc.to_string(),"artifact":"metadata-only binding fixture","assets":[],"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization":zkc::entry::OracleSelection::default()}}).to_string();
+    let package = Package::capture(
+        bytes.as_bytes(),
+        &Sha256::digest(bytes.as_bytes()).into(),
+        Package::MAX_BYTES,
+    )
+    .unwrap();
+    assert!(
+        bindings::rust(&package, InterfaceLimits::DEFAULT)
+            .unwrap()
+            .contains("[::core::primitive::bool;0]")
     );
 }

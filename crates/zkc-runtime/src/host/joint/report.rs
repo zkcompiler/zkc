@@ -171,10 +171,17 @@ pub enum Progress {
 #[derive(Clone, Debug)]
 pub struct Reached {
     pub step: Step,
-    /// Outer-to-inner iteration numbers for this static instruction coordinate.
-    pub iterations: Vec<u64>,
+    /// Outer-to-inner iteration numbers for this static instruction coordinate,
+    /// shared by every reached step of the same dynamic region.
+    pub iterations: std::sync::Arc<[u64]>,
     /// The validated local count; absent for other instructions or a bound stop.
     pub loop_count: Option<u64>,
+    /// Exact reached participant branch arm; payload agreement is separate.
+    pub branch_alternative: Option<usize>,
+    pub branch_started: bool,
+    /// Complete dynamic control path, including selected branch arms. Each
+    /// distinct path is stored once and shared by the steps it contains.
+    pub path: std::sync::Arc<[crate::vm::PathElement]>,
     /// Count agreement and this participant's loop start completed. For zero
     /// trips this means its initial carried results were bound, with no body.
     pub loop_started: bool,
@@ -228,12 +235,48 @@ pub struct Report<B: Backend> {
     pub limits: super::RunLimits,
     pub outcome: Outcome,
     pub reached: Vec<Reached>,
+    /// Report storage charged against `limits.report_bytes`; the invocation
+    /// root, when present, holds the same live bytes while the report exists.
+    pub report_bytes: usize,
     pub wire: WireUsage,
     pub pending: Option<PendingMessage>,
     pub roles: Vec<RoleReport<B::Value>>,
     pub backends: Vec<(String, B)>,
     pub(super) retained: Vec<crate::vm::RetainedOutputs<B::Value>>,
     pub(super) wire_live: Option<crate::vm::LiveReservation>,
+    /// Live allowance of each stored record and of the dynamic path it first
+    /// references, held in the invocation root: `report_bytes` in total.
+    pub(super) storage_live: Vec<crate::vm::LiveReservation>,
+    pub(super) invocation: Option<crate::vm::ExecutionLedger>,
+}
+impl<B: Backend> Report<B> {
+    /// The invocation root that charged this run's wire transport, received
+    /// payload decoding and report storage, when the Host supplied one. The
+    /// report keeps those live allowances until it is dropped.
+    pub fn invocation_ledger(&self) -> Option<&crate::vm::ExecutionLedger> {
+        self.invocation.as_ref()
+    }
+    /// Retained bytes of returned values whose runner shared no ledger. A
+    /// Host that keeps this report reserves them in its own invocation root:
+    /// custody passes to it without a new allocation. A runner that shared a
+    /// ledger moved its values' reservation there with them.
+    pub fn unreserved_output_bytes(&self) -> usize {
+        use crate::vm::Value as _;
+        self.retained
+            .iter()
+            .filter(|outputs| !outputs.is_reserved())
+            .flat_map(|outputs| outputs.iter())
+            .map(|value| value.retained_bytes())
+            .fold(0, usize::saturating_add)
+    }
+    /// Drop every returned value this report retains, with its reservation.
+    /// Cleanup observations taken before this call are unchanged.
+    pub fn release_outputs(&mut self) {
+        self.retained.clear();
+        for role in &mut self.roles {
+            role.outputs.clear();
+        }
+    }
 }
 
 #[cfg(test)]

@@ -152,7 +152,10 @@ For example, a mathematical function can declare
 
 Expansion creates an ordinary call with unary `fn(...) => ...` callbacks and structural
 domain products. Product construction never looks up a generated textual
-`product` name. The [source binder contract](definitions.md#finite-reduction-binders)
+`product` name. Predicate and body callbacks retain distinct immutable expression
+identities, including their lexical parameter definitions, even though both
+parameter patterns refer to the same written binder spans. The
+[source binder contract](definitions.md#finite-reduction-binders)
 defines evaluation, captures and retained checks. Named calls remain available
 without notation imports; the old `reduce callable [...] {...}` syntax is removed.
 

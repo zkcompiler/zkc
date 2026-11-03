@@ -13,24 +13,69 @@ pub enum TestValue {
     Bool(bool),
     Index(u64),
     Bytes(Arc<[u8]>),
+    Variant {
+        ty: PhysicalType,
+        alternative: usize,
+        payload: Vec<TestValue>,
+    },
 }
 impl Value for TestValue {
     fn physical_type(&self) -> PhysicalType {
+        if let Self::Variant { ty, .. } = self {
+            return ty.clone();
+        }
         PhysicalType::parse(match self {
             Self::Bool(_) => BOOL,
             Self::Index(_) => "index@native.index/0",
             Self::Bytes(_) => BYTES,
+            Self::Variant { .. } => unreachable!(),
         })
         .unwrap()
     }
     fn retained_bytes(&self) -> usize {
         match self {
             Self::Bytes(bytes) => bytes.len() + 32,
+            Self::Variant { payload, .. } => {
+                32 + payload.iter().map(Self::retained_bytes).sum::<usize>()
+            }
             _ => 8,
         }
     }
     fn validate_serializable(&self) -> Result<(), BackendError> {
         Ok(())
+    }
+    fn unpack_variant(&self) -> Result<(PhysicalType, usize, Vec<Self>), BackendError> {
+        match self {
+            Self::Variant {
+                ty,
+                alternative,
+                payload,
+            } => Ok((ty.clone(), *alternative, payload.clone())),
+            _ => Err(BackendError::new("variant")),
+        }
+    }
+    fn control_variant_tag(&self) -> Result<usize, BackendError> {
+        match self {
+            Self::Variant { alternative, .. } => Ok(*alternative),
+            _ => Err(BackendError::new("variant")),
+        }
+    }
+    fn control_extent(&self, axis: usize) -> Result<u64, BackendError> {
+        match (self, axis) {
+            (Self::Bytes(bytes), 0) => Ok(bytes.len() as u64),
+            _ => Err(BackendError::new("extent")),
+        }
+    }
+    fn pack_variant(
+        ty: PhysicalType,
+        alternative: usize,
+        payload: Vec<Self>,
+    ) -> Result<Self, BackendError> {
+        Ok(Self::Variant {
+            ty,
+            alternative,
+            payload,
+        })
     }
     fn control_bool(&self) -> Result<bool, BackendError> {
         match self {
@@ -63,6 +108,8 @@ pub enum Fault {
     DecodeWrongType,
     EncodeLimit,
     EncodeBackend,
+    EncodeOversizeBound,
+    EncodeOverrun,
 }
 #[derive(Default)]
 pub struct Host {
@@ -136,7 +183,11 @@ impl WireBackend for Host {
         self.supports_wire(ty).then_some(7)
     }
     fn encoding_bound(&self, _: &TestValue) -> Result<usize, WireError> {
-        Ok(7)
+        Ok(if matches!(self.fault, Fault::EncodeOversizeBound) {
+            usize::MAX
+        } else {
+            7
+        })
     }
     fn decoding_bound(&self, _: &PhysicalType, bytes: &[u8]) -> Result<usize, WireError> {
         self.measurements.set(self.measurements.get() + 1);
@@ -153,6 +204,7 @@ impl WireBackend for Host {
         match self.fault {
             Fault::EncodeLimit => return Err(WireError::Limit),
             Fault::EncodeBackend => return Err(WireError::Backend(BackendError::new("encode"))),
+            Fault::EncodeOverrun => return Ok(vec![0; 8]),
             _ => (),
         }
         match value {

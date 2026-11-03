@@ -102,7 +102,9 @@ struct TypeExport {
         if (adapter.arguments &&
             adapter.arguments(variant, adapter.constructor))
           return error("binding-type");
-    if (depth >= 8 || variant.getAlternatives().size() > 32 ||
+    if (depth >= 8 ||
+        variant.getAlternatives().size() >
+            protocol::VariantDescriptorAlternatives ||
         (account && !budget.consume()))
       return error("variant-type");
     json::Array alternatives;

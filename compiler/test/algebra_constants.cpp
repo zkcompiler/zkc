@@ -4,7 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Transforms/FoldUtils.h"
-#include "support/NativeCases.h"
+#include "support/Formation.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 using namespace mlir;
@@ -70,33 +70,30 @@ module { func.func @field_tensor()->tensor<1x!F> {
     require(succeeded(verify(*module)),
             "tensor folding damaged the nominal field");
   });
-  cases.run("materialization refuses field substitution and malformed carriers",
-            [&] {
-              auto module = ModuleOp::create(builder.getUnknownLoc());
-              builder.setInsertionPointToEnd(module.getBody());
-              auto field = algebra::FieldType::get(&context, "koala-bear");
-              auto other = algebra::FieldType::get(&context, "baby-bear");
-              auto literal =
-                  take(algebra::makeFieldLiteral(field, llvm::APInt(1, 1)));
-              require(!dialect->materializeConstant(builder, literal, other,
-                                                    module.getLoc()),
-                      "materializer changed the field");
-              auto malformed = algebra::FieldLiteralAttr::get(
-                  &context, field, builder.getI64IntegerAttr(1));
-              require(!dialect->materializeConstant(builder, malformed, field,
-                                                    module.getLoc()),
-                      "materializer accepted a signed carrier");
-              require(!dialect->materializeConstant(builder,
-                                                    builder.getStringAttr("1"),
-                                                    field, module.getLoc()),
-                      "materializer accepted a string fallback");
-              auto overflow =
-                  algebra::makeFieldLiteral(field, llvm::APInt(64, 2130706433));
-              require(!overflow,
-                      "native literal construction reduced modulo the field");
-              llvm::consumeError(overflow.takeError());
-              module.erase();
-            });
+  cases.run(
+      "materialization refuses field substitution and malformed carriers", [&] {
+        auto module = ModuleOp::create(builder.getUnknownLoc());
+        builder.setInsertionPointToEnd(module.getBody());
+        auto field = algebra::FieldType::get(&context, "koala-bear");
+        auto other = algebra::FieldType::get(&context, "baby-bear");
+        auto literal =
+            take(algebra::makeFieldLiteral(field, llvm::APInt(1, 1)));
+        require(!dialect->materializeConstant(builder, literal, other,
+                                              module.getLoc()),
+                "materializer changed the field");
+        refusesFormation<algebra::FieldLiteralAttr>(
+            &context, "field-literal", field, builder.getI64IntegerAttr(1));
+        require(!dialect->materializeConstant(builder,
+                                              builder.getStringAttr("1"), field,
+                                              module.getLoc()),
+                "materializer accepted a string fallback");
+        auto overflow =
+            algebra::makeFieldLiteral(field, llvm::APInt(64, 2130706433));
+        require(!overflow,
+                "native literal construction reduced modulo the field");
+        llvm::consumeError(overflow.takeError());
+        module.erase();
+      });
   cases.run("assembly rejects malformed value carriers", [&] {
     for (StringRef value : {"\"1\"", "#algebra.literal<!F, 1 : i31>",
                             "#algebra.literal<!F, 1 : ui32>",

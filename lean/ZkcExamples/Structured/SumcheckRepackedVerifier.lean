@@ -44,7 +44,7 @@ def rootInputs (claim : Option F) (count dimension : Option Nat) (xs : Option (L
 /-- Outputs in the repacked order: V's point and value first, then P's values. -/
 def rootResults (pc : Option (List F) × Option F) :
     Values (Component (assignment F G)) runSignature.outputs :=
-  .cons pc.1 (.cons pc.2 (.cons none (.cons none .nil)))
+  .cons (some 0) (.cons pc.1 (.cons pc.2 (.cons none (.cons none .nil))))
 
 theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
     (verifier : self = ctx.roles 1) (separate : ctx.roles 0 ≠ self)
@@ -78,14 +78,14 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
       ctx self (rootInputs claim count dimension xs service) =
       (invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.reduceSignature
         (ctx.enter "s5" [0, 1]) self
-        (reduceArguments none none none (some []) claim count service)).bind
+        (reduceArguments none none none (some 0) (some []) claim count service)).bind
         (fun result => .done (rootResults
-          (result.get (.there (.there (.there (.there .here)))),
-            result.get (.there (.there (.there (.there (.there .here)))))))) := by
+          (result.get (.there (.there (.there (.there (.there .here))))),
+            result.get (.there (.there (.there (.there (.there (.there .here))))))))) := by
   rw [verifier_context_optional ctx self verifier separate,
-    reduce_invoke_plain (ctx.enter "s5" [0, 1]) self (reduceArguments none none none (some []) claim count service),
+    reduce_invoke_plain (ctx.enter "s5" [0, 1]) self (reduceArguments none none none (some 0) (some []) claim count service),
     reduce_optional unit helperBodies claimBodies (ctx.enter "s5" [0, 1]) self verifier separate
-      SumcheckRepackedNormalForms.reduceMaximum none none none (some []) claim count service]
+      SumcheckRepackedNormalForms.reduceMaximum none none none (some 0) (some []) claim count service]
   refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
   rfl
 
@@ -115,7 +115,7 @@ theorem participant_repacked (claim : Option F) (count dimension : Option Nat)
       (SumcheckReduceViews.program.participant F G 1
         (SumcheckReduceVerifier.reduceRootInputs xs dimension claim count service)).bind
         (fun outputs => .done (rootResults
-          (outputs.get (.there (.there .here)), outputs.get (.there (.there (.there .here)))))) := by
+          (outputs.get (.there (.there (.there .here))), outputs.get (.there (.there (.there (.there .here))))))) := by
   rw [verifier_optional, SumcheckReduceVerifier.verifier_optional]
   refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
   rfl

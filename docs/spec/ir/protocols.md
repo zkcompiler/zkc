@@ -41,6 +41,29 @@ availability; an operation with no dependencies would be available at every
 declared role. A restriction selects a nonempty subset of an existing value's
 components. It neither communicates nor changes their values.
 
+Every role-valued inherent attribute of a Protocol operation is declared once,
+with its shape: one role; an ordered list of role names whose positions carry
+meaning; a role set; one role set per input, result or carried slot; or a
+roster declaration. The ordered lists are an application's actual roles, which
+bind to the callee's roster by position, a selected construction start's copy
+of them, and an assembly's role per operand; their order and multiplicity are
+part of the value. A role set names the roles that are available to, or take
+part in, an action or region. A definition's `roles` and a participant's `role`
+are roster declarations; they bind roles, and every other role-valued attribute
+uses them. A role substitution, such as application expansion or a
+correspondence under an application's role mapping, renames exactly the role
+uses, each name in place, never sorting or merging names; roster declarations
+and every other attribute are unchanged. A roster declaration opens its own
+binding scope: a substitution from an enclosing scope changes none of its
+attributes and does not enter it. Statement selectors name entry roles but are
+never substituted, because an applied definition cannot contain a statement.
+Inside selected or repeated control, every role use names a participating role.
+
+The role that executes an action is a property of the typed operation, not of
+the attribute that happens to hold its only role name: a guard, conditional
+completion or query is executed by its `owner` and a local call by its `role`,
+while a participant send or receive names its counterparty as `peer`.
+
 `protocol.assemble_roles` is the pointwise counterpart of restriction. It has
 one ordinary total, shared, non-affine input per distinct named role, all of the
 same type, and one result. At role `roles[i]`, the result is precisely that
@@ -72,6 +95,52 @@ This flat representation permits ordinary SSA transformations without an
 isolated region around each expression. The choice and its alternatives are
 explained in [the rationale](../../rationale/mathematical-ir.md).
 No intermediate located common program is required by this profile.
+
+## Native layout of participant-placed products
+
+A participant-placed source product lowers to declaration-ordered native leaves.
+Its ordinary static type identity and its ordered role application are separate.
+Every child has its own data placement, exact oracle family, or recursively
+instantiated product placement. A product's participation summary grants no
+field access and supplies no default oracle holder. Ordinary-only products,
+nested role maps, and products containing independent holders use the same
+representation.
+
+A component observation records `(field_path, local_leaf, role, facet,
+native_index)`. Field paths use declaration ordinals, including private and
+zero-storage children. Facets distinguish data, oracle holder data, oracle
+receiver anchors, and custody. Multiple ordinary role components may select one
+multi-role SSA position. A direct oracle uses the existing holder-data and
+receiver-anchor pair with its own holder and exact receiver family; nested
+products do not replace those families with a root-wide family. Native indices
+are selections, not source-place identities. Zero arrays retain their element
+schema independently of expanded storage.
+
+An explicitly restricted distributed wrapper has a leading body custody unit
+for each role in its declared telescope, in telescope order. Each unit has
+exactly one local owner. The native unit type binds the complete instantiated
+static nominal type, including phantom arguments. Caller participant indices
+and wrapper field paths are component coordinates rather than parts of that
+unit type: extracting a child and passing it through a callee must preserve its
+native type. Equal unit types do not identify dynamic roots. Actual SSA edges,
+installed resource transfers, and native resource-origin analysis establish
+origination and succession. Empty wrappers retain their units; nested wrappers
+retain separate prefixes and paths. Source usage checking separately enforces
+one root obligation and constructor or consuming-API authority.
+
+Protocol construction and consumption execute actual scoped Local operations at
+each fragment's owner. Creation is fresh; consumption followed by creation does
+not establish a successor. Calls, captures, repetition carries, projections and
+returns preserve the complete ordered leaf association. Continuing loop yields
+must preserve exact resource roots; the zero-trip result keeps the initial
+association. Participant availability establishes neither common-control
+evidence nor agreement of ordinary components. General shared branches require
+the separate control contract and cannot use Local-only branch lowering.
+
+This layout contract does not establish ingress, retained-schema, interface,
+formal-consumer or proof-profile support. Those consumers must retain and check
+the complete logical schema and recompute component coverage from the actual
+candidate before claiming that integration.
 
 ## Logical oracle kinds and handles
 
@@ -395,6 +464,11 @@ a lazy interface view: transporting a virtual sequence does not evaluate all
 its rows. Checked preparation forwards the original references and materializes
 data only for an actual holder-data demand. A returned handle likewise
 requires its matching data leaf with exact roles in the same result tuple.
+
+Interface receiver membership is a set: substituting an ordered formal-role
+map can permute its enumeration without changing its members. Pair admission
+compares the exact holder, receiver members and actual data/anchor association.
+This does not reorder an oracle delivery or its observable receiver sequence.
 
 Application expansion preserves the caller's anchor. Splitting, returning and
 rebinding a component pair creates no new anchor. Only a root input binding
@@ -820,8 +894,8 @@ references; it does not attach callee entry indices to caller instructions.
 Participant projection deliberately erases declaration contracts and formula
 links, and the statement's selected-target reference. The artifact retains
 helper bodies and domains for execution preparation, but does not retain the
-original protocol contract subject. It retains the existing statement
-identity/ABI projection. No certificate for the
+original protocol contract subject. It retains each statement's relation
+declaration, which keeps the relation identity and ABI. No certificate for the
 original contracts is transported through these transforms by this metadata.
 
 `protocol.statement` references a non-callable `relation.declare` symbol and
@@ -910,13 +984,16 @@ Statement operands must be entry ports in this profile. A retained computed
 expression or a composed statement needs a separate extension. Statements have
 a retention effect, so ordinary DCE cannot remove them. They do not create
 participant execution demand. Projection retains the original function type, input/result role sets,
-per-role argument and service-port maps, relation signatures and external
-identities, explicit purposes, selectors, acceptance indices, and ordered
-source action occurrences in one `protocol.projection` operation directly
-inside the generated `protocol.module` symbol table. Relation, participant, entry
-and generated-callee references are actual MLIR symbol references. Symbol
-renaming updates them and the operation keeps private referenced declarations
-live through symbol DCE.
+per-role argument and service-port maps, each statement's relation symbol, entry
+ports, selectors and acceptance index, and ordered source action occurrences in
+one `protocol.projection` operation directly inside the generated
+`protocol.module` symbol table. A statement record names its relation and copies
+nothing from it: the retained `relation.declare` alone carries the signature,
+external identity and explicit purposes. Projection drops only the declaration's
+`formula` link, and every later stage keeps each named declaration unchanged.
+Relation, participant, entry and generated-callee references are actual MLIR
+symbol references. Symbol renaming updates them and the operation keeps private
+referenced declarations live through symbol DCE.
 
 An acceptance index identifies the original common result. The retained
 per-role result maps identify each corresponding participant result. Service input
@@ -1079,8 +1156,8 @@ registry-managed root aliases. An affine RNG token is not such a reference
 merely because its value was copied.
 
 The supplied native participant carrier can be independently admitted and
-executed without a source correspondence claim. A Lean interpretation and
-correspondence for this native profile remain open. Independently formalized
+executed without a source correspondence claim. No Lean interpretation or
+correspondence is claimed for this native profile. Independently formalized
 source models have their own subjects and admission contracts.
 
 ## Conditional completion extension

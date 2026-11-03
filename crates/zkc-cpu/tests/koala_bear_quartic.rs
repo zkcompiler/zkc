@@ -63,9 +63,12 @@ fn nominal_admission_and_native_signatures_are_independent() {
     assert_eq!(identity.scalar_field(), Some(identity));
     assert_eq!(identity.group(), None);
     assert_eq!(identity.transcript(), None);
-    assert!(zkc_cpu::domains::TRANSCRIPTS.iter().any(
-        |t| t.domain.field == identity && t.suite == Identity::HashChainKeccak256KoalaBearExt4
-    ));
+    assert!(
+        zkc_cpu::domains::TRANSCRIPTS
+            .iter()
+            .any(|t| t.domain().field == identity
+                && t.suite == Identity::HashChainKeccak256KoalaBearExt4)
+    );
     assert!(LogicalType::new(Type::Rng, identity).is_ok());
     assert!(KOALA_BEAR_EXT4.physical(Type::Rng).is_some());
     for kind in [

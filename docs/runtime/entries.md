@@ -15,8 +15,9 @@ to give a configuration a stable short name or add application logic.
 ## Project workflow
 
 Keep reusable protocols in libraries or `protocol.zkc`, concrete Entries in
-`main.zkc`, and the explicit module/asset map in `zkc.toml`. The language also
-allows protocols and Entries in the same file.
+`main.zkc`, and the explicit module/asset map in `zkc.toml`. The manifest's
+`source-format` names the grammar of its sources; `zkc new` writes `zkc`. The
+language also allows protocols and Entries in the same file.
 
 ```sh
 zkc new my-project
@@ -39,7 +40,10 @@ zkc run
 ```
 
 Commands discover the nearest `zkc.toml`. Use `--project=FILE` to select another
-project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mappings.
+project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mappings
+with `--source-format=zkc|zkc-layout`. Explicit mappings without a source format
+refuse with `source-format-required`. A manifest states its own source format, so
+`--source-format` with a project refuses with `cli-usage`.
 `--compiler=PATH` selects a trusted compiler; otherwise the compiler is resolved
 from absolute directories in trusted `PATH`. Execution compiles in memory and
 reports the resulting package identity. It does not publish an intermediate package.
@@ -75,9 +79,9 @@ zkc prove example::Proof
 zkc verify example::Proof
 ```
 
-Omitted names require one eligible Entry: `run` considers Entry functions;
-`prove` and `verify` consider proof Entries. `inspect`, `compile`, `bindings`
-consider both kinds. `prepare` without an output override prepares all project Entries;
+Omitted names require one eligible Entry: `run` and `common-inputs` consider
+Entry functions; `prove` and `verify` consider proof Entries. `inspect`,
+`compile`, `bindings` consider both kinds. `prepare` without an output override prepares all project Entries;
 with `--output` it selects one Entry across both kinds. An explicitly ambiguous short name
 requires qualification. A unique Entry of the wrong kind is an error.
 
@@ -129,7 +133,11 @@ path even when the closed computation is identical. Use a named Entry function
 when that configuration should have one application-owned path.
 
 `inspect` describes the schema, choices and whether each input has an installed
-constructor. Add `--dry-run` to `run`, `prove` or `verify` to check actual inputs,
+constructor. Compilation does not decide whether an operation can supply its
+inputs: a proof whose prover witness has no external constructor still
+compiles, `prove` refuses that witness before execution with
+`entry-input-constructor`, and `verify` never reads it
+([supply rule](../spec/runtime/entries.md#external-supply)). Add `--dry-run` to `run`, `prove` or `verify` to check actual inputs,
 setup authority and bounds through the same native input validation as execution.
 It runs no protocol, issues no resources, reads no proof bytes and publishes no
 proof or result values. Verification does not read witness files. Output paths
@@ -201,8 +209,23 @@ Rehashing an unknown package does not authorize it. Authored proof jobs require
 
 Direct proof commands use `--service=ROLE.NAME=COUNT`,
 `--transcript-budget=COUNT` and `--context=HEX` for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
-sets [native limits](../spec/runtime/capacity.md); Entry functions also accept
-`--limits=FILE` for [work limits](../spec/runtime/joint.md).
+selects the [capacity record](../spec/runtime/capacity.md#application-capacity):
+its live, fresh and logical byte fields bound the invocation root, from request
+decoding through result publication, which every participant runner charges as
+it executes; its other fields bound each operation and runner. The `--json`
+report renders the root's usage as `invocation`, beside each runner's own
+([reported usage](../spec/runtime/capacity.md#reported-usage)), so a record can
+state its ceilings from the totals a run reported. `--material-limits=FILE`
+selects the [material allowances](../spec/runtime/capacity.md#host-allowances)
+for the public statement, named references, setup material and retained
+imports. Setup material, including key files read with `--key`, defaults to
+64 MiB and may be raised up to 256 MiB; a selection above a maximum refuses.
+`--interface-limits=FILE` selects the
+[interface admission allowances](../spec/runtime/capacity.md#host-allowances)
+under which every command that reads an Entry interface reads it, including
+`inspect`, `prepare`, `bindings`, `compile`, `init` and `new`.
+Entry functions also accept `--limits=FILE` for
+[work limits](../spec/runtime/joint.md).
 `prove` accepts services of the selected prover; `verify` accepts services of the
 selected verifier. Other roles refuse.
 [Retries](attempts.md) require an Entry completion selection and an explicit count.
@@ -292,11 +315,11 @@ existing Kernel pipeline and VM. Protocol and proof calls use their native
 admission, setup, transcript and cleanup owners. The outer invocation shares
 cumulative work and value limits across reached calls. A fresh child does not
 reset these allowances. The live allowance includes retained parent data and
-native transport; children receive a conservative share of its remainder. A
-nested computation can therefore reach the limit before the same standalone
-runner. See the [execution contract](../spec/runtime/entries.md#function-execution)
-for the partition policy. Calls are ordered, and no retry or result caching is
-implicit. Only the successfully returned source root is published.
+native transport beside the children's runners, which charge it as they
+execute. A nested computation can therefore reach the limit before the same
+computation alone. See the
+[execution contract](../spec/runtime/entries.md#function-execution) for the
+policy. Calls are ordered, and no retry or result caching is implicit. Only the successfully returned source root is published.
 
 `--invocations=FILE` can set policies for exact static child deployment IDs shown
 by inspection. Ordinary data stays in arguments.json. Child configuration carries
@@ -306,8 +329,40 @@ generated ordinary records; inspection exposes their schemas. Context cannot
 replace source call operands. Defaults cover children without
 setup slots. Required setup authority must be supplied explicitly.
 
+Participants that run a static Run deployment in separate processes check their
+inputs against one pinned common-input context. `zkc common-inputs
+--deployment=ID --input=ROLE=FILE ... --output=FILE` selects a Function Entry
+and one of its Run deployments, prepares it from one named input document per
+role without issuing resources, writes the
+[common-input context](../spec/formats/input-bindings.md#production) those
+inputs determine and reports its SHA-256. Disagreeing participants refuse with
+`input-binding-Value` and publish nothing. Producing or hashing the context
+confers no authority: distribute its pin through the application's own trusted
+context.
+
 The [Rust SDK guide](../../crates/zkc/README.md) explains generated arguments,
 package admission, reusable Hosts, preparation, typed reports and proof calls.
 Generated wrappers check exact package identity before preparation; schema
 equality alone cannot select a different deployment. Authority and invocation
 context are separate from ordinary arguments.
+
+The generated Host of a large Protocol roster restates each role's family at
+every signature, block argument and child deployment, so validating it can need
+more than the default
+[interface work allowance](../spec/runtime/capacity.md#host-allowances); the
+Host of a full 1,024-role roster does. A Rust application raises
+`FunctionOptions::limits.interface`, up to the installed maximum, and passes
+the same selection to every interface read, including
+`FunctionInterface::deployment_interfaces` for its child deployments. The CLI
+raises it with `--interface-limits=FILE`, a `zkc.interface-limits/0` record
+(work, then descriptor bytes) that the report repeats:
+
+```sh
+echo '["zkc.interface-limits/0", "4194304", "16777216"]' > interface-limits.json
+zkc run --package=host.zkpkg --sha256=EXPECTED_SHA256 \
+  --interface-limits=interface-limits.json --input=arguments.json
+```
+
+Exhausting the selected work refuses with `entry-interface-work-limit`, which
+a larger selection remedies; an interface beyond the document's own ceilings
+refuses with `entry-interface-limit`, which no selection does.

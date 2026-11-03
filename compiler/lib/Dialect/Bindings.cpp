@@ -385,11 +385,8 @@ bool messageType(Type type) {
   auto *ordinary = protocol::installedDomains().defaultRepresentation(
       kind, atomicDomain(logical));
   return (ordinary && ordinary->identity == representation) ||
-         representation == "blst/fr" || representation == "blst/g1" ||
-         representation == "blst/g2" ||
-         representation == "halo2curves-axiom/bn254.fr" ||
-         representation == "halo2curves-axiom/bn254.g1" ||
-         representation == "halo2curves-axiom/bn254.g2";
+         protocol::canonicalRepresentation(kind, atomicDomain(logical),
+                                           representation);
 }
 
 LogicalResult callAttributes(llvm::function_ref<InFlightDiagnostic()> emit,
@@ -849,22 +846,7 @@ FunctionType resolveInstalledSignature(
       return physical ? actual : logical;
     auto schema = logical.getInput(0);
     StringRef kind = constructorOf(schema), domain = atomicDomain(schema),
-              resident;
-    if (kind == "field" || kind == "vector") {
-      if (domain == "bls12-381.fr")
-        resident = "blst/fr";
-      if (domain == "bn254.fr")
-        resident = "halo2curves-axiom/bn254.fr";
-    } else if (kind == "group" || kind == "groups") {
-      if (domain == "bls12-381.g1")
-        resident = "blst/g1";
-      if (domain == "bls12-381.g2")
-        resident = "blst/g2";
-      if (domain == "bn254.g1")
-        resident = "halo2curves-axiom/bn254.g1";
-      if (domain == "bn254.g2")
-        resident = "halo2curves-axiom/bn254.g2";
-    }
+              resident = protocol::residentRepresentation(kind, domain);
     auto ordinary = defaultPhysicalType(emit, schema);
     if (!ordinary)
       return {};

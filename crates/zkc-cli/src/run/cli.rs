@@ -4,7 +4,6 @@ use crate::execution::Capacity;
 use crate::files::*;
 use serde_json::{Value as Json, json};
 type Result<T> = std::result::Result<T, String>;
-const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 pub(crate) fn run(args: &crate::cli::Arguments<'_>, cpu: &crate::execution::CpuExecution) -> Json {
     let mut report = json!({"format":"zkc.bundle-result/0","status":"refused","phase":"arguments","resources":[]});
     let result = (|| -> Result<()> {
@@ -35,7 +34,7 @@ pub(crate) fn run(args: &crate::cli::Arguments<'_>, cpu: &crate::execution::CpuE
         report["bundle_sha256"] = json!(host.identity());
         report["layout"] = host.layout();
         report["phase"] = json!("inputs");
-        let prepared = host.prepare(&read_regular(inputs, INPUT_LIMIT)?)?;
+        let prepared = host.prepare(&read_regular(inputs, zkc::execution::MAX_INPUT_BYTES)?)?;
         report = render(&prepared.execute());
         Ok(())
     })();
@@ -72,17 +71,20 @@ fn render(report: &HostReport) -> Json {
                 } => json!(["wire", physical_type, hex(&bytes)]),
                 EncodedOutput::Private { physical_type } => json!(["private", physical_type]),
                 EncodedOutput::Unavailable { code } => {
-                    result["diagnostics"].as_array_mut().unwrap().push(
-                        json!({"role":encoded.role,"output":index,"kind":"output","code":code}),
-                    );
+                    // Rendering the summary instead omits the diagnostic list.
+                    if let Some(diagnostics) = result["diagnostics"].as_array_mut() {
+                        diagnostics.push(
+                            json!({"role":encoded.role,"output":index,"kind":"output","code":code}),
+                        );
+                    }
                     json!(["unavailable", code])
                 }
             })
             .collect::<Vec<_>>();
         if let Some(role) = result["roles"]
             .as_array_mut()
-            .unwrap()
-            .iter_mut()
+            .into_iter()
+            .flatten()
             .find(|r| r["role"] == encoded.role)
         {
             role["outputs"] = json!(values);
@@ -153,6 +155,26 @@ mod tests {
             assert_eq!(report["cpu"]["workers"], threads.unwrap_or(1));
             assert_eq!(report["outcome"], json!(["completed"]));
             assert_eq!(report["roles"][0]["outputs"][0][2], "5a4b4356000500");
+            // The invocation root's usage beside each runner's own: a run's
+            // root pools no fuel, and it charged every byte the runner did.
+            let root = &report["invocation"];
+            assert_eq!(
+                root.as_object().unwrap().keys().collect::<Vec<_>>(),
+                [
+                    "instructions",
+                    "iterations",
+                    "live_value_bytes",
+                    "logical_bytes",
+                    "total_value_bytes"
+                ]
+            );
+            assert_eq!(root["instructions"], Json::Null);
+            assert_eq!(root["iterations"], Json::Null);
+            let usage = &report["roles"][0]["usage"];
+            assert_eq!(usage["instructions"], 1);
+            for field in ["logical_bytes", "total_value_bytes"] {
+                assert!(root[field].as_u64().unwrap() >= usage[field].as_u64().unwrap());
+            }
         }
     }
 }

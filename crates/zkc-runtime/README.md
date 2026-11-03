@@ -92,8 +92,14 @@ acceptance selectors, prepared computation policy and publication.
 Shared-ledger reports retain live storage guards. `Produced::into_parts()`
 transfers proof bytes, outputs and proof-buffer reservations to the application;
 keep the reservations while retaining the buffer. Runner output custody still
-uses `into_retained_outputs()`. Dropping guards releases only live capacity,
-never cumulative work or allocation charges.
+uses `into_retained_outputs()`, whose guard carries the live hold of the
+values' bytes. Dropping guards releases only live capacity, never cumulative
+work or allocation charges. A runner that shares a ledger charges every byte it
+retains there as it executes and keeps its own fuel unless the ledger pools it
+(`ExecutionLedger::new` pools fuel, `ExecutionLedger::bytes_only` does not).
+A ledger's refusal of proof transport is `ArtifactFailure::Root`, reported as
+`proof-transport-work-limit` or `proof-transport-bytes-limit`, apart from the
+proof format's own `proof-limit`.
 
 Protocol algorithms are source libraries; field arithmetic and cryptographic
 operations are supplied by installed backends. The runtime hashes canonical

@@ -2,13 +2,31 @@
 
 This native contract lists admission ceilings shared across operations.
 An exhausted checker refuses; it does not establish semantic inequivalence.
+An installed policy ceiling that implementations in more than one language
+enforce for the same contract is a row of the catalog's
+[limits](../formats/contract-declarations.md#limits) table: the protocol role
+roster and the record role telescope. Each compiler reader of the protocol role
+roster, including the source checker, the IR verifier, the language-interface
+reader, the structured-source exporter, the retained-declaration checker and the
+joint bundle producer, uses that row's generated constant. A record role
+telescope is a separate contract with its own row; the source checker and both
+interface readers use it.
+
+A format's own bounds belong to its format specification: the interface and
+Host-carrier node ceilings to the [Entry carrier](../formats/entry.md#host-control-artifact),
+the carrier bounds of a program to [program bytes](../formats/program-bytes.md#bounds-and-admission)
+and the descriptor's alternative ceiling to [variants](variants.md#portable-representation).
+Each independent reader enforces such a bound with its own constant, and
+conformance cases at the bound and one past it, which the C++ and Rust readers
+both run, keep the readers in agreement.
 
 | Boundary | Limit |
 |---|---|
-| Declared role roster | 1,024 roles |
+| Declared role roster | 1,024 roles, the catalog limit `protocol.roles` |
+| Record role telescope | 1,024 role parameters, the catalog limit `record.roles` |
 | Helper depth and expanded helper analysis | 64 levels; 100,000 operations |
 | Helper dependency analysis and availability replay | 1,000,000 words/indices within their separate budgets |
-| Role expansion | 100,000 operation/port visits |
+| Mathematical participant projection | 100,000 role-node visits per common body, owned by IR / Mathematical: each mathematical program charges its role count times its SSA nodes, one each for the program, its inputs and results, and its operations, operands, results and block arguments; exhaustion refuses with `mathematical-projection-limit` before any participant body is built |
 | Scoped helper substitution | 1,000,000 operation/port visits, 4,096 callable/domain definitions and 4,096 bindings; outlined control bodies consume structural work, 64 nesting levels, and 16 MiB occurrence text; independent comparison has its own 1,000,000 visits |
 | Exact resource-origin analysis | 100,000 shared work units and 64 call/region levels |
 | Pointwise map formulas and correspondence | Shared helper expansion budget; expanded formula within the Ring view limits of 65,536 nodes and depth 1,024; 1,000,000 matcher steps |
@@ -21,7 +39,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Optional lane realization | 1,000,000 work units; exhaustion retains ordered execution |
 | Required finite expressions and polynomial expansion | Separate cumulative allowances of 100,000 each |
 | Numerical normalization and frontier | 4,000,000 construction units per lowering subject; context/frontier readers share the existing 4,000,000-unit realization checking account; independent unit normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
-| Numerical recipe materialization and correspondence | Separate allowances of 4,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; existing recipe limits also apply |
+| Numerical recipe materialization and correspondence | Separate allowances of 4,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; selected regions nest at most 64 levels, counted cumulatively across helper crossings; existing recipe limits also apply |
 | Native R1CS reduction adapter | BLS Fr; at most 8 rows, 128 columns and 1,024 nonzero terms |
 
 Ring depth counts an input or literal as one level. Each addition or

@@ -1,8 +1,10 @@
 #include "../lib/Compiler/ComponentContracts.h"
 #include "../lib/Compiler/SourceView.h"
 #include "support/NativeCases.h"
+#include "support/SourceProject.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/Json.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <map>
@@ -99,9 +101,267 @@ void associations(const json::Value &document) {
   require(associated > 0, "no closed definition has an associated row");
   require(joined >= 2, "declaration/body source join absent");
 }
+const json::Object &member(const json::Value &document, StringRef name) {
+  return *document.getAsObject()->getObject(name);
+}
+json::Array &list(json::Value &document, StringRef name) {
+  return *document.getAsObject()->getArray(name);
+}
+/// The occurrences of one definition, by site.
+std::map<std::string, json::Value> occurrences(const json::Value &document,
+                                               StringRef definition) {
+  std::map<std::string, json::Value> result;
+  for (const auto &item : *document.getAsObject()->getArray("occurrences")) {
+    const auto &occurrence = *item.getAsObject();
+    if (occurrence.getString("definition") == definition)
+      result.emplace(occurrence.getString("site")->str(),
+                     *occurrence.get("nodes"));
+  }
+  return result;
+}
+std::string symbolOf(const json::Value &document, StringRef owner) {
+  for (const auto &item :
+       *member(document, "instances").getArray("instances")) {
+    const auto &instance = *item.getAsObject();
+    if (instance.getObject("template")->getString("owner") == owner)
+      return instance.getString("symbol")->str();
+  }
+  throw std::runtime_error(("no instance of " + owner).str());
+}
+/// The written node kind at an address, from the exported syntax.
+std::string nodeKind(const json::Value &document, const json::Value &address) {
+  const auto &target = *address.getAsObject();
+  for (const auto &decl :
+       *member(document, "source_ast").getArray("declarations")) {
+    if (decl.getAsObject()->getString("owner") != target.getString("owner"))
+      continue;
+    for (const auto &node : *decl.getAsObject()->getArray("nodes"))
+      if (*node.getAsObject()->get("path") == *target.get("path"))
+        return node.getAsObject()->getString("kind")->str();
+  }
+  return {};
+}
+constexpr StringLiteral sharedMaps = R"(module maps;
+use zkc::vector::{Vector};
+domain Fr = field("bls12-381.fr");
+math fn scale(s: Fr, x: Fr) -> Fr { return s * x; }
+fn left(s: Fr, a: Vector<Fr>) -> Vector<Fr> { return map scale(s, each a); }
+fn right(s: Fr, b: Vector<Fr>) -> Vector<Fr> { return map scale(s, each b); }
+protocol Both roles(P)(s: Fr @P, a: Vector<Fr> @P, b: Vector<Fr> @P)
+    -> (x: Vector<Fr> @P, y: Vector<Fr> @P, z: Vector<Fr> @P) {
+  let x @P = left(s, a);
+  let y @P = left(s, b);
+  let z @P = right(s, b);
+  return (x = x, y = y, z = z);
+}
+)";
+CheckedOriginal mapsOriginal(StringRef subject) {
+  auto sources = sourceProject(ZKC_SOURCE_PROJECT);
+  sources.push_back({"maps", sharedMaps.str(), {}});
+  auto project =
+      take(analyze(take(capture(std::move(sources)))).checkedProject());
+  return take(prepareOriginal(take(closeSubject(project, subject))));
+}
+CheckedOriginal claimsOriginal() {
+  auto file = MemoryBuffer::getFile(ZKC_CORRESPONDENCE_FIXTURES
+                                    "/components-local-fields.zkc");
+  require(bool(file), "component fixture cannot be read");
+  auto project =
+      take(analyze(take(capture({{"claims", (*file)->getBuffer().str(), {}}})))
+               .checkedProject());
+  return take(prepareOriginal(take(closeSubject(project, "claims::Run"))));
+}
+/// Protocol custody creation, application and destruction.
+CheckedOriginal custodyOriginal() {
+  CaptureOptions options;
+  options.format = "zkc-layout";
+  auto project = take(analyze(take(capture({{"m", R"(#[linear]
+struct Ticket roles(P, V):
+protocol forward roles(P, V)(ticket: Ticket roles(P, V)) -> Ticket roles(P, V):
+    return ticket
+pub protocol Run roles(P, V)() -> bool @V:
+    ticket <- Ticket roles(P, V) {}
+    next <- ticket.forward()
+    empty <- unpack(next)
+    return true
+)",
+                                             "custody.zkc"}},
+                                           options)))
+                          .checkedProject());
+  return take(prepareOriginal(take(closeSubject(project, "m::Run"))));
+}
+void inventoryRefuses(const json::Value &document, StringRef reason) {
+  auto refusal = checkCorrespondenceInventory(document);
+  require(bool(refusal), "an incomplete inventory was accepted");
+  auto message = toString(std::move(refusal));
+  require(StringRef(message).contains(reason),
+          "unexpected refusal: " + message);
+}
+void generatedOccurrences(Cases &cases) {
+  cases.run("every definition row has exactly one inventory entry", [] {
+    for (StringRef subject :
+         {"map_examples::First", "map_examples::Prefix",
+          "map_examples::LinearCombination", "map_examples::ConstantRows",
+          "map_examples::RealizeValues", "maps::Both"}) {
+      auto value = mapsOriginal(subject);
+      auto document = report(value);
+      accepted(checkCorrespondenceInventory(document));
+      accepted(
+          checkSourceCorrespondenceExport(value, zkc::printJson(document)));
+      require(list(document, "generated_rows").size() ==
+                  list(document, "generated").size(),
+              "generated row coverage is incomplete");
+    }
+    accepted(checkCorrespondenceInventory(report(claimsOriginal())));
+    // Protocol custody creation outlines a custody definition.
+    auto custody = report(custodyOriginal());
+    accepted(checkCorrespondenceInventory(custody));
+    unsigned outlined = 0;
+    for (unsigned i = 0; i < list(custody, "generated").size(); ++i)
+      if (list(custody, "generated")[i].getAsObject()->getString("purpose") ==
+          "custody") {
+        ++outlined;
+        require(!list(custody, "generated_rows")[i]
+                     .getAsObject()
+                     ->getArray("rows")
+                     ->empty(),
+                "a custody definition has no snapshot row");
+      }
+    require(outlined > 0, "custody creation generated no custody definition");
+  });
+  cases.run("a reused map adapter lists both callers", [] {
+    auto document = report(mapsOriginal("maps::Both"));
+    auto left = symbolOf(document, "maps::left"),
+         right = symbolOf(document, "maps::right");
+    unsigned adapters = 0;
+    for (const auto &item : list(document, "generated")) {
+      const auto &entry = *item.getAsObject();
+      if (entry.getString("purpose") != "map")
+        continue;
+      ++adapters;
+      require(StringRef(*entry.getString("symbol")).starts_with("zkl_map_"),
+              "a map adapter has another symbol");
+      std::set<std::string> callers;
+      for (const auto &origin : *entry.getArray("origins"))
+        callers.insert(origin.getAsObject()->getString("definition")->str());
+      require(callers == std::set<std::string>{left, right},
+              "a reused map adapter does not list both callers");
+    }
+    require(adapters == 2, "the shared map adapter is not domain and body");
+  });
+  cases.run("two unlabelled calls get distinct sites and nodes", [] {
+    auto document = report(mapsOriginal("maps::Both"));
+    auto sites = occurrences(document, symbolOf(document, "maps::Both"));
+    std::set<std::string> nodes;
+    for (const auto &[site, written] : sites) {
+      require(written.getAsArray()->size() == 1,
+              "an application lost its written node");
+      require(nodeKind(document, (*written.getAsArray())[0]) == "expr.call",
+              "an application site is not its call expression");
+      nodes.insert(zkc::printJson(written));
+    }
+    require(sites.size() == 3 && nodes.size() == 3,
+            "unlabelled calls share a site or a node");
+  });
+  cases.run("a labelled site resolves to its call", [] {
+    auto document = report(claimsOriginal());
+    auto run = occurrences(document, symbolOf(document, "claims::Run"));
+    auto first = nativeSiteName("first", 0);
+    auto found = run.find(first);
+    require(found != run.end() && found->second.getAsArray()->size() == 1,
+            "the labelled site has no single written node");
+    require(nodeKind(document, (*found->second.getAsArray())[0]) == "expr.call",
+            "the labelled site does not resolve to its call");
+  });
+  cases.run("sites derived from one statement share its nodes", [] {
+    auto document = report(custodyOriginal());
+    auto run = occurrences(document, symbolOf(document, "m::Run"));
+    // Creation emits one custody unit per role; both originate from the
+    // creating statement, while the next statement's application has its own.
+    std::map<std::string, std::set<std::string>> byNodes;
+    for (const auto &[site, nodes] : run) {
+      require(!nodes.getAsArray()->empty(), "a site lost its written node");
+      byNodes[zkc::printJson(nodes)].insert(site);
+    }
+    unsigned shared = 0;
+    for (const auto &[nodes, sites] : byNodes)
+      shared += sites.size() > 1;
+    require(shared == 2 && byNodes.size() == 3,
+            "creation, application and destruction do not keep their own "
+            "statement nodes");
+  });
+  cases.run("inventory and occurrence edits refuse", [] {
+    auto value = mapsOriginal("maps::Both");
+    auto pristine = report(value);
+    auto generated = list(pristine, "generated");
+    // An edited node.
+    auto edited = pristine;
+    for (auto &item : list(edited, "occurrences"))
+      if (!item.getAsObject()->getArray("nodes")->empty()) {
+        (*item.getAsObject())["nodes"] = json::Array{};
+        break;
+      }
+    refused(checkSourceCorrespondenceExport(value, zkc::printJson(edited)));
+    // A repeated symbol.
+    auto repeated = pristine;
+    list(repeated, "generated").push_back(generated[0]);
+    inventoryRefuses(repeated, "repeat");
+    refused(checkSourceCorrespondenceExport(value, zkc::printJson(repeated)));
+    // A repeated purpose, part and origins under another symbol.
+    auto twin = pristine;
+    auto copy = generated[0];
+    (*copy.getAsObject())["symbol"] = "zkl_twin";
+    list(twin, "generated").push_back(std::move(copy));
+    inventoryRefuses(twin, "purpose, part and origins repeat");
+    refused(checkSourceCorrespondenceExport(value, zkc::printJson(twin)));
+    // A function row without an entry: the producer's own invariant refuses
+    // a dropped entry before publication.
+    auto dropped = pristine;
+    list(dropped, "generated").erase(list(dropped, "generated").begin());
+    inventoryRefuses(dropped, "is not exactly one instance");
+    refused(checkSourceCorrespondenceExport(value, zkc::printJson(dropped)));
+    // An occurrence of a site the snapshot does not have.
+    auto invented = pristine;
+    (*list(invented, "occurrences")[0].getAsObject())["site"] = "s9999";
+    inventoryRefuses(invented, "occurrence names no snapshot site");
+  });
+}
 } // namespace
 int main() {
   Cases cases;
+  cases.run(
+      "installed rows retain original association without written spans", [] {
+        auto project = take(analyze(take(capture({{"m",
+                                                   R"(module m;
+      protocol P roles(A)(x:index@A,y:index@A)->(sum:index@A){
+        let sum=x+y;return(sum=sum);
+      })",
+                                                   {}}})))
+                                .checkedProject());
+        auto subject =
+            take(prepareOriginal(take(closeSubject(project, "m::P"))));
+        auto document = report(subject);
+        auto symbol = symbolOf(document, "zkc::prelude::index_add");
+        const auto &root = *document.getAsObject();
+        bool found = false;
+        for (const auto &item : *root.getArray("rows")) {
+          const auto &row = *item.getAsObject();
+          const auto &path = *row.getArray("row");
+          if (path.size() != 2)
+            continue;
+          const auto &definition =
+              *at(*root.get("snapshot"), path).getAsArray();
+          if (definition[1].getAsString() != symbol)
+            continue;
+          found = true;
+          require(row.getObject("original") && row.getArray("sources")->empty(),
+                  "installed row lost its original association or gained "
+                  "written source");
+        }
+        require(found, "installed row was not associated");
+        accepted(
+            checkSourceCorrespondenceExport(subject, zkc::printJson(document)));
+      });
   cases.run(
       "syntax, rows and claims share the checked original association", [] {
         auto value = original();
@@ -147,7 +407,7 @@ int main() {
         *claims.getAsObject()));
     const auto &declarations = *(*root.getArray("snapshot"))[10].getAsArray();
     std::set<std::string> expected, actual;
-    for (unsigned table : {0, 1})
+    for (unsigned table : {0, 1, 2})
       for (unsigned i = 0; i < declarations[table].getAsArray()->size(); ++i)
         expected.insert(zkc::printJson(json::Array{10, table, i}));
     for (const auto &item : *root.getArray("rows")) {
@@ -177,8 +437,9 @@ int main() {
   cases.run("proposal edits cannot change the original or its publication", [] {
     auto value = original();
     auto pristine = report(value);
-    for (StringRef field : {"source_ast", "bindings", "instances",
-                            "instance_rows", "rows", "snapshot", "admission"}) {
+    for (StringRef field :
+         {"source_ast", "bindings", "instances", "instance_rows", "generated",
+          "generated_rows", "occurrences", "rows", "snapshot", "admission"}) {
       auto changed = pristine;
       (*changed.getAsObject())[field] = nullptr;
       refused(checkSourceCorrespondenceExport(value, zkc::printJson(changed)));
@@ -247,5 +508,6 @@ int main() {
         refuses(exportSourceCorrespondence(value),
                 "source.correspondence.export");
       });
+  generatedOccurrences(cases);
   return cases.result();
 }

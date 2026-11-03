@@ -14,10 +14,10 @@ namespace ZkcExamples.Structured.SumcheckVerifierBodies
 open Zkc.Source Zkc.Source.Structured
 
 abbrev reduceInputs : List Ty :=
-  [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
+  [.vector "bls12-381.fr", .index, .index, SumcheckPendingBodies.custodyType, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
 
 abbrev reduceOutputs : List Ty :=
-  [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]
+  [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, SumcheckPendingBodies.custodyType, .vector "bls12-381.fr", .field "bls12-381.fr"]
 
 /-- The repeat-carried slots, which precede the unchanged outer SSA environment. -/
 abbrev repeatState : List Ty :=
@@ -30,26 +30,28 @@ abbrev repeatSite : String := "s18"
 abbrev roundGuardSite0 : String := "s27"
 
 /-- The actual service input coordinate, before any local SSA extension. -/
-abbrev serviceInput : String := "input_6"
+abbrev serviceInput : String := "input_7"
 
 abbrev repeatSpec (maximum : Nat) : RepeatSpec :=
   ⟨repeatState, [.service "random.bls12-381.fr/0"], [0, 1],
     [[0], [0], [0], [0], [1], [1]], maximum⟩
 
-/-- The state positions the retained return reads, in output order. -/
-abbrev reduceReturnIndices : List Nat := [3, 0, 1, 2, 4, 5]
-
-/-- The retained return permutation of the repeat's state, for any value family. -/
-def reduceReturnValues {Value : Ty → Type} (state : Values Value repeatState) :
-    Values Value reduceOutputs :=
-  .cons (state.get (.there (.there (.there .here)))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil)))))
+/-- Return the repeated state together with the explicitly constructed custody value. -/
+def reduceReturnValues {Value : Ty → Type} (custody : Value SumcheckPendingBodies.custodyType)
+    (state : Values Value repeatState) : Values Value reduceOutputs :=
+  .cons (state.get (.there (.there (.there .here))))
+    (.cons (state.get .here) (.cons (state.get (.there .here))
+      (.cons (state.get (.there (.there .here)))
+        (.cons custody (.cons (state.get (.there (.there (.there (.there .here)))))
+          (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil))))))
 
 /-- The retained return of the repeat's state. -/
 def reduceReturn (tail : List Ty) : Region protocolDialect (repeatState ++ tail)
     reduceOutputs :=
+
   .letOp (.mark "s48") .nil .nil <|
   .letOp (.localCall SumcheckPendingBodies.atPrefixHelper rfl 1 "s48") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
-  .ret (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) .nil))))))
+  .ret (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))))))
 
 /-- One iteration of the repeat: every retained operation, with its site mark. -/
 def roundBody : Region protocolDialect
@@ -95,9 +97,8 @@ def roundBody : Region protocolDialect
   .ret (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil))))))
 
 /-- The whole body, with the repeat maximum as a parameter. -/
-def reduceBody (maximum : Nat) : Region protocolDialect [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
-    [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"] :=
-  .letOp (.mark "") .nil .nil <|
+def reduceBody (maximum : Nat) : Region protocolDialect reduceInputs reduceOutputs :=
+.letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.invoke MapFirstBodies.widthHelper) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.indexConstant 1) rfl) .nil .nil <|
@@ -108,7 +109,7 @@ def reduceBody (maximum : Nat) : Region protocolDialect [.vector "bls12-381.fr",
   .letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.invoke MapFirstBodies.variablesHelper) rfl) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil <|
   .letOp (.mark "s5") .nil .nil <|
-  .letOp (.localCall MapFirstBodies.lessHelper rfl 0 "s5") (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) .nil)) .nil <|
+  .letOp (.localCall MapFirstBodies.lessHelper rfl 0 "s5") (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)) .nil <|
   .letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.booleanConstant false) rfl) .nil .nil <|
   .letOp (.mark "") .nil .nil <|
@@ -118,9 +119,9 @@ def reduceBody (maximum : Nat) : Region protocolDialect [.vector "bls12-381.fr",
   .letOp (.mark "s10") .nil .nil <|
   .letOp (.localCall SumcheckHelperBodies.emptyHelper rfl 0 "s10") .nil .nil <|
   .letOp (.mark "s12") .nil .nil <|
-  .letOp (.localCall SumcheckPendingBodies.openClaimHelper rfl 1 "s12") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) .nil)) .nil <|
+  .letOp (.localCall SumcheckPendingBodies.openClaimHelper rfl 1 "s12") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil))) .nil <|
   .letOp (.mark "s18") .nil .nil <|
-  .letOp (.repeat (repeatSpec maximum) "s18") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) .nil)))))))) (.cons roundBody .nil) <|
+  .letOp (.repeat (repeatSpec maximum) "s18") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) .nil)))))))) (.cons roundBody .nil) <|
   reduceReturn _
 
 end ZkcExamples.Structured.SumcheckVerifierBodies

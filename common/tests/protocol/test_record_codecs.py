@@ -74,7 +74,7 @@ def test_record_codec_execution(toolchain, journal, directory, native, nested, f
     source = directory / 'main.zkc'
     source.write_text(text + extra.replace('BASE', base))
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                              'sample::Packed', f'--output={package}', *flags])
     public_values = {'public': '5', 'rounds': '2'}
@@ -137,7 +137,7 @@ def test_record_codec_external_schnorr(toolchain, journal, directory, flags):
     modules = {'sample': source, 'spongefish::duplex': root / 'libraries/constructions/spongefish/duplex.zkc'}
     modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::ExternalProof', f'--output={package}', *flags])
     public = journal.write('public.json', PUBLIC)
@@ -244,7 +244,7 @@ def test_grouped_records_select_disjoint_round_chunks(toolchain, journal, direct
     source = directory / 'main.zkc'
     source.write_text(GROUPED)
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'rounds': '3', 'public': '5'})
     witness = journal.write('witness.json', {'secret': '7'})
@@ -298,7 +298,7 @@ def test_record_codec_admission_checks_actual_program(toolchain, journal, direct
     source = directory / 'main.zkc'
     source.write_text(GROUPED)
     package = directory / 'proof.zkpkg'
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={package}'])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])
@@ -381,7 +381,7 @@ def test_empty_record_and_state_keep_conditional_finalization(toolchain, journal
     proof Demo=End{prover P;verifier V;public{go};accept ok;construction Closed;}
     ''')
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'go': go})
     args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', f'--public={public}', '--allow-authored']
@@ -456,7 +456,7 @@ def test_wire_observation_uses_original_bytes_before_permissive_decode(toolchain
       fn scalar_from_bytes(b:Bytes)->F=primitive("encoding.field_reduce_be");
     ''')
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Packed', f'--output={package}'])
     public = journal.write('public.json', {'public': '5', 'rounds': '2'})
     witness = journal.write('witness.json', {'secret': '7'})
@@ -492,7 +492,7 @@ def test_record_codec_checks_producer_program(toolchain, journal, directory, mut
     source = directory / 'main.zkc'
     source.write_text(GROUPED)
     package = directory / 'proof.zkpkg'
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={package}'])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])
@@ -547,7 +547,7 @@ def test_codec_record_crosses_event_free_protocol_loop(toolchain, journal, direc
     source = directory / 'main.zkc'
     source.write_text(text + CODEC.replace('BASE', base))
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Packed', f'--output={package}', *flags])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])

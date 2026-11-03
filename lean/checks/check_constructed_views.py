@@ -16,6 +16,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from bridges.common.request_support import check_lean_resources  # noqa: E402
+
 
 ROLES = (
     "EmbeddingEqualityValidator",
@@ -197,6 +200,7 @@ def main() -> None:
         )
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)
+        check_lean_resources(result, str(path))
         if not (result.returncode > 0):
             raise AssertionError(f"expected ordinary proof refusal: {name}; exit={result.returncode}")
         refused = "Type mismatch" in log or (name == "validator-loop-slot-frame" and
@@ -207,16 +211,8 @@ def main() -> None:
             raise AssertionError(name)
         mutations.append({"name": name, "role": role, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
-    # A changed internal callback layout must pass the same generic root engine,
-    # including full returns, rather than a family-specific generator template.
-    shifted = subprocess.run(
-        [sys.executable, str(root / "checks/check_connection_layout.py"),
-         "--records", str(directory.resolve() / "shifted-layout")],
-        cwd=root, env=env, text=True, capture_output=True, timeout=900,
-    )
-    (directory / "shifted-layout.log").write_text(shifted.stdout + shifted.stderr)
-    if shifted.returncode:
-        raise AssertionError("generic shifted-layout connection failed; see shifted-layout.log")
+    # Shifted-layout root connections have their own maintained check,
+    # check_connection_layout.py, selected once by common/tests/run.py.
     report = {"format": "zkc.constructed-view-controls/0", "generated": receipts,
               "connections": connection_receipts, "mutations": mutations}
     (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n")

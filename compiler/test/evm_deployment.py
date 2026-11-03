@@ -1,4 +1,5 @@
 """Selected deployment forks and common compiler policies cross the EVM driver."""
+import hashlib
 import json
 from pathlib import Path
 
@@ -12,15 +13,25 @@ commands = Commands(OUT)
 ROOT = Path(__file__).resolve().parents[2]
 inputs = ['--source-format=zkc', '--entry=example::Proof',
           *project_arguments(ROOT / 'examples/projects/sumcheck-keccak/zkc.toml')]
+DECLARATION_BYTES = (ROOT / 'common/targets/evm.json').read_bytes()
+DECLARATION = json.loads(DECLARATION_BYTES)
+FORKS = [fork['name'] for fork in DECLARATION['forks']]
+IDENTITY = 'zkc.evm-target/0:' + hashlib.sha256(DECLARATION_BYTES).hexdigest()
 
 with case('deployment fork is exact and belongs only to EVM compilation'):
-    for value in ('', 'Cancun', 'Prague', 'shanghai', 'latest', 'prague, cancun'):
+    for value in ('', 'shanghai', 'latest', ', '.join(FORKS),
+                  *(name.capitalize() for name in FORKS)):
         commands.run([compiler, 'language-evm', *inputs, f'--evm-version={value}'],
                      refuses='evm.fork')
     commands.run([compiler, 'language-evm', *inputs,
-                  '--evm-version=cancun', '--evm-version=prague'], refuses='evm.fork')
-    commands.run([compiler, 'language-package', *inputs, '--evm-version=prague'],
+                  f'--evm-version={FORKS[0]}', f'--evm-version={FORKS[-1]}'], refuses='evm.fork')
+    commands.run([compiler, 'language-package', *inputs, f'--evm-version={FORKS[-1]}'],
                  refuses='evm.fork')
+
+with case('help names the declared forks and their default'):
+    help_text = commands.run([compiler, '--help'])
+    assert (f"--evm-version={'|'.join(FORKS)} (default {DECLARATION['default_fork']})"
+            in help_text), help_text
 
 with case('CPU physical and storage selections refuse at the EVM boundary'):
     for option in ('--cpu-target=portable', '--release-storage', '--dump=closed'):
@@ -32,24 +43,50 @@ flags = ['--no-simplify', '--no-finite-bulk', '--fuse-vector-reductions',
          '--fuse-collect-fold', '--no-calculation-batching',
          '--oracle-realization=' + json.dumps(oracle)]
 
-with case('both deployment forks retain exact source and effective common options'):
+# The one producer's keys. Tool facts (solc, its settings, the ABI) belong to
+# the declaration and the SDK; no key is restated in an inner record.
+KEYS = {'format', 'declaration', 'fork', 'options', 'limits', 'entry', 'capture',
+        'installation', 'original', 'source_format', 'compiler', 'policy', 'descriptor',
+        'yul'}
+
+with case('every declared fork retains exact source and effective common options'):
     original = commands.run([compiler, 'language-emit', *inputs])
-    for fork in ('cancun', 'prague'):
+    for fork in FORKS:
         response = json.loads(commands.run([compiler, 'language-evm', *inputs,
                                             f'--evm-version={fork}', *flags]))
-        assert response['fork'] == response['manifest']['fork'] == fork
-        assert response['options'] == response['manifest']['options'] == {
+        assert set(response) == KEYS, sorted(response)
+        assert response['fork'] == fork
+        assert response['declaration'] == IDENTITY
+        assert response['options'] == {
             'simplify': False, 'release_storage': False, 'finite_bulk': False,
             'fuse_vector_reductions': True, 'fuse_collect_fold': True,
-            'calculation_batching': False, 'oracle_realization': oracle,
-            'numerical_expressions': 'prefer-native'}
-        assert response['original'] == response['source_sha256']
+            'calculation_batching': False, 'oracle_realization': oracle}
+        assert response['original'] == hashlib.sha256(original.encode()).hexdigest()
         assert response['descriptor'][1] == response['policy']
         assert json.loads(response['descriptor'][8]) == oracle
         assert commands.run([compiler, 'language-emit', *inputs]) == original
+        # The CPU package publishes the same options for the same flags.
+        package = json.loads(commands.run([compiler, 'language-package', *inputs, *flags]))
+        assert response['options'] == package['options']
     default = json.loads(commands.run([compiler, 'language-evm', *inputs]))
-    assert default['fork'] == default['manifest']['fork'] == 'cancun'
+    assert set(default) == KEYS
+    assert default['fork'] == DECLARATION['default_fork']
+    assert default['declaration'] == IDENTITY
+    assert default['limits'] == {row['name']: row['maximum'] for row in DECLARATION['limits']}
     assert default['options']['simplify'] is True
+    assert default['options'] == json.loads(
+        commands.run([compiler, 'language-package', *inputs]))['options']
+
+with case('the source Entry and the policy entry keep distinct keys'):
+    response = json.loads(commands.run([compiler, 'language-evm', *inputs]))
+    # The selected source Entry; the policy keeps the protocol's entry symbol.
+    assert response['entry'] == 'example::Proof'
+    assert response['policy'][1] != response['entry']
+    assert response['source_format'] == 'zkc.original-mlir/0'
+    # The same identities the checked project reports for the same selection.
+    checked = json.loads(commands.run([compiler, 'language-check', *inputs]))
+    for key in ('entry', 'capture', 'installation', 'original'):
+        assert response[key] == checked[key], key
 
 with case('authored zero-transcript Entry retains framed common construction'):
     source = OUT / 'authored.zkc'
@@ -90,3 +127,23 @@ proof Proof=Queries {
     policy = json.loads(native['artifact'])[2][1]
     assert len(policy[11]) == 1 and policy[11][0][1] == '0'
     commands.run([compiler, 'language-evm', *selection], refuses='evm.construction')
+
+with case('a Yul export refusal joins the diagnostics captured before it'):
+    # Every message site adds its origin template to the static invocation
+    # root, so 512 sites exceed the declared root ceiling only at Yul export.
+    sites = 512
+    sends = ''.join(f'  let r{i}=send P->V(flag);\n' for i in range(sites))
+    source = OUT / 'wide-root.zkc'
+    source.write_text(f'''module wide;
+protocol Echo roles(P,V)(flag:bool@(P,V))->(accepted:bool@V) {{
+{sends}  let accepted=r{sites - 1}==flag;
+  return(accepted=accepted);
+}}
+proof Proof=Echo{{prover P;verifier V;public{{flag}};accept accepted;construction authored;}}
+''')
+    observation = OUT / 'wide-root.json'
+    commands.run([compiler, 'language-evm', '--source-format=zkc', f'--module=wide={source}',
+                  '--entry=wide::Proof', f'--diagnostics={observation}'], refuses='evm.root-limit')
+    diagnostics = json.loads(observation.read_text())['diagnostics']
+    assert [d['code'] for d in diagnostics[:2]] == ['evm.yul', 'evm.diagnostics'], diagnostics
+    assert '[evm.root-limit]' in diagnostics[1]['message'], diagnostics

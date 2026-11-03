@@ -134,6 +134,7 @@ def text : Option String → String
 def cause : Cause → String
   | .limit => "limit" | .decode => "decode" | .truncated => "truncated"
   | .contract => "contract" | .kernel reason => "kernel:" ++ toString (repr reason)
+  | .unsupported name => "unsupported:" ++ name
   | .explicit .reject => "explicit:reject"
   | .explicit reason => "explicit:" ++ toString (repr reason)
 

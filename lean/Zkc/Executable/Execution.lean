@@ -12,9 +12,11 @@ public import Zkc.Construction.Scalar
 /-! The meaning of an executable validator under a native proof host.
 
 `execute` runs the validator's instructions as the native runner does. A local
-call enters a frame and runs the function's body, and every loop iteration runs
-the loop body in a frame of its own. Every receive, local call, loop, yield and
-return of the participant and every instruction of a local body is charged one
+call enters a frame and runs the function's body, every loop iteration runs the
+loop body in a frame of its own, and a participant conditional or match runs
+only its selected arm, in a frame of its own named by the branch site and the
+arm's alternative. Every receive, local call, loop, branch, yield and return of
+the participant and every instruction of a local body is charged one
 instruction against the host's budget; the budget is checked before each
 charge, so a budget of `b` executes exactly the first `b` charged steps. A
 receive reads the next length-framed message of the proof and decodes it at the
@@ -25,6 +27,16 @@ returned transcript to the host, which retires it. The runner's other resources
 (loop iterations, retained values and bytes, logical work, a numerical call's
 work and managed memory, and frame depth) are not modelled: their exhaustion
 only stops a run.
+
+A loop body or an arm sees only its own frame: its formals, bound from the
+enclosing frame by explicit capture rows (each row binds its own formal to its
+parent's value, so rows sharing a parent are distinct bindings; the runner's
+per-row storage charge is one of the unmodelled resources). Its bindings are
+discarded with its frame. The static admission of a program keeps loop captures
+copyable and never lets two rows share an affine parent; this meaning does not
+repeat those checks. An arm yields its outputs. The executable value model has
+no variant values, so a participant match, like an instruction kept as
+unsupported, stops with an explicit unsupported refusal (`Cause.unsupported`).
 
 Installed operations are interpreted through a `Vocabulary`: each row assigns
 a meaning to an exact contract, static arguments and implementation. Values
@@ -62,14 +74,42 @@ inductive Computation where
   | vectorSubtract (domain : String)
   | vectorScale (domain : String)
   | require
+  /-- Boolean negation. -/
+  | booleanNot
   | numerical (reduction : Numerical.Reduction) (domain : String) (mask : List Bool)
       (expression : Zkc.Algebra.RingExpression.Expr Nat Nat)
   deriving DecidableEq, Repr
 
+/-- A custody transfer of one slot (`PIR.Custody`): create a fresh occurrence,
+pass the current one to its successor, or consume it. -/
+inductive CustodyTransfer where
+  | create | pass | consume
+  deriving DecidableEq, Repr
+
+/-- The local closed projection of a custody transfer. This is the same
+payload-erased interpretation as `SiteObservations.closed`; it does not model
+runtime freshness or ledger refusal. Slot and operand-shape checks remain exact.
+The runtime acceptance-inclusion boundary relates successful checked runs to
+this projection. Custody never becomes a proof or transcript payload. -/
+def CustodyTransfer.erased {F G : Type} (transfer : CustodyTransfer) (slot : String) :
+    List (Value F G) → PIR.Outcome (List (Value F G))
+  | [] => match transfer with
+      | .create => .returned [.custody slot 0]
+      | _ => .stopped .refused
+  | [.custody actual _] =>
+      if slot = actual then
+        match transfer with
+        | .pass => .returned [.custody slot 0]
+        | .consume => .returned []
+        | .create => .stopped .refused
+      else .stopped .refused
+  | _ => .stopped .refused
+
 /-- The meaning assumed for an installed operation. Constants take their value
 from the operation's single canonical decimal parameter. A numerical row takes
 the operand mask as its last static argument and the expression as its single
-parameter; `characteristic` is its field's. -/
+parameter; `characteristic` is its field's. A custody row takes its slot as its
+one static argument. -/
 inductive Kernel where
   | indicesEmpty
   | indicesAppend
@@ -80,6 +120,7 @@ inductive Kernel where
   | fieldConstant (domain : String)
   | compute (operation : Computation)
   | numerical (reduction : Numerical.Reduction) (domain : String) (characteristic : Nat)
+  | custody (transfer : CustodyTransfer)
   deriving DecidableEq, Repr
 
 /-- One installed operation: a binding's contract, logical arguments,
@@ -92,10 +133,12 @@ structure Installed where
   physicalArguments : List PhysicalType
   deriving DecidableEq, Repr
 
-/-- Installed operations and the representations admitted for value sorts. -/
+/-- Installed operations, the representations admitted for value sorts, and the
+representations admitted for the custody sort of every valid slot. -/
 structure Vocabulary where
   operations : List Installed
   representations : List (ValueSort × String)
+  custodyRepresentations : List String := []
   deriving DecidableEq, Repr
 
 /-- An operation with its meaning, its decoded occurrence template and its
@@ -107,6 +150,7 @@ inductive Resolved where
   | challenge (suite field : String) (template : Template)
   | calculate (calculation : Calculation)
   | compute (operation : Computation)
+  | custody (transfer : CustodyTransfer) (slot : String)
   deriving DecidableEq, Repr
 
 /-- The value of a canonical decimal spelling: one or more digits, without a
@@ -122,6 +166,10 @@ a numerical row, its own followed by the operand mask. -/
 def Installed.takes (row : Installed) (arguments : List String) : Bool :=
   match row.kernel with
   | .numerical _ _ _ => arguments.length == row.arguments.length + 1 && arguments.dropLast == row.arguments
+  | .custody _ =>
+    match arguments with
+    | [slot] => Source.LogicalFormat.slotIdentityValid slot
+    | _ => false
   | _ => arguments == row.arguments
 
 def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option Installed :=
@@ -131,8 +179,8 @@ def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option
 
 /-- Resolve a binding and its parameters: transcript operations carry exactly
 one occurrence, constants exactly one canonical decimal below `2 ^ 64`, a
-numerical call exactly one expression that `Numerical.decode` admits for its
-mask (`Numerical.mask?`), and other operations none. -/
+numerical call exactly one plan that `Numerical.decode` admits for its mask
+(`Numerical.mask?`), and other operations none. -/
 def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
     (parameters : List Parameter) : Option Resolved :=
   match vocabulary.installed? binding with
@@ -151,8 +199,9 @@ def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
       | .compute operation, [] => some (.compute operation)
       | .numerical reduction domain characteristic, [.text body] =>
           (binding.arguments.getLast? >>= Numerical.mask?).bind fun mask =>
-            (Numerical.decode domain characteristic mask.length body).toOption.map fun expression =>
+            (Numerical.decode domain characteristic mask body).toOption.map fun expression =>
               .compute (.numerical reduction domain mask expression)
+      | .custody transfer, [] => binding.arguments.head?.map (.custody transfer ·)
       | _, _ => none
   | none => none
 
@@ -186,10 +235,16 @@ def magic : List UInt8 := [0x5a, 0x4b, 0x43, 0x50, 0x52, 0x46, 0x30, 0x30]
 
 /-! ## Machine state and results -/
 
+/-- A frame: the participant's, a local call's, a loop iteration's, or the
+selected arm of a participant branch, named by its site and alternative. The
+branch frame is the runner's runtime occurrence step `["branch", site,
+alternative]`; it is distinct from the four-field occurrence-template step
+`["branch", protocol, site, alternative]` (`Zkc.Construction.Step.branch`). -/
 inductive FrameId where
   | participant
   | call (site function : String)
   | loop (site : String) (iteration : Nat)
+  | branch (site alternative : String)
   deriving DecidableEq, Repr
 
 inductive Exit where
@@ -217,6 +272,11 @@ inductive Cause where
   | kernel (reason : PIR.Stop)
   /-- An explicit stop instruction with this reason. -/
   | explicit (reason : PIR.Stop)
+  /-- The run reached an instruction this meaning does not interpret: one kept
+  as unsupported by the reader, or a participant match, whose variant selector
+  the executable value model does not carry. This is an explicit refusal of the
+  profile, not a failure of the program. -/
+  | unsupported (instruction : String)
   deriving DecidableEq, Repr
 
 /-- The reason an explicit stop names. -/
@@ -370,6 +430,7 @@ def Computation.apply : Computation → List (Value F G) → PIR.Outcome (List (
       if first = domain ∧ second = domain then .returned [.vector domain (xs.map (· * scalar))]
       else .stopped .refused
   | .require, [.data (.boolean true)] => .returned []
+  | .booleanNot, [.data (.boolean value)] => .returned [.data (.boolean !value)]
   | .numerical reduction domain mask expression, .index rows :: operands =>
       match Numerical.slots domain rows mask operands with
       | some slots =>
@@ -413,6 +474,10 @@ def Resolved.apply (context : Context) (challenge : History F G → m F) (live :
         | .stopped reason => .stopped reason)
   | .compute operation, arguments =>
       pure (match operation.apply arguments with
+        | .returned results => .returned (results, live, 0)
+        | .stopped reason => .stopped reason)
+  | .custody transfer slot, arguments =>
+      pure (match transfer.erased slot arguments with
         | .returned results => .returned (results, live, 0)
         | .stopped reason => .stopped reason)
   | _, _ => pure (.stopped .refused)
@@ -521,7 +586,8 @@ def localStep (call : String × String) (top : Bool) (region : Option String) :
         | some results => exit results s.charge
         | none => pure (s.charge.stop .contract place (some call))
       else pure (s.stop .limit place (some call))
-  | .unsupported _, _, s, _, _ => pure (s.stop .contract (if top then some call.1 else region) (some call))
+  | .unsupported name, _, s, _, _ =>
+      pure (s.stop (.unsupported name) (if top then some call.1 else region) (some call))
 end
 
 /-! ## Local bodies without transcript operations
@@ -561,6 +627,7 @@ def Resolved.evaluate : Resolved → List (Value F G) → PIR.Outcome (List (Val
   | .indicesAppend, [.indices coordinates, .index index] => .returned [.indices (coordinates ++ [index])]
   | .calculate calculation, arguments => Zkc.Construction.calculate calculation arguments
   | .compute operation, arguments => operation.apply arguments
+  | .custody transfer slot, arguments => transfer.erased slot arguments
   | _, _ => .stopped .refused
 
 /-- Iterate a region without a transcript. -/
@@ -635,7 +702,7 @@ def evalStep : Step → Env F G → Stepped F G
       match lookupAll env values with
       | some results => .done (.values results 1)
       | none => .done (.stopped .contract 1)
-  | .unsupported _, _ => .done (.stopped .contract 0)
+  | .unsupported name, _ => .done (.stopped (.unsupported name) 0)
 end
 
 /-- What a call to a local function without transcript operations hands back
@@ -671,9 +738,23 @@ def loopK (run : State F G → (List (Value F G) → State F G → m (Run F G)) 
             else pure (s'.stop .contract (some site) none)
         | [] => pure (s'.stop .contract (some site) none)
 
+/-- Run the selected arm of a participant branch in a frame of its own that
+holds its bindings; what the arm yields leaves that frame and is handed to
+`done`. -/
+def armK (run : State F G → (List (Value F G) → State F G → m (Run F G)) → m (Run F G))
+    (site alternative : String) (bindings : Env F G) (s : State F G)
+    (done : List (Value F G) → State F G → m (Run F G)) : m (Run F G) :=
+  run { s with
+        frames := ⟨.branch site alternative, bindings⟩ :: s.frames
+        events := s.events ++ [.enter (.branch site alternative)] } fun yielded s' =>
+    match s'.frames with
+    | _ :: below =>
+        done yielded { s' with frames := below, events := s'.events ++ [.leave (.branch site alternative) .returned] }
+    | [] => pure (s'.stop .contract (some site) none)
+
 mutual
-/-- Run participant instructions. `exit` receives the values a loop body
-yields. -/
+/-- Run participant instructions. `exit` receives the values a loop body or an
+arm yields. -/
 def runK : List Action → State F G →
     (List (Value F G) → State F G → m (Run F G)) → m (Run F G)
   | [], s, _ => pure (s.stop .contract none none)
@@ -733,17 +814,39 @@ def runStep : Action → State F G → (State F G → m (Run F G)) →
       match s.frames with
       | frame :: _ =>
           match List.lookup count frame.env, lookupAll frame.env (carried.map (·.2)),
-              lookupAll frame.env captures with
+              lookupAll frame.env (captures.map (·.parent)) with
           | some (.index bound), some initial, some captured =>
               if bound ≤ maximum then
                 if s.used < budget then
                   loopK (fun s' exit => runK body s' exit) site induction (carried.map (·.1))
-                    (captures.zip captured) (List.range bound) initial s.charge
+                    ((captures.map (·.formal)).zip captured) (List.range bound) initial s.charge
                     fun final s' => next (s'.bind outputs final)
                 else pure (s.stop .limit (some site) none)
               else pure (s.stop .contract (some site) none)
           | _, _, _ => pure (s.stop .contract (some site) none)
       | [] => pure (s.stop .contract (some site) none)
+  | .cond site condition captures yes no outputs, s, next, _ =>
+      match s.frames with
+      | frame :: _ =>
+          match List.lookup condition frame.env, lookupAll frame.env (captures.map (·.parent)) with
+          | some (.data (.boolean true)), some captured =>
+              if s.used < budget then
+                armK (fun s' exit => runK yes s' exit) site "then" ((captures.map (·.formal)).zip captured)
+                  s.charge fun results s' =>
+                    if outputs.length = results.length then next (s'.bind outputs results)
+                    else pure (s'.stop .contract (some site) none)
+              else pure (s.stop .limit (some site) none)
+          | some (.data (.boolean false)), some captured =>
+              if s.used < budget then
+                armK (fun s' exit => runK no s' exit) site "else" ((captures.map (·.formal)).zip captured)
+                  s.charge fun results s' =>
+                    if outputs.length = results.length then next (s'.bind outputs results)
+                    else pure (s'.stop .contract (some site) none)
+              else pure (s.stop .limit (some site) none)
+          | _, _ => pure (s.stop .contract (some site) none)
+      | [] => pure (s.stop .contract (some site) none)
+  -- The value model carries no variant values: a match is outside the profile.
+  | .select site _ _ _ _, s, _, _ => pure (s.stop (.unsupported "participant-match") (some site) none)
   | .yield values, s, _, exit =>
       if s.used < budget then
         match s.frames with
@@ -764,7 +867,7 @@ def runStep : Action → State F G → (State F G → m (Run F G)) →
             | none => pure (s.charge.stop .contract none none)
         | _ => pure (s.charge.stop .contract none none)
       else pure (s.stop .limit none none)
-  | .unsupported _, s, _, _ => pure (s.stop .contract none none)
+  | .unsupported name, s, _, _ => pure (s.stop (.unsupported name) none none)
 end
 
 /-- Entry inputs: the data inputs, at their declared sorts, followed by the
@@ -824,5 +927,6 @@ run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.localK
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.localStep
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.loopK
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.armK
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.runK
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.runStep

@@ -58,12 +58,12 @@ def rounds (ctx : ProtocolContext) (handle count : Nat) (point : List F) (claim 
   else .halt .refused
 
 theorem rounds_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
-    (handle count : Nat) (point : List F) (claim : F) :
-    (Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := F) (G := G) ctx (some point)
+    (handle count : Nat) (custody : CustodyToken) (point : List F) (claim : F) :
+    (Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := F) (G := G) ctx (some custody) (some point)
       (some claim) (some count) (some handle)).interpret CommonAdapter.project =
       (rounds ctx handle count point claim).bind fun result => .done (GkrRoundsReading.roundsResults result) := by
   by_cases bounded : count ≤ 4
-  · rw [GkrRoundsReading.reads ctx separate handle count bounded point claim]
+  · rw [GkrRoundsReading.reads ctx separate handle count bounded custody point claim]
     simp only [rounds, bounded, ite_true]
     have prefixed := GkrRoundsReading.repeat_prefix (G := G) ctx handle count point ([], claim)
     simp only [List.append_nil] at prefixed
@@ -104,16 +104,17 @@ theorem coefficients_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ 
 
 def afterCoefficients (ctx : ProtocolContext) (index handle selector : Nat)
     (add mul : List F)
-    (current combined : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])
+    (current : Values (assignment F G) GkrSourceBodies.helper12Helper.outputs)
+    (combined : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])
     (split : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
     (first : F) (line : List F) : PIR.Process (Actions F G) (List F × F) :=
   (helper GkrSourceBodies.sumHelper (.cons line .nil)).bind fun total =>
   (helper GkrSourceBodies.selectBlockHelper (.cons add (.cons index (.cons selector .nil)))).bind fun addBlock =>
   (helper GkrSourceBodies.evaluateWiringHelper (.cons (addBlock.get .here)
-    (.cons (current.get .here) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun addValue =>
+    (.cons (current.get (.there (.there (.there .here)))) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun addValue =>
   (helper GkrSourceBodies.selectBlockHelper (.cons mul (.cons index (.cons selector .nil)))).bind fun mulBlock =>
   (helper GkrSourceBodies.evaluateWiringHelper (.cons (mulBlock.get .here)
-    (.cons (current.get .here) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun mulValue =>
+    (.cons (current.get (.there (.there (.there .here)))) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun mulValue =>
   if combined.get (.there .here) = (addValue.get .here) * (first + total.get .here) +
       (mulValue.get .here) * first * total.get .here then
     .call (.query (GkrVerifier.lineChallengeSite ctx) "bls12-381.fr" (.cons handle .nil)) fun challenge =>
@@ -122,20 +123,21 @@ def afterCoefficients (ctx : ProtocolContext) (index handle selector : Nat)
     (helper GkrSourceBodies.linePointHelper (.cons (split.get .here)
       (.cons (split.get (.there .here)) (.cons challenge .nil)))).bind fun next =>
     (helper GkrSourceBodies.evaluateCoefficientsHelper (.cons line (.cons challenge .nil))).bind fun value =>
-    (helper GkrSourceBodies.sourceHelper19Helper (.cons (next.get .here)
-      (.cons (value.get .here) .nil))).bind fun packed =>
-    .done (packed.get .here, packed.get (.there .here))
+    (helper GkrSourceBodies.helper37Helper (.cons (current.get .here)
+      (.cons (current.get (.there .here)) (.cons (current.get (.there (.there .here)))
+        (.cons (next.get .here) (.cons (value.get .here) .nil)))))).bind fun packed =>
+    .done (packed.get (.there .here), packed.get (.there (.there .here)))
   else .halt .reject
 
 def layer (ctx : ProtocolContext) (index handle selector width : Nat)
     (add mul point : List F) (claim : F) : PIR.Process (Actions F G) (List F × F) :=
-  (helper GkrSourceBodies.sourceHelper20Helper (.cons point (.cons claim .nil))).bind fun current =>
-  (helper GkrSourceBodies.sourceHelper37Helper (.cons (current.get (.there .here)) .nil)).bind fun pending =>
-  (rounds (GkrVerifier.leftContext ctx) handle width (pending.get .here)
-    (pending.get (.there .here))).bind fun left =>
+  (helper GkrSourceBodies.helper12Helper (.cons 0 (.cons point (.cons claim .nil)))).bind fun current =>
+  (helper GkrSourceBodies.helper20Helper (.cons (current.get (.there (.there (.there (.there .here))))) .nil)).bind fun pending =>
+  (rounds (GkrVerifier.leftContext ctx) handle width (pending.get (.there .here))
+    (pending.get (.there (.there .here)))).bind fun left =>
   (rounds (GkrVerifier.rightContext ctx) handle width left.1 left.2).bind fun right =>
-  (helper GkrSourceBodies.sourceHelper40Helper (.cons right.1 (.cons right.2 .nil))).bind fun combined =>
-  (helper GkrSourceBodies.sourceHelper50Helper (.cons (combined.get .here) .nil)).bind fun split =>
+  (helper GkrSourceBodies.helper22Helper (.cons 0 (.cons right.1 (.cons right.2 .nil)))).bind fun combined =>
+  (helper GkrSourceBodies.helper27Helper (.cons (combined.get .here) .nil)).bind fun split =>
   .call (.receive (.field "bls12-381.fr") (GkrVerifier.lineConstantSite ctx) (ctx.roles 0)) fun first =>
   (coefficients ctx width [first]).bind fun line =>
   afterCoefficients ctx index handle selector add mul current combined split first line
@@ -143,9 +145,9 @@ def layer (ctx : ProtocolContext) (index handle selector width : Nat)
 theorem layer_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (index handle selector width : Nat) (add mul point : List F) (claim : F) :
     (Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
-      (some selector) (some width) (some handle) (some point) (some claim)).interpret CommonAdapter.project =
+      (some selector) (some width) (some handle) (some 0) (some point) (some claim)).interpret CommonAdapter.project =
       (layer ctx index handle selector width add mul point claim).bind fun result =>
-        .done (some result.1, some result.2) := by
+        .done (some 0, some result.1, some result.2) := by
   have leftSeparate : (GkrVerifier.leftContext ctx).roles 0 ≠
       (GkrVerifier.leftContext ctx).roles 1 := by
     simpa [GkrVerifier.leftContext, ProtocolContext.enter, roleSubstitution] using separate
@@ -172,9 +174,9 @@ theorem layer_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.rol
   have coefficient := coefficients_source (F := F) (G := G) ctx separate width [first]
   have continued := congrArg (fun process => process.bind fun maybe =>
     match maybe with
-    | none => (.halt .incomplete : PIR.Process (Actions F G) (Option (List F) × Option F))
+    | none => (.halt .incomplete : PIR.Process (Actions F G) (Option CustodyToken × Option (List F) × Option F))
     | some line => (afterCoefficients ctx index handle selector add mul current combined split first line).bind
-        fun next => .done (some next.1, some next.2)) coefficient
+        fun next => .done (some 0, some next.1, some next.2)) coefficient
   convert continued using 1 <;>
     simp only [PIR.Process.interpret_bind, PIR.Process.bind_assoc, PIR.Process.bind,
       PIR.Process.interpret, CommonAdapter.project, scalarDomain, afterCoefficients, helper,
@@ -186,7 +188,8 @@ theorem layer_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.rol
       CommonAdapter.project, scalarDomain]
   repeat' (apply congrArg (PIR.Process.bind _); funext result)
   split <;> simp only [PIR.Process.interpret, PIR.Process.interpret_bind, PIR.Process.bind,
-    CommonAdapter.project, scalarDomain]
+    CommonAdapter.project, scalarDomain, GkrLayerReading.refresh_plain, Values.get_cons]
+  all_goals rfl
 
 
 theorem finite_reads {I J : PIR.Signature} {Item S T : Type}
@@ -241,23 +244,23 @@ def layers (ctx : ProtocolContext) (handle selector width count : Nat)
 theorem layers_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (handle selector width count : Nat) (inputs add mul point : List F) (claim : F) :
     (denoteRepeat Generated.Presentations.Gkr.Root.layerSpec ctx (ctx.roles 1) (some count)
-      (Generated.Presentations.Gkr.Root.verifierLayerState (some point) (some claim))
+      (Generated.Presentations.Gkr.Root.verifierLayerState (some 0) (some point) (some claim))
       (.cons (some inputs) (.cons (some add) (.cons (some mul) (.cons (some count)
         (.cons (some selector) (.cons (some width) (.cons (some handle) .nil)))))))
       (Generated.Presentations.Gkr.Root.layerFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
       (layers ctx handle selector width count add mul (point, claim)).bind fun result =>
-        .done (Generated.Presentations.Gkr.Root.verifierLayerState (some result.1) (some result.2)) := by
+        .done (Generated.Presentations.Gkr.Root.verifierLayerState (some 0) (some result.1) (some result.2)) := by
   by_cases bounded : count ≤ 4
   · rw [Generated.Presentations.Gkr.Root.verifierLayer_fold ctx (.ofSeparate separate (by decide)) (some inputs) (some add) (some mul)
-      (some count) (some selector) (some width) (some handle) count bounded _ (some point, some claim)
-      (Generated.Presentations.Gkr.Root.verifierLayerState_masked ctx _ rfl (some point) (some claim))]
+      (some count) (some selector) (some width) (some handle) count bounded _ (some 0, some point, some claim)
+      (Generated.Presentations.Gkr.Root.verifierLayerState_masked ctx _ rfl (some 0) (some point) (some claim))]
     simp only [PIR.Process.interpret_bind]
     have foldLaw := finite_reads CommonAdapter.project
-      (fun (state : Option (List F) × Option F) index =>
+      (fun (state : Option CustodyToken × Option (List F) × Option F) index =>
         Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
-          (some selector) (some width) (some handle) state.1 state.2)
+          (some selector) (some width) (some handle) state.1 state.2.1 state.2.2)
       (fun (state : List F × F) index => layer ctx index handle selector width add mul state.1 state.2)
-      (fun (state : List F × F) => (some state.1, some state.2))
+      (fun (state : List F × F) => (some 0, some state.1, some state.2))
       (fun state index => layer_source ctx separate index handle selector width add mul state.1 state.2)
       (List.range' 0 count) (point, claim)
     rw [foldLaw]
@@ -274,28 +277,28 @@ def verifier (inputs outputs add mul : List F) (count selector width handle : Na
   if wide.get .here = false then
   (helper PrimitiveShapeViews.lessHelper (.cons 4 (.cons count .nil))).bind fun deep =>
   if deep.get .here = false then
-  (helper GkrSourceBodies.helper4Helper (.cons inputs (.cons width (.cons 1 .nil)))).bind fun initialShape =>
+  (helper GkrSourceBodies.helper2Helper (.cons inputs (.cons width (.cons 1 .nil)))).bind fun initialShape =>
   if initialShape.get .here = true then
-  (helper GkrSourceBodies.helper4Helper (.cons outputs (.cons width (.cons 1 .nil)))).bind fun outputShape =>
+  (helper GkrSourceBodies.helper2Helper (.cons outputs (.cons width (.cons 1 .nil)))).bind fun outputShape =>
   if outputShape.get .here = true then
-  (helper GkrSourceBodies.sourceHelper4Helper (.cons selector (.cons width .nil))).bind fun a1 =>
-  (helper GkrSourceBodies.sourceHelper4Helper (.cons (a1.get .here) (.cons width .nil))).bind fun a2 =>
-  (helper GkrSourceBodies.sourceHelper4Helper (.cons (a2.get .here) (.cons width .nil))).bind fun a3 =>
-  (helper GkrSourceBodies.helper4Helper (.cons add (.cons (a3.get .here) (.cons 1 .nil)))).bind fun addShape =>
+  (helper GkrSourceBodies.helper3Helper (.cons selector (.cons width .nil))).bind fun a1 =>
+  (helper GkrSourceBodies.helper3Helper (.cons (a1.get .here) (.cons width .nil))).bind fun a2 =>
+  (helper GkrSourceBodies.helper3Helper (.cons (a2.get .here) (.cons width .nil))).bind fun a3 =>
+  (helper GkrSourceBodies.helper2Helper (.cons add (.cons (a3.get .here) (.cons 1 .nil)))).bind fun addShape =>
   if addShape.get .here = true then
-  (helper GkrSourceBodies.sourceHelper4Helper (.cons selector (.cons width .nil))).bind fun m1 =>
-  (helper GkrSourceBodies.sourceHelper4Helper (.cons (m1.get .here) (.cons width .nil))).bind fun m2 =>
-  (helper GkrSourceBodies.sourceHelper4Helper (.cons (m2.get .here) (.cons width .nil))).bind fun m3 =>
-  (helper GkrSourceBodies.helper4Helper (.cons mul (.cons (m3.get .here) (.cons 1 .nil)))).bind fun mulShape =>
+  (helper GkrSourceBodies.helper3Helper (.cons selector (.cons width .nil))).bind fun m1 =>
+  (helper GkrSourceBodies.helper3Helper (.cons (m1.get .here) (.cons width .nil))).bind fun m2 =>
+  (helper GkrSourceBodies.helper3Helper (.cons (m2.get .here) (.cons width .nil))).bind fun m3 =>
+  (helper GkrSourceBodies.helper2Helper (.cons mul (.cons (m3.get .here) (.cons 1 .nil)))).bind fun mulShape =>
   if mulShape.get .here = true then
-  (helper GkrSourceBodies.helper18Helper (.cons selector .nil)).bind fun power =>
+  (helper GkrSourceBodies.helper4Helper (.cons selector .nil)).bind fun power =>
   (helper PrimitiveShapeViews.lessHelper (.cons (power.get .here) (.cons count .nil))).bind fun capacity =>
   if capacity.get .here = false then
   (output {} handle width []).bind fun point =>
   (helper GkrSourceBodies.evaluateHelper (.cons outputs (.cons point .nil))).bind fun initial =>
-  (helper GkrSourceBodies.sourceHelper19Helper (.cons point (.cons (initial.get .here) .nil))).bind fun packed =>
-  (layers {} handle selector width count add mul (packed.get .here, packed.get (.there .here))).bind fun state =>
-  (helper GkrSourceBodies.sourceHelper84Helper (.cons inputs (.cons state.1 (.cons state.2 .nil)))).bind fun final =>
+  (helper GkrSourceBodies.helper11Helper (.cons point (.cons (initial.get .here) .nil))).bind fun packed =>
+  (layers {} handle selector width count add mul (packed.get (.there .here), packed.get (.there (.there .here)))).bind fun state =>
+  (helper GkrSourceBodies.helper54Helper (.cons inputs (.cons 0 (.cons state.1 (.cons state.2 .nil))))).bind fun final =>
   .done (final.get .here)
   else .halt .reject
   else .halt .reject
@@ -338,7 +341,7 @@ theorem source_equation (inputs outputs add mul : List F) (count selector width 
     PIR.Process.bind_assoc, PIR.Process.bind, Values.get, PIR.Process.interpret_bind,
     PIR.Process.bind_ite, interpret_branch, false_guard, Values.get_cons,
     TypedABI.get_cons_here, TypedABI.get_cons_there,
-    GkrRoundsReading.empty_plain, output_source {} (by decide),
+    GkrRoundsReading.empty_plain, GkrLayerReading.tuple19_plain, output_source {} (by decide),
     layers_source {} (by decide), Generated.Presentations.Gkr.Root.verifierOutputState,
     Generated.Presentations.Gkr.Root.verifierLayerState, Generated.Presentations.Gkr.Input.verifierProcess,
     PIR.Process.interpret, CommonAdapter.project, scalarDomain, verifier, helper]
@@ -346,7 +349,7 @@ theorem source_equation (inputs outputs add mul : List F) (count selector width 
     | (fail_if_no_progress (simp only [PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret_bind,
         PIR.Process.bind_ite, interpret_branch, false_guard, Values.get_cons,
         TypedABI.get_cons_here, TypedABI.get_cons_there,
-        output_source {} (by decide), layers_source {} (by decide),
+        GkrLayerReading.tuple19_plain, output_source {} (by decide), layers_source {} (by decide),
         Generated.Presentations.Gkr.Root.verifierOutputState, Generated.Presentations.Gkr.Root.verifierLayerState]))
     | (apply congrArg (PIR.Process.bind _); funext result)
     | (apply branch_congr)

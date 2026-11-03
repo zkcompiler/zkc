@@ -8,7 +8,7 @@ use std::{
 };
 
 #[derive(Clone, Debug)]
-pub struct InputSource(Source);
+pub struct InputSource(Source, Option<Arc<str>>);
 #[derive(Clone, Debug)]
 enum Source {
     Bytes(Arc<Vec<u8>>),
@@ -18,7 +18,17 @@ enum Source {
 impl InputSource {
     /// Retain immutable bytes without importing or granting setup authority.
     pub fn from_bytes(bytes: Arc<Vec<u8>>) -> Self {
-        Self(Source::Bytes(bytes))
+        Self(Source::Bytes(bytes), None)
+    }
+    /// Bytes an application supplied under a name. A setup import from this
+    /// source records the name, so that replacing these bytes invalidates
+    /// exactly the setup pins the source fed.
+    pub fn named(name: &str, bytes: Arc<Vec<u8>>) -> Self {
+        Self(Source::Bytes(bytes), Some(name.into()))
+    }
+    /// The application name of these bytes, if they were supplied by name.
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.1.as_deref()
     }
     pub(crate) fn same_source(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
@@ -38,7 +48,7 @@ impl InputSource {
         {
             return Err("entry-input-reference".into());
         }
-        Ok(Self(Source::File(Arc::new(Mutex::new(file)))))
+        Ok(Self(Source::File(Arc::new(Mutex::new(file))), None))
     }
     pub(crate) fn read_shared(
         &self,
@@ -55,7 +65,7 @@ impl InputSource {
                     .checked_mul(2)
                     .and_then(|n| n.checked_add(512))
                     .ok_or("artifact-input-work-limit")?;
-                let retained = zkc_runtime::host::wire::reserve_allocation(Some(ledger), bound)?;
+                let retained = super::admission::reserve_input(Some(ledger), bound as u64, bound)?;
                 let mut captured = Vec::new();
                 captured
                     .try_reserve_exact(bytes.len())

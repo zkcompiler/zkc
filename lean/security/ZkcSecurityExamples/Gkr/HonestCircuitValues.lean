@@ -140,7 +140,7 @@ theorem values_below {width : Nat} (add mul inputValues : List F) (layers select
     (capacity : layers ≤ 2 ^ selector)
     (small : width + width + width + selector < 64)
     (layersBound : layers < indexLimit) (inside : layerIndex < layers) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper65Helper
       (Goals.Traversal.Inputs.pack (Value := assignment F G)
         { addWeights := add, mulWeights := mul, inputValues, layers, selector, width, layerIndex }) =
       .done (Goals.Traversal.encode (ringModel F G)

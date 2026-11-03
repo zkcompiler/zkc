@@ -3,8 +3,10 @@
 #include "APIRecords.h"
 #include "LexicalRecords.h"
 #include "NotationRecords.h"
+#include "zkc/Language/DeclarationIndex.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Syntax/Syntax.h"
+#include <algorithm>
 #include <map>
 #include <set>
 namespace zkc::language::detail {
@@ -18,6 +20,8 @@ struct WrittenSources;
 struct ScopedSource;
 struct ScopedCallSource;
 struct ScopedInvocationSource;
+struct SourceCall;
+using IntrinsicCallSource = SourceCall;
 struct SourceBinding {
   DeclarationId target;
   Span span;
@@ -30,9 +34,28 @@ struct NameEnvironment {
   std::vector<std::map<std::string, SourceBinding>> visible;
 };
 struct AuthoringStorage;
+/// Defining source authorities, computed once after the last checking step.
+/// A unit is one captured file, named by its module path. Installation
+/// sources are not units: installed declarations enter through the
+/// installation identity.
+struct SourceAuthorities {
+  struct Unit {
+    std::string module;
+    SourceId source;
+    /// Direct dependency units, as sorted unique indices into `units`.
+    std::vector<unsigned> dependencies;
+    /// Lowercase SHA-256 hex over the unit's dependency closure.
+    std::string revision;
+  };
+  /// Sorted by module path.
+  std::vector<Unit> units;
+  /// The unit of each source, indexed by source; none for installation.
+  std::vector<std::optional<unsigned>> sources;
+  bool computed = false;
+};
 struct CheckedStorage {
-  explicit CheckedStorage(CapturedProject capture)
-      : capture(std::move(capture)) {}
+  CheckedStorage(CapturedProject capture, std::string installation)
+      : capture(std::move(capture)), installation(std::move(installation)) {}
   CapturedProject capture;
   std::vector<Asset> assets;
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
@@ -41,7 +64,8 @@ struct CheckedStorage {
   std::vector<std::optional<syntax::Snapshot>> layoutHeaders, layoutBodies;
   std::vector<Declaration> declarations;
   std::vector<PendingSpecification> pendingSpecifications;
-  std::string installation;
+  /// Fixed before declaration collection, including generated nominal families.
+  const std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   /// Written headers and parsed bodies, frozen before resolution/elaboration.
@@ -50,6 +74,7 @@ struct CheckedStorage {
   APIRecords api;
   std::vector<LexicalResolution> lexicalResolutions;
   std::shared_ptr<const NameEnvironment> names;
+  std::shared_ptr<const DeclarationIndex> declarationIndex;
   std::shared_ptr<const AuthoringStorage> authoring;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.
@@ -57,6 +82,9 @@ struct CheckedStorage {
   std::vector<std::shared_ptr<const ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<const ScopedCallSource>> scopedCalls;
   std::vector<std::shared_ptr<const ScopedInvocationSource>> scopedInvocations;
+  std::vector<std::shared_ptr<const IntrinsicCallSource>> intrinsicCalls;
+  std::map<uint32_t, std::shared_ptr<const ScopedSource>> bodySources;
+  SourceAuthorities authorities;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;
@@ -79,6 +107,16 @@ struct AuthoringStorage {
   std::vector<LexicalResolution> lexicalResolutions;
   APIRecords api;
   std::shared_ptr<const NameEnvironment> names;
+  std::shared_ptr<const DeclarationIndex> declarationIndex;
+};
+/// Internal immutable vector access; the project/Entry must outlive the borrow.
+struct DeclarationAccess {
+  static const std::vector<Declaration> &get(const CheckedProject &project) {
+    return project.storage->declarations;
+  }
+  static const std::vector<Declaration> &get(const ClosedEntry &entry) {
+    return entry.storage->declarations;
+  }
 };
 struct AnalysisStorage {
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
@@ -104,12 +142,33 @@ struct Work {
   uint64_t used = 0, tokens = 0, declarations = 0, operations = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   std::optional<source::Cancellation> cancellation = {};
+  /// Optional enclosing allowance, debited immediately by every nested charge.
+  uint64_t *allowance = nullptr;
+  uint64_t remaining() const {
+    auto local = limits.work - used;
+    return allowance ? std::min(local, *allowance) : local;
+  }
   llvm::Error charge(uint64_t amount = 1, std::optional<Span> span = {});
   llvm::Error count(uint64_t &counter, uint64_t limit, llvm::StringRef what,
                     std::optional<Span> span = {});
 };
 
+/// Bound all index setup before Semantics allocates names and parameter keys.
+llvm::Error chargeSemanticIndex(const std::vector<Declaration> &, Work &);
+
 llvm::Error closeAssets(const CheckedProject &, ClosedStorage &, Work &);
+
+/// Compute every unit revision once, after all checking and the scoped
+/// witness check. `assetDomains` maps each asset domain declaration to the
+/// index of the captured asset it names.
+llvm::Error computeSourceAuthorities(CheckedStorage &,
+                                     const std::map<uint32_t, unsigned> &,
+                                     Work &);
+/// The defining source authority of a declaration path: the defining unit's
+/// revision when authored, the installation identity when installed, and none
+/// only for a generated declaration.
+llvm::Expected<std::optional<std::string>>
+definingAuthority(const CheckedStorage &, llvm::StringRef path);
 
 } // namespace zkc::language::detail
 #endif

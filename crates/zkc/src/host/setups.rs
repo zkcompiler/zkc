@@ -47,11 +47,6 @@ impl VerifierKeys {
         }
         Ok(())
     }
-    pub(crate) fn retained_bytes(&self) -> usize {
-        self.keys.values().flatten().fold(0usize, |total, key| {
-            total.saturating_add(key.bytes.len().saturating_mul(16).saturating_add(4096))
-        })
-    }
     pub(crate) fn material(&self) -> Arc<std::sync::Mutex<zkc_cpu::material::VerifierMaterials>> {
         self.material.clone()
     }
@@ -76,16 +71,18 @@ impl VerifierKeys {
             // Output preflight may have imported before the invocation ledger was
             // installed. Charge its retained snapshot on the first ledger use.
             if !imported.charged && self.ledger.is_some() {
-                self.retained
-                    .extend(zkc_runtime::host::wire::reserve_allocation(
-                        self.ledger.as_ref(),
-                        bound,
-                    )?);
+                self.retained.extend(super::admission::reserve_input(
+                    self.ledger.as_ref(),
+                    bound as u64,
+                    bound,
+                )?);
                 imported.charged = true;
             }
             return Ok(imported.key.clone());
         }
-        let guard = zkc_runtime::host::wire::reserve_allocation(self.ledger.as_ref(), bound)?;
+        // Imported setup material is loaded input: a root that cannot hold its
+        // retained snapshot refuses with the loading allowance it exhausted.
+        let guard = super::admission::reserve_input(self.ledger.as_ref(), bound as u64, bound)?;
         self.retained.extend(guard);
         let key = self
             .material
@@ -266,9 +263,8 @@ mod reusable_tests {
         let keys = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
         let fingerprint = keys.prover_key().material_fingerprint();
         let verifier = Arc::new(keys.verifier_key().clone());
-        let source = crate::execution::InputSource::from_bytes(Arc::new(
-            keys.prover_key().to_bytes(&bounds).unwrap(),
-        ));
+        let bytes = keys.prover_key().to_bytes(&bounds).unwrap();
+        let source = crate::execution::InputSource::named("pk", Arc::new(bytes.clone()));
         let backend = CpuBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "session", "main", None), None),
@@ -306,9 +302,20 @@ mod reusable_tests {
                 if let Some(previous) = previous.as_ref() {
                     assert_eq!(Arc::ptr_eq(previous, key), budget != 0);
                 }
-                // Adapter replacement cannot release the current invocation's
-                // resources or mutate its already checked immutable key.
-                material.lock().unwrap().invalidate_provers();
+                // Replacing another named input keeps this pin's import.
+                material.lock().unwrap().invalidate_source("other");
+                if budget != 0 {
+                    let kept = material
+                        .lock()
+                        .unwrap()
+                        .import_prover(&bytes, fingerprint, &verifier, bounds)
+                        .unwrap();
+                    assert!(Arc::ptr_eq(key, &kept));
+                }
+                // Adapter replacement of the named source that fed this pin
+                // cannot release the current invocation's resources or mutate
+                // its already checked immutable key.
+                material.lock().unwrap().invalidate_source("pk");
                 assert_eq!(key.material_fingerprint(), fingerprint);
                 assert_eq!(
                     ledger.snapshot().live_reserved_bytes,

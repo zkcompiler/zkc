@@ -524,7 +524,7 @@ impl Backend for CpuBackend {
         self.core.resources.active(invocation.frame)?;
         if !matches!(
             invocation.frame.kind(),
-            FrameKind::Entry | FrameKind::Loop { .. }
+            FrameKind::Entry | FrameKind::Loop { .. } | FrameKind::Branch { .. }
         ) || !invocation.frame.services().contains(invocation.port)
             || self
                 .service_support(invocation.port.contract, invocation.method)

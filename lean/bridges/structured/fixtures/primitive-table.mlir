@@ -5,23 +5,23 @@
     "runtime.binding"() <{arguments = [], contract = "index.div", function_type = (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>, implementation = "", sym_name = "zkl_binding_4"}> : () -> ()
     "runtime.binding"() <{arguments = [], contract = "index.equal", function_type = (!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>, implementation = "", sym_name = "zkl_binding_3"}> : () -> ()
     "runtime.binding"() <{arguments = [], contract = "index.mod", function_type = (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>, implementation = "", sym_name = "zkl_binding_2"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>, implementation = "", sym_name = "zkl_binding_1"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>, implementation = "", sym_name = "zkl_binding_1"}> : () -> ()
     "runtime.binding"() <{arguments = [], contract = "index.constant", function_type = (!runtime.scope) -> !exec.outcome<(ui64)>, implementation = "", sym_name = "zkl_binding_0"}> : () -> ()
-    "protocol.func"() <{contracts = [], function_type = (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> (!algebra.field_vector<"bls12-381.fr">, ui64, ui64), input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], origin = ["primitive_examples::MakeTable", []], output_roles = [["role00000000"], ["role00000000"], ["role00000000"]], roles = ["role00000000"], sym_name = "s18h7072696d69746976655f6578616d706c65739h4d616b655461626c65"}> ({
-    ^bb0(%arg38: !algebra.field_vector<"bls12-381.fr">, %arg39: ui64, %arg40: ui64):
-      %188:3 = "protocol.local_call"(%arg38, %arg39, %arg40) <{callee = @zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a, role = "role00000000", site = "s0"}> : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> (!algebra.field_vector<"bls12-381.fr">, ui64, ui64)
-      "protocol.return"(%188#0, %188#1, %188#2) : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> ()
+    "protocol.func"() <{contracts = [], function_type = (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> (!data.field_vector<"bls12-381.fr">, ui64, ui64), input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], origin = ["primitive_examples::MakeTable", []], output_roles = [["role00000000"], ["role00000000"], ["role00000000"]], roles = ["role00000000"], sym_name = "s18h7072696d69746976655f6578616d706c65739h4d616b655461626c65"}> ({
+    ^bb0(%arg38: !data.field_vector<"bls12-381.fr">, %arg39: ui64, %arg40: ui64):
+      %188:3 = "protocol.local_call"(%arg38, %arg39, %arg40) <{callee = @zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a, role = "role00000000", site = "s0"}> : (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> (!data.field_vector<"bls12-381.fr">, ui64, ui64)
+      "protocol.return"(%188#0, %188#1, %188#2) : (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> ()
     }) : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", sym_visibility = "private"}> ({
-    ^bb0(%arg34: !runtime.scope, %arg35: !algebra.field_vector<"bls12-381.fr">, %arg36: ui64, %arg37: ui64):
-      %169 = "func.call"(%arg34, %arg35, %arg36, %arg37) <{callee = @zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655}> {runtime.site = "s0"} : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", sym_visibility = "private"}> ({
+    ^bb0(%arg34: !runtime.scope, %arg35: !data.field_vector<"bls12-381.fr">, %arg36: ui64, %arg37: ui64):
+      %169 = "func.call"(%arg34, %arg35, %arg36, %arg37) <{callee = @zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655}> {runtime.site = "s0"} : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>
       "exec.dispatch"(%169)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(i1)>) -> ()
     ^bb1(%170: i1):  // pred: ^bb0
       %171 = "exec.test"(%arg34, %170) <{site = "s1"}> : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "exec.dispatch"(%171)[^bb3, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(i1)>) -> ()
     ^bb2(%172: !exec.stop):  // 8 preds: ^bb0, ^bb1, ^bb4, ^bb5, ^bb7, ^bb8, ^bb10, ^bb11
-      %173 = "exec.failed"(%172) : (!exec.stop) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">, ui64, ui64)>
-      "func.return"(%173) : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
+      %173 = "exec.failed"(%172) : (!exec.stop) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
+      "func.return"(%173) : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
     ^bb3(%174: i1):  // pred: ^bb1
       "cf.cond_br"(%174)[^bb4, ^bb5] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
     ^bb4:  // pred: ^bb3
@@ -31,8 +31,8 @@
       %176 = "runtime.enter_scope"(%arg34) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 0>, selection = "else", site = "s1"}> : (!runtime.scope) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%176)[^bb10, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.scope)>) -> ()
     ^bb6:  // 2 preds: ^bb9, ^bb12
-      %177 = "exec.returned"(%arg35, %arg36, %arg37) : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">, ui64, ui64)>
-      "func.return"(%177) : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
+      %177 = "exec.returned"(%arg35, %arg36, %arg37) : (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
+      "func.return"(%177) : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
     ^bb7(%178: !runtime.scope):  // pred: ^bb4
       %179 = "func.call"(%178) <{callee = @zkl_control_0}> : (!runtime.scope) -> !exec.outcome<>
       %180 = "runtime.exit_scope"(%178, %179) : (!runtime.scope, !exec.outcome<>) -> !exec.outcome<(!runtime.transfer<>)>
@@ -65,8 +65,8 @@
       %167 = "exec.failed"(%166) : (!exec.stop) -> !exec.outcome<>
       "func.return"(%167) : (!exec.outcome<>) -> ()
     }) {runtime.region} : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", sym_visibility = "private"}> ({
-    ^bb0(%arg28: !runtime.scope, %arg29: !algebra.field_vector<"bls12-381.fr">, %arg30: ui64, %arg31: ui64):
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", sym_visibility = "private"}> ({
+    ^bb0(%arg28: !runtime.scope, %arg29: !data.field_vector<"bls12-381.fr">, %arg30: ui64, %arg31: ui64):
       %107 = "exec.apply"(%arg28) <{binding = @zkl_binding_0, parameters = [0 : ui64], site = "s0"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%107)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%108: ui64):  // pred: ^bb0
@@ -110,16 +110,16 @@
     ^bb14(%131: i1):  // pred: ^bb7
       "cf.cond_br"(%131)[^bb15, ^bb16] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
     ^bb15:  // pred: ^bb14
-      %132 = "runtime.enter_scope"(%arg28, %arg29, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 2>, selection = "then", site = "s11"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!runtime.scope)>
+      %132 = "runtime.enter_scope"(%arg28, %arg29, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 2>, selection = "then", site = "s11"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%132)[^bb18, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.scope)>) -> ()
     ^bb16:  // pred: ^bb14
-      %133 = "runtime.enter_scope"(%arg28, %arg29, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 2>, selection = "else", site = "s11"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!runtime.scope)>
+      %133 = "runtime.enter_scope"(%arg28, %arg29, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 2>, selection = "else", site = "s11"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%133)[^bb21, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.scope)>) -> ()
     ^bb17(%134: i1):  // 2 preds: ^bb20, ^bb23
       %135 = "exec.test"(%arg28, %134) <{site = "s22"}> : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "exec.dispatch"(%135)[^bb24, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(i1)>) -> ()
     ^bb18(%136: !runtime.scope):  // pred: ^bb15
-      %137 = "func.call"(%136, %arg29, %arg31) <{callee = @zkl_control_4}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>
+      %137 = "func.call"(%136, %arg29, %arg31) <{callee = @zkl_control_4}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>
       %138 = "runtime.exit_scope"(%136, %137) : (!runtime.scope, !exec.outcome<(i1)>) -> !exec.outcome<(!runtime.transfer<(i1)>)>
       "exec.dispatch"(%138)[^bb19, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.transfer<(i1)>)>) -> ()
     ^bb19(%139: !runtime.transfer<(i1)>):  // pred: ^bb18
@@ -128,7 +128,7 @@
     ^bb20(%141: i1):  // pred: ^bb19
       "cf.br"(%141)[^bb17] : (i1) -> ()
     ^bb21(%142: !runtime.scope):  // pred: ^bb16
-      %143 = "func.call"(%142, %arg29, %arg31) <{callee = @zkl_control_5}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>
+      %143 = "func.call"(%142, %arg29, %arg31) <{callee = @zkl_control_5}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>
       %144 = "runtime.exit_scope"(%142, %143) : (!runtime.scope, !exec.outcome<(i1)>) -> !exec.outcome<(!runtime.transfer<(i1)>)>
       "exec.dispatch"(%144)[^bb22, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.transfer<(i1)>)>) -> ()
     ^bb22(%145: !runtime.transfer<(i1)>):  // pred: ^bb21
@@ -139,16 +139,16 @@
     ^bb24(%148: i1):  // pred: ^bb17
       "cf.cond_br"(%148)[^bb25, ^bb26] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
     ^bb25:  // pred: ^bb24
-      %149 = "runtime.enter_scope"(%arg28, %arg29, %arg30, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 3>, selection = "then", site = "s22"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!runtime.scope)>
+      %149 = "runtime.enter_scope"(%arg28, %arg29, %arg30, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 3>, selection = "then", site = "s22"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%149)[^bb28, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.scope)>) -> ()
     ^bb26:  // pred: ^bb24
-      %150 = "runtime.enter_scope"(%arg28, %arg29, %arg30, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 3>, selection = "else", site = "s22"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!runtime.scope)>
+      %150 = "runtime.enter_scope"(%arg28, %arg29, %arg30, %arg31) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 3>, selection = "else", site = "s22"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%150)[^bb31, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.scope)>) -> ()
     ^bb27(%151: i1):  // 2 preds: ^bb30, ^bb33
       %152 = "exec.returned"(%151) : (i1) -> !exec.outcome<(i1)>
       "func.return"(%152) : (!exec.outcome<(i1)>) -> ()
     ^bb28(%153: !runtime.scope):  // pred: ^bb25
-      %154 = "func.call"(%153, %arg29, %arg30, %arg31) <{callee = @zkl_control_6}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>
+      %154 = "func.call"(%153, %arg29, %arg30, %arg31) <{callee = @zkl_control_6}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>
       %155 = "runtime.exit_scope"(%153, %154) : (!runtime.scope, !exec.outcome<(i1)>) -> !exec.outcome<(!runtime.transfer<(i1)>)>
       "exec.dispatch"(%155)[^bb29, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.transfer<(i1)>)>) -> ()
     ^bb29(%156: !runtime.transfer<(i1)>):  // pred: ^bb28
@@ -157,7 +157,7 @@
     ^bb30(%158: i1):  // pred: ^bb29
       "cf.br"(%158)[^bb27] : (i1) -> ()
     ^bb31(%159: !runtime.scope):  // pred: ^bb26
-      %160 = "func.call"(%159, %arg29, %arg30, %arg31) <{callee = @zkl_control_7}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>
+      %160 = "func.call"(%159, %arg29, %arg30, %arg31) <{callee = @zkl_control_7}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>
       %161 = "runtime.exit_scope"(%159, %160) : (!runtime.scope, !exec.outcome<(i1)>) -> !exec.outcome<(!runtime.transfer<(i1)>)>
       "exec.dispatch"(%161)[^bb32, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!runtime.transfer<(i1)>)>) -> ()
     ^bb32(%162: !runtime.transfer<(i1)>):  // pred: ^bb31
@@ -191,9 +191,9 @@
       %99 = "exec.failed"(%98) : (!exec.stop) -> !exec.outcome<(i1)>
       "func.return"(%99) : (!exec.outcome<(i1)>) -> ()
     }) {runtime.region} : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_4", sym_visibility = "private"}> ({
-    ^bb0(%arg21: !runtime.scope, %arg22: !algebra.field_vector<"bls12-381.fr">, %arg23: ui64):
-      %84 = "exec.apply"(%arg21, %arg22) <{binding = @zkl_binding_1, parameters = [], site = "s12"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_4", sym_visibility = "private"}> ({
+    ^bb0(%arg21: !runtime.scope, %arg22: !data.field_vector<"bls12-381.fr">, %arg23: ui64):
+      %84 = "exec.apply"(%arg21, %arg22) <{binding = @zkl_binding_1, parameters = [], site = "s12"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%84)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%85: ui64):  // pred: ^bb0
       %86 = "exec.apply"(%arg21, %85, %arg23) <{binding = @zkl_binding_2, parameters = [], site = "s13"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>
@@ -211,8 +211,8 @@
       %94 = "exec.complete"(%arg21, %93) : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "func.return"(%94) : (!exec.outcome<(i1)>) -> ()
     }) {runtime.region} : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_5", sym_visibility = "private"}> ({
-    ^bb0(%arg18: !runtime.scope, %arg19: !algebra.field_vector<"bls12-381.fr">, %arg20: ui64):
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_5", sym_visibility = "private"}> ({
+    ^bb0(%arg18: !runtime.scope, %arg19: !data.field_vector<"bls12-381.fr">, %arg20: ui64):
       %79 = "exec.boolean"(%arg18) <{site = "s17", value = false}> : (!runtime.scope) -> !exec.outcome<(i1)>
       "exec.dispatch"(%79)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(i1)>) -> ()
     ^bb1(%80: i1):  // pred: ^bb0
@@ -222,9 +222,9 @@
       %83 = "exec.failed"(%82) : (!exec.stop) -> !exec.outcome<(i1)>
       "func.return"(%83) : (!exec.outcome<(i1)>) -> ()
     }) {runtime.region} : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_6", sym_visibility = "private"}> ({
-    ^bb0(%arg14: !runtime.scope, %arg15: !algebra.field_vector<"bls12-381.fr">, %arg16: ui64, %arg17: ui64):
-      %68 = "exec.apply"(%arg14, %arg15) <{binding = @zkl_binding_1, parameters = [], site = "s23"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_6", sym_visibility = "private"}> ({
+    ^bb0(%arg14: !runtime.scope, %arg15: !data.field_vector<"bls12-381.fr">, %arg16: ui64, %arg17: ui64):
+      %68 = "exec.apply"(%arg14, %arg15) <{binding = @zkl_binding_1, parameters = [], site = "s23"}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%68)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%69: ui64):  // pred: ^bb0
       %70 = "exec.apply"(%arg14, %69, %arg17) <{binding = @zkl_binding_4, parameters = [], site = "s24"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>
@@ -242,8 +242,8 @@
       %78 = "exec.complete"(%arg14, %77) : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "func.return"(%78) : (!exec.outcome<(i1)>) -> ()
     }) {runtime.region} : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_7", sym_visibility = "private"}> ({
-    ^bb0(%arg10: !runtime.scope, %arg11: !algebra.field_vector<"bls12-381.fr">, %arg12: ui64, %arg13: ui64):
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(i1)>, no_inline, sym_name = "zkl_control_7", sym_visibility = "private"}> ({
+    ^bb0(%arg10: !runtime.scope, %arg11: !data.field_vector<"bls12-381.fr">, %arg12: ui64, %arg13: ui64):
       %63 = "exec.boolean"(%arg10) <{site = "s28", value = false}> : (!runtime.scope) -> !exec.outcome<(i1)>
       "exec.dispatch"(%63)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(i1)>) -> ()
     ^bb1(%64: i1):  // pred: ^bb0

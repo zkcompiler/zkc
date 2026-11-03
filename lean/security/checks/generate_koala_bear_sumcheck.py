@@ -19,6 +19,8 @@ import time
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 SECURITY = REPOSITORY / "lean/security"
+sys.path.insert(0, str(REPOSITORY / "lean"))
+from bridges.common import source_format  # noqa: E402
 NAMESPACE = "ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated"
 MODULE = "ZkcSecurityExamples/Components/KoalaBearSumcheckGenerated"
 PRINTER_CACHE: Path | None = None
@@ -49,12 +51,13 @@ def run(command: list[str], cwd: Path, report: Path, *, env=None, expected=0) ->
     return result
 
 
-def generate(compiler: Path, fixture: Path, output: Path, report: Path) -> bool:
+def generate(compiler: Path, fixture: Path, output: Path, report: Path, *, selection: str) -> bool:
     report.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
-    emitted = run([str(compiler), "language-emit", "--source-format=zkc", "--subject=Root",
-                   "--module=mixed_sumcheck=" + str(fixture),
-                   "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")], REPOSITORY, report, expected=None)
+    emitted = run([str(compiler), "language-emit", *source_format.with_option([
+                   "--subject=Root", "--module=mixed_sumcheck=" + str(fixture),
+                   "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")], selection=selection)],
+                  REPOSITORY, report, expected=None)
     if emitted.returncode != 0:
         return False
     mlir = report / "source.mlir"
@@ -89,9 +92,9 @@ def lean_json(value) -> str:
 
 
 def export_components(compiler: Path, fixture: Path, output: Path, report: Path) -> bool:
-    result = run([str(compiler), "language-check", "--source-format=zkc", "--subject=Root",
-                  "--source-claims", "--module=mixed_sumcheck=" + str(fixture),
-                  "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")],
+    result = run([str(compiler), "language-check", *source_format.with_option([
+                  "--subject=Root", "--source-claims", "--module=mixed_sumcheck=" + str(fixture),
+                  "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")])],
                  REPOSITORY, report, expected=None)
     if result.returncode:
         return False
@@ -159,9 +162,9 @@ end ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Association
 
 def export_pair(compiler: Path, fixture: Path, output: Path, report: Path) -> None:
     """The frontend selects every draw and delivery from the authored proof."""
-    bundle = run([str(compiler), "language-bundle", "--source-format=zkc", "--entry-kind=proof",
-                  "--entry=mixed_sumcheck::Proof", "--module=mixed_sumcheck=" + str(fixture),
-                  "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")],
+    bundle = run([str(compiler), "language-bundle", *source_format.with_option([
+                  "--entry-kind=proof", "--entry=mixed_sumcheck::Proof", "--module=mixed_sumcheck=" + str(fixture),
+                  "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")])],
                  REPOSITORY, report)
     (report / "proof-bundle.json").write_text(bundle.stdout)
     policy = report / "policy.json"
@@ -257,7 +260,9 @@ def main() -> None:
     PRINTER_CACHE = args.printer_cache.resolve() if args.printer_cache else None
     compiler, output, report = args.compiler.resolve(), args.output_root.resolve(), args.report_dir.resolve()
     fixture = SECURITY / "fixtures/koala-bear-sumcheck-round.zkc"
-    if not generate(compiler, fixture, output, report):
+    # Mutations retain the declared grammar of the original fixture and its modules.
+    selection = source_format.of_sources([fixture, REPOSITORY / "libraries/core/primitives/collections/vector.zkc"])
+    if not generate(compiler, fixture, output, report, selection=selection):
         raise RuntimeError("generic generation refused the actual source")
     export_pair(compiler, fixture, output, report)
     components_exported = export_components(compiler, fixture, output, report)
@@ -281,7 +286,7 @@ def main() -> None:
             case.mkdir(parents=True, exist_ok=True)
             candidate = case / "fixture.zkc"
             candidate.write_text(changed)
-            generated = generate(compiler, candidate, case / "modules", case)
+            generated = generate(compiler, candidate, case / "modules", case, selection=selection)
             boundary = "native export or typed selection"
             if generated:
                 boundary = "actual exported body and installed law"

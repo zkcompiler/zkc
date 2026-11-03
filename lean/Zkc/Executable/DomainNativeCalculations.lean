@@ -45,7 +45,7 @@ variable {m : Type → Type} [Monad m]
 theorem helper_returns_embeds (program : Structured.Program) (name : String)
     (helper : Structured.Helper)
     (checked : (nativeHelperSignatures program).find? (fun found => found.name == name) = some helper)
-    (eligible : helper.outputs.all dataType = true)
+    (eligible : helper.outputs.all localType = true)
     (arguments results : List (Value F G))
     (returned : Construction.callHelper (Domain.helperTable (Structured.ringModel F G) program) name arguments =
       .returned results) :
@@ -67,8 +67,8 @@ theorem helper_returns_embeds (program : Structured.Program) (name : String)
       | returned values =>
         simp only [computed, PIR.Outcome.returned.injEq] at returned
         subst results
-        have outputsData : entry.helper.outputs.all dataType = true := by simpa [signature] using eligible
-        obtain ⟨nominal, embedded, sorted⟩ := encodeValues_embeds values outputsData
+        have outputsData : entry.helper.outputs.all localType = true := by simpa [signature] using eligible
+        obtain ⟨nominal, embedded, sorted⟩ := encodeValues_local_embeds values outputsData
         exact ⟨nominal, embedded, by simpa [signature] using sorted⟩
 
 /-- Exact CPS calculation law. Every failure is retained, and no instruction
@@ -110,7 +110,7 @@ theorem step_helper_native {R : Type} (program : Structured.Program) (context : 
     (references : List Nat) (env nominal : Environment F G) (arguments : List (Value F G))
     (read : Domain.read env references = some nominal)
     (embedded : DomainAdapter.embedValues arguments = some nominal)
-    (eligible : helper.outputs.all dataType = true)
+    (eligible : helper.outputs.all localType = true)
     (proof : Proof F G) (next : Environment F G → Proof F G → m (PIR.Outcome R × Proof F G)) :
     DomainAdapter.runK key initial challenge
       (Domain.step (Structured.ringModel F G) program context

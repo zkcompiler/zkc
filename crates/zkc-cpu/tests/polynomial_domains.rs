@@ -81,7 +81,7 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
         let b = OperationBinding {
             contract: "poly.even_odd_fold".into(),
             arguments: vec![domain.field.name().into()],
-            implementation: format!("{}/poly.even_odd_fold", domain.provider),
+            implementation: format!("{}/poly.even_odd_fold", domain.provider()),
             physical_arguments: vec![],
         };
         assert_eq!(

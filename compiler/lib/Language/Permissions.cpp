@@ -13,80 +13,128 @@ Permissions intersect(Permissions a, const Permissions &b) {
 
 std::optional<std::vector<TypeField>>
 Semantics::fields(const Type &type, Span span, unsigned depth) {
+  std::optional<std::vector<TypeField>> computed;
+  const auto *result = productFields(type, span, depth, computed);
+  if (!result)
+    return {};
+  if (computed)
+    return computed;
+  // A memoized declared record is copied for this caller.
+  if (!charge(result->size(), span))
+    return {};
+  return *result;
+}
+const std::vector<TypeField> *
+Semantics::productFields(const Type &type, Span span, unsigned depth,
+                         std::optional<std::vector<TypeField>> &computed) {
   if (depth > work.limits.typeDepth || !charge(1, span)) {
     if (!diagnostic)
       fail("source.limit", "field expansion depth", span);
-    return {};
+    return nullptr;
   }
-  std::vector<TypeField> result;
+  auto &result = computed.emplace();
   if (type.kind == Type::Kind::Unit)
-    return result;
+    return &result;
   if (type.kind == Type::Kind::Tuple) {
     for (unsigned i = 0; i < type.arguments.size(); ++i) {
       if (!chargeType(type.arguments[i], span))
-        return {};
+        return nullptr;
       result.push_back({std::to_string(i), type.arguments[i], true, span});
     }
-    return result;
+    return &result;
   }
   if (type.kind == Type::Kind::Array) {
     if (!type.dimension.isClosed()) {
       fail("source.bound", "array expansion requires a closed length", span);
-      return {};
+      return nullptr;
     }
     if (type.dimension.closedValue() > work.limits.aggregateLeaves) {
       fail("source.limit", "array layout exceeds bound", span);
-      return {};
+      return nullptr;
     }
     if (!charge(type.dimension.closedValue(), span))
-      return {};
+      return nullptr;
     for (uint64_t i = 0; i < type.dimension.closedValue(); ++i) {
       if (!chargeType(type.arguments.front(), span))
-        return {};
+        return nullptr;
       result.push_back({std::to_string(i), type.arguments.front(), true, span});
     }
-    return result;
+    return &result;
   }
   auto *decl = typeDeclaration(type);
   if (!decl || (type.kind != Type::Kind::Record &&
                 type.kind != Type::Kind::LogicalRecord &&
                 type.kind != Type::Kind::Associated)) {
-    fail("source.type", "type has no product fields; variants require match",
+    fail("source.type",
+         "type has no product fields; variants require match: " +
+             spelling(type),
          span);
-    return {};
+    return nullptr;
+  }
+  if (decl->generated) {
+    StringRef member = decl->generated->member;
+    if (member.contains(':') || member == "Public" || member == "Witness" ||
+        member == "ProverOutputs" || member == "VerifierOutputs") {
+      auto selected = entryFamilyFields(*decl, type.arguments, span);
+      if (!selected)
+        return nullptr;
+      for (auto &field : *selected)
+        result.push_back({field.name, std::move(field.type), true, span});
+      return &result;
+    }
   }
   auto bindings = substitution(*decl, type.arguments);
   if (type.kind == Type::Kind::Associated) {
     if (decl->abstract) {
       fail("source.private", "abstract type representation is unavailable",
            span);
-      return {};
+      return nullptr;
     }
     const auto &base = type.arguments.front();
     auto &owner = declarations[decl->parent->index];
     bindings = substitution(owner, base.arguments);
     auto repr = substitute(decl->domain, bindings, span, depth + 1);
     if (!repr)
-      return {};
+      return nullptr;
     result.push_back({"value", *repr, false, span});
-    return result;
+    return &result;
   }
+  // Placement checks walk each field of a wide record once per placed role;
+  // reuse the substituted declaration instead of expanding it again.
+  computed.reset();
+  // A lookup key suffices: this view's memo never outlives its declarations.
+  auto key = typeIdentity(type);
+  if (!charge(key.size(), span))
+    return nullptr;
+  auto memoized = declaredFields.find(key);
+  if (memoized != declaredFields.end() && depth <= memoized->second.depth)
+    return &memoized->second.fields;
+  std::vector<TypeField> expanded;
   for (const auto &source : decl->fields) {
     auto t = substitute(source.type, bindings, span, depth + 1);
     if (!t)
-      return {};
+      return nullptr;
     TypeField field{source.name, std::move(*t), source.isPublic, source.span};
     if (source.maximumRows) {
       field.maximumRows =
           substitute(*source.maximumRows, bindings, span, depth + 1);
       if (!field.maximumRows)
-        return {};
+        return nullptr;
+    }
+    if (source.placement) {
+      field.placement = placement(field.type, *source.placement,
+                                  decl->roles.size(), field.span, depth + 1);
+      if (!field.placement)
+        return nullptr;
     }
     if (type.kind == Type::Kind::LogicalRecord && !oracleField(field))
-      return {};
-    result.push_back(std::move(field));
+      return nullptr;
+    expanded.push_back(std::move(field));
   }
-  return result;
+  auto &entry = declaredFields[key];
+  entry.fields = std::move(expanded);
+  entry.depth = depth;
+  return &entry.fields;
 }
 bool Semantics::oracleField(const TypeField &field) {
   if (field.maximumRows) {
@@ -121,6 +169,7 @@ bool Semantics::oracleField(const TypeField &field) {
 bool Semantics::logicalRecord(const Type &type, Span span) {
   if (!chargeType(type, span))
     return false;
+  // A lookup key suffices: this view's memo never outlives its declarations.
   auto key = typeIdentity(type);
   if (checkedLogicalRecords.count(key))
     return true;
@@ -128,12 +177,20 @@ bool Semantics::logicalRecord(const Type &type, Span span) {
   if (type.kind != Type::Kind::LogicalRecord || !decl ||
       decl->kind != Declaration::Kind::Record || !decl->logical)
     return fail("source.type", "expected a nominal logical record", span);
-  if (decl->resource)
+  if (decl->resource && decl->roles.empty())
     return fail("source.resource", "logical records require Copy and Drop",
                 decl->span);
   auto product = fields(type, span);
   if (!product)
     return false;
+  if (!decl->roles.empty()) {
+    for (const auto &field : *product)
+      if (!field.placement)
+        return fail("source.placement", "distributed field has no placement",
+                    field.span);
+    checkedLogicalRecords.insert(std::move(key));
+    return true;
+  }
   bool logical = false;
   for (const auto &field : *product) {
     if (isOracleHandle(field.type))
@@ -253,9 +310,8 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
     return Permissions{true, true};
-  if (type.kind == K::LogicalRecord)
-    return logicalRecord(type, span) ? std::optional(Permissions{true, true})
-                                     : std::nullopt;
+  if (type.kind == K::LogicalRecord && !logicalRecord(type, span))
+    return {};
   if (type.kind == K::Formal || isOracleHandle(type))
     return Permissions{true, true};
   if (type.kind == K::Builtin) {
@@ -298,7 +354,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   std::vector<Type> children;
   if (type.kind == K::Tuple || type.kind == K::Array)
     children = type.arguments;
-  else if (type.kind == K::Record) {
+  else if (type.kind == K::Record || type.kind == K::LogicalRecord) {
     auto fs = fields(type, span, depth + 1);
     if (!fs)
       return {};
@@ -324,12 +380,13 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   }
   if (auto *decl = typeDeclaration(type)) {
     if (decl->resource) {
-      if (*decl->resource == Resource::Affine && !result.drop) {
+      if (*decl->resource == Resource::Affine && !result.drop &&
+          decl->roles.empty()) {
         fail("source.permission", "affine fields must permit Drop", decl->span);
         return {};
       }
       result.copy = false;
-      result.drop = *decl->resource == Resource::Affine;
+      result.drop = result.drop && *decl->resource == Resource::Affine;
     }
   }
   return result;

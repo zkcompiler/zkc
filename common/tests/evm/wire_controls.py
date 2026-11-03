@@ -18,6 +18,13 @@ from abi import encode_verify
 from logical_tree import encode_tree
 from probe import PROFILES, check_solc, compile_request, execute
 from validate import check_return, check_revert
+import target
+
+# The declared ceilings these controls exercise at their boundaries.
+ELEMENTS = target.LIMITS["public_elements"]
+FRAME_BYTES = target.LIMITS["frame_bytes"]
+MEMORY_BYTES = target.LIMITS["memory_bytes"]
+PATH_SIBLINGS = target.LIMITS["path_siblings"]
 
 FIELDS = [
     ("bls12-381.fr", 1, 66, 32, 1,
@@ -64,6 +71,12 @@ def raw_bytes(value):
     return head(70) + u32(len(value)) + value
 
 
+def settings(fork=target.DEFAULT_FORK):
+    """Release solc settings for a fork; consumer-emitted helpers use the default."""
+    return {"evmVersion": target.fork(fork)["solc"], "optimizer": PROFILES["colon"],
+            "outputSelection": {"*": {"*": ["evm.bytecode.object", "evm.deployedBytecode.object"]}}}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("consumer", "solc", "runner", "output"):
@@ -77,19 +90,19 @@ def main():
     artifacts = {}
     receipts = []
 
-    def run(fixture, mode, frame, expected, *, error=None, memory=2_097_152):
-        key = (fixture, mode, memory)
+    def run(fixture, mode, frame, expected, *, error=None, memory=MEMORY_BYTES,
+            path_siblings=PATH_SIBLINGS):
+        key = (fixture, mode, memory, path_siblings)
         if key not in artifacts:
             yul = subprocess.check_output(
-                [str(args.consumer), "--emit", fixture, mode, str(memory)], text=True)
+                [str(args.consumer), "--emit", fixture, mode, str(memory), str(path_siblings)],
+                text=True)
             artifact = compile_request(args.solc, {
                 "language": "Yul", "sources": {"wire.yul": {"content": yul}},
-                "settings": {"evmVersion": "cancun", "optimizer": PROFILES["colon"],
-                             "outputSelection": {"*": {"*": ["evm.bytecode.object",
-                                 "evm.deployedBytecode.object"]}}}})
+                "settings": settings()})
             artifacts[key] = artifact
             (args.output / f"wire-{len(artifacts)}.yul").write_text(yul)
-        result = execute(args.runner, artifacts[key], frame, gas=20_000_000)
+        result = execute(args.runner, artifacts[key], frame)
         label = f"{fixture}/{mode}/{len(receipts)}"
         try:
             if error:
@@ -105,6 +118,7 @@ def main():
                          "memory_high_water": result["memory_high_water"]})
 
     decode_length, decode_tag, decode_value = ("decode", 2), ("decode", 3), ("decode", 4)
+    path_ceiling = ("resource", 14)
     element_limit, wire_capacity = ("resource", 2), ("resource", 13)
     for domain, scalar_tag, vector_tag, width, degree, prime in FIELDS:
         values = [prime-1] + list(range(1, degree))
@@ -122,7 +136,7 @@ def main():
         run(f"vector:{domain}", "values", vector, b"".join(word(v) for v in coefficients))
         empty = head(vector_tag)+u32(0)
         run(f"vector:{domain}", "roundtrip", empty, empty)
-        for broken in (head(vector_tag)+u32(1025), head(vector_tag)+u32(2**32-1)):
+        for broken in (head(vector_tag)+u32(ELEMENTS+1), head(vector_tag)+u32(2**32-1)):
             run(f"vector:{domain}", "roundtrip", broken, b"", error=element_limit)
         for broken, error in ((head(vector_tag)+u32(3), decode_length),
                               (vector[:-1], decode_length), (vector+b"\x00", decode_length),
@@ -131,8 +145,8 @@ def main():
             run(f"vector:{domain}", "roundtrip", broken, b"", error=error)
 
     # One extension element counts once, rather than once per coefficient.
-    full = head(27)+u32(1024)+b"".join((i % 2130706433).to_bytes(4, "little")
-                                      for i in range(1024*8))
+    full = head(27)+u32(ELEMENTS)+b"".join((i % 2130706433).to_bytes(4, "little")
+                                          for i in range(ELEMENTS*8))
     run("vector:koala-bear.ext8-binomial3", "roundtrip", full, full)
     for fixture, frame, values in [
         ("index", head(31)+(2**64-1).to_bytes(8, "little"), word(2**64-1)),
@@ -146,7 +160,8 @@ def main():
         run(fixture, "values", frame, values)
     run("bool", "roundtrip", head(5)+b"\x02", b"", error=decode_value)
     run("index", "roundtrip", head(31)+b"\x00"*9, b"", error=decode_length)
-    full_bytes = raw_bytes(b"x"*65526)
+    # The six-byte header and four-byte length leave the rest of one frame.
+    full_bytes = raw_bytes(b"x"*(FRAME_BYTES-10))
     run("bytes", "roundtrip", full_bytes, full_bytes)
     run("bytes", "roundtrip", full_bytes+b"x", b"", error=wire_capacity)
     reserved = head(66)+u32(32)+b"\x00"*(32*32)
@@ -175,17 +190,17 @@ def main():
                            decode_length)):
         run("nested", "roundtrip", broken, b"", error=error)
     # Every local collection fits. The complete value exceeds the shared count.
-    half = sequence([head(31)+b"\x00"*8] * 512)
+    half = sequence([head(31)+b"\x00"*8] * (ELEMENTS//2))
     aggregate = sequence([half, half])
     run("sequence:sequence:index", "roundtrip", aggregate, b"", error=element_limit)
     # Numeric count fits exactly, but the extra value nodes exceed the ceiling.
-    run("sequence:index", "roundtrip", sequence([head(31)+b"\x00"*8]*1024), b"", error=element_limit)
+    run("sequence:index", "roundtrip", sequence([head(31)+b"\x00"*8]*ELEMENTS), b"", error=element_limit)
     # Byte leaves charge memory, even though they consume no numeric elements.
     many = sequence([raw_bytes(b"x"*32)]*20)
     run("sequence:bytes", "roundtrip", many, b"", error=wire_capacity, memory=8192)
     # A complete structural scan's resource refusal precedes a bad leaf value.
     bad_leaf = head(19)+(2130706433).to_bytes(4, "little")
-    overcap = sequence([bad_leaf]+[head(19)+b"\x00"*4]*1023)
+    overcap = sequence([bad_leaf]+[head(19)+b"\x00"*4]*(ELEMENTS-1))
     run("sequence:field:koala-bear", "roundtrip", overcap, b"", error=element_limit)
     for count in (0, 4):
         array = head(64)+b"".join(v.to_bytes(32, "little") for v in range(count))
@@ -217,8 +232,11 @@ def main():
         if width:
             broken = head(root_tag)+prime.to_bytes(width, "little")+digest[width:]
             run(f"root:{scheme}", "roundtrip", broken, b"", error=decode_value)
-        else:
-            run(f"path:{scheme}", "roundtrip", head(path_tag)+u32(25)+digest*25, b"", error=element_limit)
+        # Every path envelope accepts what native accepts at the default path
+        # ceiling and refuses one sibling over a lowered ceiling.
+        longer = head(path_tag)+u32(25)+digest*25
+        run(f"path:{scheme}", "roundtrip", longer, longer)
+        run(f"path:{scheme}", "roundtrip", longer, b"", error=path_ceiling, path_siblings=24)
     if args.compiler:
         def compiled_source(text):
             process = subprocess.run([str(args.compiler.resolve()), "language-evm",
@@ -228,16 +246,14 @@ def main():
             compiled = json.loads(process.stdout)
             built = compile_request(args.solc, {"language": "Yul",
                 "sources": {"entry.yul": {"content": compiled["yul"]}},
-                "settings": {"evmVersion": "cancun", "optimizer": PROFILES["colon"],
-                    "outputSelection": {"*": {"*": ["evm.bytecode.object",
-                        "evm.deployedBytecode.object"]}}}})
+                "settings": settings(compiled["fork"])})
             return compiled, built
 
         def invocation(compiled, public, payload):
             descriptor, policy = compiled["descriptor"], compiled["policy"]
             rows = [[*r[:3], v.hex()] for r, v in zip(descriptor[4], public, strict=True)]
             root = encode_tree(["zkc.native-proof-binding/0", "sha256", descriptor[2],
-                compiled["source_sha256"], *policy[1:4], descriptor, rows, ""])
+                compiled["original"], *policy[1:4], descriptor, rows, ""])
             digest = hashlib.sha256(root).digest()
             trace = [{"kind": "sha256", "input": root.hex(), "output": digest.hex(),
                       "status": "return"}]
@@ -256,7 +272,7 @@ def main():
             payload = len(received).to_bytes(8, "little")+received
             for trailing in (b"", b"\x00"):
                 calldata, trace = invocation(compiled, public, payload+trailing)
-                result = execute(args.runner, built, calldata, gas=20_000_000)
+                result = execute(args.runner, built, calldata)
                 if trailing:
                     check_revert(result, "decode", 13, trace)
                 else:
@@ -273,20 +289,18 @@ def main():
         compiled, built = compiled_source(text)
         for malformed in (b"\xff"*8, (3).to_bytes(8, "little")+b"bad"):
             calldata, trace = invocation(compiled, [head(1)+b"\x00"*32], malformed)
-            result = execute(args.runner, built, calldata, gas=20_000_000)
+            result = execute(args.runner, built, calldata)
             check_revert(result, "source", 2, trace)
             receipts.append({"fixture": "source-stop-before-unreached-frame", "mode": "integration",
                 "code_size": result["code_size"], "gas": result["runtime_gas"]})
     # Fresh-buffer writes follow a completed callback. These helper controls
     # isolate the store boundary; source collect ordering has separate controls.
-    for ceiling in (4, 1024):
+    for ceiling in (4, ELEMENTS):
         yul = subprocess.check_output(
             [str(args.consumer), "--emit-store", str(ceiling)], text=True)
         artifact = compile_request(args.solc, {
             "language": "Yul", "sources": {"store.yul": {"content": yul}},
-            "settings": {"evmVersion": "cancun", "optimizer": PROFILES["colon"],
-                         "outputSelection": {"*": {"*": ["evm.bytecode.object",
-                             "evm.deployedBytecode.object"]}}}})
+            "settings": settings()})
         artifacts[("sequence:index", "store", ceiling)] = artifact
         (args.output / f"store-{ceiling}.yul").write_text(yul)
         for name, count, index, stop, get_only, error in [
@@ -302,7 +316,7 @@ def main():
             ("allocation-capacity", ceiling+1, 0, 0, 0, ("resource", 2)),
         ]:
             calldata = b"".join(map(word, (count, index, stop, get_only)))
-            result = execute(args.runner, artifact, calldata, gas=20_000_000)
+            result = execute(args.runner, artifact, calldata)
             if error:
                 check_revert(result, *error, [])
             else:
@@ -316,9 +330,7 @@ def main():
     yul = subprocess.check_output([str(args.consumer), "--emit-append"], text=True)
     artifact = compile_request(args.solc, {
         "language": "Yul", "sources": {"append.yul": {"content": yul}},
-        "settings": {"evmVersion": "cancun", "optimizer": PROFILES["colon"],
-                     "outputSelection": {"*": {"*": ["evm.bytecode.object",
-                         "evm.deployedBytecode.object"]}}}})
+        "settings": settings()})
     artifacts[("bytes", "append", 32)] = artifact
     (args.output / "append.yul").write_text(yul)
     for count, value, reserved, error in (
@@ -327,8 +339,7 @@ def main():
             (32, 255, False, ("resource", 2)), (32, 256, False, ("source", 3)),
             (33, 256, False, ("resource", 13)),
             (31, 255, True, ("resource", 1)), (31, 256, True, ("source", 3))):
-        result = execute(args.runner, artifact, word(count) + word(value) + word(reserved),
-                         gas=20_000_000)
+        result = execute(args.runner, artifact, word(count) + word(value) + word(reserved))
         if error:
             check_revert(result, *error, [])
         else:
@@ -337,7 +348,7 @@ def main():
                          "value": value, "reserved": reserved,
                          "error": error, "code_size": result["code_size"],
                          "gas": result["runtime_gas"]})
-    receipt = {"cases": receipts, "artifacts": len(artifacts), "solc": "0.8.38",
+    receipt = {"cases": receipts, "artifacts": len(artifacts), "solc": target.SOLC_RELEASE,
                "max_code_size": max(r["code_size"] for r in receipts),
                "max_gas": max(r["gas"] for r in receipts)}
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2)+"\n")

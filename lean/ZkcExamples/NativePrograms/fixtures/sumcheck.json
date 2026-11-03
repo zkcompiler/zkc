@@ -14,44 +14,114 @@
       "public",
       [
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
+          "apply",
           "field",
-          "bls12-381.fr"
+          [
+            [
+              "domain",
+              "Field",
+              "bls12-381.fr"
+            ]
+          ]
         ],
         [
           "service",
@@ -60,7 +130,9 @@
       ],
       [
         [
-          "bool"
+          "apply",
+          "bool",
+          []
         ]
       ],
       [
@@ -139,8 +211,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -157,8 +236,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -175,8 +261,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -193,8 +286,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -212,8 +312,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -230,8 +337,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -248,8 +362,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -266,8 +387,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -284,8 +412,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -303,8 +438,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -321,8 +463,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -339,8 +488,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -357,8 +513,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -375,8 +538,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -394,8 +564,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -412,8 +589,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -430,8 +614,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -448,8 +639,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -466,7 +664,9 @@
             ],
             [
               [
-                "bool"
+                "apply",
+                "bool",
+                []
               ]
             ],
             [],
@@ -495,8 +695,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -513,8 +720,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -532,8 +746,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -550,8 +771,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -568,8 +796,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -586,8 +821,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -604,8 +846,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -622,8 +871,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -640,8 +896,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -659,8 +922,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -677,8 +947,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -695,8 +972,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -713,8 +997,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -731,8 +1022,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -749,8 +1047,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -767,8 +1072,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -786,8 +1098,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -804,8 +1123,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -822,8 +1148,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -840,8 +1173,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -858,8 +1198,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -876,8 +1223,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -894,8 +1248,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -913,8 +1274,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -931,8 +1299,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -949,8 +1324,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -967,8 +1349,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -985,8 +1374,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1003,8 +1399,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1021,8 +1424,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1039,8 +1449,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1057,8 +1474,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1075,7 +1499,9 @@
             ],
             [
               [
-                "bool"
+                "apply",
+                "bool",
+                []
               ]
             ],
             [],
@@ -1104,8 +1530,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1122,8 +1555,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1141,8 +1581,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1159,8 +1606,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1177,8 +1631,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1195,8 +1656,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1213,8 +1681,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1231,8 +1706,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1249,8 +1731,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1267,8 +1756,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1285,8 +1781,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1303,8 +1806,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1321,8 +1831,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1339,8 +1856,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1357,8 +1881,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1375,8 +1906,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1393,8 +1931,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1411,8 +1956,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1429,8 +1981,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1447,8 +2006,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1465,8 +2031,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1483,8 +2056,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1501,8 +2081,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1519,8 +2106,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1537,8 +2131,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1555,8 +2156,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1573,8 +2181,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1591,8 +2206,15 @@
             ],
             [
               [
+                "apply",
                 "field",
-                "bls12-381.fr"
+                [
+                  [
+                    "domain",
+                    "Field",
+                    "bls12-381.fr"
+                  ]
+                ]
               ]
             ],
             [],
@@ -1609,7 +2231,9 @@
             ],
             [
               [
-                "bool"
+                "apply",
+                "bool",
+                []
               ]
             ],
             [],
@@ -1721,6 +2345,7 @@
     ]
   ],
   [
+    [],
     [],
     []
   ]

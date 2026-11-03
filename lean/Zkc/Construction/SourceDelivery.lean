@@ -35,14 +35,13 @@ def candidates (snapshot : Structured.Snapshot) (context : Context) :
             let leaf := match SourceOccurrences.event context frame site with
               | some event => [⟨context.entry, steps, event⟩]
               | none => []
-            let kind := match descriptor with
-              | .protocolApply .. => some "apply"
-              | .protocolRepeat .. => some "repeat"
+            let step : Option Step := match descriptor with
+              | .protocolApply .. => some (.apply frame.definition.name site)
+              | .protocolRepeat .. => some (.repeat frame.definition.name site)
               | _ => none
-            match kind with
+            match step with
             | none => leaf
-            | some kind =>
-                let step : Step := ⟨kind, frame.definition.name, site⟩
+            | some step =>
                 match SourceOccurrences.descend snapshot frame step with
                 | none => leaf
                 | some child => leaf ++ candidates snapshot context fuel (steps ++ [step]) child

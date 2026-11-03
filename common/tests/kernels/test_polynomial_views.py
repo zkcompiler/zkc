@@ -157,7 +157,7 @@ def test_checked_polynomial_views_require_owner_admission(toolchain, journal, di
                  'opening::QueryRow<F>': 'values', 'opening::ScalarAccumulator<F>': 'value'}[view]
         source += f'fn bypass(value:{view}){{return value.{field};}}'
     elif boundary == 'entry':
-        source += f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}}entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
+        source += f'protocol Run roles(P)(value:{view}@P)->(result:bool@P){{return true;}}entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
     else:
         make = {'evaluation::EvaluationDomain<F>': 'evaluation::checked_roots(values)',
                 'evaluation::Evaluations<F>': 'evaluation::evaluations(evaluation::checked_roots(values),values)',
@@ -170,11 +170,16 @@ def test_checked_polynomial_views_require_owner_admission(toolchain, journal, di
                 'opening::ScalarAccumulator<F>': 'opening::scalar_accumulator(coset::coset_domain<F>(3,4),0,7,0,1)'}[view]
         source += f'''protocol Run roles(P,V)(values:Vector<F>@P)->(accepted:bool@V){{
           let input @P={make};let received=send P->V(input);return true;}}entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'''
+    if boundary == 'entry':
+        # Retained opaque values may enter an Entry, so the source check admits
+        # the port; caller-supplied data is refused when the SDK decodes it.
+        entry = Entry(toolchain, journal, directory, source, MODULES)
+        entry.run('external', {'value': {}}, refuses='entry-input-constructor')
+        return
     path = directory / 'private.zkc'
     path.write_text(source)
-    report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-                           f'--module=sample={path}', *MODULES,
-                           *(['sample::Demo'] if boundary == 'entry' else [])], refuses='source-compilation')
+    report = journal.json([toolchain.runtime, '--json', 'check', '--source-format=zkc', f'--compiler={toolchain.compiler}',
+                           f'--module=sample={path}', *MODULES], refuses='source-compilation')
     assert report['diagnostics'].startswith(('source.private' if boundary in ('construct', 'project') else 'source.ingress') + ':')
 
 

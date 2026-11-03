@@ -248,6 +248,9 @@ impl Dependencies<'_> {
         for op in body {
             self.charge(1)?;
             match op {
+                Instruction::Conditional { .. } | Instruction::Match { .. } => {
+                    return Err(refuse("native-proof-selected-control"));
+                }
                 Instruction::Query { outputs, .. } => {
                     self.charge(outputs.len())?;
                     bind(&mut env, outputs, &vec![true; outputs.len()])?;

@@ -60,7 +60,10 @@ Entry = ["entry", name, list([role, participant_name])]
 
 The origin is mandatory on every serialized function. It is not `null` and
 cannot be omitted even when its assignment list is empty. An internal compiler
-model with an unresolved origin is not a different public record shape.
+model with an unresolved origin is not a different public record shape. Each
+origin static argument is a canonical natural at most 1,048,576, an admitted
+type spelling, or a domain or codec identity that the catalog installs; an
+origin grants no permission.
 Results are ordered type strings, while inputs are ordered named ports.
 `input_index` is a canonical natural identifying an actual participant input.
 Entry role maps are nonempty and reference declared participants. Duplicate
@@ -129,10 +132,13 @@ under its admitted contract; that does not introduce another instruction tag.
 ["loop", site, Count, list(Carried), list(Capture),
  ParticipantBody, list(output)]
 ["return_if", site, condition, list(value), list(continuation)]
+["if", site, condition, list(Capture), ParticipantBody, ParticipantBody, list(output)]
+["match", site, input, list(Capture), list(ParticipantArm), list(output)]
 ["yield", list(value)]
 ["return", list(value)]
 
 Count = ["value", count_value, maximum, induction]
+ParticipantArm = [alternative, list(payload_binding), ParticipantBody]
 ```
 
 `count_value`, `induction` and every continuation are value names. `maximum` is
@@ -145,50 +151,134 @@ have continuation bindings; ordinary copyable results do not.
 
 Local and participant instruction alternatives are distinct even when they
 share `yield` or `return` shapes. Participant bodies cannot contain `op`,
-Boolean literals, `if`, `for`, `match`, `release` or direct `stop`. Local bodies
+Boolean literals, `for`, `release` or direct `stop`. Local bodies
 cannot contain `send`, `receive`, `query`, `loop` or `return_if`. Composition,
 parameter and family-selector records are absent from both closed grammars.
 
-Participant-loop captures use explicit bindings:
+Participant `if` and `match` use the exhaustive alternative, active payload and
+typed join rules of Local control, with the explicit capture bindings below.
+Every arm must admit under participant permissions. Only the selected arm creates a frame, executes actions,
+charges execution work or yields. Immutable service roots remain participant
+interface metadata and cannot be manufactured, returned or selected as data.
+An explicit participant branch occurrence uses `["branch", site, alternative]`
+in the runtime origin, distinct from Local control and loop iteration frames.
+Generic Program admission establishes no source common-input provenance. The
+[joint Host](../runtime/joint.md) compares reached selectors before arm work;
+independent execution establishes no agreement with peers.
+Every participant control record (`loop`, `if` and `match`) binds its captures
+explicitly:
 
 ```text
 Capture := [local_name, parent_name]
 ```
 
-Each local name is a distinct body formal, disjoint from the induction and
-carried formals. Parent names resolve in the enclosing environment and may
-repeat only for Copy types. Every row retains one formal and its owned-storage
-charge; two aliases are not deduplicated. A body uses the local name. Capture
-order remains significant. This change is confined to participant `loop`;
-local structured instructions retain their specified capture lists.
+Each local name is a distinct formal of the loop body or of every arm, disjoint
+from the induction, carried formals and arm payload bindings. Parent names
+resolve in the enclosing environment and may repeat only for Copy types. Every
+row retains one formal and its owned-storage charge; two aliases are not
+deduplicated. A body uses the local name. Capture order remains significant.
+Expanding protocol applications into participant bodies can make two formals
+share one parent, so the binding cannot be recovered from parent names.
+
+A participant `loop` body and every arm of a participant `if` or `match` is a
+nested lexical environment. Its visible names are its formals (the loop
+induction, carried formals and capture locals, or the arm's payload bindings and
+capture locals) and the participant's service ports. Nothing else from the
+enclosing body is visible; there is no ambient capture. A body's bindings are
+not visible after it, and a body may bind a name that is also bound outside it,
+including in a sibling body. Within one body every formal and binding is
+distinct, and none equals a service port name. Discarding a body's environment
+discards only value names: sites, message schemas and service ports stay unique
+or consistent across the whole participant, as they are for the participant's
+own body.
+
+Local structured instructions keep their name lists. Scoped local regions
+canonicalize aliased captures before emission, so a local capture list is
+exact. `if` and `match` therefore have different capture fields in the two
+body grammars; a reader decodes them by body kind and never guesses the shape.
 
 The version remains `zkc.program/0`. Producers, independent readers and fixtures
-change together. The previous participant-loop string capture list is refused;
-there is no compatibility decoder. Empty capture lists remain empty.
+change together. A participant string capture list is refused; there is no
+compatibility decoder. Empty capture lists remain empty.
 
 ## Bounds and admission
 
-The carrier bounds apply cumulatively, including unused definitions, all arms
-and zero-trip bodies. In particular:
+Every bound is inclusive: a quantity equal to its bound is admitted, and one
+more is refused with the `capacity` class. Static admission counts every
+definition, including unused ones, every arm, including unselected ones, and
+zero-trip bodies.
 
-| Quantity | Bound |
-| --- | --- |
-| Raw bytes and compact program encoding | 4 MiB each |
-| JSON nodes, counting arrays, strings and Booleans | 400,000 |
-| Elements of any array | 32,768 |
-| JSON array nesting | 64 |
-| Functions and participants combined | 4,096 |
-| Operation bindings | 4,096 |
-| Ports, captures and carried/output name lists | 1,024 |
-| Operation attributes | 16,384 |
-| Static instructions across all definitions and nested bodies | 65,536 |
-| Match alternatives | 32 |
+| Measure | What is counted | Scope | Bound |
+| --- | --- | --- | --- |
+| Raw bytes | UTF-8 input bytes, including whitespace | Input | 4 MiB |
+| Compact encoding | Bytes of the compact encoding a producer writes | Program | 4 MiB |
+| JSON nodes | Arrays, strings and Boolean literals | Input | 400,000 |
+| JSON nesting | Arrays on one path; the root array is level 1 | Input | 64 |
+| Array elements | Elements of one array | Each array | 32,768 |
+| String bytes | Decoded bytes of a string other than an operation attribute, including type spellings, contract identities and static arguments | Each string | 4,096 |
+| Attribute bytes | Decoded bytes of one operation attribute | Each attribute | 16,384 |
+| Identifier bytes | Bytes of a name or site | Each identifier | 128 |
+| Operation bindings | Binding declarations | Program | 4,096 |
+| Binding arguments | Static arguments; separately, physical arguments | Each binding | 128 |
+| Origin assignments | Assignment rows | Each function origin | 128 |
+| Definitions | Functions plus participants | Program, combined | 4,096 |
+| Entries | Entry records | Program | 4,096 |
+| Lists | Entries of one name or row list, listed below | Each list | 1,024 |
+| Participant interface | Inputs plus service ports | Each participant | 1,024 |
+| Operation attributes | Attributes | Each `op` | 16,384 |
+| Static instructions | Instruction records of every body | Program | 65,536 |
+| Body nesting | Bodies below a definition body, which is level 0 | Each definition | 64 |
+| Match arms | Arms | Each `match` | 64 |
+| Loop maximum | The static `maximum` | Each `loop` | 1,048,576 |
+| Descriptor charge | Units of the charge below | Program, cumulative | 64 Mi (67,108,864) |
 
-JSON nesting counts the record and list arrays, not just control constructs.
-Consequently the 64-level body bound does not authorize 64 nested `if` records.
-Type spelling, descriptor-work, static-argument, message, entry and runtime
-resource limits also apply through their owning contracts. This table does not
-replace those checks or raise a runtime execution allowance.
+The list bound applies to ports, results and service ports; capture lists and
+capture rows; carried rows; outputs; the inputs and outputs of `op`, `local` and
+`query`; `variant` payload values and `match` payload bindings; `release`,
+`yield` and `return` values; `return_if` values and continuations; and entry
+role maps. A `for_while` yield lists its condition before the carried values and
+counts it, so a `for_while` carries at most 1,023 values.
+
+A reader counts a list, array or string before it decodes or allocates the
+counted elements, and counts JSON nodes and nesting before it allocates any JSON
+value. A producer checks the same bounds before it emits a program. The measures
+stay distinct: raw bytes, compact producer output, JSON nesting, body nesting,
+descriptor charge and execution work each have their own bound, and none stands
+in for another. JSON nesting counts the record and list arrays, not just control
+constructs, so for serialized input it binds before body nesting: the 64 body
+levels do not authorize 64 nested `if` records. Body nesting also bounds programs
+that a producer builds directly.
+
+A `match` has one arm per alternative of a variant whose type the program spells
+in a 4,096-byte type string, which bounds it at 64 arms. A longer arm list
+refuses with `local-match-shape` or `interactive-match-shape`. MLIR
+[formation](../ir/variants.md#type-and-value) admits wider variants; they have no
+Program `match`. A type spelling is admitted by its own type language, whose
+structural limits are type formation, not carrier bounds. Message, entry and
+runtime resource limits apply through their owning contracts; this table does
+not raise a runtime execution allowance.
+
+### Descriptor charge
+
+The descriptor charge accounts for the type metadata a reader retains. Each
+distinct physical type spelling of a port, a result, a `receive` type or a
+`variant` type is charged once. Every resolved signature input and output of
+every binding, including bindings that no instruction uses, and every declared
+physical argument is charged separately. A reader charges a type before it
+retains its descriptor. The charge of a type, in units, is the sum of:
+
+- for a variant: 512, plus 4 per byte of its canonical logical spelling
+  (`variant:` and the hexadecimal descriptor), plus 256 per alternative, plus 256
+  per payload entry, plus the charge of every payload type;
+- for a structural application `constructor<...>`: 512, plus 256 per argument,
+  plus the charge of every type argument;
+- for a resource unit: 256;
+- for an aggregate physical layout (a sequence, field array, fixed vector or
+  variant): 256, plus 88 per stored child, plus each child's charge.
+
+Every other type charges 0. A nested type is charged at every occurrence,
+including inactive alternatives, even where a reader shares its storage. A reader
+may also bound the work of parsing one spelling, as part of type formation.
 
 Decoding, static admission, installation and invocation are separate steps.
 Static admission resolves types and bindings, validates SSA and control,
@@ -196,6 +286,23 @@ checks effects and affine custody, and checks the complete retained closure.
 Installation checks available implementations; execution applies reached
 resource and value checks. No JSON record supplies an installation grant,
 source correspondence theorem or cryptographic security claim.
+
+## Refusal classes
+
+An independent reader reports every refusal in one of these classes. Diagnostic
+codes and prose remain reader-specific. A program with several violations may be
+refused in the class of any of them; conformance cases isolate one violation.
+
+| Class | Refusal |
+| --- | --- |
+| `syntax` | The input is not one value of this grammar: invalid JSON or UTF-8, trailing input, a value other than an array, string or Boolean literal, an unknown tag, a wrong arity, an instruction of the other body grammar, a malformed identifier or natural, an unknown stop reason, an empty body, `release` or entry role map, a body that does not end at its sole terminator, a `return` or `yield` in the wrong body, or a program with neither entries nor a function-only root. |
+| `capacity` | A quantity exceeds its bound in the table above. |
+| `names-and-ssa` | A name does not resolve or is not unique: duplicate declarations, symbols, origin parameters, roles, instance and role bodies, sites, formals or bindings in one environment; unresolved bindings, functions, participants, service ports or methods; an operand not visible in the current environment; a name equal to a service port; an entry whose role names another participant's role or that selects different instances; or a message addressed to the sender's own role. |
+| `types` | Types or arities disagree: an unadmitted type spelling, operand, result, yield or return types or counts, a selector type, a join, variant alternatives and payloads, arms that do not list every alternative in order, message wire eligibility or schema consistency, a port permission, an origin static identity, or operation attributes outside their contract's parameter rule. |
+| `affine-use` | A value is used beyond its custody: a consumed value used again, an affine value captured where only copyable values may be captured, or a value that cannot be dropped released. |
+| `unsupported-profile` | A well-formed program outside the admitted profile: a binding that does not select an installed contract application, an uninstalled service contract, or a history-observing operation inside a local `match`. |
+
+Runtime failures and source stops are not admission refusals.
 
 ## Independent readers
 
@@ -215,9 +322,14 @@ mutations in dormant bodies. Existing native boundary tests exercise these
 classes; agreement does not prove a source-to-execution theorem.
 
 The shared [byte fixtures](../../../common/tests/fixtures/program/bytes.json)
-provide exact UTF-8 inputs and expected static-admission decisions. Both the
+provide exact UTF-8 inputs, with repeat segments for large ones, and the expected
+normalized result of static admission: the static instruction count and
+descriptor charge of an admitted program, or the class of a refusal. Both the
 compiler codec test and Rust reader consume this same corpus. It includes
 alternate JSON whitespace/escapes, explicit stops, local and participant loops,
-conditional completion, and malformed or unresolved records in dormant work.
+conditional completion, malformed or unresolved records in dormant work, a case
+at every bound of the table and one past it, each reaching its own bound first,
+and lexical cases for sibling and nested participant bodies, duplicates within
+one body, untaken arms and zero-trip loops.
 An independent formal reader can consume these fixtures without invoking the
 compiler. Their agreement is bounded evidence, not a proof of either reader.

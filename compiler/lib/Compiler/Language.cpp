@@ -105,6 +105,9 @@ struct CheckedOriginal::Storage {
   Correspondence report;
   LanguageInterface interfaceView;
   Limits limits;
+  /// Generated definitions and emitted sites of the emission that printed
+  /// these exact bytes.
+  EmissionRecord emission;
 };
 const Limits &CheckedOriginal::admissionLimits() const {
   return storage->limits;
@@ -150,8 +153,13 @@ Expected<NativeProofPolicy> proofPolicy(const CheckedOriginal &original) {
   }
   for (auto service : proof.services)
     policy.services.push_back(protocol.services[service].native);
-  for (auto index : proof.publicInputs)
-    append_range(policy.publicInputs, protocol.inputs[index].native);
+  auto remaining = original.admissionLimits().work;
+  auto publicNative = detail::interfacePublicNative(
+      protocol, proof.publicInputs, proof.verifier, remaining,
+      original.admissionLimits());
+  if (!publicNative)
+    return publicNative.takeError();
+  policy.publicInputs = std::move(*publicNative);
   return policy;
 }
 Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
@@ -163,25 +171,26 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
-  auto emitted = emitOriginal(entry, context, limits);
+  EmissionRecord record;
+  auto emitted = emitOriginal(entry, context, limits, &record);
   if (!emitted)
     return emitted.takeError();
   auto encoded = detail::emitInterface(entry, digest(*emitted),
                                        compilerToolchainIdentity(), limits);
   if (!encoded)
     return encoded.takeError();
-  return CheckedOriginal::admit(entry, *emitted, *encoded, limits, false);
+  return CheckedOriginal::admit(entry, *emitted, *encoded, limits, false,
+                                std::move(record));
 }
 Expected<CheckedOriginal> admitOriginal(const ClosedEntry &entry,
                                         StringRef original, StringRef interface,
                                         const Limits &limits) {
   return CheckedOriginal::admit(entry, original, interface, limits, true);
 }
-Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
-                                                 StringRef original,
-                                                 StringRef interface,
-                                                 const Limits &limits,
-                                                 bool requireCanonical) {
+Expected<CheckedOriginal>
+CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
+                       StringRef interface, const Limits &limits,
+                       bool requireCanonical, EmissionRecord prepared) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (original.size() > limits.irBytes ||
@@ -301,7 +310,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
     // Independent formation and correspondence above establish meaning. This
     // final filter fixes binding names, declaration order and source locations
     // as well as spelling; reprinting the candidate alone would not do so.
-    auto canonical = emitOriginal(entry, context, limits);
+    auto canonical = emitOriginal(entry, context, limits, &prepared);
     if (!canonical)
       return canonical.takeError();
     if (original != *canonical)
@@ -315,6 +324,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
       return error("source.interface", "interface encoding is not canonical");
   }
   storage->interfaceView = std::move(*interfaceView);
+  storage->emission = std::move(prepared);
   // Retained immutable originals may be read concurrently. Clones still share
   // MLIR's uniqued types/attributes, so their context must support those
   // readers.
@@ -331,6 +341,10 @@ detail::OriginalAccess::clone(const CheckedOriginal &original,
   auto source = original.storage->module.get();
   return mlir::OwningOpRef<mlir::ModuleOp>(mlir::cast<mlir::ModuleOp>(
       mapping ? source->clone(*mapping) : source->clone()));
+}
+const EmissionRecord &
+detail::OriginalAccess::emission(const CheckedOriginal &original) {
+  return original.storage->emission;
 }
 Expected<protocol::SourceView>
 detail::OriginalAccess::read(const CheckedOriginal &original) {

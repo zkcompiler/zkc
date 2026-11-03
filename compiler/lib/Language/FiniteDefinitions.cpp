@@ -1,28 +1,41 @@
 #include "Checker.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
+#include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Instances.h"
 using namespace llvm;
 namespace zkc::language::detail {
+namespace {
+namespace instances = protocol::instances;
+const instances::FiniteDefinition *finiteDefinition(StringRef identity) {
+  for (const auto &row : instances::finiteDefinitions())
+    if (row.identity == identity)
+      return &row;
+  return nullptr;
+}
+} // namespace
 bool Checker::finiteBody(Declaration &decl, Body &body) {
   const auto &identity = *sources[decl.id.index]->finiteDefinition;
-  StringRef name(identity);
   const bool mathematical = decl.kind == Declaration::Kind::Math;
   auto refuse = [&](StringRef message) {
     return types.fail("source.finite", message, decl.span);
   };
+  // The identity names a catalog row, which owns its meaning: the mode, fold
+  // or collect, the collected constructor and the predicate form.
+  const auto *definition = finiteDefinition(identity);
+  if (!definition)
+    return refuse("unknown finite definition identity");
   if ((decl.kind != Declaration::Kind::Math &&
        decl.kind != Declaration::Kind::Local) ||
-      !name.consume_front(mathematical ? "math." : "local.") ||
+      (definition->mode == instances::FiniteMode::Math) != mathematical ||
       decl.domainInputs.size() != 1 || decl.outputs.size() != 1 ||
       !decl.services.empty())
     return refuse("finite definition requires one domain and an ordinary "
                   "function signature of the selected mode");
-  bool filtered = name.consume_back("_where");
-  const bool fold = name == "fold";
+  const bool filtered = definition->filtered;
+  const bool fold = definition->operation == instances::FiniteOperation::Fold;
   const auto kind =
       fold ? FiniteApplication::Kind::Fold : FiniteApplication::Kind::Collect;
-  if (!fold && !name.consume_front("collect."))
-    return refuse("unknown finite definition identity");
   if (decl.inputs.size() != unsigned(fold) ||
       decl.scopedInputs.size() != (filtered ? 2u : 1u))
     return refuse("finite data or scoped input count differs");
@@ -33,20 +46,29 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
     if (decl.inputs.front().type != output)
       return refuse("fold initial and result state types differ");
   } else {
-    if (output.kind != Type::Kind::Builtin || output.domain != name ||
-        (name != "vector" && name != "groups" && name != "sequence" &&
-         name != "indices" && name != "field_array"))
+    // The collected constructor's catalog row supplies its rank-one element
+    // view and its parameters.
+    StringRef collection =
+        definition->collection ? StringRef(*definition->collection) : "";
+    const auto *declared = protocol::typeDeclaration(collection);
+    if (output.kind != Type::Kind::Builtin || output.domain != collection ||
+        !declared || !declared->collection || declared->collection->rank != 1 ||
+        declared->collection->element == protocol::CollectionElement::Byte)
       return refuse("collect requires its selected native collection result");
-    if (name == "indices") {
+    if (declared->collection->element == protocol::CollectionElement::Index) {
       if (!output.arguments.empty())
         return refuse("indices collection takes no element parameter");
       element = Type(Type::Kind::Index);
     } else {
-      if (output.arguments.size() != (name == "field_array" ? 2u : 1u))
+      if (output.arguments.empty() ||
+          output.arguments.size() != declared->parameters.size())
         return refuse("collection element parameters differ");
       element = output.arguments.front();
     }
-    if (filtered && name == "field_array")
+    // A natural parameter fixes the result size, which a predicate cannot.
+    if (filtered && any_of(declared->parameters, [](const auto &parameter) {
+          return parameter.kind == protocol::StaticKind::Nat;
+        }))
       return refuse("filtered collect cannot establish a fixed result size");
   }
   const auto mode =

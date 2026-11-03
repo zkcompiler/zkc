@@ -56,6 +56,24 @@ Expected<protocol::OracleRealizationPolicy> packagedSelection(StringRef bytes) {
   return error("entry.deployment", "missing oracle selection");
 }
 } // namespace
+Expected<CompileOptionFields>
+encodeCompileOptions(bool simplify, bool releaseStorage,
+                     const MathematicalSelectionPolicy &mathematics,
+                     const protocol::OracleRealizationPolicy &oracle) {
+  auto selection = protocol::encodeOracleRealizationPolicy(oracle);
+  if (!selection)
+    return selection.takeError();
+  CompileOptionFields fields;
+  fields.emplace_back("oracle_realization", std::move(*selection));
+  fields.emplace_back("simplify", simplify);
+  fields.emplace_back("release_storage", releaseStorage);
+  fields.emplace_back("finite_bulk", mathematics.finiteBulk);
+  fields.emplace_back("fuse_vector_reductions",
+                      mathematics.vectorReductionFusion);
+  fields.emplace_back("fuse_collect_fold", mathematics.collectFoldFusion);
+  fields.emplace_back("calculation_batching", mathematics.calculationBatching);
+  return fields;
+}
 namespace detail {
 Expected<PackagedEntry> readPackagedEntry(StringRef bytes,
                                           const Limits &limits) {
@@ -69,14 +87,18 @@ Expected<PackagedEntry> readPackagedEntry(StringRef bytes,
       !p->getString("artifact") || !p->getArray("assets") ||
       !p->getObject("options"))
     return error("entry.deployment", "invalid exact child package");
+  // Exactly the published option names, each with its published value kind.
   auto *options = p->getObject("options");
-  if (options->size() != 7 || !options->get("oracle_realization"))
+  auto published =
+      cantFail(encodeCompileOptions(true, false, MathematicalSelectionPolicy(),
+                                    protocol::OracleRealizationPolicy()));
+  if (options->size() != published.size())
     return error("entry.deployment", "invalid child compiler options");
-  for (StringRef option :
-       {"simplify", "release_storage", "finite_bulk", "fuse_vector_reductions",
-        "fuse_collect_fold", "calculation_batching"})
-    if (!options->getBoolean(option))
+  for (const auto &[name, value] : published) {
+    const json::Value *option = options->get(name);
+    if (!option || option->kind() != value.kind())
       return error("entry.deployment", "invalid child compiler option");
+  }
   auto selection = packagedSelection(bytes);
   if (!selection)
     return selection.takeError();

@@ -67,15 +67,25 @@ for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
                              [transcript_domain], '',
                              [transcript, ['apply', 'indices', []]],
                              [field, transcript]] for op in challenges)
-        assert len(producer) == len(validator) == 10
+        assert len(producer) == len(validator) == 11
         assert validator[9] == []
+        # Each child carries the native rows of the identities it names, closed
+        # under associated members: the BLS12-381 field, its pairing groups and
+        # the policy's transcript suite; only the producer's port names a service.
+        for child in (producer, validator):
+            assert [row[1] for row in child[10][0]] == [
+                "bls12-381.fr", "bls12-381.g2", "bls12-381.gt", "bls12-381.g1", policy[5]]
+        suite_row = validator[10][0][-1]
+        assert suite_row[:4] == ["nominal", policy[5], "Transcript", [["ChallengeField", "bls12-381.fr"]]]
+        assert validator[10][1] == []
         if name == "Schnorr":
             assert producer[9] == [["service_3", policy[2], "3", "3", "random.bls12-381.fr/0"]]
+            assert producer[10][1] == [["service", "random.bls12-381.fr/0", "bls12-381.fr", ["draw"]]]
             query = next(op for op in instructions(producer[7]) if op[0] == "protocol.service_query")
             assert query[3] == [] and len(query) == 7 and query[6][1] == []
             assert query[4] == [field]
         else:
-            assert producer[9] == []
+            assert producer[9] == [] and producer[10][1] == []
         for role, value in [("producer", producer), ("validator", validator), ("pair", pair)]:
             (directory / f"{role}.json").write_text(json.dumps(value) + "\n")
 

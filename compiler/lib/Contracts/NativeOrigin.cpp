@@ -82,12 +82,18 @@ Expected<NativeOriginTemplate> decodeNativeOriginTemplate(StringRef hex) {
     return invalid();
   for (uint64_t i = 0; i < count; ++i) {
     NativeOriginStep step;
-    if (!reader.array(3) || !reader.string(value) ||
-        (value != "apply" && value != "repeat") ||
-        !reader.name(step.protocol) || !reader.name(step.site))
+    uint64_t width;
+    if (!reader.header(1, width) || !reader.string(value) ||
+        (value != "apply" && value != "repeat" && value != "branch") ||
+        width != (value == "branch" ? 4u : 3u) || !reader.name(step.protocol) ||
+        !reader.name(step.site))
       return invalid();
-    step.kind = value == "apply" ? NativeOriginStep::Kind::Apply
-                                 : NativeOriginStep::Kind::Repeat;
+    step.kind = value == "apply"    ? NativeOriginStep::Kind::Apply
+                : value == "repeat" ? NativeOriginStep::Kind::Repeat
+                                    : NativeOriginStep::Kind::Branch;
+    if (step.kind == NativeOriginStep::Kind::Branch &&
+        !reader.name(step.alternative))
+      return invalid();
     result.path.push_back(std::move(step));
   }
   if (!reader.array(0) || !reader.header(1, count) || !reader.string(value))
@@ -175,11 +181,17 @@ encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
                 origin.entry.size() + 9 + 9 + 9;
   for (const auto &step : origin.path) {
     if ((step.kind != NativeOriginStep::Kind::Apply &&
-         step.kind != NativeOriginStep::Kind::Repeat) ||
-        !identifier(step.protocol) || !identifier(step.site))
+         step.kind != NativeOriginStep::Kind::Repeat &&
+         step.kind != NativeOriginStep::Kind::Branch) ||
+        !identifier(step.protocol) || !identifier(step.site) ||
+        (step.kind == NativeOriginStep::Kind::Branch
+             ? !identifier(step.alternative)
+             : !step.alternative.empty()))
       return error("interactive-native-origin");
     size += 9 + 9 + (step.kind == NativeOriginStep::Kind::Apply ? 5 : 6) + 9 +
             step.protocol.size() + 9 + step.site.size();
+    if (step.kind == NativeOriginStep::Kind::Branch)
+      size += 9 + step.alternative.size();
   }
   for (const auto &part : event)
     size += 9 + part.size();
@@ -192,11 +204,14 @@ encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
   string(bytes, origin.entry);
   header(bytes, 1, origin.path.size());
   for (const auto &step : origin.path) {
-    header(bytes, 1, 3);
-    string(bytes,
-           step.kind == NativeOriginStep::Kind::Apply ? "apply" : "repeat");
+    header(bytes, 1, step.kind == NativeOriginStep::Kind::Branch ? 4 : 3);
+    string(bytes, step.kind == NativeOriginStep::Kind::Apply    ? "apply"
+                  : step.kind == NativeOriginStep::Kind::Repeat ? "repeat"
+                                                                : "branch");
     string(bytes, step.protocol);
     string(bytes, step.site);
+    if (step.kind == NativeOriginStep::Kind::Branch)
+      string(bytes, step.alternative);
   }
   header(bytes, 1, 0);
   header(bytes, 1, event.size());
@@ -226,7 +241,9 @@ encodeNativeOriginTemplate(StringRef entry,
       return error("interactive-native-origin");
     origin.path.push_back({step[0] == "apply" ? NativeOriginStep::Kind::Apply
                                               : NativeOriginStep::Kind::Repeat,
-                           step[1], step[2]});
+                           step[1],
+                           step[2],
+                           {}});
   }
   if (event[0] == "query" && event.size() == 7) {
     auto input = inputPort(event[3]);

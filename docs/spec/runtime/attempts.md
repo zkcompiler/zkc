@@ -12,17 +12,19 @@ deployment. It is not supplied by a candidate proof or inferred from its header:
 ["zkc.native-attempt-policy/0", completion_original_result,
  [[rng_original_input, rng_original_result], ...],
  [attempt_limit, proof_byte_limit],
- [instruction_limit, iteration_limit, logical_work_limit],
- [live_payload_limit, total_payload_limit]]
+ [instruction_limit, iteration_limit]]
 ```
 
-Every number is a canonical unsigned decimal string. Parsing is bounded to
-64 KiB and the existing logical JSON tree limits. Port indices are below 1024;
-attempts are 1 through 1024. Proof bytes cannot exceed 16 MiB; instruction,
-iteration, logical-work and payload limits cannot exceed the corresponding
-interpreter hard ceilings or the selected [capacity](capacity.md). Zero work,
-payload or proof budgets are deliberate execution refusals, not unbounded values.
-The proof cap includes the framing header.
+Every number is a canonical unsigned decimal string, and every field is
+required. Parsing is bounded to 64 KiB and the existing logical JSON tree
+limits. Port indices are below 1024; attempts are 1 through 1024. Proof bytes
+cannot exceed 16 MiB; instruction and iteration limits cannot exceed the
+interpreter hard ceilings or the selected [capacity](capacity.md). Zero
+instruction, iteration or proof budgets are deliberate execution refusals, not
+unbounded values. The proof cap includes the framing header. The policy selects
+no byte allowance: the call's
+[invocation root](capacity.md#invocation-ledgers) bounds the logical work,
+fresh bytes and live bytes of every attempt.
 
 The completion port must name a producer Boolean result. True completes; false
 requests retry. RNG pairs are a bijection over producer RNG input/result ports,
@@ -36,11 +38,14 @@ and actual provider state across entry leases.
 
 Each attempt issues a fresh selected-suite transcript with the same invocation
 root, then retires it after runner cleanup. The host does not reset RNG/service
-state or external primitive-work charge. Remaining interpreter instruction/call/
-iteration, logical-work and total payload allowances are passed into each runner;
-initialization failure retains reached charges. Each attempt's runner charges its
-entry inputs again, even when their storage is shared with a previous attempt.
-Live payload and transcript-transition limits are per attempt. Transcript initialization reabsorbs the bounded invocation root
+state or external primitive-work charge. The remaining instruction and
+iteration fuel is passed into each runner; initialization failure retains
+reached charges. Each attempt's runner charges its entry inputs again, even when
+their storage is shared with a previous attempt. Transcript-transition limits
+are per attempt. Every attempt's runner charges its bytes to the call's
+[invocation root](capacity.md#invocation-ledgers) as it executes and keeps no
+byte allowance of its own; a discarded attempt keeps its committed charges, so
+later attempts run on what the root has left. Transcript initialization reabsorbs the bounded invocation root
 once per attempt, outside interpreter and external-work charges. The proof
 writer enforces the per-attempt byte cap before extending its buffer. Terminal
 execution and cleanup failures prevent retry and publication. Cleanup diagnostics
@@ -71,7 +76,7 @@ unsupported message types.
 | Application | Authorize the deployment, retry result and RNG mapping, public context and resource/work limits. |
 | Native host | Issue persistent roots once, reinstall the same service references for each entry, create/retire an attempt transcript, and recover backend custody on every outcome. |
 | Controller | Discard retry bytes, preserve successor state and stop at the attempt limit. |
-| Interpreter | Enforce the remaining instruction/iteration and payload budgets inside execution, including local bodies and initialization. |
+| Interpreter | Enforce the remaining instruction and iteration fuel and the root's byte allowances inside execution, including local bodies and initialization. |
 | Publisher | Publish only a completed result after session cleanup succeeds. |
 
 The host resolves original common-program port indices through the deployment's
@@ -110,10 +115,10 @@ cryptographic retry probability.
 
 | Budget | Scope |
 |---|---|
-| Attempt count | Whole host invocation; 1 through 1024. |
-| Proof bytes | Each tentative proof, including framing, enforced by the writer during production. |
-| Instructions and iterations | Cumulative across all runners in the invocation, bounded by interpreter hard ceilings. |
-| Retained payload charge | Live limit per runner and cumulative total charge across attempts; counts bindings, not process RSS. |
+| Attempt count | Whole host invocation; default 1, maximum 1024. |
+| Proof bytes | Each tentative proof, including framing, enforced by the writer during production; default and maximum 16 MiB. |
+| Instructions and iterations | Runner fuel, cumulative across the attempts of one call, bounded by the selected capacity; by default one million instructions and 100,000 iterations, at most 2^32 of each. |
+| Logical work, fresh and live bytes | The call's [invocation root](capacity.md#invocation-ledgers), with no policy field: every attempt's runner bytes and proof buffer, and the completed proof's retained copy, are charged there before they grow, and a discarded attempt keeps its cumulative charge. These count retained payload bindings, not process RSS. |
 | RNG and service draws | One persistent root budget; failed scalar consumes can increment generation/debit before refusal. |
 | Transcript transitions | Per freshly issued attempt transcript; observations remain in the attempt record. |
 | Transcript initialization | Reabsorbs the bounded invocation root once per attempt, outside interpreter and external-work charges; bounded by root size times attempt count. |

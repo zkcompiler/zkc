@@ -121,6 +121,22 @@ admitted local request is a zero-operand field `draw`, with one field result;
 unused replies and unused ports remain retained. It consumes no transcript
 capability and does not identify a public challenge.
 
+The rendered module keeps the export's catalogue slot as `catalogue` beside the
+participant: the native rows of every identity the participant names, closed
+under associated members, and the rows of the random services of its ports, in
+the encoding of the [structured catalogue](structured-source.md#domain-catalogue).
+The renderer projects binding members and capability facts through these rows
+and through no other table. `Participant.checkCatalogue` admits them against
+`constructionCatalogue`: the rows are consistent and equal Lean's rows, every
+stored sort is an admitted instance, the policy suite and every port's service
+have rows, a challenge's field is its suite's `ChallengeField`, an embedding's
+base is its extension's `BaseField`, a scaling field is its group's `Scalar`,
+and a local request is a method of its service at the field the service
+samples. An identity outside Lean's catalogue refuses with
+`structured-catalogue-unknown`. The subject driver checks the fresh export's
+rows in the kernel; admission of rows is separate from the construction rule
+and from the laws of any field, group or transcript they name.
+
 `AuthoredPair.selectionValid` checks the complete native port interface against
 the original source. `SourceOccurrences.localValid` follows exact source
 application and repeat steps, carries service aliases through restrictions and
@@ -132,12 +148,17 @@ source-to-producer execution correspondence are separate obligations. The
 validator construction rule continues to refuse local requests, preserving
 the scope of its transform and adversarial meanings.
 
-A template keeps the native path (application and repeat steps) and event. Its
-model occurrence, the origin the transform absorbs, names a message by its
-qualified site and its sender and receiver, and a selected challenge by its
-qualified query site under the context's replaced service
-(`Template.origin`); a site is qualified by the path's applications as the
-structured semantics qualifies nested sites.
+A template keeps the native path and event. A path step is an application or
+a repeat (three fields), or a branch step (four fields) that keeps the selected
+arm's exact declared alternative and precedes only events of that arm; a branch
+adds no dynamic coordinate. Its model occurrence, the origin the transform
+absorbs, names a message by its qualified site and its sender and receiver, and
+a selected challenge by its qualified query site under the context's replaced
+service (`Template.origin`); a site is qualified by the path's applications as
+the structured semantics qualifies nested sites. Source occurrence resolution
+and the construction and executable occurrence rules admit application and
+repeat paths only: selected source regions are outside their profile, so a
+template with a branch step resolves to no source frame and is refused.
 
 `Domain.participant` interprets the actual instruction list once. An
 observation appends the nominal message to its transcript operand; a challenge

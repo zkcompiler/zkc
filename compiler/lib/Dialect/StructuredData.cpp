@@ -126,7 +126,8 @@ struct TypeCodec {
               [&] { return silent(type.getContext()); },
               variant.getIdentity().getTerm())) ||
           variant.getAlternatives().empty() ||
-          variant.getAlternatives().size() > 512)
+          variant.getAlternatives().size() >
+              data::VariantType::maximumAlternatives)
         return refuse();
       json::Array alternatives;
       llvm::StringSet<> labels;
@@ -271,7 +272,8 @@ struct TypeCodec {
         return term.takeError();
       auto array = dyn_cast<ArrayAttr>(*term);
       auto arms = (*row)[2].getAsArray();
-      if (!array || !arms || arms->empty() || arms->size() > 512)
+      if (!array || !arms || arms->empty() ||
+          arms->size() > data::VariantType::maximumAlternatives)
         return refuse();
       auto identity = data::IdentityAttr::getChecked(emit, context, array);
       if (!identity)
@@ -407,11 +409,16 @@ Expected<json::Value> parameterData(Attribute parameter) {
     if (!value)
       return value.takeError();
     json::Array path, event;
-    for (const auto &step : value->path)
-      path.push_back(json::Array{
-          step.kind == protocol::NativeOriginStep::Kind::Apply ? "apply"
-                                                               : "repeat",
-          step.protocol, step.site});
+    for (const auto &step : value->path) {
+      json::Array frame{
+          step.kind == protocol::NativeOriginStep::Kind::Apply    ? "apply"
+          : step.kind == protocol::NativeOriginStep::Kind::Repeat ? "repeat"
+                                                                  : "branch",
+          step.protocol, step.site};
+      if (step.kind == protocol::NativeOriginStep::Kind::Branch)
+        frame.push_back(step.alternative);
+      path.push_back(std::move(frame));
+    }
     if (auto *query = std::get_if<protocol::NativeQueryOrigin>(&value->event))
       event = json::Array{
           "query",        query->protocol,

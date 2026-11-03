@@ -50,7 +50,7 @@ theorem producer_equation
 
 def validatorSignature : Signature :=
   ⟨[], false, true, program.payload.definitions.map CheckedDefinition.helper,
-    [⟨reductionSignature installation.reductionName, 1, validatorPattern, [none,none,none,none]⟩]⟩
+    [⟨reductionSignature installation.reductionName, 1, validatorPattern, [none,none,none,none,none]⟩]⟩
 
 variable (model : DomainModel)
 
@@ -61,6 +61,7 @@ def validatorCallees :
     (Occurrence.table model program.payload) installation.maximum ctx
     (entryAt args .here) (entryAt args (.there .here)) (entryAt args (.there (.there .here)))
     (entryAt args (.there (.there (.there .here))))
+    (entryAt args (.there (.there (.there (.there .here)))))
   | ⟨_+1, outside⟩ => absurd outside (by simp [validatorSignature])
 
 theorem validatorCallees_hold {types : List Ty} (input : Values (Component model.Value) types) :

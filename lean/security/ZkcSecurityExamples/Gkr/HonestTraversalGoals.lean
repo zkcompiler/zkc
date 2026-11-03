@@ -15,7 +15,7 @@ open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 
 set_option maxRecDepth 20000
 
-helper_callback traversalCallback from GkrSourceBodies.helper34Body
+helper_callback traversalCallback from GkrSourceBodies.helper65Body
 helper_presentation TraversalStep
   inputs [iteration, values, current, addWeights, mulWeights, selector, width]
   outputs [values, current, addWeights, mulWeights, selector, width] := traversalCallback

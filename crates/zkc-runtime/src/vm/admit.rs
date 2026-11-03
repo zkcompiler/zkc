@@ -83,7 +83,10 @@ impl Program {
         self.executable.functions[symbol].clone()
     }
     pub(super) fn loop_inputs(&self, participant: &str, site: &str) -> &FrameInputs {
-        &self.executable.participant_layouts[participant][site]
+        &self.executable.participant_layouts[participant][site][0]
+    }
+    pub(super) fn branch_inputs(&self, participant: &str, site: &str, arm: usize) -> &FrameInputs {
+        &self.executable.participant_layouts[participant][site][arm]
     }
     /// Decode, structurally admit and prepare an immutable VM program.
     /// This performs no backend installation and grants no execution authority.
@@ -138,6 +141,14 @@ impl Program {
     pub fn requires_boolean_literals(&self) -> bool {
         self.executable.requires_boolean_literals
     }
+    /// Instruction records across all bodies, as admission counted them.
+    pub fn static_instructions(&self) -> usize {
+        self.program.static_instructions
+    }
+    /// Cumulative descriptor charge units, as admission charged them.
+    pub fn descriptor_charge(&self) -> usize {
+        self.program.descriptor_charge
+    }
 }
 
 #[derive(Clone)]
@@ -167,7 +178,8 @@ fn lookup(env: &Env, name: &str) -> Result<PhysicalType> {
         return Err(err(
             ErrorCode::Ssa,
             format!("interactive-resource-reuse: consumed operand {name}"),
-        ));
+        )
+        .with_class(RefusalClass::AffineUse));
     }
     Ok(b.ty.clone())
 }
@@ -213,17 +225,6 @@ fn site(sites: &mut BTreeSet<String>, site: &str) -> Result<()> {
     }
     Ok(())
 }
-/// Operations whose natural attributes are vector sizes, positions or degrees.
-const VECTOR_EXTENTS: [&str; 8] = [
-    "vector.splat",
-    "vector.powers",
-    "vector.at",
-    "vector.length_check",
-    "poly.degree_check",
-    "random.vector",
-    "vector.gather",
-    "vector.matvec",
-];
 fn natural_syntax(value: &str) -> Result<()> {
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
         return Err(err(ErrorCode::Attributes, "expected-natural"));
@@ -522,7 +523,8 @@ fn local_body(
                     // external duplex states are ordinary checked data and carry
                     // no origin attribute, yet they hold the same history.
                     if LocalInstruction::walk(&arm.body).iter().any(|op| matches!(op, LocalInstruction::Op { binding, .. } if binding.observes_history())) {
-                        return Err(err(ErrorCode::Signature, "match-protocol-effect"));
+                        return Err(err(ErrorCode::Signature, "match-protocol-effect")
+                            .with_class(RefusalClass::UnsupportedProfile));
                     }
                     if arm.alternative != declared.label()
                         || arm.payload.len() != declared.payload().len()
@@ -633,7 +635,8 @@ fn local_body(
                 for name in captures {
                     let ty = lookup(&env, name)?;
                     if !ty.is_duplicable() {
-                        return Err(err(ErrorCode::Capture, "affine local loop capture"));
+                        return Err(err(ErrorCode::Capture, "affine local loop capture")
+                            .with_class(RefusalClass::AffineUse));
                     }
                     if diagonal(ty.clone()) {
                         return Err(err(ErrorCode::Signature, "diagonal-escape"));
@@ -664,13 +667,8 @@ fn local_body(
                 } else {
                     "interactive-kernel-parameters"
                 };
-                let contract = binding.declaration().contract.as_str();
-                let natural_limit = if contract == "curve.at" || VECTOR_EXTENTS.contains(&contract)
-                {
-                    1_048_576
-                } else {
-                    u64::MAX
-                };
+                let natural_limit =
+                    super::operations::natural_parameter_bound(&binding.declaration().contract);
                 if sig.attributes == AttributeRule::NumericalExpression {
                     super::operations::numerical::parameters(binding.declaration(), a)?;
                 } else {
@@ -728,7 +726,8 @@ fn local_body(
                     // ordinary storage. Resource exclusion is a logical-kind
                     // property, independently of the physical representation.
                     if !ty.is_discardable() {
-                        return Err(err(ErrorCode::Type, "release-resource"));
+                        return Err(err(ErrorCode::Type, "release-resource")
+                            .with_class(RefusalClass::AffineUse));
                     }
                     env.get_mut(name).expect("looked up").available = false;
                 }
@@ -781,7 +780,7 @@ struct Check<'a> {
     services: &'a [super::ServicePort],
     seen: BTreeSet<String>,
     schemas: &'a mut BTreeMap<(String, String), PhysicalType>,
-    loop_inputs: &'a mut BTreeMap<String, FrameInputs>,
+    region_inputs: &'a mut BTreeMap<String, Vec<FrameInputs>>,
 }
 impl Check<'_> {
     fn message(&mut self, schema: &str, peer: &str, ty: PhysicalType) -> Result<()> {
@@ -807,12 +806,13 @@ impl Check<'_> {
         &mut self,
         body: &Body,
         mut env: Env,
-        expected: &[PhysicalType],
+        expected: Option<&[PhysicalType]>,
         in_loop: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<PhysicalType>> {
         if body.is_empty() {
             return Err(err(ErrorCode::Terminal, "empty body"));
         }
+        let mut returned = Vec::new();
         for (i, instruction) in body.iter().enumerate() {
             let terminal = matches!(instruction, Instruction::Return(_) | Instruction::Yield(_));
             if terminal != (i + 1 == body.len()) {
@@ -822,6 +822,100 @@ impl Check<'_> {
                 ));
             }
             match instruction {
+                Instruction::Conditional {
+                    site: s,
+                    condition,
+                    captures,
+                    then_body,
+                    else_body,
+                    outputs,
+                } => {
+                    site(&mut self.sites, s)?;
+                    operands(
+                        &mut env,
+                        std::slice::from_ref(condition),
+                        std::slice::from_ref(&*super::code::BOOL_TYPE),
+                    )?;
+                    let (child, ports) = self.branch_captures(&mut env, captures)?;
+                    let names = self.region_names(&child);
+                    let outer_seen = std::mem::replace(&mut self.seen, names);
+                    let left = self.body(then_body, child.clone(), None, true)?;
+                    self.seen = self.region_names(&child);
+                    let right = self.body(else_body, child, None, true)?;
+                    self.seen = outer_seen;
+                    if left != right {
+                        return Err(err(ErrorCode::Signature, "participant-if-yield"));
+                    }
+                    self.region_inputs
+                        .insert(s.clone(), vec![ports.clone(), ports]);
+                    results(&mut env, &mut self.seen, outputs, &left)?;
+                }
+                Instruction::Match {
+                    site: s,
+                    input,
+                    captures,
+                    arms,
+                    outputs,
+                } => {
+                    site(&mut self.sites, s)?;
+                    let ty = lookup(&env, input)?;
+                    let logical = ty.logical();
+                    let descriptor = logical
+                        .variant_descriptor()
+                        .ok_or_else(|| err(ErrorCode::Type, "match-scrutinee"))?;
+                    if arms.len() != descriptor.alternatives().len() {
+                        return Err(err(ErrorCode::Signature, "match-exhaustive"));
+                    }
+                    operands(
+                        &mut env,
+                        std::slice::from_ref(input),
+                        std::slice::from_ref(&ty),
+                    )?;
+                    let (captured, capture_ports) = self.branch_captures(&mut env, captures)?;
+                    let shared_captures: Arc<[_]> =
+                        capture_ports.iter().cloned().collect::<Vec<_>>().into();
+                    let mut layouts = Vec::new();
+                    let mut joined = None;
+                    let outer_seen = self.seen.clone();
+                    for (i, (arm, alternative)) in
+                        arms.iter().zip(descriptor.alternatives()).enumerate()
+                    {
+                        if arm.alternative != alternative.label() {
+                            return Err(err(ErrorCode::Signature, "match-alternative"));
+                        }
+                        let types = ty
+                            .variant_payload(i)
+                            .ok_or_else(|| err(ErrorCode::Type, "match-payload"))?;
+                        if arm.payload.len() != types.len() {
+                            return Err(err(ErrorCode::Signature, "match-payload"));
+                        }
+                        let mut child = captured.clone();
+                        self.seen = self.region_names(&child);
+                        for (name, ty) in arm.payload.iter().zip(types) {
+                            define(&mut child, &mut self.seen, name, ty.clone())?;
+                        }
+                        let ports = arm
+                            .payload
+                            .iter()
+                            .zip(types)
+                            .map(|(n, t)| (n.clone(), t.clone()))
+                            .collect();
+                        layouts.push(FrameInputs::with_captures(ports, shared_captures.clone()));
+                        let types = self.body(&arm.body, child, None, true)?;
+                        if joined.as_ref().is_some_and(|old| old != &types) {
+                            return Err(err(ErrorCode::Signature, "participant-match-yield"));
+                        }
+                        joined = Some(types);
+                    }
+                    self.seen = outer_seen;
+                    self.region_inputs.insert(s.clone(), layouts);
+                    results(
+                        &mut env,
+                        &mut self.seen,
+                        outputs,
+                        &joined.unwrap_or_default(),
+                    )?;
+                }
                 Instruction::Query {
                     site: s,
                     port,
@@ -835,10 +929,11 @@ impl Check<'_> {
                         .iter()
                         .find(|p| &p.name == port)
                         .ok_or_else(|| err(ErrorCode::Symbol, "unknown service port"))?;
-                    let signature = port
-                        .contract
-                        .signature(method)
-                        .ok_or_else(|| err(ErrorCode::Type, "unsupported service method"))?;
+                    // Methods resolve in the service contract's namespace.
+                    let signature = port.contract.signature(method).ok_or_else(|| {
+                        err(ErrorCode::Type, "unsupported service method")
+                            .with_class(RefusalClass::NamesAndSsa)
+                    })?;
                     operands(&mut env, inputs, &signature.inputs)?;
                     results(&mut env, &mut self.seen, outputs, &signature.outputs)?;
                 }
@@ -891,7 +986,8 @@ impl Check<'_> {
                 } => {
                     site(&mut self.sites, s)?;
                     if count.maximum > Limits::LOOP_COUNT {
-                        return Err(err(ErrorCode::Record, "interactive-loop-count"));
+                        return Err(err(ErrorCode::Record, "interactive-loop-count")
+                            .with_class(RefusalClass::Capacity));
                     }
                     let induction_type = lookup(&env, &count.value)?;
                     if induction_type != PhysicalType::parse("index@native.index/0")? {
@@ -906,29 +1002,40 @@ impl Check<'_> {
                         &carried.iter().map(|p| p.1.clone()).collect::<Vec<_>>(),
                         &types,
                     )?;
+                    // The body is a nested lexical environment: its formals and
+                    // the service ports. Its bindings are not visible after the
+                    // loop, and outer names may be reused in it. Sites and
+                    // message schemas stay participant-wide.
                     let mut child = Env::new();
+                    let region = self.region_names(&child);
+                    let outer_seen = std::mem::replace(&mut self.seen, region);
                     define(&mut child, &mut self.seen, &count.induction, induction_type)?;
                     for ((arg, _), ty) in carried.iter().zip(&types) {
                         define(&mut child, &mut self.seen, arg, ty.clone())?;
                     }
                     for (local, parent) in captures {
+                        if self.services.iter().any(|port| &port.name == local) {
+                            return Err(err(ErrorCode::Type, "service-port-interface")
+                                .with_class(RefusalClass::NamesAndSsa));
+                        }
                         let ty = lookup(&env, parent)?;
                         if !ty.is_duplicable() {
                             return Err(err(
                                 ErrorCode::Capture,
                                 "affine values must be loop-carried, not invariant captures",
-                            ));
-                        }
-                        self.seen.insert(local.clone());
-                        if child
-                            .insert(
-                                local.clone(),
-                                Binding {
-                                    ty,
-                                    available: true,
-                                },
                             )
-                            .is_some()
+                            .with_class(RefusalClass::AffineUse));
+                        }
+                        if !self.seen.insert(local.clone())
+                            || child
+                                .insert(
+                                    local.clone(),
+                                    Binding {
+                                        ty,
+                                        available: true,
+                                    },
+                                )
+                                .is_some()
                         {
                             return Err(err(ErrorCode::Capture, "duplicate/overlapping capture"));
                         }
@@ -942,11 +1049,12 @@ impl Check<'_> {
                         .iter()
                         .map(|(name, _)| (name.clone(), child[name].ty.clone()))
                         .collect::<Vec<_>>();
-                    self.loop_inputs.insert(
+                    self.region_inputs.insert(
                         s.clone(),
-                        FrameInputs::with_captures(explicit, captured.into()),
+                        vec![FrameInputs::with_captures(explicit, captured.into())],
                     );
-                    self.body(body, child, &types, true)?;
+                    self.body(body, child, Some(&types), true)?;
+                    self.seen = outer_seen;
                     results(&mut env, &mut self.seen, outputs, &types)?;
                 }
                 Instruction::ReturnIf {
@@ -970,12 +1078,76 @@ impl Check<'_> {
                         .collect();
                     results(&mut env, &mut self.seen, continuations, &types)?;
                 }
-                Instruction::Return(names) if !in_loop => operands(&mut env, names, expected)?,
-                Instruction::Yield(names) if in_loop => operands(&mut env, names, expected)?,
+                Instruction::Return(names) if !in_loop => {
+                    returned = self.terminal(&mut env, names, expected)?;
+                }
+                Instruction::Yield(names) if in_loop => {
+                    returned = self.terminal(&mut env, names, expected)?;
+                }
                 _ => return Err(err(ErrorCode::Terminal, "return/yield in wrong region")),
             }
         }
-        Ok(())
+        Ok(returned)
+    }
+    fn terminal(
+        &self,
+        env: &mut Env,
+        names: &[String],
+        expected: Option<&[PhysicalType]>,
+    ) -> Result<Vec<PhysicalType>> {
+        let types = names
+            .iter()
+            .map(|n| lookup(env, n))
+            .collect::<Result<Vec<_>>>()?;
+        operands(env, names, expected.unwrap_or(&types))?;
+        Ok(types)
+    }
+    fn region_names(&self, env: &Env) -> BTreeSet<String> {
+        env.keys()
+            .cloned()
+            .chain(self.services.iter().map(|p| p.name.clone()))
+            .collect()
+    }
+    /// Bind each distinct arm formal to its parent. Ordinary operand use admits
+    /// a repeated parent only for duplicable values; every formal keeps its own
+    /// port and storage binding.
+    fn branch_captures(
+        &self,
+        env: &mut Env,
+        captures: &[(String, String)],
+    ) -> Result<(Env, FrameInputs)> {
+        let parents = captures
+            .iter()
+            .map(|(_, parent)| parent.clone())
+            .collect::<Vec<_>>();
+        let types = parents
+            .iter()
+            .map(|n| lookup(env, n))
+            .collect::<Result<Vec<_>>>()?;
+        operands(env, &parents, &types)?;
+        let mut child = Env::new();
+        let mut ports = Vec::new();
+        for ((local, _), ty) in captures.iter().zip(types) {
+            // Service names share the participant value namespace.
+            if self.services.iter().any(|port| &port.name == local) {
+                return Err(err(ErrorCode::Type, "service-port-interface")
+                    .with_class(RefusalClass::NamesAndSsa));
+            }
+            if child
+                .insert(
+                    local.clone(),
+                    Binding {
+                        ty: ty.clone(),
+                        available: true,
+                    },
+                )
+                .is_some()
+            {
+                return Err(err(ErrorCode::Capture, "duplicate/overlapping capture"));
+            }
+            ports.push((local.clone(), ty));
+        }
+        Ok((child, ports.into()))
     }
 }
 fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayouts> {
@@ -1004,7 +1176,7 @@ fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayout
         {
             return Err(err(ErrorCode::Type, "variant-participant-boundary"));
         }
-        if participant.inputs.len() + participant.services.len() > Limits::PORTS {
+        if participant.inputs.len() + participant.services.len() > Limits::PARTICIPANT_INTERFACE {
             return Err(err(ErrorCode::Limit, "interactive-port-limit"));
         }
         let (env, mut seen) = environment(&participant.inputs)?;
@@ -1014,7 +1186,8 @@ fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayout
                 || !indices.insert(port.input_index)
                 || port.input_index >= participant.inputs.len() + participant.services.len()
             {
-                return Err(err(ErrorCode::Type, "service-port-interface"));
+                return Err(err(ErrorCode::Type, "service-port-interface")
+                    .with_class(RefusalClass::NamesAndSsa));
             }
         }
         Check {
@@ -1027,11 +1200,11 @@ fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayout
             sites: BTreeSet::new(),
             seen,
             schemas: &mut schemas,
-            loop_inputs: participant_layouts
+            region_inputs: participant_layouts
                 .entry(participant.symbol.clone())
                 .or_default(),
         }
-        .body(&participant.body, env, &participant.outputs, false)?;
+        .body(&participant.body, env, Some(&participant.outputs), false)?;
     }
     for (name, roles) in &p.entries {
         if p.functions.contains_key(name) {

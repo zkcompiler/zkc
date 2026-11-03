@@ -61,9 +61,8 @@ def participantActionsOn : PIR.OperationInterpretation
 
 theorem observedSitesOn_forgetSitesOn :
     SiteObservations.Interprets forgetSitesOn (observedSitesOn carriers)
-      (.silent (participantInterfaceOn carriers)) := by
-  intro site
-  rfl
+      (.silent (participantInterfaceOn carriers)) :=
+  ⟨fun _ => rfl, fun _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
 
 theorem observeActionOn_forgetSitesOn (action : (participantInterfaceOn carriers).Op) :
     (observeActionOn action).interpret forgetSitesOn = participantActionsOn carriers action := by
@@ -260,9 +259,8 @@ def observedToOn : PIR.OperationInterpretation (observedInterface F G)
   | .action action => .call (.action action) .done
 
 theorem observedSites_toOn :
-    SiteObservations.Interprets observedToOn (observedSites F G) (observedSitesOn (uniformCarriers F G)) := by
-  intro site
-  rfl
+    SiteObservations.Interprets observedToOn (observedSites F G) (observedSitesOn (uniformCarriers F G)) :=
+  ⟨fun _ => rfl, fun _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
 
 theorem observeAction_toOn (action : (participantInterface F G).Op) :
     (observeAction action).interpret observedToOn = observeActionOn (carriers := uniformCarriers F G) action :=

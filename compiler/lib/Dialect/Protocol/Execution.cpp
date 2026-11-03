@@ -3,13 +3,16 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -31,13 +34,13 @@ class ExecutionModelReader {
     if (problem.empty())
       problem = why.str();
   }
-  bool attributes(Operation *op, ArrayRef<StringRef> allowed) {
-    for (auto a : op->getAttrs())
-      if (!is_contained(allowed, a.getName().getValue())) {
-        fail("interactive-unknown-attribute");
-        return false;
-      }
-    return true;
+  // The operation's decided semantic fields are admitted; a discardable
+  // attribute or call metadata is admitted only when named here.
+  bool attributes(Operation *op, ArrayRef<StringRef> named = {}) {
+    if (admitsFields(op, named))
+      return true;
+    fail("interactive-unknown-attribute");
+    return false;
   }
   protocol::Assignments pairs(ArrayAttr attrs, bool symbols = false) {
     if (!attrs) {
@@ -135,7 +138,7 @@ class ExecutionModelReader {
       if (isa<zkc::protocol_ir::MathematicalReturnOp,
               zkc::protocol_ir::FinishOp, zkc::protocol_ir::ProtocolYieldOp>(
               op)) {
-        if (!attributes(op, {}) || op != &block.back() ||
+        if (!attributes(op) || op != &block.back() ||
             op->getOperandTypes() != outputs) {
           fail("interactive-return-type");
           return {};
@@ -147,7 +150,7 @@ class ExecutionModelReader {
           instruction.value = program::Return{names(op->getOperands(), env)};
         out.push_back(std::move(instruction));
       } else if (auto completion = dyn_cast<zkc::protocol_ir::FinishIfOp>(op)) {
-        if (!attributes(op, {"site", "owner"}) || failed(completion.verify())) {
+        if (!attributes(op) || failed(completion.verify())) {
           fail("interactive-return-type");
           return {};
         }
@@ -162,8 +165,7 @@ class ExecutionModelReader {
       } else if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op)) {
         auto participant = op->getParentOfType<protocol_ir::ParticipantOp>();
         if (!participant || call.getRoleAttr() != participant.getRoleAttr() ||
-            !attributes(op, {"site", "callee", "role"}) ||
-            !callTypes(op, call.getCallee())) {
+            !attributes(op) || !callTypes(op, call.getCallee())) {
           fail("interactive-local-symbol");
           return {};
         }
@@ -195,8 +197,7 @@ class ExecutionModelReader {
           }
           return selected->spelling();
         };
-        if (!method || !attributes(op, {"site", "port", "method"}) ||
-            op->getNumResults() != 1 ||
+        if (!method || !attributes(op) || op->getNumResults() != 1 ||
             query.getInputs().size() != method->inputs.size() ||
             expected(method->output).empty() ||
             type(op->getResult(0).getType()) != expected(method->output) ||
@@ -213,7 +214,7 @@ class ExecutionModelReader {
                        query.getPort().str(), query.getMethod().str(),
                        names(query.getInputs(), env), results(op, env)}});
       } else if (isa<zkc::protocol_ir::EmitOp, zkc::protocol_ir::AwaitOp>(op)) {
-        if (!attributes(op, {"site", "schema", "peer"})) {
+        if (!attributes(op)) {
           fail("interactive-stage");
           return {};
         }
@@ -229,10 +230,89 @@ class ExecutionModelReader {
                                       attr(op, "peer").str(), n,
                                       type(op->getResult(0).getType())}});
         }
+      } else if (isa<zkc::protocol_ir::ParticipantBranchOp>(op)) {
+        auto alternatives = op->getAttrOfType<ArrayAttr>("alternatives");
+        if (!attributes(op) || op->getNumOperands() == 0 || !alternatives ||
+            alternatives.empty() ||
+            alternatives.size() != op->getNumRegions()) {
+          fail("interactive-branch-body");
+          return {};
+        }
+        auto selectorType =
+            encodeBoundType(op->getOperand(0).getType(), physical);
+        if (!selectorType) {
+          consumeError(selectorType.takeError());
+          fail("interactive-branch-selector");
+          return {};
+        }
+        bool boolean = selectorType->kind == "bool";
+        if (boolean &&
+            (alternatives.size() != 2 ||
+             alternatives[0] != StringAttr::get(op->getContext(), "then") ||
+             alternatives[1] != StringAttr::get(op->getContext(), "else"))) {
+          fail("interactive-branch-alternatives");
+          return {};
+        }
+        // Each arm formal has its own storage binding even when several Copy
+        // captures reference the same parent value, as in participant loops.
+        protocol::Assignments captured;
+        for (auto &parent : names(op->getOperands().drop_front(), env))
+          captured.emplace_back(fresh(), std::move(parent));
+        std::vector<program::MatchArm> arms;
+        for (auto [index, region] : enumerate(op->getRegions())) {
+          auto label = dyn_cast<StringAttr>(alternatives[index]);
+          if (!label || !llvm::hasSingleElement(region)) {
+            fail("interactive-branch-body");
+            return {};
+          }
+          SmallVector<Type> payload;
+          if (!boolean) {
+            auto types = data::variantPayloadTypes(op->getOperand(0).getType(),
+                                                   label.getValue());
+            if (!types) {
+              consumeError(types.takeError());
+              fail("interactive-branch-payload");
+              return {};
+            }
+            payload = std::move(*types);
+          }
+          auto &inner = region.front();
+          SmallVector<Type> expectedTypes(payload);
+          append_range(expectedTypes,
+                       op->getOperands().drop_front().getTypes());
+          if (inner.getArgumentTypes() != ArrayRef<Type>(expectedTypes)) {
+            fail("interactive-branch-payload");
+            return {};
+          }
+          Env nested;
+          program::Names bindings;
+          for (auto argument :
+               inner.getArguments().take_front(payload.size())) {
+            auto name = fresh();
+            nested[argument] = name;
+            bindings.push_back(std::move(name));
+          }
+          for (auto [argument, binding] :
+               zip(inner.getArguments().drop_front(payload.size()), captured))
+            nested[argument] = binding.first;
+          arms.push_back(
+              {label.getValue().str(), std::move(bindings),
+               body(inner, std::move(nested), op->getResultTypes())});
+        }
+        auto selector = name(op->getOperand(0), env);
+        auto joined = results(op, env);
+        if (boolean)
+          out.push_back(
+              {site, program::ParticipantConditional{
+                         std::move(selector), std::move(captured),
+                         std::move(arms[0].body), std::move(arms[1].body),
+                         std::move(joined)}});
+        else
+          out.push_back({site, program::ParticipantMatch{
+                                   std::move(selector), std::move(captured),
+                                   std::move(arms), std::move(joined)}});
       } else if (auto loop = dyn_cast<zkc::protocol_ir::ProtocolLoopOp>(op)) {
-        if (!attributes(op,
-                        {"site", "carried", "count", "parameter", "maximum"}) ||
-            !llvm::hasSingleElement(loop.getBody())) {
+        if (!attributes(op) || !llvm::hasSingleElement(loop.getBody())) {
           fail("interactive-loop-body");
           return {};
         }
@@ -291,8 +371,7 @@ class ExecutionModelReader {
     return out;
   }
   program::Participant participant(Operation *op) {
-    if (!attributes(op, {"sym_name", "function_type", "instance", "role",
-                         "service_ports"}))
+    if (!attributes(op, {"service_ports"}))
       return {};
     FunctionType ft = signature(op);
     if (!ft || op->getNumRegions() != 1) {
@@ -307,7 +386,7 @@ class ExecutionModelReader {
     // Artifact-local value names have no authority over service identities.
     // Reserve the latter before choosing names for actual SSA data arguments.
     if (auto ports = op->getAttrOfType<ArrayAttr>("service_ports")) {
-      if (ports.size() > 1024) {
+      if (ports.size() > program::listEntryLimit) {
         fail("interactive-port-limit");
         return {};
       }
@@ -364,8 +443,8 @@ public:
         physical(profile &&
                  profile.getValue() == zkc::protocol_ir::Profile::Physical) {}
   Expected<program::Participants> run() {
-    if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) ||
-        !attributes(root, {"profile", "source_declarations"}) || !profile ||
+    if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) || !attributes(root) ||
+        !profile ||
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
@@ -393,9 +472,7 @@ public:
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
       if (isa<zkc::runtime::BindingOp>(op)) {
-        if (!attributes(&op,
-                        {"sym_name", "contract", "arguments", "implementation",
-                         "function_type", "arg_attrs", "res_attrs"}))
+        if (!attributes(&op, {"arg_attrs", "res_attrs"}))
           return error("binding-attribute");
         auto binding = readBinding(&op);
         if (!binding)
@@ -407,7 +484,7 @@ public:
           return error(problem);
         participants.participants.push_back(std::move(value));
       } else if (auto entry = dyn_cast<zkc::protocol_ir::ProtocolEntryOp>(op)) {
-        if (!attributes(&op, {"sym_name", "targets"}))
+        if (!attributes(&op))
           return error("interactive-entry-attribute");
         program::ParticipantEntry value;
         value.name = entry.getSymName().str();

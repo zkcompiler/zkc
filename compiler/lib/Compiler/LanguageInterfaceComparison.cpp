@@ -1,5 +1,6 @@
 #include "LanguageInterface.h"
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Language/EntryBoundary.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/Json.h"
@@ -9,6 +10,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include <algorithm>
 #include <map>
 #include <set>
 using namespace llvm;
@@ -76,8 +78,23 @@ class Comparison {
       if (!text(source[i].name, actual[i].name) ||
           source[i].offset != actual[i].offset || !actual[i].schema ||
           source[i].maximumRows != actual[i].maximumRows ||
+          source[i].isPublic != actual[i].isPublic ||
           !schema(*source[i].layout, *actual[i].schema, depth + 1))
         return fail("logical field mapping differs");
+      else {
+        if (source[i].placement.has_value() != actual[i].placement.has_value())
+          return fail("source field placement formula differs");
+        if (source[i].placement) {
+          auto expected = detail::externalPlacement(
+              *source[i].layout, *source[i].placement, remaining, limits);
+          if (!expected) {
+            failure = expected.takeError();
+            return false;
+          }
+          if (*expected != *actual[i].placement)
+            return fail("source field role application differs");
+        }
+      }
     return true;
   }
   bool schema(const Layout &source, const InterfaceSchema &actual,
@@ -90,14 +107,17 @@ class Comparison {
     }
     if (!compared.emplace(&source, &actual).second)
       return true;
-    auto identity = typeIdentity(source.type);
-    if (!charge(identity.size()))
+    if (!charge(source.identity.key.size()))
       return false;
-    bool record = source.type.kind == Type::Kind::LogicalRecord;
-    if (!text(toHex(SHA256::hash(arrayRefFromStringRef(identity)), true),
-              actual.identity) ||
+    bool logical = detail::logicalLayout(source);
+    if (!text(source.identity.digest, actual.identity) ||
         !text(spelling(source.type), actual.type) ||
-        source.type.kind != actual.kind || source.custody != actual.custody ||
+        source.type.kind != actual.kind ||
+        source.generatedIdentity != actual.generated ||
+        source.custodyCount != actual.custody ||
+        source.sealed != actual.sealed ||
+        source.roleParameters != actual.roles ||
+        bool(source.element) != bool(actual.element) ||
         source.constructible != actual.constructible ||
         !(source.permissions == actual.permissions) ||
         ((source.type.kind == Type::Kind::Oracle ||
@@ -105,10 +125,12 @@ class Comparison {
              ? !actual.oracle || !actual.leaves.empty()
              : actual.oracle.has_value() || actual.maximum.has_value() ||
                    actual.oracleData ||
-                   (record ? !actual.leaves.empty()
-                           : source.leaves.size() != actual.leaves.size())) ||
+                   (logical ? !actual.leaves.empty()
+                            : source.leaves.size() != actual.leaves.size())) ||
         source.alternatives.size() != actual.alternatives.size())
       return fail("logical source schema differs");
+    if (source.element && !schema(*source.element, *actual.element, depth + 1))
+      return false;
     if (actual.oracle) {
       if (source.leaves.size() != 1 || !source.leaves[0].oracle())
         return fail("logical oracle schema differs");
@@ -120,7 +142,7 @@ class Comparison {
           !actual.oracleData ||
           !schema(*source.oracleData, *actual.oracleData, depth + 1))
         return fail("logical oracle kind, capacity or data schema differs");
-    } else if (!record) {
+    } else if (!logical) {
       for (unsigned i = 0; i < source.leaves.size(); ++i)
         if (!source.leaves[i].data() ||
             !text(*source.leaves[i].data(), actual.leaves[i]))
@@ -168,14 +190,34 @@ class Comparison {
         failure = observed.takeError();
         return false;
       }
-      if (!text(source[i].name, actual[i].name) ||
-          source[i].roles != actual[i].roles || !actual[i].schema ||
+      unsigned base = flat;
+      auto placed = detail::sourcePortPlacement(source[i], *observed);
+      if (!placed) {
+        failure = placed.takeError();
+        return false;
+      }
+      auto external =
+          detail::externalPlacement(*expected, *placed, remaining, limits);
+      if (!external) {
+        failure = external.takeError();
+        return false;
+      }
+      auto components =
+          detail::sourcePortComponents(source[i], *observed, base, remaining);
+      if (!components) {
+        failure = components.takeError();
+        return false;
+      }
+      if (!text(source[i].name, actual[i].name) || !actual[i].schema ||
+          !actual[i].placement || *external != *actual[i].placement ||
+          *components != actual[i].components ||
           !schema(*expected, *actual[i].schema) ||
           !slice(actual[i].native, flat, observed->size()))
         return fail("logical source port differs");
-      if (source[i].oracle.has_value() != actual[i].oracle.has_value())
+      if ((isOracleHandle(source[i].type) && source[i].oracle.has_value()) !=
+          actual[i].oracle.has_value())
         return fail("oracle role family is missing or invented");
-      if (source[i].oracle) {
+      if (isOracleHandle(source[i].type) && source[i].oracle) {
         const auto &before = *source[i].oracle;
         const auto &after = *actual[i].oracle;
         std::optional<uint64_t> maximum;
@@ -193,7 +235,8 @@ class Comparison {
     if (!charge(source.path.size() + actual.path.size() + 1))
       return false;
     if (source.anchor != actual.anchor || source.output != actual.output ||
-        source.port != actual.port || source.role != actual.role ||
+        source.port != actual.port ||
+        (!source.anchor && source.role != actual.role) ||
         source.path != actual.path)
       return fail(
           "source selector direction, port, path or participant differs");
@@ -201,6 +244,30 @@ class Comparison {
     if (!selected) {
       failure = selected.takeError();
       return false;
+    }
+    if (source.anchor) {
+      const auto &ports = source.output ? protocol.outputs : protocol.inputs;
+      auto observed = layouts.protocolPort(ports[source.port]);
+      if (!observed) {
+        failure = observed.takeError();
+        return false;
+      }
+      auto components = detail::sourcePortComponents(ports[source.port],
+                                                     *observed, 0, remaining);
+      if (!components) {
+        failure = components.takeError();
+        return false;
+      }
+      unsigned holders = 0;
+      for (const auto &component : *components)
+        if (component.path == source.path &&
+            component.facet == InterfaceComponentFacet::OracleData) {
+          if (component.role != actual.role)
+            return fail("source anchor holder differs");
+          ++holders;
+        }
+      if (holders != 1)
+        return fail("source anchor has no unique holder component");
     }
     unsigned offset = selected->offset;
     return slice(actual.native, offset,
@@ -302,7 +369,7 @@ class Comparison {
         budget.tokenBytes = limits.tokenBytes;
         budget.identifierBytes = limits.identifierBytes;
         budget.depth = limits.parseDepth;
-        budget.work = remaining;
+        budget.work = std::min(remaining, syntax::Budget{}.work);
         auto tree = syntax::parseHeaders(source::Revision(sources[module]),
                                          {module}, budget);
         if (!charge(tree.workUsed()) ||
@@ -462,6 +529,15 @@ class Comparison {
     if (!ports(decl.inputs, actual.inputs, input) ||
         !ports(decl.outputs, actual.outputs, output))
       return false;
+    auto common =
+        detail::sourceCommonRequirements(entry, decl, remaining, limits);
+    if (!common) {
+      failure = common.takeError();
+      return false;
+    }
+    if (!detail::sameCommonRequirements(*common,
+                                        actual.commonInputRequirements))
+      return fail("source common-input inventory differs");
     if (decl.services.size() != actual.services.size())
       return fail("source service count differs");
     for (unsigned i = 0; i < decl.services.size(); ++i) {
@@ -514,14 +590,34 @@ class Comparison {
         if (s.inputs[j].port != a.inputs[j].port ||
             s.inputs[j].path != a.inputs[j].path)
           return fail("source setup selector differs");
-        auto selected = layouts.selectInput(entry.protocol(), s.inputs[j]);
-        if (!selected) {
-          failure = selected.takeError();
+        unsigned base = 0;
+        const auto &protocol = entry.protocol();
+        for (unsigned port = 0; port < s.inputs[j].port; ++port) {
+          auto observed = layouts.protocolPort(protocol.inputs[port]);
+          if (!observed) {
+            failure = observed.takeError();
+            return false;
+          }
+          base += observed->size();
+        }
+        auto observed = layouts.protocolPort(protocol.inputs[s.inputs[j].port]);
+        if (!observed) {
+          failure = observed.takeError();
           return false;
         }
-        auto offset = selected->offset;
-        if (!slice(a.inputs[j].native, offset, selected->layout->leaves.size()))
-          return false;
+        std::vector<unsigned> native;
+        for (const auto &component : observed->components) {
+          if (!charge(component.fieldPath.size() + 1))
+            return false;
+          if (component.facet == ProtocolComponentFacet::Data &&
+              entryPathContains(s.inputs[j].port, s.inputs[j].path,
+                                s.inputs[j].port, component.fieldPath))
+            native.push_back(base + component.nativeIndex);
+        }
+        llvm::sort(native);
+        native.erase(std::unique(native.begin(), native.end()), native.end());
+        if (native != a.inputs[j].native)
+          return fail("source setup association native components differ");
       }
     }
     return true;
@@ -659,7 +755,7 @@ public:
         return std::move(failure);
       if (!decl.origin)
         continue;
-      if (decl.kind == Declaration::Kind::Protocol) {
+      if (isClosedConcreteProtocol(decl)) {
         auto found = protocols.find(decl.symbol);
         if (found == protocols.end())
           return error("source.correspondence",

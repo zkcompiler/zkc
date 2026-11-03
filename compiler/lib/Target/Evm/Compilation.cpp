@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/Evm.h"
+#include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
@@ -9,6 +10,7 @@
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
@@ -16,32 +18,46 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc {
+namespace {
+// The declared fork names, in declaration order, for fork refusals.
+std::string declaredForks() {
+  std::string names;
+#define ZKC_EVM_FORK_NAME(Enumerator, name, ...)                               \
+  names += (names.empty() ? "" : ", ") + std::string(name);
+  ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_NAME)
+#undef ZKC_EVM_FORK_NAME
+  return names;
+}
+} // namespace
+
 StringRef evmForkName(EvmFork fork) {
   switch (fork) {
-  case EvmFork::Cancun:
-    return "cancun";
-  case EvmFork::Prague:
-    return "prague";
+#define ZKC_EVM_FORK_CASE(Enumerator, name, ...)                               \
+  case EvmFork::Enumerator:                                                    \
+    return name;
+    ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_CASE)
+#undef ZKC_EVM_FORK_CASE
   }
   return {};
 }
 Expected<EvmFork> parseEvmFork(StringRef name) {
-  if (name == "cancun")
-    return EvmFork::Cancun;
-  if (name == "prague")
-    return EvmFork::Prague;
-  return error("evm.fork", "expected cancun or prague");
+#define ZKC_EVM_FORK_PARSE(Enumerator, spelling, ...)                          \
+  if (name == spelling)                                                        \
+    return EvmFork::Enumerator;
+  ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_PARSE)
+#undef ZKC_EVM_FORK_PARSE
+  return error("evm.fork", "expected a declared fork: " + declaredForks());
 }
 struct EvmCompilation::Storage {
   MLIRContext context;
   OwningOpRef<ModuleOp> module;
   std::string yul, source, digest;
-  json::Value abi = nullptr, descriptor = nullptr, manifest = nullptr;
-  json::Value options = nullptr;
-  EvmFork fork = EvmFork::Cancun;
+  json::Value descriptor = nullptr, options = nullptr;
+  EvmFork fork = EvmFork::ZKC_EVM_TARGET_DEFAULT_FORK;
   NativeProofPolicy policy;
   EvmLimits limits;
   std::unique_ptr<CheckedEndpoint> endpoint;
+  std::unique_ptr<evm::EvmEndpoint> exported;
   std::shared_ptr<const mathematical::RealizedProtocol> realization;
   explicit Storage(const DialectRegistry &registry) : context(registry) {
     DialectRegistry builtins;
@@ -57,12 +73,8 @@ EvmCompilation::EvmCompilation(EvmCompilation &&) noexcept = default;
 EvmCompilation &EvmCompilation::operator=(EvmCompilation &&) noexcept = default;
 EvmCompilation::~EvmCompilation() = default;
 const std::string &EvmCompilation::yul() const { return storage->yul; }
-const json::Value &EvmCompilation::abi() const { return storage->abi; }
 const json::Value &EvmCompilation::descriptor() const {
   return storage->descriptor;
-}
-const json::Value &EvmCompilation::manifest() const {
-  return storage->manifest;
 }
 const NativeProofPolicy &EvmCompilation::policy() const {
   return storage->policy;
@@ -71,57 +83,36 @@ const EvmLimits &EvmCompilation::limits() const { return storage->limits; }
 EvmFork EvmCompilation::fork() const { return storage->fork; }
 const json::Value &EvmCompilation::options() const { return storage->options; }
 StringRef EvmCompilation::sourceSha256() const { return storage->digest; }
+const evm::EvmEndpoint &EvmCompilation::endpoint() const {
+  return *storage->exported;
+}
 StringRef EvmCompilation::sourceBytes() const { return storage->source; }
 OwningOpRef<ModuleOp> EvmCompilation::targetSnapshot() const {
   return cast<ModuleOp>(storage->module->getOperation()->clone());
 }
 
 json::Value encodeEvmLimits(const EvmLimits &limits) {
-  return json::Object{{"rounds", limits.rounds},
-                      {"public_elements", limits.publicElements},
-                      {"frame_bytes", limits.frameBytes},
-                      {"public_bytes", limits.publicBytes},
-                      {"context_bytes", limits.contextBytes},
-                      {"proof_bytes", limits.proofBytes},
-                      {"calldata_bytes", limits.calldataBytes},
-                      {"root_bytes", limits.rootBytes},
-                      {"memory_bytes", limits.memoryBytes},
-                      {"transcript_transitions", limits.transcriptTransitions},
-                      {"practical_gas", limits.practicalGas}};
+  json::Object result;
+#define ZKC_EVM_LIMIT_ENCODE(member, name, minimum, maximum)                   \
+  result[name] = limits.member;
+  ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_ENCODE)
+#undef ZKC_EVM_LIMIT_ENCODE
+  return result;
 }
 namespace {
+// Each ceiling lies within its declared row. The declared minimum of the
+// memory ceiling holds the fixed target state.
 Error validateLimits(const EvmLimits &limits) {
-  EvmLimits ceiling;
-  uint64_t EvmLimits::*members[] = {
-      &EvmLimits::rounds,        &EvmLimits::publicElements,
-      &EvmLimits::frameBytes,    &EvmLimits::publicBytes,
-      &EvmLimits::contextBytes,  &EvmLimits::proofBytes,
-      &EvmLimits::calldataBytes, &EvmLimits::rootBytes,
-      &EvmLimits::memoryBytes,   &EvmLimits::transcriptTransitions,
-      &EvmLimits::practicalGas};
-  for (auto member : members)
-    if (limits.*member == 0 || limits.*member > ceiling.*member)
-      return error("evm.limits", "deployment ceilings must be positive and "
-                                 "cannot exceed the supported profile");
-  if (limits.memoryBytes < 4096)
-    return error("evm.limits",
-                 "memory ceiling cannot hold the fixed target state");
+#define ZKC_EVM_LIMIT_CHECK(member, name, minimum, maximum)                    \
+  if (limits.member < minimum || limits.member > maximum)                      \
+    return error("evm.limits", Twine("deployment ceiling ") + name +           \
+                                   " lies outside its declared range");
+  ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_CHECK)
+#undef ZKC_EVM_LIMIT_CHECK
   return Error::success();
 }
 std::string digest(StringRef bytes) {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-}
-json::Value standardAbi() {
-  return json::Array{json::Object{
-      {"type", "function"},
-      {"name", "verify"},
-      {"stateMutability", "view"},
-      {"inputs",
-       json::Array{json::Object{{"name", "publicInputs"}, {"type", "bytes[]"}},
-                   json::Object{{"name", "context"}, {"type", "bytes"}},
-                   json::Object{{"name", "proof"}, {"type", "bytes"}}}},
-      {"outputs",
-       json::Array{json::Object{{"name", "accepted"}, {"type", "bool"}}}}}};
 }
 } // namespace
 
@@ -129,13 +120,15 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
                                          const EvmOptions &options,
                                          const DialectRegistry &registry) {
   if (evmForkName(options.fork).empty())
-    return error("evm.fork", "expected cancun or prague");
+    return error("evm.fork", "expected a declared fork: " + declaredForks());
   if (auto error = validateLimits(options.limits))
     return std::move(error);
-  auto oracleSelection =
-      protocol::encodeOracleRealizationPolicy(options.oracleSelection);
-  if (!oracleSelection)
-    return oracleSelection.takeError();
+  // The CPU storage choice never reaches this target. The numerical
+  // expression mode is not published: only CPU physical selection reads it.
+  auto published = language::encodeCompileOptions(
+      options.simplify, false, options.mathematics, options.oracleSelection);
+  if (!published)
+    return published.takeError();
   if (bytes.empty() || bytes.size() > 16 * 1024 * 1024 ||
       filename.size() > 4096 || !mlirNestingWithinLimit(bytes))
     return error("evm.source-limit",
@@ -153,16 +146,21 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   if (!source || failed(admitStage(source->getOperation())))
     return error("evm.source", diagnostics);
   auto policy = options.policy;
-  if ((!policy.suite.empty() &&
-       policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0") ||
-      !policy.construction.empty() ||
+  if (!policy.construction.empty() ||
       (policy.suite.empty() &&
        (!policy.services.empty() || !policy.draws.empty() ||
         !policy.gates.empty())) ||
       policy.format != protocol::ProofFormat::Native)
     return error("evm.construction",
-                 "EVM requires framed transport with no transcript or the "
-                 "managed Keccak Fr64BE construction");
+                 "EVM requires framed transport with no transcript or a "
+                 "managed construction over a realized transcript suite");
+  if (!policy.suite.empty()) {
+    evm::NativeLayouts layouts(result->context);
+    if (auto realized =
+            evm::realizeTranscript(layouts, result->context, policy.suite);
+        !realized)
+      return realized.takeError();
+  }
   if (!policy.suite.empty() && policy.draws.empty()) {
     auto selected = selectNativeProofDraws(*source, policy, options.mathematics,
                                            options.oracleSelection);
@@ -193,55 +191,36 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   auto endpoint = closeEndpoint(*constructed->module, policy.validator);
   if (!endpoint)
     return endpoint.takeError();
+  // The exported schemas come from checked rows while the complete source
+  // and the candidate are available.
+  auto described = evm::describeEndpoint(*endpoint, constructed->descriptor,
+                                         policy, digest(bytes));
+  if (!described)
+    return described.takeError();
   EvmOptions selected = options;
   selected.policy = policy;
   auto module = evm::lowerEndpoint(*endpoint, selected);
   if (!module)
     return joinErrors(module.takeError(),
                       error("evm.diagnostics", diagnostics));
-  auto yul = evm::exportYul(**module, bytes, constructed->descriptor, policy,
-                            options.limits);
+  auto yul = evm::exportYul(**module, *described, policy, options.limits);
   if (!yul)
-    return yul.takeError();
+    return joinErrors(yul.takeError(), error("evm.diagnostics", diagnostics));
   result->source = bytes.str();
   result->digest = digest(bytes);
   result->yul = std::move(*yul);
   result->module = std::move(*module);
   result->descriptor = std::move(constructed->descriptor);
-  result->abi = standardAbi();
   result->policy = std::move(policy);
   result->limits = options.limits;
   result->fork = options.fork;
-  result->options = json::Object{
-      {"simplify", options.simplify},
-      {"release_storage", false},
-      {"finite_bulk", options.mathematics.finiteBulk},
-      {"fuse_vector_reductions", options.mathematics.vectorReductionFusion},
-      {"fuse_collect_fold", options.mathematics.collectFoldFusion},
-      {"calculation_batching", options.mathematics.calculationBatching},
-      {"numerical_expressions", options.mathematics.numericalExpressions ==
-                                        NumericalExpressionMode::PreferNative
-                                    ? "prefer-native"
-                                    : "vector-only"},
-      {"oracle_realization", std::move(*oracleSelection)}};
+  json::Object publishedOptions;
+  for (auto &[name, value] : *published)
+    publishedOptions[name] = std::move(value);
+  result->options = std::move(publishedOptions);
   result->endpoint = std::make_unique<CheckedEndpoint>(std::move(*endpoint));
+  result->exported = std::make_unique<evm::EvmEndpoint>(std::move(*described));
   result->realization = std::move(constructed->realization);
-  result->manifest = json::Object{
-      {"format", "zkc.evm-source-manifest/0"},
-      {"target", "evm"},
-      {"fork", evmForkName(options.fork)},
-      {"options", result->options},
-      {"source_sha256", result->digest},
-      {"source_format", "zkc.original-mlir/0"},
-      {"entry", result->policy.entry},
-      {"producer", result->policy.producer},
-      {"validator", result->policy.validator},
-      {"compiler", language::compilerToolchainIdentity()},
-      {"yul_sha256", digest(result->yul)},
-      {"limits", encodeEvmLimits(options.limits)},
-      {"solc_version", "0.8.38"},
-      {"optimizer_steps", ":"},
-      {"release_validation", "pending-deployment-and-dynamic-trace"}};
   return EvmCompilation(std::move(result));
 }
 
@@ -263,17 +242,21 @@ compileEvmEntry(const language::CheckedOriginal &original,
                          selected, DialectRegistry());
 }
 
-json::Value encodeEvmCompilation(const EvmCompilation &compiled) {
+json::Value encodeEvmCompilation(const EvmCompilation &compiled,
+                                 const EvmSourceIdentity &source) {
   return json::Object{{"format", "zkc.evm-source/0"},
-                      {"target", "evm"},
+                      {"declaration", evm_target::identity},
                       {"fork", evmForkName(compiled.fork())},
                       {"options", compiled.options()},
-                      {"yul", compiled.yul()},
-                      {"abi", compiled.abi()},
-                      {"descriptor", compiled.descriptor()},
-                      {"policy", encodeNativeProofPolicy(compiled.policy())},
                       {"limits", encodeEvmLimits(compiled.limits())},
-                      {"source_sha256", compiled.sourceSha256()},
-                      {"manifest", compiled.manifest()}};
+                      {"entry", source.entry},
+                      {"capture", source.capture},
+                      {"installation", source.installation},
+                      {"original", compiled.sourceSha256()},
+                      {"source_format", "zkc.original-mlir/0"},
+                      {"compiler", language::compilerToolchainIdentity()},
+                      {"policy", encodeNativeProofPolicy(compiled.policy())},
+                      {"descriptor", compiled.descriptor()},
+                      {"yul", compiled.yul()}};
 }
 } // namespace zkc

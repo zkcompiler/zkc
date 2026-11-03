@@ -219,9 +219,12 @@ fn selected_file_result_encoder_and_setup_import_do_not_restore_default_support(
     let capacity = Capacity::default();
     #[cfg(feature = "files")]
     {
-        let bindings =
-            entry::files::Invocations::load_with_installation(None, capacity, true, plonky3())
-                .unwrap();
+        let limits = HostLimits {
+            capacity,
+            ..Default::default()
+        }
+        .with_installation(plonky3());
+        let bindings = entry::files::Invocations::load(None, &limits, true).unwrap();
         let (_, _, encoder) = bindings.into_parts();
         let value = Value::Field(zkc_cpu::Scalar::from(7)).into();
         assert_eq!(encoder.encode(&value).unwrap_err(), "entry-output-encoding");

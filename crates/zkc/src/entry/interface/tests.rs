@@ -1,16 +1,112 @@
 use super::*;
 use serde_json::{Value, json};
+mod admission;
+mod common;
+mod components;
 mod logical;
+mod recursive;
 mod static_arguments;
 fn digest(s: &str) -> String {
     crate::io::bytes::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, ty: &str, leaves: Value) -> Value {
-    json!({"kind":kind,"identity":digest(ty),"type":ty,"custody":false,"constructible":true,
+    json!({"kind":kind,"identity":digest(ty),"type":ty,"generated":null,"custody":0,"sealed":false,"roles":[],"element":null,"constructible":true,
         "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
+// Fixtures explicitly build the one current carrier. No reader normalization.
+fn data_placement(roles: Value) -> Value {
+    json!({"kind":"data","roles":roles})
+}
+fn fixture_components(schema: &Value, placed: &Value, start: u32) -> Value {
+    fn walk(s: &Value, p: &Value, path: Vec<u32>, next: &mut u32, out: &mut Vec<Value>) {
+        let mut leaf = |local: u32, roles: Vec<u32>, facet: &str, at: u32| {
+            for role in roles {
+                out.push(json!({"path":path,"leaf":local,"role":role,"facet":facet,"native":at}));
+            }
+        };
+        if p["kind"] == "oracle" {
+            let holder = p["holder"].as_u64().unwrap() as u32;
+            let mut roles: Vec<_> = p["receivers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r.as_u64().unwrap() as u32)
+                .collect();
+            roles.push(holder);
+            roles.sort_unstable();
+            for role in roles {
+                leaf(
+                    0,
+                    vec![role],
+                    if role == holder {
+                        "oracle_data"
+                    } else {
+                        "oracle_anchor"
+                    },
+                    *next + u32::from(role != holder),
+                );
+            }
+            *next += 2;
+            return;
+        }
+        let roles: Vec<u32> = p["roles"]
+            .as_array()
+            .map(|a| a.iter().map(|r| r.as_u64().unwrap() as u32).collect())
+            .unwrap_or_default();
+        let custody = s["custody"].as_u64().unwrap() as u32;
+        for i in 0..custody {
+            let holders = if p["kind"] == "product" {
+                vec![p["arguments"][i as usize].as_u64().unwrap() as u32]
+            } else {
+                roles.clone()
+            };
+            leaf(i, holders, "custody", *next);
+            *next += 1;
+        }
+        let fields = s["fields"].as_array().unwrap();
+        if fields.is_empty() {
+            for i in custody as usize..s["leaves"].as_array().unwrap().len() {
+                leaf(i as u32, roles.clone(), "data", *next);
+                *next += 1;
+            }
+        } else {
+            for (i, field) in fields.iter().enumerate() {
+                let child = if p["kind"] == "product" {
+                    &p["fields"][if s["kind"] == "array" { 0 } else { i }]
+                } else {
+                    p
+                };
+                let mut nested = path.clone();
+                nested.push(i as u32);
+                walk(&field["schema"], child, nested, next, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(schema, placed, vec![], &mut start.clone(), &mut out);
+    json!(out)
+}
+fn placed_port(name: &str, index: u32, native: Value, placement: Value, schema: Value) -> Value {
+    let start = native
+        .as_array()
+        .unwrap()
+        .first()
+        .and_then(Value::as_u64)
+        .unwrap_or(0) as u32;
+    let components = fixture_components(&schema, &placement, start);
+    json!({"name":name,"index":index,"native":native,"placement":placement,"components":components,"type":schema["type"],"schema":schema})
+}
 fn port(name: &str, index: u32, native: Value, roles: Value, schema: Value) -> Value {
-    json!({"name":name,"index":index,"native":native,"roles":roles,"type":schema["type"],"schema":schema})
+    placed_port(name, index, native, data_placement(roles), schema)
+}
+fn refresh_components(p: &mut Value) {
+    let start = p["native"]
+        .as_array()
+        .unwrap()
+        .first()
+        .and_then(Value::as_u64)
+        .unwrap_or(0) as u32;
+    p["components"] = fixture_components(&p["schema"], &p["placement"], start);
 }
 fn selector(direction: &str, port: u32, role: &str) -> Value {
     json!({"direction":direction,"port":port,"role":role,"path":[]})
@@ -20,17 +116,17 @@ fn document() -> Value {
     json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"sample::Proof","protocol":"sample_Protocol",
         "protocols":[{"symbol":"sample_Protocol","roles":["P","V"],
-            "inputs":[port("statement",0,json!([0]),json!(["P","V"]),boolean.clone()),
-                port("witness",1,json!([1]),json!(["P"]),boolean.clone())],
-            "outputs":[port("accepted",0,json!([0]),json!(["V"]),boolean.clone())],"services":[],
-            "clauses":[{"name":"knowledge","kind":"target","subject":{"relation":"Predicate",
+            "inputs":[port("statement",0,json!([0]),json!([0,1]),boolean.clone()),
+                port("witness",1,json!([1]),json!([0]),boolean.clone())],
+            "outputs":[port("accepted",0,json!([0]),json!([1]),boolean.clone())],"services":[],
+            "common_input_requirements":[],"clauses":[{"name":"knowledge","kind":"target","subject":{"relation":"Predicate",
                 "operands":[selector("input",0,"V"),selector("input",1,"P")]},
                 "residual":null,"decision":selector("output",0,"V")}]}],
         "relations":[{"symbol":"Predicate","static_arguments":[],"inputs":[
             {"name":"s","purpose":"statement","native":[0],"schema":boolean.clone()},
             {"name":"w","purpose":"witness","native":[1],"schema":boolean}],"definition":{"kind":"opaque"}}],
-        "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],
-            "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","gates":[], "construction":{"kind":"authored", "format": "zkc.framed/0"}}})
+        "job":{"kind":"proof","prover":"P","verifier":"V","public":[{"port":0,"path":[],"role":"V"}],
+            "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","gates":[],"construction":{"kind":"authored", "format": "zkc.framed/0"}}})
 }
 fn read_text(interface: &str) -> Result<Interface> {
     let frame = json!({"format":"zkc.entry/0","original":"original","interface":interface,
@@ -42,10 +138,30 @@ fn read_text(interface: &str) -> Result<Interface> {
         Package::MAX_BYTES,
     )
     .unwrap();
-    crate::entry::BoundInterface::read(&package).map(|view| view.into_view())
+    crate::entry::BoundInterface::read(&package, InterfaceLimits::DEFAULT)
+        .map(|view| view.into_view())
 }
 fn read(value: &Value) -> Result<Interface> {
     read_text(&value.to_string())
+}
+/// Replace the one occurrence of `from` in a retained fixture, keeping every
+/// other byte.
+fn replace_once(fixture: &[u8], from: &str, to: &str) -> Vec<u8> {
+    let text = std::str::from_utf8(fixture).unwrap();
+    assert_eq!(text.matches(from).count(), 1, "{from} is not unique");
+    text.replacen(from, to, 1).into_bytes()
+}
+/// A compiler-emitted fixture records the producing build's toolchain identity.
+/// Structural consumers take that identity as a fixture parameter: they check
+/// the recorded bytes and the same bytes under another identity, so a compiler
+/// edit that changes only the identity leaves them valid.
+fn toolchain_parameters(fixture: &[u8]) -> [Vec<u8>; 2] {
+    let recorded: Value = serde_json::from_slice(fixture).unwrap();
+    let other = json!("0".repeat(64));
+    assert_ne!(recorded["toolchain"], other);
+    let member = |identity: &Value| format!("\"toolchain\":{identity}");
+    let substituted = replace_once(fixture, &member(&recorded["toolchain"]), &member(&other));
+    [fixture.to_vec(), substituted]
 }
 #[test]
 fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
@@ -74,6 +190,72 @@ fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
             "{key}"
         );
     }
+}
+#[test]
+fn protocol_rosters_are_not_bounded_by_record_role_telescopes() {
+    // A protocol roster has the catalog's `protocol.roles` ceiling, shared
+    // with the joint runtime, separately from a record telescope's
+    // `record.roles`. Boundary reconstruction walks each
+    // port only at its placed roles, so admission work grows with ports times
+    // placed roles times schema size rather than with the square of the
+    // roster: ordinary ports supplied by every participant, in both
+    // directions, fit the default allowance at the full roster.
+    let boolean = schema("boolean", "bool", json!(["bool"]));
+    let mut reconstruction = BTreeMap::new();
+    for (count, accepted) in [(17, true), (256, true), (1024, true), (1025, false)] {
+        let mut value = document();
+        // Proof jobs separately require exactly a prover and a verifier.
+        value["job"] = json!({"kind":"run"});
+        let roles: Vec<String> = ["P".to_string(), "V".to_string()]
+            .into_iter()
+            .chain((2..count).map(|i| format!("R{i}")))
+            .collect();
+        value["protocols"][0]["roles"] = json!(roles);
+        let everyone = json!((0..count.min(1024) as u32).collect::<Vec<_>>());
+        value["protocols"][0]["inputs"] = json!([
+            port(
+                "statement",
+                0,
+                json!([0]),
+                everyone.clone(),
+                boolean.clone()
+            ),
+            port("witness", 1, json!([1]), json!([0]), boolean.clone()),
+            port("shared", 2, json!([2]), everyone.clone(), boolean.clone()),
+        ]);
+        value["protocols"][0]["outputs"] =
+            json!([port("accepted", 0, json!([0]), everyone, boolean.clone())]);
+        match read(&value) {
+            Ok(view) => {
+                assert!(accepted, "{count} roles");
+                let roles = view.roles();
+                assert_eq!(roles.len(), count);
+                assert!(roles.iter().all(|role| role.outputs.len() == 1));
+                assert_eq!(roles[0].inputs.len(), 3);
+                assert!(roles[1..].iter().all(|role| role.inputs.len() == 2));
+                let mut work = boundary::Work::new(InterfaceLimits::DEFAULT);
+                ports::Ports::with_work(
+                    &view.document,
+                    view.selected,
+                    &view.types,
+                    &view.setups,
+                    &mut work,
+                )
+                .unwrap();
+                reconstruction.insert(count, InterfaceLimits::DEFAULT.work - work.remaining);
+            }
+            Err(error) => {
+                assert!(!accepted, "{count} roles: {error:?}");
+                assert_eq!(error, InterfaceError::Schema);
+            }
+        }
+    }
+    // Four times the placed roles costs about four times the work.
+    assert!(
+        reconstruction[&1024] < 5 * reconstruction[&256],
+        "{reconstruction:?}"
+    );
+    assert!(reconstruction[&1024] < InterfaceLimits::DEFAULT.work / 4);
 }
 fn changed(path: &str, value: Value, error: InterfaceError) {
     let mut original = document();
@@ -106,7 +288,7 @@ fn external_interface_bytes_require_canonical_unsigned_integer_indices() {
         "/protocols/0/inputs/0/native/0",
         "/protocols/0/clauses/0/subject/operands/0/port",
         "/relations/0/inputs/0/native/0",
-        "/job/public/0",
+        "/job/public/0/port",
         "/job/acceptance/port",
     ] {
         let mut template = valid.clone();
@@ -217,10 +399,10 @@ fn ports_require_exact_logical_roles_order_and_native_slices() {
         ("/protocols/0/inputs/0/index", json!(1)),
         ("/protocols/0/inputs/0/native", json!([])),
         ("/protocols/0/inputs/0/native", json!([1])),
-        ("/protocols/0/inputs/0/roles", json!(["V", "P"])),
-        ("/protocols/0/inputs/0/roles", json!(["P", "P"])),
-        ("/protocols/0/inputs/0/roles", json!([])),
-        ("/protocols/0/inputs/0/roles", json!(["X"])),
+        ("/protocols/0/inputs/0/placement/roles", json!([1, 0])),
+        ("/protocols/0/inputs/0/placement/roles", json!([0, 0])),
+        ("/protocols/0/inputs/0/placement/roles", json!([])),
+        ("/protocols/0/inputs/0/placement/roles", json!([2])),
         ("/protocols/0/inputs/1/name", json!("statement")),
         ("/protocols/0/roles", json!(["P", "P"])),
         ("/protocols/0/inputs/0/type", json!("index")),
@@ -233,8 +415,14 @@ fn ports_require_exact_logical_roles_order_and_native_slices() {
 fn proof_and_clause_selections_are_complete() {
     for (path, value) in [
         ("/job/public", json!([])),
-        ("/job/public", json!([0, 1])),
-        ("/job/public", json!([0, 0])),
+        (
+            "/job/public",
+            json!([{"port":0,"path":[],"role":"V"},{"port":1,"path":[],"role":"V"}]),
+        ),
+        (
+            "/job/public",
+            json!([{"port":0,"path":[],"role":"V"},{"port":0,"path":[],"role":"V"}]),
+        ),
         ("/job/prover", json!("V")),
         ("/job/verifier", json!("X")),
         ("/job/acceptance/role", json!("P")),
@@ -267,7 +455,7 @@ fn conflicting_same_identity_and_unearned_permissions_are_refused() {
     for (path, value) in [
         ("/relations/0/inputs/0/schema/constructible", json!(false)),
         ("/relations/0/inputs/0/schema/leaves", json!(["index"])),
-        ("/relations/0/inputs/0/schema/custody", json!(true)),
+        ("/relations/0/inputs/0/schema/custody", json!(1)),
         (
             "/relations/0/inputs/0/schema/permissions",
             json!(["Drop", "Copy"]),
@@ -288,7 +476,7 @@ fn conflicting_same_identity_and_unearned_permissions_are_refused() {
         "polynomial",
         0,
         json!([0]),
-        json!(["P"]),
+        json!([0]),
         schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]))
     )]);
     let interface = read(&value).unwrap();
@@ -356,8 +544,8 @@ fn bundle_definitions_are_recognized_with_single_leaf_formals() {
     let boolean = schema("boolean", "bool", json!(["bool"]));
     let mut product = schema("tuple", "(bool,bool)", json!(["bool", "bool"]));
     product["fields"] = json!([
-        {"name":"0","offset":0,"schema":boolean.clone()},
-        {"name":"1","offset":1,"schema":boolean}
+        {"name":"0","offset":0,"public":true,"placement":null,"schema":boolean.clone()},
+        {"name":"1","offset":1,"public":true,"placement":null,"schema":boolean}
     ]);
     value["relations"][0]["inputs"][3] =
         json!({"name":"trace","purpose":"witness","native":[3,4],"schema":product});
@@ -376,8 +564,8 @@ fn products_empty_values_and_nominal_variants_preserve_structure() {
     let boolean = schema("boolean", "bool", json!(["bool"]));
     let unit = schema("unit", "()", json!([]));
     let mut record = schema("record", "Record", json!(["bool"]));
-    record["fields"] = json!([{"name":"empty","offset":0,"schema":unit}, {"name":"flag","offset":0,"schema":boolean}]);
-    let value = run_with(port("record", 0, json!([0]), json!(["P"]), record));
+    record["fields"] = json!([{"name":"empty","offset":0,"public":true,"placement":null,"schema":unit}, {"name":"flag","offset":0,"public":true,"placement":null,"schema":boolean}]);
+    let value = run_with(port("record", 0, json!([0]), json!([0]), record));
     assert!(read(&value).is_ok());
     let mut bad = value.clone();
     bad["protocols"][0]["inputs"][0]["schema"]["fields"][1]["offset"] = json!(1);
@@ -394,8 +582,8 @@ fn products_empty_values_and_nominal_variants_preserve_structure() {
         [["case00000000", []], ["case00000001", ["bool"]]]
     ]));
     let mut variant = schema("variant", key, json!([spelling]));
-    variant["alternatives"] = json!([{"name":"Empty","fields":[]}, {"name":"Flag","fields":[{"name":"0","offset":0,"schema":boolean}]}]);
-    let value = run_with(port("choice", 0, json!([0]), json!(["P"]), variant));
+    variant["alternatives"] = json!([{"name":"Empty","fields":[]}, {"name":"Flag","fields":[{"name":"0","offset":0,"public":true,"placement":null,"schema":boolean}]}]);
+    let value = run_with(port("choice", 0, json!([0]), json!([0]), variant));
     assert!(read(&value).is_ok());
     for (path, replacement) in [
         ("identity", json!(digest("other"))),
@@ -418,11 +606,12 @@ fn zero_leaf_verifier_inputs_remain_in_public_policy() {
             "empty",
             2,
             json!([]),
-            json!(["V"]),
+            json!([1]),
             schema("unit", "()", json!([])),
         ));
     assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
-    value["job"]["public"] = json!([0, 2]);
+    value["job"]["public"] =
+        json!([{"port":0,"path":[],"role":"V"},{"port":2,"path":[],"role":"V"}]);
     assert!(read(&value).is_ok());
 }
 #[test]
@@ -431,16 +620,11 @@ fn recursive_and_lexical_limits_precede_unbounded_allocation() {
         let mut nested = schema("unit", "()", json!([]));
         for i in 1..depth {
             let mut outer = schema("tuple", &format!("Tuple{i}"), json!([]));
-            outer["fields"] = json!([{"name":"0","offset":0,"schema":nested}]);
+            outer["fields"] =
+                json!([{"name":"0","offset":0,"public":true,"placement":null,"schema":nested}]);
             nested = outer;
         }
-        let result = read(&run_with(port(
-            "nested",
-            0,
-            json!([]),
-            json!(["P"]),
-            nested,
-        )));
+        let result = read(&run_with(port("nested", 0, json!([]), json!([0]), nested)));
         if depth == 32 {
             result.unwrap();
         } else {
@@ -529,6 +713,80 @@ fn carrier_records_and_enum_names_have_one_json_shape() {
 }
 
 #[test]
+fn empty_restricted_record_custody_is_exact_and_keeps_empty_fields() {
+    for permissions in [json!([]), json!(["Drop"])] {
+        let mut guard = schema(
+            "record",
+            "Guard<1>",
+            json!([format!("resource_unit:zkl_resource_{}", digest("Guard<1>"))]),
+        );
+        guard["custody"] = json!(1);
+        guard["constructible"] = json!(false);
+        guard["permissions"] = permissions;
+        guard["fields"] = json!([
+            {"name":"empty","offset":1,"public":true,"placement":null,"schema":schema("unit","()",json!([]))}
+        ]);
+        let value = run_with(port("guard", 0, json!([0]), json!([0]), guard));
+        read(&value).unwrap();
+        for (path, replacement) in [
+            ("/protocols/0/inputs/0/schema/custody", json!(0)),
+            ("/protocols/0/inputs/0/schema/leaves", json!([])),
+            (
+                "/protocols/0/inputs/0/schema/identity",
+                json!(digest("Guard<2>")),
+            ),
+            ("/protocols/0/inputs/0/schema/fields/0/offset", json!(0)),
+        ] {
+            let mut mutated = value.clone();
+            *mutated.pointer_mut(path).unwrap() = replacement;
+            assert!(read(&mutated).is_err(), "accepted mutation {path}");
+        }
+        let mut duplicated = value.clone();
+        let leaves = duplicated
+            .pointer_mut("/protocols/0/inputs/0/schema/leaves")
+            .unwrap()
+            .as_array_mut()
+            .unwrap();
+        leaves.push(leaves[0].clone());
+        assert!(read(&duplicated).is_err());
+    }
+}
+
+#[test]
+fn restricted_specification_fields_do_not_grant_executable_selection() {
+    let mut guard = schema(
+        "record",
+        "Guard",
+        json!([
+            format!("resource_unit:zkl_resource_{}", digest("Guard")),
+            "bool"
+        ]),
+    );
+    guard["custody"] = json!(1);
+    guard["constructible"] = json!(false);
+    guard["permissions"] = json!([]);
+    guard["fields"] = json!([
+        {"name":"value","offset":1,"public":false,"placement":null,"schema":schema("boolean","bool",json!(["bool"]))}
+    ]);
+    let input = port("guard", 0, json!([0, 1]), json!([0]), guard);
+    let raw: super::raw::Port = serde_json::from_value(input.clone()).unwrap();
+    assert!(super::validate::project(&raw, &[0]).is_err());
+    let mut value = run_with(input);
+    value["relations"] = document()["relations"].clone();
+    value["relations"][0]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    value["protocols"][0]["clauses"] = document()["protocols"][0]["clauses"].clone();
+    let mut selected = selector("input", 0, "P");
+    selected["path"] = json!([0]);
+    value["protocols"][0]["clauses"][0]["subject"]["operands"] = json!([selected]);
+    read(&value).unwrap();
+    value["protocols"][0]["clauses"][0]["subject"]["operands"][0]["path"] = json!([1]);
+    assert!(read(&value).is_err());
+}
+
+#[test]
 fn custody_optional_targets_and_continuations_have_positive_controls() {
     let id = digest("Guard");
     let mut guard = schema(
@@ -536,10 +794,10 @@ fn custody_optional_targets_and_continuations_have_positive_controls() {
         "Guard",
         json!([format!("resource_unit:zkl_resource_{id}")]),
     );
-    guard["custody"] = json!(true);
+    guard["custody"] = json!(1);
     guard["permissions"] = json!(["Drop"]);
     guard["constructible"] = json!(false);
-    read(&run_with(port("guard", 0, json!([0]), json!(["P"]), guard))).unwrap();
+    read(&run_with(port("guard", 0, json!([0]), json!([0]), guard))).unwrap();
     let mut value = document();
     value["job"]["target"] = Value::Null;
     read(&value).unwrap();
@@ -570,10 +828,11 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
     let mut nested = schema("unit", "()", json!([]));
     for i in 1..81 {
         let mut outer = schema("tuple", &format!("Tuple{i}"), json!([]));
-        outer["fields"] = json!([{"name":"0","offset":0,"schema":nested}]);
+        outer["fields"] =
+            json!([{"name":"0","offset":0,"public":true,"placement":null,"schema":nested}]);
         nested = outer;
     }
-    let text = run_with(port("nested", 0, json!([]), json!(["P"]), nested)).to_string();
+    let text = run_with(port("nested", 0, json!([]), json!([0]), nested)).to_string();
     preflight::check(text.as_bytes()).unwrap();
     std::thread::Builder::new()
         .stack_size(2 * 1024 * 1024)
@@ -589,7 +848,7 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
 fn pcs_schemas_preserve_independent_boundaries() {
     let kzg = "multilinear.kzg.bls12-381/0";
     let rows = "rows.merkle-keccak256.koala-bear/0";
-    for (head, domain, participants, constructible, _message) in [
+    for (head, domain, participants, constructible, message) in [
         ("commitment", kzg, true, true, true),
         ("proof", kzg, true, true, true),
         ("commitments", rows, true, true, false),
@@ -609,12 +868,9 @@ fn pcs_schemas_preserve_independent_boundaries() {
             participants,
             "{head}"
         );
-        #[cfg(feature = "cpu")]
         assert_eq!(
-            zkc_runtime::vm::LogicalType::parse(&leaf)
-                .unwrap()
-                .is_native_message_data(),
-            _message,
+            syntax::Leaf::parse(&leaf, &mut 1_000_000).unwrap().message,
+            message,
             "{head}"
         );
         if !constructible {
@@ -627,6 +883,91 @@ fn pcs_schemas_preserve_independent_boundaries() {
             );
         }
     }
+}
+
+#[test]
+fn builtin_leaves_are_ordinary_catalog_source_data() {
+    let check = |leaf: &str, permissions: Value| {
+        let mut value = schema("builtin", leaf, json!([leaf]));
+        value["constructible"] = json!(false);
+        value["permissions"] = permissions;
+        let parsed = serde_json::from_value(value).unwrap();
+        schemas::Schemas::new().check(&parsed, 0)
+    };
+    // Copy and Drop source data without its own source kind is a leaf.
+    for leaf in [
+        "quotient_matrix",
+        "shake128_state",
+        "bytes",
+        "vector:koala-bear",
+    ] {
+        check(leaf, json!(["Copy", "Drop"])).unwrap();
+    }
+    // Affine managed state, a physical-only aggregate and the four types with
+    // their own source kinds are not builtin leaves.
+    for leaf in [
+        "transcript:merlin3.bls12-381.fr64be/0",
+        "fixed_vector<field:koala-bear,4>",
+        "bool",
+        "index",
+        "field:koala-bear",
+        "group:bls12-381.g1",
+    ] {
+        assert_eq!(
+            check(leaf, json!([])),
+            Err(InterfaceError::Schema),
+            "{leaf}"
+        );
+    }
+    // The compiler's interface reader applies the same rule to the same
+    // catalog rows: source data, no own source kind, Copy and Drop.
+    let catalog: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../common/catalog/declarations.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut ordinary = std::collections::BTreeSet::new();
+    for row in catalog["types"].as_array().unwrap() {
+        let name = row["name"].as_str().unwrap();
+        let expected = row["sourceData"] == true
+            && !["bool", "index", "field", "group"].contains(&name)
+            && row["copy"] == true
+            && row["drop"] == true;
+        assert_eq!(schemas::ordinary_builtin_data(name), expected, "{name}");
+        if expected {
+            ordinary.insert(name);
+        }
+    }
+    assert_eq!(
+        ordinary,
+        [
+            "bytes",
+            "commitment",
+            "commitments",
+            "field_array",
+            "groups",
+            "indices",
+            "matrix",
+            "opening_state",
+            "opening_states",
+            "point",
+            "polynomial",
+            "proof",
+            "prover_key",
+            "quotient_matrix",
+            "round",
+            "sequence",
+            "shake128_state",
+            "table",
+            "vector",
+            "verifier_key",
+        ]
+        .into_iter()
+        .collect()
+    );
 }
 
 #[test]
@@ -649,7 +990,7 @@ fn input_description_uses_the_execution_admission_check() {
             "value",
             0,
             json!([0]),
-            json!(["P"]),
+            json!([0]),
             schema(kind, leaf, json!([leaf]))
         )]);
         let interface = read(&doc).unwrap();
@@ -672,9 +1013,9 @@ fn setup_document() -> Value {
     doc["protocols"][0]["clauses"] = json!([]);
     let mut inputs = Vec::new();
     for (i, (name, head, role)) in [
-        ("vk", "verifier_key", "V"),
-        ("pk", "prover_key", "P"),
-        ("statement", "commitment", "V"),
+        ("vk", "verifier_key", 1),
+        ("pk", "prover_key", 0),
+        ("statement", "commitment", 1),
     ]
     .into_iter()
     .enumerate()
@@ -685,7 +1026,7 @@ fn setup_document() -> Value {
         inputs.push(port(name, i as u32, json!([i]), json!([role]), ty));
     }
     doc["protocols"][0]["inputs"] = json!(inputs);
-    doc["job"]["public"] = json!([0, 2]);
+    doc["job"]["public"] = json!([{"port":0,"path":[],"role":"V"},{"port":2,"path":[],"role":"V"}]);
     doc["job"]["target"] = Value::Null;
     doc["setups"] = json!([{"name":"pcs","inputs":[{"port":0,"path":[]},{"port":1,"path":[]},{"port":2,"path":[]}]}]);
     doc
@@ -754,11 +1095,12 @@ fn setup_alias_keys_share_the_pin_and_original_representative() {
     alias["name"] = json!("alias");
     alias["index"] = json!(3);
     alias["native"] = json!([3]);
+    refresh_components(&mut alias);
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()
         .push(alias);
-    doc["job"]["public"] = json!([0, 2, 3]);
+    doc["job"]["public"] = json!([{"port":0,"path":[],"role":"V"},{"port":2,"path":[],"role":"V"},{"port":3,"path":[],"role":"V"}]);
     doc["setups"][0]["inputs"] = json!([
         {"port":3,"path":[]}, {"port":2,"path":[]},
         {"port":1,"path":[]}, {"port":0,"path":[]}
@@ -771,14 +1113,17 @@ fn setup_alias_keys_share_the_pin_and_original_representative() {
     assert_eq!(native.keys, [(0, [9; 32]), (3, [9; 32])].into());
     assert_eq!(native.inputs, [(1, 0), (2, 0)].into());
     let material = [("pcs".into(), vec![1, 2, 3])].into();
+    // The copies are bounded by the setup material allowance. A runner's
+    // capacity too small to hold them does not bound them.
     let mut capacity = crate::execution::Capacity::default();
+    capacity.values.live_bytes = 0;
+    capacity.values.total_bytes = 0;
     assert_eq!(
-        crate::entry::setups::material_bytes(&interface, &material, capacity).unwrap(),
+        crate::entry::setups::material_bytes(&interface, &material, capacity, 6).unwrap(),
         6
     );
-    capacity.values.live_bytes = 5;
     assert_eq!(
-        crate::entry::setups::material_bytes(&interface, &material, capacity).unwrap_err(),
+        crate::entry::setups::material_bytes(&interface, &material, capacity, 5).unwrap_err(),
         "entry-setup-limit"
     );
 }
@@ -786,8 +1131,9 @@ fn setup_alias_keys_share_the_pin_and_original_representative() {
 #[test]
 fn proof_setup_refuses_prover_key_at_verifier() {
     let mut doc = setup_document();
-    doc["protocols"][0]["inputs"][1]["roles"] = json!(["V"]);
-    doc["job"]["public"] = json!([0, 1, 2]);
+    doc["protocols"][0]["inputs"][1]["placement"] = data_placement(json!([1]));
+    refresh_components(&mut doc["protocols"][0]["inputs"][1]);
+    doc["job"]["public"] = json!([{"port":0,"path":[],"role":"V"},{"port":1,"path":[],"role":"V"},{"port":2,"path":[],"role":"V"}]);
     assert_eq!(read(&doc).unwrap_err(), InterfaceError::Selection);
 }
 #[test]
@@ -798,6 +1144,7 @@ fn proof_setup_bounds_total_verifier_keys_separately_from_slots() {
         key["name"] = json!(format!("key{index}"));
         key["index"] = json!(index);
         key["native"] = json!([index]);
+        refresh_components(&mut key);
         doc["protocols"][0]["inputs"]
             .as_array_mut()
             .unwrap()
@@ -805,7 +1152,7 @@ fn proof_setup_bounds_total_verifier_keys_separately_from_slots() {
         doc["job"]["public"]
             .as_array_mut()
             .unwrap()
-            .push(json!(index));
+            .push(json!({"port":index,"path":[],"role":"V"}));
         doc["setups"][0]["inputs"]
             .as_array_mut()
             .unwrap()
@@ -825,13 +1172,13 @@ fn completion_selects_a_prover_boolean_native_output() {
     let index = schema("index", "index", json!(["index"]));
     let mut product = schema("tuple", "(bool,index)", json!(["bool", "index"]));
     product["fields"] = json!([
-        {"name":"0","offset":0,"schema":boolean},
-        {"name":"1","offset":1,"schema":index}
+        {"name":"0","offset":0,"public":true,"placement":null,"schema":boolean},
+        {"name":"1","offset":1,"public":true,"placement":null,"schema":index}
     ]);
     doc["protocols"][0]["outputs"]
         .as_array_mut()
         .unwrap()
-        .push(port("state", 1, json!([1, 2]), json!(["P", "V"]), product));
+        .push(port("state", 1, json!([1, 2]), json!([0, 1]), product));
     doc["job"]["completion"] = json!({"direction":"output","port":1,"role":"P","path":[0]});
     assert_eq!(read(&doc).unwrap().proof().unwrap().completion, Some(1));
     for (field, value) in [
@@ -900,8 +1247,8 @@ fn managed_transcript_leaves_are_not_source_builtin_data() {
     data["constructible"] = json!(false);
     data["permissions"] = json!([]);
     value["protocols"] = json!([{"symbol":"sample_Protocol", "roles":["P"],
-        "inputs":[port("x",0,json!([0]),json!(["P"]),data.clone())],
-        "outputs":[port("r",0,json!([0]),json!(["P"]),data)],
-        "services":[],"clauses":[]}]);
+        "inputs":[port("x",0,json!([0]),json!([0]),data.clone())],
+        "outputs":[port("r",0,json!([0]),json!([0]),data)],
+        "services":[],"common_input_requirements":[],"clauses":[]}]);
     assert_eq!(read(&value).unwrap_err(), InterfaceError::Schema);
 }

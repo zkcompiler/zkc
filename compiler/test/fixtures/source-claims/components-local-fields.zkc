@@ -12,9 +12,9 @@ fn pack(first:bool,second:bool)->Pending { return Pending{first:first,second:sec
 // This conversion is defined only when the first field holds. Purity supplies no
 // totality theorem outside that domain.
 fn guarded(claim:Pending)->Pending {
-  let payload=unpack(claim);
-  require payload.0;
-  return pack(payload.0,payload.1);
+  let observed=inspect_record(claim);
+  require observed.1.0;
+  return repack_record(observed.0,observed.1);
 }
 fn check(claim:Pending)->bool {
   let payload=unpack(claim);

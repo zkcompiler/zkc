@@ -7,7 +7,7 @@ public import Zkc.Construction.Structured
 /-! Structural admission of actual compiled producer instructions. The shared
 Fiat–Shamir step checks calculations, transcript observations, queries and
 coordinates. Its producer sends append proof payloads and must immediately be
-observed. Plain uses the shared data-only rule with the producer role: sends
+observed. Plain uses the shared local-frame rule with the producer role: sends
 and receives preserve actual data without observations or transcript slots. Owner-local field draws preserve transcript state and retain their
 separate service-port identity. Fiat–Shamir producer receives are unsupported. This checker proves
 no source projection theorem by itself.
@@ -60,7 +60,7 @@ def checkProducerStep (program : Program) (context : Context) (state : CheckStat
           if state.sorts[count]? = some (.data .index) ∧
               initial.map (state.sorts[·]?) = results.map some ∧
               initial.count state.current = 1 ∧
-              (initial.eraseIdx position).all (fun operand => isData state.sorts[operand]?) ∧
+              (initial.eraseIdx position).all (fun operand => isLocalValue state.sorts[operand]?) ∧
               yielded.length = initial.length then
             match checkProducerFrom program context
                 { state with
@@ -82,8 +82,8 @@ def checkProducerStep (program : Program) (context : Context) (state : CheckStat
           let fresh := state.sorts.length
           if state.sorts[count]? = some (.data .index) ∧
               initial.map (state.sorts[·]?) = results.map some ∧
-              initial.all (fun operand => isData state.sorts[operand]?) ∧
-              results.all (fun result => isData (some result)) ∧
+              initial.all (fun operand => isLocalValue state.sorts[operand]?) ∧
+              results.all (fun result => isLocalValue (some result)) ∧
               yielded.length = initial.length then
             match checkProducerFrom program context
                 { state with
@@ -104,7 +104,7 @@ def checkFiatShamirProducer (program : Program) (context : Context) (participant
     Except String Unit :=
   match participant.inputs.getLast? with
   | some (.transcript suite) =>
-      if suite = context.suite ∧ participant.inputs.dropLast.all (fun sort => isData (some sort)) then
+      if suite = context.suite ∧ participant.inputs.dropLast.all (fun sort => isLocalValue (some sort)) then
         match checkProducerFrom program context
             ⟨participant.inputs, participant.inputs.length - 1, .none, [], [], []⟩ participant.instructions with
         | .ok final =>
@@ -112,13 +112,13 @@ def checkFiatShamirProducer (program : Program) (context : Context) (participant
                 context.draws.all (fun draw => final.seen.contains draw.1) ∧
                 final.pending = .none ∧ participant.returned.getLast? = some final.current ∧
                 participant.returned.map (final.sorts[·]?) = participant.outputs.map some ∧
-                participant.returned.dropLast.all (fun index => isData final.sorts[index]?) then .ok ()
+                participant.returned.dropLast.all (fun index => isLocalValue final.sorts[index]?) then .ok ()
             else .error "construction-producer-final"
         | .error error => .error error
       else .error "construction-producer-inputs"
   | _ => .error "construction-producer-inputs"
 
-/-- Plain producers execute their actual data-only ABI. -/
+/-- Plain producers execute their actual local-value ABI. -/
 def checkProducer (program : Program) (context : Context) (participant : Participant) :
     Except String Unit :=
   match context.profile with

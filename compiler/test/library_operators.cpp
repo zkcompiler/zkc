@@ -56,21 +56,28 @@ int main() {
     refuses(check(field + "fn unused(a:F)->F{let nested={a;};return a;"),
             "source.syntax");
   });
-  cases.run("prelude is installed separately from capture", [&] {
-    auto captureValue = take(capture({{"m", "module m;", {}}}));
-    auto project = take(analyze(captureValue).checkedProject());
-    require(project.capture().identity() == captureValue.identity() &&
-                project.capture().sources().size() == 1,
-            "prelude altered capture identity or files");
-    require(project.sources().size() == 2 &&
-                project.sources().back().origin == SourceOrigin::Installation,
-            "prelude source origin is missing");
-    refuses(capture({{"zkc::prelude", "module zkc::prelude;", {}}}),
-            "source.module");
-    Limits limits;
-    limits.files = 1;
-    take(analyze(captureValue, limits).checkedProject());
-  });
+  cases.run(
+      "prelude and record operations are installed separately from capture",
+      [&] {
+        auto captureValue = take(capture({{"m", "module m;", {}}}));
+        auto project = take(analyze(captureValue).checkedProject());
+        require(project.capture().identity() == captureValue.identity() &&
+                    project.capture().sources().size() == 1,
+                "prelude altered capture identity or files");
+        require(project.sources().size() == 3 &&
+                    project.sources()[0].module == "m" &&
+                    project.sources()[0].origin == SourceOrigin::Captured &&
+                    project.sources()[1].module == "zkc::prelude" &&
+                    project.sources()[1].origin == SourceOrigin::Installation &&
+                    project.sources()[2].module == "zkc::records" &&
+                    project.sources()[2].origin == SourceOrigin::Installation,
+                "captured and installed source identities differ");
+        refuses(capture({{"zkc::prelude", "module zkc::prelude;", {}}}),
+                "source.module");
+        Limits limits;
+        limits.files = 1;
+        take(analyze(captureValue, limits).checkedProject());
+      });
   cases.run("inspection distinguishes public primitive definitions", [&] {
     auto project = take(
         check(field + "pub math fn add(a:F,b:F)->F=primitive(\"field.add\");"));

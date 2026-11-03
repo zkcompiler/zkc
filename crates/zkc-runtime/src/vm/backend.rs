@@ -39,6 +39,19 @@ pub trait Value: Clone {
     fn unpack_variant(&self) -> Result<(PhysicalType, usize, Vec<Self>), BackendError> {
         Err(BackendError::new("variant-unsupported"))
     }
+    /// Pure, stable tag inspection for reached selected control. Agreement of
+    /// this tag never establishes equality of the active payload. Implementations
+    /// must not unpack, clone or allocate the payload while inspecting its tag.
+    fn control_variant_tag(&self) -> Result<usize, BackendError> {
+        Err(BackendError::new("program-control-variant-tag"))
+    }
+    /// Pure stable collection metadata inspection, without encoding, copying or
+    /// executing a length operation. Axis order must match the installed native
+    /// collection contract (matrix rows, then columns). Unsupported carriers and
+    /// invalid axes refuse. This grants no content or capability authority.
+    fn control_extent(&self, _axis: usize) -> Result<u64, BackendError> {
+        Err(BackendError::new("input-binding-extent-unsupported"))
+    }
     /// Trusted scalar access for backend-independent local control.
     fn control_bool(&self) -> Result<bool, BackendError> {
         Err(BackendError::new("local-control-bool"))
@@ -146,6 +159,7 @@ impl FrameId {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameKind {
+    Branch { site: String, alternative: String },
     Entry,
     Loop { site: String, iteration: u64 },
     Local { site: String, function: String },

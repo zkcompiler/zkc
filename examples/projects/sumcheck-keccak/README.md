@@ -19,7 +19,9 @@ and `claim` is its sum in the selected field. The supplied sixteen elements
 1 through 16 use four rounds and claim 136. Use 1,024 elements for ten rounds.
 
 Compile the EVM verifier using an explicitly installed and pinned Solidity
-0.8.38 compiler:
+compiler of the release the
+[target declaration](../../../docs/spec/targets/evm.md#target-declaration)
+names:
 
 ```sh
 zkc compile Proof --project=examples/projects/sumcheck-keccak/zkc.toml \
@@ -30,7 +32,8 @@ The fresh output directory contains Yul, ABI, creation and runtime bytecode,
 exact compiler metadata/settings and a manifest. Retain the reported manifest
 SHA-256 independently. The contract's `verify(bytes[],bytes,bytes)` arguments are
 canonical public ZKCV frames in descriptor order, context bytes and the unchanged
-native proof. Cancun is the default; use `--evm-version=prague` to select Prague.
+native proof. `--evm-version` selects one of the declared forks; without it,
+the declared default applies.
 See the [EVM contract](../../../docs/spec/targets/evm.md)
 for limits and failure behavior, and the [deployed checks](../../../common/tests/evm/README.md)
 for the independent native/EVM comparison.

@@ -15,15 +15,29 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common.lean_render import ROOT, digest  # noqa: E402
+from bridges.common import interface as language_interface, policy as native_policy, source_format  # noqa: E402
+from bridges.common.lean_render import ROOT, digest, require  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
 from bridges.construction import pair  # noqa: E402
-from bridges.pipeline import source_claims  # noqa: E402
+from bridges.pipeline import source_claims, source_inventory  # noqa: E402
+
+
+def selection(subject):
+    """The source format of a subject: its project's, as the SDK reports it,
+    which its explicit module sources must share."""
+    if subject.project is None:
+        return source_format.option(subject.modules.values())
+    formats = {source_format.of_project(subject.project / "zkc.toml")}
+    explicit = [ROOT / path for path in subject.get("source", "modules", {}).values()]
+    if explicit:
+        formats.add(source_format.of_sources(explicit))
+    require(len(formats) == 1, f"{subject.name}: mixed source formats {sorted(formats)}")
+    return source_format.OPTION + formats.pop()
 
 
 def options(subject, entry, extra=(), *, protocol=False):
-    return ["--source-format=zkc", f"--{'subject' if protocol else 'entry'}={entry}", *subject.module_arguments(),
-            *subject.compiler_options, *extra]
+    return [selection(subject), f"--{'subject' if protocol else 'entry'}={entry}",
+            *subject.module_arguments(), *subject.compiler_options, *extra]
 
 
 def proof_artifacts(runner, subject, compiler, directory, executable=False):
@@ -40,13 +54,14 @@ def proof_artifacts(runner, subject, compiler, directory, executable=False):
     (directory / "source.mlir").write_bytes(source)
     interface_text = run("language-interface", *common, name="interface")
     (directory / "interface.json").write_text(interface_text)
-    interface = json.loads(interface_text)
+    interface = language_interface.loads(interface_text)
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source))
     deployment_text = run("language-bundle", *common, name="bundle").rstrip("\n")
     (directory / "deployment.json").write_text(deployment_text)
     deployment = json.loads(deployment_text)
     runner.check(f"{prefix}:deployment-source", deployment[1] == digest(source))
     policy = deployment[2][1]
+    entry_symbol = native_policy.decode(policy).entry
     (directory / "policy.json").write_text(json.dumps(policy))
     artifacts = dict(source=source, interface=interface, interface_text=interface_text, deployment=deployment,
                      deployment_text=deployment_text, policy=policy)
@@ -76,7 +91,7 @@ def proof_artifacts(runner, subject, compiler, directory, executable=False):
         runner.check(f"{prefix}:pair-validator", validator == exported,
                      "pair validator differs from independently exported participant")
         artifacts.update(pair=pair_export, pair_text=pair_text)
-    original_text = run("protocol-structured", directory / "source.mlir", f"--symbol={policy[1]}",
+    original_text = run("protocol-structured", directory / "source.mlir", f"--symbol={entry_symbol}",
                         name="original")
     (directory / "original.json").write_text(original_text)
     runner.check(f"{prefix}:participant-source", exported[1] == "sha256:" + digest(source))
@@ -96,10 +111,12 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     """Compile a proof Entry and bind its independently exported source requests."""
     artifacts = proof_artifacts(runner, subject, compiler, directory, executable)
     entry = subject.get("entries", "proof")
-    claim_text = runner.run([compiler, "language-check", *options(subject, entry), "--source-claims"],
+    claim_text = runner.run([compiler, "language-check", *options(subject, entry), "--source-claims", "--source-correspondence"],
                             name=f"{subject.name}:proof:source-claims").stdout
     (directory / "source-claims.json").write_text(claim_text)
     claim_report = source_claims.decode(claim_text)
+    require(claim_report["source_claims"]["admission"] == claim_report["source_correspondence"]["admission"],
+            "source claims and correspondence name different admissions")
     bound_claims = source_claims.bind_export(
         claim_report["source_claims"], entry=entry, source=artifacts["source"],
         interface_text=artifacts["interface_text"], original_text=artifacts["original_text"],
@@ -110,6 +127,9 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     (directory / "bound-source-claims.json").write_text(json.dumps(bound_claims, indent=2) + "\n")
     artifacts["source_claims"] = bound_claims
     artifacts["source_claim_inventory"] = claim_report["source_claim_inventory"]
+    artifacts["source_inventory"] = source_inventory.Inventory(claim_report["source_correspondence"],
+        source=artifacts["source"], interface_text=artifacts["interface_text"],
+        original_text=artifacts["original_text"])
     return artifacts
 
 
@@ -130,15 +150,19 @@ def interactive_entry(runner, subject, compiler, directory):
     snapshot = json.loads(exported)
     runner.check(f"{prefix}:export-source", snapshot[2] == "sha256:" + digest(source.encode())
                  and snapshot[3] == interface["protocol"])
-    claim_text = runner.run([compiler, "language-check", *common, "--source-claims"],
+    claim_text = runner.run([compiler, "language-check", *common, "--source-claims", "--source-correspondence"],
                             name=f"{prefix}:source-claims").stdout
     (directory / "source-claims.json").write_text(claim_text)
     claim_report = source_claims.decode(claim_text)
+    require(claim_report["source_claims"]["admission"] == claim_report["source_correspondence"]["admission"],
+            "source claims and correspondence name different admissions")
     bound = source_claims.bind_export(claim_report["source_claims"], entry=interface["entry"],
         source=source.encode(), interface_text=interface_text, original_text=exported)
     (directory / "bound-source-claims.json").write_text(json.dumps(bound, indent=2) + "\n")
     return dict(source=source, interface=interface, export_text=exported, snapshot=snapshot, source_claims=bound,
-                source_claim_inventory=claim_report["source_claim_inventory"])
+                source_claim_inventory=claim_report["source_claim_inventory"],
+                source_inventory=source_inventory.Inventory(claim_report["source_correspondence"],
+                    source=source.encode(), interface_text=interface_text, original_text=exported))
 
 
 def relative(path):

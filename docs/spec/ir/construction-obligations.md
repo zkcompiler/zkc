@@ -52,10 +52,10 @@ commitment lets the producer pick `z` and set `R = g^z · Y^(-e)` (informative).
   difficulties); it does not replace statement binding, authenticated
   configuration that leaves the shape unchanged, or key correctness.
 - The **salt** step and event kind is reserved. Zero-knowledge Fiat–Shamir
-  variants absorb salts before their challenges, and adding the kind later would
-  change request and transcript identities, so it belongs to the vocabulary now;
-  it has no semantics yet, and admission refuses a pattern or a construction
-  that contains one.
+  variants absorb salts before their challenges, and adding a kind to the
+  vocabulary changes request and transcript identities, so the vocabulary
+  carries it. It has no semantics: admission refuses a pattern or a
+  construction that contains one.
 - There is one oracle per primitive namespace, not per deployment. Deployments
   are separated only by their encoded inputs: identical inputs to one primitive
   share cells, and composition arguments keep that sharing.
@@ -406,8 +406,8 @@ A history provider meets six obligations.
   which governs extraction time. Challenge codecs admit preimage sampling; this
   condition is reserved for zero-knowledge claims and is not an obligation of a
   soundness claim.
-  An imported codec carries no security claim until this obligation is
-  discharged for it.
+  An imported codec for which this obligation is not discharged carries no
+  security claim.
 - **Execution simulation.** The adaptive execution of the chain or sponge in
   primitive calls, together with the adversary's direct primitive access, is
   simulated in the primitive's ideal model: the joint view matches the ideal

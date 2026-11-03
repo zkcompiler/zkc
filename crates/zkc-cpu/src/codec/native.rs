@@ -8,6 +8,7 @@ pub use input::NativeInputSize;
 mod pcs;
 mod readable;
 mod structured;
+pub(crate) mod tags;
 use crate::{CpuBackend, Policy, Value};
 pub use readable::readable_wire;
 use zkc_runtime::vm::{BackendError, DecodeReason, PhysicalType, Type, Value as RuntimeValue};
@@ -46,28 +47,28 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
     // Positive selected codec inventory. Canonical ZKCV tags are unchanged.
     if crate::operations::halo2curves::is_resident(ty) {
         return match (ty.kind(), ty.logical().identity()) {
-            (Type::Field, zkc_runtime::vm::Identity::Bn254Fr) => Some((40, 38)),
-            (Type::Group, zkc_runtime::vm::Identity::Bn254G1) => Some((46, 38)),
-            (Type::Group, zkc_runtime::vm::Identity::Bn254G2) => Some((48, 70)),
+            (Type::Field, zkc_runtime::vm::Identity::Bn254Fr) => Some((tags::BN254_FIELD, 38)),
+            (Type::Group, zkc_runtime::vm::Identity::Bn254G1) => Some((tags::BN254_G1, 38)),
+            (Type::Group, zkc_runtime::vm::Identity::Bn254G2) => Some((tags::BN254_G2, 70)),
             _ => None,
         };
     }
     if crate::operations::blst::is_resident(ty) {
         return match (ty.kind(), ty.logical().identity()) {
-            (Type::Field, zkc_runtime::vm::Identity::Bls12381Fr) => Some((1, 38)),
-            (Type::Group, zkc_runtime::vm::Identity::Bls12381G1) => Some((9, 54)),
-            (Type::Group, zkc_runtime::vm::Identity::Bls12381G2) => Some((51, 102)),
+            (Type::Field, zkc_runtime::vm::Identity::Bls12381Fr) => Some((tags::BLS_FIELD, 38)),
+            (Type::Group, zkc_runtime::vm::Identity::Bls12381G1) => Some((tags::BLS_G1, 54)),
+            (Type::Group, zkc_runtime::vm::Identity::Bls12381G2) => Some((tags::BLS_G2, 102)),
             _ => None,
         };
     }
     // Exact physical identities, including storage. Other providers never fall
     // through merely because their coarse kind is Field or Group.
     if *ty == Value::Bool(false).physical_type() {
-        Some((5, 7))
+        Some((tags::BOOL, 7))
     } else if *ty == Value::Field(crate::Scalar::from(0)).physical_type() {
-        Some((1, 38))
+        Some((tags::BLS_FIELD, 38))
     } else if *ty == Value::Index(0).physical_type() {
-        Some((31, 14))
+        Some((tags::INDEX, 14))
     } else if crate::field_array::supports_type(ty) {
         let (field, length) = ty.logical().field_array_parts()?;
         if field != zkc_runtime::vm::Identity::Bls12381Fr {
@@ -87,18 +88,18 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
     {
         use zkc_runtime::vm::{Identity::*, Type::*};
         match (ty.kind(), ty.logical().identity()) {
-            (Field, Bn254Fr) => Some((40, 38)),
-            (Group, Bls12381G1) => Some((9, 54)),
-            (Group, Bn254G1) => Some((46, 38)),
-            (Group, Bn254Gt) => Some((50, 390)),
-            (Group, Bn254G2) => Some((48, 70)),
-            (Group, Bls12381G2) => Some((51, 102)),
-            (Group, Bls12381Gt) => Some((53, 582)),
-            (Field, Binary64) => Some((73, 14)),
-            (Field, Binary64Ext3) => Some((76, 30)),
-            (Field, Ristretto255Scalar) => Some((13, 38)),
-            (Group, Ristretto255Group) => Some((16, 38)),
-            (Group, Edwards25519Prime) => Some((68, 38)),
+            (Field, Bn254Fr) => Some((tags::BN254_FIELD, 38)),
+            (Group, Bls12381G1) => Some((tags::BLS_G1, 54)),
+            (Group, Bn254G1) => Some((tags::BN254_G1, 38)),
+            (Group, Bn254Gt) => Some((tags::BN254_GT, 390)),
+            (Group, Bn254G2) => Some((tags::BN254_G2, 70)),
+            (Group, Bls12381G2) => Some((tags::BLS_G2, 102)),
+            (Group, Bls12381Gt) => Some((tags::BLS_GT, 582)),
+            (Field, Binary64) => Some((tags::BINARY_FIELD, 14)),
+            (Field, Binary64Ext3) => Some((tags::BINARY_EXT3_FIELD, 30)),
+            (Field, Ristretto255Scalar) => Some((tags::RISTRETTO_FIELD, 38)),
+            (Group, Ristretto255Group) => Some((tags::RISTRETTO_GROUP, 38)),
+            (Group, Edwards25519Prime) => Some((tags::EDWARDS_GROUP, 38)),
             _ => Option::None,
         }
     } else {
@@ -171,7 +172,7 @@ pub(crate) fn encode(
         let mut bytes = Vec::new();
         bytes.try_reserve_exact(width).map_err(|_| Limit)?;
         bytes.extend_from_slice(super::MAGIC);
-        bytes.push(2);
+        bytes.push(tags::BLS_TABLE);
         bytes.extend_from_slice(
             &u32::try_from(table.arity())
                 .map_err(|_| Limit)?
@@ -371,7 +372,7 @@ impl CpuBackend {
         }
         let (tag, width) = fixed_header(ty, bytes)?;
         self.policy().wire(width).map_err(|_| Limit)?;
-        if tag != 64 {
+        if tag != tags::FIELD_ARRAY {
             // Fixed leaves include any separate group backing. Reject insufficient capacity before
             // canonical/subgroup decoding; fixed arrays reserve their
             // shape-dependent backing below.
@@ -383,13 +384,13 @@ impl CpuBackend {
         if crate::operations::halo2curves::is_resident(ty) {
             use zkc_kernels::halo2curves::bn254 as kernel;
             return match tag {
-                40 => kernel::decode_scalar(&bytes[6..])
+                tags::BN254_FIELD => kernel::decode_scalar(&bytes[6..])
                     .map(Value::HaloField)
                     .map_err(|_| Invalid(DecodeReason::Scalar)),
-                46 => kernel::G1::from_bytes(&bytes[6..])
+                tags::BN254_G1 => kernel::G1::from_bytes(&bytes[6..])
                     .map(Value::HaloG1)
                     .map_err(|_| Invalid(DecodeReason::Group)),
-                48 => kernel::G2::from_bytes(&bytes[6..])
+                tags::BN254_G2 => kernel::G2::from_bytes(&bytes[6..])
                     .map(|p| Value::HaloG2(std::sync::Arc::new(p)))
                     .map_err(|_| Invalid(DecodeReason::Group)),
                 _ => Err(unsupported()),
@@ -398,13 +399,13 @@ impl CpuBackend {
         if crate::operations::blst::is_resident(ty) {
             use zkc_kernels::blst::bls12_381 as kernel;
             return match tag {
-                1 => kernel::decode_scalar(&bytes[6..])
+                tags::BLS_FIELD => kernel::decode_scalar(&bytes[6..])
                     .map(Value::BlstField)
                     .map_err(|_| Invalid(DecodeReason::Scalar)),
-                9 => kernel::G1::from_bytes(&bytes[6..])
+                tags::BLS_G1 => kernel::G1::from_bytes(&bytes[6..])
                     .map(|point| Value::BlstG1(point.into()))
                     .map_err(|_| Invalid(DecodeReason::Group)),
-                51 => kernel::G2::from_bytes(&bytes[6..])
+                tags::BLS_G2 => kernel::G2::from_bytes(&bytes[6..])
                     .map(|p| Value::BlstG2(std::sync::Arc::new(p)))
                     .map_err(|_| Invalid(DecodeReason::Group)),
                 _ => Err(unsupported()),
@@ -415,7 +416,7 @@ impl CpuBackend {
                 .map_err(|_| Invalid(DecodeReason::Scalar));
         }
         let value = match tag {
-            64 => {
+            tags::FIELD_ARRAY => {
                 let count = (width - 6) / 32;
                 let retained = crate::field_array::bytes(count)
                     .map_err(|_| Limit)?
@@ -457,67 +458,67 @@ impl CpuBackend {
                     )
                 }
             }
-            31 => Value::Index(u64::from_le_bytes(
+            tags::INDEX => Value::Index(u64::from_le_bytes(
                 bytes[6..14].try_into().expect("checked index width"),
             )),
-            5 => Value::Bool(super::decode_bool(&bytes[6..]).map_err(Invalid)?),
+            tags::BOOL => Value::Bool(super::decode_bool(&bytes[6..]).map_err(Invalid)?),
             // These checked helpers already normalize upstream decoding and
             // canonical re-encoding errors. No lost provenance is reconstructed.
-            1 => Value::Field(
+            tags::BLS_FIELD => Value::Field(
                 zkc_kernels::arkworks::bls12_381::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
-            9 => Value::Curve(
+            tags::BLS_G1 => Value::Curve(
                 (crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?)
                     .into(),
             ),
-            50 => Value::Bn254Gt(std::sync::Arc::new(
+            tags::BN254_GT => Value::Bn254Gt(std::sync::Arc::new(
                 crate::Bn254Gt::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             )),
-            40 => Value::Bn254Field(
+            tags::BN254_FIELD => Value::Bn254Field(
                 zkc_kernels::arkworks::bn254::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
-            46 => Value::Bn254G1(
+            tags::BN254_G1 => Value::Bn254G1(
                 crate::Bn254G1::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
-            48 => Value::Bn254G2(
+            tags::BN254_G2 => Value::Bn254G2(
                 (crate::Bn254G2::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?)
                 .into(),
             ),
-            51 => Value::Bls12381G2(
+            tags::BLS_G2 => Value::Bls12381G2(
                 (crate::Bls12381G2::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?)
                 .into(),
             ),
-            53 => Value::Bls12381Gt(std::sync::Arc::new(
+            tags::BLS_GT => Value::Bls12381Gt(std::sync::Arc::new(
                 crate::Bls12381Gt::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             )),
             // Every bit pattern of the exact width is an element.
-            73 => Value::Binary64Field(
+            tags::BINARY_FIELD => Value::Binary64Field(
                 zkc_kernels::plonky3::binary::decode(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
-            76 => Value::Binary64Ext3Field(
+            tags::BINARY_EXT3_FIELD => Value::Binary64Ext3Field(
                 zkc_kernels::plonky3::binary::decode_ext3(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
-            13 => Value::RistrettoField(
+            tags::RISTRETTO_FIELD => Value::RistrettoField(
                 Option::from(crate::RistrettoScalar::from_canonical_bytes(
                     bytes[6..].try_into().expect("checked scalar width"),
                 ))
                 .ok_or(Invalid(DecodeReason::Scalar))?,
             ),
-            68 => Value::EdwardsGroup(
+            tags::EDWARDS_GROUP => Value::EdwardsGroup(
                 (crate::EdwardsPrime::from_bytes(&bytes[6..])
                     .ok_or(Invalid(DecodeReason::Group))?)
                 .into(),
             ),
-            16 => {
+            tags::RISTRETTO_GROUP => {
                 let compressed = curve25519_dalek::ristretto::CompressedRistretto(
                     bytes[6..].try_into().expect("checked group width"),
                 );
@@ -586,9 +587,23 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
 #[cfg(test)]
 mod tag_tests {
     use super::*;
-    use zkc_runtime::vm::{Identity, LogicalType};
+    use std::collections::{BTreeMap, BTreeSet};
+    use zkc_runtime::vm::{Identity, LogicalType, ResourceDomain};
 
-    /// The frame tag of every default physical type over the listed identities.
+    /// Every variant of a fieldless enum. The match has no wildcard arm, so the
+    /// list stops compiling when a variant is added, and a repeated variant is
+    /// an unreachable pattern.
+    macro_rules! every {
+        ($enum:ident: $($variant:ident),+ $(,)?) => {{
+            let all = [$($enum::$variant),+];
+            all.into_iter().for_each(|value| match value {
+                $($enum::$variant)|+ => {}
+            });
+            all
+        }};
+    }
+
+    /// The frame tag the native codec writes for a complete physical type.
     fn tag(ty: &PhysicalType) -> Option<u8> {
         frame(ty)
             .map(|(tag, _)| tag)
@@ -598,96 +613,190 @@ mod tag_tests {
             .or_else(|| table_type(ty).then_some(2))
     }
 
+    /// The catalog frame tag of a complete logical type: its codec's frame,
+    /// or the aggregate frame of its constructor.
+    fn catalog_tag(logical: &LogicalType) -> Option<u8> {
+        use zkc_runtime::catalog::{CATALOG, installed_codec};
+        let aggregate = |constructor: &str, domain| {
+            CATALOG
+                .aggregate_frames
+                .iter()
+                .find(|row| row.constructor == constructor && row.domain == domain)
+                .map(|row| row.tag)
+        };
+        match logical.kind() {
+            Type::Sequence | Type::Variant => aggregate(logical.kind().name(), None),
+            Type::FieldArray => aggregate("field_array", logical.field_array_parts()?.0.catalog()),
+            _ => installed_codec(&logical.codec()?)?
+                .frame
+                .map(|frame| frame.tag),
+        }
+    }
+
+    /// The frame a tag identifies, named by the logical type it carries.
+    /// Sequence, variant and field-array frames take their element, payload or
+    /// length from the expected type, and digest-generic Merkle frames take
+    /// their scheme from it, so each of these families is one frame.
+    fn owner(ty: &PhysicalType) -> String {
+        let logical = ty.logical();
+        match ty.kind() {
+            Type::Sequence | Type::Variant => ty.kind().name().into(),
+            Type::FieldArray => {
+                let (field, _) = logical.field_array_parts().expect("field array");
+                format!("field_array:{}", field.name())
+            }
+            kind if crate::merkle::Scheme::from_identity(logical.identity()).is_some() => {
+                format!("{}:digest-generic-merkle", kind.name())
+            }
+            _ => logical.spelling(),
+        }
+    }
+
     #[test]
-    fn binary_field_frame_tags_are_unique() {
-        let identities = [
-            "",
-            "bn254.fr",
-            "bn254.g1",
-            "bn254.g2",
-            "bn254.gt",
-            "bls12-381.fr",
-            "bls12-381.g1",
-            "bls12-381.g2",
-            "bls12-381.gt",
-            "multilinear.kzg.bls12-381/0",
-            "rows.merkle-keccak256.koala-bear/0",
-            "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
-            "rows.merkle-poseidon2-16.koala-bear/0",
-            "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
-            "merlin3.bls12-381.fr64be/0",
-            "merlin3.ristretto255.scalar64le/0",
-            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
-            "hash-chain.keccak256.bls12-381.fr64be/0",
-            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
-            "ristretto255.scalar",
-            "ristretto255.group",
-            "edwards25519.prime",
-            "koala-bear",
-            "koala-bear.ext8-binomial3",
-            "koala-bear.ext4-binomial3",
-            "gf2-64.pentanomial-4-3-1",
-            "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
-        ];
-        let kinds = [
-            "bool",
-            "index",
-            "indices",
-            "bytes",
-            "shake128_state",
-            "field",
-            "vector",
-            "polynomial",
-            "round",
-            "matrix",
-            "table",
-            "point",
-            "rng",
-            "nonce",
-            "group",
-            "groups",
-            "transcript",
-            "commitment",
-            "proof",
-            "opening_state",
-            "commitments",
-            "opening_states",
-            "prover_key",
-            "verifier_key",
-        ];
-        let mut owners: std::collections::BTreeMap<u8, Vec<String>> = Default::default();
+    fn frame_tags_and_frames_correspond_one_to_one() {
+        let identities = every!(Identity:
+            None, Bn254Fr, Bn254G1, Bn254G2, Bn254Gt, Bls12381Fr, Bls12381G1,
+            MultilinearKzgBls12381, MerkleKoalaBear, MerkleKoalaBearExt8, MerkleKoalaBearExt4,
+            MerklePoseidon2KoalaBear, MerklePoseidon2KoalaBearExt4, MerklePoseidon2BabyBear,
+            MerklePoseidon2BabyBearExt4, MerklePoseidon2Goldilocks, MerklePoseidon2GoldilocksExt2,
+            Merlin3KoalaBearExt8, Merlin3Fr64Be, Spongefish080KeccakFr64Be, Ristretto255Scalar,
+            KoalaBear, KoalaBearExt8, KoalaBearExt4, BabyBear, BabyBearExt4, Goldilocks,
+            GoldilocksExt2, Merlin3BabyBearExt4, Merlin3GoldilocksExt2, Ristretto255Group,
+            Edwards25519Prime, Merlin3Ristretto64Le, Bls12381G2, Bls12381Gt,
+            HashChainKeccak256Fr64Be, HashChainKeccak256KoalaBearExt8,
+            HashChainKeccak256KoalaBearExt4, Binary64, Binary64Ext3,
+        );
+        let kinds = every!(Type:
+            Sequence, FieldArray, FixedVector, Variant, ResourceUnit, Index, Indices, Bytes,
+            Shake128State, QuotientMatrix, Matrix, Vector, Polynomial, Field, Table, Point,
+            Round, Bool, Rng, Commitment, Commitments, OpeningStates, Proof, ProverKey,
+            VerifierKey, OpeningState, Group, Nonce, Transcript, Groups,
+        );
+        // Every leaf kind over every identity, then the structural kinds over
+        // those leaves.
+        let leaves: Vec<_> = kinds
+            .iter()
+            .flat_map(|kind| {
+                identities
+                    .iter()
+                    .filter_map(move |identity| LogicalType::new(*kind, *identity).ok())
+            })
+            .collect();
+        let mut types = leaves.clone();
+        for leaf in &leaves {
+            types.extend(LogicalType::sequence(leaf.clone()).ok());
+            types.extend(LogicalType::fixed_vector(leaf.clone(), 2).ok());
+            let variant = zkc_test_support::variants::logical(
+                "Message",
+                serde_json::json!([["value", [leaf.spelling()]], ["none", []]]),
+            );
+            types.extend(LogicalType::parse(&variant).ok());
+        }
         for identity in identities {
-            for kind in kinds {
-                let spelling = if identity.is_empty() {
-                    kind.to_string()
-                } else {
-                    format!("{kind}:{identity}")
-                };
-                let Ok(logical) = LogicalType::parse(&spelling) else {
-                    continue;
-                };
-                let ty = PhysicalType::default_for(logical).unwrap();
+            for length in [0, 1, 3] {
+                types.extend(LogicalType::field_array(identity, length).ok());
+            }
+        }
+        types.push(LogicalType::resource_unit(
+            ResourceDomain::parse("Slot.A").unwrap(),
+        ));
+        assert_eq!(
+            types.iter().map(LogicalType::kind).collect::<BTreeSet<_>>(),
+            BTreeSet::from(kinds)
+        );
+        assert_eq!(
+            leaves
+                .iter()
+                .map(LogicalType::identity)
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(identities)
+        );
+        // Default and resident representations of one logical type share its frame.
+        let mut pairs = BTreeSet::new();
+        for logical in &types {
+            let (kind, identity) = (logical.kind(), logical.identity());
+            let representations = [
+                PhysicalType::default_for(logical.clone()).ok(),
+                crate::operations::blst::physical(kind, identity),
+                crate::operations::halo2curves::physical(kind, identity),
+            ];
+            for ty in representations.into_iter().flatten() {
                 if let Some(tag) = tag(&ty) {
-                    owners.entry(tag).or_default().push(spelling);
+                    pairs.insert((tag, owner(&ty)));
                 }
             }
         }
-        let expected = [
+        // Every tag the codec writes is the catalog's frame tag of the logical
+        // type, and every fixed scalar frame has the codec's element width.
+        let mut checked = 0;
+        for logical in &types {
+            let (kind, identity) = (logical.kind(), logical.identity());
+            let representations = [
+                PhysicalType::default_for(logical.clone()).ok(),
+                crate::operations::blst::physical(kind, identity),
+                crate::operations::halo2curves::physical(kind, identity),
+            ];
+            for ty in representations.into_iter().flatten() {
+                let Some(written) = tag(&ty) else {
+                    continue;
+                };
+                assert_eq!(
+                    Some(written),
+                    catalog_tag(logical),
+                    "{}",
+                    logical.spelling()
+                );
+                if let Some((_, length)) = frame(&ty)
+                    && logical.structural().is_none()
+                {
+                    let element = logical
+                        .codec()
+                        .and_then(|codec| zkc_runtime::catalog::installed_codec(&codec))
+                        .and_then(|row| row.frame?.element_bytes);
+                    assert_eq!(
+                        Some(length),
+                        element.map(|n| n + 6),
+                        "{}",
+                        logical.spelling()
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked > 100, "{checked}");
+        let mut owners: BTreeMap<u8, BTreeSet<&str>> = BTreeMap::new();
+        let mut tags: BTreeMap<&str, BTreeSet<u8>> = BTreeMap::new();
+        for (tag, frame) in &pairs {
+            owners.entry(*tag).or_default().insert(frame);
+            tags.entry(frame).or_default().insert(*tag);
+        }
+        let shared: BTreeMap<_, _> = owners.iter().filter(|(_, f)| f.len() > 1).collect();
+        assert!(
+            shared.is_empty(),
+            "tags identifying several frames: {shared:?}"
+        );
+        let split: BTreeMap<_, _> = tags.iter().filter(|(_, t)| t.len() > 1).collect();
+        assert!(
+            split.is_empty(),
+            "frames written with several tags: {split:?}"
+        );
+        for (tag, frame) in [
+            (68, "indices"),
+            (69, "sequence"),
             (73, "field:gf2-64.pentanomial-4-3-1"),
             (74, "vector:gf2-64.pentanomial-4-3-1"),
             (75, "matrix:gf2-64.pentanomial-4-3-1"),
             (76, "field:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
             (77, "vector:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
             (78, "matrix:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
-        ];
-        for (tag, spelling) in expected {
-            assert_eq!(owners[&tag], vec![spelling.to_string()], "tag {tag}");
+            (81, "group:edwards25519.prime"),
+            (82, "groups:edwards25519.prime"),
+        ] {
+            assert_eq!(
+                owners.get(&tag),
+                Some(&BTreeSet::from([frame])),
+                "tag {tag}"
+            );
         }
-        // Appended after every earlier tag, so no earlier frame can collide.
-        let earlier = owners.keys().copied().filter(|t| *t < 73).max();
-        assert_eq!(earlier, Some(72));
-        assert!(owners.keys().all(|t| *t <= 78));
-        assert!(Identity::Binary64.bit_pattern_width().is_some());
     }
 }

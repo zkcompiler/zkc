@@ -13,7 +13,7 @@ import time
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.structured.snapshot import render
 from bridges.common.schema import interpreted_type
-from request_support import require
+from request_support import check_lean_resources, require
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -102,6 +102,7 @@ def compile_modules(directory, modules, environment=ROOT, lake='lake', timeout=1
         log = directory / (module.replace('.', '_') + '.log')
         log.write_text(result.stdout + result.stderr)
         logs.append(str(log))
+        check_lean_resources(result, str(log))
         require(result.returncode == 0, 'correspondence-unproved',
                 'Lean refused a generated module: ' + str(log))
     return logs

@@ -1,10 +1,14 @@
 #include "ComponentContracts.h"
 #include "SourceView.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Instances.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/SourceTerms.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/StructuredData.h"
@@ -31,8 +35,10 @@ StringRef symbol(mlir::Operation *op, StringRef attribute = "callee") {
   auto value = op->getAttrOfType<mlir::FlatSymbolRefAttr>(attribute);
   return value ? value.getValue() : StringRef();
 }
-StringRef role(mlir::Operation *op, StringRef attribute = "owner") {
-  auto value = op->getAttrOfType<mlir::StringAttr>(attribute);
+// The owner of a single-owner action: a guard, a query or a local call; empty
+// for every other operation.
+StringRef role(mlir::Operation *op) {
+  auto value = protocol_ir::getActionOwner(op);
   return value ? value.getValue() : StringRef();
 }
 std::vector<std::string> roleNames(mlir::ArrayAttr values) {
@@ -372,7 +378,7 @@ struct Deriver {
         const auto &callee = *found->second;
         auto childRoles = roles(callee);
         const auto actualRoles =
-            roleNames(op->getAttrOfType<mlir::ArrayAttr>("roles"));
+            roleNames(mlir::cast<protocol_ir::ApplyOp>(op).getRoles());
         auto actual = [&](StringRef role) -> StringRef {
           size_t index =
               std::find(childRoles.begin(), childRoles.end(), role.str()) -
@@ -620,16 +626,18 @@ struct Deriver {
           }
           continue;
         }
+        auto exchange = mlir::dyn_cast<protocol_ir::ExchangeOp>(op);
         for (const auto &role : roster) {
           if (tag == "restrict" &&
               !llvm::is_contained(
-                  roleNames(op->getAttrOfType<mlir::ArrayAttr>("roles")), role))
+                  roleNames(
+                      mlir::cast<protocol_ir::RestrictRolesOp>(op).getRoles()),
+                  role))
             continue;
           if ((tag == "local_call" || tag == "draw") &&
-              zkc::language::role(op, tag == "local_call" ? "role" : "owner") !=
-                  role)
+              zkc::language::role(op) != role)
             continue;
-          if (tag == "exchange" && zkc::language::role(op, "receiver") != role)
+          if (exchange && exchange.getReceiver() != role)
             continue;
           std::vector<Flow> operands;
           bool available = true;
@@ -637,9 +645,7 @@ struct Deriver {
             unsigned index = argument;
             if (index >= environment.size())
               return refuse("component-seam-reference");
-            auto sourceRole = tag == "exchange"
-                                  ? zkc::language::role(op, "sender").str()
-                                  : role;
+            auto sourceRole = exchange ? exchange.getSender().str() : role;
             auto found = environment[index].find(sourceRole);
             if (found == environment[index].end()) {
               available = false;
@@ -1141,8 +1147,8 @@ Error checkComponentContracts(const SourceView &source,
 }
 Error checkComponentDeclarations(const J &value) {
   auto rows = value.getAsArray();
-  if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
-      !(*rows)[1].getAsArray())
+  if (!rows || rows->size() != 3 || !(*rows)[0].getAsArray() ||
+      !(*rows)[1].getAsArray() || !(*rows)[2].getAsArray())
     return error("component-declaration");
   auto validString = [](const J &value) {
     auto text = value.getAsString();
@@ -1166,18 +1172,91 @@ Error checkComponentDeclarations(const J &value) {
   std::set<std::string> types, owners;
   std::map<std::string, StringRef> nominalKinds;
   std::map<std::string, const A *> declarations;
-  auto fields = [&](const A &members) -> Error {
+  // A placement names roles. A record member's formula ranges over its row's
+  // telescope; a port's tree ranges over its protocol's roster, which only
+  // the exporter knows. Product arguments are an injective substitution in
+  // telescope order. `used` receives the top-level participant summary.
+  std::function<Error(const J &, const std::set<std::string> *,
+                      std::set<std::string> *, unsigned)>
+      placement = [&](const J &value, const std::set<std::string> *telescope,
+                      std::set<std::string> *used, unsigned depth) -> Error {
+    if (!remaining || depth > 64)
+      return error("component-declaration-limit");
+    --remaining;
+    auto node = value.getAsArray();
+    if (!node || node->empty() || !(*node)[0].getAsString())
+      return error("component-declaration-placement");
+    auto names = [&](const J &list, bool injective,
+                     bool summary) -> Expected<std::set<std::string>> {
+      auto items = list.getAsArray();
+      if (!items || items->size() > protocol::instances::protocolRoleLimit)
+        return error("component-declaration-placement");
+      std::set<std::string> result;
+      for (const auto &item : *items) {
+        if (!validString(item) ||
+            (telescope && !telescope->count(string(item).str())))
+          return error("component-declaration-role");
+        if (!result.insert(string(item).str()).second && injective)
+          return error("component-declaration-role");
+        if (summary && used)
+          used->insert(string(item).str());
+      }
+      return result;
+    };
+    auto tag = string((*node)[0]);
+    if (tag == "data") {
+      if (node->size() != 2)
+        return error("component-declaration-placement");
+      auto roles = names((*node)[1], true, true);
+      return roles ? Error::success() : roles.takeError();
+    }
+    if (tag == "oracle") {
+      if (node->size() != 3)
+        return error("component-declaration-placement");
+      const auto &holder = (*node)[1];
+      if (!validString(holder) ||
+          (telescope && !telescope->count(string(holder).str())))
+        return error("component-declaration-role");
+      auto receivers = names((*node)[2], true, true);
+      if (!receivers)
+        return receivers.takeError();
+      if (receivers->count(string(holder).str()))
+        return error("component-declaration-role");
+      if (used)
+        used->insert(string(holder).str());
+      return Error::success();
+    }
+    if (tag != "product" || node->size() != 3 || !(*node)[2].getAsArray() ||
+        array((*node)[2]).size() > 512)
+      return error("component-declaration-placement");
+    auto arguments = names((*node)[1], true, true);
+    if (!arguments)
+      return arguments.takeError();
+    for (const auto &field : array((*node)[2]))
+      if (auto e = placement(field, telescope, nullptr, depth + 1))
+        return e;
+    return Error::success();
+  };
+  auto fields = [&](const A &members, bool placed,
+                    const std::set<std::string> &telescope) -> Error {
     if (members.size() > 512)
       return error("component-declaration-limit");
     std::set<std::string> names;
     for (const auto &value : members) {
       auto field = value.getAsArray();
-      if (!field || field->size() != 2 || !validString((*field)[0]))
+      if (!field || field->size() != 3 || !validString((*field)[0]))
         return error("component-declaration");
       if (!names.insert(string((*field)[0]).str()).second)
         return error("component-declaration-duplicate");
       if (auto e = checkStaticTerm((*field)[1]))
         return e;
+      // Placement is present exactly for the members of a logical record
+      // with a role telescope; its formula ranges over that telescope.
+      if (((*field)[2].kind() == J::Null) == placed)
+        return error("component-declaration-placement");
+      if (placed)
+        if (auto e = placement((*field)[2], &telescope, nullptr, 0))
+          return e;
     }
     return Error::success();
   };
@@ -1185,8 +1264,9 @@ Error checkComponentDeclarations(const J &value) {
     return error("component-declaration-limit");
   for (const auto &value : array((*rows)[0])) {
     auto record = value.getAsArray();
-    if (!record || record->size() != 4 || !(*record)[1].getAsString() ||
-        !(*record)[2].getAsBoolean() || !(*record)[3].getAsArray())
+    if (!record || record->size() != 6 || !(*record)[1].getAsString() ||
+        !(*record)[2].getAsBoolean() || !(*record)[3].getAsArray() ||
+        !(*record)[4].getAsArray())
       return error("component-declaration");
     if (auto e = checkStaticTerm((*record)[0]))
       return e;
@@ -1206,14 +1286,29 @@ Error checkComponentDeclarations(const J &value) {
     auto resource = string((*record)[1]);
     if (resource != "ordinary" && resource != "affine" && resource != "linear")
       return error("component-declaration");
-    if (kind == "logical_record" && resource != "ordinary")
-      return error("component-declaration-record");
-    if (resource == "linear" && !*(*record)[2].getAsBoolean())
-      return error("component-declaration-record");
+    // A custody slot names the resource units of exactly the affine and linear
+    // rows.
+    const auto &slot = (*record)[5];
+    if ((resource == "ordinary") != (slot.kind() == J::Null) ||
+        (slot.kind() != J::Null &&
+         (!slot.getAsString() || !string(slot).starts_with("zkl_resource_") ||
+          !protocol::resourceUnitDomain(string(slot)))))
+      return error("component-declaration-slot");
+    // The telescope is the row's own roles in declaration order; only a
+    // logical record has one.
+    const auto &roles = array((*record)[4]);
+    if (roles.size() > protocol::instances::recordRoleLimit)
+      return error("component-declaration-limit");
+    if (kind != "logical_record" && !roles.empty())
+      return error("component-declaration-role");
+    std::set<std::string> telescope;
+    for (const auto &role : roles)
+      if (!validString(role) || !telescope.insert(string(role).str()).second)
+        return error("component-declaration-role");
     if (array((*record)[3]).size() > 512)
       return error("component-declaration-limit");
     if (kind != "variant") {
-      if (auto e = fields(array((*record)[3])))
+      if (auto e = fields(array((*record)[3]), !telescope.empty(), telescope))
         return e;
       continue;
     }
@@ -1225,14 +1320,55 @@ Error checkComponentDeclarations(const J &value) {
         return error("component-declaration");
       if (!alternatives.insert(string((*alternative)[0]).str()).second)
         return error("component-declaration-duplicate");
-      if (auto e = fields(array((*alternative)[1])))
+      if (auto e = fields(array((*alternative)[1]), false, telescope))
         return e;
     }
   }
-  // Logical records cannot acquire resource custody through an ordinary
-  // nominal child, including children erased by zero-length layouts.
-  std::set<std::string> ordinary;
-  std::function<Error(const J &, unsigned)> shared =
+  // Retain every nominal child, including children with no physical leaves.
+  std::function<Error(const J &, unsigned)> referenced =
+      [&](const J &value, unsigned depth) -> Error {
+    if (!remaining || depth > 64)
+      return error("component-declaration-limit");
+    --remaining;
+    const auto &term = array(value);
+    auto tag = string(term[0]);
+    const A *arguments = nullptr;
+    if (tag == "nominal") {
+      auto kind = string(term[1]);
+      if ((kind == "record" || kind == "logical_record" || kind == "variant") &&
+          !declarations.count(key(value)))
+        return error("component-declaration-record");
+      arguments = &array(term[3]);
+    } else if (tag == "array")
+      return referenced(term[1], depth + 1);
+    else if (tag == "tuple")
+      arguments = &array(term[1]);
+    else if (tag == "builtin" || tag == "formal")
+      arguments = &array(term[2]);
+    if (arguments)
+      for (const auto &argument : *arguments)
+        if (auto e = referenced(argument, depth + 1))
+          return e;
+    return Error::success();
+  };
+  for (const auto &[identity, declaration] : declarations) {
+    if (auto e = referenced((*declaration)[0], 0))
+      return e;
+    bool variant = array((*declaration)[0])[1] == J("variant");
+    for (const auto &member : array((*declaration)[3])) {
+      if (variant) {
+        for (const auto &field : array(array(member)[1]))
+          if (auto e = referenced(array(field)[1], 0))
+            return e;
+      } else if (auto e = referenced(array(member)[1], 0))
+        return e;
+    }
+  }
+  // Ordinary carriers cannot hide distributed logical category, including
+  // children erased by zero-length layouts. Distributed records may contain
+  // nested records and restrictions; source comparison checks their authority.
+  std::set<std::string> checkedOrdinary;
+  std::function<Error(const J &, unsigned)> ordinaryCategory =
       [&](const J &value, unsigned depth) -> Error {
     if (!remaining || depth > 64)
       return error("component-declaration-limit");
@@ -1247,42 +1383,48 @@ Error checkComponentDeclarations(const J &value) {
       if (kind == "record" || kind == "variant") {
         auto identity = key(value);
         auto found = declarations.find(identity);
-        if (found == declarations.end() || (*found->second)[1] != J("ordinary"))
+        if (found == declarations.end())
           return error("component-declaration-record");
-        if (!ordinary.insert(identity).second)
+        if (!checkedOrdinary.insert(identity).second)
           return Error::success();
         const auto &members = array((*found->second)[3]);
         if (kind == "variant") {
           for (const auto &alternative : members)
             for (const auto &field : array(array(alternative)[1]))
-              if (auto e = shared(array(field)[1], depth + 1))
+              if (auto e = ordinaryCategory(array(field)[1], depth + 1))
                 return e;
         } else
           for (const auto &field : members)
-            if (auto e = shared(array(field)[1], depth + 1))
+            if (auto e = ordinaryCategory(array(field)[1], depth + 1))
               return e;
-        // Closed member types already substitute the nominal arguments.
-        // A phantom type argument does not confer resource custody.
+        // Logical category is checked before physical expansion, including
+        // phantom arguments. An ordinary carrier cannot erase that category.
+        for (const auto &argument : array(term[3]))
+          if (auto e = ordinaryCategory(argument, depth + 1))
+            return e;
         return Error::success();
       }
       arguments = &array(term[3]);
     } else if (tag == "array") {
-      return shared(term[1], depth + 1);
+      return ordinaryCategory(term[1], depth + 1);
     } else if (tag == "tuple")
       arguments = &array(term[1]);
-    else if (tag == "builtin" || tag == "formal")
+    else if (tag == "builtin" || tag == "formal") {
+      // A head that a frontend constructor row spells is a logical handle.
+      if (tag == "builtin" && protocol::frontendConstructor(string(term[1])))
+        return error("component-declaration-record");
       arguments = &array(term[2]);
+    }
     if (arguments)
       for (const auto &argument : *arguments)
-        if (auto e = shared(argument, depth + 1))
+        if (auto e = ordinaryCategory(argument, depth + 1))
           return e;
     return Error::success();
   };
   for (const auto &[identity, declaration] : declarations)
-    if (array((*declaration)[0])[1] == J("logical_record"))
-      for (const auto &field : array((*declaration)[3]))
-        if (auto e = shared(array(field)[1], 0))
-          return e;
+    if (array((*declaration)[0])[1] != J("logical_record"))
+      if (auto e = ordinaryCategory((*declaration)[0], 0))
+        return e;
   for (const auto &value : array((*rows)[1])) {
     auto owner = value.getAsArray();
     if (!owner || owner->size() != 3 || !validString((*owner)[0]))
@@ -1296,7 +1438,7 @@ Error checkComponentDeclarations(const J &value) {
       std::set<std::string> names;
       for (const auto &value : *ports) {
         auto port = value.getAsArray();
-        if (!port || port->size() != 5 || !validString((*port)[0]) ||
+        if (!port || port->size() != 6 || !validString((*port)[0]) ||
             !(*port)[2].getAsArray() || !(*port)[3].getAsUINT64() ||
             !(*port)[4].getAsUINT64() || *(*port)[3].getAsUINT64() > 512 ||
             *(*port)[4].getAsUINT64() > 512)
@@ -1305,7 +1447,9 @@ Error checkComponentDeclarations(const J &value) {
           return error("component-declaration-duplicate");
         if (auto e = checkStaticTerm((*port)[1]))
           return e;
-        if (array((*port)[2]).size() > 16)
+        if (auto e = referenced((*port)[1], 0))
+          return e;
+        if (array((*port)[2]).size() > protocol::instances::protocolRoleLimit)
           return error("component-declaration-limit");
         std::set<std::string> roles;
         for (const auto &role : array((*port)[2])) {
@@ -1314,8 +1458,80 @@ Error checkComponentDeclarations(const J &value) {
           if (!roles.insert(string(role).str()).second)
             return error("component-declaration-role");
         }
+        // The participant list is a derived summary of the placement tree.
+        std::set<std::string> placed;
+        if (auto e = placement((*port)[5], nullptr, &placed, 0))
+          return e;
+        if (placed != roles)
+          return error("component-declaration-placement");
       }
     }
+  }
+  // One authority row per nominal record, logical record, variant and module
+  // path in any carrier term, sorted by path. A revision is a SHA-256 hex
+  // digest; null marks a generated declaration.
+  std::set<std::string> paths;
+  std::function<Error(const J &, unsigned)> nominal =
+      [&](const J &value, unsigned depth) -> Error {
+    if (!remaining || depth > 64)
+      return error("component-declaration-limit");
+    --remaining;
+    const auto &term = array(value);
+    auto tag = string(term[0]);
+    const A *arguments = nullptr;
+    if (tag == "nominal") {
+      auto kind = string(term[1]);
+      if (kind == "record" || kind == "logical_record" || kind == "variant" ||
+          kind == "module")
+        paths.insert(string(term[2]).str());
+      arguments = &array(term[3]);
+    } else if (tag == "array")
+      return nominal(term[1], depth + 1);
+    else if (tag == "tuple")
+      arguments = &array(term[1]);
+    else if (tag == "builtin" || tag == "formal")
+      arguments = &array(term[2]);
+    if (arguments)
+      for (const auto &argument : *arguments)
+        if (auto e = nominal(argument, depth + 1))
+          return e;
+    return Error::success();
+  };
+  for (const auto &[identity, declaration] : declarations) {
+    if (auto e = nominal((*declaration)[0], 0))
+      return e;
+    bool variant = array((*declaration)[0])[1] == J("variant");
+    for (const auto &member : array((*declaration)[3])) {
+      if (variant) {
+        for (const auto &field : array(array(member)[1]))
+          if (auto e = nominal(array(field)[1], 0))
+            return e;
+      } else if (auto e = nominal(array(member)[1], 0))
+        return e;
+    }
+  }
+  for (const auto &value : array((*rows)[1]))
+    for (unsigned side : {1u, 2u})
+      for (const auto &port : array(array(value)[side]))
+        if (auto e = nominal(array(port)[1], 0))
+          return e;
+  const auto &authorities = array((*rows)[2]);
+  if (authorities.size() != paths.size())
+    return error("component-declaration-authority");
+  auto expected = paths.begin();
+  for (const auto &value : authorities) {
+    auto row = value.getAsArray();
+    if (!row || row->size() != 2 || !validString((*row)[0]) ||
+        string((*row)[0]) != *expected++)
+      return error("component-declaration-authority");
+    const auto &revision = (*row)[1];
+    if (revision.kind() == J::Null)
+      continue;
+    auto digest = revision.getAsString();
+    if (!digest || digest->size() != 64 || !llvm::all_of(*digest, [](char c) {
+          return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        }))
+      return error("component-declaration-authority");
   }
   return Error::success();
 }

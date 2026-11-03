@@ -3,6 +3,29 @@
 use super::*;
 mod reconstructed;
 
+/// The live, fresh and logical byte selections of a capacity record.
+#[derive(Clone, Copy, Debug)]
+struct Bytes {
+    live: usize,
+    total: usize,
+    logical: u64,
+}
+impl Bytes {
+    const DEFAULT: Self = Self {
+        live: zkc_runtime::vm::Limits::VALUE_BYTES,
+        total: zkc_runtime::vm::Limits::TOTAL_VALUE_BYTES,
+        logical: zkc_runtime::vm::Limits::LOGICAL_BYTES,
+    };
+    /// The invocation root of the default record with these selections.
+    fn root(self) -> zkc_runtime::vm::ExecutionLedger {
+        let mut record = Capacity::default();
+        record.values.live_bytes = self.live;
+        record.values.total_bytes = self.total;
+        record.work.logical_bytes = self.logical;
+        record.root()
+    }
+}
+
 fn deployment() -> Json {
     let boolean = "bool@native.bool/0";
     let candidate = json!([
@@ -315,6 +338,21 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     assert_eq!(empty.messages, 1);
     assert_eq!(empty.bytes, 0);
 
+    // A proof-byte allowance above the native proof limit refuses; it is
+    // never clamped to the limit.
+    assert_eq!(
+        host.clone()
+            .with_allowances(
+                host.capacity,
+                host.external_work_limit,
+                host.ring_work_limit,
+                host.sequence_work_limit,
+                MAX_PROOF_BYTES + 1,
+            )
+            .err()
+            .unwrap(),
+        "native-proof-proof-limit"
+    );
     // Application calls attach one cumulative ledger; it must retain the same
     // raw format, including the single empty message, without native framing.
     for payload in [b"raw payload".as_slice(), b"".as_slice()] {
@@ -324,13 +362,14 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
         capacity.values.live_bytes /= 2;
         let shared = host
             .clone()
-            .with_invocation_limits(
+            .with_allowances(
                 capacity,
                 host.external_work_limit,
                 host.ring_work_limit,
                 host.sequence_work_limit,
                 host.proof_bytes_limit,
             )
+            .unwrap()
             .with_shared_ledger(ledger.clone());
         let report = shared
             .execute(&request(false, true, true), Invocation::Verify(payload))
@@ -340,6 +379,113 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
         assert_eq!(report.messages, 1);
         assert_eq!(report.bytes, payload.len());
         assert_eq!(ledger.snapshot().pending_value_bytes, 0);
+    }
+}
+
+#[test]
+fn binding_root_refusals_name_the_root_allowance_that_refused() {
+    use crate::execution::PreparedData;
+    const DEFAULT: Bytes = Bytes::DEFAULT;
+    let host = admit(&deployment()).unwrap();
+    // The verifier's public value also initializes its role operand. A native
+    // operand is encoded and compared under its own reservation; a wire
+    // operand is compared as it is, so the public value's own encoding is the
+    // last fresh allocation of preparation.
+    let shared = request(false, true, true);
+    let mut encoded = request(false, true, true);
+    let wire = PreparedData::from_value(Value::Bool(true), Default::default()).unwrap();
+    encoded.inputs[0] = InputValue::Wire(wire.canonical_bytes().to_vec().into());
+    for request in [shared, encoded] {
+        let check = |limits: Bytes| {
+            let root = limits.root();
+            host.clone()
+                .with_invocation_ledger(root.clone())
+                .check_inputs(&request, Invocation::Verify(&[]))
+                .map(|()| root.snapshot())
+        };
+        let used = check(DEFAULT).unwrap();
+        for (limits, code) in [
+            // The binding root's tree is the first charge of preparation.
+            (
+                Bytes { live: 0, ..DEFAULT },
+                "native-proof-binding-bytes-limit",
+            ),
+            (
+                Bytes {
+                    logical: 0,
+                    ..DEFAULT
+                },
+                "native-proof-binding-work-limit",
+            ),
+            // The last fresh allocation encodes or compares a public value.
+            (
+                Bytes {
+                    total: used.total_value_bytes - 1,
+                    ..DEFAULT
+                },
+                "native-proof-binding-bytes-limit",
+            ),
+            // The last logical work encodes the binding root.
+            (
+                Bytes {
+                    logical: used.logical_bytes - 1,
+                    ..DEFAULT
+                },
+                "native-proof-binding-work-limit",
+            ),
+        ] {
+            assert_eq!(check(limits).unwrap_err(), code, "{limits:?}");
+        }
+    }
+}
+
+#[test]
+fn a_retained_received_proof_names_the_root_allowance_that_refused() {
+    let host = admit(&deployment()).unwrap();
+    let proof = [7; 100];
+    let charge = proof.len() + 512;
+    let retain = |limits: Bytes| {
+        let root = limits.root();
+        host.clone()
+            .with_invocation_ledger(root.clone())
+            .retain_received_proof(&proof)
+            .map(|held| (held.map(|held| held.bytes()), root.snapshot()))
+    };
+    let (held, used) = retain(Bytes {
+        live: charge,
+        total: charge,
+        logical: charge as u64,
+    })
+    .unwrap();
+    assert_eq!(held, Some(charge));
+    assert_eq!(
+        (used.total_value_bytes, used.logical_bytes),
+        (charge, charge as u64)
+    );
+    for (limits, code) in [
+        (
+            Bytes {
+                logical: charge as u64 - 1,
+                ..Bytes::DEFAULT
+            },
+            "native-proof-received-work-limit",
+        ),
+        (
+            Bytes {
+                total: charge - 1,
+                ..Bytes::DEFAULT
+            },
+            "native-proof-received-bytes-limit",
+        ),
+        (
+            Bytes {
+                live: charge - 1,
+                ..Bytes::DEFAULT
+            },
+            "native-proof-received-bytes-limit",
+        ),
+    ] {
+        assert_eq!(retain(limits).unwrap_err(), code);
     }
 }
 
@@ -393,13 +539,14 @@ fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
     child_capacity.values.live_bytes /= 2;
     let host = host
         .clone()
-        .with_invocation_limits(
+        .with_allowances(
             child_capacity,
             host.external_work_limit,
             host.ring_work_limit,
             host.sequence_work_limit,
             host.proof_bytes_limit,
         )
+        .unwrap()
         .with_shared_ledger(ledger);
     for producer in [true, false] {
         let mut imports = crate::host::setups::VerifierKeys::new(

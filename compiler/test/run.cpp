@@ -1,7 +1,9 @@
 #include "zkc/Compiler/Run.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeCases.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 using namespace llvm;
@@ -47,6 +49,31 @@ void refuses(StringRef text, const RunOptions &options, StringRef expected) {
 }
 } // namespace
 int main() {
+  test::Cases cases;
+  for (StringRef name : {"branch", "match"})
+    for (bool simplify : {false, true})
+      for (bool release : {false, true})
+        cases.run(
+            Twine(name) + " executable selected ports simplify=" +
+                Twine(simplify) + " release=" + Twine(release),
+            [&] {
+              auto file =
+                  MemoryBuffer::getFile(std::string(ZKC_CONTROL_FIXTURES) +
+                                        "/" + name.str() + ".mlir");
+              test::require(bool(file), "cannot read selected fixture");
+              mlir::DialectRegistry registry;
+              RunOptions options;
+              options.simplify = simplify;
+              options.releaseStorage = release;
+              auto result = test::take(compileRun(
+                  (*file)->getBuffer(), "selected.mlir", options, registry));
+              test::require(
+                  succeeded(mlir::verify(result.compilation.module())),
+                  "selected physical IR invalid");
+              auto bundle = test::take(json::parse(result.bundle));
+              test::require(bundle.getAsObject() != nullptr,
+                            "selected bundle is not an object");
+            });
   for (bool simplify : {false, true})
     for (bool release : {false, true}) {
       auto result = compile(simplify, release);
@@ -95,4 +122,5 @@ int main() {
   std::string deep(65, '{');
   refuses(deep, {}, "run-input-limit");
   outs() << "native invocation ownership, guards and diagnostics passed\n";
+  return cases.result();
 }

@@ -95,7 +95,7 @@ def terminal (returned : Values (Component model.Value) SumcheckVerifierBodies.r
     Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs :=
   .cons (returned.get (.there (.there (.there .here))))
     (.cons (returned.get .here) (.cons (returned.get (.there .here))
-    (.cons (returned.get (.there (.there .here))) (.cons none (.cons none .nil)))))
+    (.cons (returned.get (.there (.there .here))) (.cons none (.cons none (.cons none .nil))))))
 
 def reference (definitions : List CheckedDefinition)
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))

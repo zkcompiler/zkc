@@ -1,4 +1,5 @@
 #include "Run.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -12,7 +13,8 @@ namespace zkc::detail {
 namespace {
 // Outer JSON costs seven nodes per step, one per role, and eleven fixed nodes.
 // Keep emitted maxima within the run/0 decoder's 250000-node cap.
-static_assert(32768 * 7 + 1024 + 11 <= 250000);
+static_assert(32768 * 7 + zkc::protocol::instances::protocolRoleLimit + 11 <=
+              250000);
 using Coordinate = std::pair<std::string, std::string>;
 struct Role {
   const program::Participant *program;
@@ -113,6 +115,9 @@ class Schedule {
       auto a = cast<DictionaryAttr>(item);
       if (auto body = a.getAs<ArrayAttr>("body"))
         collectGuards(body);
+      if (auto arms = a.getAs<ArrayAttr>("arms"))
+        for (auto arm : arms)
+          collectGuards(cast<DictionaryAttr>(arm).getAs<ArrayAttr>("body"));
       if (a.getAs<StringAttr>("kind").getValue() == "protocol.guard")
         for (auto t : a.getAs<ArrayAttr>("targets"))
           guards.emplace(cast<DictionaryAttr>(t)
@@ -127,7 +132,76 @@ class Schedule {
       size_t anchor = nextAnchor++;
       auto a = cast<DictionaryAttr>(item);
       auto targets = a.getAs<ArrayAttr>("targets");
-      if (a.getAs<StringAttr>("kind").getValue() == "protocol.repeat") {
+      if (a.getAs<StringAttr>("kind").getValue() == "protocol.branch") {
+        if (depth >= 64 || (nodes += 5) > 250000)
+          return error("run-limit");
+        auto armMaps = a.getAs<ArrayAttr>("arms");
+        if (!armMaps || armMaps.empty())
+          return error("run-branch");
+        json::Array entries, arms;
+        auto *parent = current;
+        current = &entries;
+        std::vector<size_t> participants;
+        for (auto targetItem : targets) {
+          auto index = target(cast<DictionaryAttr>(targetItem));
+          if (!index)
+            return index.takeError();
+          participants.push_back(*index);
+          if (auto e = prefix(*index, anchor))
+            return e;
+          auto instruction = next(*index);
+          auto conditional =
+              instruction ? instruction->get<program::ParticipantConditional>()
+                          : nullptr;
+          auto match = instruction
+                           ? instruction->get<program::ParticipantMatch>()
+                           : nullptr;
+          if ((!conditional && !match) ||
+              instruction->site != a.getAs<StringAttr>("site").getValue() ||
+              armMaps.size() != (conditional ? 2 : match->arms.size()))
+            return error("run-branch");
+          for (auto [armIndex, armMap] : enumerate(armMaps)) {
+            auto label =
+                cast<DictionaryAttr>(armMap).getAs<StringAttr>("alternative");
+            StringRef expected =
+                conditional ? (armIndex ? "else" : "then")
+                            : StringRef(match->arms[armIndex].alternative);
+            if (!label || label.getValue() != expected)
+              return error("run-branch");
+          }
+          if (auto e = append(*index, anchor))
+            return e;
+        }
+        for (auto armItem : armMaps) {
+          if ((nodes += 7) > 250000)
+            return error("run-limit");
+          auto arm = cast<DictionaryAttr>(armItem);
+          auto bodyMap = arm.getAs<ArrayAttr>("body");
+          if (!bodyMap)
+            return error("run-branch");
+          json::Array body, exits;
+          current = &body;
+          if (auto e = buildActions(bodyMap, depth + 1))
+            return e;
+          current = &exits;
+          for (size_t role : participants) {
+            if (auto e = prefix(role, std::nullopt))
+              return e;
+            auto instruction = next(role);
+            if (!instruction || !instruction->get<program::Yield>())
+              return error("run-yield");
+            if (auto e = append(role, std::nullopt))
+              return e;
+          }
+          arms.push_back(json::Object{
+              {"alternative", arm.getAs<StringAttr>("alternative").getValue()},
+              {"body", std::move(body)},
+              {"yield", std::move(exits)}});
+        }
+        current = parent;
+        current->push_back(json::Object{{"branch", std::move(entries)},
+                                        {"arms", std::move(arms)}});
+      } else if (a.getAs<StringAttr>("kind").getValue() == "protocol.repeat") {
         if (depth >= 64 || (nodes += 7) > 250000)
           return error("run-limit");
         json::Array entries, body, exits;
@@ -199,7 +273,9 @@ public:
   Expected<json::Array> build(const program::Participants &candidate,
                               DictionaryAttr interface, ArrayAttr origins) {
     auto roster = interface.getAs<ArrayAttr>("participants");
-    if (roster.empty() || roster.size() > 1024)
+    // The bundle carries the selected Entry's protocol role roster.
+    if (roster.empty() ||
+        roster.size() > protocol::instances::protocolRoleLimit)
       return error("run-limit");
     auto entry = interface.getAs<FlatSymbolRefAttr>("entry").getValue();
     auto selected = llvm::find_if(

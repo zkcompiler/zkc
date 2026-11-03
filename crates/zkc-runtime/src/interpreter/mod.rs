@@ -26,6 +26,9 @@ struct Execution<V> {
 }
 enum Destination {
     Root,
+    Branch {
+        outputs: Vec<String>,
+    },
     Loop {
         outputs: Vec<String>,
         captures: Vec<String>,
@@ -264,7 +267,9 @@ impl<B: Backend> Runner<B> {
                     Instruction::Receive { site, .. } => {
                         (Some(CutKind::Receive), Some(site.as_str()))
                     }
-                    Instruction::Loop { site, .. } => (None, Some(site.as_str())),
+                    Instruction::Loop { site, .. }
+                    | Instruction::Conditional { site, .. }
+                    | Instruction::Match { site, .. } => (None, Some(site.as_str())),
                     Instruction::ReturnIf { site, .. } => {
                         return Ok(ProgramState::ReturnIf { site });
                     }
@@ -301,10 +306,12 @@ impl<B: Backend> Runner<B> {
     fn discard_returned(&mut self) {
         if let Some(Action::Returned(values)) = self.pending.as_mut() {
             let values = std::mem::take(values);
-            self.instance.release_returned(&values);
-            // Drop payloads before take_backend or Instance::drop releases the
-            // shared live reservation. Keep the stable terminal marker.
-            drop(values);
+            // Drop payloads before the root sees their live bytes released.
+            // Keep the stable terminal marker.
+            self.with_live_reservation(|runner| {
+                runner.instance.release_returned(&values);
+                drop(values);
+            });
         }
     }
     /// Consume a terminal runner and move its live reservation with returned
@@ -317,10 +324,15 @@ impl<B: Backend> Runner<B> {
     fn take_retained_outputs(&mut self) -> Option<RetainedOutputs<B::Value>> {
         let outputs = match self.pending.take() {
             Some(Action::Returned(values)) => {
-                self.instance.release_returned(&values);
+                // The returned values' live bytes leave with them: the hold
+                // keeps them in the root until the guard drops.
+                let reservation = self.with_live_reservation(|runner| {
+                    runner.instance.release_returned(&values);
+                    runner.instance.take_live_reservation()
+                });
                 Some(RetainedOutputs {
                     values,
-                    reservation: self.instance.take_live_reservation(),
+                    reservation,
                 })
             }
             terminal => {
@@ -423,15 +435,13 @@ impl<B: Backend> Runner<B> {
             .last()
             .map_or_else(|| self.root.clone(), |f| f.frame.origin().clone())
     }
-    /// Keep the allowance through destruction of values owned by an action,
-    /// including those no longer represented by a retained scope or backing pin.
-    /// Successful executions retain it; stopped executions release it afterward.
+    /// Keep released live bytes in the root through destruction of values
+    /// owned by an action, including those no longer represented by a
+    /// retained scope or backing pin; the root sees them released afterward.
     fn with_live_reservation<T>(&mut self, action: impl FnOnce(&mut Self) -> T) -> T {
-        let reservation = self.instance.take_live_reservation();
+        self.instance.defer_release();
         let result = action(self);
-        if !matches!(self.pending, Some(Action::Stopped(_))) {
-            self.instance.restore_live_reservation(reservation);
-        }
+        self.instance.finish_deferred_release();
         result
     }
     fn halt(&mut self, kind: StopKind, site: Option<String>, origin: Option<Origin>) {
@@ -583,7 +593,11 @@ impl<B: Backend> Runner<B> {
                 }
                 // Structured control is crossed only by the explicit program
                 // control API, under the Host's chosen coordination policy.
-                Instruction::Loop { .. } | Instruction::Yield(_) | Instruction::ReturnIf { .. } => {
+                Instruction::Loop { .. }
+                | Instruction::Conditional { .. }
+                | Instruction::Match { .. }
+                | Instruction::Yield(_)
+                | Instruction::ReturnIf { .. } => {
                     return Err(BackendError::new("program-control-cut").into());
                 }
                 Instruction::Return(names) => {
@@ -592,6 +606,130 @@ impl<B: Backend> Runner<B> {
                     self.finish(values)?;
                 }
             }
+        }
+        Ok(())
+    }
+    /// Inspect only this reached selector. No selected frame or arm action is
+    /// created here; a joint Host must compare every reached role first.
+    pub fn branch_selector(&mut self, origin: &Origin, site: &str) -> Result<Option<usize>> {
+        let (body, pc) = self.program_control(origin)?;
+        let env = &self.stack.last().expect("branch parent").env;
+        let checked = match &body[pc] {
+            Instruction::Conditional {
+                site: actual,
+                condition,
+                ..
+            } if actual == site => env[condition].control_bool().map(|b| usize::from(!b)),
+            Instruction::Match {
+                site: actual,
+                input,
+                arms,
+                ..
+            } if actual == site => env[input].control_variant_tag().and_then(|tag| {
+                if tag < arms.len() {
+                    Ok(tag)
+                } else {
+                    Err(BackendError::new("variant-alternative"))
+                }
+            }),
+            Instruction::Conditional { .. } | Instruction::Match { .. } => {
+                return Err(RuntimeError::WrongCut);
+            }
+            _ => return Err(RuntimeError::WrongAction),
+        };
+        match checked {
+            Ok(arm) => Ok(Some(arm)),
+            Err(error) => {
+                self.failed(error.into(), Some(site.into()), Some(origin.clone()));
+                Ok(None)
+            }
+        }
+    }
+    /// Enter exactly the agreed alternative using its actual payload and
+    /// captures. This does not establish agreement with any other process.
+    pub fn enter_branch(&mut self, origin: &Origin, site: &str, alternative: usize) -> Result<()> {
+        match self.branch_selector(origin, site)? {
+            None => return Ok(()),
+            Some(actual) if actual != alternative => return Err(RuntimeError::WrongCut),
+            Some(_) => {}
+        }
+        self.close_preparation();
+        let (body, pc) = self.program_control(origin)?;
+        let result = (|| {
+            self.instance.tick()?;
+            let (selected, captures, outputs, label, mut values) = match &body[pc] {
+                Instruction::Conditional {
+                    captures,
+                    then_body,
+                    else_body,
+                    outputs,
+                    ..
+                } => (
+                    if alternative == 0 {
+                        then_body
+                    } else {
+                        else_body
+                    },
+                    captures,
+                    outputs,
+                    if alternative == 0 { "then" } else { "else" },
+                    Vec::new(),
+                ),
+                Instruction::Match {
+                    input,
+                    captures,
+                    arms,
+                    outputs,
+                    ..
+                } => {
+                    let value = &self.stack.last().expect("branch parent").env[input];
+                    let (ty, tag, values) = value.unpack_variant()?;
+                    if ty != value.physical_type() || tag != alternative {
+                        return Err(RuntimeError::Payload);
+                    }
+                    let expected = ty.variant_payload(tag).ok_or(RuntimeError::Payload)?;
+                    if expected.len() != values.len() {
+                        return Err(RuntimeError::Payload);
+                    }
+                    for (value, expected) in values.iter().zip(expected) {
+                        self.instance.validate(value, expected, false)?;
+                    }
+                    let arm = &arms[tag];
+                    (
+                        &arm.body,
+                        captures,
+                        outputs,
+                        arm.alternative.as_str(),
+                        values,
+                    )
+                }
+                _ => return Err(RuntimeError::WrongAction),
+            };
+            let parents = captures
+                .iter()
+                .map(|(_, parent)| parent.clone())
+                .collect::<Vec<_>>();
+            values.extend(self.values(&parents));
+            let mut child = origin.clone();
+            child.path.push(PathElement::Branch {
+                site: site.into(),
+                alternative: label.into(),
+            });
+            let frame = self.instance.branch_frame(child, site, alternative, label);
+            self.stack.last_mut().expect("branch parent").pc += 1;
+            self.push_child(
+                frame,
+                selected.clone(),
+                values,
+                Destination::Branch {
+                    outputs: outputs.clone(),
+                },
+                site,
+            );
+            Ok(())
+        })();
+        if let Err(error) = result {
+            self.failed(error, Some(site.into()), Some(origin.clone()));
         }
         Ok(())
     }
@@ -658,11 +796,18 @@ impl<B: Backend> Runner<B> {
                 site: Some(site),
             } => {
                 let site = site.to_owned();
-                if let Some(count) = self.loop_count(&origin, &site)? {
-                    let (body, pc) = self.program_control(&origin)?;
-                    if let Err(error) = self.start_loop(&body[pc], count) {
-                        self.failed(error, Some(site), Some(origin));
+                let (body, pc) = self.program_control(&origin)?;
+                if matches!(
+                    &body[pc],
+                    Instruction::Conditional { .. } | Instruction::Match { .. }
+                ) {
+                    if let Some(arm) = self.branch_selector(&origin, &site)? {
+                        self.enter_branch(&origin, &site, arm)?;
                     }
+                } else if let Some(count) = self.loop_count(&origin, &site)?
+                    && let Err(error) = self.start_loop(&body[pc], count)
+                {
+                    self.failed(error, Some(site), Some(origin));
                 }
                 Ok(true)
             }
@@ -733,8 +878,9 @@ impl<B: Backend> Runner<B> {
         }
         Ok(())
     }
-    /// Complete exactly one reached iteration. A subsequent iteration has a
-    /// fresh occurrence path; its first body action remains unpolled.
+    /// Complete exactly one reached participant-region yield. A selected arm
+    /// returns its actual results; a loop may start a fresh iteration whose first
+    /// body action remains unpolled.
     pub fn yield_loop(&mut self, origin: &Origin) -> Result<()> {
         let (body, pc) = self.program_control(origin)?;
         let Instruction::Yield(names) = &body[pc] else {
@@ -788,7 +934,7 @@ impl<B: Backend> Runner<B> {
                 while runner.stack.len() > 1 {
                     if !matches!(
                         runner.stack.last().expect("enclosing frame").frame.kind(),
-                        FrameKind::Loop { .. }
+                        FrameKind::Loop { .. } | FrameKind::Branch { .. }
                     ) {
                         return Err(BackendError::new("program-return-frame").into());
                     }
@@ -852,6 +998,9 @@ impl<B: Backend> Runner<B> {
         }
         match execution.destination {
             Destination::Root => unreachable!("root completion handled above"),
+            Destination::Branch { outputs } => {
+                self.bind(&outputs, values.to_vec(), Retention::Transfer)?;
+            }
             Destination::Loop {
                 outputs,
                 captures,

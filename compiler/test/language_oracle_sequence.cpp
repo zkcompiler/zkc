@@ -1,7 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
-#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Compiler/StructuredSource.h"
@@ -34,8 +33,7 @@ Expected<CheckedProject> check(StringRef code) {
 }
 CheckedOriginal original(StringRef code) {
   auto project = take(check(code));
-  auto source =
-      take(prepareOriginal(take(zkc::test::closeNativeRun(project, "m::Run"))));
+  auto source = take(prepareOriginal(take(closeSubject(project, "m::Run"))));
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -174,7 +172,7 @@ int main() {
               refuses(check(R"(
     protocol Invalid roles(P,V)(words:Oracles<Fixed<F,16>,2>@P->V)
       ->(out:Oracles<Fixed<F,16>,2>@V->P){return(out=words);})"),
-                      "source.oracle-role");
+                      "source.placement");
             });
   cases.run("runtime selection retains the selected actual anchor", [] {
     auto source = original(selectionSubject);

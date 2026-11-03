@@ -188,7 +188,7 @@ protocol Blocks roles(P,V)(coins: Random<E> @V) -> (positions: Indices @P) {
 }
 '''.replace('FIELD', field))
     package = directory / 'blocks.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                              *library_modules('core/collections'),
                              'sample::Blocks', f'--output={package}'])

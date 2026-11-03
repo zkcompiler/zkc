@@ -4,10 +4,7 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Value};
-use zkc_runtime::{
-    attempt::Limits,
-    vm::{ValueBudget, WorkBudget},
-};
+use zkc_runtime::attempt::Limits;
 use zkc_test_support::hex;
 
 mod controls;
@@ -108,8 +105,8 @@ fn policy() -> AttemptPolicy {
             attempts: 3,
             proof_bytes: 1 << 20,
         },
-        work: WorkBudget::default(),
-        values: ValueBudget::default(),
+        instructions: zkc_runtime::vm::Limits::INSTRUCTIONS,
+        iterations: zkc_runtime::vm::Limits::ITERATIONS,
     }
 }
 fn main() {
@@ -193,7 +190,7 @@ fn main() {
             }
             if case["early"] == true && count == 0 {
                 let mut bounded = policy();
-                bounded.work.iterations = 1;
+                bounded.iterations = 1;
                 let short = zkc_test_drivers::execute(
                     &deployment,
                     &producer,

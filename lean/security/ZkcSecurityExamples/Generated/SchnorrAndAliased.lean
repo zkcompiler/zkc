@@ -27,7 +27,7 @@ def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "knowledge" with_registry Zkc.Source.Structured.OpaqueRegistry.empty
     connections ZkcExamples.Structured.Generated.Connections.SchnorrAndAliased.producer, ZkcExamples.Structured.Generated.Connections.SchnorrAndAliased.validator
-    exports "sha256:b78ef55572e78298209c42ae3e72b1777c36d71264dc43b6fd4e5208804ae617", "sha256:3b65db8b0a00000dbbc7389ad9c9f1819af432ea515d17b4130454ebb6ba5cd2", "sha256:e73a4d6f32305c6cf1e0f514ee04ef8c700430bacee71a5f5bec9cd15b6f3ae3"
+    exports "sha256:e1ff4f63caeca365121d61f45f7535ea10c414dfcfbd9888c2c105be7c4ae106", "sha256:8d7237fd873f97e3b0861974969bafb196c65b94b9dd952162d67cbe63e40b40", "sha256:450965840fa3085291262fd5e44b38e790d23ef101ad3630336bbb35c12ce6cc"
 
 abbrev validatorArtifacts := subject.validatorArtifacts
 abbrev validatorCompiled := subject.validatorCompiled

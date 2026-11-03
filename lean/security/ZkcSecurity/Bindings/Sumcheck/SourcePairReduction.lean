@@ -26,7 +26,7 @@ def returned (original : List (model.Field field)) (callerFrame : Frame)
   ∃ state : PrefixState (model.Field field) Frame 0,
     state.original = original ∧ state.frame = callerFrame ∧ state.scalar = state.entries.sum ∧
     p = SourceProducerReduction.terminal model (producerSlots model state) ∧
-    v = SumcheckVerifierBodies.reduceReturnValues (validatorSlots model state)
+    v = SumcheckVerifierBodies.reduceReturnValues (some 0) (validatorSlots model state)
 
 theorem reduction (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
     (roundBodies : Bodies definitions MultilinearSourceBindings.sumcheck)
@@ -53,7 +53,7 @@ theorem reduction (definitions : List CheckedDefinition) (linked : DeclarationsL
         (participantMeaningWithOn model (.silent _) Occurrence.actions (tables model definitions)
           (ctx.roles 1) protocols ctx Occurrence.iterations)
         (SumcheckReductionReference.pattern.environment model
-          (SumcheckReductionReference.inputs model (some []) (some scalar) (some count) (some handle))).get) := by
+          (SumcheckReductionReference.inputs model (some 0) (some []) (some scalar) (some count) (some handle))).get) := by
   have bound : count < indexLimit := lt_trans small (by decide +kernel)
   rw [SourceProducerReduction.body_reference model definitions linked producerBodies protocols
     maximum ctx distinctP original count count bound bound (le_refl count)]

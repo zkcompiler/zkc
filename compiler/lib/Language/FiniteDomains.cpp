@@ -3,6 +3,7 @@
 #include "CallableConstraints.h"
 #include "Checker.h"
 #include "DataRequirements.h"
+#include "zkc/Contracts/Instances.h"
 #include "llvm/ADT/STLExtras.h"
 #include <numeric>
 using namespace llvm;
@@ -46,34 +47,40 @@ struct Constructor {
   Kind kind;
   unsigned axis;
 };
+// The identity names a catalog domain constructor, which owns its kind and
+// axis.
 std::optional<Constructor> constructor(StringRef name) {
-  if (name == "elements")
-    return Constructor{Kind::Elements, 0};
-  if (name == "indices" || name == "indices.rows")
-    return Constructor{Kind::Indices, 0};
-  if (name == "indices.columns")
-    return Constructor{Kind::Indices, 1};
-  if (name == "range")
-    return Constructor{Kind::Range, 0};
-  if (name == "zip")
-    return Constructor{Kind::Zip, 0};
-  if (name == "product")
-    return Constructor{Kind::Product, 0};
-  if (name == "matrix.row")
-    return Constructor{Kind::MatrixRow, 0};
-  if (name == "matrix.column")
-    return Constructor{Kind::MatrixColumn, 1};
-  if (name == "matrix.coordinates.row_major")
-    return Constructor{Kind::MatrixCoordinates, 0};
-  if (name == "matrix.coordinates.column_major")
-    return Constructor{Kind::MatrixCoordinates, 1};
-  if (name == "source_array")
-    return Constructor{Kind::SourceArray, 0};
+  using Declared = protocol::instances::DomainConstructorKind;
+  for (const auto &row : protocol::instances::domainConstructors()) {
+    if (row.identity != name)
+      continue;
+    switch (row.kind) {
+    case Declared::Elements:
+      return Constructor{Kind::Elements, row.axis};
+    case Declared::Indices:
+      return Constructor{Kind::Indices, row.axis};
+    case Declared::Range:
+      return Constructor{Kind::Range, row.axis};
+    case Declared::Zip:
+      return Constructor{Kind::Zip, row.axis};
+    case Declared::Product:
+      return Constructor{Kind::Product, row.axis};
+    case Declared::MatrixRow:
+      return Constructor{Kind::MatrixRow, row.axis};
+    case Declared::MatrixColumn:
+      return Constructor{Kind::MatrixColumn, row.axis};
+    case Declared::MatrixCoordinates:
+      return Constructor{Kind::MatrixCoordinates, row.axis};
+    case Declared::SourceArray:
+      return Constructor{Kind::SourceArray, row.axis};
+    }
+    llvm_unreachable("domain constructor kind");
+  }
   return {};
 }
+// A rank-two collection, traversed through its explicit matrix view.
 bool matrix(const Type &type) {
-  return type.kind == Type::Kind::Builtin && type.domain == "matrix" &&
-         type.arguments.size() == 1;
+  return collectionElement(type, /*matrix=*/true).has_value();
 }
 bool matches(const Declaration &decl, Constructor ctor) {
   if (!decl.domainResult)

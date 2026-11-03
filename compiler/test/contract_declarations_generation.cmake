@@ -366,7 +366,8 @@ def Good : ZKC_Operation<"good.direct", [T], [ZKC_Apply<State>, T], [ZKC_Apply<S
 ]=] "")
 # Kinded fixture preserves explicit stage and never becomes source authority.
 execute_process(COMMAND "${ZKC_TABLEGEN}" -dump-contract-declarations
-  -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
+  -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" -I "${ZKC_DECLARATION_FIXTURES}"
+  "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
   RESULT_VARIABLE result OUTPUT_VARIABLE fixture ERROR_VARIABLE stderr)
 if(NOT result EQUAL 0)
   list(APPEND failures "Type/Nat fixture failed: ${stderr}")
@@ -436,7 +437,7 @@ foreach(action gen-contract-declarations dump-contract-declarations)
   endif()
 endforeach()
 execute_process(COMMAND "${ZKC_TABLEGEN}" -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}"
-  "${ZKC_DECLARATION_FIXTURES}/minimal.td"
+  -I "${ZKC_DECLARATION_FIXTURES}" "${ZKC_DECLARATION_FIXTURES}/minimal.td"
   RESULT_VARIABLE missing_action OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
 if(missing_action EQUAL 0)
   list(APPEND failures "generation without an explicit action succeeded")
@@ -837,6 +838,55 @@ def Op : ZKC_Operation<"example.nested", [F,E,C], [C], [C]>;
 def Entry : ZKC_ConsumerOperation<Op, [F,E,C], [C], [C]>;
 def Profile : Selected<[Entry]> { let typeConstructors = [Container]; }
 ]=] "unsupported profile type constructor")
+
+# Succession transfers one resource identity: both ports are resource units of
+# one Slot root and no other port carries a resource unit.
+set(slot_definitions [=[
+def SlotSort : ZKC_Sort<"Slot">;
+def SlotDomain : ZKC_Domain<SlotSort>;
+def Unit : ZKC_Type<"resource_unit", [SlotDomain], Affine, 0, 1>;
+def S : ZKC_Root<"S", SlotDomain>;
+def T : ZKC_Root<"T", SlotDomain>;
+]=])
+declaration_case(succession "${slot_definitions}
+def Pass : ZKC_Operation<\"resource_unit.pass\", [S], [ZKC_Apply<Unit, [S]>], [ZKC_Apply<Unit, [S]>]> {
+  let facets = [ZKC_Succession<0, 0>];
+}" "")
+declaration_case(succession-outside-signature "${slot_definitions}
+def Pass : ZKC_Operation<\"resource_unit.pass\", [S], [ZKC_Apply<Unit, [S]>], [ZKC_Apply<Unit, [S]>]> {
+  let facets = [ZKC_Succession<1, 0>];
+}" "facet port outside signature")
+declaration_case(succession-unequal-slots "${slot_definitions}
+def Pass : ZKC_Operation<\"example.exchange\", [S, T], [ZKC_Apply<Unit, [S]>], [ZKC_Apply<Unit, [T]>]> {
+  let facets = [ZKC_Succession<0, 0>];
+}" "succession resource types differ")
+declaration_case(succession-another-unit "${slot_definitions}
+def Pass : ZKC_Operation<\"example.merge\", [S], [ZKC_Apply<Unit, [S]>, ZKC_Apply<Unit, [S]>], [ZKC_Apply<Unit, [S]>]> {
+  let facets = [ZKC_Succession<0, 0>];
+}" "succession operation has another resource unit port")
+declaration_case(succession-ordinary-values "
+def Add : ZKC_Operation<\"example.add\", [F], [ZKC_Apply<Element, [F]>], [ZKC_Apply<Element, [F]>]> {
+  let facets = [ZKC_Succession<0, 0>];
+}" "facet port constructor mismatch")
+declaration_case(succession-field-root "
+def FieldUnit : ZKC_Type<\"resource_unit\", [FDomain], Affine, 0, 1>;
+def Pass : ZKC_Operation<\"example.field_unit\", [F], [ZKC_Apply<FieldUnit, [F]>], [ZKC_Apply<FieldUnit, [F]>]> {
+  let facets = [ZKC_Succession<0, 0>];
+}" "succession requires a Slot root")
+# Installed-instance records carry exactly their schema's fields and the facts
+# of their sort.
+declaration_case(instance-unknown-field [=[
+def G1 : ZKC_InstalledDomain<"example.g1", "Group", [], []> { int extra = 0; }
+]=] "unknown field extra")
+declaration_case(instance-missing-facts [=[
+def F1 : ZKC_InstalledDomain<"example.f1", "Field", [], []>;
+]=] "domain facts disagree with its sort")
+declaration_case(instance-member-sort [=[
+def G1 : ZKC_InstalledDomain<"example.g1", "Group", [], []> { int ordinal = 0; }
+def G2 : ZKC_InstalledDomain<"example.g2", "Group", [["Scalar", "example.g1"]], []> {
+  int ordinal = 1;
+}
+]=] "domain member sort mismatch")
 
 if(failures)
   list(JOIN failures "\n" diagnostic)

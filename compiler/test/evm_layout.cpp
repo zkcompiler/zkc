@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -72,16 +73,21 @@ int main() {
         require(first == take(layouts.field(base)),
                 "cache invalidated descriptor address");
       });
-  for (auto facts : protocol::plonky3Fields())
-    cases.run("ascending-binomial facts: " + facts.identity, [&] {
-      const auto *value = take(layouts.field(field(facts.identity)));
-      require(value->degree == facts.degree &&
-                  value->base == field(facts.base) &&
-                  value->coefficientBytes() == uint64_t(facts.degree) * 32,
-              "extension basis facts were lost");
-      require(value->beta == APInt(256, facts.nonresidue),
-              "wrong binomial reduction");
-    });
+  // Every residue field: a prime field, or a binomial extension of one.
+  for (const auto &form : protocol::installation::fieldForms())
+    if (form.arithmetic)
+      cases.run("ascending-binomial facts: " + form.field, [&] {
+        auto extension = protocol::instances::binomialExtension(form.field);
+        unsigned degree = extension ? extension->degree : 1;
+        auto baseField = field(extension ? extension->base : form.field);
+        std::string nonresidue = extension ? extension->nonresidue : "0";
+        const auto *value = take(layouts.field(field(form.field)));
+        require(value->degree == degree && value->base == baseField &&
+                    value->coefficientBytes() == uint64_t(degree) * 32,
+                "extension basis facts were lost");
+        require(value->beta == APInt(256, nonresidue, 10),
+                "wrong binomial reduction");
+      });
   for (StringRef name :
        {"gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"})
     cases.run("characteristic two is not a residue prime: " + name, [&] {
@@ -138,6 +144,38 @@ int main() {
                 payload.values[1].first == 1 && payload.values[1].count == 2,
             "payload flattening lost complete value boundaries");
     refuses(layouts.payload(value, 2), "evm.layout");
+  });
+  cases.run("nominal custody slots erase without erasing adjacent data", [&] {
+    auto a = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::ResourceUnit, "Slot.A");
+    auto b = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::ResourceUnit, "Slot.B");
+    auto vector = data::FieldVectorType::get(&context, base.getDomain());
+    auto signature = take(layouts.signature({a, base, b, vector, a}));
+    require(
+        a != b && signature.values.size() == 5 &&
+            signature.lanes == ArrayRef<Type>{i256, i64, i64} &&
+            signature.values[0].first == 0 && signature.values[0].count == 0 &&
+            signature.values[1].first == 0 && signature.values[1].count == 1 &&
+            signature.values[2].first == 1 && signature.values[2].count == 0 &&
+            signature.values[3].first == 1 && signature.values[3].count == 2 &&
+            signature.values[4].first == 3 && signature.values[4].count == 0,
+        "zero-storage custody shifted or erased data lanes");
+    require(take(layouts.signature({a, b})).lanes.empty(),
+            "empty custody-only signature acquired storage");
+    refuses(layouts.get(a), "evm.layout");
+    auto wire = evm::verifyWireType(layouts, a);
+    require(bool(wire), "unit acquired a wire codec");
+    consumeError(std::move(wire));
+    auto transcript = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::Transcript,
+        "hash-chain.keccak256.bls12-381.fr64be/0");
+    refuses(layouts.signature({transcript}), "evm.layout");
+    MLIRContext foreign(registry);
+    foreign.loadAllAvailableDialects();
+    auto other = runtime::CapabilityType::get(
+        &foreign, runtime::CapabilityKind::ResourceUnit, "Slot.A");
+    refuses(layouts.signature({other}), "evm.layout");
   });
   cases.run("local representation does not grant a wire codec", [&] {
     auto fixed = data::FixedVectorType::get(&context, base, 0);

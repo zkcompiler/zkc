@@ -169,7 +169,7 @@ class Instances {
           return e;
         path.pop_back();
       } else if (const auto *control =
-                     std::get_if<LocalControl>(&operation.action)) {
+                     std::get_if<Control>(&operation.action)) {
         for (unsigned region = 0; region < control->regions.size(); ++region) {
           path.push_back(region);
           if (auto e = oracleObligations(*control->regions[region], path,
@@ -219,11 +219,16 @@ public:
           return candidates.takeError();
         if (auto e = work.charge(1 + source.qualifiedName.size()))
           return std::move(e);
-        origin = json::Object{{"kind", "declaration"},
-                              {"owner", source.qualifiedName},
-                              {"generated", source.generated.has_value()},
-                              {"source", span(source.span)},
-                              {"candidates", std::move(*candidates)}};
+        origin = json::Object{
+            {"kind", "declaration"},
+            {"owner", source.qualifiedName},
+            {"generated", source.generated.has_value()},
+            {"source",
+             entry.project().sources()[source.span.source.index].origin ==
+                     SourceOrigin::Installation
+                 ? json::Value(nullptr)
+                 : json::Value(span(source.span))},
+            {"candidates", std::move(*candidates)}};
       }
       json::Array statics, scoped, domains;
       for (unsigned i = 0; i < source.parameters.size(); ++i) {
@@ -315,6 +320,36 @@ Expected<json::Value> sourceInstancesData(const ClosedEntry &entry,
                            "source instance export byte limit exceeded");
   ownJsonStrings(value);
   return value;
+}
+Expected<std::vector<json::Array>>
+writtenSiteNodes(const CheckedProject &project, ArrayRef<EmittedSite> sites,
+                 const Limits &limits) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  if (!project.storage->writtenSources)
+    return detail::failure("source.syntax", "written source was not retained");
+  detail::Work work{limits};
+  auto written = detail::indexWrittenSource(
+      project, *project.storage->writtenSources, work);
+  if (!written)
+    return written.takeError();
+  std::vector<json::Array> result;
+  for (const auto &site : sites) {
+    if (auto e = work.charge(1))
+      return std::move(e);
+    if (!site.expression) {
+      result.emplace_back();
+      continue;
+    }
+    auto nodes = detail::encodeWrittenAddresses(
+        written->at(site.owner,
+                    {detail::LexicalNode::Kind::Expression, *site.expression}),
+        work);
+    if (!nodes)
+      return nodes.takeError();
+    result.push_back(std::move(*nodes));
+  }
+  return result;
 }
 Expected<std::string> inspectSourceInstances(const ClosedEntry &entry,
                                              const Limits &limits) {

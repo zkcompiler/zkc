@@ -1,6 +1,7 @@
 #include "zkc/Target/Catalog.h"
 #include "NativePlanTypes.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -74,12 +75,13 @@ resolveDiagonal(const NativeBindingApplication &application,
     return error("binding-contraction");
   return *installed;
 }
+// A resident representation: a nondefault installation row whose value bytes
+// are its instance's codec frame.
 bool isResident(StringRef representation) {
-  return representation == "blst/fr" || representation == "blst/g1" ||
-         representation == "blst/g2" ||
-         representation == "halo2curves-axiom/bn254.fr" ||
-         representation == "halo2curves-axiom/bn254.g1" ||
-         representation == "halo2curves-axiom/bn254.g2";
+  return any_of(installation::representations(), [&](const auto &row) {
+    return row.identity == representation && !row.isDefault &&
+           row.frame == installation::ValueFrame::Canonical;
+  });
 }
 struct ImplementationPreference {
   StringRef contract, domain, implementation;

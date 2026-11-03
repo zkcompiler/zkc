@@ -14,6 +14,8 @@ construction = true
 original_source = "lean/bridges/structured/fixtures/gkr-source.mlir"
 original_export = "lean/bridges/structured/fixtures/gkr-source.json"
 data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
+bodies = "lean/ZkcExamples/Structured/GkrSourceBodies.lean"
+views = "lean/ZkcExamples/Structured/GkrSourceViews.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
 pair = "lean/ZkcExamples/Construction/Generated/GkrPair.lean"
 glue = "lean/ZkcExamples/Construction/GkrArtifact.lean"
@@ -39,6 +41,24 @@ kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-deliv
 [construction]
 namespace = "ZkcExamples.Construction.GkrProof"
 connection = "ZkcExamples.Construction.GkrProof"
+library_module = "ZkcExamples.Structured.Generated.Connections.Gkr"
+library = "ZkcExamples.Structured.Generated.Connections.Gkr.sourceLibrary"
 admission = "external"
 views = "ZkcExamples.Structured.GkrSourceViews"
 inputs = "values"
+
+[bodies]
+entry = "gkr"
+
+[bodies.owners]
+"gkr::Gkr" = "gkr"
+"gkr::Rounds" = "rounds"
+"gkr::Input" = "input"
+"zkc::primitives::vector::empty" = "empty"
+"zkc::primitives::vector::append" = "append"
+"zkc::primitives::vector::sum" = "sum"
+"gkr::select_block" = "selectBlock"
+"gkr::evaluate" = "evaluate"
+"gkr::evaluate_wiring" = "evaluateWiring"
+"gkr::line_point" = "linePoint"
+"gkr::evaluate_coefficients" = "evaluateCoefficients"

@@ -96,7 +96,7 @@ theorem wrong_kind_refused (enabled : Bool) :
 
 private abbrev group : Ty := .group "bls12-381.g1"
 private def sites : PIR.Signature := ⟨String, fun _ => Unit⟩
-private def observations : SiteObservations sites := ⟨fun site => .call site .done⟩
+private def observations : SiteObservations sites := { mark := fun site => .call site .done }
 
 private abbrev scaleHelper : Helper := ⟨"scale", .local, [group, scalar], [group, group]⟩
 

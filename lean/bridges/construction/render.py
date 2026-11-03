@@ -12,15 +12,18 @@ results; after the loop its results take the place of the body's values. A
 loop's captured block arguments (operands after the count and the carried
 values) denote their capture operands, unchanged in every iteration, so the
 rendered body refers to those operands directly and the rendered loop keeps
-only the count and the carried values. No proof is generated here and no
-meaning is assigned to any operation.
+only the count and the carried values. Associated members, binding capability
+facts and the fields that random services sample are read from the export's
+catalogue rows, which are rendered beside the participant for Lean to check
+against its own catalogue. No proof is generated here and no meaning is
+assigned to any operation.
 """
 
 from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render, schema  # noqa: E402
+from bridges.common import catalogue, lean_render, policy as native_policy, schema  # noqa: E402
 from bridges.construction.types import data_type, render_type  # noqa: E402
 from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
@@ -41,6 +44,10 @@ def sort(value):
         return f".transcript {text(suite)}", ("transcript", suite)
     if value == ["apply", "indices", []]:
         return ".indices", ("indices", None)
+    slot = schema.custody_slot(value)
+    if slot is not None:
+        # A custody permission: a sort of its own, never an ordinary payload.
+        return f".data (.resourceUnit {text(slot)})", ("custody", slot)
     data = data_type(value)
     if data[0] in ("bool", "index"):
         tag = "boolean" if data[0] == "bool" else "index"
@@ -93,37 +100,15 @@ def one_parameter(attrs):
     return schema.origin_hex(payload[0][1])
 
 
-# This bounded interpretation's nominal associations are explicit. They are not
-# inferred from supplied signature ports or parsed from a suite's display name.
+# The operations this bounded interpretation classifies. Their associated
+# members are projected through the export's catalogue rows, never inferred
+# from supplied signature ports or parsed from a suite's display name.
 CONSTRUCTION_PRIMITIVES = frozenset((
     "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
     "transcript.native.indexed.challenge", "field.embed"))
 
-CONSTRUCTION_MEMBERS = {
-    ("Field", "koala-bear.ext8-binomial3", "BaseField"): ("Field", "koala-bear"),
-    ("Field", "koala-bear.ext4-binomial3", "BaseField"): ("Field", "koala-bear"),
-    ("Field", "baby-bear.ext4-binomial11", "BaseField"): ("Field", "baby-bear"),
-    ("Field", "goldilocks.ext2-binomial7", "BaseField"): ("Field", "goldilocks"),
-    ("Transcript", "merlin3.bls12-381.fr64be/0", "ChallengeField"): ("Field", "bls12-381.fr"),
-    ("Transcript", "merlin3.ristretto255.scalar64le/0", "ChallengeField"): ("Field", "ristretto255.scalar"),
-    ("Transcript", "spongefish0.8.0.keccak.bls12-381.fr64be/0", "ChallengeField"): ("Field", "bls12-381.fr"),
-    ("Transcript", "merlin3.koala-bear.ext8-binomial3.rejection31le/0", "ChallengeField"):
-        ("Field", "koala-bear.ext8-binomial3"),
-    ("Transcript", "merlin3.baby-bear.ext4-binomial11.rejection31le/0", "ChallengeField"):
-        ("Field", "baby-bear.ext4-binomial11"),
-    ("Transcript", "merlin3.goldilocks.ext2-binomial7.rejection64le/0", "ChallengeField"):
-        ("Field", "goldilocks.ext2-binomial7"),
-}
 
-
-def construction_member(parent, member):
-    require(parent[0] == "domain", "associated member parent kind")
-    key = (parent[1], parent[2], member)
-    require(key in CONSTRUCTION_MEMBERS, "uninstalled construction associated member")
-    return ["domain", *CONSTRUCTION_MEMBERS[key]]
-
-
-def operation(name, attrs, binding, operand_kinds, result_kinds):
+def operation(name, attrs, binding, operand_kinds, result_kinds, rows):
     """Classify one exported operation strictly; return its Lean term."""
     schema.binding(binding)
     boolean, index = ("boolean", None), ("index", None)
@@ -160,7 +145,9 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         parameters = [value[1] for value in attrs["parameters"][1]]
         if contract not in CONSTRUCTION_PRIMITIVES:
             return f".unsupported {text(name + ':' + contract)}"
-        declaration, _ = schema.resolve_signature(binding, construction_member, CONSTRUCTION_PRIMITIVES)
+        declaration, terms = schema.resolve_signature(binding, catalogue.member_resolver(rows),
+                                                      CONSTRUCTION_PRIMITIVES)
+        catalogue.require_capabilities(declaration, terms, rows)
         schema.validate_parameters(parameters, declaration["parameters"])
         require([sort(value)[1] for value in inputs] == operand_kinds
                 and [sort(value)[1] for value in outputs] == result_kinds,
@@ -247,21 +234,16 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
 
 
 def policy(value):
-    (version, entry, producer, validator, acceptance, suite, services, public, draws,
-     framing, construction, gates) = record(value, 12)
-    require(version == "zkc.native-proof-policy/0", "wrong policy version")
-    require(gates == [], "unsupported policy gates")
-    require(isinstance(services, list) and isinstance(public, list) and isinstance(draws, list),
-            "invalid policy lists")
-    require(producer != validator and construction == "", "unsupported construction profile")
-    if suite == "":
-        require(services == [] and draws == [], "plain policy has a challenge replacement")
-    else:
-        require(isinstance(suite, str) and len(services) == 1 and draws, "invalid Fiat-Shamir profile")
-    pairs = [record(pair, 2) for pair in draws]
-    return (f"⟨{text(entry)}, {text(producer)}, {text(validator)}, {decimal(acceptance)}, {text(suite)}, "
-            f"{seq(services, decimal)}, {seq(public, decimal)}, "
-            f"{seq(pairs, lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, {text(framing)}, {text(construction)}⟩")
+    """The participant policy literal. The construction rule reads the authored
+    and native profiles without gates; other profiles refuse."""
+    decoded = native_policy.decode(value)
+    require(not decoded.gates, "unsupported policy gates")
+    require(decoded.profile in (native_policy.AUTHORED, native_policy.NATIVE)
+            and decoded.producer != decoded.validator, "unsupported construction profile")
+    return (f"⟨{text(decoded.entry)}, {text(decoded.producer)}, {text(decoded.validator)}, {decoded.acceptance}, "
+            f"{text(decoded.suite)}, {seq(list(decoded.services))}, {seq(list(decoded.public))}, "
+            f"{seq(list(decoded.draws), lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, "
+            f"{text(decoded.format)}, {text(decoded.construction)}⟩")
 
 
 def service_port(value):
@@ -272,7 +254,7 @@ def service_port(value):
             f"{decimal(input_)}, {text(contract)}⟩")
 
 
-def local_service(attrs, binding, operands, result_kinds, retained, ports, places, kinds):
+def local_service(attrs, binding, operands, result_kinds, retained, ports, places, kinds, rows):
     require(set(attrs) == {"port", "method", "site"} and binding == [], "local service attributes")
     name, method, site = (string_attribute(attrs, key) for key in ("port", "method", "site"))
     require(name in ports, "undeclared local service port")
@@ -280,15 +262,17 @@ def local_service(attrs, binding, operands, result_kinds, retained, ports, place
     require(method == "draw" and not operands and len(result_kinds) == 1
             and result_kinds[0][0] == "field", "unsupported local service request")
     field = result_kinds[0][1]
-    require(port[4] == f"random.{field}/0", "local service nominal domain")
+    service = catalogue.service(rows, port[4])
+    require(service[2] == field and "draw" in service[3], "local service nominal domain")
     encoded, coordinates = record(retained, 2)
     template = origin(encoded)
     _, _, steps, _, event = lean_render.template(encoded)
     require(len(event) == 7 and event[0] == "query" and event[4] == port[4]
             and event[5] == method and event[6] == port[1], "local service occurrence")
     prefix = None
-    for kind, _, application in steps:
-        if kind == "apply":
+    for step in steps:
+        if step[0] == "apply":
+            application = step[2]
             prefix = application if prefix is None else f"apply_{len(prefix.encode('utf-8'))}_{prefix}_{application}"
     qualified = event[2] if prefix is None else f"apply_{len(prefix.encode('utf-8'))}_{prefix}_{event[2]}"
     require(site == qualified, "local service source site")
@@ -311,7 +295,7 @@ def references(values, places, what):
     return [places[o] for o in values]
 
 
-def block(instructions, kinds, places, indent, depth=0, ports=None):
+def block(instructions, kinds, places, indent, rows, depth=0, ports=None):
     """Render one block. `kinds` are the sorts of the rendered environment and
     `places` maps every exported reference in scope to its rendered reference.
     Return the rendered instructions, the final kinds and the final map."""
@@ -343,7 +327,8 @@ def block(instructions, kinds, places, indent, depth=0, ports=None):
             require(all(kind[0] in CAPTURED for kind in captured_kinds), "loop capture sort")
             inner, _, inner_places = block(
                 nested, kinds + argument_kinds[:1 + carried],
-                places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", depth + 1, ports)
+                places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", rows, depth + 1,
+                ports)
             yielded = references(yielded, inner_places, "yielded")
             maximum = decimal(integer_attribute(attributes_, "maximum"), 1048577)
             require(maximum is not None, "loop maximum")
@@ -354,9 +339,10 @@ def block(instructions, kinds, places, indent, depth=0, ports=None):
             require(regions == [], "unexpected operation region")
             if is_service:
                 term = local_service(attributes(attrs), binding, mapped, result_kinds,
-                                     item[6], ports or {}, places, kinds)
+                                     item[6], ports or {}, places, kinds, rows)
             else:
-                term = operation(name, attributes(attrs), binding, [kinds[o] for o in mapped], result_kinds)
+                term = operation(name, attributes(attrs), binding, [kinds[o] for o in mapped], result_kinds,
+                                 rows)
             rendered.append(f"{indent}⟨{term}, {seq(mapped, nat)}, {result_terms}, []⟩")
         kinds = kinds + result_kinds
         places = places + list(range(fresh, fresh + len(result_kinds)))
@@ -364,10 +350,12 @@ def block(instructions, kinds, places, indent, depth=0, ports=None):
 
 
 def render_declaration(data, namespace):
-    version, source, candidate, selected, symbol, inputs, outputs, instructions, returned, services = record(data, 10)
+    (version, source, candidate, selected, symbol, inputs, outputs, instructions, returned, services,
+     rows) = record(data, 11)
     require(version == FORMAT, "wrong participant export version")
     lean_render.namespace(namespace)
     policy_term = policy(selected)
+    catalogue_term = catalogue.catalogue(rows)
     require(isinstance(services, list) and len(services) <= 512, "invalid service interface")
     ports = {}
     roots, positions = set(), set()
@@ -383,7 +371,7 @@ def render_declaration(data, namespace):
     if selected[5] == "":
         require(all(kind[0] in CAPTURED for kind in kinds + [sort(value)[1] for value in outputs]),
                 "plain-profile-abi")
-    rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ", ports=ports)
+    rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ", rows, ports=ports)
     returned = references(returned, places, "returned")
     body = ",\n".join(rendered)
     return f'''namespace {namespace}
@@ -399,6 +387,11 @@ def participant : Participant where
   instructions := [
 {body}]
   returned := {seq(returned, nat)}{chr(10) + '  servicePorts := ' + seq(services, service_port) if services else ''}
+
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  {catalogue_term}
 
 end {namespace}
 '''

@@ -26,10 +26,10 @@ private def body : Json := arr [.str "block", empty, arr [.str "return", empty]]
 private def function (source : Json) : Json := arr [.str "function", .str "main", .str "protocol",
   .str "public", empty, empty, arr [.str "protocol", arr [.str "P"], empty, empty],
   empty, source, body]
--- The final slot retains the current source record and protocol declarations.
+-- The final slot retains the current records, protocols and authorities.
 private def envelope (definitions : List Json) : Json := arr [.str "zkc.structured-source/0",
   .str "original", .str ("sha256:" ++ String.ofList (List.replicate 64 '0')), .str "main",
-  empty, empty, empty, arr definitions, arr [arr [.str "main", empty]], arr [empty, empty], arr [empty, empty]]
+  empty, empty, empty, arr definitions, arr [arr [.str "main", empty]], arr [empty, empty], arr [empty, empty, empty]]
 private def wire (origin : ProtocolOrigin) : Json := envelope [function origin.toJson]
 private def withTerm (term : OriginTerm) : ProtocolOrigin := ⟨"test::Depth", [("T", term)]⟩
 private def replace (json : Json) (index : Nat) (value : Json) : Json :=

@@ -79,24 +79,28 @@ example (state : State Unit 1) :
 
 /-- Raw sealed carries require both fields and exactly one point extension. -/
 example (priorPoint : List Octic) (value : Octic) :
-    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation priorPoint
-      (.cons none (.cons (some value) .nil)) = .halt .incomplete := rfl
+    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation (slot := "test.custody") priorPoint
+      (.cons (some 0) (.cons none (.cons (some value) .nil))) = .halt .incomplete := rfl
 example (priorPoint point : List Octic) :
-    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation priorPoint
-      (.cons (some point) (.cons none .nil)) = .halt .incomplete := rfl
+    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation (slot := "test.custody") priorPoint
+      (.cons (some 0) (.cons (some point) (.cons none .nil))) = .halt .incomplete := rfl
 example (priorPoint : List Octic) (value : Octic) :
-    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation priorPoint
-      (.cons (some priorPoint) (.cons (some value) .nil)) = .halt .reject := by
+    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation (slot := "test.custody") priorPoint
+      (.cons (some 0) (.cons (some priorPoint) (.cons (some value) .nil))) = .halt .reject := by
   simp [ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation,
     ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeCarry, Values.get]
 example (r value : Octic) :
-    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation []
-      (.cons (some [r, r]) (.cons (some value) .nil)) = .halt .reject := rfl
+    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation (slot := "test.custody") []
+      (.cons (some 0) (.cons (some [r, r]) (.cons (some value) .nil))) = .halt .reject := rfl
 example (p r value : Octic) (different : p ≠ r) :
-    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation [p]
-      (.cons (some [r, r]) (.cons (some value) .nil)) = .halt .reject := by
+    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation (slot := "test.custody") [p]
+      (.cons (some 0) (.cons (some [r, r]) (.cons (some value) .nil))) = .halt .reject := by
   simp [ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation,
     ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeCarry, Values.get, List.take, Ne.symm different]
+
+example (point : List Octic) (value : Octic) :
+    ZkcSecurity.Examples.Components.KoalaBearSumcheckSource.decodeEvaluation (slot := "test.custody") []
+      (.cons none (.cons (some point) (.cons (some value) .nil))) = .halt .incomplete := rfl
 
 /-- Returning the two octic fields in the wrong order changes the state. Host
 types alone would accept this mistake; the whole-body binding does not. -/

@@ -362,12 +362,16 @@ impl<'a> MessageLayout<'a> {
         }
         for role in admitted.program_entry(entry).map_err(|e| e.to_string())? {
             if self.format == super::ProofFormat::RawBytes {
-                // Program admission already validates loop boundaries. The
-                // flattened action order lets us check nesting in one pass.
+                // Program admission already validates loop and branch
+                // boundaries. The flattened action order lets us check nesting
+                // in one pass; a branch arm nests its messages like a loop.
                 let mut inside_until = 0;
                 for (index, action) in role.actions.iter().enumerate() {
                     match action {
                         ProgramAction::Loop { end, .. } => inside_until = inside_until.max(*end),
+                        ProgramAction::Branch { ends, .. } => {
+                            inside_until = ends.iter().copied().fold(inside_until, usize::max)
+                        }
                         ProgramAction::Send { .. } | ProgramAction::Receive { .. }
                             if index < inside_until =>
                         {

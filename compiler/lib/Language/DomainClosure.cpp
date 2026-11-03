@@ -15,6 +15,7 @@ class Closure {
   std::vector<ValueId> operands;
   std::map<ValueOrigin, unsigned> inputs;
   ValueOrigins &origins;
+  /// Keyed by lookup keys; confined to this one closure pass.
   std::map<std::string, unsigned> factories;
   std::set<std::string> activeFactories;
   std::vector<unsigned> constructorDepths;

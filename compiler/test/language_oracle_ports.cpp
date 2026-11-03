@@ -1,5 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -35,8 +36,7 @@ Expected<CheckedProject> check(StringRef code) {
 }
 CheckedOriginal original(StringRef code) {
   auto project = take(check(code));
-  return take(
-      prepareOriginal(take(zkc::test::closeNativeRun(project, "m::Run"))));
+  return take(prepareOriginal(take(closeSubject(project, "m::Run"))));
 }
 const char *forward = R"(
 protocol Forward<K:OracleKind> roles(B,A)(word:Oracle<K>@A->B)
@@ -136,15 +136,28 @@ int main() {
     return prepareOriginal(*closed);
   };
   const std::string proofSource = std::string(anchored) + R"(
-    proof Proof=Run{prover P;verifier V;public{word};accept ok;
+    proof Proof=Run{prover P;verifier V;public{};accept ok;
                     target claim;construction authored;}
   )";
   cases.run(
-      "selected proof target retains logical anchor without a data read", [&] {
-        auto source = take(proof(proofSource));
-        require(source.bytes().contains("protocol.statement") &&
-                    source.bytes().contains("selectors = [\"anchor\"]"),
-                "logical selected target was omitted");
+      "selected logical target supplies no external handle or public data",
+      [&] {
+        auto project = take(check(proofSource));
+        const Declaration *job = nullptr;
+        for (const auto &declaration : project.declarations())
+          if (declaration.qualifiedName == "m::Proof")
+            job = &declaration;
+        require(job && job->proof() && job->proof()->target &&
+                    job->proof()->publicInputs.empty(),
+                "logical selected target became an ordinary public input");
+        // The proof publishes the handle exactly; the SDK's Entry admission
+        // refuses fresh external supply of it for the operation consuming it.
+        auto selected =
+            take(prepareOriginal(take(closeEntry(project, "m::Proof"))));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(selected.interface()), {"word"},
+            "logical handle lost its exact supply mark");
+        auto source = original(anchored);
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
         if (auto error = compareInterface(source.entry(), view))
           throw std::runtime_error(toString(std::move(error)));
@@ -162,9 +175,9 @@ int main() {
                         "source.specification");
               });
   cases.run(
-      "logical selected target survives preparation and structured export",
+      "logical semantic subject survives preparation and structured export",
       [&] {
-        auto source = take(proof(proofSource));
+        auto source = original(anchored);
         mlir::DialectRegistry registry;
         registerDialects(registry);
         mlir::MLIRContext context(registry);
@@ -178,29 +191,25 @@ int main() {
             source.bytes(), source.entry().protocol().symbol, context));
         require(!snapshot.bytes.empty(),
                 "logical target disappeared from export");
-        for (StringRef selector : {"P", "V"})
-          refuses(
-              protocol::exportStructuredSource(
-                  replaceText(source.bytes().str(), "selectors = [\"anchor\"]",
-                              ("selectors = [\"" + selector + "\"]").str()),
-                  source.entry().protocol().symbol, context),
-              "structured-source-original");
-        refuses(
-            protocol::exportStructuredSource(
-                replaceText(source.bytes().str(), ", target = \"claim\"", ""),
-                source.entry().protocol().symbol, context),
-            "structured-source-original");
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(take(proof(proofSource)).interface()),
+            {"word"}, "proof selection hid the logical handle's supply mark");
       });
-  cases.run("verifier holder may bind its own oracle data as statement", [&] {
-    auto text = replaceText(proofSource, "witness values", "statement values");
-    size_t at = 0;
-    while ((at = text.find("@P->V", at)) != std::string::npos) {
-      text.replace(at, 5, "@V->P");
-      at += 5;
-    }
-    text = replaceText(text, "roles(P,V)(word)", "roles(V,P)(word)");
-    take(proof(text));
-  });
+  cases.run(
+      "verifier holder may observe its own data without supplying it", [&] {
+        auto text =
+            replaceText(proofSource, "witness values", "statement values");
+        size_t at = 0;
+        while ((at = text.find("@P->V", at)) != std::string::npos) {
+          text.replace(at, 5, "@V->P");
+          at += 5;
+        }
+        text = replaceText(text, "roles(P,V)(word)", "roles(V,P)(word)");
+        take(check(text));
+        zkc::test::requireWithheld(
+            zkc::test::withheldSupply(take(proof(text)).interface()), {"word"},
+            "verifier-held handle lost its supply mark");
+      });
   cases.run("receiver anchor does not make witness data public", [&] {
     refuses(
         proof(replaceText(proofSource, "witness values", "statement values")),

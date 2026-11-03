@@ -63,6 +63,9 @@ std::string Natural::spelling() const {
 Error NaturalArithmetic::charge(uint64_t work) {
   if (work > remaining)
     return error("source.limit", "natural normalization work limit exceeded");
+  if (admit)
+    if (auto e = admit(work))
+      return e;
   remaining -= work;
   return Error::success();
 }

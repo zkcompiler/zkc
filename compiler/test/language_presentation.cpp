@@ -33,6 +33,21 @@ int main() {
                     std::string::npos,
                 text);
       });
+  cases.run("a refusal without a detail renders as its code alone", [] {
+    Diagnostic bare{"source.limit", "", std::nullopt, {}};
+    require(formatDiagnostics({bare}) == "source.limit\n",
+            formatDiagnostics({bare}));
+    Diagnostic detailed{
+        "source.limit", "work limit exceeded", std::nullopt, {}};
+    require(formatDiagnostics({detailed}) ==
+                "source.limit: work limit exceeded\n",
+            formatDiagnostics({detailed}));
+    Diagnostic uncoded{
+        "", "further diagnostic lines omitted", std::nullopt, {}};
+    require(formatDiagnostics({uncoded}) ==
+                "further diagnostic lines omitted\n",
+            formatDiagnostics({uncoded}));
+  });
   cases.run("printable source text retains quotes and backslashes", [] {
     auto captured = take(capture(
         {{"m", "module m;\ndomain F=field(\"koala-bear\");\n", "source.zkc"}}));

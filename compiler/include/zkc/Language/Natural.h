@@ -5,6 +5,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 #include <utility>
@@ -57,9 +58,14 @@ private:
 /// Limits are work bounds, not assumptions about symbolic values.
 class NaturalArithmetic {
 public:
+  /// The optional owned callable admits each charge before normalization work,
+  /// after checking the local ceiling. Any borrowed ledger must outlive this
+  /// object. Errors propagate unchanged; callers supply diagnostic spans.
   explicit NaturalArithmetic(uint64_t work = 1000000, uint64_t terms = 1024,
-                             uint64_t factors = 64)
-      : remaining(work), termLimit(terms), factorLimit(factors) {}
+                             uint64_t factors = 64,
+                             std::function<llvm::Error(uint64_t)> admit = {})
+      : remaining(work), termLimit(terms), factorLimit(factors),
+        admit(std::move(admit)) {}
   llvm::Expected<Natural> add(const Natural &, const Natural &);
   llvm::Expected<Natural> multiply(const Natural &, const Natural &);
   /// Cancel equal additive monomials coefficientwise, including constants.
@@ -83,6 +89,7 @@ public:
 
 private:
   uint64_t remaining, termLimit, factorLimit;
+  std::function<llvm::Error(uint64_t)> admit;
   llvm::Error charge(uint64_t);
   llvm::Error insert(Natural &, const Natural::Monomial &, uint64_t);
 };

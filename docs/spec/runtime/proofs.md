@@ -20,7 +20,11 @@ and acceptance selection, immutable prepared computation identity, attempts and
 publication. Drivers infer none of that authority from proof or candidate
 contents. Shared-ledger production transfers proof-buffer live guards with its
 result; callers retaining bytes must retain those guards. Cumulative work remains
-consumed after cancellation or guard release.
+consumed after cancellation or guard release. A transport buffer or received
+message that the invocation root cannot afford refuses with
+`proof-transport-work-limit` or `proof-transport-bytes-limit`
+([root refusals](capacity.md#root-refusals)); the proof format's own size limit
+keeps `proof-limit`.
 
 ## Operation admission
 
@@ -74,6 +78,12 @@ per-attempt stops. Ingress keeps its `ingress.<parameter>` outer site and stores
 the inner instruction separately. These are diagnostics and do not alter origins,
 transcript history or proof framing.
 
+Verifier-local helpers may create, pass and consume nominal record custody
+units in their exact default native representation. These local bookkeeping
+permissions do not admit provider resources or grant wire/codec permissions.
+Verifier participant inputs and outputs retain their separate data admission
+rules, and native affine-use checks still apply to every unit.
+
 Session cleanup requires no active frames or residual logical resource units.
 The proof host does not export returned logical units to a caller. Deployment
 admission refuses affine entry outputs other than RNG, nonce or transcript
@@ -126,8 +136,10 @@ a prover key uses its separate authenticated material constructor. Foreign
 capabilities or key handles cannot enter through ordinary native data.
 
 `PreparedData::from_wire` decodes a canonical native frame once;
-`from_value` validates and encodes native data once. Both retain immutable data
-and its exact physical type and wire bytes under an explicit `Capacity`.
+`from_value` validates and encodes native data once. Both decode or encode
+under an explicit `Capacity` and retain immutable data and its exact physical
+type and wire bytes within the
+[prepared-data allowance](capacity.md#host-allowances), never a runner's.
 The handle shares storage across clones and exposes its retained payload size,
 including the wire copy. Its lifetime belongs to the application. Preparation
 does not authorize a statement, import setup keys, issue capabilities or retain

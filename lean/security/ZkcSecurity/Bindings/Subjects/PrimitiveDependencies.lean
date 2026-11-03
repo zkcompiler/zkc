@@ -8,7 +8,8 @@ public import Zkc.Claims.Wire
 /-! Conservative applicability of the default ideal experiments. Relations
 may use the admitted pure Math vocabulary and its checked helper closure.
 Executable primitives and internal observations have no default relation
-interpretation under an ideal oracle. Every nested callback is inspected. -/
+interpretation under an ideal oracle, nor do custody transfers. Every nested
+callback is inspected. -/
 
 set_option autoImplicit false
 namespace ZkcSecurity.Claims
@@ -16,13 +17,14 @@ open Zkc.Claims Zkc.Source.Structured
 
 def defaultRelationOperation : Op → Bool
   | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. |
     .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
     .makeProduct .. | .getProduct .. | .invoke .. | .multilinearRestrictPrefix .. |
     .fold .. | .collect .. | .map .. | .branch .. | .loop .. | .loopCondition .. | .guard => true
-  | .exec .. | .mark .. => false
+  | .exec .. | .mark .. | .createUnit .. | .passUnit .. | .consumeUnit .. => false
 
 /-- The admitted declaration table is acyclic. Its size bounds the depth;
 zero fuel, missing signatures and duplicate signatures refuse conservatively. -/

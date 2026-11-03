@@ -10,6 +10,30 @@ pub(crate) fn read_regular(
         zkc::files::ReadError::Limit => "artifact-byte-limit".into(),
     })
 }
+/// The interface admission allowances that `--interface-limits` selects, or
+/// the defaults without it, read once per command. The report gives the
+/// effective record, which can be supplied again.
+pub(crate) fn interface_limits(
+    args: &crate::cli::Arguments<'_>,
+    report: &mut Json,
+) -> Result<zkc::entry::InterfaceLimits, String> {
+    let limits = match args.value("--interface-limits") {
+        Some(file) => zkc::entry::InterfaceLimits::parse(&read_regular(file, 4096)?)?,
+        None => zkc::entry::InterfaceLimits::DEFAULT,
+    };
+    report["interface_limits"] = limits.record();
+    Ok(limits)
+}
+/// The selection file is an input that publication never replaces.
+pub(crate) fn protect_interface_limits(
+    args: &crate::cli::Arguments<'_>,
+    outputs: &mut Outputs,
+) -> Result<(), String> {
+    match args.value("--interface-limits") {
+        Some(file) => outputs.protect([file]),
+        None => Ok(()),
+    }
+}
 pub(crate) fn publication(
     result: Result<zkc::files::Publication, zkc::files::PublicationError>,
     report: &mut Json,

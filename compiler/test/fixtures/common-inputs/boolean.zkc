@@ -1,0 +1,4 @@
+module m;
+protocol Run roles(P,V)(flag:bool@(P,V),other:bool@(P,V))->(r:bool@(P,V)) {
+ let r=if flag {if other {true}else{false}}else{false};return(r=r);
+}

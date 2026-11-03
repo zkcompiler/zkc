@@ -92,19 +92,19 @@ Private runtime outputs remain absent; their ghost factors cannot be chosen
 anew after a query because Prefix starts at the fixed original state. -/
 def NoReturn {dimension n : Nat} (service : Nat)
     (root : GkrRoundsBinding.State F dimension)
-    (output : Values (Component (assignment F G)) spec.state) : Prop :=
+    (output : Values (Component (assignment F G)) definition0.outputs) : Prop :=
   ∃ final : GkrRoundsBinding.State F n,
     Prefix root final ∧ Represents final.raw final.reference ∧
-    (representation (G := G) service).No final ∧ carried (G := G) final = output
+    (representation (G := G) service).No final ∧ returnedState (G := G) final = output
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The return relation exposes exactly the executed source count and masks,
 even when the call leaves a nonzero mathematical residual dimension. -/
 theorem noReturn_exact_point {n count : Nat} (service : Nat) (raw : RawState F)
     (reference : GkrRoundsReference.State F (n + count)) (claim : F)
-    (output : Values (Component (assignment F G)) spec.state)
+    (output : Values (Component (assignment F G)) definition0.outputs)
     (residual : NoReturn (n := n) service (initial raw reference claim) output) :
-    ∃ point scalar, output = runtime (G := G) point scalar ∧ point.length = count := by
+    ∃ point scalar, output = returned (G := G) point scalar ∧ point.length = count := by
   rcases residual with ⟨final, reachedPrefix, _, _, carriedEq⟩
   refine ⟨final.point, final.claim, carriedEq.symm, ?_⟩
   have length := prefix_length (initial raw reference claim) final reachedPrefix
@@ -128,7 +128,7 @@ whole imported Process equation, degree-two reference laws, and a checked
 actual-query collision bound. No target-truth or honest-receive premise. -/
 def verifier_residual (service count : Nat) (bounded : count ≤ 4)
     (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r : Option (List F))
+    (a m l r : Option (List F)) (token : Nat)
     {n : Nat} (raw : RawState F) (reference : GkrRoundsReference.State F (n + count))
     (claim : F) (represented : Represents raw reference)
     (wrong : claim ≠ GkrRoundsReference.total reference)
@@ -137,7 +137,7 @@ def verifier_residual (service count : Nat) (bounded : count ≤ 4)
     (history : List E) :
     Derivation absorb (boundedEscape charge)
       (fun _ output => NoReturn (n := n) service (initial raw reference claim) output)
-      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some [])
+      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some token) (some [])
         (some claim) (some count) (some service)) := by
   let root := initial raw reference claim
   have no : (representation (G := G) service).No root := ⟨represented.2.1, wrong⟩
@@ -148,18 +148,18 @@ def verifier_residual (service count : Nat) (bounded : count ≤ 4)
     (returns_prefix service ctx (interaction (F := F) (G := G)) root count root .initial ())
   have finish (final : GkrRoundsBinding.State F n)
       (holds : (representation (G := G) service).No final ∧ Prefix root final) :
-      NoReturn (n := n) service root (carried (G := G) final) :=
+      NoReturn (n := n) service root (returnedState (G := G) final) :=
     ⟨final, holds.2, prefix_representation root final represented holds.2, holds.1, rfl⟩
   have projected : Derivation absorb (boundedEscape charge)
       (fun _ output => NoReturn (n := n) service root output) history
-      (((program service).remaining count ctx root).bind (fun final => .done (carried (G := G) final))) :=
-    ZkcSecurity.Source.PropertyAssembly.map (fun final => carried (G := G) final) framed
+      (((program service).remaining count ctx root).bind (fun final => .done (returnedState (G := G) final))) :=
+    ZkcSecurity.Source.PropertyAssembly.map (fun final => returnedState (G := G) final) framed
       (fun _ final holds => finish final holds)
-  exact projected.transport (verifier_binding ctx distinct a m l r claim service count bounded raw reference)
+  exact projected.transport (verifier_binding ctx distinct a m l r token claim service count bounded raw reference)
 
 theorem verifier_doomed (service count : Nat) (bounded : count ≤ 4)
     (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r : Option (List F))
+    (a m l r : Option (List F)) (token : Nat)
     {n : Nat} (raw : RawState F) (reference : GkrRoundsReference.State F (n + count))
     (claim : F) (represented : Represents raw reference)
     (wrong : claim ≠ GkrRoundsReference.total reference)
@@ -168,9 +168,9 @@ theorem verifier_doomed (service count : Nat) (bounded : count ≤ 4)
     (history : List E) :
     (reduction absorb
       (fun _ output => NoReturn (n := n) service (initial raw reference claim) output) charge).doomed
-      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some [])
+      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some token) (some [])
         (some claim) (some count) (some service)) :=
-  derived_doomed (verifier_residual service count bounded ctx distinct a m l r raw reference claim
+  derived_doomed (verifier_residual service count bounded ctx distinct a m l r token raw reference claim
     represented wrong queries sampling history)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
@@ -195,7 +195,7 @@ policy or circuit terminal predicate is introduced. -/
 def verifier_uniform_residual [Fintype F] [SampleableType F]
     (service count : Nat) (bounded : count ≤ 4)
     (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r : Option (List F))
+    (a m l r : Option (List F)) (token : Nat)
     {n : Nat} (raw : RawState F) (reference : GkrRoundsReference.State F (n + count))
     (claim : F) (represented : Represents raw reference)
     (wrong : claim ≠ GkrRoundsReference.total reference)
@@ -206,9 +206,9 @@ def verifier_uniform_residual [Fintype F] [SampleableType F]
     (history : List E) :
     Derivation absorb (boundedEscape (fun _ _ => 2 / (Fintype.card F : ENNReal)))
       (fun _ output => NoReturn (n := n) service (initial raw reference claim) output)
-      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some [])
+      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some token) (some [])
         (some claim) (some count) (some service)) :=
-  verifier_residual service count bounded ctx distinct a m l r raw reference claim represented wrong queries
+  verifier_residual service count bounded ctx distinct a m l r token raw reference claim represented wrong queries
     (conditional_uniform service queries uniform) history
 
 end ZkcSecurity.Examples.Components.GkrRoundsResidual

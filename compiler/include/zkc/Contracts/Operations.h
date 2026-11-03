@@ -80,6 +80,14 @@ struct HistoryContract {
   unsigned stateOutput = 0;
 };
 
+/// Output `stateOutput` returns the exact resource identity received at input
+/// `stateInput`, with the same resource_unit type and Slot. Identity transfer
+/// only: no value equality, purity, reordering or speculation.
+struct SuccessionContract {
+  unsigned stateInput = 0;
+  unsigned stateOutput = 0;
+};
+
 struct ObservationContract {
   unsigned stateInput = 0;
   unsigned payloadInput = 1;
@@ -127,6 +135,7 @@ const CosetConvention *cosetConvention(llvm::StringRef field);
 struct OperationContracts {
   std::optional<ComputationContract> mathematical;
   std::optional<HistoryContract> history;
+  std::optional<SuccessionContract> succession;
   std::optional<SamplingContract> sampling;
   std::optional<ObservationContract> observation;
   std::optional<DiagonalMapContract> diagonalMap;

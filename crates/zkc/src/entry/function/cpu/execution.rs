@@ -2,9 +2,10 @@ use super::{
     carrier::{Block, Operation},
     *,
 };
+use crate::host::capacity::RootCharge;
 use serde_json::{Value as Json, json};
 use zkc_runtime::interpreter::LocalRunner;
-use zkc_runtime::vm::{ExecutionLedger, ExecutionLedgerUsage, Value as RuntimeValue, WorkBudget};
+use zkc_runtime::vm::{ExecutionLedger, ExecutionLedgerUsage, WorkBudget};
 
 #[derive(Clone, Debug)]
 pub struct CallReceipt {
@@ -19,6 +20,8 @@ pub struct FunctionFailure {
     pub code: String,
     pub path: Vec<String>,
     pub native: Option<Json>,
+    /// A child Entry's own refusal, with its phase and schema path.
+    pub entry: Option<Box<EntryError>>,
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FunctionUsage {
@@ -42,10 +45,16 @@ pub struct FunctionReport {
     /// Optional native observations merged across reached children only.
     pub execution_counts: zkc_runtime::vm::ExecutionCounts,
     _journal_live: Vec<zkc_runtime::vm::LiveReservation>,
+    invocation: ExecutionLedger,
 }
 impl FunctionReport {
     pub fn is_success(&self) -> bool {
         self.failure.is_none() && self.value.is_some()
+    }
+    /// The one ledger that charged this invocation, including its children;
+    /// result encoding charges it too.
+    pub fn invocation_ledger(&self) -> &ExecutionLedger {
+        &self.invocation
     }
     pub fn into_result(self) -> std::result::Result<Self, Box<Self>> {
         if self.is_success() {
@@ -56,12 +65,12 @@ impl FunctionReport {
     }
     pub fn diagnostics(&self) -> Json {
         json!({"format":"zkc.entry-function-result/0","completed":self.is_success(),
-            "failure":self.failure.as_ref().map(|f|json!({"code":f.code,"path":f.path,"native":f.native})),
-            "usage":{"instructions":self.usage.execution.instructions,"iterations":self.usage.execution.iterations,
-                "logical_bytes":self.usage.execution.logical_bytes,"fresh_bytes":self.usage.execution.total_value_bytes,
-                "live_reserved_bytes":self.usage.execution.live_reserved_bytes,"dispatches":self.usage.dispatches,
+            "failure":self.failure.as_ref().map(|f|json!({"code":f.code,"path":f.path,"native":f.native,
+                "phase":f.entry.as_ref().map(|e|format!("{:?}",e.phase)),"input_path":f.entry.as_ref().and_then(|e|e.path())})),
+            "usage":{"dispatches":self.usage.dispatches,
                 "wire_bytes":self.usage.wire_bytes,"proof_bytes":self.usage.proof_bytes,"external_work":self.usage.external_work,
                 "ring_work":self.usage.ring_work,"sequence_work":self.usage.sequence_work,"service_draws":self.usage.service_draws,"service_allowances":self.usage.service_allowances},
+            "invocation":crate::host::diagnostics::invocation(&self.invocation, &self.usage.execution),
             "calls":self.calls.iter().map(|c|json!({"target":c.target,"operation":c.operation,"path":c.path,"completed":c.completed,"native":c.native})).collect::<Vec<_>>(),
             "journal_truncated":self.journal_truncated})
     }
@@ -75,30 +84,28 @@ pub struct PreparedFunction<'a> {
 }
 impl EntryHost {
     pub fn prepare(&self, mut request: FunctionRequest) -> Result<PreparedFunction<'_>> {
-        require(
-            request.arguments.len() == self.signature().parameters.len(),
-            "entry-host-argument-names",
-        )?;
-        let ledger = ExecutionLedger::new(
-            self.options.limits.capacity.values,
-            self.options.limits.capacity.work,
-        );
-        let context_live = zkc_runtime::host::wire::reserve_allocation(
-            Some(&ledger),
-            deployment::context_bytes(&request.context),
-        )
-        .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
+        if request.arguments.len() != self.signature().parameters.len() {
+            return Err(EntryCondition::InputNames.into());
+        }
+        // The selected record bounds this root, which the interpreter and
+        // every reached child share: its byte fields bound the whole
+        // invocation, and its instruction and iteration selections are the
+        // meter they pool, so a Function invocation's aggregate work is
+        // bounded across its children, which a standalone run never pools.
+        let ledger = self.options.limits.capacity.pooled_root();
+        let context_live = RootCharge::FUNCTION
+            .reserve_bytes(Some(&ledger), deployment::context_bytes(&request.context))
+            .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
         deployment::context_check(self, &request.context, &ledger)?;
         let arguments = self
             .signature()
             .parameters
             .iter()
             .map(|p| {
-                self.interface.check_native_input(&p.schema)?;
                 let value = request
                     .arguments
                     .remove(&p.name)
-                    .ok_or_else(|| error("entry-host-argument-names"))?;
+                    .ok_or(EntryCondition::InputNames)?;
                 data::import(self, &p.schema, value, &ledger)
                     .map_err(|e| EntryError::new(EntryPhase::Preparation, e))
             })
@@ -129,7 +136,7 @@ impl PreparedFunction<'_> {
         };
         // Reserve bounded native observation scratch even when the retained
         // journal is disabled or full. A final failure still carries its stop.
-        let returned = match zkc_runtime::host::wire::reserve_allocation(
+        let returned = match RootCharge::FUNCTION.reserve_bytes(
             Some(&execution.ledger),
             crate::host::diagnostics::SCRATCH_BYTES,
         ) {
@@ -152,6 +159,7 @@ impl PreparedFunction<'_> {
             journal_truncated: execution.truncated,
             _journal_live: execution.journal_live,
             execution_counts: execution.execution_counts,
+            invocation: execution.ledger,
         }
     }
 }
@@ -175,8 +183,18 @@ impl Execution<'_> {
             code: code.to_string(),
             path: self.path.clone(),
             native: self.last_native.clone(),
+            entry: None,
         }
     }
+    /// A child's refusal keeps its own phase and schema path.
+    fn fail_entry(&self, error: EntryError) -> FunctionFailure {
+        FunctionFailure {
+            entry: Some(Box::new(error.clone())),
+            ..self.fail(error.code())
+        }
+    }
+    /// Charge the pooled instruction or iteration meter. A refusal names the
+    /// meter that is exhausted.
     fn charge(&self, instructions: u64, iterations: u64) -> ExecResult<()> {
         self.ledger
             .charge(
@@ -187,17 +205,27 @@ impl Execution<'_> {
                 },
                 0,
             )
+            .map_err(|_| {
+                self.fail(if instructions > 0 {
+                    "entry-host-instruction-limit"
+                } else {
+                    "entry-host-iteration-limit"
+                })
+            })
+    }
+    /// Charge and hold the Function's own Host storage in the invocation root.
+    fn reserve(&self, bytes: usize) -> ExecResult<Option<zkc_runtime::vm::LiveReservation>> {
+        RootCharge::FUNCTION
+            .reserve_bytes(Some(&self.ledger), bytes)
             .map_err(|e| self.fail(e))
     }
     fn function(&mut self, symbol: &str, arguments: Vec<TypedValue>) -> ExecResult<TypedValue> {
-        let _frame = zkc_runtime::host::wire::reserve_allocation(
-            Some(&self.ledger),
+        let _frame = self.reserve(
             symbol
                 .len()
                 .saturating_add(arguments.len() * 512)
                 .saturating_add(512),
-        )
-        .map_err(|e| self.fail(e))?;
+        )?;
         self.path.push(symbol.into());
         self.charge(1, 0)?;
         let f = self
@@ -216,19 +244,13 @@ impl Execution<'_> {
                 .iter()
                 .map(|op| op.results().len())
                 .sum::<usize>();
-        let _environment =
-            zkc_runtime::host::wire::reserve_allocation(Some(&self.ledger), slots * 512 + 512)
-                .map_err(|e| self.fail(e))?;
+        let _environment = self.reserve(slots * 512 + 512)?;
         let mut env: BTreeMap<_, _> = b.arguments.iter().map(|a| a.id).zip(arguments).collect();
         for (index, op) in b.operations.iter().enumerate() {
             self.path.push(format!("operation:{index}"));
             self.last_native = None;
             self.charge(1, 0)?;
-            let _operands = zkc_runtime::host::wire::reserve_allocation(
-                Some(&self.ledger),
-                (op.operands().len() + op.results().len()) * 512 + 512,
-            )
-            .map_err(|e| self.fail(e))?;
+            let _operands = self.reserve((op.operands().len() + op.results().len()) * 512 + 512)?;
             let values = op
                 .operands()
                 .iter()
@@ -349,8 +371,7 @@ impl Execution<'_> {
             + target.len()
             + operation.len()
             + self.path.iter().map(|s| s.len() + 512).sum::<usize>();
-        let live = zkc_runtime::host::wire::reserve_allocation(Some(&self.ledger), bytes)
-            .map_err(|e| self.fail(e))?;
+        let live = self.reserve(bytes)?;
         self.journal_live.extend(live);
         let index = self.calls.len();
         self.calls.push(CallReceipt {
@@ -401,28 +422,38 @@ impl Execution<'_> {
         self.usage.dispatches += 1;
         Ok(())
     }
-    /// Partition the remaining aggregate allowance once per native invocation.
-    /// Keep transport/result space beside the runners' full live reservations.
-    fn child_capacity(&self, runners: usize) -> crate::execution::Capacity {
-        let mut capacity = self.host.options.limits.capacity;
-        capacity.values.live_bytes = capacity
-            .values
-            .live_bytes
-            .saturating_sub(self.ledger.snapshot().live_reserved_bytes)
-            / 2
-            / runners.max(1);
-        capacity
+    /// The policy record a child receives: the record's capacity for runners
+    /// whose root pools their fuel, so the child's runners keep no fuel of
+    /// their own beside the pooled meter, and what remains of each
+    /// invocation-wide allowance, divided equally across the child's runners.
+    /// Children never replenish a parent allowance.
+    fn child_limits(&self, runners: usize) -> crate::run::HostLimits {
+        let divisor = runners.max(1) as u64;
+        let mut limits = self.host.options.limits.clone();
+        limits.capacity = limits.capacity.pooled_runners();
+        limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
+        limits.total_wire_bytes = limits
+            .total_wire_bytes
+            .saturating_sub(self.usage.wire_bytes);
+        limits.external_work = limits
+            .external_work
+            .saturating_sub(self.usage.external_work)
+            / divisor;
+        limits.ring_work = limits.ring_work.saturating_sub(self.usage.ring_work) / divisor;
+        limits.sequence_work = limits
+            .sequence_work
+            .saturating_sub(self.usage.sequence_work)
+            / divisor;
+        limits
     }
     fn numeric(&mut self, id: &str, values: Vec<TypedValue>) -> ExecResult<Vec<TypedValue>> {
         let index = self.begin(id, "numeric")?;
         self.dispatch()?;
         let c = &self.host.calculations[id];
-        let _input_vector = zkc_runtime::host::wire::reserve_allocation(
-            Some(&self.ledger),
-            values.iter().map(|v| v.schema().leaves.len() * 512).sum(),
-        )
-        .map_err(|e| self.fail(e))?;
-        let capacity = self.child_capacity(1);
+        let _input_vector =
+            self.reserve(values.iter().map(|v| v.schema().leaves.len() * 512).sum())?;
+        let remaining = self.child_limits(1);
+        let capacity = remaining.capacity;
         let mut inputs = Vec::new();
         for v in values {
             v.flatten(&mut inputs).map_err(|e| self.fail(e))?;
@@ -433,25 +464,18 @@ impl Execution<'_> {
             .map_err(|e| self.fail(e))?
             .with_relation_assets(self.host.assets.relation_registry().clone())
             .map_err(|e| self.fail(e))?
-            .with_external_work_limit(
-                self.host
-                    .options
-                    .limits
-                    .external_work
-                    .saturating_sub(self.usage.external_work),
-            )
-            .with_ring_work_limit(
-                zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
-            )
-            .with_sequence_work_limit(16_777_216u64.saturating_sub(self.usage.sequence_work));
+            .with_external_work_limit(remaining.external_work)
+            .with_ring_work_limit(remaining.ring_work)
+            .with_sequence_work_limit(remaining.sequence_work);
+        let (budget, fuel) = capacity.runner_budgets();
         let result = LocalRunner::new_with_ledger(
             &c.program,
             &c.function,
             "entry-host",
             backend,
             inputs,
-            capacity.values,
-            capacity.work,
+            budget,
+            fuel,
             Some(self.ledger.clone()),
         );
         let mut runner = match result {
@@ -466,33 +490,29 @@ impl Execution<'_> {
         self.usage.external_work += runner.backend().external_work_spent();
         self.usage.ring_work += runner.backend().ring_work_spent();
         self.usage.sequence_work += runner.backend().sequence_work_spent();
-        let diagnostic = json!({"stop":runner.stop().map(crate::host::diagnostics::stop)});
+        // The receipt keeps the child's own usage and the root's when the
+        // child ended.
+        let diagnostic = json!({"stop":runner.stop().map(crate::host::diagnostics::stop),
+            "usage":crate::host::diagnostics::usage(&runner.usage()),
+            "invocation":crate::host::diagnostics::invocation(&self.ledger, &self.ledger.snapshot())});
         let failed = runner.stop().is_some();
         self.end(index, !failed, diagnostic);
-        let values = runner
-            .returned_values()
-            .ok_or_else(|| self.fail("entry-host-numeric-stopped"))?;
+        // The child's returned values leave it with their live hold in the
+        // root, so custody moves without a gap and without a second charge.
+        let (backend, returned) = runner.into_retained_outputs();
+        drop(backend);
+        let returned = returned.ok_or_else(|| self.fail("entry-host-numeric-stopped"))?;
+        // The result's new metadata is a fresh allocation the parent holds
+        // beside the moved values.
         let metadata = c.results.iter().map(data::metadata).sum::<usize>();
-        self.ledger
-            .charge(
-                WorkBudget {
-                    instructions: 0,
-                    iterations: 0,
-                    logical_bytes: 0,
-                },
-                metadata,
-            )
+        let mut live = RootCharge::FUNCTION
+            .charge_and_hold(&self.ledger, 0, metadata, metadata)
             .map_err(|e| self.fail(e))?;
-        let bytes = values
-            .iter()
-            .map(RuntimeValue::retained_bytes)
-            .sum::<usize>()
-            .saturating_add(metadata);
-        // Reserve the parent's exact retained result while the child still owns
-        // its full live allowance. No gap exposes unreserved native backings.
-        let live = std::sync::Arc::new(self.ledger.reserve_live(bytes).map_err(|e| self.fail(e))?);
-        let outputs = values.to_vec();
-        drop(runner.into_backend());
+        let (outputs, held) = returned.into_parts();
+        if let Some(held) = held {
+            live.merge(held);
+        }
+        let live = std::sync::Arc::new(live);
         let mut outputs = outputs.into_iter();
         c.results
             .iter()
@@ -532,15 +552,11 @@ impl Execution<'_> {
             .iter()
             .map(|v| data::metadata(v.schema()))
             .sum::<usize>();
-        let _request_live = zkc_runtime::host::wire::reserve_allocation(
-            Some(&self.ledger),
-            context_copy.saturating_add(descriptors),
-        )
-        .map_err(|e| self.fail(e))?;
+        let _request_live = self.reserve(context_copy.saturating_add(descriptors))?;
         match (&deployment.kind, binding) {
             (DeploymentKind::Run(entry), InvocationBinding::Run(context)) => {
                 let request = deployment::run_request(entry, &values[0], context)
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 let service_budgets = entry
                     .interface()
                     .roles()
@@ -556,23 +572,10 @@ impl Execution<'_> {
                     })
                     .collect::<Vec<_>>();
                 self.reserve_services(service_budgets.into_iter())?;
-                let mut limits = self.host.options.limits.clone();
-                limits.capacity = self.child_capacity(entry.interface().roles().len());
-                limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
-                limits.total_wire_bytes = limits
-                    .total_wire_bytes
-                    .saturating_sub(self.usage.wire_bytes);
-                limits.external_work = limits
-                    .external_work
-                    .saturating_sub(self.usage.external_work)
-                    / entry.interface().roles().len() as u64;
-                let ring = zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work)
-                    / entry.interface().roles().len() as u64;
-                let sequence = 16_777_216u64.saturating_sub(self.usage.sequence_work)
-                    / entry.interface().roles().len() as u64;
+                let limits = self.child_limits(entry.interface().roles().len());
                 let report = entry
-                    .execute_shared(request, limits, ring, sequence, self.ledger.clone())
-                    .map_err(|e| self.fail(e))?;
+                    .execute_shared(request, limits, self.ledger.clone())
+                    .map_err(|e| self.fail_entry(e))?;
                 if let Some(execution) = &report.native.execution {
                     for role in &execution.roles {
                         self.execution_counts.merge(&role.execution_counts);
@@ -604,7 +607,7 @@ impl Execution<'_> {
             (DeploymentKind::Proof { entry, operation }, InvocationBinding::Proof(context)) => {
                 let producer = *operation == crate::entry::ProofOperation::Prove;
                 let request = deployment::proof_request(entry, producer, values, context)
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 let p = entry.interface().proof().expect("proof");
                 let role = &entry.interface().roles()[if producer { p.prover } else { p.verifier }];
                 let service_budgets = entry
@@ -638,18 +641,12 @@ impl Execution<'_> {
                     .execute_shared(
                         request,
                         proof,
-                        self.child_capacity(1),
-                        self.host
-                            .options
-                            .limits
-                            .external_work
-                            .saturating_sub(self.usage.external_work),
-                        zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
-                        16_777_216u64.saturating_sub(self.usage.sequence_work),
+                        self.host.options.attempts.get(id).copied(),
+                        &self.child_limits(1),
                         proof_limit,
                         self.ledger.clone(),
                     )
-                    .map_err(|e| self.fail(e))?;
+                    .map_err(|e| self.fail_entry(e))?;
                 self.usage.external_work += report.native.external_work;
                 self.usage.ring_work += report.native.ring_work;
                 self.usage.sequence_work += report.native.sequence_work;
@@ -673,11 +670,7 @@ impl Execution<'_> {
                 // own checked typed result. Vec-to-Arc proof conversion also
                 // reserves the second allocation before copying exact bytes.
                 let _proof_copy = if producer {
-                    zkc_runtime::host::wire::reserve_allocation(
-                        Some(&self.ledger),
-                        report.native.bytes.saturating_add(512),
-                    )
-                    .map_err(|e| self.fail(e))?
+                    self.reserve(report.native.bytes.saturating_add(512))?
                 } else {
                     None
                 };
@@ -703,9 +696,11 @@ impl Execution<'_> {
 // Retain bounded control diagnostics; large native reports/backends are dropped.
 fn bounded_native(mut value: Json) -> Json {
     // These summaries are already bounded by their native owners. Keep the
-    // primary failure even when observational prefixes exhaust the trim budget.
+    // primary failure, the child's usage and the root's even when
+    // observational prefixes exhaust the trim budget.
     let object = value.as_object_mut().expect("native diagnostic object");
-    let primary = ["failure_role", "stop"].map(|key| (key, object.remove(key)));
+    let primary =
+        ["failure_role", "stop", "usage", "invocation"].map(|key| (key, object.remove(key)));
     let mut summary = crate::host::diagnostics::trim(&value, &mut 256, &mut 4096, 0);
     for (key, value) in primary {
         if let Some(value) = value {

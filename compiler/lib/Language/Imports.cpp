@@ -214,14 +214,16 @@ bool Checker::imports() {
       };
       if (import.alias && !exportable(*import.target))
         return false;
-      if (!recordReference(context, import.provider.value_or(*import.target),
+      if (!recordReference(context, ReferenceRoute::Import,
+                           import.provider.value_or(*import.target),
                            *import.target, import.module, import.span))
         return false;
       for (const auto &name : import.names) {
         auto selected = lookup(context, *import.target, name, import.span);
         if (!selected || !exportable(*selected))
           return false;
-        if (!recordReference(context, import.provider.value_or(*import.target),
+        if (!recordReference(context, ReferenceRoute::ImportName,
+                             import.provider.value_or(*import.target),
                              *selected, import.module + "::" + name,
                              import.span))
           return false;

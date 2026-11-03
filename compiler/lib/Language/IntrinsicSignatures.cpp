@@ -203,23 +203,18 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
     result.dimension = std::move(n);
     return result;
   };
-  auto normalize = [&](Expected<Natural> n,
-                       uint64_t before) -> std::optional<Type> {
+  auto normalize = [&](Expected<Natural> n) -> std::optional<Type> {
     if (!n) {
       accept(n.takeError(), span);
       return {};
     }
-    if (!charge(before - naturals.remainingWork(), span))
-      return {};
     return natural(std::move(*n));
   };
   auto add = [&](const Type &a, const Type &b) {
-    auto before = naturals.remainingWork();
-    return normalize(naturals.add(a.dimension, b.dimension), before);
+    return normalize(naturals.add(a.dimension, b.dimension));
   };
   auto pow2 = [&](const Type &a) {
-    auto before = naturals.remainingWork();
-    return normalize(naturals.powerOfTwo(a.dimension), before);
+    return normalize(naturals.powerOfTwo(a.dimension));
   };
   auto one = natural(Natural::constant(1));
   auto bound = [&](const Type &a, const Type &b) {

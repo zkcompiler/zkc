@@ -186,6 +186,17 @@ Error LayoutReader::body(Id id, SyntaxDeclaration &decl, bool region) {
       break;
     case K::If:
     case K::Match:
+      if ((region || decl.kind == Declaration::Kind::Math) &&
+          item == children(id).back() && !statement.site) {
+        auto selected = expression(item, decl);
+        if (!selected)
+          return selected.takeError();
+        result.returned = !region;
+        result.implicitResult = !region;
+        result.results.emplace_back("result", *selected);
+        continue;
+      }
+      [[fallthrough]];
     case K::For:
       statement.kind = Statement::Kind::Expression;
       statement.terminated = false;

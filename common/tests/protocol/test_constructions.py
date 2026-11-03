@@ -66,7 +66,7 @@ def test_custom_construction_state_and_logical_payloads(toolchain, journal, dire
                      .replace('LOOP_START', 'for _ in 0..rounds roles(P,V) max 2 {\n' * 2 if nested else '')
                      .replace('LOOP_END', '}}' if nested else ''))
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                              'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5', 'rounds': '2'})
@@ -120,7 +120,7 @@ def test_custom_index_query_keeps_the_service_range(toolchain, journal, director
     proof Demo=Choose {prover P;verifier V;public{};accept ok;construction Custom<Provider>;}
     '''.replace('RESULT', 'bound' if out_of_range else '0'))
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
     args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', '--allow-authored']
     proof = directory / 'proof.bin'
@@ -222,7 +222,7 @@ def test_native_base_supports_ordinary_affine_handlers(toolchain, journal, direc
       on message commitment(t,value){return t;}''' if override else '')
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5', 'rounds': '2'})
     witness = journal.write('witness.json', {'secret': '7'})
@@ -287,7 +287,7 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
     if protocol == 'sumcheck':
         modules['sumcheck'] = root / 'libraries/protocols/polynomial/sumcheck/lib.zkc'
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}', *flags])
     public_value = PUBLIC if protocol == 'schnorr' else {
@@ -337,7 +337,7 @@ def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, jour
     modules = {'sample': source}
     modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
@@ -380,7 +380,7 @@ def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, jou
     package = directory / 'proof.zkpkg'
     modules = {'sample': source, 'zkc::transcript': root / 'libraries/core/primitives/cryptography/transcript.zkc',
                'zkc::bytes': root / 'libraries/core/encoding/bytes.zkc'}
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}'])
     args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}']
@@ -407,7 +407,7 @@ def test_copyable_construction_state_survives_untaken_completion(toolchain, jour
     text = text.replace('public{public,rounds}', 'public{go,public,rounds}')
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {})
     witness = journal.write('witness.json', {'secret': '7'})
@@ -428,7 +428,7 @@ def test_copyable_construction_state_is_internal(toolchain, journal, directory, 
     source = directory / 'main.zkc'
     source.write_text(text.replace('LOOP_START', '').replace('LOOP_END', ''))
     package = directory / 'proof.zkpkg'
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={package}'])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])

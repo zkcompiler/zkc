@@ -295,7 +295,7 @@ module {
       auto function = *candidate->getOps<func::FuncOp>().begin();
       for (uint64_t x : {uint64_t(0), uint64_t(1), uint64_t(16), uint64_t(17),
                          std::numeric_limits<uint64_t>::max()}) {
-        auto input = llvm::APInt(inputWidth, x).getZExtValue();
+        auto input = llvm::APInt(64, x).zextOrTrunc(inputWidth).getZExtValue();
         require(execute(function, input, 0).front().getZExtValue() ==
                     input % 17,
                 "projection did not use the full unsigned input");

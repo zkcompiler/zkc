@@ -1,11 +1,10 @@
 //! Executable data has no file paths, material import requests or capabilities.
 use super::*;
 use crate::execution::{Capacity, InputValue};
+use crate::host::capacity::RootCharge;
 use std::sync::Arc;
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Value as Native};
-use zkc_runtime::vm::{
-    ExecutionLedger, LiveReservation, PhysicalType, Value as RuntimeValue, WorkBudget,
-};
+use zkc_runtime::vm::{ExecutionLedger, LiveReservation, PhysicalType, Value as RuntimeValue};
 
 type DataResult<T> = std::result::Result<T, String>;
 // Measurement vectors can grow geometrically within the existing conservative
@@ -45,7 +44,7 @@ impl TypedValue {
     }
     pub(super) fn to_value(&self) -> crate::entry::Value {
         use crate::entry::Value;
-        match self.payload.as_ref() {
+        let value = match self.payload.as_ref() {
             Payload::Unit => Value::Unit,
             Payload::Native(v) => v.clone().into(),
             Payload::Product(values) => match self.schema.kind {
@@ -82,7 +81,8 @@ impl TypedValue {
                         .collect(),
                 }
             }
-        }
+        };
+        crate::entry::value::protect(&self.schema, value)
     }
     pub(super) fn boolean(&self) -> bool {
         let Payload::Native(Native::Bool(b)) = self.payload.as_ref() else {
@@ -176,21 +176,12 @@ fn backend_for(
     )
     .map_err(|e| e.to_string())
 }
+/// Charge and hold a typed value's Host storage in the invocation root,
+/// together; a refusal names the root allowance that refused.
 fn charge(ledger: &ExecutionLedger, fresh: usize) -> DataResult<Arc<LiveReservation>> {
-    ledger
-        .charge(
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: 0,
-            },
-            fresh,
-        )
-        .map_err(|e| e.to_string())?;
-    ledger
-        .reserve_live(fresh)
+    RootCharge::FUNCTION
+        .charge_and_hold(ledger, 0, fresh, fresh)
         .map(Arc::new)
-        .map_err(|e| e.to_string())
 }
 fn measure_native_value(
     backend: &CpuBackend,
@@ -199,17 +190,11 @@ fn measure_native_value(
 ) -> DataResult<zkc_cpu::NativeInputSize> {
     // Charge the retained bound before walking payloads, including repeated
     // uses of shared data. Recursive sequences and variants cache that bound.
-    ledger
-        .charge(
-            WorkBudget {
-                instructions: 0,
-                iterations: 0,
-                logical_bytes: u64::try_from(value.retained_bytes())
-                    .map_err(|_| "entry-host-output-limit")?,
-            },
-            0,
-        )
-        .map_err(|e| e.to_string())?;
+    RootCharge::FUNCTION.charge(
+        ledger,
+        u64::try_from(value.retained_bytes()).map_err(|_| "entry-host-output-limit")?,
+        0,
+    )?;
     if !backend.installation().supports_type(&value.physical_type()) {
         return Err("native-input-type".into());
     }
@@ -362,7 +347,6 @@ pub(super) fn import(
     v: crate::entry::Value,
     ledger: &ExecutionLedger,
 ) -> DataResult<TypedValue> {
-    crate::entry::interface::schemas::check_import(s)?;
     host.cpu.enter(|| load_ingress(host, s, v, ledger))
 }
 fn load_ingress(
@@ -374,15 +358,14 @@ fn load_ingress(
     let _planning = charge(ledger, metadata(s))?;
 
     let mut inputs = Vec::new();
-    crate::entry::value::flatten(s, v, &mut inputs)?;
+    crate::entry::value::flatten(&host.interface.types, s, v, &mut inputs)?;
     let backend = backend(
         host.options.limits.capacity,
         host.cpu.clone(),
         host.options.limits.installation.clone(),
     )?;
-    let mut admission =
-        crate::host::admission::Admission::new(host.options.limits.capacity.loading())?
-            .with_shared_ledger(Some(ledger.clone()));
+    let mut admission = crate::host::admission::Admission::new(host.options.limits.loading())?
+        .with_shared_ledger(Some(ledger.clone()));
     for (input, spelling) in inputs.iter().zip(&s.leaves) {
         let ty =
             PhysicalType::default_for(host.types[spelling].clone()).map_err(|e| e.to_string())?;
@@ -402,58 +385,7 @@ fn load_ingress(
     }
     Ok(result)
 }
-pub(super) fn duplicate(value: &crate::entry::Value) -> crate::entry::Value {
-    use crate::entry::Value;
-    match value {
-        Value::Leaf(v) => Value::Leaf(duplicate_input(v)),
-        Value::Unit => Value::Unit,
-        Value::Tuple(v) => Value::Tuple(v.iter().map(duplicate).collect()),
-        Value::Array(v) => Value::Array(v.iter().map(duplicate).collect()),
-        Value::Record(v) => {
-            Value::Record(v.iter().map(|(n, v)| (n.clone(), duplicate(v))).collect())
-        }
-        Value::Variant {
-            alternative,
-            fields,
-        } => Value::Variant {
-            alternative: alternative.clone(),
-            fields: fields
-                .iter()
-                .map(|(n, v)| (n.clone(), duplicate(v)))
-                .collect(),
-        },
-        Value::Associated(v) => Value::Associated(Box::new(duplicate(v))),
-    }
-}
-fn duplicate_input(value: &InputValue) -> InputValue {
-    match value {
-        InputValue::Native(v) => InputValue::Native(v.clone()),
-        InputValue::Wire(v) => InputValue::Wire(v.clone()),
-        InputValue::Prepared(v) => InputValue::Prepared(v.clone()),
-        InputValue::WireSource { file, sha256 } => InputValue::WireSource {
-            file: file.clone(),
-            sha256: *sha256,
-        },
-        InputValue::Resource { budget } => InputValue::Resource { budget: *budget },
-        InputValue::VerifierKey => InputValue::VerifierKey,
-        InputValue::ProverKey(v) => InputValue::ProverKey(v.clone()),
-        InputValue::ProverKeyFile { path, fingerprint } => InputValue::ProverKeyFile {
-            path: path.clone(),
-            fingerprint: *fingerprint,
-        },
-        InputValue::ProverKeyInput { file, fingerprint } => InputValue::ProverKeyInput {
-            file: file.clone(),
-            fingerprint: *fingerprint,
-        },
-        InputValue::Variant {
-            alternative,
-            payload,
-        } => InputValue::Variant {
-            alternative: *alternative,
-            payload: payload.iter().map(duplicate_input).collect(),
-        },
-    }
-}
+pub(super) use crate::entry::value::{description_bytes, duplicate};
 
 pub(super) fn metadata(s: &Schema) -> usize {
     let variant = if s.kind == SchemaKind::Variant {
@@ -693,6 +625,7 @@ pub(super) fn from_output(
     // Bound measurement scratch before walking the source shape. The complete
     // active variants are checked before collect_owned builds any native spine.
     let planning = charge(ledger, metadata(schema))?;
+    let value = crate::entry::value::open_output(schema, value)?;
     let backend = backend(
         host.options.limits.capacity,
         host.cpu.clone(),
@@ -706,39 +639,4 @@ pub(super) fn from_output(
     drop(planning);
     let live = charge(ledger, bytes)?;
     collect_owned(host, schema, value, live)
-}
-
-/// Conservative ownership of descriptions retained by application contexts.
-/// File descriptors retain no file contents until bounded native loading.
-pub(super) fn description_bytes(value: &crate::entry::Value) -> usize {
-    use crate::entry::Value;
-    let children = match value {
-        Value::Unit => 0,
-        Value::Leaf(input) => match input {
-            InputValue::Native(v) => v.retained_bytes(),
-            InputValue::Wire(v) => v.len(),
-            InputValue::Prepared(v) => v
-                .value()
-                .retained_bytes()
-                .saturating_add(v.canonical_bytes().len()),
-            InputValue::ProverKey(v) => v.value().retained_bytes(),
-            InputValue::ProverKeyFile { path, .. } => path.len(),
-            InputValue::Variant { payload, .. } => payload.len() * 512,
-            _ => 0,
-        },
-        Value::Tuple(v) | Value::Array(v) => v.iter().map(description_bytes).sum(),
-        Value::Record(v) => v.iter().map(|(n, v)| n.len() + description_bytes(v)).sum(),
-        Value::Variant {
-            alternative,
-            fields,
-        } => {
-            alternative.len()
-                + fields
-                    .iter()
-                    .map(|(n, v)| n.len() + description_bytes(v))
-                    .sum::<usize>()
-        }
-        Value::Associated(v) => description_bytes(v),
-    };
-    children.saturating_add(512)
 }

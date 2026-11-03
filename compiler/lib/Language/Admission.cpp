@@ -162,9 +162,7 @@ std::optional<bool> Semantics::setupAuthority(const Type &type, Span span,
       for (const auto &field : variant.fields)
         children.push_back(field.type);
   } else {
-    if (type.kind == K::Builtin &&
-        (type.domain == "prover_key" || type.domain == "verifier_key" ||
-         type.domain == "srs"))
+    if (type.kind == K::Builtin && protocol::setupKey(type.domain))
       return true;
     if (type.kind == K::Builtin && !symbolic(type)) {
       auto native = nativeLayout(type);

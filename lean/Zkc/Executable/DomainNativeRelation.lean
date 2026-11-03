@@ -112,7 +112,7 @@ private theorem transcript_readback {suite : String} {key : Origin → Origin} {
             simp only [mapped, Option.map_some, Option.some.injEq, Value.transcript.injEq] at found
             exact ⟨history, suffix, rfl, mapped, found.symm⟩
       · cases found
-  | indices => cases found
+  | indices | custody => cases found
   | data payload =>
       rcases payload with ⟨ty, supported, contents⟩
       cases ty <;> simp [DomainAdapter.readbackValue, DomainAdapter.readbackData] at found
@@ -123,6 +123,7 @@ private theorem coordinates_readback {suite : String} {key : Origin → Origin} 
     value = .indices path := by
   cases value with
   | indices coordinates => cases found; rfl
+  | custody => cases found
   | transcript actual history =>
       simp only [DomainAdapter.readbackValue] at found
       split at found
@@ -170,7 +171,7 @@ private theorem dataSort_embed (suite : String) (key : Origin → Origin) (initi
   | data payload =>
       cases payload <;> cases reported <;> exact ⟨_, rfl, rfl, rfl⟩
   | index | vector => cases reported; exact ⟨_, rfl, rfl, rfl⟩
-  | transcript | indices | unsupported => cases reported
+  | transcript | indices | custody | unsupported => cases reported
 
 private theorem embed_sorted_data (suite : String) (key : Origin → Origin) (initial : History F G) :
     ∀ (sorts : List ValueSort) (data : List (Value F G)),

@@ -741,10 +741,8 @@ class ContractCheck {
     if (call.scopedArguments.size() != callee.scopedInputs.size() ||
         call.domainArguments.size() != callee.domainInputs.size())
       return refuse(span, "static call argument coverage differs");
-    if (!callee.dataPreconditions.empty() && !mathematicalMode(context.body))
-      return types.fail(
-          "source.data-bound",
-          "conditional mathematical helper requires a total context", span);
+    // Local callers must discharge the same exact formation obligations.
+    // Installed reached-guard results may do so; being ordered grants none.
     for (const auto &requirement : callee.dataPreconditions) {
       auto needed = condition(context, call.operands, requirement, span);
       if (!needed)
@@ -771,9 +769,60 @@ class ContractCheck {
     }
     return true;
   }
-  bool control(Context &context, const LocalControl &control, unsigned depth,
+  bool reached(Context &context, ValueId condition, Span span) {
+    auto origin = context.origins.get(condition, span);
+    if (!origin)
+      return false;
+    if (!origin->second.empty())
+      return true;
+    const auto *producer =
+        context.origins.producer(ValueId{origin->first}, span);
+    const auto *less =
+        producer ? std::get_if<MathValue>(&producer->action) : nullptr;
+    const auto *orderedLess =
+        producer ? std::get_if<LocalPrimitive>(&producer->action) : nullptr;
+    const std::vector<ValueId> *operands = nullptr;
+    if (less && less->identity == MathematicalIdentity::IndexLess)
+      operands = &less->operands;
+    else if (orderedLess && orderedLess->contract == "index.less")
+      operands = &orderedLess->operands;
+    if (!operands || operands->size() != 2)
+      return true;
+    auto rhs = context.origins.get((*operands)[1], span);
+    if (!rhs || !rhs->second.empty())
+      return !types.diagnostic;
+    const auto *lengthOp = context.origins.producer(ValueId{rhs->first}, span);
+    const auto *length =
+        lengthOp ? std::get_if<MathValue>(&lengthOp->action) : nullptr;
+    const auto *orderedLength =
+        lengthOp ? std::get_if<LocalPrimitive>(&lengthOp->action) : nullptr;
+    const auto *helperLength =
+        lengthOp ? std::get_if<HelperCall>(&lengthOp->action) : nullptr;
+    const std::vector<ValueId> *containers = nullptr;
+    if (length && length->identity == MathematicalIdentity::VectorLength)
+      containers = &length->operands;
+    else if (orderedLength && orderedLength->contract == "vector.length")
+      containers = &orderedLength->operands;
+    else if (helperLength && helperLength->callee.index < declarations.size()) {
+      const auto &callee = declarations[helperLength->callee.index];
+      if (callee.primitive && callee.primitive->identity == "vector.length")
+        containers = &helperLength->operands;
+    }
+    if (!containers || containers->size() != 1)
+      return true;
+    auto index = value(context, (*operands)[0], span);
+    auto container = value(context, containers->front(), span);
+    if (!index || !container)
+      return false;
+    DataFact fact{DataPrecondition::Kind::IndexBound, *index, *container, 0, 0};
+    if (!established(mathematical.reached(fact, span), span))
+      return false;
+    assumptions.push_back(std::move(fact));
+    return true;
+  }
+  bool control(Context &context, const Control &control, unsigned depth,
                Span span) {
-    bool loop = control.kind == LocalControl::Kind::For;
+    bool loop = control.kind == Control::Kind::For;
     unsigned skipped = loop ? 2 : 1;
     if (control.operands.size() < skipped)
       return refuse(span, "control operand coverage differs");
@@ -782,7 +831,23 @@ class ContractCheck {
     for (unsigned i = 0; i < domains.size(); ++i)
       if (!domain(context, control.domainArguments[i], domains[i], span))
         return false;
-    for (const auto &region : control.regions) {
+    for (unsigned arm = 0; arm < control.regions.size(); ++arm) {
+      const auto &region = control.regions[arm];
+      auto parentScope = mathematical.scope();
+      auto savedAssumptions = assumptions.size();
+      if (!established(mathematical.enter(span), span))
+        return false;
+      auto restore = llvm::scope_exit([&] {
+        mathematical.restore(parentScope);
+        assumptions.resize(savedAssumptions);
+      });
+      // Only an actual single-role branch supplies an ordered path fact. A
+      // guard at one participant never grants a peer a formation premise.
+      if (!loop && control.kind == Control::Kind::If && arm == 0 &&
+          (context.body.mode != Body::Mode::Protocol ||
+           control.roles.size() == 1) &&
+          !reached(context, control.operands.front(), span))
+        return false;
       if (!region || region->inputs < forwarded ||
           !types.charge(region->inputs, span))
         return types.diagnostic ? false
@@ -1146,7 +1211,12 @@ class ContractCheck {
             !closedFinite(context, *finite, depth + 1, op.span,
                           op.results.front()))
           return false;
-      } else if (const auto *region = std::get_if<LocalControl>(&op.action)) {
+      } else if (const auto *guard = std::get_if<Require>(&op.action)) {
+        if ((source.mode == Body::Mode::Local ||
+             (owner && owner->roles.size() == 1 && guard->owner == 0)) &&
+            !reached(context, guard->condition, op.span))
+          return false;
+      } else if (const auto *region = std::get_if<Control>(&op.action)) {
         if (!control(context, *region, depth + 1, op.span))
           return false;
       } else if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {

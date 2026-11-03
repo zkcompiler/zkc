@@ -103,7 +103,7 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
         'State(zkc::finite::fold(zkc::vector::fill(unpack(t),3),v,fn(s,x)=>s+x))'))
     modules = library_modules(*core_packages())
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                              *modules, 'sample::Packed', f'--output={package}', *flags])
     stored = json.loads(package.read_text())
@@ -154,7 +154,7 @@ def test_serialized_child_start_admission(toolchain, journal, directory, mutatio
     source = directory / 'main.zkc'
     source.write_text(composed_source(False))
     package = directory / 'proof.zkpkg'
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Packed', f'--output={package}'])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])
@@ -207,7 +207,7 @@ def test_native_root_can_delegate_to_an_explicit_managed_child(toolchain, journa
     source = directory / 'main.zkc'
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules(*core_packages(), overrides={'sample': source}),
                              'sample::Composed', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
@@ -235,7 +235,7 @@ def test_child_start_codec_and_conditional_completion(toolchain, journal, direct
     source = directory / 'main.zkc'
     source.write_text(text + '\nfn done(rounds:index)->bool{return rounds==1;}')
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
                              'sample::Packed', f'--output={package}', *flags])
     witness = journal.write('witness.json', {'secret': '7'})

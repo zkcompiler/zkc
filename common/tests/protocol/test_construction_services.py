@@ -28,7 +28,7 @@ def test_retained_verifier_services(toolchain, journal, directory, native, codec
     source = directory / 'main.zkc'
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', f'sample::{"Packed" if codec else "Demo"}',
                              f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5', 'rounds': '2'})
@@ -69,7 +69,7 @@ def test_private_verifier_entropy_cannot_replace_a_delivery(toolchain, journal, 
     text = text[:start] + text[end:]
     source = directory / 'main.zkc'
     source.write_text(text)
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={directory / "proof.zkpkg"}'],
                  refuses='native-request-reconstruction')
 
@@ -87,7 +87,7 @@ def test_private_reply_admission_on_serialized_program(toolchain, journal, direc
     source = directory / 'main.zkc'
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', f'sample::{"Packed" if codec else "Demo"}',
                   f'--output={package}'])
     original = json.loads(json.loads(package.read_text())['artifact'])
@@ -202,7 +202,7 @@ def test_mixed_authorities_across_repeated_calls(toolchain, journal, directory, 
     source = directory / 'main.zkc'
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
     envelope = json.loads(package.read_text())
     deployment = json.loads(envelope['artifact'])
@@ -249,7 +249,7 @@ def test_authority_set_refusals(toolchain, journal, directory, old, new):
         text += 'proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Mixed;}'
     source = directory / 'main.zkc'
     source.write_text(text)
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={directory / "proof.zkpkg"}'],
                  refuses='source.name' if new == 'replace {};' else 'source.construction')
 
@@ -264,7 +264,7 @@ def test_private_prover_count_without_child_start(toolchain, journal, directory,
     source = directory / 'main.zkc'
     source.write_text(text)
     package = directory / 'proof.zkpkg'
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={package}'])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])
@@ -301,7 +301,7 @@ def test_private_query_cannot_split_selected_delivery(toolchain, journal, direct
         text += CODEC.replace('BASE', f'base {base};')
     source = directory / 'main.zkc'
     source.write_text(text)
-    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', f'sample::{"Packed" if codec else "Demo"}',
                   f'--output={directory / "proof.zkpkg"}'],
                  refuses='native-proof-prefix')

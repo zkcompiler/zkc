@@ -976,9 +976,9 @@ def applied_probes(declarations, catalog):
     assert len({json.dumps(p, sort_keys=True) for p in patterns}) == len(patterns), "duplicate pattern"
     probes, coverage = set(), []
     for pattern in patterns:
-        assert set(pattern) == {"constructor", "arguments", "representation", "default"}
+        assert set(pattern) == {"constructor", "arguments", "representation", "default", "child"}
         assert type(pattern["default"]) is bool
-        assert pattern["representation"]
+        assert pattern["representation"] and pattern["child"]
         constructor = pattern["constructor"]
         assert [p["kind"] for p in pattern["arguments"]] == [p["kind"] for p in types[constructor]["parameters"]]
         base, maximum = [], []
@@ -1361,28 +1361,64 @@ def test_backend_attribute_drift_refuses_installation(physical_drivers, director
 
 
 def entry_schema(kind, spelling, permissions):
-    return {"kind": kind, "identity": sha256(spelling.encode()).hexdigest(), "type": spelling,
-            "custody": False, "constructible": False, "permissions": permissions, "leaves": [spelling], "fields": [], "alternatives": []}
+    return {"kind": kind, "identity": sha256(spelling.encode()).hexdigest(), "generated": None,
+            "type": spelling, "custody": 0, "sealed": False, "roles": [], "element": None,
+            "constructible": False, "permissions": permissions, "leaves": [spelling],
+            "fields": [], "alternatives": []}
+
+
+def entry_field(name, offset, schema):
+    return {"name": name, "offset": offset, "public": True, "placement": None, "schema": schema}
 
 
 def entry_record(child, *, custody=False, permissions=None, name="Record"):
     identity = sha256(name.encode()).hexdigest()
     prefix = ["resource_unit:zkl_resource_" + identity] if custody else []
-    return {"kind": "record", "identity": identity, "type": name, "custody": custody,
+    return {"kind": "record", "identity": identity, "generated": None, "type": name,
+            "custody": len(prefix), "sealed": False, "roles": [], "element": None,
             "constructible": not custody and child["constructible"],
             "permissions": child["permissions"] if permissions is None else permissions,
             "leaves": prefix + child["leaves"],
-            "fields": [{"name": "value", "offset": len(prefix), "schema": child}], "alternatives": []}
+            "fields": [entry_field("value", len(prefix), child)], "alternatives": []}
+
+
+def entry_components(schema, roles):
+    """Each native leaf of a data-placed port, once per holding role, in schema order."""
+    components = []
+    native = 0
+
+    def leaf(path, index, facet):
+        nonlocal native
+        components.extend({"path": path, "leaf": index, "role": role, "facet": facet,
+                           "native": native} for role in roles)
+        native += 1
+
+    def walk(schema, path):
+        for index in range(schema["custody"]):
+            leaf(path, index, "custody")
+        if not schema["fields"]:
+            for index in range(schema["custody"], len(schema["leaves"])):
+                leaf(path, index, "data")
+        for index, field in enumerate(schema["fields"]):
+            walk(field["schema"], path + [index])
+
+    walk(schema, [])
+    return components
 
 
 def entry_request(schema, roles, *, setup=False):
+    roster = ["P", "V"]
+    holders = [roster.index(role) for role in roles]
     document = {
         "format": "zkc.language-interface/0", "capture": "1" * 64,
         "original": sha256(b"conformance original").hexdigest(), "toolchain": "conformance",
         "entry": "test::Main", "protocol": "Main", "relations": [], "job": {"kind": "run"},
         "setups": ([{"name": "setup", "inputs": [{"port": 0, "path": []}]}] if setup else []),
-        "protocols": [{"symbol": "Main", "roles": ["P", "V"], "outputs": [], "services": [], "clauses": [],
-                       "inputs": [{"name": "value", "index": 0, "type": schema["type"], "roles": roles,
+        "protocols": [{"symbol": "Main", "roles": roster, "outputs": [], "services": [], "clauses": [],
+                       "common_input_requirements": [],
+                       "inputs": [{"name": "value", "index": 0, "type": schema["type"],
+                                   "placement": {"kind": "data", "roles": holders},
+                                   "components": entry_components(schema, holders),
                                    "native": list(range(len(schema["leaves"]))), "schema": schema}]}],
     }
     # The transport carries a string, so duplicate keys and recursive metadata
@@ -1526,8 +1562,7 @@ def variant_share_witnesses():
             schema["leaves"] = [spelling]
             schema["alternatives"] = [
                 {"name": "Empty", "fields": []},
-                {"name": "Value", "fields": [{"name": "0", "offset": 0,
-                                                 "schema": entry_schema(kind, leaf, permissions)}]},
+                {"name": "Value", "fields": [entry_field("0", 0, entry_schema(kind, leaf, permissions))]},
             ]
             requests.append(entry_request(entry_record(schema), ["P", "V"] if multi else ["P"]))
             expected.append(shared or not multi)

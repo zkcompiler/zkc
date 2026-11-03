@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 #include <optional>
@@ -54,8 +55,7 @@ struct SuccessfulContinuationAnalysis::Impl {
     }
     return false;
   }
-  // Only the declaration body and its owned repeat bodies are supported.
-  // This validates ancestry, not a second lexical operation traversal.
+  // Validate closed Protocol ancestry without a second lexical traversal.
   bool contains(Value value, Operation *declaration, facts::Work &work) const {
     if (!work.charge() || !value)
       return false;
@@ -63,7 +63,7 @@ struct SuccessfulContinuationAnalysis::Impl {
     for (unsigned depth = 0; enter(work, depth); ++depth) {
       if (scope == declaration)
         return true;
-      if (!isa_and_nonnull<pir::RepeatOp>(scope))
+      if (!isa_and_nonnull<pir::RepeatOp, pir::BranchOp>(scope))
         return false;
       scope = scope->getParentOp();
     }
@@ -87,6 +87,10 @@ struct SuccessfulContinuationAnalysis::Impl {
         continue;
       }
       if (auto argument = dyn_cast<BlockArgument>(value)) {
+        if (auto capture = selectedCapture(argument)) {
+          value = capture;
+          continue;
+        }
         auto repeat =
             dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
         if (repeat && !member(repeat.getRoles(), participant, work))
@@ -99,6 +103,114 @@ struct SuccessfulContinuationAnalysis::Impl {
       return value;
     }
     return {};
+  }
+
+  Expected<Status> prefix(const InteractionDeclaration &view,
+                          const InteractionSequence &sequence, unsigned end,
+                          StringRef participant, Value index, Value upper,
+                          std::optional<uint64_t> constantUpper,
+                          facts::Work &work, unsigned depth, bool proven) {
+    if (!enter(work, depth))
+      return Status::Capacity;
+    auto missing = [&] {
+      return work.exhausted() ? Status::Capacity : Status::Unknown;
+    };
+    for (unsigned i = 0; i < end; ++i) {
+      if (!work.charge())
+        return Status::Capacity;
+      const auto &action = view.getActions()[sequence.getActions()[i]];
+      auto *operation = action.getOperation();
+      if (auto branch = dyn_cast<pir::BranchOp>(operation)) {
+        if (!member(branch.getRoles(), participant, work)) {
+          if (work.exhausted())
+            return Status::Capacity;
+          continue;
+        }
+        std::optional<unsigned> selected;
+        if (branch.getInputs()[0].getType().isSignlessInteger(1)) {
+          auto selector = observeProtocolConstant(
+              branch.getInputs()[0], participant, mathematics, work, depth);
+          if (selector.status == facts::Status::Capacity)
+            return Status::Capacity;
+          if (selector.value)
+            selected = *selector.value ? 0 : 1;
+        }
+        bool continuing = false, common = true;
+        for (const auto &edge : action.getRegions()) {
+          if (selected && *selected != edge.ordinal)
+            continue;
+          const auto &arm = view.getSequence(edge.sequence);
+          auto state =
+              prefix(view, arm, arm.getActions().size(), participant, index,
+                     upper, constantUpper, work, depth + 1, proven);
+          if (!state)
+            return state.takeError();
+          if (*state == Status::Capacity)
+            return Status::Capacity;
+          if (*state == Status::Unreachable)
+            continue;
+          continuing = true;
+          common &= *state == Status::Proven;
+        }
+        if (!continuing)
+          return Status::Unreachable;
+        proven = common;
+        continue;
+      }
+      Value condition;
+      bool guard = false;
+      if (auto check = dyn_cast<pir::GuardOp>(operation)) {
+        if (check.getOwner() == participant) {
+          condition = check.getCondition();
+          guard = true;
+        }
+      } else if (auto finish = dyn_cast<pir::FinishIfOp>(operation)) {
+        if (finish.getOwner() == participant)
+          condition = finish.getCondition();
+      }
+      if (!condition)
+        continue;
+      condition =
+          normalize(condition, view.getDeclaration(), participant, work);
+      if (!condition)
+        return missing();
+      // Literal/condition lookup, even on repeated queries.
+      if (!work.charge())
+        return Status::Capacity;
+      auto literal = observeProtocolConstant(condition, participant,
+                                             mathematics, work, depth);
+      if (literal.status == facts::Status::Capacity)
+        return Status::Capacity;
+      if (literal.value && (bool(*literal.value) != guard))
+        return Status::Unreachable;
+      if (!guard)
+        continue;
+      auto less = condition.getDefiningOp<data::LessOp>();
+      if (!less)
+        continue;
+      auto lhs =
+          normalize(less.getLhs(), view.getDeclaration(), participant, work);
+      auto rhs =
+          normalize(less.getRhs(), view.getDeclaration(), participant, work);
+      if (work.exhausted())
+        return Status::Capacity;
+      // Exact fact lookup, with no shape/origin substitution.
+      if (!work.charge())
+        return Status::Capacity;
+      if (!lhs || !rhs || lhs != index)
+        continue;
+      if (!constantUpper) {
+        proven |= rhs == upper;
+      } else {
+        auto integer =
+            observeProtocolConstant(rhs, participant, mathematics, work, depth);
+        if (integer.status == facts::Status::Capacity)
+          return Status::Capacity;
+        proven |= integer.status == facts::Status::Proven && integer.value &&
+                  *integer.value <= *constantUpper;
+      }
+    }
+    return proven ? Status::Proven : missing();
   }
 
   Expected<Status> bound(Operation *declaration, Operation *point,
@@ -159,71 +271,44 @@ struct SuccessfulContinuationAnalysis::Impl {
     bool proven = false;
     const auto *sequence = &view.getBody();
     auto path = selected->getPath();
-    for (auto [depth, ordinal] : enumerate(path)) {
+    unsigned depth = 0;
+    for (unsigned coordinate = 0; coordinate < path.size();
+         ++coordinate, ++depth) {
+      unsigned ordinal = path[coordinate];
       if (!enter(work, depth))
         return Status::Capacity;
       // Prefixes are interpreted outer-to-inner. A preceding repeat remains
       // opaque: neither its body guards nor its stops escape to this block.
-      for (unsigned i = 0; i < ordinal; ++i) {
-        if (!work.charge())
-          return Status::Capacity;
-        auto *operation =
-            view.getActions()[sequence->getActions()[i]].getOperation();
-        Value condition;
-        bool guard = false;
-        if (auto check = dyn_cast<pir::GuardOp>(operation)) {
-          if (check.getOwner() == participant) {
-            condition = check.getCondition();
-            guard = true;
-          }
-        } else if (auto finish = dyn_cast<pir::FinishIfOp>(operation)) {
-          if (finish.getOwner() == participant)
-            condition = finish.getCondition();
-        }
-        if (!condition)
-          continue;
-        condition = normalize(condition, declaration, participant, work);
-        if (!condition)
-          return missing();
-        // Literal/condition lookup, even on repeated queries.
-        if (!work.charge())
-          return Status::Capacity;
-        auto literal = observeProtocolConstant(condition, participant,
-                                               mathematics, work, depth);
-        if (literal.status == facts::Status::Capacity)
-          return Status::Capacity;
-        if (literal.value && (bool(*literal.value) != guard))
-          return Status::Unreachable;
-        if (!guard)
-          continue;
-        auto less = condition.getDefiningOp<data::LessOp>();
-        if (!less)
-          continue;
-        auto lhs = normalize(less.getLhs(), declaration, participant, work);
-        auto rhs = normalize(less.getRhs(), declaration, participant, work);
-        if (work.exhausted())
-          return Status::Capacity;
-        // Exact fact lookup, with no shape/origin substitution.
-        if (!work.charge())
-          return Status::Capacity;
-        if (!lhs || !rhs || lhs != index)
-          continue;
-        if (!constantUpper) {
-          proven |= rhs == upper;
-        } else {
-          auto integer = observeProtocolConstant(rhs, participant, mathematics,
-                                                 work, depth);
-          if (integer.status == facts::Status::Capacity)
-            return Status::Capacity;
-          proven |= integer.status == facts::Status::Proven && integer.value &&
-                    *integer.value <= *constantUpper;
-        }
-      }
+      auto state = prefix(view, *sequence, ordinal, participant, index, upper,
+                          constantUpper, work, depth, proven);
+      if (!state)
+        return state.takeError();
+      if (*state == Status::Capacity || *state == Status::Unreachable)
+        return *state;
+      proven = *state == Status::Proven;
       if (!work.charge())
         return Status::Capacity;
       const auto &action = view.getActions()[sequence->getActions()[ordinal]];
-      if (depth + 1 == path.size())
+      if (coordinate + 1 == path.size())
         break;
+      if (auto branch = dyn_cast<pir::BranchOp>(action.getOperation())) {
+        if (!member(branch.getRoles(), participant, work) ||
+            coordinate + 1 >= path.size())
+          return missing();
+        unsigned arm = path[++coordinate];
+        if (arm >= action.getRegions().size())
+          return missing();
+        if (branch.getInputs()[0].getType().isSignlessInteger(1)) {
+          auto selector = observeProtocolConstant(
+              branch.getInputs()[0], participant, mathematics, work, depth);
+          if (selector.status == facts::Status::Capacity)
+            return Status::Capacity;
+          if (selector.value && arm != (*selector.value ? 0u : 1u))
+            return Status::Unreachable;
+        }
+        sequence = &view.getSequence(action.getRegions()[arm].sequence);
+        continue;
+      }
       auto repeat = dyn_cast<pir::RepeatOp>(action.getOperation());
       if (!repeat || !action.getRepeatBody() ||
           !member(repeat.getRoles(), participant, work))

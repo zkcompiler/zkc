@@ -22,7 +22,7 @@ private theorem nominalBoolean (env : Environment F G) (reference : Nat)
   | some value =>
     simp only [found, Option.map_some, Option.some.injEq] at sorted
     cases value with
-    | indices | transcript => cases sorted
+    | indices | transcript | custody => cases sorted
     | data payload =>
       rcases payload with ⟨ty, supported, contents⟩
       cases sorted

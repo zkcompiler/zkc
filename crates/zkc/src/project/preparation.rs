@@ -32,7 +32,7 @@ impl Template {
         [
             (
                 "zkc.toml",
-                "format = \"zkc.project/0\"\n\n[modules]\nexample = \"main.zkc\"\n",
+                "format = \"zkc.project/0\"\nsource-format = \"zkc\"\n\n[modules]\nexample = \"main.zkc\"\n",
             ),
             (
                 "main.zkc",
@@ -57,14 +57,17 @@ pub struct Preparation {
 impl Compiler {
     /// Without an output override, prepare all project Entries or a named one.
     /// An explicit directory selects exactly one interface, including outside a project.
+    /// Every interface is read under the Host's selected interface admission
+    /// allowances.
     pub fn prepare(
         &self,
         project: &Project,
         name: Option<&str>,
         output: Option<&Path>,
+        limits: crate::entry::InterfaceLimits,
     ) -> Result<Preparation, Error> {
         if let Some(directory) = output {
-            let interface = self.inspect(project, Selection { name, kind: None })?;
+            let interface = self.inspect(project, Selection { name, kind: None }, limits)?;
             return Ok(Preparation {
                 templates: Template::inputs(directory, &interface)?,
                 entries: vec![interface],
@@ -92,6 +95,7 @@ impl Compiler {
                     name: Some(&name),
                     kind: None,
                 },
+                limits,
             )?;
             if interface.kind() == super::EntryKind::Function
                 || interface
@@ -109,5 +113,32 @@ impl Compiler {
             plan.entries.push(interface);
         }
         Ok(plan)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_skeletons_select_the_grammar_of_their_source_template() {
+        let directory = tempfile::tempdir().unwrap();
+        let templates = Template::scaffold(directory.path());
+        for template in &templates {
+            std::fs::write(&template.path, &template.contents).unwrap();
+        }
+        let manifest = &templates[0];
+        assert_eq!(manifest.path, directory.path().join("zkc.toml"));
+        assert!(
+            manifest
+                .contents
+                .lines()
+                .any(|line| line == "source-format = \"zkc\""),
+            "{}",
+            manifest.contents
+        );
+        let project = Project::load(&manifest.path).unwrap();
+        assert_eq!(project.flags.len(), 1);
+        assert_eq!(project.source_format(), super::super::SourceFormat::Zkc);
     }
 }

@@ -268,9 +268,10 @@ OperatorInference::solve(Span span, const std::function<bool()> &complete) {
     auto application = apply(choice, choice.candidates[selected.candidate]);
     if (!application)
       return {};
+    const auto &candidate = choice.candidates[selected.candidate];
     result.emplace(choice.expression,
-                   Selection{std::move(*application),
-                             choice.candidates[selected.candidate].binding});
+                   Selection{std::move(*application), candidate.binding,
+                             candidate.provider});
   }
   if (!types.solve(span))
     return {};

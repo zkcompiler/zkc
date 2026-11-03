@@ -44,6 +44,11 @@ pub enum ProgramAction {
         peer: String,
         ty: PhysicalType,
     },
+    Branch {
+        site: String,
+        alternatives: Vec<String>,
+        ends: Vec<usize>,
+    },
     Loop {
         site: String,
         maximum: u64,
@@ -64,7 +69,11 @@ impl ProgramAction {
             Self::Query { .. } => Some(CutKind::Query),
             Self::Send { .. } => Some(CutKind::Send),
             Self::Receive { .. } => Some(CutKind::Receive),
-            Self::Loop { .. } | Self::Yield { .. } | Self::ReturnIf { .. } | Self::Finish => None,
+            Self::Branch { .. }
+            | Self::Loop { .. }
+            | Self::Yield { .. }
+            | Self::ReturnIf { .. }
+            | Self::Finish => None,
         }
     }
     pub fn site(&self) -> Option<&str> {
@@ -73,6 +82,7 @@ impl ProgramAction {
             | Self::Query { site, .. }
             | Self::Send { site, .. }
             | Self::Receive { site, .. }
+            | Self::Branch { site, .. }
             | Self::Loop { site, .. }
             | Self::Yield { site }
             | Self::ReturnIf { site } => Some(site),
@@ -83,8 +93,9 @@ impl ProgramAction {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProgramRole {
     pub entry: EntryRole,
-    /// Static preorder, including loop headers, body yields, and the final return.
-    /// A loop body occurs once in this layout, independently of its runtime count.
+    /// Static preorder, including control headers, every selected arm, body
+    /// yields and final return. Each retained body occurs once independently of
+    /// its runtime selection or iteration count.
     pub actions: Vec<ProgramAction>,
 }
 
@@ -103,7 +114,7 @@ pub enum ProgramState<'a> {
         kind: Option<CutKind>,
         site: Option<&'a str>,
     },
-    /// An unpolled loop yield, crossed only by the explicit control API.
+    /// An unpolled participant-region yield, crossed only by the explicit control API.
     Yield,
     /// A conditional entry return, crossed only by the explicit control API.
     ReturnIf {
@@ -121,6 +132,19 @@ fn called_functions(body: &Body, out: &mut BTreeSet<String>) {
                 out.insert(function.clone());
             }
             Instruction::Loop { body, .. } => called_functions(body, out),
+            Instruction::Conditional {
+                then_body,
+                else_body,
+                ..
+            } => {
+                called_functions(then_body, out);
+                called_functions(else_body, out);
+            }
+            Instruction::Match { arms, .. } => {
+                for arm in arms {
+                    called_functions(&arm.body, out);
+                }
+            }
             _ => {}
         }
     }
@@ -243,15 +267,92 @@ impl Program {
         participant: &Participant,
         body: &Body,
         mut env: BTreeMap<String, PhysicalType>,
-        loop_site: Option<&str>,
+        region_site: Option<&str>,
         actions: &mut Vec<ProgramAction>,
-    ) -> Result<(), AdmissionError> {
+    ) -> Result<Vec<PhysicalType>, AdmissionError> {
         let refuse = |detail| AdmissionError::new(ErrorCode::Record, detail);
+        let mut returned = Vec::new();
         for instruction in body.iter() {
             actions
                 .try_reserve(1)
                 .map_err(|_| refuse("program-layout-allocation"))?;
             let action = match instruction {
+                Instruction::Conditional {
+                    site,
+                    captures,
+                    then_body,
+                    else_body,
+                    outputs,
+                    ..
+                } => {
+                    let child = captures
+                        .iter()
+                        .map(|(local, parent)| (local.clone(), env[parent].clone()))
+                        .collect::<BTreeMap<_, _>>();
+                    let start = actions.len();
+                    actions.push(ProgramAction::Branch {
+                        site: site.clone(),
+                        alternatives: vec![],
+                        ends: vec![],
+                    });
+                    let types = self.program_body(
+                        participant,
+                        then_body,
+                        child.clone(),
+                        Some(site),
+                        actions,
+                    )?;
+                    let left_end = actions.len() - 1;
+                    self.program_body(participant, else_body, child, Some(site), actions)?;
+                    actions[start] = ProgramAction::Branch {
+                        site: site.clone(),
+                        alternatives: vec!["then".into(), "else".into()],
+                        ends: vec![left_end, actions.len() - 1],
+                    };
+                    env.extend(outputs.iter().cloned().zip(types));
+                    continue;
+                }
+                Instruction::Match {
+                    site,
+                    input,
+                    captures,
+                    arms,
+                    outputs,
+                } => {
+                    let ty = env[input].clone();
+                    let start = actions.len();
+                    actions.push(ProgramAction::Branch {
+                        site: site.clone(),
+                        alternatives: vec![],
+                        ends: vec![],
+                    });
+                    let mut ends = Vec::new();
+                    let mut types = Vec::new();
+                    for (i, arm) in arms.iter().enumerate() {
+                        let mut child = captures
+                            .iter()
+                            .map(|(local, parent)| (local.clone(), env[parent].clone()))
+                            .collect::<BTreeMap<_, _>>();
+                        child.extend(
+                            arm.payload.iter().cloned().zip(
+                                ty.variant_payload(i)
+                                    .expect("admitted payload")
+                                    .iter()
+                                    .cloned(),
+                            ),
+                        );
+                        types =
+                            self.program_body(participant, &arm.body, child, Some(site), actions)?;
+                        ends.push(actions.len() - 1);
+                    }
+                    actions[start] = ProgramAction::Branch {
+                        site: site.clone(),
+                        alternatives: arms.iter().map(|a| a.alternative.clone()).collect(),
+                        ends,
+                    };
+                    env.extend(outputs.iter().cloned().zip(types));
+                    continue;
+                }
                 Instruction::Local {
                     site,
                     function,
@@ -353,11 +454,14 @@ impl Program {
                     };
                     continue;
                 }
-                Instruction::Yield(_) => ProgramAction::Yield {
-                    site: loop_site
-                        .ok_or_else(|| refuse("program-layout-yield"))?
-                        .into(),
-                },
+                Instruction::Yield(names) => {
+                    returned = names.iter().map(|n| env[n].clone()).collect();
+                    ProgramAction::Yield {
+                        site: region_site
+                            .ok_or_else(|| refuse("program-layout-yield"))?
+                            .into(),
+                    }
+                }
                 Instruction::ReturnIf {
                     site,
                     values,
@@ -376,6 +480,6 @@ impl Program {
             };
             actions.push(action);
         }
-        Ok(())
+        Ok(returned)
     }
 }

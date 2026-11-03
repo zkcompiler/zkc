@@ -8,6 +8,7 @@ public meta import ZkcTools.ConstructionBindings.Family
 public meta import ZkcTools.ConstructionBindings.TargetEquality
 public meta import ZkcTools.ConstructionBindings.StructuralFacts
 public meta import ZkcTools.ConstructionBindings.Syntax
+public meta import ZkcTools.ConstructionBindings.Normalization
 public meta import Lean.Elab.Tactic
 
 public meta section
@@ -173,21 +174,8 @@ private def applyWithLengths (goal : MVarId) (term : Expr) : TacticM (List MVarI
   goal.assign (← mkEqMP transport term)
   return (← getMVars (← instantiateMVars (mkMVar goal))).toList
 
-private def viewHead (expression : Expr) : MetaM Expr := do
-  let mut current := expression
-  repeat
-    current := (← instantiateMVars current).consumeMData
-    while current.isHeadBetaTarget do current := current.headBeta.consumeMData
-    if let .letE _ _ value body _ := current then
-      current := body.instantiate1 value
-      continue
-    if [``Domain.View.sequence, ``Domain.View.calculation, ``Domain.View.receive,
-        ``Domain.View.send, ``Domain.View.guard, ``Domain.View.helper, ``Domain.View.loop,
-        ``Domain.View.indicesEmpty, ``Domain.View.indicesAppend, ``Domain.View.observe,
-        ``Domain.View.challenge, ``Domain.View.localService, ``Domain.View.empty].any current.isAppOf then return current
-    let some unfolded ← unfoldDefinition? current | return current
-    current := unfolded
-  return current
+private def viewHead (expression : Expr) : MetaM Expr :=
+  TargetEquality.expose expression
 
 /-- Discover only the finite coordinate-building prefix. Its exact cells and
 instruction tree are subsequently checked by CoordinatePrefix. -/
@@ -933,7 +921,10 @@ private def discoverReturn (discovery : CutDiscovery) (expected : Expr) : Tactic
     let mut selected : Option Nat := none
     for suffix in discovery.suffixes, index in [:discovery.suffixes.size] do
       let candidate ← viewHead (mkApp suffix model)
-      if ← isDefEq view candidate then
+      -- Search the finite instruction vocabulary. Definitional equality of
+      -- mismatched views can unfold symbolic loop execution while looking
+      -- for a cut; the final application still checks the exact boundary.
+      if ← TargetEquality.matchBlock view candidate then
         selected := some index
         break
     let some index := selected | return
@@ -967,6 +958,20 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     let constructor ← mkConstWithFreshMVarLevels ``ConnectionCertificate.Certificate.mk
     let pending ← goal.apply (mkAppN constructor expected.getAppArgs)
     tracePhase "certificate fields"
+    -- A computed `.get` normal form duplicates symbolic state during later
+    -- meta reduction. Propose the finite literal once, then kernel-check its
+    -- exact association before any alignment search.
+    for field in pending do
+      let type ← instantiateMVars (← field.getType)
+      if let some (_, computation, result) := type.eq? then
+        if computation.isAppOf ``NormalForm.normalize && result.isAppOf ``Except.ok then
+          let form := result.getAppArgs.back!
+          if form.isMVar then
+            let literal ← unsafe Normalization.propose cache computation
+            let literal ← Syntax.normalize cache literal
+            form.mvarId!.assign literal
+          setGoals [field]
+          evalTactic (← `(tactic| kernel_rfl))
     let [alignment] ← tryReflexivity pending
       | throwError "alignment-normalization-failed"
     tracePhase "certificate normalized"
@@ -983,6 +988,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     -- expanding it destroys layout constructors needed by their generic laws
     -- and duplicates open substitutions without creating cacheable syntax.
     if args[index]!.hasFVar then continue
+    tracePhase s!"normalize index {index}"
     let start ← IO.monoMsNow
     args := args.set! index (← Syntax.freeze cache (← reducedSyntax cache args[index]!))
     let elapsed := (← IO.monoMsNow) - start
@@ -997,6 +1003,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
   tracePhase s!"source {source.getAppFn.constName?}"
   let target := args[14]!
   if source.isAppOf ``NormalForm.Form.apply then
+    tracePhase "application selection"
     let selection ← whnf args[4]!
     unless selection.isAppOf ``ConnectionLibrary.Selection.selected do
       throwError "alignment-unsupported-callee"
@@ -1008,6 +1015,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     let calleeType ← inferType parts[parts.size - 6]!
     let position ← whnf (← mkAppM ``Fin.val #[parts[parts.size - 6]!])
     let some position ← getNatValue? position | throwError "alignment-nonfinite-callee"
+    tracePhase "application callee"
     let callee ← Term.elabTerm (← `(⟨$(quote position), by decide +kernel⟩)) (some calleeType)
     Term.synthesizeSyntheticMVarsNoPostponing
     let signature := parts[parts.size - 5]!
@@ -1017,9 +1025,12 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     let next := parts.back!
     let key ← mkAppM ``NormalForm.calleeAt #[args[3]!, callee]
     let declared ← mkAppM ``NormalForm.CalleeKey.signature #[key]
+    tracePhase "application outputs"
     let types ← reducedSyntax cache (← mkAppM ``ProtocolSignature.outputs #[declared])
+    tracePhase "application returns"
     let selection ← returnSelection cache types next
     let continuationChecked ← mkEqRefl next
+    tracePhase "application target slices"
     let slices ← withLocalDeclD `sliceModel (mkConst ``DomainModel) fun model => do
       let mut current ← viewHead (mkApp target model)
       let mut views : Array Expr := #[]
@@ -1039,6 +1050,10 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     let mut candidates := if slices.isEmpty then [] else
       ((slices.size - 1) :: List.range (slices.size - 1)).flatMap candidatesFor
     let mut visited : List (Nat × Name) := []
+    let entry ← mkAppM ``ConnectionLibrary.Library.entry #[library, callee]
+    -- Both history rules inspect the same source Entry and target slice.
+    -- Cache only this syntactic prefilter, never a proof or a placement match.
+    let mut compatible : Array (Option Bool) := Array.replicate slices.size none
     let mut failure : MessageData := "no finite target slice"
     while !candidates.isEmpty do
       let (index, rule) := candidates.head!
@@ -1046,8 +1061,12 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
       if visited.contains (index, rule) then continue
       visited := (index, rule) :: visited
       let (spine, rest) := slices[index]!
-      let entry ← mkAppM ``ConnectionLibrary.Library.entry #[library, callee]
-      unless ← TargetPlacement.compatiblePrefix entry spine do
+      tracePhase s!"application prefix filter {index}/{slices.size}"
+      let allowed ← match compatible[index]! with
+        | some result => pure result
+        | none => TargetPlacement.compatiblePrefix entry spine
+      compatible := compatible.set! index (some allowed)
+      unless allowed do
         failure := "alignment-reusable-body-refused: target instruction schedule"
         continue
       search.found.set none
@@ -1166,6 +1185,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     -- Total source computations can normalize into the arguments of the next
     -- application. First try every checked callee slice, then account for an
     -- auxiliary calculation in the caller before reusing the callee family.
+    tracePhase "application candidates exhausted"
     let auxiliary ← withLocalDeclD `applicationModel (mkConst ``DomainModel) fun model => do
       let block ← viewHead (mkApp target model)
       unless block.isAppOf ``Domain.View.sequence do return false
@@ -1175,7 +1195,9 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
       staticGoal readback
       derive cache discovery tail
       return true
+    tracePhase "application auxiliary checked"
     if auxiliary then return
+    tracePhase "application refusing"
     throwError "alignment-callee-slice-refused: {failure}"
   if source.isAppOf ``NormalForm.Form.split then
     let parts := source.getAppArgs

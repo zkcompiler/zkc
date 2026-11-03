@@ -49,6 +49,26 @@ int main() {
                 a->second != b->second,
             "different instances merged or static arguments became strings");
       });
+  cases.run("installed templates have no captured source span", [] {
+    auto entry = close(R"(
+      protocol P roles(A)(x:index@A,y:index@A)->(sum:index@A){
+        let sum=x+y;return(sum=sum);
+      }
+    )");
+    auto report = inspect(entry);
+    bool found = false;
+    for (const auto &item : *report.getAsObject()->getArray("instances")) {
+      const auto &origin = *item.getAsObject()->getObject("template");
+      if (origin.getString("owner") != "zkc::prelude::index_add")
+        continue;
+      found = true;
+      require(origin.get("source") &&
+                  *origin.get("source") == json::Value(nullptr) &&
+                  origin.getArray("candidates")->empty(),
+              "installed declaration acquired a synthetic written span");
+    }
+    require(found, "installed addition instance was not inspected");
+  });
   cases.run(
       "scoped helpers use written nodes and explicit capture layouts", [] {
         auto entry = close(R"(

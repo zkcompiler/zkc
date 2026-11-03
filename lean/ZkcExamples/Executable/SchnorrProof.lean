@@ -105,7 +105,7 @@ theorem acceptance_selection : SchnorrProof.acceptance (F := F) (G := G) = scala
   | nil => rfl
   | cons head tail => cases head with
     | data payload => cases payload <;> rfl
-    | index | vector | transcript | indices | unsupported => rfl
+    | index | vector | custody | transcript | indices | unsupported => rfl
 
 /-- At the measured threshold the complete native observation agrees with the
 actual Domain reading, for all malformed and well-formed byte strings. -/

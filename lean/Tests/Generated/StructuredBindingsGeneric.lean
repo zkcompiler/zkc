@@ -69,7 +69,7 @@ noncomputable def protocol0Role0Form : Form protocol0Role0Signature.laws calleeK
 
 noncomputable def protocol0Role0Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.ret (.cons (.there .here) .nil)))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.ret (.cons (.there .here) .nil))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol0Role0_calls : protocol0Role0Form.CallsMatch := by
@@ -148,7 +148,7 @@ noncomputable def protocol0Role1Form : Form protocol0Role1Signature.laws calleeK
 
 noncomputable def protocol0Role1Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
-  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.ret (.cons (.there .here) .nil)))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
+  ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).callback (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (.ret (.cons (.there .here) .nil))) "round").bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
 theorem protocol0Role1_calls : protocol0Role1Form.CallsMatch := by

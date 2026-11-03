@@ -68,12 +68,32 @@ def query (entry site port contract owner : String) (request : Request) : Origin
 end Origin
 
 /-- One step of a native occurrence path: an application of a protocol at a
-site, or a repeat. -/
-structure Step where
-  kind : String
-  protocol : String
-  site : String
+site, a repeat, or the selected arm of a branch, which keeps the arm's exact
+declared alternative. A branch step precedes only events in that arm and adds
+no dynamic coordinate. -/
+inductive Step where
+  | apply (protocol site : String)
+  | «repeat» (protocol site : String)
+  | branch (protocol site alternative : String)
   deriving DecidableEq, Repr
+
+namespace Step
+
+/-- The step's tag in the canonical encoding: `apply`, `repeat` or `branch`. -/
+def kind : Step → String
+  | .apply .. => "apply"
+  | .repeat .. => "repeat"
+  | .branch .. => "branch"
+
+/-- The original protocol the step occurs in. -/
+def protocol : Step → String
+  | .apply protocol _ | .repeat protocol _ | .branch protocol _ _ => protocol
+
+/-- The original site of the application, repeat or branch. -/
+def site : Step → String
+  | .apply _ site | .repeat _ site | .branch _ site _ => site
+
+end Step
 
 /-- A native occurrence template, decoded from its canonical bytes
 `["zkc.native-origin-template/0", entry, steps, [], event]`. -/
@@ -124,6 +144,7 @@ execute directly. Helper invocations are separate `call` operations. -/
 inductive Calculation where
   | indexConstant (value : Nat)
   | indexEqual
+  | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
@@ -146,6 +167,10 @@ namespace Calculation
 def op : Calculation → Structured.Op
   | .indexConstant value => .indexConstant value
   | .indexEqual => .indexEqual
+  | .indexWrappingAdd => .indexWrappingAdd
+  | .indexWrappingSubtract => .indexWrappingSubtract
+  | .indexBitAnd => .indexBitAnd
+  | .indexLogicalShiftRight => .indexLogicalShiftRight
   | .fieldConstant domain value => .fieldConstant domain value
   | .fieldAdd domain => .fieldAdd domain
   | .fieldSubtract domain => .fieldSubtract domain
@@ -169,6 +194,10 @@ def op : Calculation → Structured.Op
 def ofOp? : Structured.Op → Option Calculation
   | .indexConstant value => some (.indexConstant value)
   | .indexEqual => some .indexEqual
+  | .indexWrappingAdd => some .indexWrappingAdd
+  | .indexWrappingSubtract => some .indexWrappingSubtract
+  | .indexBitAnd => some .indexBitAnd
+  | .indexLogicalShiftRight => some .indexLogicalShiftRight
   | .fieldConstant domain value => some (.fieldConstant domain value)
   | .fieldAdd domain => some (.fieldAdd domain)
   | .fieldSubtract domain => some (.fieldSubtract domain)

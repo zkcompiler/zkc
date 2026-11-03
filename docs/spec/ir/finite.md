@@ -226,7 +226,7 @@ Finite result dependencies close monotonically over repeated state transitions,
 including initial state, cardinality, predicate and captures. A single-step summary
 is insufficient for `(a,b) -> (b,item)`. Formation requirements remain separate
 from result dependencies. Consumers that clone a complete operation retain all
-operand dependencies until a checked decomposition supports narrower cloning.
+operand dependencies; narrower cloning requires a checked decomposition.
 
 ## Realization and checking
 
@@ -291,9 +291,9 @@ correspondence proposal because its selected comparison omits that algebra. Grou
 reduction selection likewise requires the scalar-ring/group-action fragment,
 field-vector or group-vector element domains (possibly zipped), and
 single-result helper calls. Extra indexed
-work or multi-result group helpers remain valid ordered computations until the
-independent group reader covers them. These are selection limits, not new source
-admission rules.
+work and multi-result group helpers remain valid ordered computations outside
+the independent group reader's coverage. These are selection limits, not new
+source admission rules.
 
 Field-additive folds also compose supported pointwise bodies with native sum.
 The pointwise expression must be independent of recurrent state and use the

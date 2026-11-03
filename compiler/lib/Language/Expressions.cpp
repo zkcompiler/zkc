@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "RecordIntrinsics.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
@@ -7,20 +8,38 @@
 #include <cassert>
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<ValueId> BodyChecker::expression(uint32_t id,
-                                               std::optional<Type> expected,
-                                               unsigned depth,
-                                               bool allowUntypedStop) {
+std::optional<ValueId>
+BodyChecker::expression(uint32_t id, std::optional<Type> expected,
+                        unsigned depth, bool allowUntypedStop,
+                        std::optional<ValuePlacement> placed,
+                        const ValuePlacement *schema) {
   assert((!protocol() || placement) &&
          "protocol expression requires a statement inference scope");
   SaveAndRestore completionScope(completionAllowed,
                                  completionAllowed && completionLoop == id);
+  SaveAndRestore<const ValuePlacement *> placementContext(
+      contextualPlacement, placed ? &*placed : nullptr);
+  SaveAndRestore<const ValuePlacement *> schemaContext(
+      contextualPlacementSchema, schema);
+  const bool expectedDataContract =
+      expected.has_value() && !placed &&
+      !(schema && std::holds_alternative<ProductPlacement>(schema->value));
   TypeScope types(*this, id, expected);
   if (!types)
     return {};
   if (!expected)
     expected = inferredType(id);
   auto result = evaluate(id, expected, depth, allowUntypedStop);
+  if (result && expectedDataContract && expected &&
+      !isLogicalValue(*expected) && product(*result)) {
+    fail("source.placement",
+         "distributed product requires an expected placed contract",
+         syntax.expressions[id].span);
+    return {};
+  }
+  if (result && placed &&
+      !matchPlacement(*result, *placed, syntax.expressions[id].span))
+    return {};
   if (result && retainExpressionValues) {
     if (!checker.types.charge(1, syntax.expressions[id].span))
       return {};
@@ -45,14 +64,23 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       fail("source.limit", "expression depth limit exceeded", expr.span);
     return {};
   }
+  SaveAndRestore<std::optional<uint32_t>> origin(
+      originatingExpression, expr.synthesized ? originatingExpression : id);
   using K = Expression::Kind;
   using T = Type::Kind;
   if (this->oracleMode() && !oracleExpression(expr))
     return {};
   const auto oracleMode = oracleEvaluation(expr.kind);
   if (syntax.layoutSyntax || this->oracleMode() || orderedRoot) {
-    bool ordered = expr.kind == K::MethodCall ||
-                   oracleMode == Statement::Evaluation::Ordered;
+    bool ordered =
+        (expr.kind == K::MethodCall && !inference->callees.count(id)) ||
+        oracleMode == Statement::Evaluation::Ordered;
+    if (expr.kind == K::Record) {
+      auto type = inferredType(id);
+      const auto *nominal =
+          type ? checker.types.typeDeclaration(*type) : nullptr;
+      ordered |= nominal && nominal->resource.has_value();
+    }
     if (auto found = inference->callees.find(id);
         found != inference->callees.end()) {
       const auto &callee =
@@ -64,10 +92,33 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
              expr.span);
         return {};
       }
-      ordered |= callee.kind == Declaration::Kind::Oracle ||
-                 callee.kind == Declaration::Kind::Local ||
-                 callee.kind == Declaration::Kind::EntryFunction ||
-                 (callee.generated && callee.generated->operation.has_value());
+      const auto *association =
+          checker.output.declarationIndex->association(callee.id);
+      if (isRecordIntrinsic(association)) {
+        ordered |=
+            association->rule != protocol::FrontendSignature::RecordUnpack;
+        if (!expr.children.empty()) {
+          auto source = inferredType(expr.children.front());
+          const auto *nominal =
+              source ? checker.types.typeDeclaration(*source) : nullptr;
+          ordered |=
+              nominal && (nominal->resource.has_value() ||
+                          (protocol() && source->kind == T::LogicalRecord &&
+                           !nominal->roles.empty()));
+        }
+      } else {
+        ordered |=
+            callee.kind == Declaration::Kind::Oracle ||
+            callee.kind == Declaration::Kind::Protocol ||
+            callee.kind == Declaration::Kind::Local ||
+            callee.kind == Declaration::Kind::EntryFunction ||
+            (callee.generated && callee.generated->operation.has_value());
+      }
+    }
+    if (bindingPattern && bindingPatternRoot == id) {
+      auto source = inferredType(id);
+      if (source)
+        ordered |= retiresCustody(*bindingPattern, *source);
     }
     if ((ordered && orderedRoot != id) || (!ordered && orderedRoot == id)) {
       fail("source.action",
@@ -97,10 +148,16 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
 
   } else if (expr.kind == K::Map) {
     result = bulk(expr, depth);
-  } else if (expr.kind == K::MethodCall) {
-    bool index = expr.text == "index", block = expr.text == "indices";
-    if (!protocol() || (expr.text != "draw" && !index && !block) ||
-        expr.children.size() != 1 ||
+  } else if (expr.kind == K::MethodCall && !inference->callees.count(id)) {
+    auto methods = protocol::serviceMethodDeclarations();
+    auto selected = llvm::find_if(
+        methods, [&](const auto &row) { return row.name == expr.text; });
+    bool index = selected != methods.end() &&
+                 selected->signature == protocol::ServiceSignature::RandomIndex,
+         block =
+             selected != methods.end() &&
+             selected->signature == protocol::ServiceSignature::RandomIndices;
+    if (!protocol() || selected == methods.end() || expr.children.size() != 1 ||
         expr.arguments.size() != (block   ? 2u
                                   : index ? 1u
                                           : 0u)) {
@@ -119,12 +176,10 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       result =
           emit(ServiceQuery{*root, {}}, port.field, {port.owner}, expr.span);
     } else {
-      if (!checker.types.entails(&decl,
-                                 CapabilityBound{block ? "IndexBlockRandomness"
-                                                       : "IndexRandomness",
-                                                 {port.field},
-                                                 expr.span},
-                                 "source.service"))
+      if (!checker.types.entails(
+              &decl,
+              CapabilityBound{selected->capability, {port.field}, expr.span},
+              "source.service"))
         return {};
       auto bound = checker.type(decl, expr.arguments.front());
       if (!bound)
@@ -334,6 +389,42 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
     fail("source.field", "constructor field count differs", expr.span);
     return {};
   }
+  std::optional<ValuePlacement> productPlacement;
+  if ((type.kind == T::Tuple || type.kind == T::Array) && contextualPlacement &&
+      std::holds_alternative<ProductPlacement>(contextualPlacement->value))
+    productPlacement = *contextualPlacement;
+  const auto *definition = checker.types.typeDeclaration(type);
+  const auto *structuralSchema =
+      contextualPlacementSchema
+          ? std::get_if<ProductPlacement>(&contextualPlacementSchema->value)
+          : nullptr;
+  if (type.kind == T::LogicalRecord && definition &&
+      !definition->roles.empty()) {
+    if (contextualPlacement)
+      productPlacement = *contextualPlacement;
+    if (expr.roles) {
+      SyntaxType target;
+      target.name = expr.text;
+      target.arguments = expr.arguments;
+      target.labels = expr.staticLabels;
+      target.roles = expr.roles;
+      target.span = expr.span;
+      auto explicitType = checker.placedType(decl, target);
+      if (!explicitType || !explicitType->placement)
+        return {};
+      if (productPlacement && *productPlacement != *explicitType->placement) {
+        fail("source.placement",
+             "constructor role application differs from context", expr.span);
+        return {};
+      }
+      productPlacement = explicitType->placement;
+    }
+  }
+  if (expr.roles && !productPlacement && type.kind != T::LogicalRecord) {
+    fail("source.roles", "role application requires a distributed constructor",
+         expr.span);
+    return {};
+  }
   std::vector<ValueId> values(fields.size());
   std::map<std::string, unsigned> fieldIndices;
   if (expr.kind == E::Record)
@@ -356,20 +447,112 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
     }
     // Evaluate each field exactly once, in source order.
     const bool inferred = expr.kind == E::Tuple && !expected;
-    auto v = expression(expr.children[i],
-                        inferred ? std::nullopt
-                                 : std::optional<Type>(fields[index].type),
-                        depth + 1);
+    const ValuePlacement *schema = nullptr;
+    if (!productPlacement) {
+      if (expr.kind == E::Record && fields[index].placement)
+        schema = &*fields[index].placement;
+      else if (structuralSchema)
+        schema = &structuralSchema->fields[type.kind == T::Array ? 0 : index];
+    }
+    auto v = expression(
+        expr.children[i],
+        inferred ? std::nullopt : std::optional<Type>(fields[index].type),
+        depth + 1, false,
+        productPlacement
+            ? std::optional(std::get<ProductPlacement>(productPlacement->value)
+                                .fields[type.kind == T::Array ? 0 : index])
+            : std::nullopt,
+        schema);
     if (!v || !use(*v, expr.span))
       return {};
     if (inferred)
       type.arguments[index] = body.values[v->index].type;
     values[index] = *v;
   }
+  auto selectFields = [&] {
+    const auto &product = std::get<ProductPlacement>(productPlacement->value);
+    for (unsigned i = 0; i < values.size(); ++i) {
+      const auto &field = product.fields[type.kind == T::Array ? 0 : i];
+      if (!matchPlacement(values[i], field, expr.span))
+        return false;
+      const auto *data = std::get_if<DataPlacement>(&field.value);
+      auto available = components(values[i]);
+      if (!data || !available.owners.empty() || available.roles == data->roles)
+        continue;
+      // The authored field has already transferred above. Retain its selected
+      // components explicitly without evaluating or moving that operand twice.
+      auto selected =
+          emit(Restriction{values[i], data->roles},
+               body.values[values[i].index].type, data->roles, expr.span);
+      if (!selected || !use(*selected, expr.span))
+        return false;
+      values[i] = *selected;
+    }
+    return true;
+  };
+  if ((isLogicalValue(type) || productPlacement || structuralSchema) &&
+      (type.kind == T::Tuple || type.kind == T::Array)) {
+    if (!productPlacement) {
+      ProductPlacement schema{typeIdentity(type), {}, {}};
+      std::set<unsigned> roles;
+      for (auto id : values) {
+        const auto &value = body.values[id.index];
+        const auto *legacy = checker.types.typeDeclaration(value.type);
+        if (value.type.kind == T::LogicalRecord && legacy &&
+            legacy->roles.empty()) {
+          fail("source.oracle-boundary",
+               "legacy logical families require separate ports", expr.span);
+          return {};
+        }
+        if (!value.placement) {
+          fail("source.placement-inference",
+               "product child has no concrete placement", expr.span);
+          return {};
+        }
+        auto participation = placementRoles(*value.placement);
+        roles.insert(participation.begin(), participation.end());
+        if (type.kind == T::Array && !schema.fields.empty()) {
+          if (schema.fields[0] != *value.placement) {
+            fail("source.placement",
+                 "array elements have different placed identities", expr.span);
+            return {};
+          }
+        } else
+          schema.fields.push_back(*value.placement);
+      }
+      schema.arguments.assign(roles.begin(), roles.end());
+      productPlacement =
+          checker.types.placement(type, schema, decl.roles.size(), expr.span);
+      if (!productPlacement)
+        return {};
+    }
+    if (!selectFields())
+      return {};
+    return emit(Construct{std::move(values), {}}, type,
+                placementRoles(*productPlacement), expr.span, productPlacement);
+  }
   const auto *nominal = checker.types.typeDeclaration(type);
-  if (!local() && nominal && nominal->resource) {
+  if (!local() && nominal && nominal->resource &&
+      !(protocol() && type.kind == T::LogicalRecord && orderedRoot &&
+        *orderedRoot == uint32_t(&expr - syntax.expressions.data()))) {
     fail("source.mode", "resource construction requires local mode", expr.span);
     return {};
+  }
+  if (type.kind == T::LogicalRecord && nominal && !nominal->roles.empty()) {
+    if (!protocol()) {
+      fail("source.oracle-boundary",
+           "distributed construction requires protocol mode", expr.span);
+      return {};
+    }
+    if (!productPlacement)
+      productPlacement = inferRecordPlacement(type, fields, values, expr.span);
+    if (!productPlacement)
+      return {};
+    if (!selectFields())
+      return {};
+    auto roles = placementRoles(*productPlacement);
+    return emit(Construct{std::move(values), {}}, type, roles, expr.span,
+                productPlacement);
   }
   if (type.kind == T::LogicalRecord) {
     if (!protocol() || !checker.types.logicalRecord(type, expr.span)) {
@@ -413,6 +596,13 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
         return {};
     return emit(Construct{std::move(values), {}}, type, family, expr.span);
   }
+  // Unit has no operands from which to derive placement. Retain its expected
+  // scope, including an empty distributed record's exact repacking payload.
+  if (protocol() && type.kind == T::Unit && contextualPlacement &&
+      std::holds_alternative<DataPlacement>(contextualPlacement->value))
+    return emit(Construct{std::move(values), {}}, type,
+                placementRoles(*contextualPlacement), expr.span,
+                *contextualPlacement);
   auto components = combine(values, expr.span);
   if (!components)
     return {};

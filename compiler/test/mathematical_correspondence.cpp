@@ -240,6 +240,71 @@ void polynomialMutations(MLIRContext &context) {
                      : "wrong fixed table passed");
   }
 }
+// Only P demands the selection: projection places it at P alone, and the
+// projected comparison reads it where P sends it.
+constexpr StringLiteral demandedSelection =
+    R"mlir(!F = !algebra.field<"bls12-381.fr">
+!Choice = !data.variant<#data.identity<["atom", "DemandedChoice"]>, [#data.alternative<"none">, #data.alternative<"some", [!F]>]>
+module { "protocol.module"() ({
+  "protocol.func"() ({
+  ^entry(%choice:!Choice, %other:!Choice, %x:!F, %y:!F):
+    %selected = "data.branch"(%choice,%x,%y) ({
+    ^none(%left:!F,%right:!F):
+      "data.yield"(%left) : (!F)->()
+    }, {
+    ^some(%payload:!F,%left:!F,%right:!F):
+      %sum = algebra.field_add %payload,%right : (!F,!F)->!F
+      "data.yield"(%sum) : (!F)->()
+    }) {alternatives=["none","some"]} : (!Choice,!F,!F)->!F
+    %received = protocol.exchange %selected {site="selected",sender="P",receiver="V"} : !F
+    "protocol.return"(%received) : (!F)->()
+  }) {sym_name="main",function_type=(!Choice,!Choice,!F,!F)->!F,roles=["P","V"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })mlir";
+Operation *selection(ModuleOp module, StringRef role) {
+  Operation *result = nullptr;
+  unsigned count = 0;
+  module.walk([&](data::BranchOp op) {
+    auto participant = op->getParentOfType<protocol_ir::ParticipantOp>();
+    if (participant && participant.getRole() == role) {
+      result = op;
+      ++count;
+    }
+  });
+  require(count <= 1, "more than one projected selection");
+  return result;
+}
+void demandedSelections(MLIRContext &context) {
+  auto source = parseSourceString<ModuleOp>(demandedSelection, &context);
+  require(bool(source), "selection fixture refused");
+  auto projected = copy(*source);
+  run(*projected, protocol::createProjectProtocolPass(false));
+  require(selection(*projected, "P") && !selection(*projected, "V"),
+          "projection did not place the selection where it is demanded");
+  require(
+      succeeded(mathematical::verifyProjectionPreserved(*source, *projected)),
+      "selection demanded by one role refused");
+  negative(*source, *projected, "selected arm yields another capture",
+           [](ModuleOp m) {
+             auto &arm = selection(m, "P")->getRegion(0).front();
+             arm.back().setOperand(0, arm.getArgument(1));
+           });
+  negative(*source, *projected, "selector substituted", [](ModuleOp m) {
+    auto *selected = selection(m, "P");
+    selected->setOperand(0, selected->getBlock()->getArgument(1));
+  });
+  negative(*source, *projected, "payload association substituted",
+           [](ModuleOp m) {
+             auto &arm = selection(m, "P")->getRegion(1).front();
+             arm.front().setOperand(0, arm.getArgument(1));
+           });
+  negative(*source, *projected, "consumer bypasses the selection",
+           [](ModuleOp m) {
+             auto *send = site(m, "selected", "P");
+             send->setOperand(0, send->getBlock()->getArgument(2));
+           });
+  negative(*source, *projected, "selection consumer dropped",
+           [](ModuleOp m) { site(m, "selected", "P")->erase(); });
+}
 
 } // namespace
 int main() {
@@ -250,6 +315,7 @@ int main() {
   rewrites(context);
   substitutions(context);
   polynomialMutations(context);
+  demandedSelections(context);
   auto source = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(source), "source fixture refused");
   auto projected = copy(*source);

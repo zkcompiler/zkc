@@ -48,10 +48,10 @@ def left_residual (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     Derivation absorb (boundedEscape charge)
       (fun _ output => GkrRoundsResidual.NoReturn (n := 1) service
         (GkrRoundsBinding.initial (raw rho) (reference rho) (wrongClaim rho)) output)
-      history (protocol0Role1Process (leftContext ctx) none none none none (some [])
+      history (protocol0Role1Process (leftContext ctx) none none none none (some 0) (some [])
         (some (wrongClaim rho)) (some 1) (some service)) :=
   GkrRoundsResidual.verifier_residual service 1 (by decide) (leftContext ctx)
-    (left_distinct ctx distinct) none none none none (raw rho) (reference rho)
+    (left_distinct ctx distinct) none none none none 0 (raw rho) (reference rho)
     (wrongClaim rho) (represented rho) (wrong_control rho) queries sampling history
 
 /-- The discharged actual call equation binds precisely the original suffix. -/

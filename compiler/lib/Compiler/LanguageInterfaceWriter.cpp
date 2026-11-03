@@ -12,9 +12,6 @@
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
-std::string digest(StringRef bytes) {
-  return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-}
 Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
                      StringRef original, StringRef toolchain,
                      const Limits &limits) {
@@ -114,18 +111,34 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
     }
     auto found = identities.find(&layout);
     if (found == identities.end()) {
-      auto key = typeIdentity(layout.type);
-      if (!charge(key.size())) {
+      if (!charge(layout.identity.key.size())) {
         out.value(nullptr);
         return;
       }
-      found = identities.emplace(&layout, digest(key)).first;
+      found = identities.emplace(&layout, layout.identity.digest).first;
     }
     out.object([&] {
       out.attribute("kind", typeKindName(layout.type.kind));
       out.attribute("identity", found->second);
+      out.attribute("generated", layout.generatedIdentity.empty()
+                                     ? json::Value(nullptr)
+                                     : json::Value(layout.generatedIdentity));
       out.attribute("type", display);
-      out.attribute("custody", layout.custody);
+      out.attribute("custody", layout.custodyCount);
+      out.attribute("sealed", layout.sealed);
+      out.attributeArray("roles", [&] {
+        for (const auto &role : layout.roleParameters) {
+          if (!charge(role.size() + 1))
+            break;
+          out.value(role);
+        }
+      });
+      out.attributeBegin("element");
+      if (layout.element)
+        schema(*layout.element, port);
+      else
+        out.value(nullptr);
+      out.attributeEnd();
       out.attribute("constructible", layout.constructible);
       out.attributeArray("permissions", [&] {
         if (layout.permissions.copy)
@@ -140,6 +153,20 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
           out.object([&] {
             out.attribute("name", field.name);
             out.attribute("offset", field.offset);
+            out.attribute("public", field.isPublic);
+            out.attributeBegin("placement");
+            if (field.placement) {
+              auto external = externalPlacement(*field.layout, *field.placement,
+                                                remaining, limits);
+              if (!external) {
+                staticFailure =
+                    joinErrors(std::move(staticFailure), external.takeError());
+                out.value(nullptr);
+              } else
+                out.value(encodeInterfacePlacement(*external));
+            } else
+              out.value(nullptr);
+            out.attributeEnd();
             if (field.maximumRows)
               out.attribute("maximum_rows", std::to_string(*field.maximumRows));
             out.attributeBegin("schema");
@@ -170,7 +197,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         out.attributeEnd();
       }
       out.attributeArray("leaves", [&] {
-        if (layout.type.kind == Type::Kind::LogicalRecord)
+        if (logicalLayout(layout))
           return;
         for (auto &leaf : layout.leaves) {
           if (leaf.oracle())
@@ -187,8 +214,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
       });
     });
   };
-  auto ports = [&](const Declaration &protocol, StringRef name,
-                   ArrayRef<Port> source,
+  auto ports = [&](const Declaration &, StringRef name, ArrayRef<Port> source,
                    ArrayRef<std::shared_ptr<const Layout>> portLayouts) {
     unsigned flat = 0;
     out.attributeArray(name, [&] {
@@ -204,25 +230,49 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         out.object([&] {
           out.attribute("name", source[i].name);
           out.attribute("type", spelling(source[i].type));
-          out.attributeArray("roles", [&] {
-            for (unsigned role : source[i].roles)
-              out.value(protocol.roles[role]);
-          });
           out.attribute("index", i);
-          if (source[i].oracle) {
-            const auto &port = *source[i].oracle;
-            out.attribute("holder", protocol.roles[port.holder]);
-            if (source[i].type.kind != Type::Kind::LogicalRecord)
-              out.attribute(
-                  "maximum_rows",
-                  port.maximumRows
-                      ? json::Value(std::to_string(
-                            port.maximumRows->dimension.closedValue()))
-                      : json::Value(nullptr));
+          auto placed = sourcePortPlacement(source[i], *observed);
+          if (!placed) {
+            staticFailure =
+                joinErrors(std::move(staticFailure), placed.takeError());
+          } else {
+            auto external =
+                externalPlacement(*portLayouts[i], *placed, remaining, limits);
+            if (!external)
+              staticFailure =
+                  joinErrors(std::move(staticFailure), external.takeError());
+            else
+              out.attribute("placement", encodeInterfacePlacement(*external));
           }
+          if (isOracleHandle(source[i].type)) {
+            const auto &port = source[i].oracle;
+            out.attribute("maximum_rows",
+                          port && port->maximumRows
+                              ? json::Value(std::to_string(
+                                    port->maximumRows->dimension.closedValue()))
+                              : json::Value(nullptr));
+          }
+          auto components =
+              sourcePortComponents(source[i], *observed, flat, remaining);
+          if (!components)
+            staticFailure =
+                joinErrors(std::move(staticFailure), components.takeError());
+          else
+            out.attributeArray("components", [&] {
+              for (const auto &component : *components)
+                out.object([&] {
+                  out.attributeArray("path", [&] {
+                    for (unsigned index : component.path)
+                      out.value(index);
+                  });
+                  out.attribute("leaf", component.leaf);
+                  out.attribute("role", component.role);
+                  out.attribute("facet", componentFacetName(component.facet));
+                  out.attribute("native", component.native);
+                });
+            });
           out.attributeArray("native", [&] {
-            unsigned count = observed->size();
-            for (unsigned j = 0; j < count; ++j)
+            for (unsigned j = 0; j < observed->size(); ++j)
               out.value(flat++);
           });
           out.attributeBegin("schema");
@@ -307,8 +357,18 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
       out.attribute("prover", protocol.roles[proof->prover]);
       out.attribute("verifier", protocol.roles[proof->verifier]);
       out.attributeArray("public", [&] {
-        for (unsigned index : proof->publicInputs)
-          out.value(index);
+        for (const auto &input : proof->publicInputs) {
+          if (!charge(input.path.size() + 1))
+            return;
+          out.object([&] {
+            out.attribute("port", input.port);
+            out.attributeArray("path", [&] {
+              for (auto step : input.path)
+                out.value(step);
+            });
+            out.attribute("role", protocol.roles[input.role]);
+          });
+        }
       });
       out.attributeBegin("acceptance");
       selector(protocol, proof->acceptance);
@@ -366,10 +426,17 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
     });
     out.attributeArray("protocols", [&] {
       for (const auto &protocol : entry.declarations()) {
-        if (!protocol.body || protocol.kind != Declaration::Kind::Protocol)
+        if (!isClosedConcreteProtocol(protocol))
           continue;
         if (!charge(protocol.symbol.size() + 1))
           break;
+        auto common =
+            sourceCommonRequirements(entry, protocol, remaining, limits);
+        if (!common) {
+          staticFailure =
+              joinErrors(std::move(staticFailure), common.takeError());
+          break;
+        }
         const auto &record = declared.at(protocol.id.index);
         out.object([&] {
           out.attribute("symbol", protocol.symbol);
@@ -379,10 +446,19 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
           });
           ports(protocol, "inputs", protocol.inputs, record.inputs);
           ports(protocol, "outputs", protocol.outputs, record.outputs);
+          out.attribute("common_input_requirements",
+                        encodeCommonRequirements(*common, protocol.roles));
           out.attributeArray("services", [&] {
             unsigned native = 0;
-            for (const auto &layout : record.inputs)
-              native += layout->leaves.size();
+            for (const auto &input : protocol.inputs) {
+              auto observed = layouts.protocolPort(input);
+              if (!observed) {
+                staticFailure =
+                    joinErrors(std::move(staticFailure), observed.takeError());
+                break;
+              }
+              native += observed->size();
+            }
             for (const auto &service : protocol.services) {
               if (!charge(service.name.size() + service.contract.size() + 1))
                 break;

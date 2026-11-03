@@ -29,7 +29,7 @@ theorem layout_encodes {width : Nat} (add mul below point : List F)
     (small : width + width + width < 64) :
     let state := GkrRoundsLayout.state
       (fixPrefix width a (coordinates width point)) (fixPrefix width m (coordinates width point)) v v
-    invoke (helpers (G := G)) GkrSourceBodies.helper36Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper66Helper
       (CollectionGoals.Layout.Inputs.pack { add, mul, point, below, width }) =
         .done (CollectionGoals.Layout.encode (ringModel F G)
           { addValues := GkrRoundsLayout.encode state.add,

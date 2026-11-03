@@ -1,6 +1,7 @@
 #ifndef ZKC_CONTRACTS_SERVICES_H
 #define ZKC_CONTRACTS_SERVICES_H
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -14,40 +15,42 @@ namespace zkc::protocol {
 // independently select execution and its registered interpretation.
 enum class ServiceFamily { Random };
 struct SourceService {
-  llvm::StringLiteral module, name;
+  llvm::StringRef module, name;
   ServiceFamily family;
   unsigned parameters;
 };
-inline constexpr SourceService sourceServices[] = {
-    {"zkc::prelude", "Random", ServiceFamily::Random, 1}};
+inline const std::vector<SourceService> sourceServices = [] {
+  std::vector<SourceService> rows;
+  for (const auto &declaration : frontendDeclarations())
+    if (declaration.rule == FrontendSignature::RandomConstructor)
+      rows.push_back(
+          {declaration.module, declaration.name, ServiceFamily::Random, 1});
+  return rows;
+}();
 inline const SourceService *sourceService(llvm::StringRef qualifiedName) {
-  auto [module, name] = qualifiedName.rsplit("::");
-  for (const auto &service : sourceServices)
-    if (service.module == module && service.name == name)
-      return &service;
+  auto *association = frontendDeclaration(qualifiedName);
+  if (!association || association->rule != FrontendSignature::RandomConstructor)
+    return nullptr;
+  for (const auto &row : sourceServices)
+    if (row.module == association->module && row.name == association->name)
+      return &row;
   return nullptr;
 }
-// Installed random-service signatures. Contracts identify distributions;
-// registry references separately authenticate the actual provider root.
+// Installed random-service signatures: the catalog's random-service rows, in
+// declared order. Contracts identify distributions; registry references
+// separately authenticate the actual provider root.
 struct RandomService {
-  llvm::StringLiteral contract, field;
+  llvm::StringRef contract, field;
 };
-inline constexpr RandomService randomServices[] = {
-    {"random.bls12-381.fr/0", "bls12-381.fr"},
-    {"random.bn254.fr/0", "bn254.fr"},
-    {"random.ristretto255.scalar/0", "ristretto255.scalar"},
-    {"random.koala-bear.ext8-binomial3/0", "koala-bear.ext8-binomial3"},
-    {"random.koala-bear.ext4-binomial3/0", "koala-bear.ext4-binomial3"},
-    {"random.baby-bear.ext4-binomial11/0", "baby-bear.ext4-binomial11"},
-    {"random.goldilocks.ext2-binomial7/0", "goldilocks.ext2-binomial7"}};
+llvm::ArrayRef<RandomService> randomServices();
 inline llvm::StringRef randomServiceField(llvm::StringRef contract) {
-  for (const auto &service : randomServices)
+  for (const auto &service : randomServices())
     if (service.contract == contract)
       return service.field;
   return {};
 }
 inline llvm::StringRef randomServiceContract(llvm::StringRef field) {
-  for (const auto &service : randomServices)
+  for (const auto &service : randomServices())
     if (service.field == field)
       return service.contract;
   return {};
@@ -76,31 +79,31 @@ inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
   auto field = randomServiceField(contract);
   if (field.empty())
     return {};
-  if (method == "draw")
-    return ServiceMethod{{}, {"field", field.str(), {}}};
-  if (method == "index" &&
-      installedDomains().hasFact("IndexRandomness", {field.str()}))
-    return ServiceMethod{{{"index", {}, {}}}, {"index", {}, {}}};
-  if (method == "indices" &&
-      installedDomains().hasFact("IndexBlockRandomness", {field.str()}))
-    return ServiceMethod{{{"index", {}, {}}, {"index", {}, {}}},
-                         {"indices", {}, {}}};
+  for (const auto &row : serviceMethodDeclarations()) {
+    if (row.name != method ||
+        (!row.capability.empty() &&
+         !installedDomains().hasFact(row.capability, {field.str()})))
+      continue;
+    switch (row.signature) {
+    case ServiceSignature::RandomDraw:
+      return ServiceMethod{{}, {"field", field.str(), {}}};
+    case ServiceSignature::RandomIndex:
+      return ServiceMethod{{{"index", {}, {}}}, {"index", {}, {}}};
+    case ServiceSignature::RandomIndices:
+      return ServiceMethod{{{"index", {}, {}}, {"index", {}, {}}},
+                           {"indices", {}, {}}};
+    }
+  }
   return {};
 }
+// The challenge field of an installed transcript suite. A suite has one
+// exactly when the catalog declares it as a Transcript domain; the target
+// still admits each transcript operation it executes.
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {
-  // Native proof support is an explicit policy; the catalog owns the field.
-  if (suite == "merlin3.bls12-381.fr64be/0" ||
-      suite == "spongefish0.8.0.keccak.bls12-381.fr64be/0" ||
-      suite == "merlin3.ristretto255.scalar64le/0" ||
-      suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0" ||
-      suite == "merlin3.baby-bear.ext4-binomial11.rejection31le/0" ||
-      suite == "merlin3.goldilocks.ext2-binomial7.rejection64le/0" ||
-      suite == "hash-chain.keccak256.bls12-381.fr64be/0" ||
-      suite ==
-          "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0" ||
-      suite == "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0")
-    return installedDomains().associatedIdentity(suite, "ChallengeField");
-  return {};
+  const auto &catalog = installedDomains();
+  if (catalog.identitySort(suite) != "Transcript")
+    return {};
+  return catalog.associatedIdentity(suite, "ChallengeField");
 }
 } // namespace zkc::protocol
 #endif

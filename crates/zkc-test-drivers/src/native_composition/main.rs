@@ -384,10 +384,9 @@ fn main() {
                         .unwrap_or_else(|| panic!("{name}: capacity {kind} did not stop"));
                     let expected = match kind {
                         "work" => "artifact-stopped:Limit",
-                        "live" => "artifact-input-bytes-limit",
-                        // Loading work shares the cumulative byte ceiling; wire
-                        // scanning is charged before reserving decoded values.
-                        "total" => "artifact-input-work-limit",
+                        // The record bounds the invocation root, whose first
+                        // byte charge is the binding root.
+                        "live" | "total" => "native-proof-binding-bytes-limit",
                         "wire" => "native-capacity-wire",
                         _ => "native-wire-limit",
                     };
@@ -542,11 +541,24 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
             let below = if low > 0 {
                 let error = probe(low - 1).unwrap_err();
                 let expected: &[&str] = match kind {
+                    // Instructions and iterations are each runner's own fuel.
                     "instructions" | "iterations" => &["execution:artifact-stopped:Limit"],
-                    "live" | "total" => &[
+                    // The record's byte fields bound the invocation root,
+                    // which holds the Host's charges and the runner's
+                    // together: below a boundary a root charge refuses with
+                    // its item's bytes code, or the runner stops with its own
+                    // limit stop, never a generic limit. The live boundary is
+                    // the loaded pool or the binding root's retained
+                    // encoding; the fresh boundary is a proof transport
+                    // charge, which reports the transport item's code rather
+                    // than the proof format's.
+                    "live" => &[
                         "admission:artifact-input-bytes-limit",
+                        "admission:native-proof-binding-bytes-limit",
+                    ],
+                    "total" => &[
+                        "execution:proof-transport-bytes-limit",
                         "execution:artifact-stopped:Limit",
-                        "execution:exhausted:output-bytes",
                     ],
                     "wire" => &[
                         "admission:native-capacity-wire",

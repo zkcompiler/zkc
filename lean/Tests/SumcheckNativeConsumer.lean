@@ -30,21 +30,21 @@ def honestRun (budget : Nat) (values : List F) (rounds : Nat) : Bool :=
 include roundtrip bounded bindingLength
 
 theorem selected_honest (rounds : Fin 3) (values : List F) (shaped : values.length = 2 ^ rounds.val) :
-    honestRun oracle decode encode binding initial (72 + 59 * rounds.val) values rounds.val = true := by
+    honestRun oracle decode encode binding initial (76 + 59 * rounds.val) values rounds.val = true := by
   exact SumcheckCompleteness.honest_accepted oracle decode encode roundtrip bounded _ binding bindingLength
     values rounds.val (by rw [SumcheckProof.maximum_eq]; exact Nat.le_of_lt_succ rounds.isLt)
     shaped initial (by rw [SumcheckCharges.charge_eq])
 
 theorem zero_honest (value : F) :
-    honestRun oracle decode encode binding initial 72 [value] 0 = true :=
+    honestRun oracle decode encode binding initial 76 [value] 0 = true :=
   selected_honest oracle decode encode roundtrip bounded binding bindingLength initial 0 [value] (by simp)
 
 theorem one_honest (low high : F) :
-    honestRun oracle decode encode binding initial 131 [low,high] 1 = true :=
+    honestRun oracle decode encode binding initial 135 [low,high] 1 = true :=
   selected_honest oracle decode encode roundtrip bounded binding bindingLength initial 1 [low,high] (by simp)
 
 theorem two_honest (a b c d : F) :
-    honestRun oracle decode encode binding initial 190 [a,b,c,d] 2 = true :=
+    honestRun oracle decode encode binding initial 194 [a,b,c,d] 2 = true :=
   selected_honest oracle decode encode roundtrip bounded binding bindingLength initial 2 [a,b,c,d] (by simp)
 
 omit encode roundtrip bounded bindingLength in

@@ -123,8 +123,30 @@ theorem operationOn_interpret (operations : PIR.OperationInterpretation I J)
     cases args; cases bodies
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values model.Value []))).interpret operations =
       (rightSites.mark site).bind (fun _ => .done Values.nil)
-    simp only [PIR.Process.interpret_bind, sites site, PIR.Process.interpret]
-  | indexEqual | indexLess | indexPowerOfTwo | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+    simp only [PIR.Process.interpret_bind, sites.mark site, PIR.Process.interpret]
+  | createUnit slot =>
+    cases args; cases bodies
+    change ((leftSites.createUnit slot).bind (fun token =>
+        .done (Values.cons token Values.nil : Values model.Value [.resourceUnit slot]))).interpret operations =
+      (rightSites.createUnit slot).bind (fun token => .done (.cons token .nil))
+    simp only [PIR.Process.interpret_bind, sites.createUnit slot, PIR.Process.interpret]
+  | passUnit slot =>
+    cases args with
+    | cons token rest =>
+      cases rest; cases bodies
+      change ((leftSites.passUnit slot token).bind (fun next =>
+          .done (Values.cons next Values.nil : Values model.Value [.resourceUnit slot]))).interpret operations =
+        (rightSites.passUnit slot token).bind (fun next => .done (.cons next .nil))
+      simp only [PIR.Process.interpret_bind, sites.passUnit slot token, PIR.Process.interpret]
+  | consumeUnit slot =>
+    cases args with
+    | cons token rest =>
+      cases rest; cases bodies
+      change ((leftSites.consumeUnit slot token).bind (fun _ =>
+          .done (Values.nil : Values model.Value []))).interpret operations =
+        (rightSites.consumeUnit slot token).bind (fun _ => .done .nil)
+      simp only [PIR.Process.interpret_bind, sites.consumeUnit slot token, PIR.Process.interpret]
+  | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with
     | cons a rest => cases rest with

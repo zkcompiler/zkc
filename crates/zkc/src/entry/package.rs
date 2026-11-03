@@ -5,7 +5,7 @@ use std::sync::Arc;
 const PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const ORIGINAL_BYTES: usize = 16 * 1024 * 1024;
 pub(super) const INTERFACE_BYTES: usize = 4 * 1024 * 1024;
-const ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
 /// Fixed bounds of the native package publication contract. Native execution
 /// independently admits each expression asset and its registry capacity.
 pub(super) const ASSET_COUNT: usize = 256;

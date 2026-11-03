@@ -112,7 +112,7 @@ private def runDiagnostics : IO Unit := do
 
 private def arr (values : List Lean.Json) := Lean.Json.arr values.toArray
 private def wire : List Lean.Json := [.str "zkc.structured-source/0", .str "original",
-  .str digest, .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []], arr [arr [], arr []]]
+  .str digest, .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []], arr [arr [], arr [], arr []]]
 private def selectorWire : Lean.Json := arr [.str "input", Lean.toJson (0 : Nat), .str "P"]
 private def applicationWire := arr [.str "Equal", arr [selectorWire]]
 private def clauseWire := arr [.str "target", .str "claim", applicationWire, .null,
@@ -126,6 +126,16 @@ private def runWire : IO Unit := do
     ("eleven", (Format.snapshot (arr wire)).isOk),
     ("ten-refused", refusal (Format.snapshot (arr (wire.take 10))) "structured-envelope"),
     ("twelve-refused", refusal (Format.snapshot (arr (wire ++ [Lean.Json.null]))) "structured-envelope"),
+    -- The current carrier includes authorities; the old two-table shape refuses.
+    ("declarations-two-tables-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr [], arr []]))))
+        "component-declaration"),
+    ("declarations-one-table-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr []])))) "component-declaration"),
+    ("declarations-four-tables-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr [], arr [], arr [], arr []])))) "structured-origin-list-limit"),
+    ("declarations-three-slots-refused",
+      refusal (Format.snapshot (arr (wire.set 10 (arr [arr [], arr [], .null])))) "structured-origin-array"),
     ("formula-field", (Format.relation (arr relationWire)).isOk),
     ("relation-missing", refusal (Format.relation (arr (relationWire.take 9))) "structured-relation"),
     ("relation-extra", refusal (Format.relation (arr (relationWire ++ [Lean.Json.null]))) "structured-relation"),

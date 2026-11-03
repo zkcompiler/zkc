@@ -26,7 +26,7 @@ production correctness theorem.
 | SDK discovery and dependency isolation | `just test-sdk` | Small static/shared CMake fixtures; no LLVM installation needed |
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
-| Documentation | `just test-docs` | Links, fragments and reachability |
+| Documentation | `just test-docs` | Links, fragments, reachability and fixture digest tables |
 | Installed Rust SDK | `nix build .#checks.x86_64-linux.rust-consumer` | Staged SDK and Unicode sources, independent normal-feature Rust consumer; prepared execution outside checkout without compiler or CLI |
 | Installed CLI | `nix build .#checks.x86_64-linux.application` | Check source, compile, inspect, prove and verify outside the checkout |
 | Formatting and lint | `just lint` | C++, Rust and Nix formatting; Clippy, Ruff, Just and workflow syntax |
@@ -62,6 +62,45 @@ uv run --no-sync --locked pytest common/tests --collect-only
 The `harness`, `sdk` and `integration` selections are disjoint. `checks.project` in Nix invokes `integration` against packaged tools; separate derivations own the harness, SDK discovery, compiler, Rust, installed consumer and style checks. The integration suite executes the [published walkthrough](../../docs/getting-started.md) directly.
 
 `python3 common/tests/run.py style` checks source formatting and syntax without project builds. `lint` adds C++ formatting and Clippy. Install checks live in `check_sdk.py` and `check_domain.py`; `check_install.py` exercises the packaged application outside the checkout. Domain checks prepare isolated base/domain builds or validate explicitly selected existing builds with `--skip-build`.
+
+### Fresh compiler pairing
+
+Seven ignored Cargo tests pair the SDK with a freshly built compiler. They
+compile real sources through `language-package`, then admit and execute the
+actual packages: published common-input inventories and the contexts the SDK
+produces for them, collection extents, Entry component families, typed Host
+children, a Function's proof child completing on a later attempt and the
+generated Host of a full 1,024-role roster under a raised interface selection.
+One more pairs the CLI with the compiler: it compiles, inspects, prepares and
+runs that Host under `--interface-limits`.
+Hand-built SDK fixtures cannot satisfy them. Build the compiler first, then run them explicitly:
+
+```sh
+ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc --features cpu,files --test common_inventory_compiler --test entry_components -- --ignored
+ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc-cli -- --ignored
+```
+
+### Compiler-produced interface fixtures
+
+The [language-interface](../../compiler/test/fixtures/language-interface/README.md),
+[Entry component](../../compiler/test/fixtures/entry-components/README.md),
+[common-input](../../compiler/test/fixtures/common-inputs/README.md) and
+[FRI interface](../../crates/zkc/src/entry/interface/tests/fixtures/README.md)
+fixtures are compiler output, and each JSON interface records the producing
+build's toolchain identity. Consumers testing schema structure take that
+identity as a fixture parameter, so a compiler edit that changes only the
+identity needs no regeneration. After a change to the interface schema, the
+native printing or a fixture's construction, regenerate all of them from one
+named build:
+
+```sh
+python3 scripts/regenerate-interface-fixtures.py build/compiler
+```
+
+The [script](../../scripts/regenerate-interface-fixtures.py) runs the compiler
+producers and `zkc-compile`, then recomputes the `Current fixture SHA-256` table
+of each fixture guide. `just test-docs` compares every such table with the
+retained bytes, so an edited fixture or a stale table fails.
 
 ### CPU worker confinement
 

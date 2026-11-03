@@ -30,6 +30,11 @@ python3 lean/bridges/common/verify_tests.py --output build/common-requests
 python3 lean/bridges/common/intent_tests.py --compiler build/compiler/zkc-compile --output build/common-intent
 ```
 
+`check.py` also runs the shared program byte corpus through the native decoder
+beside the reference tool and then the Lean program reader
+([`executable/corpus.py`](../executable/README.md#program-byte-corpus)), and
+records the agreement counts in its report.
+
 The native comparison reads original SSA independently of the export. Both
 references use the existing Structured tool's BLS scalar field, with an additive
 group model. The former Common differential executable used Z/97. Its independent
@@ -61,7 +66,11 @@ python3 lean/bridges/common/verify.py \
 ```
 
 `--module NAME=PATH --subject MODULE::PROTOCOL` obtains a fresh native Structured
-export instead. The versioned request selects a registered mathematical
+export instead. The modules' source format is the selection the SDK's project
+inspection reports for the packages that list them; only a fixture no package
+lists takes its declaration in `fixture-formats.toml`. `--source-format` states
+it explicitly for sources neither declares, such as an edited copy
+(`source_format.py`). The versioned request selects a registered mathematical
 contract, its exact properties and experiment, verifier role, nominal domains,
 input availability and wiring. Unknown or unsupported requests stay unresolved.
 
@@ -88,6 +97,12 @@ validity. Missing-input and foreign-role behavior have separate Structured
 participant controls. Open-process equalities retain every independent reply,
 continuation, handler state, event and stop; honest-message restrictions are
 confined to the mathematical experiment or theorem premises.
+
+Resource failures leave an incomplete obligation: `proof-budget` covers
+wall-clock, heartbeat, recursion and memory limits, and `proof-interrupted`
+covers signal termination. Neither is `correspondence-unproved`, and neither
+can pass a semantic-mutation control. Ordinary proof refusals still require
+the expected equation or alignment diagnostic.
 
 Success remains **`verified-in-model`**. It is neither a canonical established
 claim nor native security. Receipts retain the exact registered experiment and

@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.Generated.SchnorrRandomizedPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:883440afaef9b69c73fe0832c7d8c4d13076b1cc1d3b64f65060fa01f5eac158"
-  candidate := "sha256:6d8cb0a22dd69646cc21791df7a995f0c5a02b77ab78cb52c7f017fb77875409"
+  source := "sha256:e0e6520563aadb939aaac48414f14606e424c87e3c4f63d287e31479eb6f4d13"
+  candidate := "sha256:541268dea4cc1b1af6210452e2da74d30a261e09fa9cc7df43b96ec372d36e6e"
   policy := ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [4], [0, 1], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -32,14 +32,19 @@ def participant : Participant where
   returned := [16]
   servicePorts := [⟨"service_3", "role00000000", 3, 3, "random.bls12-381.fr/0"⟩]
 
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [⟨"random.bls12-381.fr/0", "bls12-381.fr", ["draw"]⟩] }
+
 end ZkcExamples.Construction.Generated.SchnorrRandomizedPair.Producer
 
 namespace ZkcExamples.Construction.Generated.SchnorrRandomizedPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:883440afaef9b69c73fe0832c7d8c4d13076b1cc1d3b64f65060fa01f5eac158"
-  candidate := "sha256:6d8cb0a22dd69646cc21791df7a995f0c5a02b77ab78cb52c7f017fb77875409"
+  source := "sha256:e0e6520563aadb939aaac48414f14606e424c87e3c4f63d287e31479eb6f4d13"
+  candidate := "sha256:541268dea4cc1b1af6210452e2da74d30a261e09fa9cc7df43b96ec372d36e6e"
   policy := ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [4], [0, 1], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -60,6 +65,11 @@ def participant : Participant where
     ⟨.calculate (.groupAdd "bls12-381.g1"), [3, 15], [.data (.group "bls12-381.g1")], []⟩,
     ⟨.calculate (.groupEqual "bls12-381.g1"), [14, 16], [.data .boolean], []⟩]
   returned := [17, 13]
+
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [] }
 
 end ZkcExamples.Construction.Generated.SchnorrRandomizedPair.Validator
 

@@ -1,9 +1,11 @@
+#include "../lib/Compiler/LanguageInterface.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/LanguagePackage.h"
@@ -17,7 +19,9 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Entry.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
+#include <functional>
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::language;
@@ -43,9 +47,187 @@ constexpr StringLiteral sourceText = R"(module sample;
   entry fn Twice(x:index)->index{return add(x,x);}
   entry fn Demo(x:index)->index{return Twice(Twice(x));})";
 CompiledEntry compiled() { return take(compileEntry(original(sourceText))); }
+// One input of the shared Entry JSON node-ceiling corpus: a string, or ordered
+// segments, each a string or a repeated item.
+std::string wire(const json::Value &value) {
+  if (auto text = value.getAsString())
+    return text->str();
+  std::string result;
+  for (const auto &segment : *value.getAsArray()) {
+    if (auto text = segment.getAsString()) {
+      result += *text;
+      continue;
+    }
+    const auto &repeat = *segment.getAsObject();
+    auto item = *repeat.getString("repeat");
+    auto separator = *repeat.getString("separator");
+    for (int64_t i = 0, count = *repeat.getInteger("count"); i < count; ++i) {
+      if (i)
+        result += separator;
+      SmallVector<StringRef> parts;
+      item.split(parts, "{i}");
+      result += join(parts, std::to_string(i));
+    }
+  }
+  return result;
+}
+std::string opaqueSource() {
+  auto file = MemoryBuffer::getFile(ZKC_OPAQUE_HOST_FIXTURE);
+  require(bool(file), "missing opaque Host transport fixture");
+  return (*file)->getBuffer().str();
+}
+CheckedProject opaqueProject(StringRef text) {
+  CaptureOptions options;
+  options.format = "zkc-layout";
+  return take(analyze(take(capture({{"m", text.str(), "opaque.zkc"}}, options)))
+                  .checkedProject());
+}
+CompiledEntry opaqueCompiled(StringRef name) {
+  auto project = opaqueProject(opaqueSource());
+  auto closed = take(closeEntry(project, ("m::" + name).str()));
+  return take(compileEntry(take(prepareOriginal(closed))));
+}
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("opaque proof subjects publish their sealed witness", [] {
+    auto project = opaqueProject(opaqueSource());
+    // Closure selects no external operation. Every selection publishes the
+    // sealed prover witness; the SDK's Entry admission decides whether the
+    // selected operation consumes it.
+    for (auto kind : std::initializer_list<std::optional<HostInvocation::Kind>>{
+             std::nullopt, HostInvocation::Kind::Prove,
+             HostInvocation::Kind::Verify}) {
+      auto original = take(prepareOriginal(
+          take(closeEntry(project, "m::Demo", {}, EntryKind::Proof, kind))));
+      zkc::test::requireWithheld(
+          zkc::test::withheldSupply(original.interface()), {"state.witness"},
+          "sealed proof witness lost its exact supply mark");
+    }
+    auto subject = take(closeSubject(project, "m::Demo"));
+    require(subject.entry().proof() && !subject.invocationKind(),
+            "semantic proof subject acquired a Host operation");
+    take(prepareOriginal(subject));
+  });
+  for (StringRef name : {"Produce", "Check", "Run", "Import"})
+    cases.run(
+        "whole opaque typed Host child publishes and reads: " + name, [=] {
+          auto entry = opaqueCompiled(name);
+          take(packageEntry(entry));
+          auto &checked = entry.original();
+          take(admitOriginal(checked.entry(), checked.bytes(),
+                             checked.interfaceJson()));
+          mlir::DialectRegistry registry;
+          registerDialects(registry);
+          mlir::MLIRContext context(registry);
+          auto module = mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(),
+                                                                &context);
+          require(bool(module), "opaque Host original did not parse");
+          auto functions = take(readHostFunctions(*module));
+          auto artifact = take(json::parse(entry.bytes()));
+          require(functions == *artifact.getAsObject()->getArray("functions"),
+                  "independent Host readback changed typed transport");
+          if (auto e = checkHostArtifact(entry.bytes(), checked.interface()))
+            throw std::runtime_error(toString(std::move(e)));
+        });
+  cases.run("generated opaque witness schema cannot be forged", [] {
+    auto entry = opaqueCompiled("Produce");
+    auto artifact = take(json::parse(entry.bytes()));
+    // Keep repeated Host schemas consistent. The independently packaged child
+    // must still determine the generated field association.
+    std::function<void(json::Value &)> forge = [&](json::Value &value) {
+      if (auto *object = value.getAsObject()) {
+        if (object->getString("type") == "m::Demo::Witness")
+          (*object->getArray("fields")->front().getAsObject())["name"] =
+              "forged_witness";
+        for (auto &field : *object)
+          forge(field.second);
+      } else if (auto *array = value.getAsArray())
+        for (auto &element : *array)
+          forge(element);
+    };
+    forge(artifact);
+    rejects(
+        checkHostArtifact(printJson(artifact), entry.original().interface()),
+        "entry.signature");
+  });
+  cases.run("home construction does not grant a raw Host constructor", [] {
+    auto entry = opaqueCompiled("Produce");
+    auto artifact = take(json::parse(entry.bytes()));
+    bool replaced = false;
+    std::function<void(json::Value &)> forge = [&](json::Value &value) {
+      if (auto *object = value.getAsObject()) {
+        auto *results = object->getArray("results");
+        if (object->getString("op") == "numeric" && results &&
+            results->size() == 1 &&
+            results->front().getAsObject()->getObject("schema")->getString(
+                "type") == "m::Secret") {
+          (*object)["op"] = "construct";
+          object->erase("calculation");
+          (*object)["alternative"] = "";
+          replaced = true;
+        }
+        for (auto &field : *object)
+          forge(field.second);
+      } else if (auto *array = value.getAsArray())
+        for (auto &element : *array)
+          forge(element);
+    };
+    forge(artifact);
+    require(replaced, "home construction did not use a numerical fragment");
+    rejects(
+        checkHostArtifact(printJson(artifact), entry.original().interface()),
+        "entry.construct");
+  });
+  for (StringRef barrier : {"sealed", "private"})
+    cases.run("typed Host cannot split a " + barrier + " ancestor", [=] {
+      auto text = opaqueSource();
+      text.erase(text.find("entry def Produce"));
+      auto body = text.find("    value <- reveal");
+      auto scheme = text.find("scheme Demo");
+      require(body != std::string::npos && scheme != std::string::npos,
+              "missing protocol body");
+      text.replace(body, scheme - body, "    return true\n\n");
+      text += R"(
+entry def Run(inputs: Round::Inputs) -> Round::RunResult:
+    completed <- Round::run(inputs)
+    return completed
+)";
+      auto at = text.find("struct State roles");
+      require(at != std::string::npos, "missing distributed ancestor");
+      if (barrier == "sealed")
+        text.insert(at, "#[sealed]\n");
+      else {
+        at = text.find("pub witness: Secret");
+        require(at != std::string::npos, "missing private split target");
+        text.erase(at, 4);
+      }
+      if (barrier == "sealed") {
+        CaptureOptions options;
+        options.format = "zkc-layout";
+        auto captured = take(capture({{"m", text, "opaque.zkc"}}, options));
+        refuses(analyze(captured).checkedProject(), "source.private");
+        return;
+      }
+      auto project = opaqueProject(text);
+      auto closed = take(closeEntry(project, "m::Run"));
+      refuses(compileEntry(take(prepareOriginal(closed))), "source.interface");
+    });
+  cases.run("typed Host cannot erase zero-extent element assembly authority",
+            [] {
+              auto project = opaqueProject(R"(
+#[sealed]
+struct Empty roles(P, V):
+pub protocol Zero roles(P, V)(state: [Empty roles(P, V); 0]) -> bool @V:
+    return true
+entry def Run(inputs: Zero::Inputs) -> Zero::RunResult:
+    completed <- Zero::run(inputs)
+    return completed
+)");
+              auto closed = take(closeEntry(project, "m::Run"));
+              refuses(compileEntry(take(prepareOriginal(closed))),
+                      "source.interface");
+            });
   cases.run("standalone typed static calls and native numerical Program", [] {
     auto entry = compiled();
     auto artifact = take(json::parse(entry.bytes()));
@@ -409,10 +591,11 @@ int main() {
     auto check = [&](StringRef bytes, StringRef code) {
       rejects(checkHostArtifact(bytes, entry.original().interface()), code);
     };
-    // One array and 199999 scalar tokens reach structural admission. One more
+    // One array and 799999 scalar tokens reach structural admission. One more
     // token must refuse before shape checks, just as the independent reader.
+    // The carrier ceiling is four times an interface document's 200000.
     std::string nodes = "[0";
-    for (unsigned i = 1; i < 199999; ++i)
+    for (unsigned i = 1; i < 799999; ++i)
       nodes += ",0";
     nodes += ']';
     check(nodes, "entry.artifact");
@@ -863,6 +1046,103 @@ int main() {
     require(mlir::succeeded(mlir::verify(*module)),
             "extra generic forwarding should remain structurally valid");
     refuses(readHostFunctions(*module), "source.correspondence");
+  });
+  // `unpack` returns a tuple of the record's fields. A Host body eliminates
+  // the record into one value per field and rebuilds that tuple from them.
+  struct UnpackCase {
+    const char *name, *record;
+    unsigned fields;
+    bool rebuildRecord;
+  };
+  for (const UnpackCase &item :
+       {UnpackCase{"one-field", "pub struct Secret:\n    value: index\n", 1,
+                   false},
+        UnpackCase{"two-field",
+                   "pub struct Secret:\n    value: index\n    flag: bool\n", 2,
+                   false},
+        UnpackCase{"sealed",
+                   "#[sealed]\npub struct Secret:\n    value: index\n", 1,
+                   false},
+        UnpackCase{"reconstructed", "pub struct Secret:\n    value: index\n", 1,
+                   true}})
+    cases.run(std::string("Host unpack of a ") + item.name + " record", [=] {
+      std::string source = item.record;
+      source += item.rebuildRecord
+                    ? "entry def Echo(value: Secret) -> Secret:\n"
+                    : "entry def Echo(value: Secret) -> index:\n";
+      source += "    fields = unpack(value)\n";
+      source += item.rebuildRecord ? "    return Secret {value: fields.0}\n"
+                                   : "    return fields.0\n";
+      auto fields = item.fields;
+      CaptureOptions options;
+      options.format = "zkc-layout";
+      auto project =
+          take(analyze(take(capture({{"m", source, "unpack.zkc"}}, options)))
+                   .checkedProject());
+      auto entry = take(compileEntry(take(prepareOriginal(
+          take(closeEntry(project, "m::Echo", {}, EntryKind::Function))))));
+      auto artifact = take(json::parse(entry.bytes()));
+      bool unpacked = false;
+      for (const auto &function :
+           *artifact.getAsObject()->getArray("functions")) {
+        const auto &operations =
+            *function.getAsObject()->getObject("body")->getArray("operations");
+        for (size_t i = 0; i < operations.size(); ++i) {
+          const auto &op = *operations[i].getAsObject();
+          if (op.getString("op") != "unpack")
+            continue;
+          const auto &outputs = *op.getArray("results");
+          require(outputs.size() == fields,
+                  "Host unpack did not yield one value per field");
+          require(i + 1 < operations.size(),
+                  "Host unpack lost its tuple reconstruction");
+          const auto &rebuilt = *operations[i + 1].getAsObject();
+          json::Array ids;
+          for (const auto &output : outputs)
+            ids.push_back(*output.getAsObject()->getInteger("id"));
+          require(rebuilt.getString("op") == "construct" &&
+                      rebuilt.getString("alternative") == "" &&
+                      *rebuilt.getArray("operands") == ids &&
+                      rebuilt.getArray("results")->size() == 1,
+                  "Host unpack did not rebuild the source tuple");
+          unpacked = true;
+        }
+      }
+      require(unpacked, "Host artifact lost the source unpack");
+    });
+  // Both Entry readers enforce their lexical node ceilings exactly: a case at a
+  // ceiling never refuses for it, and one past it does.
+  cases.run("Entry readers agree on the shared node-ceiling corpus", [] {
+    auto buffer = MemoryBuffer::getFile(ZKC_ENTRY_JSON_NODES_FIXTURE);
+    require(bool(buffer), "missing Entry JSON node fixture");
+    auto corpus = take(json::parse((*buffer)->getBuffer()));
+    require(corpus.getAsObject()->getString("format") ==
+                "zkc.entry-json-node-fixtures/0",
+            "unexpected Entry JSON node fixture format");
+    auto entry = compiled();
+    unsigned checked = 0;
+    for (const auto &value : *corpus.getAsObject()->getArray("cases")) {
+      const auto &item = *value.getAsObject();
+      auto name = *item.getString("name");
+      auto reader = *item.getString("reader");
+      auto bytes = wire(*item.get("wire"));
+      Error refusal = Error::success();
+      if (reader == "interface") {
+        auto parsed = language::detail::parseInterface(bytes, Limits{});
+        if (!parsed)
+          refusal = parsed.takeError();
+      } else {
+        require(reader == "host", "unknown reader in " + name);
+        refusal = checkHostArtifact(bytes, entry.original().interface());
+      }
+      std::string message = refusal ? toString(std::move(refusal)) : "";
+      bool limited = StringRef(message).contains("source.limit") &&
+                     StringRef(message).contains("node limit");
+      require(limited == (*item.getString("expected") == "node-limit"),
+              name + ": unexpected result: " + message);
+      ++checked;
+    }
+    require(checked == 8, "Entry JSON node fixture cases differ");
   });
   return cases.result();
 }

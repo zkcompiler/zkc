@@ -18,17 +18,17 @@ namespace ZkcExamples.Structured.GkrGateGoals
 open Zkc.Source Zkc.Source.Structured
 
 helper_presentation Value inputs [addWeight, mulWeight, left, right]
-  outputs [value] := GkrSourceBodies.helper31Body
+  outputs [value] := GkrSourceBodies.helper19Body
 
 helper_presentation Realization inputs [addWeight, mulWeight, left, right]
-  outputs [value] := GkrSourceBodies.scopedHelper42Body
+  outputs [value] := GkrSourceBodies.helper55Body
 
 helper_presentation Callback
   inputs [addWeight, mulWeight, left, right, addWeights, mulWeights, lefts, rights]
-  outputs [value] := GkrSourceBodies.scopedHelper43Body
+  outputs [value] := GkrSourceBodies.helper56Body
 
 helper_presentation Map inputs [addWeights, mulWeights, lefts, rights]
-  outputs [values] := GkrSourceBodies.scopedHelper44Body
+  outputs [values] := GkrSourceBodies.helper57Body
 
 abbrev collection : CollectSpec :=
   collection_spec% Map.body
@@ -37,9 +37,9 @@ named_values Item [addWeight, mulWeight, left, right] := collection.domain.items
 
 /-- Source selection is checked once and shared by every installed gate law. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
-  value : BodyIn definitions GkrSourceBodies.helper31Helper Value.body
-  realization : BodyIn definitions GkrSourceBodies.scopedHelper42Helper Realization.body
-  callback : BodyIn definitions GkrSourceBodies.scopedHelper43Helper Callback.body
-  map : BodyIn definitions GkrSourceBodies.scopedHelper44Helper Map.body
+  value : BodyIn definitions GkrSourceBodies.helper19Helper Value.body
+  realization : BodyIn definitions GkrSourceBodies.helper55Helper Realization.body
+  callback : BodyIn definitions GkrSourceBodies.helper56Helper Callback.body
+  map : BodyIn definitions GkrSourceBodies.helper57Helper Map.body
 
 end ZkcExamples.Structured.GkrGateGoals

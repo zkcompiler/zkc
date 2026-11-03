@@ -5,7 +5,7 @@ public import Zkc.Source.KernelRfl
 public import ZkcTools.ConstructionBindings.LibraryPlan
 public meta import ZkcTools.ConstructionBindings.LibraryPlan
 public meta import Lean.Elab.Tactic
-public meta import ZkcTools.StructuredSource.Presentation.Syntax
+public meta import ZkcTools.ConstructionBindings.Normalization
 public meta import ZkcTools.ConstructionBindings.Syntax
 public meta import Lean.Meta.Closure
 public meta import Lean.Compiler.NoncomputableAttr
@@ -62,44 +62,6 @@ private def freezeSourceTemplate (expression : Expr) : TermElabM Expr := do
   modifyEnv (addNoncomputable · name)
   return mkConst name
 
-/-- Compiled proposal using the existing normalizer and literal printer. This
-produces source text, never an equation or a proof. Public visibility lets the
-meta evaluator invoke it from an importing module. -/
-def normalizationLiteral (signature : Signature) {inputs outputs : List Ty}
-    (body : Region protocolDialect inputs outputs) (role roster : Nat)
-    (pattern : InputPattern inputs) : Except String String := do
-  let form ← NormalForm.normalize signature body role roster pattern
-  return ZkcTools.StructuredSource.Presentation.formLiteral form
-
-/-- Reduce the finite inputs, then run the normalizer in compiled meta code.
-Reducing its whole call with `whnf` repeatedly expands intermediate symbolic
-states. The proposed literal is checked against that unchanged call below.
-Implicit data indices must also be reduced: a generated syntax constant can
-be noncomputable even when its closed data has an executable literal. -/
-private unsafe def proposeNormalization (computation : Expr) : TermElabM Expr := do
-  let computation ← instantiateMVars computation
-  unless computation.isAppOf ``NormalForm.normalize &&
-      !computation.hasFVar && !computation.hasMVar do
-    throwError "connection-normalization-not-closed"
-  let mut arguments := computation.getAppArgs
-  for index in [:arguments.size] do
-    arguments := arguments.set! index (← withTransparency .all <|
-      reduce arguments[index]! (explicitOnly := false) (skipTypes := false))
-  let proposal := mkAppN (mkConst ``normalizationLiteral) arguments
-  let text ← evalExpr (Except String String)
-    (← mkAppM ``Except #[mkConst ``String, mkConst ``String]) proposal
-  let .ok text := text | throwError "connection-native-normalization-refused"
-  let .ok parsed := Parser.runParserCategory (← getEnv) `term text
-    | throwError "connection-native-normalization-syntax"
-  let resultType ← inferType computation
-  let proposed ← Term.elabTerm parsed (some resultType.getAppArgs.back!)
-  -- Literal source applications contain finite-index proof obligations. Solve
-  -- those before the normal form is frozen behind a kernel declaration.
-  Term.synthesizeSyntheticMVarsNoPostponing
-  let proposed ← instantiateMVars proposed
-  if proposed.hasMVar then throwError "connection-normalization-literal-unresolved"
-  return proposed
-
 private def template (cache : Syntax.Cache) (payload keys : Expr) (selection : LibraryPlan.Selection) : TacticM Expr := do
   let source ← Term.exprToSyntax payload
   let earlier ← Term.exprToSyntax keys
@@ -115,7 +77,7 @@ private def template (cache : Syntax.Cache) (payload keys : Expr) (selection : L
       { strict := true, names := true, kept := ($source).definitions.map CheckedDefinition.helper, callees := $earlier }
       ($source).protocols[$index].body $role ($source).protocols[$index].roles.length $patternSyntax)) none
   Term.synthesizeSyntheticMVarsNoPostponing
-  let literal ← unsafe proposeNormalization computation
+  let literal ← unsafe Normalization.propose cache computation
   let form ← withTransparency .all <| Syntax.normalize cache literal
   let body ← sharedSourceBody form
   let bodySyntax ← Term.exprToSyntax body

@@ -22,10 +22,12 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
       return error("source.package-limit", "Entry asset limit exceeded");
     assets.emplace_back(asset.identity().str(), std::move(body));
   }
-  auto selection = protocol::encodeOracleRealizationPolicy(
-      entry.options().oracleRealization);
-  if (!selection)
-    return selection.takeError();
+  const auto &selected = entry.options();
+  auto options = encodeCompileOptions(
+      selected.simplify, selected.releaseStorage,
+      selected.mathematicalSelection, selected.oracleRealization);
+  if (!options)
+    return options.takeError();
   std::string bytes;
   BoundedStream stream(bytes, byteLimit);
   json::OStream out(stream);
@@ -42,18 +44,8 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
         });
     });
     out.attributeObject("options", [&] {
-      out.attribute("oracle_realization", *selection);
-      out.attribute("simplify", entry.options().simplify);
-      out.attribute("release_storage", entry.options().releaseStorage);
-      out.attribute("finite_bulk",
-                    entry.options().mathematicalSelection.finiteBulk);
-      out.attribute(
-          "fuse_vector_reductions",
-          entry.options().mathematicalSelection.vectorReductionFusion);
-      out.attribute("fuse_collect_fold",
-                    entry.options().mathematicalSelection.collectFoldFusion);
-      out.attribute("calculation_batching",
-                    entry.options().mathematicalSelection.calculationBatching);
+      for (const auto &[name, value] : *options)
+        out.attribute(name, value);
     });
   });
   if (stream.overflow())

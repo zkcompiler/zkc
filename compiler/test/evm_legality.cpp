@@ -1,4 +1,5 @@
 #include "../lib/Target/Evm/Arithmetic.h"
+#include "../lib/Target/Evm/Runtime.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -7,13 +8,17 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ResourceSources.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Stages.h"
@@ -223,6 +228,158 @@ int main() {
   auto compileSource = [&](StringRef text) {
     return take(compileEvmEntry(originalSource(text)));
   };
+  for (bool managed : {false, true})
+    cases.run(
+        managed ? "nominal units coexist with managed transcript state"
+                : "empty and nonempty records retain only data lanes",
+        [&] {
+          std::string text = R"zkc(
+module scalar;
+domain Fr=field("bls12-381.fr");
+struct Empty{}
+#[linear] struct Ticket<N:nat>{empty:(),phantom:[bool;0]}
+#[linear] struct Payload{value:Fr,padding:Empty}
+fn make()->Ticket<1>{return Ticket<1>{empty:(),phantom:[]};}
+fn make_second()->Ticket<2>{return Ticket<2>{empty:(),phantom:[]};}
+fn payload(value:Fr)->Payload{return Payload{value:value,padding:Empty{}};}
+fn advance(x:Ticket<1>)->Ticket<1>{return repack_record(x,((),[]));}
+fn check_empty(go:bool)->Empty{require go;return Empty{};}
+fn preserve(x:Payload)->Payload{
+  let parts=inspect_record(x);return repack_record(parts.0,parts.1);
+}
+fn finish(x:Ticket<1>,y:Ticket<2>,p:Payload)->Fr{
+  consume x;consume y;let parts=unpack(p);return parts.0;
+}
+protocol Work roles(P,V)(value:Fr@V,go:bool@V)->(accepted:bool@V){
+  let x@V=make();let next@V=advance(x);
+  let empty@V=check_empty(go);
+  let y@V=make_second();let p@V=payload(value);
+  let q@V=preserve(p);let observed@V=finish(next,y,q);
+  return(accepted=observed==value);
+}
+proof Proof=Work{prover P;verifier V;public{value,go};accept accepted;construction authored;}
+)zkc";
+          if (managed) {
+            text = replaceFixture(text, "go:bool@V)->",
+                                  "go:bool@V,coins:Random<Fr>@V)->");
+            text =
+                replaceFixture(text, "let x@V=make();",
+                               "let coin=coins.draw();let sent=send V->P(coin);"
+                               "let x@V=make();");
+            text = replaceFixture(
+                text, "construction authored;",
+                "construction fiat_shamir(\"hash-chain.keccak256."
+                "bls12-381.fr64be/0\",coins);");
+          }
+          auto original = originalSource(text);
+          require(original.bytes().contains("resource_unit.pass") &&
+                      original.bytes().contains("resource_unit.consume"),
+                  "fixture did not exercise native unit operations");
+          EvmOptions options;
+          options.simplify = false;
+          options.mathematics.finiteBulk = false;
+          auto compiled = take(compileEvmEntry(original, options));
+          auto target = compiled.targetSnapshot();
+          unsigned calls = 0, fields = 0, scopeChecks = 0, stops = 0;
+          target->walk([&](func::CallOp) { ++calls; });
+          target->walk([&](evm::CheckedOp op) {
+            fields += op.opcode() == "field.equal";
+            scopeChecks += op.opcode() == "scope.check";
+            stops += op.opcode() == "source.stop";
+          });
+          require(
+              calls && fields && scopeChecks && stops,
+              "unit erasure removed surrounding calls, data checks or stops");
+          require(StringRef(compiled.yul()).contains("let boundState :=") ==
+                      managed,
+                  "unit custody changed transcript selection");
+        });
+  for (StringRef malformed : {"nominal", "reused"})
+    cases.run("unit erasure requires native admission: " + malformed, [&] {
+      resource_sources::Source source;
+      source.binding("pass", "resource_unit.pass", {"Slot.A"});
+      source.binding("passB", "resource_unit.pass", {"Slot.B"});
+      auto helper = source.function("advance", {source.unit, source.unit},
+                                    {source.unit, source.unit});
+      exec::ScopedExecutionBuilder body(source.builder, helper);
+      auto left = source.invoke(body, "pass", helper.getArgument(1),
+                                source.unit, "left")[0];
+      auto right = source.invoke(body, "pass", helper.getArgument(2),
+                                 source.unit, "right")[0];
+      body.returned({left, right});
+      auto *entry = source.protocol(
+          "main", {source.unit, source.unit}, {source.unit, source.unit}, {"V"},
+          source.portRoles(2, {"V"}), source.portRoles(2, {"V"}));
+      source.operation("protocol.return",
+                       source.local("advance", entry->getArguments(),
+                                    {source.unit, source.unit}, "call", "V"));
+      PassManager pipeline(&source.context);
+      buildProjectionPipeline(pipeline, false);
+      buildClosedExecutionPipeline(pipeline, false);
+      require(succeeded(pipeline.run(*source.module)),
+              "invalid native unit fixture");
+      take(evm::lowerEndpoint(take(closeEndpoint(*source.module, "V")), {}));
+      SmallVector<exec::ApplyOp> passes;
+      source.module->walk([&](exec::ApplyOp op) { passes.push_back(op); });
+      require(passes.size() == 2, "missing native pass invocations");
+      if (malformed == "nominal")
+        passes[1].setBindingAttr(
+            FlatSymbolRefAttr::get(&source.context, "passB"));
+      else
+        passes[1]->setOperand(1, passes[0]->getOperand(1));
+      std::string message;
+      ScopedDiagnosticHandler handler(&source.context, [&](Diagnostic &diag) {
+        raw_string_ostream out(message);
+        diag.print(out);
+        return success();
+      });
+      refuses(closeEndpoint(*source.module, "V"), "endpoint-source");
+      require(StringRef(message).contains(malformed == "nominal"
+                                              ? "binding-signature"
+                                              : "execution-resource-reuse"),
+              "native unit refusal lost its diagnostic: " + message);
+    });
+  cases.run("formed random capability does not acquire unit erasure", [&] {
+    auto source = close(R"mlir(
+module { "protocol.module"() ({
+  "protocol.func"() ({ ^entry(%rng:!runtime.capability<rng,"bls12-381.fr">):
+    %ok = arith.constant true
+    "protocol.return"(%ok) : (i1)->()
+  }) {sym_name="main",function_type=(!runtime.capability<rng,"bls12-381.fr">)->i1,
+      roles=["V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+    diagnostics.clear();
+    refuses(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}),
+            "evm.lowering");
+    require(StringRef(diagnostics).contains("evm.unsupported-type"),
+            "unsupported capability lost its type refusal");
+  });
+  cases.run("conditional verifier completion refuses by name", [&] {
+    auto source = close(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+module { "protocol.module"() ({
+  "protocol.func"() ({ ^entry(%a:!F,%b:!F,%go:i1):
+    %same = algebra.field_equal %a,%b : (!F,!F)->i1
+    "protocol.finish_if"(%go,%same) {owner="V",site="early"} : (i1,i1)->()
+    "protocol.return"(%same) : (i1)->()
+  }) {sym_name="main",function_type=(!F,!F,i1)->i1,roles=["V"],
+      input_roles=[["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+    unsigned completions = 0;
+    source->walk([&](Operation *op) {
+      completions += op->getName().getStringRef() == "protocol.finish_if";
+    });
+    require(completions == 1, "closed candidate lost its completion");
+    diagnostics.clear();
+    refuses(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}),
+            "evm.completion");
+    require(StringRef(diagnostics)
+                    .contains("[evm.completion] protocol.finish_if") &&
+                !StringRef(diagnostics).contains("evm.unsupported-operation"),
+            "completion did not refuse by name: " + diagnostics);
+  });
   constexpr StringLiteral bytesSource = R"zkc(
 module scalar;
 type Bytes=builtin("bytes");
@@ -314,6 +471,69 @@ proof Proof=Work {
         "");
     refuses(compileEvmEntry(originalSource(text)), "native-proof-policy");
   });
+  cases.run("transcript suites are realized by their declared facts", [&] {
+    evm::NativeLayouts layouts(context);
+    unsigned realized = 0;
+    for (const auto &row : protocol::instances::domains()) {
+      if (!row.transcript)
+        continue;
+      const auto &facts = *row.transcript;
+      bool expected = facts.family == "hash-chain" &&
+                      facts.hash == "keccak256" && facts.bindsSuite &&
+                      facts.decoder == "fr64be";
+      auto suite = evm::realizeTranscript(layouts, context, row.identity);
+      if (!suite) {
+        auto message = toString(suite.takeError());
+        require(!expected && StringRef(message).contains("evm.construction"),
+                "a suite refused outside its facts: " + message);
+        if (facts.family == "hash-chain" && facts.decoder != "fr64be")
+          require(
+              StringRef(message).contains(facts.decoder + " challenge decoder"),
+              "a hash-chain suite refused without its decoder: " + message);
+        continue;
+      }
+      require(expected, "a suite without the realized facts was realized: " +
+                            row.identity);
+      ++realized;
+      // The reduction modulus is the challenge field's declared
+      // characteristic, and the runtime emits exactly that prime.
+      auto field = protocol::installedDomains().associatedIdentity(
+          row.identity, "ChallengeField");
+      const auto *challenge = protocol::instances::domain(field);
+      require(challenge && challenge->field && !challenge->field->extension,
+              "realized challenge field is not a declared prime field");
+      APInt modulus(256, challenge->field->characteristic, 10);
+      require(suite->challenge->modulus == modulus,
+              "realized modulus differs from the declared characteristic");
+      SmallString<80> digits;
+      modulus.toString(digits, 16, false, false, false);
+      auto helpers =
+          evm::detail::runtimeHelpers(EvmLimits{}, &suite->challenge->modulus);
+      require(StringRef(helpers).contains(("p := 0x" + digits).str()),
+              "emitted challenge prime differs from the catalog modulus");
+      require(evm::realizedChallengeField(layouts, context, field),
+              "realized challenge field is not admitted");
+    }
+    require(realized > 0, "no installed suite is realized");
+    auto plain = evm::detail::runtimeHelpers(EvmLimits{}, nullptr);
+    require(!StringRef(plain).contains("evm_challenge_prime") &&
+                !StringRef(plain).contains("evm_transcript_"),
+            "a program without a transcript received transcript helpers");
+  });
+  cases.run("a hash-chain suite refuses at its unrealized decoder", [&] {
+    auto text = proofSource("", "accepted:bool@V", "return(accepted=a*b==c);");
+    text = replaceFixture(std::move(text), "field(\"bls12-381.fr\")",
+                          "field(\"koala-bear.ext8-binomial3\")");
+    text = replaceFixture(
+        std::move(text), "\"hash-chain.keccak256.bls12-381.fr64be/0\"",
+        "\"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0\"");
+    auto compiled = compileEvmEntry(originalSource(text));
+    require(!compiled, "an unrealized challenge decoder compiled");
+    auto message = toString(compiled.takeError());
+    require(StringRef(message).contains("evm.construction") &&
+                StringRef(message).contains("rejection31le challenge decoder"),
+            "unexpected refusal: " + message);
+  });
   for (StringRef expression : {"a*b==c", "a+b==c", "a-b==c", "!(a==b)",
                                "a==b && b==c", "a==b || b==c", "a+1==c"}) {
     cases.run(
@@ -345,13 +565,16 @@ proof Proof=Work {
         auto result = compileSource(proofSource(
             "", "hidden:Fr@P,extra:Fr@V,other:bool@V,accepted:bool@V",
             "return(hidden=delivered,extra=a+b,other=true,accepted=a*b==c);"));
+        // The checked endpoint keeps the validator's original output ports;
+        // the exported function expands them to lanes.
+        const auto &endpoint = result.endpoint();
         auto target = result.targetSnapshot();
         for (auto function : target->getOps<func::FuncOp>()) {
           if (!function->hasAttr("evm.entry"))
             continue;
-          auto ports = function->getAttrOfType<ArrayAttr>("evm.output_ports");
-          require(ports && ports.size() == 3 &&
-                      cast<IntegerAttr>(ports[2]).getUInt() == 3 &&
+          require(ArrayRef<uint64_t>(endpoint.outputs) ==
+                          ArrayRef<uint64_t>({1, 2, 3}) &&
+                      endpoint.acceptance == 2 &&
                       function.getNumResults() == 4 &&
                       function.getResultTypes()[0].isInteger(256),
                   "acceptance mapping lost source output ownership or Fr lane");
@@ -404,6 +627,68 @@ proof Proof=Work {
     refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),
             "evm.limits");
   });
+  cases.run("participant loops admit only the deployment's loop maximum", [&] {
+    auto loops = [](uint64_t maximum) {
+      return R"zkc(
+module scalar;
+domain F=field("bls12-381.fr");
+protocol Copies roles(A,B)(a:F@(A,B),rounds:index@(A,B))->(accepted:bool@B) {
+  let mut accepted @B = true;
+  for _ in 0..rounds roles(A,B) max )zkc" +
+             std::to_string(maximum) + R"zkc( {
+    let copy=send A->B(a);
+    accepted=accepted&&copy==a;
+  }
+  return accepted;
+}
+proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construction authored;}
+)zkc";
+    };
+    const uint64_t declared = EvmLimits().participantLoopMaximum;
+    EvmOptions options;
+    take(compileEvmEntry(originalSource(loops(declared)), options));
+    for (auto [maximum, ceiling] :
+         {std::pair<uint64_t, uint64_t>{declared + 1, declared}, {3, 2}}) {
+      options.limits.participantLoopMaximum = ceiling;
+      auto refused = compileEvmEntry(originalSource(loops(maximum)), options);
+      require(!refused, "a loop above the deployment's maximum compiled");
+      auto message = toString(refused.takeError());
+      require(namesIdentifier(message, "evm.participant-loop-maximum") &&
+                  StringRef(message).contains(
+                      "loop maximum " + std::to_string(maximum) +
+                      " exceeds the deployment's participant loop maximum " +
+                      std::to_string(ceiling)),
+              "loop refusal does not name both maxima: " + message);
+    }
+  });
+  cases.run("runtime revert helpers follow the declared classes", [&] {
+    std::string helpers = evm::detail::runtimeHelpers(EvmLimits(), nullptr);
+    // The emitted helper comment names each tag beside the helper's word.
+#define ZKC_EVM_REVERT_CHECK(name, tag, word)                                  \
+  require(StringRef(helpers).contains(                                         \
+              "function evm_" #name "(code) { evm_fail(0x" +                   \
+              utohexstr(word, true, 8) + ", code) }") &&                       \
+              StringRef(helpers).contains(tag),                                \
+          "runtime helpers differ from declared revert class " #name);
+    ZKC_EVM_TARGET_REVERTS(ZKC_EVM_REVERT_CHECK)
+#undef ZKC_EVM_REVERT_CHECK
+  });
+  cases.run("deployment ceilings default to and stay within declared rows",
+            [&] {
+#define ZKC_EVM_LIMIT_BOUNDS(member, name, minimum, maximum)                   \
+  {                                                                            \
+    require(EvmLimits().member == maximum,                                     \
+            Twine(name) + " does not default to its declared maximum");        \
+    for (uint64_t value : {minimum - 1, maximum + 1}) {                        \
+      EvmOptions options;                                                      \
+      options.limits.member = value;                                           \
+      refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),  \
+              "evm.limits");                                                   \
+    }                                                                          \
+  }
+              ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_BOUNDS)
+#undef ZKC_EVM_LIMIT_BOUNDS
+            });
   cases.run("deployment forks are typed and exact", [&] {
     require(take(parseEvmFork("cancun")) == EvmFork::Cancun &&
                 take(parseEvmFork("prague")) == EvmFork::Prague,
@@ -413,6 +698,14 @@ proof Proof=Work {
             "fork spelling is not canonical");
     for (StringRef name : {"", "Cancun", "Prague", "shanghai"})
       refuses(parseEvmFork(name), "evm.fork");
+#define ZKC_EVM_FORK_ROUND_TRIP(Enumerator, name, ...)                         \
+  require(take(parseEvmFork(name)) == EvmFork::Enumerator &&                   \
+              evmForkName(EvmFork::Enumerator) == name,                        \
+          Twine("declared fork ") + name + " does not round-trip");
+    ZKC_EVM_TARGET_FORKS(ZKC_EVM_FORK_ROUND_TRIP)
+#undef ZKC_EVM_FORK_ROUND_TRIP
+    require(EvmOptions().fork == EvmFork::ZKC_EVM_TARGET_DEFAULT_FORK,
+            "EVM options do not select the declared default fork");
     EvmOptions options;
     options.fork = static_cast<EvmFork>(255);
     refuses(compileEvmProof(sourceText, "numeric.mlir", options, registry),
@@ -1010,72 +1303,17 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
   constexpr StringLiteral boundaryText = R"mlir(
       module {
         func.func private @verify_endpoint(%generation:i64) -> (i1,i64) attributes {evm.entry,
-          evm.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
-          evm.output_ports=[0:i64]} {
+          test.logical_type=(!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">)->(i1,!runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">),
+          test.output_ports=[0:i64]} {
           %accepted = arith.constant true
           func.return %accepted,%generation : i1,i64
         }
       })mlir";
-  // Exporter tests use a formed original interface. Its private producer
-  // inputs exercise output-type projection without supplying public rows.
-  auto boundaryOriginal = [&](ModuleOp module) {
-    func::FuncOp endpoint;
-    for (auto function : module.getOps<func::FuncOp>())
-      if (function->hasAttr("evm.entry"))
-        endpoint = function;
-    auto logical = cast<FunctionType>(
-        endpoint->getAttrOfType<TypeAttr>("evm.logical_type").getValue());
-    auto ports = endpoint->getAttrOfType<ArrayAttr>("evm.output_ports");
-    unsigned count =
-        ports.empty()
-            ? 0
-            : cast<IntegerAttr>(ports[ports.size() - 1]).getUInt() + 1;
-    SmallVector<Type> results(count, IntegerType::get(&context, 1));
-    for (auto [i, port] : enumerate(ports))
-      results[cast<IntegerAttr>(port).getUInt()] = logical.getResult(i);
-    SmallVector<Type> inputs;
-    SmallVector<std::string> returned;
-    for (Type type : results) {
-      if (type.isInteger(1))
-        returned.push_back("%ok");
-      else {
-        returned.push_back("%input" + std::to_string(inputs.size()));
-        inputs.push_back(type);
-      }
-    }
-    std::string source;
-    raw_string_ostream out(source);
-    out << "module { \"protocol.module\"() ({ \"protocol.func\"() ({ ^entry(";
-    for (auto [i, type] : enumerate(inputs)) {
-      if (i)
-        out << ",";
-      out << "%input" << i << ":" << type;
-    }
-    out << "): %ok = arith.constant true \"protocol.return\"(";
-    interleaveComma(returned, out);
-    out << ") : (";
-    interleaveComma(results, out);
-    out << ")->() }) {sym_name=\"independent\",function_type=(";
-    interleaveComma(inputs, out);
-    out << ")->(";
-    interleaveComma(results, out);
-    out << "),roles=[\"P\",\"V\"],input_roles=[";
-    for (unsigned i = 0; i < inputs.size(); ++i) {
-      if (i)
-        out << ",";
-      out << "[\"P\"]";
-    }
-    out << "],output_roles=[";
-    for (unsigned i = 0; i < results.size(); ++i) {
-      if (i)
-        out << ",";
-      out << "[\"P\"]";
-    }
-    out << "]} : ()->() }) {profile=#protocol.profile<protocol>} : ()->() }\n";
-    return source;
-  };
+  // The exporter borrows a checked endpoint. These fixtures state its logical
+  // signature and output ports as test annotations; they have no public rows.
+  constexpr StringLiteral boundaryOriginal = "boundary test original";
   auto boundary = [&](StringRef text, unsigned selected = 0,
-                      bool managed = true) {
+                      bool managed = true) -> Expected<std::string> {
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "invalid boundary test target");
     NativeProofPolicy policy;
@@ -1094,8 +1332,22 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
                                          json::Array{},
                                          json::Array{},
                                          json::Array{}};
-    return evm::exportYul(*module, boundaryOriginal(*module), descriptor,
-                          policy, {});
+    func::FuncOp function;
+    for (auto candidate : module->getOps<func::FuncOp>())
+      if (candidate->hasAttr("evm.entry"))
+        function = candidate;
+    auto logical = cast<FunctionType>(
+        function->getAttrOfType<TypeAttr>("test.logical_type").getValue());
+    SmallVector<uint64_t> outputs;
+    for (Attribute port :
+         function->getAttrOfType<ArrayAttr>("test.output_ports"))
+      outputs.push_back(cast<IntegerAttr>(port).getUInt());
+    auto endpoint = evm::describeEndpoint(
+        logical, {}, outputs, descriptor, policy,
+        toHex(SHA256::hash(arrayRefFromStringRef(boundaryOriginal)), true));
+    if (!endpoint)
+      return endpoint.takeError();
+    return evm::exportYul(*module, *endpoint, policy, {});
   };
   cases.run("expanded copyable results precede selected acceptance", [&] {
     auto text = replaceFixture(boundaryText.str(), "-> (i1,i64)",
@@ -1103,8 +1355,8 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
     text = replaceFixture(
         std::move(text), "->(i1,!runtime.capability",
         "->(!data.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
-    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
-                          "evm.output_ports=[0:i64,2:i64]");
+    text = replaceFixture(std::move(text), "test.output_ports=[0:i64]",
+                          "test.output_ports=[0:i64,2:i64]");
     text = replaceFixture(
         std::move(text), "func.return %accepted,%generation : i1,i64",
         "func.return %generation,%generation,%accepted,%generation : "
@@ -1115,28 +1367,28 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
     auto text = replaceFixture(
         boundaryText.str(), "->(i1,!runtime.capability",
         "->(!data.field_vector<\"bls12-381.fr\">,i1,!runtime.capability");
-    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
-                          "evm.output_ports=[0:i64,1:i64]");
+    text = replaceFixture(std::move(text), "test.output_ports=[0:i64]",
+                          "test.output_ports=[0:i64,1:i64]");
     refuses(boundary(text, 1), "evm.yul");
   });
-  cases.run("invocation refuses unconsumed affine results", [&] {
+  cases.run("endpoint refuses unconsumed affine results", [&] {
     auto text =
         replaceFixture(boundaryText.str(), "-> (i1,i64)", "-> (i64,i1,i64)");
     text = replaceFixture(std::move(text), "->(i1,!runtime.capability",
                           "->(!runtime.scope,i1,!runtime.capability");
-    text = replaceFixture(std::move(text), "evm.output_ports=[0:i64]",
-                          "evm.output_ports=[0:i64,1:i64]");
+    text = replaceFixture(std::move(text), "test.output_ports=[0:i64]",
+                          "test.output_ports=[0:i64,1:i64]");
     text = replaceFixture(
         std::move(text), "func.return %accepted,%generation : i1,i64",
         "func.return %generation,%accepted,%generation : i64,i1,i64");
-    refuses(boundary(text, 1), "evm.yul");
+    refuses(boundary(text, 1), "evm.endpoint");
   });
-  cases.run("invocation refuses absent selected acceptance",
-            [&] { refuses(boundary(boundaryText, 1), "evm.yul"); });
+  cases.run("endpoint refuses absent selected acceptance",
+            [&] { refuses(boundary(boundaryText, 1), "evm.endpoint"); });
   cases.run("zero transcript signature needs no invented generation lane", [&] {
     take(boundary(R"mlir(module {
       func.func private @verify_endpoint() -> i1 attributes {
-        evm.entry,evm.logical_type=()->i1,evm.output_ports=[0:i64]} {
+        evm.entry,test.logical_type=()->i1,test.output_ports=[0:i64]} {
         %ok = arith.constant true
         func.return %ok : i1
       }
@@ -1161,12 +1413,10 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
             "datacopy(root, dataoffset(\"bytes_0\"), datasize(\"bytes_0\"))") &&
             !text.contains("evm_static") && !text.contains("Compressed"),
         "static byte copying retained compression machinery");
-    auto source = parseSourceString<ModuleOp>(boundaryText, &context);
-    auto originalBytes = boundaryOriginal(*source);
     auto digest =
-        toHex(SHA256::hash(arrayRefFromStringRef(originalBytes)), true);
+        toHex(SHA256::hash(arrayRefFromStringRef(boundaryOriginal)), true);
     require(text.contains(toHex(digest, true)) &&
-                !text.contains(toHex(originalBytes, true)),
+                !text.contains(toHex(boundaryOriginal, true)),
             "binding source is not the exact original SHA256 identity");
     require(text.contains("verbatim_1i_0o(hex\"50\", boundState)"),
             "invocation observation lost its final POP sink");

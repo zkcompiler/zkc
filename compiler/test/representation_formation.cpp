@@ -123,9 +123,8 @@ int main() {
     represented(logical, "logical.variant/0", {blst, bear});
     refuse(logical, "logical.variant/0", {bear, ark});
     refuse(logical, "logical.variant/0", {ark});
-    auto forged = runtime::RepresentedType::get(&context, koala, "blst/fr",
-                                                ArrayRef<Type>{});
-    refuse(logical, "logical.variant/0", {ark, forged});
+    refuse(koala, "blst/fr");
+    refuse(logical, "logical.variant/0", {ark, blst});
     refuse(logical, "logical.sequence/0", {ark, bear});
     refuse(variant({}), "logical.variant/0", {ark});
   });
@@ -158,43 +157,41 @@ int main() {
     require(failed(verifyValueType(emit, malformed)),
             "foreign logical child admitted");
   });
-  cases.run(
-      "operation formation rechecks forged values and uniform stage", [&] {
-        auto forged = runtime::RepresentedType::get(&context, koala, "blst/fr",
-                                                    ArrayRef<Type>{});
-        for (SmallVector<Type> types :
-             {SmallVector<Type>{forged}, SmallVector<Type>{koala, bear}}) {
-          Block block;
-          auto scope = block.addArgument(runtime::ScopeType::get(&context),
-                                         builder.getUnknownLoc());
-          for (auto type : types)
-            block.addArgument(type, builder.getUnknownLoc());
-          OpBuilder b(&context);
-          b.setInsertionPointToStart(&block);
-          auto outcome = exec::OutcomeType::get(&context, types);
-          auto returned = exec::CompleteOp::create(
-              b, builder.getUnknownLoc(), outcome, scope,
-              block.getArguments().drop_front());
-          codes.clear();
-          require(failed(verify(returned)) &&
-                      llvm::is_contained(codes, "execution-formation"),
-                  "forged or mixed-stage completion admitted");
-        }
-      });
+  cases.run("operation formation checks exact payloads and uniform stage", [&] {
+    for (SmallVector<Type> types :
+         {SmallVector<Type>{bear}, SmallVector<Type>{koala, bear}}) {
+      Block block;
+      auto scope = block.addArgument(runtime::ScopeType::get(&context),
+                                     builder.getUnknownLoc());
+      for (auto type : types)
+        block.addArgument(type, builder.getUnknownLoc());
+      OpBuilder b(&context);
+      b.setInsertionPointToStart(&block);
+      auto payload = types;
+      if (types.size() == 1)
+        payload[0] = ark;
+      auto outcome = exec::OutcomeType::get(&context, payload);
+      auto returned =
+          exec::CompleteOp::create(b, builder.getUnknownLoc(), outcome, scope,
+                                   block.getArguments().drop_front());
+      codes.clear();
+      require(failed(verify(returned)) &&
+                  llvm::is_contained(codes, "execution-formation"),
+              "wrong payload or mixed-stage completion admitted");
+    }
+  });
   cases.run("unused callable declarations recheck represented ports", [&] {
     OwningOpRef<ModuleOp> module(ModuleOp::create(builder.getUnknownLoc()));
     OpBuilder b(module->getBody(), module->getBody()->end());
     auto binding = runtime::BindingOp::create(
         b, module->getLoc(), "literal", "field.constant",
         b.getArrayAttr({b.getStringAttr("koala-bear")}), "");
-    auto forged = runtime::RepresentedType::get(&context, koala, "blst/fr",
-                                                ArrayRef<Type>{});
     binding.setFunctionType(
-        executableBindingSignature(b.getFunctionType({}, {forged})));
+        executableBindingSignature(b.getFunctionType({}, {blst})));
     codes.clear();
     require(failed(verify(*module)) &&
-                llvm::is_contained(codes, "represented-type-formation"),
-            "unused binding accepted a forged represented port");
+                llvm::is_contained(codes, "binding-signature"),
+            "unused binding accepted a different represented field");
     binding.setFunctionType(
         executableBindingSignature(b.getFunctionType({}, {bear})));
     binding.setImplementation("plonky3/field.constant");
@@ -208,7 +205,10 @@ int main() {
       logical = variant(payload);
       physical = represented(logical, "logical.variant/0", children);
     }
-    SmallVector<Type> payload(512, logical), children(512, physical);
+    // Keep the logical tree within its own work bound. Its represented
+    // expansion repeats both logical and physical subtrees and exceeds that
+    // bound.
+    SmallVector<Type> payload(64, logical), children(64, physical);
     refuse(variant(payload), "logical.variant/0", children);
   });
   cases.run("text parser uses the same checked formation", [&] {

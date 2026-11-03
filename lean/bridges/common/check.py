@@ -4,6 +4,10 @@
 Uses the explicit BLS scalar-field and additive-group test interpretation. Does not
 execute a production field/curve backend. Every selected source is natively
 verified before export. Reports include seeds and original-byte identities.
+
+It also runs the shared program byte corpus through the native decoder (the
+`zkc-program_codec-test` beside the reference tool) and then the Lean program
+reader (`bridges/executable/corpus.py`), and reports their agreement.
 """
 import argparse
 import copy
@@ -15,10 +19,13 @@ import random
 import subprocess
 import tempfile
 import shutil
+import sys
 
 from native_entry import native_subject
 from structured import render, entry
+from bridges.common import source_format
 from bridges.common.schema import interpreted_type
+from bridges.common.replacement import replace_exactly_once
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
 
@@ -106,7 +113,7 @@ return %s, %d : !F,!F
             values.append((name,first[1],first[2] & second[2] & condition[2]))
         elif choice == 12:
             number = rng.randrange(1000000)
-            body.append(f'%{name} = "algebra.constant"() {{value="{number}"}} : ()->!F')
+            body.append(f'%{name} = "algebra.constant"() {{value=#algebra.literal<!F, {number} : ui255>}} : ()->!F')
             values.append((name,'f',{0,1,2}))
         elif choice == 13:
             if i % 2:
@@ -217,7 +224,7 @@ class Suite:
         return self.observe(left, data)
 
     def value(self, ty):
-        return self.rng.choice([False,True]) if ty[0]=='bool' else self.rng.randrange(97)
+        return self.rng.choice([False,True]) if interpreted_type(ty)[0]=='bool' else self.rng.randrange(97)
 
     def exercise(self, text, symbol='main', repetitions=2):
         source, exported, data = self.export(text,symbol)
@@ -226,7 +233,7 @@ class Suite:
         self.instructions.update(x[0][0] for x in selected[9][1])
         for _ in range(repetitions):
             for role in range(len(selected[6][1])):
-                inputs = [self.value(interpreted_type(ty)) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
+                inputs = [self.value(ty) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
                 request = ['scalar-control',role,inputs,[]]
                 for _ in range(65):
                     result = self.compare(source,exported,symbol,request)
@@ -239,14 +246,14 @@ class Suite:
                         stopped[3].append([action,['stop',stop]])
                         observed = self.compare(source,exported,symbol,stopped)
                         if not (observed[1] == ['stopped',stop]):
-                            raise AssertionError("bridges/common/check.py:190: observed[1] == ['stopped',stop]")
+                            raise AssertionError(f"reply stop {stop}: observed {observed[1]} at {action}")
                     altered = copy.deepcopy(request)
                     wrong = copy.deepcopy(action)
                     wrong[1] += '-wrong-site'
                     altered[3].append([wrong,['stop','abort']])
                     if not (self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']):
                         raise AssertionError("bridges/common/check.py:195: self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']")
-                    ty = action[3] if action[0]=='receive' else ['field',FIELD]
+                    ty = action[3] if action[0]=='receive' else ['apply','field',[['domain','Field',FIELD]]]
                     value = None if action[0]=='send' else self.value(ty)
                     request[3].append([action,['return',value]])
                 else:
@@ -318,10 +325,16 @@ class Suite:
         source, exported, data = self.export(wrap([], [('a', 'f', [0,1,2])], ('a','f'), [0,1,2]))
         request = self.wire_request(data, ['scalar-control',0,[0],[]])
         path = self.directory / 'raw-request.json'
-        controls = [json.dumps(request).replace('4096', '-0'),
-                    json.dumps(request).replace('4096', '1e0'),
-                    json.dumps(request).replace('4096', '0.0'),
-                    '{"x":0,"x":1}', json.dumps(request + ['extra'])]
+        # Noncanonical step capacities are refused while each tool reads the
+        # request, not later during execution.
+        for spelling in ('-0', '1e0', '0.0'):
+            path.write_text(replace_exactly_once(json.dumps(request), '4096', spelling))
+            execute([self.args.reference, 'open', source, 'main', path], ok=False,
+                    diagnostic='structured-reference-input')
+            refusal = json.loads(execute([self.args.lean, 'open', exported, path], ok=False))
+            if refusal != {'code': 'expected-natural', 'status': 'refused'}:
+                raise AssertionError((spelling, refusal))
+        controls = ['{"x":0,"x":1}', json.dumps(request + ['extra'])]
         for inputs in ([True], ['-0'], ['1e0'], [str(MODULUS)], [], ['0', '0']):
             changed = copy.deepcopy(request)
             changed[2] = inputs
@@ -422,8 +435,9 @@ def main():
             binaries[name] = {'path': str(original), 'sha256': hashlib.sha256(target.read_bytes()).hexdigest()}
             setattr(args, name, target)
         suite=Suite(args,temporary)
-        flags=['--source-format=zkc','--module=example=examples/projects/schnorr/main.zkc',
-               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--subject=schnorr::Schnorr<example::G>']
+        flags=source_format.with_option(['--module=example=examples/projects/schnorr/main.zkc',
+                                         '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc',
+                                         '--subject=schnorr::Schnorr<example::G>'])
         text, interface_text, interface = native_subject(execute, args.compiler, flags)
         if not (interface['original']==hashlib.sha256(text.encode()).hexdigest()):
             raise AssertionError("bridges/common/check.py:336: interface['original']==hashlib.sha256(text.encode()).hexdigest()")
@@ -437,9 +451,8 @@ def main():
             raise AssertionError("bridges/common/check.py:342: expected==(fixture.parent.parent/'SchnorrData.lean').read_text()")
         fixture_text=(ROOT/'compiler/test/fixtures/mathematical/schnorr-services.mlir').read_text()
         suite.exercise(fixture_text)
-        sumcheck_flags=['--source-format=zkc',
-                        '--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
-                        '--subject=scalar_sumcheck::Sumcheck']
+        sumcheck_flags=source_format.with_option(['--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
+                                                  '--subject=scalar_sumcheck::Sumcheck'])
         sumcheck_text, interface_text, sumcheck_interface = native_subject(execute, args.compiler, sumcheck_flags)
         if not (sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()):
             raise AssertionError("bridges/common/check.py:349: sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()")
@@ -456,9 +469,8 @@ def main():
         factor_controls=check_factor_forms(suite,ROOT,execute)
         algebra_sources=[]
         for entry in ('WithHelper', 'Inline', 'Residual'):
-            flags=['--source-format=zkc',
-                   '--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
-                   '--subject=scalar_algebra::'+entry]
+            flags=source_format.with_option(['--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
+                                             '--subject=scalar_algebra::'+entry])
             algebra_text, interface_text, algebra_interface = native_subject(execute, args.compiler, flags)
             algebra_symbol = algebra_interface['protocol']
             suite.exercise(algebra_text,algebra_symbol)
@@ -478,7 +490,13 @@ def main():
         negatives=suite.negatives(data)
         request_formats=suite.request_formats()
         control=suite.mutation_control()
+        codec=Path(binaries['reference']['path']).parent/'zkc-program_codec-test'
+        corpus_output=args.report.parent/'program-corpus'
+        subprocess.run([sys.executable,str(ROOT/'lean/bridges/executable/corpus.py'),'--codec',str(codec),
+                        '--output',str(corpus_output)],cwd=ROOT,check=True,timeout=3600)
+        program_corpus=json.loads((corpus_output/'report.json').read_text())['counts']
         report={'binaries':binaries,'seed':args.seed,'generated_cases':args.cases,'comparisons':suite.comparisons,
+                'program_corpus':program_corpus,
                 'negative_formats':negatives,'request_format_refusals':request_formats,
                 'mutation_control':control,'sources':suite.sources,
                 'sumcheck_controls':sumcheck_controls,'source_variation_checks':variation_checks,

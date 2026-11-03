@@ -115,7 +115,7 @@ theorem protocolOperationWithOn_interpret {I J : PIR.Signature}
     change ((leftSites.mark (qualifyProtocolSite context.applicationPrefix site)).bind
       (fun _ => .done (Values.nil : Values (Component model.Value) []))).interpret operations =
       (rightSites.mark (qualifyProtocolSite context.applicationPrefix site)).bind (fun _ => .done Values.nil)
-    simp only [PIR.Process.interpret_bind, sites (qualifyProtocolSite context.applicationPrefix site), PIR.Process.interpret]
+    simp only [PIR.Process.interpret_bind, sites.mark (qualifyProtocolSite context.applicationPrefix site), PIR.Process.interpret]
   | protocolApply signature roles site =>
     cases callbacks
     change (if (context.enter site roles).contains signature self then

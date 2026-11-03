@@ -55,7 +55,7 @@ def differenceWrapperReference (model : DomainModel) (high : model.Field scalarD
     PIR.Outcome (DifferenceWrapper.Output model) := .returned ⟨high - low⟩
 
 def differenceWrapperCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) =>
-  (differenceLaw model).Realizes (helper := GkrSourceBodies.helper58Helper) table
+  (differenceLaw model).Realizes (helper := GkrSourceBodies.helper31Helper) table
 
 theorem differenceWrapper (model : DomainModel) :
     DifferenceWrapper.Goal model (differenceWrapperReference model) (differenceWrapperCondition model) := by
@@ -73,7 +73,7 @@ def slopeWrapperReference (model : DomainModel) (low : model.Field scalarDomain)
     PIR.Outcome (SlopeWrapper.Output model) := .returned ⟨(high - low) * delta⟩
 
 def slopeWrapperCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) =>
-  (slopeLaw model).Realizes (helper := GkrSourceBodies.helper60Helper) table
+  (slopeLaw model).Realizes (helper := GkrSourceBodies.helper32Helper) table
 
 theorem slopeWrapper (model : DomainModel) :
     SlopeWrapper.Goal model (slopeWrapperReference model) (slopeWrapperCondition model) := by
@@ -91,7 +91,7 @@ def slopeCallbackReference (model : DomainModel) (low : model.Field scalarDomain
     PIR.Outcome (SlopeCallback.Output model) := .returned ⟨(high - low) * delta⟩
 
 def slopeCallbackCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) (_ : List (model.Field scalarDomain)) (_ : List (model.Field scalarDomain)) (_ : model.Field scalarDomain) =>
-  (slopeWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper68Helper) table
+  (slopeWrapperLaw model).Realizes (helper := GkrSourceBodies.helper81Helper) table
 
 theorem slopeCallback (model : DomainModel) :
     SlopeCallback.Goal model (slopeCallbackReference model) (slopeCallbackCondition model) := by
@@ -109,7 +109,7 @@ def totalWrapperReference (model : DomainModel) (left : model.Field scalarDomain
     PIR.Outcome (TotalWrapper.Output model) := .returned ⟨left + right⟩
 
 def totalWrapperCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) =>
-  (totalLaw model).Realizes (helper := GkrSourceBodies.helper67Helper) table
+  (totalLaw model).Realizes (helper := GkrSourceBodies.helper33Helper) table
 
 theorem totalWrapper (model : DomainModel) :
     TotalWrapper.Goal model (totalWrapperReference model) (totalWrapperCondition model) := by
@@ -127,7 +127,7 @@ def totalCallbackReference (model : DomainModel) (low : model.Field scalarDomain
     PIR.Outcome (TotalCallback.Output model) := .returned ⟨low + high⟩
 
 def totalCallbackCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) (_ : List (model.Field scalarDomain)) (_ : List (model.Field scalarDomain)) =>
-  (totalWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper71Helper) table
+  (totalWrapperLaw model).Realizes (helper := GkrSourceBodies.helper84Helper) table
 
 theorem totalCallback (model : DomainModel) :
     TotalCallback.Goal model (totalCallbackReference model) (totalCallbackCondition model) := by
@@ -141,54 +141,54 @@ noncomputable def totalCallbackLaw (model : DomainModel) :=
 /-- Complete scalar laws installed against the actual associated declarations. -/
 structure ScalarLaws (model : DomainModel)
     (table : Evaluation.MeaningsOn model.toCarriers closedInterface) : Prop where
-  difference : (differenceLaw model).Realizes (helper := GkrSourceBodies.helper58Helper) table
-  slope : (slopeLaw model).Realizes (helper := GkrSourceBodies.helper60Helper) table
-  total : (totalLaw model).Realizes (helper := GkrSourceBodies.helper67Helper) table
-  differenceWrapper : (differenceWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper67Helper) table
-  slopeWrapper : (slopeWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper68Helper) table
-  slopeCallback : (slopeCallbackLaw model).Realizes (helper := GkrSourceBodies.scopedHelper69Helper) table
-  totalWrapper : (totalWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper71Helper) table
-  totalCallback : (totalCallbackLaw model).Realizes (helper := GkrSourceBodies.scopedHelper72Helper) table
+  difference : (differenceLaw model).Realizes (helper := GkrSourceBodies.helper31Helper) table
+  slope : (slopeLaw model).Realizes (helper := GkrSourceBodies.helper32Helper) table
+  total : (totalLaw model).Realizes (helper := GkrSourceBodies.helper33Helper) table
+  differenceWrapper : (differenceWrapperLaw model).Realizes (helper := GkrSourceBodies.helper80Helper) table
+  slopeWrapper : (slopeWrapperLaw model).Realizes (helper := GkrSourceBodies.helper81Helper) table
+  slopeCallback : (slopeCallbackLaw model).Realizes (helper := GkrSourceBodies.helper82Helper) table
+  totalWrapper : (totalWrapperLaw model).Realizes (helper := GkrSourceBodies.helper84Helper) table
+  totalCallback : (totalCallbackLaw model).Realizes (helper := GkrSourceBodies.helper85Helper) table
 
 theorem installScalars (model : DomainModel) (definitions : List CheckedDefinition)
     (linked : DeclarationsLinked [] definitions) (bodies : ScalarBodies definitions) :
     ScalarLaws model (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []) := by
-  have difference := (differenceLaw model).realizes (helper := GkrSourceBodies.helper58Helper)
+  have difference := (differenceLaw model).realizes (helper := GkrSourceBodies.helper31Helper)
     definitions linked bodies.difference (by
       intro arguments
       obtain ⟨view, rfl⟩ := Difference.Inputs.pack_surjective arguments
       trivial)
-  have slope := (slopeLaw model).realizes (helper := GkrSourceBodies.helper60Helper)
+  have slope := (slopeLaw model).realizes (helper := GkrSourceBodies.helper32Helper)
     definitions linked bodies.slope (by
       intro arguments
       obtain ⟨view, rfl⟩ := Slope.Inputs.pack_surjective arguments
       trivial)
-  have total := (totalLaw model).realizes (helper := GkrSourceBodies.helper67Helper)
+  have total := (totalLaw model).realizes (helper := GkrSourceBodies.helper33Helper)
     definitions linked bodies.total (by
       intro arguments
       obtain ⟨view, rfl⟩ := Total.Inputs.pack_surjective arguments
       trivial)
-  have differenceWrapper := (differenceWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper67Helper)
+  have differenceWrapper := (differenceWrapperLaw model).realizes (helper := GkrSourceBodies.helper80Helper)
     definitions linked bodies.differenceWrapper (by
       intro arguments
       obtain ⟨view, rfl⟩ := DifferenceWrapper.Inputs.pack_surjective arguments
       exact difference)
-  have slopeWrapper := (slopeWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper68Helper)
+  have slopeWrapper := (slopeWrapperLaw model).realizes (helper := GkrSourceBodies.helper81Helper)
     definitions linked bodies.slopeWrapper (by
       intro arguments
       obtain ⟨view, rfl⟩ := SlopeWrapper.Inputs.pack_surjective arguments
       exact slope)
-  have slopeCallback := (slopeCallbackLaw model).realizes (helper := GkrSourceBodies.scopedHelper69Helper)
+  have slopeCallback := (slopeCallbackLaw model).realizes (helper := GkrSourceBodies.helper82Helper)
     definitions linked bodies.slopeCallback (by
       intro arguments
       obtain ⟨view, rfl⟩ := SlopeCallback.Inputs.pack_surjective arguments
       exact slopeWrapper)
-  have totalWrapper := (totalWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper71Helper)
+  have totalWrapper := (totalWrapperLaw model).realizes (helper := GkrSourceBodies.helper84Helper)
     definitions linked bodies.totalWrapper (by
       intro arguments
       obtain ⟨view, rfl⟩ := TotalWrapper.Inputs.pack_surjective arguments
       exact total)
-  have totalCallback := (totalCallbackLaw model).realizes (helper := GkrSourceBodies.scopedHelper72Helper)
+  have totalCallback := (totalCallbackLaw model).realizes (helper := GkrSourceBodies.helper85Helper)
     definitions linked bodies.totalCallback (by
       intro arguments
       obtain ⟨view, rfl⟩ := TotalCallback.Inputs.pack_surjective arguments

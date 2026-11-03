@@ -70,12 +70,18 @@ bool matchesSubject(const SourceClaimBlock &block, const ClosedEntry &entry) {
          protocol->origin && protocol->origin->index == block.subject->index &&
          protocol->staticArguments == block.arguments;
 }
-// A path traverses only explicitly labelled calls. Repeated occurrences are
-// static sites, not dynamic loop iterations. No synthetic ordinal is exported.
-using Sites = std::map<std::string, const Operation *>;
-Error exportedSites(ArrayRef<Declaration> declarations, const Body *body,
-                    StringRef prefix, Sites &sites, detail::Work &work,
-                    unsigned depth = 1) {
+// A path traverses labelled calls and selected alternatives. Repeated
+// occurrences are static sites, not dynamic loop iterations.
+struct ExportedSite {
+  const Operation *operation;
+  std::vector<std::string> nativePath;
+};
+using Sites = std::map<std::string, ExportedSite>;
+Error exportedSites(
+    ArrayRef<Declaration> declarations, const Body *body, StringRef prefix,
+    Sites &sites, detail::Work &work, unsigned depth = 1,
+    std::vector<std::string> nativeParents = {},
+    std::optional<std::pair<std::string, std::string>> selectedScope = {}) {
   if (!body)
     return Error::success();
   if (depth > work.limits.callDepth)
@@ -86,19 +92,52 @@ Error exportedSites(ArrayRef<Declaration> declarations, const Body *body,
     auto path = op.site ? (prefix + *op.site).str() : std::string();
     if (path.size() > work.limits.symbolBytes)
       return detail::failure("source.limit", "source claim site path exceeded");
-    if (op.site && !sites.emplace(path, &op).second)
-      return detail::failure("source.claim.site", "ambiguous exported site",
-                             op.span);
-    if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
-      if (auto e = exportedSites(declarations, repeat->region.get(), prefix,
-                                 sites, work, depth + 1))
-        return e;
-    } else if (auto *call = std::get_if<ProtocolApplication>(&op.action)) {
-      if (op.site)
-        if (auto e = exportedSites(declarations,
-                                   declarations[call->callee.index].body.get(),
-                                   path + ".", sites, work, depth + 1))
+    std::string nativeSite;
+    if (op.site) {
+      nativeSite = nativeSiteName(*op.site, 0);
+      if (selectedScope)
+        nativeSite = nativeSelectedSite(selectedScope->first,
+                                        selectedScope->second, nativeSite);
+      auto nativePath = nativeParents;
+      nativePath.push_back(nativeSite);
+      for (const auto &part : nativePath)
+        if (auto e = work.charge(part.size() + 1, op.span))
           return e;
+      if (!sites.emplace(path, ExportedSite{&op, std::move(nativePath)}).second)
+        return detail::failure("source.claim.site", "ambiguous exported site",
+                               op.span);
+    }
+    if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+      if (auto e =
+              exportedSites(declarations, repeat->region.get(), prefix, sites,
+                            work, depth + 1, nativeParents, selectedScope))
+        return e;
+    } else if (auto *control = std::get_if<Control>(&op.action)) {
+      if (!op.site)
+        continue;
+      for (unsigned arm = 0; arm < control->regions.size(); ++arm) {
+        auto alternative =
+            control->kind == Control::Kind::If
+                ? (arm == 0 ? std::string("then") : std::string("else"))
+                : control->alternatives[arm];
+        if (auto e = exportedSites(
+                declarations, control->regions[arm].get(),
+                path + "." + alternative + ".", sites, work, depth + 1,
+                nativeParents,
+                std::pair(nativeSite, control->kind == Control::Kind::If
+                                          ? alternative
+                                          : nativeAlternativeName(arm))))
+          return e;
+      }
+    } else if (auto *call = std::get_if<ProtocolApplication>(&op.action)) {
+      if (op.site) {
+        auto parents = nativeParents;
+        parents.push_back(nativeSite);
+        if (auto e = exportedSites(
+                declarations, declarations[call->callee.index].body.get(),
+                path + ".", sites, work, depth + 1, std::move(parents)))
+          return e;
+      }
     }
   }
   return Error::success();
@@ -168,6 +207,61 @@ json::Object sourceNode(const CheckedProject &project, Span span) {
                       {"begin", span.begin},
                       {"end", span.end}};
 }
+/// A placement tree with role names instead of ordinals. Product arguments
+/// keep telescope order; set roles keep roster order.
+Expected<json::Value> placementData(const ValuePlacement &value,
+                                    ArrayRef<std::string> names,
+                                    detail::Work &work, unsigned depth = 0) {
+  if (depth > 128)
+    return detail::failure("source.limit", "component placement depth");
+  if (auto e = work.charge(1))
+    return std::move(e);
+  auto name = [&](unsigned role) -> Expected<json::Value> {
+    if (role >= names.size())
+      return detail::failure("component-declaration",
+                             "placement role is outside its telescope");
+    return json::Value(names[role]);
+  };
+  auto list = [&](ArrayRef<unsigned> roles) -> Expected<json::Array> {
+    json::Array result;
+    for (auto role : roles) {
+      auto value = name(role);
+      if (!value)
+        return value.takeError();
+      result.push_back(std::move(*value));
+    }
+    return result;
+  };
+  if (const auto *data = std::get_if<DataPlacement>(&value.value)) {
+    auto roles = list(data->roles);
+    if (!roles)
+      return roles.takeError();
+    return json::Array{"data", std::move(*roles)};
+  }
+  if (const auto *oracle = std::get_if<OraclePlacement>(&value.value)) {
+    auto holder = name(oracle->holder);
+    auto receivers = list(oracle->receivers);
+    if (!holder || !receivers) {
+      consumeError(holder.takeError());
+      consumeError(receivers.takeError());
+      return detail::failure("component-declaration",
+                             "placement role is outside its telescope");
+    }
+    return json::Array{"oracle", std::move(*holder), std::move(*receivers)};
+  }
+  const auto &product = std::get<ProductPlacement>(value.value);
+  auto arguments = list(product.arguments);
+  if (!arguments)
+    return arguments.takeError();
+  json::Array fields;
+  for (const auto &field : product.fields) {
+    auto encoded = placementData(field, names, work, depth + 1);
+    if (!encoded)
+      return encoded.takeError();
+    fields.push_back(std::move(*encoded));
+  }
+  return json::Array{"product", std::move(*arguments), std::move(fields)};
+}
 } // namespace
 
 Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
@@ -179,6 +273,24 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
   json::Array records, protocols;
   bool required = false;
   std::set<std::string> seen;
+  // Every record, logical-record, variant and module path in any carrier term,
+  // including nested, phantom and associated-module arguments.
+  std::set<std::string> nominals;
+  std::function<Error(const Type &, unsigned)> nominalPaths =
+      [&](const Type &type, unsigned depth) -> Error {
+    if (depth > limits.typeDepth)
+      return detail::failure("source.limit", "component declaration depth");
+    if (auto e = work.charge(1))
+      return e;
+    using K = Type::Kind;
+    if (type.kind == K::Record || type.kind == K::LogicalRecord ||
+        type.kind == K::Variant || type.kind == K::Module)
+      nominals.insert(type.domain);
+    for (const auto &argument : type.arguments)
+      if (auto e = nominalPaths(argument, depth + 1))
+        return e;
+    return Error::success();
+  };
   std::map<std::string, const Declaration *> declarations;
   for (const auto &declaration : entry.declarations()) {
     if (auto e = work.charge(1, declaration.span))
@@ -239,7 +351,19 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
     auto term = encodeStaticTerm(type);
     if (!term)
       return term.takeError();
-    auto fields = [&](ArrayRef<LayoutField> source) -> Expected<json::Array> {
+    if (auto e = nominalPaths(type, 0))
+      return e;
+    // The telescope names the row's own roles in declaration order. Only a
+    // logical record has one; its members' formulas range over it. A
+    // telescope-free logical record has no member formulas.
+    std::vector<std::string> telescope;
+    if (type.kind == K::LogicalRecord)
+      telescope = (*layout)->roleParameters;
+    const bool placed = !telescope.empty();
+    if (auto e = work.charge(telescope.size() + 1))
+      return e;
+    auto fields = [&](ArrayRef<LayoutField> source,
+                      bool placed) -> Expected<json::Array> {
       json::Array result;
       for (const auto &field : source) {
         if (auto e = work.charge(field.name.size() + 1))
@@ -247,27 +371,57 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
         auto term = encodeStaticTerm(field.layout->type);
         if (!term)
           return term.takeError();
-        result.push_back(json::Array{field.name, std::move(*term)});
+        if (auto e = nominalPaths(field.layout->type, 0))
+          return std::move(e);
+        json::Value placement = nullptr;
+        if (placed) {
+          if (!field.placement)
+            return detail::failure("component-declaration",
+                                   "logical member has no placement");
+          auto encoded = placementData(*field.placement, telescope, work);
+          if (!encoded)
+            return encoded.takeError();
+          placement = std::move(*encoded);
+        }
+        result.push_back(
+            json::Array{field.name, std::move(*term), std::move(placement)});
       }
       return result;
     };
-    auto members = fields((*layout)->fields);
+    auto members = fields((*layout)->fields, placed);
     if (!members)
       return members.takeError();
     for (const auto &alternative : (*layout)->alternatives) {
       if (auto e = work.charge(alternative.name.size() + 1))
         return e;
-      auto payload = fields(alternative.fields);
+      auto payload = fields(alternative.fields, false);
       if (!payload)
         return payload.takeError();
       members->push_back(json::Array{alternative.name, std::move(*payload)});
+    }
+    json::Array roles;
+    for (const auto &role : telescope)
+      roles.push_back(role);
+    // The custody slot names the row's resource units, exactly as its layout
+    // prefixes them.
+    json::Value slot = nullptr;
+    if (declaration.resource) {
+      constexpr StringLiteral unit = "resource_unit:";
+      const auto *leaf = (*layout)->custody && !(*layout)->leaves.empty()
+                             ? (*layout)->leaves.front().data()
+                             : nullptr;
+      if (!leaf || !StringRef(*leaf).starts_with(unit))
+        return detail::failure("component-declaration",
+                               "resource row has no custody slot");
+      slot = StringRef(*leaf).drop_front(unit.size());
     }
     records.push_back(json::Array{std::move(*term),
                                   !declaration.resource ? "ordinary"
                                   : *declaration.resource == Resource::Linear
                                       ? "linear"
                                       : "affine",
-                                  declaration.sealed, std::move(*members)});
+                                  declaration.sealed, std::move(*members),
+                                  std::move(roles), std::move(slot)});
     return Error::success();
   };
   std::function<Error(const Body &, unsigned)> retainBody =
@@ -285,7 +439,7 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
           if (auto e = retainBody(*repeat->region, depth + 1))
             return e;
       } else if (const auto *control =
-                     std::get_if<LocalControl>(&operation.action)) {
+                     std::get_if<Control>(&operation.action)) {
         for (const auto &region : control->regions)
           if (region)
             if (auto e = retainBody(*region, depth + 1))
@@ -319,11 +473,25 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
         auto term = encodeStaticTerm(port.type);
         if (!term)
           return term.takeError();
+        if (auto e = nominalPaths(port.type, 0))
+          return std::move(e);
+        // The participant list is a summary of the placement tree, which
+        // ranges over the protocol's native role names.
+        if (!layout->placement)
+          return detail::failure("component-declaration",
+                                 "protocol port has no placement");
+        std::vector<std::string> roster;
+        for (unsigned role = 0; role < declaration.roles.size(); ++role)
+          roster.push_back(nativeRoleName(role));
+        auto placement = placementData(*layout->placement, roster, work);
+        if (!placement)
+          return placement.takeError();
         json::Array roles;
-        for (auto role : port.roles)
+        for (auto role : placementRoles(*layout->placement))
           roles.push_back(nativeRoleName(role));
         ports.push_back(json::Array{port.name, std::move(*term),
-                                    std::move(roles), offset, layout->size()});
+                                    std::move(roles), offset, layout->size(),
+                                    std::move(*placement)});
         if (offset > std::numeric_limits<unsigned>::max() - layout->size())
           return detail::failure("source.limit", "component port leaves");
         offset += layout->size();
@@ -333,11 +501,22 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
     protocols.push_back(json::Array{declaration.symbol, std::move(sides[0]),
                                     std::move(sides[1])});
   }
+  json::Array authorities;
   if (!required) {
     records.clear();
     protocols.clear();
-  }
-  json::Value value = json::Array{std::move(records), std::move(protocols)};
+  } else
+    for (const auto &path : nominals) {
+      if (auto e = work.charge(path.size() + 1))
+        return std::move(e);
+      auto authority = sourceAuthority(entry.project(), path);
+      if (!authority)
+        return authority.takeError();
+      authorities.push_back(json::Array{
+          path, *authority ? json::Value(**authority) : json::Value(nullptr)});
+    }
+  json::Value value = json::Array{std::move(records), std::move(protocols),
+                                  std::move(authorities)};
   if (!jsonWithinByteLimit(value, limits.interfaceBytes))
     return detail::failure("source.limit", "component declaration bytes");
   ownJsonStrings(value);
@@ -844,8 +1023,9 @@ Expected<json::Value> sourceClaimsData(const ClosedEntry &entry,
           for (const auto &capability : value->arguments)
             capabilities.getAsArray()->push_back(expression(capability));
         // Occurrence proposals are attachments. Native paths follow labelled
-        // calls and the final source site; aggregate messages may have several
-        // native leaves, which the admitted construction context must resolve.
+        // calls and exact selected-arm scopes; aggregate messages may have
+        // several native leaves, which the admitted construction context must
+        // resolve.
         json::Array siteBindings;
         std::set<std::string> referencedSites;
         std::function<void(const E &)> collectSites = [&](const E &value) {
@@ -857,14 +1037,12 @@ Expected<json::Value> sourceClaimsData(const ClosedEntry &entry,
         };
         collectSites(property);
         for (const auto &path : referencedSites) {
-          SmallVector<StringRef> parts;
-          StringRef(path).split(parts, '.');
           json::Array nativePath;
-          for (auto part : parts)
-            nativePath.push_back(nativeSiteName(part, 0));
+          for (const auto &part : sites.at(path).nativePath)
+            nativePath.push_back(part);
           siteBindings.push_back(json::Object{
               {"site", path},
-              {"source", sourceNode(project, sites.at(path)->span)},
+              {"source", sourceNode(project, sites.at(path).operation->span)},
               {"native_path", std::move(nativePath)}});
         }
         json::Value method = nullptr;

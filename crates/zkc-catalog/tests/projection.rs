@@ -8,8 +8,20 @@ use zkc_catalog::{CATALOG, Facet, Kind, NumericalResult, Signature, Term};
 fn source() -> Value {
     serde_json::from_str(include_str!("../../../common/catalog/declarations.json")).unwrap()
 }
+fn installation() -> Value {
+    serde_json::from_str(include_str!("../../../common/catalog/installation.json")).unwrap()
+}
+fn check_both(declarations: &Value, installation: &Value) -> Result<String, String> {
+    projection::generate(
+        &serde_json::to_vec(declarations).unwrap(),
+        &serde_json::to_vec(installation).unwrap(),
+    )
+}
 fn check(value: &Value) -> Result<String, String> {
-    projection::generate(&serde_json::to_vec(value).unwrap())
+    check_both(value, &installation())
+}
+fn check_installation(value: &Value) -> Result<String, String> {
+    check_both(&source(), value)
 }
 fn operation<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
     value["operations"]
@@ -24,6 +36,10 @@ fn operation<'a>(value: &'a mut Value, name: &str) -> &'a mut Value {
 fn complete_static_inventory() {
     let value = source();
     for (key, count) in [
+        ("frontendDeclarations", CATALOG.frontend_declarations.len()),
+        ("frontendNotations", CATALOG.frontend_notations.len()),
+        ("frontendHomes", CATALOG.frontend_homes.len()),
+        ("serviceMethods", CATALOG.service_methods.len()),
         ("sorts", CATALOG.sorts.len()),
         ("types", CATALOG.types.len()),
         ("operations", CATALOG.operations.len()),
@@ -84,6 +100,16 @@ fn complete_static_inventory() {
             ..
         }]
     ));
+    assert_eq!(
+        pass.facets,
+        [Facet::Succession {
+            state_input: 0,
+            state_output: 0
+        }]
+    );
+    for name in ["resource_unit.create", "resource_unit.consume"] {
+        assert!(zkc_catalog::operation(name).unwrap().facets.is_empty());
+    }
     assert!(matches!(
         zkc_catalog::operation("numerical.map").unwrap().signature,
         Signature::Numerical {
@@ -193,7 +219,7 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
     assert_eq!(profile.implementation, ConsumerImplementation::Unselected);
     assert_eq!(
         profile.type_constructors,
-        ["index", "bool", "field", "vector"]
+        ["index", "bool", "field", "vector", "resource_unit"]
     );
     assert_eq!(
         profile.parameter_validators,
@@ -216,13 +242,18 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
         ("vector.equal", true),
         ("field.equal", true),
         ("field.embed", true),
+        ("resource_unit.create", false),
+        ("resource_unit.pass", false),
+        ("resource_unit.consume", false),
     ];
     assert_eq!(profile.operations.len(), expected.len());
     for (entry, (name, field)) in profile.operations.iter().zip(expected) {
         assert_eq!(entry.operation, name);
         assert_eq!(
             entry.static_parameters,
-            if field {
+            if name.starts_with("resource_unit.") {
+                &[Kind::Domain("Slot")][..]
+            } else if field {
                 &[Kind::Domain("Field")][..]
             } else {
                 &[]
@@ -389,39 +420,52 @@ fn shapes(value: &Value, path: String, out: &mut BTreeMap<String, String>) {
 
 #[test]
 fn unknown_and_missing_fields_refuse_at_every_record_shape() {
-    let original = source();
-    let mut cases = BTreeMap::new();
-    shapes(&original, String::new(), &mut cases);
-    assert!(cases.len() > 30);
-    for path in cases.values() {
-        let mut changed = original.clone();
-        changed
-            .pointer_mut(path)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .insert("unexpected".into(), json!(0));
-        assert!(check(&changed).is_err(), "unknown field at {path}");
-        // Optional fields may legitimately disappear; remove all fields for a
-        // missing-shape control instead of treating optional data as required.
-        changed
-            .pointer_mut(path)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .clear();
-        assert!(check(&changed).is_err(), "missing fields at {path}");
+    type Check = fn(&Value) -> Result<String, String>;
+    let documents: [(Value, Check, usize); 2] = [
+        (source(), check, 30),
+        (installation(), check_installation, 10),
+    ];
+    for (original, check, minimum) in documents {
+        let mut cases = BTreeMap::new();
+        shapes(&original, String::new(), &mut cases);
+        assert!(cases.len() > minimum);
+        for path in cases.values() {
+            let mut changed = original.clone();
+            changed
+                .pointer_mut(path)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .insert("unexpected".into(), json!(0));
+            assert!(check(&changed).is_err(), "unknown field at {path}");
+            // Optional fields may legitimately disappear; remove all fields for a
+            // missing-shape control instead of treating optional data as required.
+            changed
+                .pointer_mut(path)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .clear();
+            assert!(check(&changed).is_err(), "missing fields at {path}");
+        }
     }
 }
 
 #[test]
 fn duplicate_keys_and_noninteger_counts_refuse() {
-    let text = serde_json::to_string(&source()).unwrap();
-    let duplicate = text.replacen('{', "{\"format\":\"zkc.contract-declarations/0\",", 1);
+    let declarations = serde_json::to_string(&source()).unwrap();
+    let installed = serde_json::to_string(&installation()).unwrap();
+    let duplicate = declarations.replacen('{', "{\"format\":\"zkc.contract-declarations/0\",", 1);
     assert!(
-        projection::generate(duplicate.as_bytes())
+        projection::generate(duplicate.as_bytes(), installed.as_bytes())
             .unwrap_err()
             .contains("duplicate key")
+    );
+    let duplicate = installed.replacen('{', "{\"format\":\"zkc.native-installation/0\",", 1);
+    let error = projection::generate(declarations.as_bytes(), duplicate.as_bytes()).unwrap_err();
+    assert!(
+        error.contains("native installation: duplicate key"),
+        "{error}"
     );
     for value in [
         json!(-1),
@@ -527,6 +571,141 @@ fn cross_references_and_permissions_refuse() {
 }
 
 #[test]
+fn source_vocabulary_columns_are_exact() {
+    let original = source();
+    let row = |name: &str| -> usize {
+        original["types"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|t| t["name"] == name)
+            .unwrap()
+    };
+    for (name, field, value, message) in [
+        ("field", "sourceData", Value::Null, "expected Boolean"),
+        ("field", "sourceData", json!("true"), "expected Boolean"),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 3, "element": "parameter"}),
+            "collection rank",
+        ),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 0, "element": "parameter"}),
+            "collection rank",
+        ),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 1, "element": "row"}),
+            "unknown declaration alternative row",
+        ),
+        (
+            "vector",
+            "collection",
+            json!({"rank": 1}),
+            "missing field element",
+        ),
+        (
+            "vector",
+            "collection",
+            json!("parameter"),
+            "expected declaration object",
+        ),
+        (
+            "prover_key",
+            "setup",
+            json!("both"),
+            "unknown declaration alternative both",
+        ),
+        (
+            "prover_key",
+            "setup",
+            json!(false),
+            "expected declaration string",
+        ),
+    ] {
+        let mut changed = original.clone();
+        changed["types"][row(name)][field] = value;
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(message), "{name}.{field}: {error}");
+    }
+    for field in ["sourceData", "collection", "setup"] {
+        let mut changed = original.clone();
+        changed["types"][0].as_object_mut().unwrap().remove(field);
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(&format!("missing field {field}")), "{error}");
+    }
+}
+
+#[test]
+fn succession_transfers_exactly_one_resource_identity() {
+    let mut base = source();
+    let mut example = operation(&mut base, "resource_unit.pass").clone();
+    example["name"] = json!("example.succession");
+    base["operations"].as_array_mut().unwrap().push(example);
+    assert!(check(&base).is_ok());
+    type Mutation = (&'static str, fn(&mut Value));
+    let cases: &[Mutation] = &[
+        ("unscoped declaration reference", |op| {
+            op["facets"][0]["stateInput"] = json!(1);
+        }),
+        ("unscoped declaration reference", |op| {
+            op["facets"][0]["stateOutput"] = json!(1);
+        }),
+        ("facet port constructor mismatch", |op| {
+            op["signature"]["inputs"][0] = json!({"constructor": "bool", "arguments": []});
+        }),
+        ("succession resource type mismatch", |op| {
+            op["scope"].as_array_mut().unwrap().push(json!(
+                {"kind": "root", "name": "T", "parameter": {"kind": "Domain", "sort": "Slot"}}
+            ));
+            op["signature"]["outputs"][0]["arguments"] = json!([1]);
+        }),
+        ("succession admits no other resource port", |op| {
+            let extra = op["signature"]["inputs"][0].clone();
+            op["signature"]["inputs"]
+                .as_array_mut()
+                .unwrap()
+                .push(extra);
+        }),
+        ("succession admits no other resource port", |op| {
+            let extra = op["signature"]["outputs"][0].clone();
+            op["signature"]["outputs"]
+                .as_array_mut()
+                .unwrap()
+                .insert(0, extra);
+        }),
+    ];
+    for (message, mutate) in cases {
+        let mut changed = base.clone();
+        mutate(operation(&mut changed, "example.succession"));
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(message), "{message}: {error}");
+    }
+    // A Slot reached through an associated member is not the scope's root.
+    let mut projected = base.clone();
+    projected["members"].as_array_mut().unwrap().push(json!({
+        "name": "Unit",
+        "owner": {"kind": "Domain", "sort": "Field"},
+        "result": {"kind": "Domain", "sort": "Slot"}
+    }));
+    let op = operation(&mut projected, "example.succession");
+    op["scope"] = json!([
+        {"kind": "root", "name": "F", "parameter": {"kind": "Domain", "sort": "Field"}},
+        {"kind": "project", "member": "Unit", "parent": 0}
+    ]);
+    op["signature"]["inputs"][0]["arguments"] = json!([1]);
+    op["signature"]["outputs"][0]["arguments"] = json!([1]);
+    let error = check(&projected).unwrap_err();
+    assert!(error.contains("succession requires a Slot root"), "{error}");
+    operation(&mut projected, "example.succession")["facets"] = json!([]);
+    assert!(check(&projected).is_ok());
+}
+
+#[test]
 fn complete_type_ports_do_not_depend_on_authoring_inheritance() {
     let mut value = source();
     value["operations"].as_array_mut().unwrap().push(json!({
@@ -615,4 +794,189 @@ fn native_index_blocks_have_distinct_product_and_search_contracts() {
     operation(&mut scalar, "transcript.native.indexed.indices")["facets"][0]["domain"] =
         json!("BoundedIndex");
     assert!(check(&scalar).is_err());
+}
+
+#[test]
+fn frontend_association_mutations_refuse() {
+    let original = source();
+    assert!(check(&original).is_ok());
+    for (section, field, value) in [
+        (
+            "frontendDeclarations",
+            "association",
+            json!({"kind": "rule", "target": "RecordUnpack"}),
+        ),
+        (
+            "frontendDeclarations",
+            "association",
+            json!({"kind": "rule", "target": "RecordUnknown"}),
+        ),
+        ("frontendDeclarations", "authority", json!("all-records")),
+        ("frontendNotations", "target", json!("unknown")),
+        ("frontendHomes", "constructor", json!("Vector")),
+        ("frontendHomes", "module", json!("foreign")),
+        ("serviceMethods", "signature", json!("Unknown")),
+        ("serviceMethods", "capability", json!("IndexRandomness")),
+    ] {
+        let mut changed = original.clone();
+        changed[section][0][field] = value;
+        assert!(check(&changed).is_err(), "{section}.{field}");
+    }
+    for section in [
+        "frontendDeclarations",
+        "frontendRules",
+        "frontendNotations",
+        "frontendHomes",
+        "serviceSignatures",
+        "serviceMethods",
+    ] {
+        let mut changed = original.clone();
+        let duplicate = changed[section][0].clone();
+        changed[section].as_array_mut().unwrap().push(duplicate);
+        assert!(check(&changed).is_err(), "duplicate {section}");
+    }
+    let mut renamed = original.clone();
+    renamed["frontendDeclarations"][0]["name"] = json!("OpenService");
+    assert!(check(&renamed).is_ok());
+}
+
+type Mutation = (&'static str, fn(&mut Value));
+
+fn rows<'a>(value: &'a mut Value, table: &str) -> &'a mut Vec<Value> {
+    value[table].as_array_mut().unwrap()
+}
+fn refuse(original: &Value, cases: &[Mutation], check: fn(&Value) -> Result<String, String>) {
+    assert!(check(original).is_ok());
+    for (message, mutate) in cases {
+        let mut changed = original.clone();
+        mutate(&mut changed);
+        let error = check(&changed).expect_err(message);
+        assert!(error.contains(message), "{message}: {error}");
+    }
+}
+
+#[test]
+fn staged_catalog_documents_validate_together() {
+    let generated = check(&source()).unwrap();
+    // A physical-only change leaves the logical projection unchanged: the
+    // installation tables are the separate INSTALLATION static.
+    let mut changed = installation();
+    rows(&mut changed, "representations").retain(|row| row["identity"] != "arkworks.mle-msb/0");
+    let physical = check_installation(&changed).unwrap();
+    let logical = |code: &str| {
+        code.split("pub static INSTALLATION")
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(logical(&physical), logical(&generated));
+    assert_ne!(physical, generated);
+    assert!(!logical(&generated).contains("arkworks.mle-msb/0"));
+    for table in [
+        "domains",
+        "logicalTypes",
+        "frameTags",
+        "codecs",
+        "aggregateFrames",
+        "randomServices",
+        "limits",
+        "finiteDefinitions",
+        "domainConstructors",
+    ] {
+        assert!(!source()[table].as_array().unwrap().is_empty(), "{table}");
+    }
+}
+
+#[test]
+fn unknown_and_missing_root_keys_refuse_in_each_document() {
+    let mut declarations = source();
+    declarations["unexpected"] = json!([]);
+    let error = check(&declarations).unwrap_err();
+    assert!(error.contains("unknown field unexpected"), "{error}");
+    let mut installed = installation();
+    installed["unexpected"] = json!([]);
+    let error = check_installation(&installed).unwrap_err();
+    assert!(
+        error.contains("native installation: unknown field unexpected"),
+        "{error}"
+    );
+    for key in [
+        "domains",
+        "logicalTypes",
+        "frameTags",
+        "codecs",
+        "aggregateFrames",
+        "randomServices",
+        "limits",
+        "finiteDefinitions",
+        "domainConstructors",
+    ] {
+        let mut changed = source();
+        changed.as_object_mut().unwrap().remove(key);
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains(&format!("missing field {key}")), "{error}");
+    }
+    for key in [
+        "format",
+        "representations",
+        "appliedRepresentations",
+        "providers",
+        "providerUnits",
+        "fieldForms",
+        "physicalArguments",
+    ] {
+        let mut changed = installation();
+        changed.as_object_mut().unwrap().remove(key);
+        let error = check_installation(&changed).unwrap_err();
+        assert!(error.contains(&format!("missing field {key}")), "{error}");
+    }
+    let mut changed = installation();
+    changed["format"] = json!("zkc.native-installation/1");
+    assert!(
+        check_installation(&changed)
+            .unwrap_err()
+            .contains("unknown declaration alternative zkc.native-installation/1")
+    );
+}
+
+// The shared case list (`common/catalog/validation-cases.json`) owns the
+// refusal cases of the installed-instance and installation rules. These remain
+// specific to this reader: a JSON value of another type, and type pattern trees
+// that the TableGen projection cannot spell.
+#[test]
+fn json_types_and_unspellable_pattern_trees_refuse() {
+    refuse(
+        &source(),
+        &[(
+            "limit value must be a JSON integer from 0 to 2^63 - 1",
+            |v| {
+                v["limits"][0]["value"] = json!("1024");
+            },
+        )],
+        check,
+    );
+    refuse(
+        &installation(),
+        &[
+            (
+                "Type patterns are constructor applications, never variant, oracle or service trees",
+                |v| {
+                    v["appliedRepresentations"][2]["arguments"][0] =
+                        json!(["type", ["variant", ["atom", "Choice"], [["some", []]]]]);
+                },
+            ),
+            (
+                "Type patterns are constructor applications, never variant, oracle or service trees",
+                |v| {
+                    v["appliedRepresentations"][2]["arguments"][0] =
+                        json!(["type", ["oracle", "vector", []]]);
+                },
+            ),
+            ("Type patterns are constructor applications", |v| {
+                v["appliedRepresentations"][2]["arguments"][0] =
+                    json!(["type", ["service", "random.bls12-381.fr/0"]]);
+            }),
+        ],
+        check_installation,
+    );
 }

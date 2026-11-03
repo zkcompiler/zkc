@@ -200,7 +200,7 @@ fn nested(directory: &Fixtures) {
                 .reached
                 .iter()
                 .filter(|r| r.step.role == 0 && r.loop_started)
-                .map(|r| (r.iterations.clone(), r.loop_count.unwrap()))
+                .map(|r| (r.iterations.to_vec(), r.loop_count.unwrap()))
                 .collect();
             let mut expected = vec![(vec![], count)];
             expected.extend((0..count).map(|i| (vec![i], i)));
@@ -691,7 +691,7 @@ fn execute(directory: &Fixtures) {
                 .reached
                 .iter()
                 .filter(|r| r.sent_bytes.is_some() && r.replacement_bytes.is_none())
-                .map(|r| r.iterations.clone())
+                .map(|r| r.iterations.to_vec())
                 .collect();
             assert_eq!(
                 occurrences,

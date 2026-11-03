@@ -97,14 +97,20 @@ struct Loop {
   Names outputs;
 };
 
-/// Role-local structured control. Regions have explicit captures and yield
-/// their ordered results; protocol interaction remains outside these regions.
-struct Conditional {
+/// Selected structured control with closed captures and ordered typed yields.
+/// Local functions list captured names: scoped local regions canonicalize
+/// aliased captures before emission. Participant bodies bind each distinct arm
+/// formal to its parent value, so Copy aliases keep separate storage bindings,
+/// as participant loops do. Service roots remain immutable participant
+/// metadata.
+template <typename Captures> struct SelectedConditional {
   std::string condition;
-  Names captures;
+  Captures captures;
   Body thenBody, elseBody;
   Names outputs;
 };
+using Conditional = SelectedConditional<Names>;
+using ParticipantConditional = SelectedConditional<protocol::Assignments>;
 struct For {
   std::string induction, lower, upper;
   protocol::Assignments carried;
@@ -124,18 +130,21 @@ struct MatchArm {
   Names payload;
   Body body;
 };
-struct Match {
+template <typename Captures> struct SelectedMatch {
   std::string input;
-  Names captures;
+  Captures captures;
   std::vector<MatchArm> arms;
   Names outputs;
 };
+using Match = SelectedMatch<Names>;
+using ParticipantMatch = SelectedMatch<protocol::Assignments>;
 
 struct Instruction {
-  using Value = std::variant<Operation, LocalCall, Send, Receive, Return, Yield,
-                             Stop, Loop, Release, LocalApply, Conditional, For,
-                             VariantConstruct, Match, ServiceQuery,
-                             BooleanConstant, ReturnIf>;
+  using Value =
+      std::variant<Operation, LocalCall, Send, Receive, Return, Yield, Stop,
+                   Loop, Release, LocalApply, Conditional, For,
+                   VariantConstruct, Match, ServiceQuery, BooleanConstant,
+                   ReturnIf, ParticipantConditional, ParticipantMatch>;
   std::string site; // Empty for return/yield/release; scoped to its definition
                     // otherwise.
   Value value;

@@ -134,8 +134,8 @@ test('invalid late arguments, unknown options and wasm32 sizes are refused befor
   assert.equal(fake.calls, 0);
   for (const options of [{ providers: ['Plonky3'] }, { providers: ['unknown'] }, { operation: 'run' },
     { allow_authored: 1 }, { unknown: true }, { package_bytes: 0x100000000 },
-    { external_work: Number.MAX_SAFE_INTEGER + 1 },
-    { capacity: ['zkc.native-capacity/0', '1', '1', '1', '1', ['1', '1', '1'], ['1', '4294967296']] }]) {
+    { external_work: Number.MAX_SAFE_INTEGER + 1 }, { capacity: [1n] }, { interface_limits: [undefined] },
+    { capacity: [Symbol.iterator] }, { interface_limits: { [Symbol.iterator]: '1' } }]) {
     assert.throws(() => request('admit', { ...admission(), options }), /web-/);
   }
   const detached = new Uint8Array();
@@ -144,6 +144,31 @@ test('invalid late arguments, unknown options and wasm32 sizes are refused befor
   if (typeof SharedArrayBuffer !== 'undefined') {
     assert.throws(() => request('prove', { ...proving(), context: new Uint8Array(new SharedArrayBuffer(1)) }), /web-message-bytes/);
   }
+});
+
+test('capacity and interface allowance records reach Rust unchanged as opaque JSON', async () => {
+  // Rust is the only reader of both records: another tag, another arity, a
+  // number in place of a decimal string, a u64 overflow and a capacity size
+  // beyond wasm32 are each its refusal, not the transport's.
+  for (const options of [
+    { capacity: ['zkc.native-capacity/0', '1', '1', '1', '1', ['1', '1', '1'], ['1', '4294967296']] },
+    { capacity: ['zkc.material-limits/0', '1'] },
+    { interface_limits: ['zkc.material-limits/0', '1', '1'] }, { interface_limits: ['zkc.interface-limits/0', '1'] },
+    { interface_limits: ['zkc.interface-limits/0', 1, '1'] },
+    { interface_limits: ['zkc.interface-limits/0', '18446744073709551616', '1'] },
+    { interface_limits: { tag: 'zkc.interface-limits/0', fields: [null, true] } }]) {
+    assert.equal(optionsJSON(options), JSON.stringify(options));
+    const fake = new FakeWorker();
+    await fake.scope.onmessage({ data: { id: 1, generation: 1, operation: 'initialize' } });
+    await fake.scope.onmessage({ data: { id: 2, generation: 1, operation: 'admit', ...admission(), options } });
+    assert.equal(fake.arguments[2], JSON.stringify(options));
+  }
+  const cyclic = ['zkc.interface-limits/0'];
+  cyclic.push(cyclic);
+  assert.throws(() => optionsJSON({ interface_limits: cyclic }), /web-options-limit/);
+  const sparse = [];
+  sparse.length = 0xffffffff;
+  assert.throws(() => optionsJSON({ capacity: sparse }), /web-options-limit/);
 });
 
 test('u64 values preserve exact decimal bytes and providers are frozen before admission', async () => {
@@ -155,6 +180,10 @@ test('u64 values preserve exact decimal bytes and providers are frozen before ad
   await fake.scope.onmessage({ data: { id: 3, generation: 1, operation: 'prove', ...proving(), budget: '18446744073709551615' } });
   assert.equal(fake.callArguments[3], 0xffffffffffffffffn);
   assert.equal(optionsJSON({ external_work: 0xffffffffffffffffn }), '{"external_work":18446744073709551615}');
+  // Rust refuses an interface selection above a maximum with that allowance's
+  // code, even beyond the wasm32 address space, so the transport keeps it.
+  const beyond = ['zkc.interface-limits/0', '4294967296', '18446744073709551615'];
+  assert.equal(optionsJSON({ interface_limits: beyond }), JSON.stringify({ interface_limits: beyond }));
 });
 
 test('successful transferable publication precedes result.free and preserves raw report', async () => {
@@ -218,6 +247,10 @@ test('nested option arrays normalize data without invoking custom methods or acc
   capacity.slice = capacity[5].map = () => { throw new Error('custom capacity method'); };
   assert.deepEqual(JSON.parse(optionsJSON({ capacity })).capacity,
     ['zkc.native-capacity/0', '1', '1', '1', '1', ['1', '1', '1'], ['1', '1']]);
+  const limits = ['zkc.interface-limits/0', '64', '64'];
+  limits.slice = limits.map = () => { throw new Error('custom interface limits method'); };
+  assert.deepEqual(JSON.parse(optionsJSON({ interface_limits: limits })).interface_limits,
+    ['zkc.interface-limits/0', '64', '64']);
 });
 
 test('feature selection precedes loading with no failed-module fallback', async () => {

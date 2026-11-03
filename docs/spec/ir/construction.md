@@ -314,9 +314,9 @@ does not imply transcript or proof-format compatibility.
 
 For iterated construction, dynamic coordinates are explicit semantic inputs to
 the observation/challenge operation. Optimization preserves those inputs;
-a future transformation that peels a loop must substitute the induction value
+a transformation that peels a loop must substitute the induction value
 and supply the required correspondence, rather than infer an origin from a changed
-runtime frame. The current iterated admission retains the original loop structure.
+runtime frame. Iterated admission retains the original loop structure.
 
 Explicit [external construction data](../realization/external-constructions.md)
 keeps its separate contract. Its copyable Monero/OpenVM states are checked data,
@@ -480,7 +480,7 @@ root/alias bindings, dynamic paths, guards/stops and later disclosure. A private
 guard is not automatically public observation. Distribution laws, root
 initialization assumptions, honest delivery and observers are separate premises.
 See the [observation requirements](../../compiler/pipeline.md#analysis-boundary).
-Their preservation does not require implementing the future affine analyzer.
+Their preservation does not depend on an affine analyzer.
 
 Readers admit only this proof contract. Native structural checking does not
 inherit an independent Lean source interpreter, a proof about another carrier,
@@ -497,12 +497,15 @@ event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["start", original_caller_protocol, original_apply_site]
 step = ["apply", original_caller_protocol, original_apply_site]
      | ["repeat", original_protocol, original_repeat_site]
+     | ["branch", original_protocol, original_branch_site, alternative]
 ```
 
 The tree uses the canonical logical encoding: tag 0 followed by a u64
 little-endian UTF-8 byte count and string bytes, or tag 1 followed by a u64
 little-endian element count and recursively encoded elements. An application
 step precedes its callee's steps; a repeat step precedes every event in its body.
+A branch step retains the exact declared arm label and precedes only events
+in that selected arm. It has four fields; apply and repeat steps have three.
 The path excludes the final event. Roles reflect static application substitution.
 For a child start the path excludes that child's apply step; it records the
 caller's enclosing applications and repeats. The following child events include
@@ -660,5 +663,6 @@ coordinates, witness schema/slot/peer and control order. Full candidate
 comparison remains an additional check. The independent Rust deployment reader
 must authenticate the descriptor, operation parameters and complete transport
 slot coverage against the actual native program; a descriptor hash alone is
-not source authority. Lean is an independently maintained pending consumer;
-these native checks supply no formal grinding or compound-query theorem.
+not source authority. Lean is an independently maintained consumer whose
+adaptation the [contract register](../contracts.md) records; these native checks
+supply no formal grinding or compound-query theorem.

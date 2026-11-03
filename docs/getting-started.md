@@ -44,7 +44,7 @@ demo_dir=$(mktemp -d)
 compiler="${ZKC_COMPILER_BIN:-build/compiler}/zkc-compile"
 native="${ZKC_NATIVE_BIN:-${CARGO_TARGET_DIR:-target}/release}"
 
-"$native/zkc" --json compile --compiler="$compiler" \
+"$native/zkc" --json compile --compiler="$compiler" --source-format=zkc \
   --module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
   example::Proof --output="$demo_dir/proof.zkpkg" \

@@ -715,7 +715,16 @@ fn construction_function(
     state: &[PhysicalType],
     contracts: &super::Contracts,
 ) -> Result<()> {
-    let permitted = |t: &PhysicalType| verifier_data(t, contracts) || state.contains(t);
+    // Nominal units account for local record custody; they carry no wire data
+    // or external provider state. Ordinary Program admission still checks their
+    // exact signatures and affine uses. Keep verifier_data unchanged: endpoint
+    // ports and codecs must not acquire an ingress/egress permission from this.
+    let permitted = |t: &PhysicalType| {
+        verifier_data(t, contracts)
+            || state.contains(t)
+            || t.kind() == Type::ResourceUnit
+                && PhysicalType::default_for(t.logical().clone()).ok().as_ref() == Some(t)
+    };
     if function.inputs.iter().any(|(_, t)| !permitted(t))
         || function.outputs.iter().any(|t| !permitted(t))
     {
@@ -820,6 +829,7 @@ impl ProofWalk<'_> {
             | Instruction::Receive { .. }
             | Instruction::ReturnIf { .. } => self.transcript,
             Instruction::Loop { body, .. } => self.has_events(body),
+            Instruction::Conditional { .. } | Instruction::Match { .. } => true,
             _ => false,
         })
     }
@@ -848,6 +858,9 @@ impl ProofWalk<'_> {
                 return Err(refuse("native-proof-witness-order"));
             }
             match instruction {
+                Instruction::Conditional { .. } | Instruction::Match { .. } => {
+                    return Err(refuse("native-proof-selected-control"));
+                }
                 Instruction::Local {
                     function,
                     inputs,
@@ -1228,6 +1241,22 @@ impl NativeProofEntry {
             || !super::decode::valid_name(validator)
         {
             return Err(refuse("native-proof-profile"));
+        }
+        // This installed transcript profile has no conditional request/codec
+        // correspondence. Inspect actual dormant bodies before normalization.
+        for participant in admitted.program.participants.values() {
+            let mut pending = vec![participant.body.as_ref()];
+            while let Some(body) = pending.pop() {
+                for instruction in body {
+                    match instruction {
+                        Instruction::Conditional { .. } | Instruction::Match { .. } => {
+                            return Err(refuse("native-proof-selected-control"));
+                        }
+                        Instruction::Loop { body, .. } => pending.push(body.as_ref()),
+                        _ => {}
+                    }
+                }
+            }
         }
         let transcript = suite
             .map(|suite| {

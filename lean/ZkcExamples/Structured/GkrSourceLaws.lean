@@ -53,62 +53,62 @@ abbrev fold? {inputs outputs : List Ty} : Region dialect inputs outputs → Opti
   | _ => none
 
 abbrev firstCollection : CollectSpec :=
-  (collection? GkrSourceBodies.helper8Body).get (by decide +kernel)
+  (collection? GkrSourceBodies.helper44Body).get (by decide +kernel)
 
 abbrev lineCollection : CollectSpec :=
-  (collection? GkrSourceBodies.sourceHelper110Body).get (by decide +kernel)
+  (collection? GkrSourceBodies.helper103Body).get (by decide +kernel)
 
 abbrev collectBindings : MultilinearCollectBodies.Bindings :=
-  ⟨GkrSourceBodies.helper8Helper.name, firstCollection.domain.name,
-    firstCollection.body, GkrSourceBodies.interpolateRealizationHelper.name⟩
+  ⟨GkrSourceBodies.helper44Helper.name, firstCollection.domain.name,
+    firstCollection.body, GkrSourceBodies.helper42Helper.name⟩
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨GkrSourceBodies.helper12Helper.name, GkrSourceBodies.helper16Helper.name⟩
+  ⟨GkrSourceBodies.helper48Helper.name, GkrSourceBodies.helper41Helper.name⟩
 
 abbrev lineBindings : MultilinearCollectBodies.Bindings :=
-  ⟨GkrSourceBodies.sourceHelper110Helper.name, lineCollection.domain.name,
-    lineCollection.body, GkrSourceBodies.lineInterpolationRealizationHelper.name⟩
+  ⟨GkrSourceBodies.helper103Helper.name, lineCollection.domain.name,
+    lineCollection.body, GkrSourceBodies.helper74Helper.name⟩
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
   [empty := GkrSourceBodies.empty,
     append := GkrSourceBodies.append,
-    helper2 := GkrSourceBodies.helper2,
-    helper3 := GkrSourceBodies.helper3,
-    helper4 := GkrSourceBodies.helper4,
-    helper5 := GkrSourceBodies.helper5,
-    helper6 := GkrSourceBodies.helper6,
-    helper7 := GkrSourceBodies.helper7,
-    helper8 := GkrSourceBodies.helper8,
-    helper9 := GkrSourceBodies.helper9,
-    helper10 := GkrSourceBodies.helper10,
-    helper11 := GkrSourceBodies.helper11,
-    helper12 := GkrSourceBodies.helper12,
-    helper13 := GkrSourceBodies.helper13,
-    helper14 := GkrSourceBodies.helper14,
-    helper15 := GkrSourceBodies.helper15,
-    helper16 := GkrSourceBodies.helper16,
+    helper2 := GkrSourceBodies.helper0,
+    helper3 := GkrSourceBodies.helper1,
+    helper4 := GkrSourceBodies.helper2,
+    helper5 := GkrSourceBodies.helper7,
+    helper6 := GkrSourceBodies.helper8,
+    helper7 := GkrSourceBodies.helper9,
+    helper8 := GkrSourceBodies.helper44,
+    helper9 := GkrSourceBodies.helper45,
+    helper10 := GkrSourceBodies.helper46,
+    helper11 := GkrSourceBodies.helper47,
+    helper12 := GkrSourceBodies.helper48,
+    helper13 := GkrSourceBodies.helper49,
+    helper14 := GkrSourceBodies.helper50,
+    helper15 := GkrSourceBodies.helper10,
+    helper16 := GkrSourceBodies.helper41,
     evaluate := GkrSourceBodies.evaluate,
-    helper18 := GkrSourceBodies.helper18,
+    helper18 := GkrSourceBodies.helper4,
     selectBlock := GkrSourceBodies.selectBlock,
-    helper42 := GkrSourceBodies.helper42,
-    sourceHelper110 := GkrSourceBodies.sourceHelper110,
+    helper42 := GkrSourceBodies.helper25,
+    sourceHelper110 := GkrSourceBodies.helper103,
     sum := GkrSourceBodies.sum,
     evaluateWiring := GkrSourceBodies.evaluateWiring,
-    helper73 := GkrSourceBodies.helper73,
-    sourceHelper112 := GkrSourceBodies.sourceHelper112,
-    helper75 := GkrSourceBodies.helper75,
-    helper76 := GkrSourceBodies.helper76,
-    helper74 := GkrSourceBodies.helper74,
-    helper78 := GkrSourceBodies.helper78,
-    helper43 := GkrSourceBodies.helper43,
-    helper80 := GkrSourceBodies.helper80,
+    helper73 := GkrSourceBodies.helper35,
+    sourceHelper112 := GkrSourceBodies.helper106,
+    helper75 := GkrSourceBodies.helper107,
+    helper76 := GkrSourceBodies.helper36,
+    helper74 := GkrSourceBodies.helper105,
+    helper78 := GkrSourceBodies.helper108,
+    helper43 := GkrSourceBodies.helper109,
+    helper80 := GkrSourceBodies.helper110,
     evaluateCoefficients := GkrSourceBodies.evaluateCoefficients,
     linePoint := GkrSourceBodies.linePoint,
-    interpolateRealization := GkrSourceBodies.interpolateRealization,
-    interpolateCallback := GkrSourceBodies.interpolateCallback,
-    lineInterpolationRealization := GkrSourceBodies.lineInterpolationRealization,
-    lineCallback := GkrSourceBodies.lineCallback]
+    interpolateRealization := GkrSourceBodies.helper42,
+    interpolateCallback := GkrSourceBodies.helper43,
+    lineInterpolationRealization := GkrSourceBodies.helper74,
+    lineCallback := GkrSourceBodies.helper75]
 
 theorem first_bodies : MapFirstContracts.Bodies unit.definitions collectBindings := by
   bind_structured_bodies
@@ -215,18 +215,18 @@ theorem evaluateWiring_extension (w : Nat) (xs gate left right : List F)
         (coordinates (w + w + w) (gate ++ left ++ right))) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateWiring_extension unit.linked bodies w xs gate left right table decoded gateLength leftLength rightLength small vectorBound
 
-theorem helper42_body_eq : GkrSourceBodies.helper42Body = MapFirstBodies.interpolateBody := by
+theorem helper42_body_eq : GkrSourceBodies.helper25Body = MapFirstBodies.interpolateBody := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.interpolate_body_eq
 
 theorem interpolate_equation (low high r : F) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper42Helper (.cons low (.cons high (.cons r .nil))) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper25Helper (.cons low (.cons high (.cons r .nil))) =
       .done (.cons (low + (high - low) * r) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.interpolate_equation unit.linked bodies low high r
 
 theorem line_realization_body (table : Meanings F G) (low high r : F) :
-    GkrSourceBodies.lineInterpolationRealizationBody.denote (meaning F G table)
+    GkrSourceBodies.helper74Body.denote (meaning F G table)
       (Values.cons low (.cons high (.cons r .nil))).get =
-      (invoke table GkrSourceBodies.helper42Helper (.cons low (.cons high (.cons r .nil)))).bind
+      (invoke table GkrSourceBodies.helper25Helper (.cons low (.cons high (.cons r .nil)))).bind
         fun result => .done (.cons (result.get .here) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.line_realization_body table low high r
 
@@ -238,14 +238,14 @@ theorem line_callback_equation (low high : List F) (lo hi r : F) :
 
 theorem map_equation (start finish : List F) (t : F) (sameLength : finish.length = start.length)
     (small : start.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.sourceHelper110Helper (.cons start (.cons finish (.cons t .nil))) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper103Helper (.cons start (.cons finish (.cons t .nil))) =
       .done (.cons (linePoints start finish t) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.map_equation unit.linked bodies start finish t sameLength small
 
 theorem linePoint_body (table : Meanings F G) (start finish : List F) (t : F) :
     GkrSourceBodies.linePointBody.denote (meaning F G table)
         (Values.cons start (.cons finish (.cons t .nil))).get =
-      (invoke table GkrSourceBodies.sourceHelper110Helper (.cons start (.cons finish (.cons t .nil)))).bind
+      (invoke table GkrSourceBodies.helper103Helper (.cons start (.cons finish (.cons t .nil)))).bind
         fun result => .done (.cons (result.get .here) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.linePoint_body table start finish t
 
@@ -256,53 +256,53 @@ theorem linePoint_equation (start finish : List F) (t : F) (sameLength : finish.
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.linePoint_equation unit.linked bodies start finish t sameLength small
 
 abbrev powerFold : FoldSpec :=
-  (fold? GkrSourceBodies.helper43Body).get (by decide +kernel)
+  (fold? GkrSourceBodies.helper109Body).get (by decide +kernel)
 
 theorem helper73_body (table : Meanings F G) (accumulated power coefficient point : F) :
-    GkrSourceBodies.helper73Body.denote (meaning F G table)
+    GkrSourceBodies.helper35Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStep_body table accumulated power coefficient point
 
 theorem coefficientStepRealization_body (table : Meanings F G) (accumulated power coefficient point : F) :
-    GkrSourceBodies.sourceHelper112Body.denote (meaning F G table)
+    GkrSourceBodies.helper106Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
-      (invoke table GkrSourceBodies.helper73Helper
+      (invoke table GkrSourceBodies.helper35Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.coefficientStepRealization_body table accumulated power coefficient point
 
 theorem helper75_body (table : Meanings F G) (accumulated power coefficient point : F) :
-    GkrSourceBodies.helper75Body.denote (meaning F G table)
+    GkrSourceBodies.helper107Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
-      (invoke table GkrSourceBodies.sourceHelper112Helper
+      (invoke table GkrSourceBodies.helper106Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStepWrapper_body table accumulated power coefficient point
 
 theorem helper78_body (table : Meanings F G) (accumulated power coefficient : F)
     (coefficients : List F) (point : F) :
-    GkrSourceBodies.helper78Body.denote (meaning F G table)
+    GkrSourceBodies.helper108Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons coefficients
           (.cons point .nil))))).get =
-      (invoke table GkrSourceBodies.helper75Helper
+      (invoke table GkrSourceBodies.helper107Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerFoldCallback_body table accumulated power coefficient coefficients point
 
 theorem helper76_body (table : Meanings F G) :
-    GkrSourceBodies.helper76Body.denote (meaning F G table) (Values.nil).get =
+    GkrSourceBodies.helper36Body.denote (meaning F G table) (Values.nil).get =
       .done (.cons ((0 : Nat) : F) (.cons ((1 : Nat) : F) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerInitialState_body table
 
 theorem coefficientStartRealization_body (table : Meanings F G) :
-    GkrSourceBodies.helper74Body.denote (meaning F G table) (Values.nil).get =
-      (invoke table GkrSourceBodies.helper76Helper .nil).bind fun result =>
+    GkrSourceBodies.helper105Body.denote (meaning F G table) (Values.nil).get =
+      (invoke table GkrSourceBodies.helper36Helper .nil).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.coefficientStartRealization_body table
 
 theorem coefficientFold_body (table : Meanings F G) (coefficients : List F) (accumulated power point : F) :
-    GkrSourceBodies.helper43Body.denote (meaning F G table)
+    GkrSourceBodies.helper109Body.denote (meaning F G table)
         (Values.cons coefficients (.cons accumulated (.cons power (.cons point .nil)))).get =
       (Evaluation.denoteFold table powerFold
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil))))).bind fun result =>
@@ -310,9 +310,9 @@ theorem coefficientFold_body (table : Meanings F G) (coefficients : List F) (acc
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.coefficientFold_body table coefficients accumulated power point
 
 theorem helper80_body (table : Meanings F G) (accumulated power point : F) (coefficients : List F) :
-    GkrSourceBodies.helper80Body.denote (meaning F G table)
+    GkrSourceBodies.helper110Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons point (.cons coefficients .nil)))).get =
-      (invoke table GkrSourceBodies.helper43Helper
+      (invoke table GkrSourceBodies.helper109Helper
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerFoldWrapper_body table accumulated power point coefficients
@@ -320,26 +320,26 @@ theorem helper80_body (table : Meanings F G) (accumulated power point : F) (coef
 theorem evaluateCoefficients_body (table : Meanings F G) (coefficients : List F) (point : F) :
     GkrSourceBodies.evaluateCoefficientsBody.denote (meaning F G table)
         (Values.cons coefficients (.cons point .nil)).get =
-      (invoke table GkrSourceBodies.helper74Helper .nil).bind fun start =>
-      (invoke table GkrSourceBodies.helper80Helper (.cons (start.get .here)
+      (invoke table GkrSourceBodies.helper105Helper .nil).bind fun start =>
+      (invoke table GkrSourceBodies.helper110Helper (.cons (start.get .here)
         (.cons (start.get (.there .here)) (.cons point (.cons coefficients .nil))))).bind fun result =>
       .done (.cons (result.get .here) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateCoefficients_body table coefficients point
 
 theorem powerStep_equation (accumulated power coefficient point : F) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper75Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper107Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))) =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStep_equation unit.linked bodies accumulated power coefficient point
 
 theorem step_equation (accumulated power coefficient : F) (coefficients : List F) (point : F) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper78Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper108Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons coefficients (.cons point .nil))))) =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.step_equation unit.linked bodies accumulated power coefficient coefficients point
 
 theorem powerStart_equation :
-    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper74Helper .nil =
+    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper105Helper .nil =
       .done (.cons 0 (.cons 1 .nil)) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStart_equation unit.linked bodies
 
@@ -366,7 +366,7 @@ theorem powerReference_fold (point : F) (coefficients : List F) (accumulated pow
 
 theorem fold_equation (coefficients : List F) (accumulated power point : F)
     (small : coefficients.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper43Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper109Helper
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil)))) =
       .done (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).1
         (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).2 .nil)) := by
@@ -392,12 +392,12 @@ theorem denoteLoop_states {I : PIR.Signature} (state captures : List Ty)
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.denoteLoop_states state captures body count initial captured states start law
 
 theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponent < 64) :
-    GkrSourceBodies.helper18Body.denote (meaning F G table) (Values.cons exponent .nil).get =
+    GkrSourceBodies.helper4Body.denote (meaning F G table) (Values.cons exponent .nil).get =
       .done (.cons (2 ^ exponent) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerOfTwo_body table exponent small
 
 theorem powerOfTwo_equation (exponent : Nat) (small : exponent < 64) :
-    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper18Helper (.cons exponent .nil) =
+    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper4Helper (.cons exponent .nil) =
       .done (.cons (2 ^ exponent) .nil) := by
   exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerOfTwo_equation unit.linked bodies exponent small
 
@@ -422,7 +422,7 @@ theorem selectLoop_body (table : Meanings F G) (index : Nat) (current : List F) 
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexSub)
       (.cons remaining (.cons (result0.get .here) .nil))) :
       Closed (Values (assignment F G) [.index])).bind fun result1 =>
-    (invoke table GkrSourceBodies.helper18Helper (.cons (result1.get .here) .nil) :
+    (invoke table GkrSourceBodies.helper4Helper (.cons (result1.get .here) .nil) :
       Closed (Values (assignment F G) [.index])).bind fun result2 =>
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexDiv)
       (.cons position (.cons (result2.get .here) .nil))) :

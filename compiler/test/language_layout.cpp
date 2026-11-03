@@ -1,3 +1,4 @@
+#include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -563,7 +564,13 @@ module BoolIdentity: Identity:
 pub protocol Demo roles(P)(value: BoolIdentity::Item @P) -> BoolIdentity::Item @P:
     return BoolIdentity::run(value)
 )"));
-    refuses(closeNativeRun(project, "m::Demo"), "source.ingress");
+    // The opaque member type is published; its fresh supply is the SDK's
+    // operation-specific judgment.
+    auto direct =
+        take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+    zkc::test::requireWithheld(zkc::test::withheldSupply(direct.interface()),
+                               {"value", "value.value"},
+                               "opaque interface member lost its supply mark");
   });
   cases.run("bodyless protocol is confined to interfaces", [] {
     refuses(check("protocol Demo roles(P)(value: bool @P) -> bool @P\n"),
@@ -645,11 +652,46 @@ pub struct Token:
 pub protocol Demo roles(P)(value: Token @P) -> Token @P:
     return value
 )"));
-    refuses(closeNativeRun(project, "m::Demo"), "source.ingress");
+    auto direct =
+        take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+    zkc::test::requireWithheld(zkc::test::withheldSupply(direct.interface()),
+                               {"value"},
+                               "affine record lost its custody supply mark");
     auto written = take(inspectWrittenSource(project));
     require(StringRef(written).contains("affine"),
             "authored resource restriction lost");
   });
+  for (StringRef restriction : {"linear", "affine"}) {
+    auto declarations = "#[" + restriction.str() + R"(]
+struct Token:
+    empty: ()
+)";
+    cases.run("restricted record creation is ordered: " + restriction, [&] {
+      take(check(declarations + R"(local def make() -> Token:
+    token <- Token { empty: () }
+    return token
+)"));
+      refuses(check(declarations + R"(local def make() -> Token:
+    token = Token { empty: () }
+    return token
+)"),
+              "source.action");
+      refuses(check(declarations + R"(local def make() -> Token:
+    return Token { empty: () }
+)"),
+              "source.action");
+      take(check(declarations + R"(local def forward(value: Token) -> Token:
+    observed <- inspect_record(value)
+    successor <- repack_record(observed.0, observed.1)
+    return successor
+)"));
+      refuses(check(declarations + R"(local def forward(value: Token) -> Token:
+    observed = inspect_record(value)
+    return observed.0
+)"),
+              "source.action");
+    });
+  }
   cases.run("unknown semantic attributes cannot disappear", [] {
     refuses(check(R"(#[mystery]
 struct Token:
@@ -912,5 +954,74 @@ pub protocol Demo roles(P)(left: bool @P, right: bool @P) -> bool @P:
 )"));
     take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
   });
+  cases.run(
+      "restricted unpack and destructuring retire custody at ordered sites",
+      [] {
+        const std::string header =
+            "#[linear]\nstruct Ticket:\n    value: bool\n";
+        take(check(header + R"(local def finish(x: Ticket) -> bool:
+    fields <- unpack(x)
+    return fields.0
+)"));
+        for (StringRef body : {R"(local def finish(x: Ticket) -> bool:
+    fields = unpack(x)
+    return fields.0
+)",
+                               R"(local def finish(x: Ticket) -> (bool,):
+    return unpack(x)
+)",
+                               R"(local def finish(x: Ticket) -> ((bool,),):
+    return (unpack(x),)
+)",
+                               R"(local def finish(x: Ticket) -> bool:
+    Ticket { value } = x
+    return value
+)"})
+          refuses(check(header + body.str()), "source.action");
+        take(check(header + R"(local def finish(x: Ticket) -> bool:
+    Ticket { value } <- x
+    return value
+)"));
+        take(check(R"(#[sealed]
+struct Sealed:
+    value: bool
+local def finish(x: Sealed) -> bool:
+    fields = unpack(x)
+    return fields.0
+)"));
+        take(check(R"(struct Plain:
+    value: bool
+local def finish(x: Plain) -> bool:
+    fields = unpack(x)
+    return fields.0
+)"));
+        refuses(check(R"(struct Plain:
+    value: bool
+local def finish(x: Plain) -> bool:
+    fields <- unpack(x)
+    return fields.0
+)"),
+                "source.action");
+      });
+  cases.run(
+      "pure authored record-operation homonyms remain pure and nested", [] {
+        take(check(R"(def inspect_record(x: bool) -> bool:
+    x
+def repack_record(x: bool, y: bool) -> bool:
+    x and y
+def unpack(x: bool) -> bool:
+    x
+def nested(x: bool) -> bool:
+    return repack_record(inspect_record(x), unpack(x))
+)"));
+        take(check(
+            R"(local def repack_record(x: bool, y: bool) -> bool effects(stop):
+    guard y
+    return x
+local def forward(x: bool) -> bool effects(stop):
+    result <- repack_record(x, true)
+    return result
+)"));
+      });
   return cases.result();
 }

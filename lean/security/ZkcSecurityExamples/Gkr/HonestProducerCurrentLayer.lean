@@ -62,6 +62,7 @@ theorem layer_actual
       (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
         observedHelpers 0 beforeRoot {} Occurrence.iterations)
       (((SourceRows.LayerArguments.pack {
+          custody := none,
           index := some index,
           proverPoint := some point,
           point := none,
@@ -125,6 +126,7 @@ theorem layer_actual
     (coordinates encoding.width point)
   change (invokeProtocol beforeRoot GkrSourceBodies.roundsSignature (GkrVerifier.leftContext {}) 0
     ((SourceRows.RoundsInputs.pack {
+        custody := none,
         add := some (encode reference).add,
         mul := some (encode reference).mul,
         left := some (encode reference).left,
@@ -150,6 +152,7 @@ theorem layer_actual
   have rightAllowed := cast_admissible (Nat.zero_add encoding.width).symm left.reference leftAllowed
   change (invokeProtocol beforeRoot GkrSourceBodies.roundsSignature (GkrVerifier.rightContext {}) 0
     ((SourceRows.RoundsInputs.pack {
+        custody := none,
         add := some left.raw.add,
         mul := some left.raw.mul,
         left := some left.raw.left,

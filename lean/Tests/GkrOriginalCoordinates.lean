@@ -13,8 +13,8 @@ theorem wrong_coefficient_frame (layer coefficient : Nat) :
     OccurrenceResolution.matchesOccurrence snapshot context
       (context.message "label_6c696e655f636f656666696369656e74_0" 0 1)
       [⟨"s57", layer⟩, ⟨"s9", coefficient⟩] template13 = false := by
-  have sites : SourceOccurrences.repeatSites template13 = ["s57", "s91"] := rfl
-  have different : (["s57", "s91"] == ["s57", "s9"]) = false := rfl
+  have sites : SourceOccurrences.repeatSites template13 = ["s57", "s93"] := rfl
+  have different : (["s57", "s93"] == ["s57", "s9"]) = false := rfl
   simp only [OccurrenceResolution.matchesOccurrence, sites, List.map_cons, List.map_nil,
     different, Bool.and_false, Bool.false_and]
 

@@ -26,7 +26,7 @@ theorem layout_plain {width : Nat} (add mul below point : List F)
     let state := GkrRoundsLayout.state
       (fixPrefix width a (coordinates width point)) (fixPrefix width m (coordinates width point)) v v
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper36Helper
+      GkrSourceBodies.helper66Helper
       (CollectionGoals.Layout.Inputs.pack (Value := assignment F G) { add, mul, point, below, width }) =
         .done (CollectionGoals.Layout.encode (ringModel F G)
           { addValues := GkrRoundsLayout.encode state.add, mulValues := GkrRoundsLayout.encode state.mul,
@@ -44,7 +44,7 @@ theorem layout_component {width : Nat} (add mul below point : List F)
     let state := GkrRoundsLayout.state
       (fixPrefix width a (coordinates width point)) (fixPrefix width m (coordinates width point)) v v
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper36Helper
+      GkrSourceBodies.helper66Helper
       (CollectionGoals.Layout.Inputs.pack (Value := Component (assignment F G))
         { add := some add, mul := some mul, point := some point, below := some below, width := some width }) =
       .done (CollectionGoals.Layout.encode (ringModel F G)
@@ -57,7 +57,7 @@ theorem round_coefficients_component {n : Nat} (raw : GkrRoundsRealization.RawSt
     (state : GkrRoundsReference.State F (n + 1))
     (decoded : GkrRoundsRealization.Decodes raw state) (capacity : 2 ^ n < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper41Helper raw.values.present =
+      GkrSourceBodies.helper73Helper raw.values.present =
       .done (CoefficientResults.pack (Value := Component (assignment F G))
         { constant := some (GkrRoundsReference.message state).constant,
           linear := some (GkrRoundsReference.message state).linear,
@@ -71,7 +71,7 @@ theorem round_restriction_component {n : Nat} (raw : GkrRoundsRealization.RawSta
     (decoded : GkrRoundsRealization.Decodes raw state) (capacity : 2 ^ n < indexLimit)
     (challenge : F) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper45Helper (RestrictionArguments.pack (Value := assignment F G)
+      GkrSourceBodies.helper78Helper (RestrictionArguments.pack (Value := assignment F G)
         { add := raw.add, mul := raw.mul, left := raw.left, right := raw.right, challenge }).present =
       .done (raw.restrict challenge).values.present := by
   rw [component_invoke_present, round_restriction raw state decoded capacity challenge]
@@ -80,14 +80,14 @@ theorem round_restriction_component {n : Nat} (raw : GkrRoundsRealization.RawSta
 theorem element_plain (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper57Helper (ReadbackGoals.Element.Inputs.pack (Value := assignment F G) { source := xs, position }) =
+      GkrSourceBodies.helper97Helper (ReadbackGoals.Element.Inputs.pack (Value := assignment F G) { source := xs, position }) =
       .done (ReadbackGoals.Element.encode (ringModel F G) ⟨xs[position]?.getD 0⟩) :=
   closed_invoke_returned GkrSourceViews.unit _ _ _ (element_equation xs position xsBound positionBound)
 
 theorem element_after_plain (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position + 1 < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper70Helper (ReadbackGoals.Element.Inputs.pack (Value := assignment F G) { source := xs, position }) =
+      GkrSourceBodies.helper98Helper (ReadbackGoals.Element.Inputs.pack (Value := assignment F G) { source := xs, position }) =
       .done (ReadbackGoals.After.encode (ringModel F G) ⟨xs[position + 1]?.getD 0⟩) :=
   closed_invoke_returned GkrSourceViews.unit _ _ _ (element_after_equation xs position xsBound positionBound)
 
@@ -95,7 +95,7 @@ theorem element_after_plain (xs : List F) (position : Nat)
 theorem element_component (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper57Helper (ReadbackGoals.Element.Inputs.pack (Value := Component (assignment F G))
+      GkrSourceBodies.helper97Helper (ReadbackGoals.Element.Inputs.pack (Value := Component (assignment F G))
         { source := some xs, position := some position }) =
       .done (ReadbackGoals.Element.encode (ringModel F G) ⟨xs[position]?.getD 0⟩).present :=
   component_invoke_returned GkrSourceViews.unit _ _ _ (element_equation xs position xsBound positionBound)
@@ -104,7 +104,7 @@ theorem element_component (xs : List F) (position : Nat)
 theorem element_after_component (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position + 1 < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper70Helper (ReadbackGoals.Element.Inputs.pack (Value := Component (assignment F G))
+      GkrSourceBodies.helper98Helper (ReadbackGoals.Element.Inputs.pack (Value := Component (assignment F G))
         { source := some xs, position := some position }) =
       .done (ReadbackGoals.After.encode (ringModel F G) ⟨xs[position + 1]?.getD 0⟩).present :=
   component_invoke_returned GkrSourceViews.unit _ _ _ (element_after_equation xs position xsBound positionBound)

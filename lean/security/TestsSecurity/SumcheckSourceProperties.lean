@@ -57,7 +57,7 @@ theorem terminal_false (selection : Selection) (reference : PrefixState (model.F
     (count : Nat) (shape : reference.original.length = 2^count) (small : count < 64)
     (finite : reference.original.length < indexLimit) (wrong : (layout model).representation.No reference) :
     terminalCheck model selection reference.original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots) = .done (some false) := by
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots) = .done (some false) := by
   rw [terminal_check model selection reference count shape small finite]
   have unequal : reference.scalar ≠ reference.entries.sum := ((layout model).no_iff reference).mp wrong
   simp only [unequal, decide_false]
@@ -108,7 +108,7 @@ example (_selection : Selection) (reference : PrefixState (model.Field field) Fr
     (count : Nat) (_shape : reference.original.length = 2^count) (_small : count < 64) : True := by
   fail_if_success
     have : terminalCheck model _selection reference.original
-        (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots) =
+        (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots) =
         .done (some (decide (reference.scalar = reference.entries.sum))) := by
       apply terminal_check model _selection reference count _shape _small
       assumption

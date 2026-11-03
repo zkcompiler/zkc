@@ -18,13 +18,30 @@ operations have the meanings of the structured primitives
 (`Zkc.Source.Structured.Primitive.evaluate`), element access is
 `Zkc.Construction.Calculation.boundedAt`, and the pointwise vector operations
 and the requirement have the meanings of `Zkc.Executable.Computation.apply`.
+The total word operations on indices (wrapping addition and subtraction,
+bitwise conjunction and logical right shift) have the meanings of their
+structured calculations (`Zkc.Source.Structured.IndexWords`). Checked index
+addition has the meaning of the structured primitive, which refuses on
+overflow; Boolean conjunction and disjunction are the structured calculations
+and negation is `Zkc.Executable.Computation.apply`.
+
+The three logical custody rows (`logical/resource_unit.*`) take the slot as
+their one static argument and admit the custody sort of a valid slot at
+`logical.resource_unit/0`. They select logical bookkeeping, not an external
+backend. Their native meaning is the custody ledger (`PIR.Custody`). Checked
+local helper recipes use its closed, payload-erased projection, with exact slot
+and arity checks. The constructed instruction profile has no standalone custody
+transfer; reading one as a participant instruction still refuses explicitly.
+The runtime acceptance-inclusion assumption covers successful ledger execution
+relative to this projection.
 
 The arkworks numerical kernels (`numerical.map`, `numerical.sum` and
 `numerical.product` over the scalar field) are one row each, whatever their
 operand mask: the row takes the mask as the binding's last static argument. Their
 assumed meaning is that, within the runtime's row bound
-(`Zkc.Executable.Numerical.rowLimit`), the kernel evaluates the `zkc.ring/0`
-expression its parameter carries, as `Zkc.Executable.Numerical.decode` reads it,
+(`Zkc.Executable.Numerical.rowLimit`), the kernel evaluates the expression of the
+`zkc.numerical-plan/0` plan its parameter carries, as
+`Zkc.Executable.Numerical.decode` reads it,
 at every row with the operands the mask selects, and returns the vector of the
 values, their sum or their product (`Zkc.Executable.Computation.apply`); a payload
 the decoder refuses has no meaning, as the runtime's program admission refuses
@@ -76,6 +93,18 @@ def installed : Vocabulary where
     ⟨"index.mul", [], "native/index.mul", .compute (.primitive .indexMul), []⟩,
     ⟨"index.div", [], "native/index.div", .compute (.primitive .indexDiv), []⟩,
     ⟨"index.mod", [], "native/index.mod", .compute (.primitive .indexMod), []⟩,
+    ⟨"index.wrapping_add", [], "native/index.wrapping_add", .calculate .indexWrappingAdd, []⟩,
+    ⟨"index.wrapping_sub", [], "native/index.wrapping_sub", .calculate .indexWrappingSubtract, []⟩,
+    ⟨"index.bit_and", [], "native/index.bit_and", .calculate .indexBitAnd, []⟩,
+    ⟨"index.logical_shift_right", [], "native/index.logical_shift_right",
+      .calculate .indexLogicalShiftRight, []⟩,
+    ⟨"index.add", [], "native/index.add", .compute (.primitive .indexAdd), []⟩,
+    ⟨"bool.and", [], "arkworks/bool.and", .calculate .booleanAnd, []⟩,
+    ⟨"bool.or", [], "arkworks/bool.or", .calculate .booleanOr, []⟩,
+    ⟨"bool.not", [], "arkworks/bool.not", .compute .booleanNot, []⟩,
+    ⟨"resource_unit.create", [], "logical/resource_unit.create", .custody .create, []⟩,
+    ⟨"resource_unit.pass", [], "logical/resource_unit.pass", .custody .pass, []⟩,
+    ⟨"resource_unit.consume", [], "logical/resource_unit.consume", .custody .consume, []⟩,
     ⟨"vector.empty", [scalarField], "arkworks/vector.empty", .compute (.primitive (.vectorEmpty scalarField)), []⟩,
     ⟨"vector.append", [scalarField], "arkworks/vector.append",
       .compute (.primitive (.vectorAppend scalarField)), []⟩,
@@ -101,5 +130,6 @@ def installed : Vocabulary where
     (.data .index, "native.index/0"),
     (.data .boolean, "native.bool/0"),
     (.transcript nativeSuite, "host.resource/0")]
+  custodyRepresentations := ["logical.resource_unit/0"]
 
 end Zkc.Executable

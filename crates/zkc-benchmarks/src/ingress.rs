@@ -121,6 +121,7 @@ impl Conversion<'_> {
                     .ok_or("benchmark-ingress: retained payload overflow")?;
                 Value::Leaf(value)
             }
+            Value::Opaque(value) => Value::Opaque(value),
             Value::Unit => Value::Unit,
             Value::Tuple(values) | Value::Array(values) => {
                 let fields = array(schema, "fields")?;
@@ -265,6 +266,7 @@ fn share_fields(values: &NamedValues) -> Result<NamedValues> {
 fn share_value(value: &Value) -> Result<Value> {
     Ok(match value {
         Value::Leaf(value) => Value::Leaf(share_leaf(value)?),
+        Value::Opaque(value) => Value::Opaque(value.clone()),
         Value::Unit => Value::Unit,
         Value::Tuple(values) => {
             Value::Tuple(values.iter().map(share_value).collect::<Result<_>>()?)
@@ -321,49 +323,92 @@ mod tests {
     fn schema(kind: &str, name: &str, leaves: Json) -> Json {
         // Same checked metadata shape as zkc' interface fixtures.
         json!({"kind":kind,"identity":hex(&Sha256::digest(name.as_bytes())),"type":name,
-            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],
             "fields":[],"alternatives":[],"leaves":leaves})
+    }
+
+    fn field(name: &str, offset: usize, child: Json) -> Json {
+        json!({"name":name,"offset":offset,"public":true,"placement":null,"schema":child})
     }
 
     fn product(kind: &str, name: &str, fields: Vec<(&str, Json)>) -> Json {
         let mut leaves = Vec::new();
+        let element = (kind == "array").then(|| fields[0].1.clone());
         let fields: Vec<_> = fields
             .into_iter()
             .map(|(name, child)| {
                 let offset = leaves.len();
                 leaves.extend(child["leaves"].as_array().unwrap().iter().cloned());
-                json!({"name":name,"offset":offset,"schema":child})
+                field(name, offset, child)
             })
             .collect();
         let mut value = schema(kind, name, json!(leaves));
         value["fields"] = json!(fields);
+        value["element"] = json!(element);
         value
     }
 
+    /// One data component per placed role and ordinary leaf, in field order,
+    /// as the compiler publishes them for data placements.
+    fn components(schema: &Json, roles: &[u32], start: u32) -> Json {
+        fn walk(schema: &Json, roles: &[u32], path: Vec<u32>, next: &mut u32, out: &mut Vec<Json>) {
+            let fields = schema["fields"].as_array().unwrap();
+            if fields.is_empty() {
+                for leaf in 0..schema["leaves"].as_array().unwrap().len() {
+                    for role in roles {
+                        out.push(json!({"path":path,"leaf":leaf,"role":role,"facet":"data","native":*next}));
+                    }
+                    *next += 1;
+                }
+            }
+            for (i, field) in fields.iter().enumerate() {
+                let mut nested = path.clone();
+                nested.push(i as u32);
+                walk(&field["schema"], roles, nested, next, out);
+            }
+        }
+        let mut out = Vec::new();
+        walk(schema, roles, vec![], &mut start.clone(), &mut out);
+        json!(out)
+    }
+
+    fn port(name: &str, index: u32, start: u32, roles: &[u32], schema: &Json) -> Json {
+        let count = schema["leaves"].as_array().unwrap().len() as u32;
+        json!({"name":name,"index":index,"native":(start..start + count).collect::<Vec<_>>(),
+            "placement":{"kind":"data","roles":roles},
+            "components":components(schema, roles, start),
+            "type":schema["type"],"schema":schema})
+    }
+
     fn document(statement: Json) -> Json {
-        let count = statement["leaves"].as_array().unwrap().len();
         json!({"format":"zkc.language-interface/0","setups":[],
             "capture":hex(&Sha256::digest(b"capture")),"original":hex(&Sha256::digest(b"original")),
             "toolchain":"test-toolchain","entry":"sample::Ingress","protocol":"Ingress",
             "protocols":[{"symbol":"Ingress","roles":["P"],
-                "inputs":[{"name":"statement","index":0,"native":(0..count).collect::<Vec<_>>(),
-                    "roles":["P"],"type":statement["type"],"schema":statement}],
-                "outputs":[],"services":[],"clauses":[]}],"relations":[],"job":{"kind":"run"}})
+                "inputs":[port("statement", 0, 0, &[0], &statement)],
+                "outputs":[],"services":[],"common_input_requirements":[],"clauses":[]}],
+            "relations":[],"job":{"kind":"run"}})
     }
 
     fn proof_document(statement: Json) -> Json {
-        let count = statement["leaves"].as_array().unwrap().len();
+        let count = statement["leaves"].as_array().unwrap().len() as u32;
         let mut doc = document(statement.clone());
         let protocol = &mut doc["protocols"][0];
         protocol["roles"] = json!(["P", "V"]);
-        protocol["inputs"][0]["roles"] = json!(["P", "V"]);
-        protocol["inputs"].as_array_mut().unwrap().push(json!({
-            "name":"witness","index":1,"native":(count..2*count).collect::<Vec<_>>(),
-            "roles":["P"],"type":statement["type"],"schema":statement
-        }));
-        protocol["outputs"] = json!([{"name":"accepted","index":0,"native":[0],
-            "roles":["V"],"type":"bool","schema":schema("boolean", "bool", json!(["bool"]))}]);
-        doc["job"] = json!({"kind":"proof","prover":"P","verifier":"V","public":[0],
+        protocol["inputs"] = json!([
+            port("statement", 0, 0, &[0, 1], &statement),
+            port("witness", 1, count, &[0], &statement)
+        ]);
+        protocol["outputs"] = json!([port(
+            "accepted",
+            0,
+            0,
+            &[1],
+            &schema("boolean", "bool", json!(["bool"]))
+        )]);
+        doc["job"] = json!({"kind":"proof","prover":"P","verifier":"V",
+            "public":[{"port":0,"path":[],"role":"V"}],
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
             "completion":null,"target":null,
             "gates":[],"construction":{"kind":"authored","format":"zkc.framed/0"}});
@@ -385,9 +430,12 @@ mod tests {
     }
 
     fn read_interface(document: &Json) -> Interface {
-        BoundInterface::read(&package(document, "metadata only"))
-            .unwrap()
-            .into_view()
+        BoundInterface::read(
+            &package(document, "metadata only"),
+            zkc::entry::InterfaceLimits::DEFAULT,
+        )
+        .unwrap()
+        .into_view()
     }
 
     fn decode(group: &InputGroup<'_>, input: &Json) -> NamedValues {
@@ -420,8 +468,7 @@ mod tests {
         let spelling = format!("variant:{}", hex(&serde_json::to_vec(&graph).unwrap()));
         let mut choice = schema("variant", "sample::Choice", json!([spelling]));
         choice["alternatives"] = json!([{"name":"Empty","fields":[]},
-            {"name":"Flag","fields":[{"name":"0","offset":0,
-                "schema":schema("boolean", "bool", json!(["bool"]))}]}]);
+            {"name":"Flag","fields":[field("0", 0, schema("boolean", "bool", json!(["bool"])))]}]);
         choice
     }
 

@@ -3,6 +3,7 @@
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Target/Evm/Layout.h"
+#include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringSwitch.h"
 
@@ -303,9 +304,12 @@ LogicalResult CheckedOp::verify() {
       correct = signature(inputs, {i64});
     }
   } else if (code == "transcript.challenge") {
+    // The challenge is an element of a realized suite's challenge field.
     auto scalar = dyn_cast<algebra::FieldType>(type.getValue());
-    correct = scalar && scalar.getDomain() == "bls12-381.fr" &&
-              signature({i64, i64, i64, i64}, {i256, i64});
+    correct =
+        scalar &&
+        realizedChallengeField(layouts, *getContext(), scalar.getDomain()) &&
+        signature({i64, i64, i64, i64}, {i256, i64});
   } else if (code.starts_with("index.")) {
     if (code == "index.pow2")
       correct = signature({i64}, {i64});

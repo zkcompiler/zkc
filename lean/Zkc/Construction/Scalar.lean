@@ -6,6 +6,7 @@ meta import Lean.Meta.Eqns
 public import Zkc.Construction.FiatShamir
 public import Zkc.Source.Structured.DomainEvaluation
 public import Zkc.Source.Structured.Participant
+public import Zkc.Source.Structured.Admission
 
 @[expose] public section
 
@@ -28,6 +29,8 @@ inductive Value (F G : Type) where
   | data (payload : Payload F G)
   | index (value : Nat)
   | vector (domain : String) (values : List F)
+  /-- A nominal local coordinate; it has no wire payload encoding. -/
+  | custody (slot : String) (token : Structured.CustodyToken)
   | transcript (history : History F G)
   | indices (coordinates : List Nat)
   /-- Outside the selected construction value profile; decoding always refuses. -/
@@ -41,9 +44,21 @@ def dataType : Structured.Ty → Bool
   | .boolean | .index | .field _ | .group _ | .vector _ => true
   | _ => false
 
+/-- The local scalar frame also carries an exact-slot custody coordinate. -/
+def localType (ty : Structured.Ty) : Bool := ty.isCustody || dataType ty
+
+theorem localType_of_data {ty : Structured.Ty} (data : dataType ty = true) :
+    localType ty = true := by simp [localType, data]
+
+theorem localTypes_of_data {types : List Structured.Ty} (data : types.all dataType = true) :
+    types.all localType = true := by
+  apply List.all_eq_true.mpr
+  intro ty member
+  exact localType_of_data (List.all_eq_true.mp data ty member)
+
 namespace Value
 
-/-- A structured value as an exported value. Services are never carried. -/
+/-- Encode a local scalar value. Custody retains its nominal slot; services never decode. -/
 def encode : (ty : Structured.Ty) → Structured.assignment F G ty → Value F G
   | .boolean, value => .data (.boolean value)
   | .field domain, value => .data (.field domain value)
@@ -51,21 +66,33 @@ def encode : (ty : Structured.Ty) → Structured.assignment F G ty → Value F G
   | .index, value => .index value
   | .vector domain, values => .vector domain values
   | .service _, handle => .index handle
+  | .resourceUnit slot, token => .custody slot token
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => .unsupported
 
-/-- Read an exported value at a structured type; services never decode. -/
+/-- Read a local scalar value at its exact structured type; services never decode. -/
 def decode : (ty : Structured.Ty) → Value F G → Option (Structured.assignment F G ty)
   | .boolean, .data (.boolean value) => some value
   | .field domain, .data (.field other value) => if domain = other then some value else none
   | .group domain, .data (.group other value) => if domain = other then some value else none
   | .index, .index value => some value
   | .vector domain, .vector other values => if domain = other then some values else none
+  | .resourceUnit slot, .custody actual token => if slot = actual then some token else none
   | _, _ => none
 
 theorem decode_encode {ty : Structured.Ty} (data : dataType ty = true)
     (value : Structured.assignment F G ty) : decode ty (encode ty value) = some value := by
   cases ty <;> simp_all [encode, decode, dataType]
+
+/-- Local transport checks the slot and preserves the token exactly. -/
+theorem decode_encode_local {ty : Structured.Ty} (supported : localType ty = true)
+    (value : Structured.assignment F G ty) : decode ty (encode ty value) = some value := by
+  cases ty <;> simp_all [encode, decode, localType, dataType, Structured.Ty.isCustody]
+
+theorem custody_wrong_slot {actual expected : String} (different : expected ≠ actual)
+    (token : Structured.CustodyToken) :
+    decode (.resourceUnit expected) (.custody actual token : Value F G) = none := by
+  simp [decode, different]
 
 end Value
 

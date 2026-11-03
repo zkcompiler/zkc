@@ -13,6 +13,7 @@ The root has exactly these fields:
 | `format` | `zkc.application-map/0` |
 | `source` | `{format, digest, entry}` identifying the retained original |
 | `candidate` | `{format, digest}` identifying the actual selected output |
+| `correspondence` | Null, or `{format, digest}` of the exact supplied `zkc.source-correspondence/0` bytes |
 | `applications` | Materialized application occurrence forest in source preorder |
 | `instructions` | Complete selected candidate instruction association in traversal order |
 
@@ -91,11 +92,38 @@ an ordinal is never interpreted in an unrelated caller environment.
 The checker rederives the complete type, role and custody of each association.
 Swapping same-typed arguments must fail even if signature verification succeeds.
 
-`written` is null when the original has no checked frontend association;
-otherwise it is `{subject, node, instance}` using the frontend-owned written
-source and closed-instance identities. This optional navigation link never
-manufactures source-elaboration evidence. A diagnostic Location is not a
-substitute for any semantic identity in this map.
+`written` is null without a supplied
+[source correspondence](../language/source-ast.md#generated-definitions-and-occurrences);
+otherwise it is `{subject, node, instance}`. `subject` is the correspondence
+admission's `{capture, installation}`. A root's `node` is
+`{owner, path: []}` for the template owner of its closed instance and its
+`instance` is the root symbol. An expansion's `node` is the single written node
+of the occurrence `(source_definition, site)`, the site read from the source
+instruction row at `source_path`, and its `instance` is `callee`, which
+resolves to exactly one `instances` or `generated` entry; a generated callee's
+origins contain that occurrence. `written` is null when the occurrence has zero
+or several nodes, and the full list stays in the correspondence. Nothing is
+inferred from spans or generated symbol spellings. This optional navigation
+link never manufactures source-elaboration evidence. A diagnostic Location is
+not a substitute for any semantic identity in this map.
+
+The supplied correspondence is read strictly and needs no source: duplicate
+keys and unknown members refuse; `admission.original_sha256` is the original
+bytes' digest and `protocol_symbol` the entry; the embedded snapshot equals the
+structured export of the supplied original; the completeness invariant holds;
+every occurrence names an existing definition and site; every node resolves in
+`source_ast`; every instance and generated symbol resolves to exactly its
+snapshot rows. A malformed or mismatched document refuses with
+`application-map-written`; it is never treated as absent.
+
+The map format never states trust. `checkApplicationMap` rederives every
+written link from the supplied document and returns its status: `absent`
+without a correspondence; `conditional` for supplied bytes alone, which the
+command reports with their digest; `checked` when the caller also supplies the
+checked original, its own correspondence export is those bytes and its bytes
+are the original. Only `checked` makes the links authoritative navigation; the
+checker still derives every IR association independently, and a link is never
+source-correspondence evidence.
 
 Each instruction association is exactly:
 
@@ -136,12 +164,18 @@ interpretation and a relocation theorem remain separate work.
 
 `zkc/Compiler/ApplicationMap.h` exposes `produceApplicationMap` and
 `checkApplicationMap`, taking exact original bytes, exact candidate bytes, the
-entry and an MLIR context. The public commands are:
+entry, an MLIR context and an optional `CorrespondenceInput`: the supplied
+correspondence bytes and, when the caller holds it, the `CheckedOriginal`. The
+public commands are:
 
 ```text
-zkc-compile protocol-application-map ORIGINAL.mlir PREPARED.mlir --symbol=NAME
-zkc-compile protocol-check-application-map ORIGINAL.mlir PREPARED.mlir MAP.json --symbol=NAME
+zkc-compile protocol-application-map ORIGINAL.mlir PREPARED.mlir --symbol=NAME [--source-correspondence=FILE]
+zkc-compile protocol-check-application-map ORIGINAL.mlir PREPARED.mlir MAP.json --symbol=NAME [--source-correspondence=FILE]
 ```
+
+With a correspondence the check command prints
+`{"written":"conditional","correspondence":DIGEST}`: it holds only supplied
+bytes.
 
 The implemented edge accepts unsimplified preparation, including protocol and
 pure helper expansion, retained shared helpers, actual input/output role
@@ -151,7 +185,7 @@ checker also runs native prepared-value comparison and checks retained native
 bodies; equal exported rows cannot hide a changed administrative CFG.
 
 Every association is a whole logical value (`components` is empty), and
-`written` is null because these APIs receive no checked frontend association.
+`written` is null unless a source correspondence is supplied.
 Role restrictions inserted at application ports are the only supported auxiliary
 rows. Arithmetic folding, CSE, polynomial realization and selected construction
 start insertion need explicit independently checked rules before joining this

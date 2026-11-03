@@ -1,6 +1,6 @@
 //! Reusable project loading and bounded transport to the installed compiler.
 mod manifest;
-pub use manifest::{Asset, CatalogDependency, Project, ProjectGraph, ProjectPackage};
+pub use manifest::{Asset, CatalogDependency, Project, ProjectGraph, ProjectPackage, SourceFormat};
 mod compiler;
 pub use compiler::{
     CheckOptions, Checked, CompilationRequest, CompilationResult, Compiler, Entry, EntryKind,

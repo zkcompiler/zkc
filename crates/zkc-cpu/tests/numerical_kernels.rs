@@ -9,7 +9,7 @@ fn binding(name: &str, domain: domains::NativeDomain) -> OperationBinding {
     OperationBinding {
         contract: name.into(),
         arguments: vec![domain.field.name().into()],
-        implementation: format!("{}/{name}", domain.provider),
+        implementation: format!("{}/{name}", domain.provider()),
         physical_arguments: vec![],
     }
 }
