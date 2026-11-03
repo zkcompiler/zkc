@@ -322,8 +322,8 @@
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifierLayer_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
-      "structural": "4af3e04bb819db30",
-      "explicit": "4f1790e5443c75ac"
+      "structural": "aec54da25fb8ad10",
+      "explicit": "14f2d939e08e4dad"
     },
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifier_participant": {
       "package": "main",
@@ -334,8 +334,8 @@
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Rounds.verifierRounds_invocation": {
       "package": "main",
       "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
-      "structural": "6d6f73bb2f8901ff",
-      "explicit": "d28001bb7a8b8e95"
+      "structural": "5f4e41484f5929d7",
+      "explicit": "623a57d68c144054"
     },
     "ZkcExamples.Structured.Generated.Scalar.ChaumPedersen.Root.verifier_process": {
       "package": "main",
