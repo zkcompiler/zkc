@@ -28,13 +28,14 @@ noncomputable def terminal {I : PIR.Signature} (raw point : List F) (scalar : F)
 
 variable [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- A total source-helper equation, with no vector, dimension, or shape premise. -/
+/-- A total source-helper equation for the closed constructor's custody result,
+with no vector, dimension, or shape premise. -/
 theorem source_terminal (payload : UnitPayload)
     (bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions)
     (self : Nat) (raw point : List F) (scalar : F) :
     Participant.owned self self
       (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper)
-      (.cons (some raw) (.cons (some point) (.cons (some scalar) .nil))) =
+      (.cons (some raw) (.cons (some 0) (.cons (some point) (.cons (some scalar) .nil)))) =
       terminal raw point scalar := by
   obtain ⟨bindings, implementation⟩ := bodies
   obtain ⟨collectBindings, first⟩ := implementation.first
@@ -49,7 +50,7 @@ theorem source_terminal (payload : UnitPayload)
       · rw [ite_eq_right rawBound]
         simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence]
         change (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper
-          (checkInputs raw point scalar)).bind _ = _
+          (terminalInputs raw 0 point scalar)).bind _ = _
         rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
           Zkc.Source.Structured.closed_invoke_plain, implementation.check.invoke payload.linked]
         rw [check_vector_exhausted_generic_body _
@@ -60,7 +61,7 @@ theorem source_terminal (payload : UnitPayload)
     · rw [ite_eq_right small]
       simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence]
       change (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper
-        (checkInputs raw point scalar)).bind _ = _
+        (terminalInputs raw 0 point scalar)).bind _ = _
       rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
         Zkc.Source.Structured.closed_invoke_plain, implementation.check.invoke payload.linked]
       rw [check_large_dimension_generic_body _
@@ -71,7 +72,7 @@ theorem source_terminal (payload : UnitPayload)
   · rw [ite_eq_right pointBound]
     simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence]
     change (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper
-      (checkInputs raw point scalar)).bind _ = _
+      (terminalInputs raw 0 point scalar)).bind _ = _
     rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
       Zkc.Source.Structured.closed_invoke_plain, implementation.check.invoke payload.linked,
       (check_point_exhausted (bindings := bindings) _ raw point scalar pointBound).1]

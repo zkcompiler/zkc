@@ -34,11 +34,20 @@ def capabilities : Claims.Domain.Capabilities model original :=
 noncomputable instance samples : ∀ event : Domain.Event model.toCarriers,
     SampleableType (Domain.Raw event) := capabilities.samples
 
-def subject : HonestPair.Subject model original imported selected := by
+/-- Closed source and artifact admission, before the required connection installation. -/
+def admittedSubject : HonestPair.Subject model original imported selected := by
   bind_authored_subject "selected_rows" exports
     "sha256:f9ad0166f81e29dacbc6be4e2e674912a349fcff66f6cf01826b81b8511326fc",
     "sha256:031121c1a6117b34ca2edacf20d589dd65958524d9054cb3edf674278330a977",
     "sha256:fdb65e400d7005ce06cbeddeda37f05f2ab0f24dab1625f9198b9dc65a45d59d"
+
+/-- Fix the admitted metadata before deriving both complete source connections.
+This subject requires the links explicitly; failed proof production cannot
+leave an optional connection unresolved in a certified fixture. -/
+def subject : HonestPair.Subject model original imported selected := {
+  admittedSubject with
+  producerConnection := some ⟨by derive_source_connection⟩
+  validatorConnection := some ⟨by derive_source_connection⟩ }
 
 abbrev validatorArtifacts := subject.validatorArtifacts
 abbrev validatorCompiled := subject.validatorCompiled
