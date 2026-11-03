@@ -19,7 +19,7 @@ from bridges.common import interface as language_interface, policy as native_pol
 from bridges.common.lean_render import ROOT, digest, require  # noqa: E402
 from bridges.common.native_entry import native_subject  # noqa: E402
 from bridges.construction import pair  # noqa: E402
-from bridges.pipeline import source_claims  # noqa: E402
+from bridges.pipeline import source_claims, source_inventory  # noqa: E402
 
 
 def selection(subject):
@@ -111,10 +111,12 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     """Compile a proof Entry and bind its independently exported source requests."""
     artifacts = proof_artifacts(runner, subject, compiler, directory, executable)
     entry = subject.get("entries", "proof")
-    claim_text = runner.run([compiler, "language-check", *options(subject, entry), "--source-claims"],
+    claim_text = runner.run([compiler, "language-check", *options(subject, entry), "--source-claims", "--source-correspondence"],
                             name=f"{subject.name}:proof:source-claims").stdout
     (directory / "source-claims.json").write_text(claim_text)
     claim_report = source_claims.decode(claim_text)
+    require(claim_report["source_claims"]["admission"] == claim_report["source_correspondence"]["admission"],
+            "source claims and correspondence name different admissions")
     bound_claims = source_claims.bind_export(
         claim_report["source_claims"], entry=entry, source=artifacts["source"],
         interface_text=artifacts["interface_text"], original_text=artifacts["original_text"],
@@ -125,6 +127,9 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     (directory / "bound-source-claims.json").write_text(json.dumps(bound_claims, indent=2) + "\n")
     artifacts["source_claims"] = bound_claims
     artifacts["source_claim_inventory"] = claim_report["source_claim_inventory"]
+    artifacts["source_inventory"] = source_inventory.Inventory(claim_report["source_correspondence"],
+        source=artifacts["source"], interface_text=artifacts["interface_text"],
+        original_text=artifacts["original_text"])
     return artifacts
 
 
@@ -145,15 +150,19 @@ def interactive_entry(runner, subject, compiler, directory):
     snapshot = json.loads(exported)
     runner.check(f"{prefix}:export-source", snapshot[2] == "sha256:" + digest(source.encode())
                  and snapshot[3] == interface["protocol"])
-    claim_text = runner.run([compiler, "language-check", *common, "--source-claims"],
+    claim_text = runner.run([compiler, "language-check", *common, "--source-claims", "--source-correspondence"],
                             name=f"{prefix}:source-claims").stdout
     (directory / "source-claims.json").write_text(claim_text)
     claim_report = source_claims.decode(claim_text)
+    require(claim_report["source_claims"]["admission"] == claim_report["source_correspondence"]["admission"],
+            "source claims and correspondence name different admissions")
     bound = source_claims.bind_export(claim_report["source_claims"], entry=interface["entry"],
         source=source.encode(), interface_text=interface_text, original_text=exported)
     (directory / "bound-source-claims.json").write_text(json.dumps(bound, indent=2) + "\n")
     return dict(source=source, interface=interface, export_text=exported, snapshot=snapshot, source_claims=bound,
-                source_claim_inventory=claim_report["source_claim_inventory"])
+                source_claim_inventory=claim_report["source_claim_inventory"],
+                source_inventory=source_inventory.Inventory(claim_report["source_correspondence"],
+                    source=source.encode(), interface_text=interface_text, original_text=exported))
 
 
 def relative(path):

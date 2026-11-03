@@ -557,7 +557,7 @@ end {namespace}
 """
 
 
-def body_names(snapshot, entry_name):
+def body_names(snapshot, entry_name, inventory=None, owners=None):
     """The printer's local names: the Entry protocol is `entry_name` and a unique
     relation formula is `formula`; other bodies keep the printer's defaults."""
     formulas = [relation[10] for relation in snapshot[5] if relation[10] is not None]
@@ -566,6 +566,15 @@ def body_names(snapshot, entry_name):
         names[snapshot[3]] = entry_name
     if len(formulas) == 1:
         names[formulas[0]] = "formula"
+    for owner, name in (owners or {}).items():
+        require(inventory is not None, "source owner aliases require the bound identity inventory")
+        candidates = [identity.symbol for identity in inventory.identities.values()
+                      if identity.kind == "instance" and identity.declaration["template"]["kind"] == "declaration"
+                      and identity.declaration["template"]["owner"] == owner]
+        require(len(candidates) == 1, f"body owner {owner} has no unique closed instance")
+        require(candidates[0] not in names or names[candidates[0]] == name,
+                "body owner alias conflicts with another presentation name")
+        names[candidates[0]] = name
     return names
 
 

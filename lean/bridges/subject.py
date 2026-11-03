@@ -173,7 +173,7 @@ class Driver(Runner):
             self.build(data)
             text, helpers, protocols = printer.printed_module(data, bodies, subject.get("bodies", "closed", False),
                                                               names, self, self.args.lake,
-                                                              fresh=self.args.fresh_bodies)
+                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"])
             self.generated(subject, "interactive_bodies", text, modules)
             views = subject.module_name("interactive_views")
             if views:
@@ -202,19 +202,25 @@ class Driver(Runner):
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
         if subject.generated("pair"):
             self.generated(subject, "pair", pair.render(artifacts["pair"], subject.module_name("pair")), modules)
-        # Presentations read the refreshed source and precede every consumer.
-        self.source_views(subject, record)
         entry = glue.Entry(artifacts["original"], artifacts["exported"], artifacts["interface"])
         names = {"glue": subject.construction_namespace, "data": data, "participant": participant}
         admission = subject.get("construction", "admission", "views")
         if subject.generated("bodies"):
             bodies = subject.module_name("bodies")
-            body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"))
+            body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"),
+                                         artifacts["source_inventory"], subject.get("bodies", "owners", {}))
             self.build(data)
             text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake,
-                                                              fresh=self.args.fresh_bodies)
+                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"])
             self.generated(subject, "bodies", text, modules)
             names.update(bodies=bodies, helpers=helpers, protocols=protocols)
+            views = subject.module_name("views")
+            if views:
+                self.generated(subject, "views", glue.views_module(views, data, bodies, helpers, protocols,
+                    max_rec_depth=50000, max_heartbeats=4000000), modules)
+                self.build(views)
+        # Presentations consume refreshed source, literal bodies and admission.
+        self.source_views(subject, record)
         if admission != "views":
             names.pop("bodies", None)
         if subject.generated("glue"):

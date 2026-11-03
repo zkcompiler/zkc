@@ -47,7 +47,7 @@ root.
 | `profiles` | `construction` | original Data, constructed participant, generated glue, kernel checks |
 | `profiles` | `executable` | program data, executable facts, Lean lowering rule, runtime differential |
 | `profiles` | `scalar` | the derived Common scalar contract over Structured participants in `[scalar]` |
-| `generated` | `data`, `bodies`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
+| `generated` | `data`, `bodies`, `views`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
 | `generated` | `pair` | optional actual producer/validator pair; independently exported validator must match in full, and both participants enter generated-data freshness checks |
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive protocol |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
@@ -87,6 +87,15 @@ that module and applies its checked `compiled_transform`; admission alone does
 not imply correspondence. The maintained module may continue the metadata's
 namespace. Its file is separate from generated outputs, so regeneration cannot
 overwrite the proof or accidentally build it before its metadata is ready.
+
+Body generation binds the source correspondence inventory to the exact original,
+interface and snapshot before resolving symbols. Optional `bodies.owners` maps
+canonical authored owners to presentation names and requires exactly one closed
+instance per owner. It selects no theorem or meaning. Other body names follow
+the independent checker's dependency order. `generated.views`, when present,
+must be the declared external construction admission module. It is generated
+from those bodies and kernel-checked before source presentations
+and construction consumers. No previous generated body is an input to generation.
 
 Every generated path is owned by this subject: `--write` rewrites it and
 `--check` compares it. Generated paths that another subject or a structured

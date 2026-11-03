@@ -14,25 +14,33 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
 sys.path.insert(0, str(ROOT / "common/tests"))
 from bridges.common import interface as language_interface, source_format  # noqa: E402
-from bridges.common.lean_render import Runner, digest  # noqa: E402
+from bridges.common.lean_render import Runner, digest, require  # noqa: E402
+from bridges.pipeline.source_inventory import Inventory, decode  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
 from support.project import project_arguments  # noqa: E402
 
-BATCH_NAMES = {
-    "zkl_b26f24aff1f462f4c3e9ea4c594fd6eaaac4e0d13a163302bc46f14e913cc892": "checkOpening",
-    "finite_zkl_040b90e6fc9f7c074519f3a904772619b0e3c63ed7b7a051cbc3db4b3c514ff3_s3_body": "batchStep",
-    "zkl_040b90e6fc9f7c074519f3a904772619b0e3c63ed7b7a051cbc3db4b3c514ff3": "batchValues",
-    "_mathematical_admission_0": "mathematicalAdmission",
-    "zkf_53219b51c062230506c8b229ef72062dff0e276e6336e241e0b2d30a9a6fe712": "formula",
-    "zkl_765e0fbfb20c4afe7930d2c0cbb531d52446ae1c25c74ad1237691d8738b0a85": "checkBatch",
-    "zkl_206d594942dc6f123848ad35c8fcdc7017b483db9ccd5c0651d1ad5c850eceab": "run",
-}
-
-TWO_BATCHES_NAMES = {
-    **BATCH_NAMES,
-    "zkl_ccb0c20474f144c8f1737523c09fa681cbd4974bb2edde5304978a97c3573492": "pair",
-}
+def batch_names(inventory, paired):
+    """Presentation names select authored substitutions and actual callees."""
+    statics = [["F", ["field", "koala-bear"]]]
+    def authored(owner):
+        return inventory.authored(owner, statics=statics, scoped=[], domains=[]).symbol
+    batch = authored("batch_opening::batch_values")
+    step = inventory.single_target(batch, "fold", 2)
+    require(step.kind == "generated" and step.declaration["purpose"] == "finite"
+            and step.declaration["part"] == "body", "batch step has no finite-body provenance")
+    opening = inventory.single_target(step.symbol, "call")
+    require(opening.kind == "instance" and opening.declaration["template"]["kind"] == "scoped"
+            and opening.declaration["template"]["owner"] == "batch_opening::batch_values",
+            "batch callback has another lexical owner")
+    realizations = [row[1] for row in inventory.snapshot[7] if row[0] == "realize" and row[4] == batch]
+    require(len(realizations) == 1, "batch body has no unique mathematical realization")
+    names = {batch: "batchValues", step.symbol: "batchStep", opening.symbol: "checkOpening",
+             realizations[0]: "mathematicalAdmission", authored("batch_opening::BatchValues"): "formula",
+             authored("batch_opening::check_batch"): "checkBatch", authored("batch_opening::CheckBatch"): "run"}
+    if paired:
+        names[authored("reusable_aggregate::TwoBatches")] = "pair"
+    return names
 
 
 def main():
@@ -73,6 +81,7 @@ def main():
         ("two-batches", "reusable_aggregate::TwoBatches<batch_opening::Scalar>",
          project_arguments(two_batches), "ReusableAggregateTwoBatches", two_batches),
     ]
+    inventories = {}
     try:
         for name, subject, modules, stem, project in subjects:
             if args.subject and name not in args.subject:
@@ -97,6 +106,10 @@ def main():
             if name == "table":
                 runner.check("exact-library-source", source ==
                              (ROOT / "lean/bridges/structured/fixtures/table-membership.mlir").read_text())
+            checked = run("language-check", *flags, "--source-correspondence")
+            (directory / "source-correspondence.json").write_text(checked)
+            inventories[name] = Inventory(decode(checked)["source_correspondence"],
+                source=source.encode(), interface_text=interface_text, original_text=original)
             original_data = json.loads(original)
             entries = [entry for entry in original_data[7]
                        if entry[0] == "function" and entry[1] == interface["protocol"]]
@@ -132,9 +145,9 @@ def main():
             data_namespace = "ZkcExamples.Structured.TableMembershipData" if name == "table" else namespace + "Data"
             generated(ROOT / ("lean/" + data_namespace.replace(".", "/") + ".lean"),
                       snapshot.render(json.loads(original), data_namespace))
-        for name, namespace, names in [
-            ("batch", "ZkcExamples.Construction.BatchOpening", BATCH_NAMES),
-            ("two-batches", "Tests.ReusableAggregateTwoBatches", TWO_BATCHES_NAMES),
+        for name, namespace in [
+            ("batch", "ZkcExamples.Construction.BatchOpening"),
+            ("two-batches", "Tests.ReusableAggregateTwoBatches"),
         ]:
             if args.subject and name not in args.subject:
                 continue
@@ -142,7 +155,8 @@ def main():
                        cwd=ROOT / "lean", name=name + ":build-data")
             generated(ROOT / ("lean/" + namespace.replace(".", "/") + "Bodies.lean"),
                       bodies.generate(namespace + "Data", namespace + "Bodies",
-                                      names=names, runner=runner, lake=args.lake,
+                                      names=batch_names(inventories[name], name == "two-batches"),
+                                      inventory=inventories[name], runner=runner, lake=args.lake,
                                       fresh=args.fresh_bodies))
         report["status"] = "pass"
     finally:
