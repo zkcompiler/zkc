@@ -353,7 +353,7 @@ def test_fri_rejects_altered_commitments_openings_and_terminal(toolchain, journa
     if report['code'] == 'rejected:require':
         assert authentication_rejection(report, descriptor)[0] == 0
     else:
-        assert report['code'] == 'artifact-stopped'
+        assert report['code'] == 'artifact-stopped:Explicit("reject")'
         assert rejected(report, sites) == ('terminal', ['0'])
     # A canonical degree-one terminal violates the exact constant-sized message.
     report = reject('terminal-degree', {rounds: bytes.fromhex(wire_frame([ONE, ONE]))},

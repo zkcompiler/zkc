@@ -149,7 +149,7 @@ exported root must equal the independently executed native binding. It never
 implements protocol arithmetic beyond preparing the public table and its claim.
 
 ```sh
-evm_native --compiler "$ZKC_COMPILER_BIN" \
+evm_native --compiler "$ZKC_COMPILER_BIN/zkc-compile" \
  --project examples/projects/sumcheck-keccak/zkc.toml \
  --entry example::Proof --rounds 4 --context 65766d --budget 64
 ```
@@ -164,7 +164,7 @@ Generate the complete native/reference matrix with:
 
 ```sh
 python3 common/tests/evm/native_fixtures.py \
- --driver /path/to/evm_native --compiler "$ZKC_COMPILER_BIN" \
+ --driver /path/to/evm_native --compiler "$ZKC_COMPILER_BIN/zkc-compile" \
  --output build/experiments/evm-implementation/EVM-EXECUTION-FIXTURES
 ```
 

@@ -62,7 +62,9 @@ what actually landed. The completion criteria below belong inside those units.
 | Virtual batching and FRI | Landed supported native profile: shared interaction analyses, checked dynamic virtual query blocks and one logical FRI component used by maintained STARK callers. Formal realization closure remains separate |
 | STARK reduction and checked construction | Implemented native profile: caller-owned DEEP adjustment and complete column inventory, phased common FRI, source-selected gates, shared verifier observations, actual-body binding checks and a quartic Keccak STARK client |
 | Represented execution | Implemented native profile: Data collection ownership, exact Residue/codec distinction, checked Arith/Vector/private-buffer candidates and actual CPU numerical-plan execution |
-| Constraints and semantic consumers | Next substantial PR: complete assignment-level redesign and consumer migration, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
+| Native analysis and transformation contracts | Next substantial PR: form the native source view directly from the admitted module, separate optional publication, unify purpose-specific typed policies, and migrate every consumer without a second source representation |
+| Selected proof control | Complete selected branches across source/candidate checking, construction, runtime and maintained targets, including selected mathematical results, captures and stopped prefixes; use the target's typed lowering boundary |
+| Constraints and semantic consumers | Complete assignment-level redesign after the native foundation and the construction contracts its consumers use, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
 
 The remaining units each contain their research, contract changes, implementation,
 review and final validation. Do not reopen the completed foundation or shared FRI
@@ -148,9 +150,42 @@ This unit contains the following implementation and completion criteria:
    interpretation and security closure independently. Remove superseded forms
    and revise represented execution from the measured result.
 
+### Native analysis and transformation contracts
+
+Build native analyses from an admitted module with an explicit immutable lifetime.
+Publication becomes an optional projection with its own size ceiling; exceeding
+that ceiling must not itself reject a native consumer. Preserve the exact
+semantic admission profile. Migrate every source-view consumer and delete the
+exporter-owned construction path, rather than introducing a second AST or a
+serialized analysis format. Stable producer/component coordinates must not
+require shifting all prior coordinates for each instruction.
+
+Use one structural traversal over native bound types, with separate judgments
+for source legality, role placement, custody, wire encoding, external supply and
+target support. These are different questions, not one universal admissibility
+bit. Keep the SDK's operation-specific supply checks and independent runtime,
+EVM and formal validation. Move target-owned public headers into their target
+trees with their consumers; delete the old headers without forwarding shims.
+
+Introduce more precise dataflow and effects only with a concrete consumer and
+its semantic controls. Cache facts within the exact subject, profile and
+substitution context; mutation invalidates them. Preserve reached effects,
+stop prefixes, zero-trip behavior and mandatory checking budgets. General
+MLIR purity or a reused analysis result cannot authorize a changed candidate.
+
+### Selected proof control
+
+Complete this as one feature across the construction contract and its maintained
+readers. Define selector agreement, arm-local facts, continuing-arm joins,
+captures, result values and reached stops before implementing the correspondence.
+Equal final values alone do not preserve transcript or oracle behavior. The EVM
+consumer uses typed target conversion and explicit legality; this foundation can
+proceed alongside unrelated native analysis work. Independent formal branch
+semantics retain their own proof obligations and support records.
+
 ### Constraint redesign and complete migration
 
-The next PR redesigns the whole assignment/constraint boundary. It
+After the native analysis foundation, redesign the whole assignment/constraint boundary. It
 is not an adapter-only addition to the present AIR representation. Clean and
 LLZK exercise complementary requirements; neither becomes the protocol owner.
 
@@ -189,7 +224,11 @@ CirC remains a comparison point, not an extra mandatory integration.
 The STARK construction retains logical terms and statement/witness maps;
 represented execution preserves them; Constraint reads them before physical lowering.
 Consequently this delivery order does not require rebuilding relations from
-buffers or bytes. If representation work needs assignment meaning, it must
+buffers or bytes. The preferred implementation order is native analysis,
+selected proof control, then Constraint. Constraint research and importer
+experiments can proceed earlier: not every constraint requires selected control.
+Reorder implementation only after identifying the shared consumers and the
+construction contracts they actually need. If representation work needs assignment meaning, it must
 preserve the existing logical subject instead of inventing a temporary owner.
 
 ### Shared interfaces before implementation
@@ -212,10 +251,11 @@ producer/consumer gaps. Frontend owns source spelling, companions and source-AST
 contracts; the checked program belongs to frontend, its lowering and the catalog
 to IR. The foundation migration is complete. Subsequent shared changes use the
 landed interfaces and publish their producer/consumer changes together; the
-temporary foundation-wide ownership freeze is over. Lean remains the sole
-writer of `lean/`. These native units neither patch Lean nor use its pipeline
-as a landing gate. Its independent interpretation does not delay native work
-or become established by catalog generation.
+temporary foundation-wide ownership freeze is over. The formal layer owns the
+interpretations and proofs under `lean/`. Changes there require the affected
+formal checks; a native-only extension records any missing formal consumer
+migration explicitly. An integration checkpoint that changes both layers checks
+both. Catalog generation alone never establishes the independent interpretation.
 
 Restricted logical aggregates retain typed field paths, actual handles and role
 components for claim records. They require explicit native frontend/IR admission;
