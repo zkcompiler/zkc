@@ -91,6 +91,9 @@ theorem fieldEqual_calculates (left right : model.toCarriers.Field "field") :
     Domain.calculate model (.fieldEqual "field") [.data (.field "field" left), .data (.field "field" right)] =
       .returned [.data (.boolean (decide (left = right)))] := by rfl
 
+theorem field_encodes (value : model.toCarriers.Field "field") :
+    Domain.Value.encode (.field "field") value = some (.data (.field "field" value)) := rfl
+
 theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.DomainSpec model.toCarriers) Id) :
     Domain.PairExecution.Success 0 (evalWithAnswerFn answers computation) := by
   unfold computation
@@ -101,7 +104,7 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.Dom
     queryOrigin, templateOrigin, Template.origin, Template.qualify, Template.repeats,
     Template.applicationPrefix, atCoordinates, Context.query, Context.role, Origin.query,
     Structured.qualifyProtocolSite, context, Context.fiatShamir, query, decimal, decimalDigit, Domain.read,
-    Domain.dataType, Domain.Value.encode, Domain.Payload.ofValue, Domain.Value.sort, drawRequest, Request.draw,
+    Domain.dataType, field_encodes, Domain.Value.sort, drawRequest, Request.draw,
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
     Domain.Payload.value, Context.replacement?, Context.suite, Context.contract,
