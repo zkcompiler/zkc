@@ -1,4 +1,5 @@
 import Zkc.Source.Structured.BodyBindings
+import Zkc.Source.Structured.UnitViews
 
 /-! Exact association controls independent of source admission. The fixtures
 construct formed declarations; linking remains a separate invocation premise. -/
@@ -22,6 +23,37 @@ private def wrongInputs : CheckedDefinition :=
   formed "value" (.ret (.cons .here .nil) : Region dialect [.boolean] [.boolean])
 private def wrongOutputs : CheckedDefinition :=
   formed "value" (.ret .nil : Region dialect [] [])
+
+-- The command selects actual symbols independently of presentation spelling.
+private structure AssociationTable where
+  definitions : List CheckedDefinition
+
+namespace Selection
+private def unit : AssociationTable := ⟨[unrelated, actual]⟩
+end Selection
+
+structured_associations Selection [renamed := (helper, valueBody true)]
+example : BodyIn Selection.unit.definitions helper (valueBody true) := renamed_association
+
+namespace Ambiguous
+private def unit : AssociationTable := ⟨[actual, actual]⟩
+end Ambiguous
+
+/-- error: structured_associations: no unique definition for duplicate -/
+#guard_msgs (substring := true) in
+structured_associations Ambiguous [duplicate := (helper, valueBody true)]
+
+/-- error: structured_associations: no unique definition for missing -/
+#guard_msgs (substring := true) in
+structured_associations Selection [missing := ((⟨"absent", .math, [], [.boolean]⟩ : Helper), valueBody true)]
+
+/-- error: structured_associations: generated declaration stale_shared_raw was not accepted -/
+#guard_msgs (substring := true) in
+structured_associations Selection [stale := (helper, valueBody false)]
+
+run_cmd do
+  if (← Lean.getEnv).contains `Tests.StructuredAssociations.stale_member then
+    throwError "refused association left a partial declaration"
 
 theorem original_association : BodyIn [actual, unrelated] helper (valueBody true) := by
   exact_body actual

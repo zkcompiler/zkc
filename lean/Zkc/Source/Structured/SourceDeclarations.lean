@@ -78,7 +78,7 @@ def revisionValid (value : String) : Bool :=
   value.length == 64 && value.toList.all (fun c => ('0' ≤ c && c ≤ '9') || ('a' ≤ c && c ≤ 'f'))
 
 def slotValid (value : String) : Bool :=
-  value.startsWith "zkl_resource_" && Source.LogicalFormat.slotIdentityValid value
+  "zkl_resource_".toList.isPrefixOf value.toList && Source.LogicalFormat.slotIdentityValid value
 
 def SourcePlacement.check (telescope : Option (List String)) : Nat → SourcePlacement → Except String Unit
   | 0, _ => .error "component-declaration-limit"

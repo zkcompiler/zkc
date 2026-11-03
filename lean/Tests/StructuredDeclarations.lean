@@ -35,6 +35,11 @@ def records (resource : String := "linear") (sealed : Bool := false) : SourceDec
         ⟨"empty", .array ticket "0", none⟩, ⟨"second", ticket, none⟩], [], some chainSlot⟩],
     authorities := [("probe::Chain", none), ("probe::Holder", none), ("probe::Ticket", none)] }
 
+example : records.checkShape = .ok () := by decide +kernel
+example : SourceDeclarations.slotValid "zkl_resource_ticket" = true := by decide +kernel
+example : SourceDeclarations.slotValid "zkl_resources_ticket" = false := by decide +kernel
+example : SourceDeclarations.slotValid "zkl_resource_한" = false := by decide +kernel
+
 #guard (records.checkShape).isOk
 #guard (records "affine").checkShape.isOk
 #guard (records "ordinary").checkShape.isOk
