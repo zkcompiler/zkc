@@ -56,7 +56,7 @@ theorem sums_unrepresentable_dimension : sumsBody.denote
 /-- A malformed shape returns false even with no check_table closure installed. -/
 theorem malformed_no_callback : checkBody.denote
     (meaning ℤ ℤ (MapPrefixViews.program.payload.meanings ℤ ℤ))
-    (checkInputs [1,2,3] [2] 0).get = .done (boolResult false) :=
+    (terminalInputs [1,2,3] 0 [2] 0).get = .done (boolResult false) :=
   check_malformed_generic_body _ MapPrefixContractsInstance.first_laws.shape _ _ _
     (by decide +kernel) (by decide +kernel) (by decide +kernel)
 
@@ -88,7 +88,7 @@ theorem finite_too_long : foldBody.denote
 /-- The reached true branch demands the absent callback in the actual map table. -/
 theorem valid_shape_missing_callback : checkBody.denote
     (meaning ℤ ℤ (MapPrefixViews.program.payload.meanings ℤ ℤ))
-    (checkInputs [1,2,3,4] [2,3] 8).get = .halt .refused := by
+    (terminalInputs [1,2,3,4] 0 [2,3] 8).get = .halt .refused := by
   rw [check_expansion, ite_eq_left (by decide +kernel),
     MapPrefixContractsInstance.first_laws.shape _ _ _
       (by decide +kernel) (by decide +kernel) (by decide +kernel)]

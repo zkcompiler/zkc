@@ -13,21 +13,21 @@ selects no mathematical readback reference and imports no readback companion. -/
 namespace ZkcSecurity.Realizations.Gkr.HonestHelpers.ReadbackGoals
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 
-helper_presentation Zero inputs [] outputs [value] := GkrSourceBodies.helper46Body
-helper_presentation ZeroWrapper inputs [] outputs [value] := GkrSourceBodies.scopedHelper74Body
+helper_presentation Zero inputs [] outputs [value] := GkrSourceBodies.helper28Body
+helper_presentation ZeroWrapper inputs [] outputs [value] := GkrSourceBodies.helper87Body
 helper_presentation Step inputs [current, index, value, position]
-  outputs [selected, nextIndex] := GkrSourceBodies.helper53Body
+  outputs [selected, nextIndex] := GkrSourceBodies.helper29Body
 helper_presentation Callback inputs [current, index, value, source, position]
-  outputs [selected, nextIndex] := GkrSourceBodies.helper54Body
+  outputs [selected, nextIndex] := GkrSourceBodies.helper30Body
 helper_presentation Scan inputs [source, current, index, position]
-  outputs [selected, nextIndex] := GkrSourceBodies.scopedHelper82Body
+  outputs [selected, nextIndex] := GkrSourceBodies.helper95Body
 helper_presentation ScanWrapper inputs [current, index, position, source]
-  outputs [selected, nextIndex] := GkrSourceBodies.helper56Body
-helper_presentation Element inputs [source, position] outputs [value] := GkrSourceBodies.helper57Body
-helper_presentation After inputs [source, position] outputs [value] := GkrSourceBodies.helper70Body
+  outputs [selected, nextIndex] := GkrSourceBodies.helper96Body
+helper_presentation Element inputs [source, position] outputs [value] := GkrSourceBodies.helper97Body
+helper_presentation After inputs [source, position] outputs [value] := GkrSourceBodies.helper98Body
 
 abbrev foldSpec : FoldSpec :=
-  (GkrSourceLaws.fold? GkrSourceBodies.scopedHelper82Body).get (by decide +kernel)
+  (GkrSourceLaws.fold? GkrSourceBodies.helper95Body).get (by decide +kernel)
 
 named_values State [current, index] := foldSpec.state
 named_values Item [value] := foldSpec.domain.items
@@ -37,13 +37,13 @@ named_values Captures [position] := foldSpec.captures
 /-- Every dependency is associated separately; matching its signature alone is
 insufficient. This record can be installed for any linked definition list. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
-  zero : BodyIn definitions GkrSourceBodies.helper46Helper Zero.body
-  zeroWrapper : BodyIn definitions GkrSourceBodies.scopedHelper74Helper ZeroWrapper.body
-  step : BodyIn definitions GkrSourceBodies.helper53Helper Step.body
-  callback : BodyIn definitions GkrSourceBodies.helper54Helper Callback.body
-  scan : BodyIn definitions GkrSourceBodies.scopedHelper82Helper Scan.body
-  scanWrapper : BodyIn definitions GkrSourceBodies.helper56Helper ScanWrapper.body
-  element : BodyIn definitions GkrSourceBodies.helper57Helper Element.body
-  after : BodyIn definitions GkrSourceBodies.helper70Helper After.body
+  zero : BodyIn definitions GkrSourceBodies.helper28Helper Zero.body
+  zeroWrapper : BodyIn definitions GkrSourceBodies.helper87Helper ZeroWrapper.body
+  step : BodyIn definitions GkrSourceBodies.helper29Helper Step.body
+  callback : BodyIn definitions GkrSourceBodies.helper30Helper Callback.body
+  scan : BodyIn definitions GkrSourceBodies.helper95Helper Scan.body
+  scanWrapper : BodyIn definitions GkrSourceBodies.helper96Helper ScanWrapper.body
+  element : BodyIn definitions GkrSourceBodies.helper97Helper Element.body
+  after : BodyIn definitions GkrSourceBodies.helper98Helper After.body
 
 end ZkcSecurity.Realizations.Gkr.HonestHelpers.ReadbackGoals

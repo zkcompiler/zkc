@@ -77,12 +77,13 @@ theorem rounds_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.ro
   rw [repeated]
   rfl
 
-/-- The actual eight-input invocation, including both source masks and the
+/-- The actual nine-input invocation, including both source masks and the
 pending-prefix reconstruction, is the complete observed round loop. -/
 theorem rounds_reads (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one : ctx.roles 1 = 1)
-    (handle count : Nat) (bounded : count ≤ 4) (point : List F) (claim : F) :
+    (handle count : Nat) (bounded : count ≤ 4) (custody : CustodyToken) (point : List F) (claim : F) :
     invokeProtocol (beforeRoot (F := F) (G := G)) GkrSourceBodies.roundsSignature ctx 1
       ((SourceRows.RoundsInputs.pack {
+          custody := some custody,
           add := none,
           mul := none,
           left := none,
@@ -98,6 +99,7 @@ theorem rounds_reads (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one : ctx
   rw [rounds_body]
   have masked : maskValues 1 (ctx.mapScopes GkrSourceBodies.roundsSignature.inputScopes)
       (((SourceRows.RoundsInputs.pack {
+          custody := some custody,
           add := none,
           mul := none,
           left := none,
@@ -109,6 +111,7 @@ theorem rounds_reads (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one : ctx
         })) :
           Values (Component (assignment F G)) roundsInputs) =
       ((SourceRows.RoundsInputs.pack {
+          custody := some custody,
           add := none,
           mul := none,
           left := none,
@@ -119,13 +122,13 @@ theorem rounds_reads (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one : ctx
           service := some handle
         })) := by
     dsimp only [SourceRows.RoundsInputs.pack, SourceRows.RoundsInputs.types]
-    iterate 9 unfold maskValues
+    iterate 10 unfold maskValues
     simp [ProtocolContext.mapScopes, GkrSourceBodies.roundsSignature,
       Participant.restrict, zero, one]
   rw [masked]
   have normalized := roundsPresentation_equation (F := F) (G := G) ctx
     (.ofSeparate separate (by decide)) [] (ProtocolPresentation.masked_empty (ringModel F G) _)
-    (some point) (some claim) (some count) (some handle)
+    (some custody) (some point) (some claim) (some count) (some handle)
   rw [one] at normalized
   erw [normalized]
   dsimp only [roundsPresentation, roundsPresentation_certificate, NormalForm.runsAtOn, NormalForm.meaningAtOn]

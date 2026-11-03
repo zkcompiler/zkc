@@ -17,18 +17,18 @@ open ZkcExamples.Structured GkrGateGoals
 /-- A complete optional source row, with two separate stopping controls. -/
 def source (model : DomainModel) (definitions : List CheckedDefinition)
     (input : Option (Value.Inputs.View model.Value)) (stop : Option Bool) :
-    PIR.Process closedInterface (Values model.Value GkrSourceBodies.helper31Helper.outputs) :=
+    PIR.Process closedInterface (Values model.Value GkrSourceBodies.helper19Helper.outputs) :=
   match stop, input with
   | none, _ => .halt .incomplete
   | some true, _ => .halt .reject
   | some false, none => .halt .incomplete
   | some false, some arguments => Structured.invoke
       (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
-      GkrSourceBodies.helper31Helper (Value.Inputs.pack arguments)
+      GkrSourceBodies.helper19Helper (Value.Inputs.pack arguments)
 
 def reference (model : DomainModel)
     (input : Option (Value.Inputs.View model.Value)) (stop : Option Bool) :
-    PIR.Process closedInterface (Values model.Value GkrSourceBodies.helper31Helper.outputs) :=
+    PIR.Process closedInterface (Values model.Value GkrSourceBodies.helper19Helper.outputs) :=
   match stop, input with
   | none, _ => .halt .incomplete
   | some true, _ => .halt .reject
@@ -40,14 +40,14 @@ def reference (model : DomainModel)
 /-- An applicability premise remains on the whole equation, including stops. -/
 def admittedSource (model : DomainModel) (definitions : List CheckedDefinition)
     (permit : Bool) (input : Option (Value.Inputs.View model.Value)) (stop : Option Bool) :
-    PIR.Process closedInterface (Values model.Value GkrSourceBodies.helper31Helper.outputs) :=
+    PIR.Process closedInterface (Values model.Value GkrSourceBodies.helper19Helper.outputs) :=
   if permit then source model definitions input stop else .halt .refused
 
 /-- This checked theorem retains actual source selection and dependency linking.
 Every placement below uses this complete equation, rather than a row type alias. -/
 theorem installed (model : DomainModel) (definitions : List CheckedDefinition)
     (linked : DeclarationsLinked [] definitions)
-    (associated : BodyIn definitions GkrSourceBodies.helper31Helper Value.body)
+    (associated : BodyIn definitions GkrSourceBodies.helper19Helper Value.body)
     (permit : Bool) (applicable : permit = true)
     (input : Option (Value.Inputs.View model.Value)) (stop : Option Bool) :
     admittedSource model definitions permit input stop = reference model input stop := by
@@ -59,7 +59,7 @@ theorem installed (model : DomainModel) (definitions : List CheckedDefinition)
     | false => cases input with
       | none => rfl
       | some arguments =>
-        exact (GkrGateCompanion.valueLaw model).invoke (helper := GkrSourceBodies.helper31Helper) definitions linked associated
+        exact (GkrGateCompanion.valueLaw model).invoke (helper := GkrSourceBodies.helper19Helper) definitions linked associated
           (Value.Inputs.pack arguments) trivial
 
 source_reference checked from_equation @installed using []

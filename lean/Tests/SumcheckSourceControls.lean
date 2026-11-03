@@ -15,7 +15,7 @@ variable {F : Type} [CommRing F] [DecidableEq F]
 
 def sourceCheck (xs point : List F) (claim : F) : Closed (Values (assignment F F) [.boolean]) :=
   invoke (SumcheckSourceContracts.helperMeanings (F := F) (G := F))
-    checkHelper (checkInputs xs point claim)
+    checkHelper (terminalInputs xs 0 point claim)
 
 theorem source_check_equation (xs point : List F) (claim : F)
     (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
@@ -81,9 +81,9 @@ set_option backward.isDefEq.respectTransparency false in
 theorem permuted_capture_lookup :
     invoke (Evaluation.extendMeanings SiteObservations.closed
       (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ)) checkPermutedDefinition)
-      checkHelper (checkInputs [1,2,3,4] [2,3] 8) = .halt .reject := by
+      checkHelper (terminalInputs [1,2,3,4] 0 [2,3] 8) = .halt .reject := by
   refine (Evaluation.invoke_extended (F := ℤ) (G := ℤ) SiteObservations.closed _
-    checkPermutedDefinition (checkInputs [1,2,3,4] [2,3] 8)).trans ?_
+    checkPermutedDefinition (terminalInputs [1,2,3,4] 0 [2,3] 8)).trans ?_
   change checkPermutedBody.denote _ _ = _
   rw [check_permuted_expansion, ite_eq_left (by decide +kernel),
     SumcheckSourceContracts.prefix_laws.shape _ _ _
@@ -114,7 +114,7 @@ theorem characteristic_two_sums_cancel :
 /-- The actual malformed source checker is also the existing mathematical check. -/
 theorem original_malformed_mathematical_check :
     invoke (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ))
-      checkHelper (checkInputs [1,2,3] [2] 0) =
+      checkHelper (terminalInputs [1,2,3] 0 [2] 0) =
         .done (boolResult (Zkc.Protocols.Sumcheck.Multilinear.check
           (n := 0 + [2].length) ([1,2,3] : List ℤ)
           (Zkc.Polynomial.Quadratic.point [2].length (coordinates [2].length [2]) Fin.elim0) 0)) :=
@@ -127,13 +127,13 @@ theorem permuted_capture_not_associated :
   have original := SumcheckSourceContracts.check_equation (F := ℤ) (G := ℤ)
     [1,2,3,4] [2,3] 8 (by decide +kernel) (by decide +kernel)
   have originalResult : invoke (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ))
-      checkHelper (checkInputs [1,2,3,4] [2,3] 8) = .done (boolResult true) := by
+      checkHelper (terminalInputs [1,2,3,4] 0 [2,3] 8) = .done (boolResult true) := by
     rw [original]; rfl
   have body := association.invoke (F := ℤ) (G := ℤ) SumcheckSourceViews.unit.linked
-    (checkInputs [1,2,3,4] [2,3] 8)
+    (terminalInputs [1,2,3,4] 0 [2,3] 8)
   have mutation := Evaluation.invoke_extended (F := ℤ) (G := ℤ) SiteObservations.closed
     (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ)) checkPermutedDefinition
-    (checkInputs [1,2,3,4] [2,3] 8)
+    (terminalInputs [1,2,3,4] 0 [2,3] 8)
   have stopped := mutation.symm.trans permuted_capture_lookup
   have impossible := originalResult.symm.trans (body.trans stopped)
   cases impossible
@@ -143,9 +143,9 @@ set_option backward.isDefEq.respectTransparency false in
 theorem accepts_malformed_lookup :
     invoke (Evaluation.extendMeanings SiteObservations.closed
       (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ)) checkAcceptMalformedDefinition)
-      checkHelper (checkInputs [1,2,3] [2] 0) = .done (boolResult true) := by
+      checkHelper (terminalInputs [1,2,3] 0 [2] 0) = .done (boolResult true) := by
   refine (Evaluation.invoke_extended (F := ℤ) (G := ℤ) SiteObservations.closed _
-    checkAcceptMalformedDefinition (checkInputs [1,2,3] [2] 0)).trans ?_
+    checkAcceptMalformedDefinition (terminalInputs [1,2,3] 0 [2] 0)).trans ?_
   change checkAcceptMalformedBody.denote _ _ = _
   rw [check_accept_malformed_expansion, ite_eq_left (by decide +kernel),
     SumcheckSourceContracts.first_laws.shape _ _ _
@@ -182,10 +182,10 @@ theorem accepts_malformed_not_associated :
     ¬ BodyIn SumcheckSourceViews.unit.definitions checkHelper checkAcceptMalformedBody := by
   intro association
   have body := association.invoke (F := ℤ) (G := ℤ) SumcheckSourceViews.unit.linked
-    (checkInputs [1,2,3] [2] 0)
+    (terminalInputs [1,2,3] 0 [2] 0)
   have mutation := Evaluation.invoke_extended (F := ℤ) (G := ℤ) SiteObservations.closed
     (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ)) checkAcceptMalformedDefinition
-    (checkInputs [1,2,3] [2] 0)
+    (terminalInputs [1,2,3] 0 [2] 0)
   have changed := mutation.symm.trans accepts_malformed_lookup
   have impossible := malformed_returns_false.symm.trans (body.trans changed)
   cases impossible

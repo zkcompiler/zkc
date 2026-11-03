@@ -69,7 +69,7 @@ abbrev beforeInput : ProtocolTable (assignment F G) (Occurrence.signature (unifo
     GkrSourceViews.roundsDefinition Occurrence.iterations
 abbrev beforeRoot : ProtocolTable (assignment F G) (Occurrence.signature (uniformCarriers F G)) :=
   extendProtocolTableOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers beforeInput
-    GkrSourceViews.sourceProtocol80Definition Occurrence.iterations
+    GkrSourceViews.inputDefinition Occurrence.iterations
 
 theorem beforeInput_masked : ProtocolPresentation.Masked (beforeInput (F := F) (G := G)) :=
   ProtocolPresentation.masked_extend (ringModel F G) _ _ _ _
@@ -96,10 +96,10 @@ theorem rounds_body (ctx : ProtocolContext) (self : Nat)
           observedHelpers self [] ctx Occurrence.iterations)
         (maskValues self (ctx.mapScopes GkrSourceBodies.roundsSignature.inputScopes) args).get).bind
         (fun out => .done (maskValues self (ctx.mapScopes GkrSourceBodies.roundsSignature.outputScopes) out)) := by
-  change invokeProtocol (⟨GkrSourceViews.sourceProtocol80Definition.signature, _⟩ :: _)
+  change invokeProtocol (⟨GkrSourceViews.inputDefinition.signature, _⟩ :: _)
     GkrSourceViews.roundsDefinition.signature ctx self args = _
   rw [invokeProtocol_cons_other _ _ _ (by
-    change GkrSourceBodies.sourceProtocol80Signature.name ≠ GkrSourceBodies.roundsSignature.name
+    change GkrSourceBodies.inputSignature.name ≠ GkrSourceBodies.roundsSignature.name
     decide)]
   unfold beforeInput extendProtocolTableOn
   rw [invokeProtocol_cons_same]
@@ -153,12 +153,13 @@ theorem observed_rounds_fold (ctx : ProtocolContext) (site : String) (start coun
     exact ih (start + 1) result.reference result.raw related smaller result.point
 
 /-- Exact current Rounds invocation in the occurrence view. Input and output
-masks remain those of the current eight-input source declaration. -/
+masks remain those of the current nine-input source declaration. -/
 theorem rounds_invocation (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one : ctx.roles 1 = 1)
     (add mul left right : Option (List F)) (count : Option Nat)
-    (pending : Option (List F)) (claim : Option F) (service : Option Nat) :
+    (custody : Option CustodyToken) (pending : Option (List F)) (claim : Option F) (service : Option Nat) :
     invokeProtocol (beforeRoot (F := F) (G := G)) GkrSourceBodies.roundsSignature ctx 0
       ((SourceRows.RoundsInputs.pack {
+          custody := custody,
           add := add,
           mul := mul,
           left := left,
@@ -173,7 +174,7 @@ theorem rounds_invocation (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one 
   have distinct : NormalForm.RosterDistinct ctx 0 2 :=
     .ofSeparate (show ctx.roles 1 ≠ ctx.roles 0 from by omega) (by decide)
   have inputMask := SourceRows.RoundsInputs.mask_context (ringModel F G) ctx 0 distinct
-    { add, mul, left, right, pending, claim, count, service }
+    { add, mul, left, right, custody, pending, claim, count, service }
   rw [zero] at inputMask
   rw [inputMask]
   have normalized := roundsPresentation_equation (F := F) (G := G) ctx
@@ -339,9 +340,10 @@ theorem rounds_observed (ctx : ProtocolContext) (zero : ctx.roles 0 = 0) (one : 
     (count : Nat) (bounded : count ≤ 4) {n : Nat}
     (reference : GkrRoundsReference.State F (n + count)) (raw : RawState F)
     (decoded : Decodes raw reference) (capacity : 2 ^ (n + count) < indexLimit)
-    (pending : Option (List F)) (claim : Option F) (service : Option Nat) :
+    (custody : Option CustodyToken) (pending : Option (List F)) (claim : Option F) (service : Option Nat) :
     invokeProtocol (beforeRoot (F := F) (G := G)) GkrSourceBodies.roundsSignature ctx 0
       ((SourceRows.RoundsInputs.pack {
+          custody := custody,
           add := some raw.add,
           mul := some raw.mul,
           left := some raw.left,

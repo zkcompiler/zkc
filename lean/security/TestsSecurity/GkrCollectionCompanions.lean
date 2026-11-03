@@ -14,17 +14,17 @@ open CollectionGoals CollectionCompanion
 
 private abbrev model := ringModel Int Int
 
-example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper25Helper
+example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper60Helper
     (Replicate.Inputs.pack { source := [3, 5], count := 2 }) =
       .done (Replicate.encode model ⟨[3, 3, 5, 5]⟩) :=
   replicate_equation [3, 5] 2 (by decide +kernel) (by decide +kernel)
 
-example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper30Helper
+example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper63Helper
     (Replicate.Inputs.pack { source := [3, 5], count := 2 }) =
       .done (Tile.encode model ⟨[3, 5, 3, 5]⟩) :=
   tile_equation [3, 5] 2 (by decide +kernel) (by decide +kernel)
 
-example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper29Helper
+example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper62Helper
     (Concatenate.Inputs.pack { initial := [7], source := [3, 5] }) =
       .done (Concatenate.encode model ⟨[7, 3, 5]⟩) := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
@@ -32,14 +32,14 @@ example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.h
     (Concatenate.Inputs.pack { initial := [7], source := [3, 5] })
   exact law
 
-example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper36Helper
+example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper66Helper
     (Layout.Inputs.pack { add := [2], mul := [3], point := [], below := [7], width := 0 }) =
       .done (Layout.encode model ⟨[2], [3], [7], [7]⟩) :=
   layout_equation [2] [3] [7] [] 0 (by decide +kernel) (by decide +kernel)
     (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
 
 -- Nontrivial width distinguishes every payload, including replication versus tiling.
-example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper36Helper
+example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper66Helper
     (Layout.Inputs.pack
       { add := [1, 2, 3, 4], mul := [5, 6, 7, 8], point := [], below := [3, 5], width := 1 }) =
       .done (Layout.encode model ⟨[1, 2, 3, 4], [5, 6, 7, 8], [3, 3, 5, 5], [3, 5, 3, 5]⟩) :=
@@ -55,7 +55,7 @@ example : Repeat.run model [] [7] 3 0 = .done ⟨[7]⟩ := rfl
 
 /-- Actual vector admission precedes the missing fold callback, even at count zero. -/
 theorem replicate_exhausted (source : List Int) (exhausted : ¬ source.length < indexLimit) :
-    invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper25Helper
+    invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper60Helper
       (Replicate.Inputs.pack { source, count := 0 }) = .halt .exhausted := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (collection_laws (F := Int) (G := Int)).replicated
@@ -65,13 +65,13 @@ theorem replicate_exhausted (source : List Int) (exhausted : ¬ source.length < 
 
 /-- Tile has no up-front vector admission: its zero loop never calls concatenation. -/
 theorem tile_zero_unadmitted (source : List Int) :
-    invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper30Helper
+    invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper63Helper
       (Replicate.Inputs.pack { source, count := 0 }) = .done (Tile.encode model ⟨[]⟩) := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   exact (collection_laws (F := Int) (G := Int)).tiled (Replicate.Inputs.pack { source, count := 0 })
 
 theorem tile_exhausted (source : List Int) (exhausted : ¬ source.length < indexLimit) :
-    invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper30Helper
+    invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper63Helper
       (Replicate.Inputs.pack { source, count := 1 }) = .halt .exhausted := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (collection_laws (F := Int) (G := Int)).tiled
@@ -92,7 +92,7 @@ example : AppendFold.run model [] [3] [7] = .halt .refused := rfl
 
 -- Synthetic stopping dependency, retaining the actual complete layout body.
 private def abortPower : Evaluation.MeaningsOn model.toCarriers closedInterface :=
-  [⟨GkrSourceBodies.helper18Helper, fun _ => .halt .abort⟩]
+  [⟨GkrSourceBodies.helper4Helper, fun _ => .halt .abort⟩]
 
 /-- The first helper stops before the layout even reads an exhausted point. -/
 example (point : List Int) (_exhausted : ¬ point.length < indexLimit) :
@@ -106,7 +106,7 @@ private def variantHelper : Helper :=
 
 private def variantBody : Region dialect variantHelper.inputs variantHelper.outputs :=
   .letOp (.mark "expanded") .nil .nil <|
-  .letOp (.invoke GkrSourceBodies.helper25Helper)
+  .letOp (.invoke GkrSourceBodies.helper60Helper)
     (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
   .ret (.cons .here .nil)
 
@@ -121,7 +121,7 @@ private def variantReference (copies : Nat) (_retained : Bool) (batch : List Int
   else .stopped .exhausted
 
 theorem variant_companion : Variant.Goal model variantReference
-    (fun table _ _ _ => (replicateLaw model).Realizes (helper := GkrSourceBodies.helper25Helper) table) := by
+    (fun table _ _ _ => (replicateLaw model).Realizes (helper := GkrSourceBodies.helper60Helper) table) := by
   apply Variant.of_law model _ _ variantLibrary rfl
   · intro copies retained batch
     by_cases bounded : batch.length < indexLimit <;>
@@ -133,11 +133,11 @@ private def definition (helper : Helper) (body : Region dialect helper.inputs he
     CheckedDefinition :=
   ⟨helper.name, helper.kind, helper.inputs, helper.outputs, body.erase, body, body.elaborate_erase⟩
 
-private def alteredAppend := definition GkrSourceBodies.helper26Helper (.stop .abort)
+private def alteredAppend := definition GkrSourceBodies.helper17Helper (.stop .abort)
 
 /-- A matching helper name and ABI cannot replace the actual append body. -/
 theorem altered_append_not_associated :
-    ¬ BodyIn [alteredAppend] GkrSourceBodies.helper26Helper Append.body := by
+    ¬ BodyIn [alteredAppend] GkrSourceBodies.helper17Helper Append.body := by
   rintro ⟨selected, member, _, same⟩
   simp only [List.mem_singleton] at member
   subst selected
@@ -145,17 +145,17 @@ theorem altered_append_not_associated :
 
 private def variantDefinition := definition variantHelper variantBody
 private def definitions :=
-  [definition GkrSourceBodies.helper20Helper Repeat.body,
-    definition GkrSourceBodies.helper21Helper RepeatWrapper.body,
-    definition GkrSourceBodies.helper22Helper ReplicateStep.body,
-    definition GkrSourceBodies.scopedHelper45Helper ReplicateFold.body,
-    definition GkrSourceBodies.helper24Helper ReplicateWrapper.body,
-    definition GkrSourceBodies.helper25Helper Replicate.body,
-    definition GkrSourceBodies.helper26Helper Append.body,
-    definition GkrSourceBodies.helper27Helper AppendStep.body,
-    definition GkrSourceBodies.scopedHelper48Helper AppendFold.body,
-    definition GkrSourceBodies.helper29Helper Concatenate.body,
-    definition GkrSourceBodies.helper30Helper Tile.body,
+  [definition GkrSourceBodies.helper14Helper Repeat.body,
+    definition GkrSourceBodies.helper15Helper RepeatWrapper.body,
+    definition GkrSourceBodies.helper16Helper ReplicateStep.body,
+    definition GkrSourceBodies.helper58Helper ReplicateFold.body,
+    definition GkrSourceBodies.helper59Helper ReplicateWrapper.body,
+    definition GkrSourceBodies.helper60Helper Replicate.body,
+    definition GkrSourceBodies.helper17Helper Append.body,
+    definition GkrSourceBodies.helper18Helper AppendStep.body,
+    definition GkrSourceBodies.helper61Helper AppendFold.body,
+    definition GkrSourceBodies.helper62Helper Concatenate.body,
+    definition GkrSourceBodies.helper63Helper Tile.body,
     variantDefinition]
 
 set_option maxRecDepth 20000 in
@@ -164,7 +164,7 @@ private theorem linked : DeclarationsLinked [] definitions := by decide +kernel
 private theorem bodies : Bodies definitions := by bind_structured_bodies
 
 private def variantLaw := Variant.law model variantReference
-  (fun table _ _ _ => (replicateLaw model).Realizes (helper := GkrSourceBodies.helper25Helper) table)
+  (fun table _ _ _ => (replicateLaw model).Realizes (helper := GkrSourceBodies.helper60Helper) table)
   variant_companion
 
 /-- Reassembly checks the changed caller's body and all actual dependencies. -/

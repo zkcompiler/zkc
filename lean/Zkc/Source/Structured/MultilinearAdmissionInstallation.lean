@@ -13,17 +13,17 @@ namespace Zkc.Source.Structured.ReferenceLibrary.Multilinear.Admission
 open Zkc.Source MultilinearBodies Zkc.Polynomial.Multilinear
 
 structure Bodies (definitions : List CheckedDefinition) (domain : String) (bindings : Bindings)
-    (checker : String) : Prop extends Multilinear.Bodies definitions domain bindings where
+    (slot checker : String) : Prop extends Multilinear.Bodies definitions domain bindings where
   rows : BodyIn definitions (rowsHelper bindings) (rowsBody domain bindings)
   shape : BodyIn definitions (shapeHelper domain bindings) (shapeBody domain bindings)
   table : BodyIn definitions (tableHelper domain bindings) (tableBody domain bindings)
   checkTable : BodyIn definitions (checkTableHelper domain bindings) (checkTableBody domain bindings)
   check : BodyIn definitions ⟨checker, .local,
-    [.vector domain, .vector domain, .field domain], [.boolean]⟩ (checkBody domain bindings)
+    [.vector domain, .resourceUnit slot, .vector domain, .field domain], [.boolean]⟩ (checkBody domain slot bindings)
 
-variable {definitions : List CheckedDefinition} {domain : String} {bindings : Bindings} {checker : String}
+variable {definitions : List CheckedDefinition} {domain : String} {bindings : Bindings} {slot checker : String}
   (model : DomainModel) (linked : DeclarationsLinked [] definitions)
-  (bodies : Bodies definitions domain bindings checker)
+  (bodies : Bodies definitions domain bindings slot checker)
 include linked bodies
 
 theorem rows_eq (n : Nat) (small : n < 64) :
@@ -77,18 +77,18 @@ theorem checkTable_eq (xs point : List (model.Field domain)) (claim : model.Fiel
   · intro _
     exact valuesRealization_eq model linked bodies.toBodies (restrictPrefixValues xs point) 0 1
 
-theorem check_eq (xs point : List (model.Field domain)) (claim : model.Field domain)
+theorem check_eq (xs : List (model.Field domain)) (token : CustodyToken) (point : List (model.Field domain)) (claim : model.Field domain)
     (lengthBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
     invoke (closed model (definitions := definitions))
-      ⟨checker, .local, [.vector domain, .vector domain, .field domain], [.boolean]⟩
-      (checkInputs model domain xs point claim) = .done (boolResult model
+      ⟨checker, .local, [.vector domain, .resourceUnit slot, .vector domain, .field domain], [.boolean]⟩
+      (terminalInputs model domain slot xs token point claim) = .done (boolResult model
         (decide (HasShape xs point.length 1 ∧ (restrictPrefixValues xs point).sum = claim))) := by
   apply ReferenceLaw.invoke (model := model)
-    (helper := ⟨checker, .local, [.vector domain, .vector domain, .field domain], [.boolean]⟩)
-    (check model domain bindings) definitions linked bodies.check
-  change (check model domain bindings).Requires (closed model (definitions := definitions))
-    (checkInputs model domain xs point claim)
-  dsimp only [check, checkInputs, Values.get]
+    (helper := ⟨checker, .local, [.vector domain, .resourceUnit slot, .vector domain, .field domain], [.boolean]⟩)
+    (check model domain bindings slot) definitions linked bodies.check
+  change (check model domain bindings slot).Requires (closed model (definitions := definitions))
+    (terminalInputs model domain slot xs token point claim)
+  dsimp only [check, terminalInputs, Values.get]
   exact ⟨pointBound, shape_eq model linked bodies xs point.length 1 lengthBound pointBound (by decide +kernel),
     fun _ => checkTable_eq model linked bodies xs point claim lengthBound pointBound⟩
 

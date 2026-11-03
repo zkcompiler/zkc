@@ -31,7 +31,7 @@ noncomputable def zeroWrapperLibrary :=
   forward_reference% ZeroWrapper.body using (zeroLaw model)
 
 def zeroWrapperCondition := fun table =>
-  (zeroLaw model).Realizes (helper := GkrSourceBodies.helper46Helper) table
+  (zeroLaw model).Realizes (helper := GkrSourceBodies.helper28Helper) table
 
 theorem zeroWrapper : ZeroWrapper.Goal model (.returned ⟨0⟩) (zeroWrapperCondition model) := by
   apply ZeroWrapper.of_law model _ _ (zeroWrapperLibrary model) rfl
@@ -82,7 +82,7 @@ def callbackReference (current : model.Field scalarDomain) (index : Nat)
 
 def callbackCondition := fun table (_ : model.Field scalarDomain) (_ : Nat)
     (_ : model.Field scalarDomain) (_ : List (model.Field scalarDomain)) (_ : Nat) =>
-  (stepLaw model).Realizes (helper := GkrSourceBodies.helper53Helper) table
+  (stepLaw model).Realizes (helper := GkrSourceBodies.helper29Helper) table
 
 theorem callback : Callback.Goal model (callbackReference model) (callbackCondition model) := by
   apply Callback.of_law model _ _ (callbackLibrary model) rfl
@@ -106,7 +106,7 @@ def scanReference (source : List (model.Field scalarDomain)) (current : model.Fi
 
 def scanCondition := fun table (_ : List (model.Field scalarDomain))
     (_ : model.Field scalarDomain) (_ _ : Nat) =>
-  (callbackLaw model).Realizes (helper := GkrSourceBodies.helper54Helper) table
+  (callbackLaw model).Realizes (helper := GkrSourceBodies.helper30Helper) table
 
 /-- Admission is checked before the scan; the shared fold law handles every
 step outcome. The named state encoding is a source representation choice. -/
@@ -118,7 +118,7 @@ theorem scan : Scan.Goal model (scanReference model) (scanCondition model) := by
   by_cases bounded : source.length < indexLimit
   · have admitted : foldSpec.domain.admit (DomainArguments.pack (Value := model.Value) ⟨source⟩) =
         .returned (source.map fun value => Item.pack (Value := model.Value) ⟨value⟩) := by
-      simp [foldSpec, GkrSourceLaws.fold?, GkrSourceBodies.scopedHelper82Body,
+      simp [foldSpec, GkrSourceLaws.fold?, GkrSourceBodies.helper95Body,
         DomainSpec.admit, DomainBody.admit, DomainNode.admit, Collection.values,
         DomainArguments.pack, Item.pack, Values.get, bounded, Finite.continueWith]
     have folded := Evaluation.denoteFoldOn_checked table foldSpec
@@ -129,7 +129,7 @@ theorem scan : Scan.Goal model (scanReference model) (scanCondition model) := by
         have call := dependency (Callback.Inputs.pack
           { current := state.1, index := state.2, value, source, position })
         change _ = primitiveOutcome ((callbackLaw model).reference _) at call
-        change invoke table GkrSourceBodies.helper54Helper (Callback.Inputs.pack
+        change invoke table GkrSourceBodies.helper30Helper (Callback.Inputs.pack
           { current := state.1, index := state.2, value, source, position }) = _
         rw [call]
         change primitiveOutcome (Callback.encodeOutcome model
@@ -148,7 +148,7 @@ theorem scan : Scan.Goal model (scanReference model) (scanCondition model) := by
         encode, State.pack, Scan.decode, primitiveOutcome]
   · have exhausted : foldSpec.domain.admit (DomainArguments.pack (Value := model.Value) ⟨source⟩) =
         .stopped .exhausted := by
-      simp [foldSpec, GkrSourceLaws.fold?, GkrSourceBodies.scopedHelper82Body,
+      simp [foldSpec, GkrSourceLaws.fold?, GkrSourceBodies.helper95Body,
         DomainSpec.admit, DomainBody.admit, DomainNode.admit, Collection.values,
         DomainArguments.pack, Item.pack, Values.get, bounded, Finite.continueWith]
     dsimp only [DomainArguments.pack] at exhausted
@@ -168,7 +168,7 @@ def wrapperReference (current : model.Field scalarDomain) (index position : Nat)
 
 def wrapperCondition := fun table (_ : model.Field scalarDomain) (_ _ : Nat)
     (_ : List (model.Field scalarDomain)) =>
-  (scanLaw model).Realizes (helper := GkrSourceBodies.scopedHelper82Helper) table
+  (scanLaw model).Realizes (helper := GkrSourceBodies.helper95Helper) table
 
 /-- Only the complete ABI transport is generated; the chosen scan mathematics
 and its dependency premise are retained by the named reference and condition. -/
@@ -187,8 +187,8 @@ def elementReference (source : List (model.Field scalarDomain)) (position : Nat)
   | .stopped reason => .stopped reason
 
 def elementCondition := fun table (_ : List (model.Field scalarDomain)) (_ : Nat) =>
-  (zeroWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper74Helper) table ∧
-  (wrapperLaw model).Realizes (helper := GkrSourceBodies.helper56Helper) table
+  (zeroWrapperLaw model).Realizes (helper := GkrSourceBodies.helper87Helper) table ∧
+  (wrapperLaw model).Realizes (helper := GkrSourceBodies.helper96Helper) table
 
 theorem element : Element.Goal model (elementReference model) (elementCondition model) := by
   intro table source position dependencies
@@ -201,7 +201,7 @@ theorem element : Element.Goal model (elementReference model) (elementCondition 
   simp only [zeroWrapperLaw, ZeroWrapper.law, ZeroWrapper.encodeOutcome, ZeroWrapper.encode,
     primitiveOutcome, PIR.Process.bind, Environment.prepend, Environment.push, Values.get,
     Primitive.evaluateOn, show 0 < indexLimit by decide +kernel, ↓reduceIte]
-  change invoke table GkrSourceBodies.helper56Helper _ =
+  change invoke table GkrSourceBodies.helper96Helper _ =
     primitiveOutcome (ScanWrapper.encodeOutcome model (wrapperReference model 0 0 position source)) at scanCall
   dsimp only [ScanWrapper.Inputs.pack] at scanCall
   rw [scanCall]
@@ -223,7 +223,7 @@ def afterReference (source : List (model.Field scalarDomain)) (position : Nat) :
   else .stopped .refused
 
 def afterCondition := fun table (_ : List (model.Field scalarDomain)) (_ : Nat) =>
-  (elementLaw model).Realizes (helper := GkrSourceBodies.helper57Helper) table
+  (elementLaw model).Realizes (helper := GkrSourceBodies.helper97Helper) table
 
 theorem after : After.Goal model (afterReference model) (afterCondition model) := by
   intro table source position dependency
@@ -251,47 +251,47 @@ noncomputable def afterLaw :=
 
 /-- A shared installation into the actual complete linked helper table. -/
 structure Laws (table : Evaluation.MeaningsOn model.toCarriers closedInterface) : Prop where
-  zero : (zeroLaw model).Realizes (helper := GkrSourceBodies.helper46Helper) table
-  zeroWrapper : (zeroWrapperLaw model).Realizes (helper := GkrSourceBodies.scopedHelper74Helper) table
-  step : (stepLaw model).Realizes (helper := GkrSourceBodies.helper53Helper) table
-  callback : (callbackLaw model).Realizes (helper := GkrSourceBodies.helper54Helper) table
-  scan : (scanLaw model).Realizes (helper := GkrSourceBodies.scopedHelper82Helper) table
-  wrapper : (wrapperLaw model).Realizes (helper := GkrSourceBodies.helper56Helper) table
-  element : (elementLaw model).Realizes (helper := GkrSourceBodies.helper57Helper) table
-  after : (afterLaw model).Realizes (helper := GkrSourceBodies.helper70Helper) table
+  zero : (zeroLaw model).Realizes (helper := GkrSourceBodies.helper28Helper) table
+  zeroWrapper : (zeroWrapperLaw model).Realizes (helper := GkrSourceBodies.helper87Helper) table
+  step : (stepLaw model).Realizes (helper := GkrSourceBodies.helper29Helper) table
+  callback : (callbackLaw model).Realizes (helper := GkrSourceBodies.helper30Helper) table
+  scan : (scanLaw model).Realizes (helper := GkrSourceBodies.helper95Helper) table
+  wrapper : (wrapperLaw model).Realizes (helper := GkrSourceBodies.helper96Helper) table
+  element : (elementLaw model).Realizes (helper := GkrSourceBodies.helper97Helper) table
+  after : (afterLaw model).Realizes (helper := GkrSourceBodies.helper98Helper) table
 
 theorem install (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
     (bodies : Bodies definitions) :
     Laws model (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []) := by
-  have zero := (zeroLaw model).realizes (helper := GkrSourceBodies.helper46Helper) definitions linked bodies.zero (by
+  have zero := (zeroLaw model).realizes (helper := GkrSourceBodies.helper28Helper) definitions linked bodies.zero (by
     intro arguments
     obtain ⟨view, rfl⟩ := Zero.Inputs.pack_surjective arguments
     trivial)
-  have step := (stepLaw model).realizes (helper := GkrSourceBodies.helper53Helper) definitions linked bodies.step (by
+  have step := (stepLaw model).realizes (helper := GkrSourceBodies.helper29Helper) definitions linked bodies.step (by
     intro arguments
     obtain ⟨view, rfl⟩ := Step.Inputs.pack_surjective arguments
     trivial)
-  have zeroWrapper := (zeroWrapperLaw model).realizes (helper := GkrSourceBodies.scopedHelper74Helper) definitions linked bodies.zeroWrapper (by
+  have zeroWrapper := (zeroWrapperLaw model).realizes (helper := GkrSourceBodies.helper87Helper) definitions linked bodies.zeroWrapper (by
     intro arguments
     obtain ⟨view, rfl⟩ := Zero.Inputs.pack_surjective arguments
     exact zero)
-  have callback := (callbackLaw model).realizes (helper := GkrSourceBodies.helper54Helper) definitions linked bodies.callback (by
+  have callback := (callbackLaw model).realizes (helper := GkrSourceBodies.helper30Helper) definitions linked bodies.callback (by
     intro arguments
     obtain ⟨view, rfl⟩ := Callback.Inputs.pack_surjective arguments
     exact step)
-  have scan := (scanLaw model).realizes (helper := GkrSourceBodies.scopedHelper82Helper) definitions linked bodies.scan (by
+  have scan := (scanLaw model).realizes (helper := GkrSourceBodies.helper95Helper) definitions linked bodies.scan (by
     intro arguments
     obtain ⟨view, rfl⟩ := Scan.Inputs.pack_surjective arguments
     exact callback)
-  have wrapper := (wrapperLaw model).realizes (helper := GkrSourceBodies.helper56Helper) definitions linked bodies.scanWrapper (by
+  have wrapper := (wrapperLaw model).realizes (helper := GkrSourceBodies.helper96Helper) definitions linked bodies.scanWrapper (by
     intro arguments
     obtain ⟨view, rfl⟩ := ScanWrapper.Inputs.pack_surjective arguments
     exact scan)
-  have element := (elementLaw model).realizes (helper := GkrSourceBodies.helper57Helper) definitions linked bodies.element (by
+  have element := (elementLaw model).realizes (helper := GkrSourceBodies.helper97Helper) definitions linked bodies.element (by
     intro arguments
     obtain ⟨view, rfl⟩ := Element.Inputs.pack_surjective arguments
     exact ⟨zeroWrapper, wrapper⟩)
-  have after := (afterLaw model).realizes (helper := GkrSourceBodies.helper70Helper) definitions linked bodies.after (by
+  have after := (afterLaw model).realizes (helper := GkrSourceBodies.helper98Helper) definitions linked bodies.after (by
     intro arguments
     obtain ⟨view, rfl⟩ := Element.Inputs.pack_surjective arguments
     exact element)

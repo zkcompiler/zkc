@@ -30,14 +30,14 @@ theorem readback_laws : ReadbackCompanion.Laws (ringModel F G)
   ReadbackCompanion.install (ringModel F G) unit.definitions unit.linked readback_bodies
 
 theorem zero_equation :
-    invoke (helpers (F := F) (G := G)) GkrSourceBodies.scopedHelper74Helper (Zero.Inputs.pack {}) =
+    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper87Helper (Zero.Inputs.pack {}) =
       .done (ZeroWrapper.encode (ringModel F G) ⟨0⟩) := by
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   exact readback_laws.zeroWrapper .nil
 
 theorem read_fold (xs : List F) (position offset : Nat) (current : F)
     (positionBound : position < indexLimit) (bound : offset + xs.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper82Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper95Helper
       (Scan.Inputs.pack { source := xs, current, index := offset, position }) =
       .done (Scan.encode (ringModel F G)
         { selected := if offset ≤ position then xs[position - offset]?.getD current else current,
@@ -54,7 +54,7 @@ theorem read_fold (xs : List F) (position offset : Nat) (current : F)
 bound even when the selected position is outside the list. -/
 theorem element_equation (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper57Helper (Element.Inputs.pack { source := xs, position }) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper97Helper (Element.Inputs.pack { source := xs, position }) =
       .done (Element.encode (ringModel F G) ⟨xs[position]?.getD 0⟩) := by
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := F) (G := G)).element
@@ -67,7 +67,7 @@ theorem element_equation (xs : List F) (position : Nat)
 
 theorem element_after_equation (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position + 1 < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper70Helper (Element.Inputs.pack { source := xs, position }) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper98Helper (Element.Inputs.pack { source := xs, position }) =
       .done (After.encode (ringModel F G) ⟨xs[position + 1]?.getD 0⟩) := by
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := F) (G := G)).after
@@ -81,7 +81,7 @@ theorem element_after_equation (xs : List F) (position : Nat)
 /-- The checked successor refuses overflow before any vector admission. -/
 theorem element_after_overflow (xs : List F) (position : Nat)
     (overflow : ¬ position + 1 < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper70Helper (Element.Inputs.pack { source := xs, position }) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper98Helper (Element.Inputs.pack { source := xs, position }) =
       .halt .refused := by
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := F) (G := G)).after

@@ -73,7 +73,7 @@ theorem mul_encoding : HonestCircuit.StackedEncoding rawMul 2 1 circuit.mul := b
 /-- The actual helper34 supplies the intermediate wires; they are not test
 inputs to the upper layer helper. -/
 theorem intermediate_values :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 0 .nil))))))) = .done (.cons [8, 15] .nil) := by
   rw [HonestCircuit.values_below rawAdd rawMul [3, 5] 2 1 0 circuit add_encoding mul_encoding
@@ -85,10 +85,10 @@ theorem intermediate_values :
 /-- Actual helper34 followed by actual helper33 computes the independent
 circuit's outputs, exercising both mixed add/multiply layers. -/
 theorem mixed_two_layers :
-    (invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    (invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 0 .nil)))))))).bind (fun below =>
-      invoke (helpers (G := ℚ)) GkrSourceBodies.helper33Helper
+      invoke (helpers (G := ℚ)) GkrSourceBodies.helper64Helper
         (.cons upperAdd (.cons upperMul (.cons (below.get .here) (.cons 1 .nil))))) =
       .done (.cons [120, 30] .nil) := by
   rw [HonestCircuit.values_below rawAdd rawMul [3, 5] 2 1 0 circuit add_encoding mul_encoding
@@ -104,7 +104,7 @@ theorem mixed_two_layers :
 
 /-- The zero-iteration boundary returns the exact inputs. -/
 theorem last_layer_below :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 1 .nil))))))) = .done (.cons [3, 5] .nil) := by
   rw [HonestCircuit.values_below rawAdd rawMul [3, 5] 2 1 1 circuit add_encoding mul_encoding
@@ -139,7 +139,7 @@ theorem padded_mul_encoding (tail : List ℚ) (tailSize : tail.length = 16) :
 
 theorem padded_values (addTail mulTail : List ℚ)
     (addSize : addTail.length = 16) (mulSize : mulTail.length = 16) :
-    invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper
+    invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper65Helper
       (.cons (rawAdd ++ addTail) (.cons (rawMul ++ mulTail) (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 2 (.cons 1 (.cons 0 .nil))))))) = .done (.cons [8, 15] .nil) := by
   rw [HonestCircuit.values_below_plain _ _ [3, 5] 2 2 0 circuit
@@ -155,7 +155,7 @@ def refusingHandler : PIR.Handler (participantInterface ℚ ℚ) (List ℚ) Unit
   fun _ initial => ⟨.stopped .refused, initial, []⟩
 
 theorem unchanged_suffix (suffix : List ℚ) :
-    (invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper
+    (invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 0 .nil)))))))).run refusingHandler suffix =
       ⟨.returned (.cons [8, 15] .nil), suffix, []⟩ := by
@@ -171,7 +171,7 @@ theorem current_digest : GkrSourceData.snapshot.source =
 
 /-- Malformed rows stop during the ordered domain admission. -/
 theorem malformed_gate_map :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.scopedHelper44Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
       (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) = .halt .refused := by
   rw [HonestCircuit.gate_bodies.map.invoke GkrSourceViews.unit.linked]
   change (Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
@@ -184,7 +184,7 @@ theorem malformed_gate_map :
 
 /-- The actual traversal refuses a decrement past its input boundary. -/
 theorem refused_layer_index :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons ([] : List ℚ) (.cons [] (.cons []
         (.cons 2 (.cons 1 (.cons 1 (.cons 2 .nil))))))) = .halt .refused := by
   rw [HonestCircuit.circuit_bodies.values.invoke GkrSourceViews.unit.linked]
@@ -198,7 +198,7 @@ theorem refused_layer_index :
 /-- The complete present value is returned by the actual component table. -/
 theorem read_output :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper57Helper
+      GkrSourceBodies.helper97Helper
       (.cons (some ([120, 30] : List ℚ)) (.cons (some 1) .nil)) =
       .done (.cons (some 30) .nil) := by
   convert HonestHelpers.element_component (G := ℚ) ([120, 30] : List ℚ) 1
@@ -207,7 +207,7 @@ theorem read_output :
 
 theorem changed_readback :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper57Helper
+      GkrSourceBodies.helper97Helper
       (.cons (some ([120, 30] : List ℚ)) (.cons (some 1) .nil)) ≠
       .done (.cons (some 31) .nil) := by
   rw [read_output]
@@ -217,7 +217,7 @@ theorem changed_readback :
 
 theorem read_after :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper70Helper
+      GkrSourceBodies.helper98Helper
       (.cons (some ([120, 30] : List ℚ)) (.cons (some 0) .nil)) =
       .done (.cons (some 30) .nil) := by
   convert HonestHelpers.element_after_component (G := ℚ) ([120, 30] : List ℚ) 0
@@ -225,18 +225,18 @@ theorem read_after :
   kernel_rfl
 
 theorem read_past_end :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper97Helper
       (.cons ([120, 30] : List ℚ) (.cons 2 .nil)) = .done (.cons 0 .nil) := by
   simpa using HonestHelpers.element_equation (G := ℚ) ([120, 30] : List ℚ) 2
     (by norm_num [indexLimit]) (by norm_num [indexLimit])
 
 theorem successor_overflow :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper70Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper98Helper
       (.cons ([120, 30] : List ℚ) (.cons (indexLimit - 1) .nil)) = .halt .refused := by
   exact HonestHelpers.element_after_overflow _ _ (by unfold indexLimit; omega)
 
 theorem upper_layout (rho : ℚ) :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper36Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper66Helper
       (.cons upperAdd (.cons upperMul (.cons [rho] (.cons [8, 15] (.cons 1 .nil))))) =
       .done (GkrCallerRealization.raw rho).values := by
   rw [HonestHelpers.layout_equation upperAdd upperMul [8, 15] [rho] 1 (by decide)
@@ -250,7 +250,7 @@ open TestsSecurity.GkrHonestLine
 open CoefficientRows LineCoefficients _root_.Polynomial
 
 theorem actual_quadratic :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [0, 0] (.cons [1, 1] (.cons 2 .nil)))) =
         .done (.cons [1, 3, 4] .nil) := by
   rw [HonestLine.coefficients_correspond 2 cubeValues [0, 0] [1, 1] cubeTable decoded
@@ -258,7 +258,7 @@ theorem actual_quadratic :
   norm_num [row, List.range_succ, coeff_add, coeff_mul_X, coeff_X_pow, coeff_one]
 
 theorem changed_highest :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [0, 0] (.cons [1, 1] (.cons 2 .nil)))) ≠
         .done (.cons [1, 3, 5] .nil) := by
   rw [actual_quadratic]
@@ -268,7 +268,7 @@ theorem changed_highest :
 
 theorem actual_translated :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper69Helper
+      GkrSourceBodies.helper102Helper
       (.cons (some cubeValues) (.cons (some [2, 3]) (.cons (some [5, 7]) (.cons (some 2) .nil)))) =
         .done (.cons (some [32, 78, 48]) .nil) := by
   rw [HonestLine.coefficients_component 2 cubeValues [2, 3] [5, 7] cubeTable decoded
@@ -278,14 +278,14 @@ theorem actual_translated :
   rfl
 
 theorem actual_scalar :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons [7] (.cons [] (.cons [] (.cons 0 .nil)))) = .done (.cons [7] .nil) := by
   rw [HonestLine.line_coefficients (F := ℚ) [7] [] [] 0 rfl
     (by norm_num [indexLimit]) (by norm_num [indexLimit]) (by norm_num [indexLimit])]
   simp [row_constant]
 
 theorem unequal_slope_rows :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper70Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper83Helper
       (.cons [1, 2] (.cons [3] (.cons 4 .nil))) = .halt .refused := by
   rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked]
   named_equation HonestLine.Goals.Slopes over ℚ ℚ
@@ -307,14 +307,14 @@ theorem first_message : GkrRoundsReference.message (GkrCallerRealization.referen
 
 theorem actual_round :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper41Helper (GkrCallerRealization.raw 0).values.present =
+      GkrSourceBodies.helper73Helper (GkrCallerRealization.raw 0).values.present =
       .done (.cons (some 120) (.cons (some (-15)) (.cons (some (-105)) .nil))) := by
   rw [HonestHelpers.round_coefficients_component _ (GkrCallerRealization.reference 0)
     (GkrCallerRealization.represented 0).1 (by norm_num [indexLimit]), first_message]
 
 theorem changed_round :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper41Helper (GkrCallerRealization.raw 0).values.present ≠
+      GkrSourceBodies.helper73Helper (GkrCallerRealization.raw 0).values.present ≠
       .done (.cons (some 121) (.cons (some (-15)) (.cons (some (-105)) .nil))) := by
   rw [actual_round]
   intro wrong
@@ -323,7 +323,7 @@ theorem changed_round :
 
 theorem actual_restriction (challenge : ℚ) :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).components
-      GkrSourceBodies.helper45Helper
+      GkrSourceBodies.helper78Helper
       ((GkrCallerRealization.raw 0).values.append (.cons challenge .nil)).present =
       .done ((GkrCallerRealization.raw 0).restrict challenge).values.present := by
   exact HonestHelpers.round_restriction_component _ (GkrCallerRealization.reference 0)
@@ -331,7 +331,7 @@ theorem actual_restriction (challenge : ℚ) :
 
 theorem malformed_round :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper41Helper
+      GkrSourceBodies.helper73Helper
       (.cons [] (.cons [0, 1] (.cons [1, 1] (.cons [1, 1] .nil)))) = .halt .refused := by
   rw [HonestHelpers.round_message_table, GkrRoundsProcesses.round_equation]
   rfl
@@ -339,7 +339,7 @@ theorem malformed_round :
 /-- Restriction also retains the source split refusal before any update. -/
 theorem refused_restriction (challenge : ℚ) :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper45Helper
+      GkrSourceBodies.helper78Helper
       (.cons [] (.cons [0, 1] (.cons [1, 1] (.cons [1, 1] (.cons challenge .nil))))) =
       .halt .refused := by
   rw [HonestHelpers.round_restriction_table, GkrRoundsProcesses.fixGates_equation]

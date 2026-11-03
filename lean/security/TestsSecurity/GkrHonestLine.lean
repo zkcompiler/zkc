@@ -14,7 +14,7 @@ open ZkcSecurity.Realizations.Gkr
 open _root_.Polynomial
 
 theorem actual_quadratic :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [0, 0] (.cons [1, 1] (.cons 2 .nil)))) =
         .done (.cons [1, 3, 4] .nil) := by
   rw [HonestLine.coefficients_correspond 2 cubeValues [0, 0] [1, 1] cubeTable decoded
@@ -23,7 +23,7 @@ theorem actual_quadratic :
 
 /-- Changing the highest coefficient changes the actual returned packet. -/
 theorem changed_highest :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [0, 0] (.cons [1, 1] (.cons 2 .nil)))) ≠
         .done (.cons [1, 3, 5] .nil) := by
   rw [actual_quadratic]
@@ -33,7 +33,7 @@ theorem changed_highest :
 
 theorem actual_translated :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper69Helper
+      GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [2, 3] (.cons [5, 7] (.cons 2 .nil)))) =
         .done (.cons [32, 78, 48] .nil) := by
   rw [HonestLine.coefficients_plain 2 cubeValues [2, 3] [5, 7] cubeTable decoded
@@ -42,7 +42,7 @@ theorem actual_translated :
 
 /-- The width-zero loop really performs no contraction. -/
 theorem actual_scalar :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons [7] (.cons [] (.cons [] (.cons 0 .nil)))) = .done (.cons [7] .nil) := by
   rw [HonestLine.line_coefficients (F := ℚ) [7] [] [] 0 rfl
     (by norm_num [indexLimit]) (by norm_num [indexLimit]) (by norm_num [indexLimit])]
@@ -50,7 +50,7 @@ theorem actual_scalar :
 
 /-- A checked map refuses unequal rows before invoking any scalar callback. -/
 theorem unequal_slope_rows :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper70Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper83Helper
       (.cons [1, 2] (.cons [3] (.cons 4 .nil))) = .halt .refused := by
   rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked]
   named_equation HonestLine.Goals.Slopes over ℚ ℚ
@@ -69,7 +69,7 @@ theorem unequal_slope_rows :
 theorem actual_all_points :
     ∃ coefficients : List ℚ,
       invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-        GkrSourceBodies.helper69Helper
+        GkrSourceBodies.helper102Helper
         (.cons cubeValues (.cons [2, 3] (.cons [5, 7] (.cons 2 .nil)))) =
           .done (.cons coefficients .nil) ∧
       coefficients.length = 3 ∧

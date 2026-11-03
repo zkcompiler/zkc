@@ -54,17 +54,21 @@ theorem original_return_consumes_pending :
 
 /-- The verifier point incorrectly selects the absent prover point. -/
 def wrongPointReturn : Region protocolDialect repeatState reduceOutputs :=
-  .ret (.cons (.there (.there (.there .here))) (.cons .here
-    (.cons (.there .here) (.cons (.there (.there .here))
-      (.cons (.there (.there (.there .here)))
-        (.cons (.there (.there (.there (.there (.there .here))))) .nil))))))
+  .letOp (.mark "s48") .nil .nil <|
+  .letOp (.localCall SumcheckPendingBodies.atPrefixHelper rfl 1 "s48")
+    (.cons (.there (.there (.there (.there .here))))
+      (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
+  .ret (.cons (.there (.there (.there (.there (.there (.there .here))))))
+    (.cons (.there (.there (.there .here)))
+      (.cons (.there (.there (.there (.there .here))))
+        (.cons (.there (.there (.there (.there (.there .here)))))
+          (.cons .here (.cons (.there (.there (.there (.there (.there (.there .here))))))
+            (.cons (.there (.there .here)) .nil)))))))
 
 theorem return_mutation_breaks_raw_association :
     wrongPointReturn.erase ≠ (reduceReturn []).erase := by
   intro same
-  have lengths := congrArg (fun body => body.operations.length) same
-  change 0 = 2 at lengths
-  contradiction
+  cases same
 
 def verifierState : Values (Component (assignment (ZMod 5) (ZMod 5))) repeatState :=
   .cons none (.cons none (.cons none (.cons none
@@ -74,9 +78,9 @@ def verifierState : Values (Component (assignment (ZMod 5) (ZMod 5))) repeatStat
 theorem return_mutation_loses_verifier_point :
     wrongPointReturn.denote
         (participantMeaningWith (.silent _) (participantActions (ZMod 5) (ZMod 5))
-          ⟨[], []⟩ 1 [] {}) verifierState.get =
+          (Zkc.Source.Structured.plainHelpers SumcheckSourceViews.unit) 1 [] {}) verifierState.get =
       .done (.cons none (.cons none (.cons none (.cons none
-        (.cons none (.cons (some 1) .nil)))))) := rfl
+        (.cons (some 0) (.cons none (.cons (some 1) .nil))))))) := by kernel_rfl
 
 set_option backward.isDefEq.respectTransparency false in
 theorem original_return_retains_verifier_point :
@@ -84,7 +88,7 @@ theorem original_return_retains_verifier_point :
         (participantMeaningWith (.silent _) (participantActions (ZMod 5) (ZMod 5))
           (Zkc.Source.Structured.plainHelpers SumcheckSourceViews.unit) 1 [] {}) verifierState.get =
       .done (.cons none (.cons none (.cons none (.cons none
-        (.cons (some [1]) (.cons (some 1) .nil)))))) := by
+        (.cons (some 0) (.cons (some [1]) (.cons (some 1) .nil))))))) := by
   kernel_rfl
 
 /-- Same input/output ABI; only the actual append value changes. -/

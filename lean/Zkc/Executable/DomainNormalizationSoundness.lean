@@ -55,7 +55,7 @@ theorem indices_of_sort {value : Value F G} (sorted : value.sort = .indices) :
     ∃ path, value = .indices path := by
   cases value with
   | data payload => cases sorted
-  | transcript => cases sorted
+  | transcript | custody => cases sorted
   | indices path => exact ⟨path, rfl⟩
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in

@@ -56,7 +56,7 @@ theorem stopped_child_terminal (raw : List F) (claim : F) (count handle : Nat)
   rcases selected with ⟨point, value, pointRead, _, _⟩
   have absent := publicReductionCall.boundaryOfOutcome_stopped_output {} 1
     (publicCallEnvironment (G := G) raw claim count handle) reason childPoint
-    (.there (.there (.there (.there .here)))) rfl
+    (.there (.there (.there (.there (.there .here))))) rfl
   have contradiction := absent.symm.trans pointRead
   cases contradiction
 

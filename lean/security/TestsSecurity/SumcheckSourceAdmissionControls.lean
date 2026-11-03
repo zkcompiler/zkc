@@ -23,21 +23,22 @@ private theorem get_cons_there {types : List Ty} {ty head : Ty} (value : model.V
     (rest : Values model.Value types) (position : Var types ty) :
     (Values.cons value rest).get (.there position) = rest.get position := rfl
 
-def pointOverflow : ReferenceLaw model [.vector domain, .vector domain, .field domain] [.boolean] where
-  body := checkBody domain bindings
-  Requires _ args := ¬ (args.get (.there .here)).length < indexLimit
+def pointOverflow (slot : String) : ReferenceLaw model [.vector domain, .resourceUnit slot, .vector domain, .field domain] [.boolean] where
+  body := checkBody domain slot bindings
+  Requires _ args := ¬ (args.get (.there (.there .here))).length < indexLimit
   reference _ := .stopped .exhausted
   valid table args overflow := by
     cases args with
     | cons xs rest => cases rest with
-      | cons point rest => cases rest with
-        | cons claim rest =>
-          cases rest
-          change ¬ point.length < indexLimit at overflow
-          simp [checkBody, Region.denote, Evaluation.meaningOn, Evaluation.operationOn,
-            Operands.eval, Regions.denote, Values.get_cons, get_cons_here, get_cons_there,
-            Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
-            SiteObservations.silent, PIR.Process.bind, Primitive.evaluateOn, primitiveOutcome, overflow]
+      | cons token rest => cases rest with
+       | cons point rest => cases rest with
+         | cons claim rest =>
+           cases rest
+           change ¬ point.length < indexLimit at overflow
+           simp [checkBody, Region.denote, Evaluation.meaningOn, Evaluation.operationOn,
+             Operands.eval, Regions.denote, Values.get_cons, get_cons_here, get_cons_there,
+             Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
+             SiteObservations.silent, PIR.Process.bind, Primitive.evaluateOn, primitiveOutcome, overflow]
 
 def largeShape : ReferenceLaw model (triple domain) [.boolean] where
   body := MultilinearBodies.shapeBody domain bindings
@@ -66,55 +67,56 @@ def largeShape : ReferenceLaw model (triple domain) [.boolean] where
             PIR.Process.bind, Values.get_cons, get_cons_here, get_cons_there,
             Values.get, Environment.prepend, Environment.push, Values.split]
 
-def largeCheck : ReferenceLaw model [.vector domain, .vector domain, .field domain] [.boolean] where
-  body := checkBody domain bindings
-  Requires table args := (args.get (.there .here)).length < indexLimit ∧
+def largeCheck (slot : String) : ReferenceLaw model [.vector domain, .resourceUnit slot, .vector domain, .field domain] [.boolean] where
+  body := checkBody domain slot bindings
+  Requires table args := (args.get (.there (.there .here))).length < indexLimit ∧
     invoke table (shapeHelper domain bindings)
-      (tableValues model domain (args.get .here) (args.get (.there .here)).length 1) =
+      (tableValues model domain (args.get .here) (args.get (.there (.there .here))).length 1) =
         .done (boolResult model false)
   reference _ := .returned (boolResult model false)
   valid table args premises := by
     cases args with
     | cons xs rest => cases rest with
-      | cons point rest => cases rest with
-        | cons claim rest =>
-          cases rest
-          obtain ⟨pointBound, shape⟩ := premises
-          change point.length < indexLimit at pointBound
-          change invoke table (shapeHelper domain bindings) (tableValues model domain xs point.length 1) = .done (boolResult model false) at shape
-          simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, Region.denote,
-            Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
-            Values.get_cons, get_cons_here, get_cons_there, Values.get, Environment.prepend,
-            Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-            Evaluation.invokeCallbackOn, Values.split]
-          simp only [Primitive.evaluateOn, pointBound, show 1 < indexLimit by decide +kernel,
-            ↓reduceIte, primitiveOutcome, PIR.Process.bind, Values.get_cons, get_cons_here,
-            get_cons_there, Values.get, Environment.prepend, Environment.push]
-          change (invoke table (shapeHelper domain bindings)
-            (tableValues model domain xs point.length 1)).bind _ = _
-          rw [shape]
-          rfl
+      | cons token rest => cases rest with
+       | cons point rest => cases rest with
+         | cons claim rest =>
+           cases rest
+           obtain ⟨pointBound, shape⟩ := premises
+           change point.length < indexLimit at pointBound
+           change invoke table (shapeHelper domain bindings) (tableValues model domain xs point.length 1) = .done (boolResult model false) at shape
+           simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, Region.denote,
+             Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+             Values.get_cons, get_cons_here, get_cons_there, Values.get, Environment.prepend,
+             Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+             Evaluation.invokeCallbackOn, Values.split]
+           simp only [Primitive.evaluateOn, pointBound, show 1 < indexLimit by decide +kernel,
+             ↓reduceIte, primitiveOutcome, PIR.Process.bind, Values.get_cons, get_cons_here,
+             get_cons_there, Values.get, Environment.prepend, Environment.push]
+           change (invoke table (shapeHelper domain bindings)
+             (tableValues model domain xs point.length 1)).bind _ = _
+           rw [shape]
+           rfl
 
 variable (selection : Selection)
-theorem point_overflow (raw point : List (model.Field field)) (scalar : model.Field field)
+theorem point_overflow (raw point : List (model.Field field)) (token : CustodyToken) (scalar : model.Field field)
     (overflow : ¬ point.length < indexLimit) :
     invoke (SumcheckReferenceInstallation.tables model (source selection).payload.definitions).closed
       Generated.Bindings.SmallSumcheckInputs.helper33Helper
-      (checkInputs model field raw point scalar) = .halt .exhausted := by
+      (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) = .halt .exhausted := by
   rw [Evaluation.closed_invoke_componentTablesOn]
   rw [ReferenceLaw.invoke (model := model)
     (helper := Generated.Bindings.SmallSumcheckInputs.helper33Helper)
-    (pointOverflow model field SumcheckSourceSelections.bindings)
+    (pointOverflow model field SumcheckSourceSelections.bindings SumcheckPendingBodies.custodySlot)
     (source selection).payload.definitions (source selection).payload.linked (admissionBodies selection).check
-    (checkInputs model field raw point scalar) overflow]
+    (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) overflow]
   rfl
 
 /-- A representable large dimension returns false before any raw-length guard. -/
-theorem large_dimension (raw point : List (model.Field field)) (scalar : model.Field field)
+theorem large_dimension (raw point : List (model.Field field)) (token : CustodyToken) (scalar : model.Field field)
     (finite : point.length < indexLimit) (large : ¬ point.length < 64) :
     invoke (SumcheckReferenceInstallation.tables model (source selection).payload.definitions).closed
       Generated.Bindings.SmallSumcheckInputs.helper33Helper
-      (checkInputs model field raw point scalar) = .done (boolResult model false) := by
+      (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) = .done (boolResult model false) := by
   have shape : invoke (closed model (definitions := (source selection).payload.definitions))
       (shapeHelper field SumcheckSourceSelections.bindings)
       (tableValues model field raw point.length 1) = .done (boolResult model false) := by
@@ -132,9 +134,9 @@ theorem large_dimension (raw point : List (model.Field field)) (scalar : model.F
   rw [Evaluation.closed_invoke_componentTablesOn]
   rw [ReferenceLaw.invoke (model := model)
     (helper := Generated.Bindings.SmallSumcheckInputs.helper33Helper)
-    (largeCheck model field SumcheckSourceSelections.bindings)
+    (largeCheck model field SumcheckSourceSelections.bindings SumcheckPendingBodies.custodySlot)
     (source selection).payload.definitions (source selection).payload.linked (admissionBodies selection).check
-    (checkInputs model field raw point scalar) ⟨finite, shape⟩]
+    (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) ⟨finite, shape⟩]
   rfl
 
 /-- The actual optional mathematical helper preserves an absent Boolean. -/

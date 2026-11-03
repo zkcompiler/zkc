@@ -13,7 +13,7 @@ open Zkc.Construction
 
 def participant : Participant where
   source := "sha256:82600bde6a020cade986703063b92038eea6bc63938ce0a54793ffac327ee7e6"
-  candidate := "sha256:34af2ef01f20d3617b95d526a676e32c5fc76f300190d70d18537f579e0b7025"
+  candidate := "sha256:c4d1a0df34a6f840757bf672cf9bb1b6b5808b4d20975f65bb571589b5ca7311"
   policy := ⟨"zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [2], [0], [("label_6330", "label_6430_0"), ("label_6331", "label_6431_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -40,5 +40,10 @@ def participant : Participant where
     ⟨.calculate (.fieldAdd "bls12-381.fr"), [21, 0], [.data (.field "bls12-381.fr")], []⟩,
     ⟨.calculate (.fieldEqual "bls12-381.fr"), [20, 22], [.data .boolean], []⟩]
   returned := [23, 18]
+
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [] }
 
 end ZkcExamples.Construction.DeferredRoundsParticipant

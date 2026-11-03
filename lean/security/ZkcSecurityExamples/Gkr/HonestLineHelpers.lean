@@ -18,14 +18,14 @@ open Zkc.Polynomial.Multilinear CoefficientRows LineCoefficients
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
-  [helper48 := GkrSourceBodies.helper48, helper49 := GkrSourceBodies.helper49,
-    helper50 := GkrSourceBodies.helper50, scopedHelper80 := GkrSourceBodies.scopedHelper80,
-    helper52 := GkrSourceBodies.helper52,
-    scopedHelper70 := GkrSourceBodies.scopedHelper70, helper62 := GkrSourceBodies.helper62,
-    helper63 := GkrSourceBodies.helper63, scopedHelper86 := GkrSourceBodies.scopedHelper86,
-    helper65 := GkrSourceBodies.helper65, helper66 := GkrSourceBodies.helper66,
-    scopedHelper73 := GkrSourceBodies.scopedHelper73,
-    helper69 := GkrSourceBodies.helper69]
+  [helper48 := GkrSourceBodies.helper88, helper49 := GkrSourceBodies.helper89,
+    helper50 := GkrSourceBodies.helper90, scopedHelper80 := GkrSourceBodies.helper93,
+    helper52 := GkrSourceBodies.helper94,
+    scopedHelper70 := GkrSourceBodies.helper83, helper62 := GkrSourceBodies.helper91,
+    helper63 := GkrSourceBodies.helper92, scopedHelper86 := GkrSourceBodies.helper99,
+    helper65 := GkrSourceBodies.helper100, helper66 := GkrSourceBodies.helper101,
+    scopedHelper73 := GkrSourceBodies.helper86,
+    helper69 := GkrSourceBodies.helper102]
 
 set_option backward.isDefEq.respectTransparency false
 attribute [local implicit_reducible] Collection.type Collection.element Op.arguments Op.results Op.regions
@@ -46,7 +46,7 @@ theorem scalar_laws : Companion.ScalarLaws (ringModel F G)
   Companion.installScalars (ringModel F G) unit.definitions unit.linked scalar_bodies
 
 theorem constant_row (xs : List F) (value : F) (width : Nat) (small : width < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper49Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper89Helper
       (Goals.ConstantWrapper.Inputs.pack (Value := assignment F G) { initial := xs, value, width }) =
         .done (Goals.Constant.encode (ringModel F G) ⟨xs ++ (value :: List.replicate width 0)⟩) := by
   rw [helper49_association.invoke unit.linked]
@@ -71,7 +71,7 @@ theorem constant_step (xs : List F) (value : F) (source : List F) (width : Nat)
     invoke (helpers (G := G)) constantFold.stepHelper
       (Goals.ConstantStep.Inputs.pack (Value := assignment F G) { initial := xs, value, source, width }) =
         .done (Goals.Constant.encode (ringModel F G) ⟨xs ++ (value :: List.replicate width 0)⟩) := by
-  change invoke (helpers (G := G)) GkrSourceBodies.helper50Helper _ = _
+  change invoke (helpers (G := G)) GkrSourceBodies.helper90Helper _ = _
   rw [helper50_association.invoke unit.linked]
   named_equation Goals.ConstantStep over F G
   rw [constant_row xs value width small]
@@ -79,7 +79,7 @@ theorem constant_step (xs : List F) (value : F) (source : List F) (width : Nat)
 
 theorem constant_fold (values xs : List F) (width : Nat)
     (valuesBound : values.length < indexLimit) (small : width < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper80Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper93Helper
       (Goals.ConstantFold.Inputs.pack (Value := assignment F G) { source := values, initial := xs, width }) =
         .done (Goals.Constants.encode (ringModel F G) ⟨xs ++ values.flatMap (fun v => v :: List.replicate width 0)⟩) := by
   rw [scopedHelper80_association.invoke unit.linked]
@@ -87,7 +87,7 @@ theorem constant_fold (values xs : List F) (width : Nat)
   have admitted : constantFold.domain.admit (Goals.ConstantDomain.pack (Value := assignment F G) ⟨values⟩) =
       .returned (values.map fun value => Goals.ConstantItem.pack ⟨value⟩) := by
     simp [constantFold, Goals.constantSpec, Goals.ConstantFold.body, GkrSourceLaws.fold?,
-      GkrSourceBodies.scopedHelper80Body, DomainSpec.admit, DomainBody.admit, DomainNode.admit,
+      GkrSourceBodies.helper93Body, DomainSpec.admit, DomainBody.admit, DomainNode.admit,
       Collection.values, Goals.ConstantDomain.pack, Goals.ConstantItem.pack, Values.get, valuesBound,
       Finite.continueWith]
   have folded := Evaluation.denoteFoldOn_append_encode (model := ringModel F G)
@@ -105,7 +105,7 @@ theorem constant_fold (values xs : List F) (width : Nat)
 
 theorem constant_rows (values xs : List F) (width : Nat)
     (valuesBound : values.length < indexLimit) (small : width < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper52Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper94Helper
       (Goals.Constants.Inputs.pack (Value := assignment F G) { initial := xs, width, source := values }) =
         .done (Goals.Constants.encode (ringModel F G) ⟨xs ++ values.flatMap (fun v => v :: List.replicate width 0)⟩) := by
   rw [helper52_association.invoke unit.linked]
@@ -114,7 +114,7 @@ theorem constant_rows (values xs : List F) (width : Nat)
   rfl
 
 theorem difference (high low : F) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper67Helper (Goals.DifferenceWrapper.Inputs.pack (Value := assignment F G) { high, low }) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper80Helper (Goals.DifferenceWrapper.Inputs.pack (Value := assignment F G) { high, low }) =
       .done (Goals.DifferenceWrapper.encode (ringModel F G) ⟨high - low⟩) := by
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   simpa [Companion.differenceWrapperLaw, Goals.DifferenceWrapper.law,
@@ -127,19 +127,19 @@ noncomputable abbrev slopeCollection : CollectSpec := Goals.slopesSpec
 noncomputable abbrev totalCollection : CollectSpec := Goals.totalsSpec
 
 noncomputable abbrev slopeBindings : MultilinearCollectBodies.Bindings :=
-  ⟨GkrSourceBodies.scopedHelper70Helper.name, slopeCollection.domain.name,
-    slopeCollection.body, GkrSourceBodies.scopedHelper68Helper.name⟩
+  ⟨GkrSourceBodies.helper83Helper.name, slopeCollection.domain.name,
+    slopeCollection.body, GkrSourceBodies.helper81Helper.name⟩
 noncomputable abbrev totalBindings : MultilinearCollectBodies.Bindings :=
-  ⟨GkrSourceBodies.scopedHelper73Helper.name, totalCollection.domain.name,
-    totalCollection.body, GkrSourceBodies.scopedHelper71Helper.name⟩
+  ⟨GkrSourceBodies.helper86Helper.name, totalCollection.domain.name,
+    totalCollection.body, GkrSourceBodies.helper84Helper.name⟩
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
-  [scopedHelper66 := GkrSourceBodies.scopedHelper66]
+  [scopedHelper66 := GkrSourceBodies.helper79]
 
 theorem slope_map (left right : List F) (delta : F)
     (small : left.length < indexLimit) (same : right.length = left.length) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper70Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper83Helper
       (Goals.Slopes.Inputs.pack (Value := assignment F G) { left, right, delta }) =
         .done (Goals.Slopes.encode (ringModel F G) ⟨List.zipWith (fun a b => (b - a) * delta) left right⟩) := by
   rw [scopedHelper70_association.invoke unit.linked]
@@ -150,7 +150,7 @@ theorem slope_map (left right : List F) (delta : F)
     (MultilinearCollectLaws.domain_admit slopeBindings left right small same.symm) rfl
     (fun pair => (pair.2 - pair.1) * delta) (by
       intro pair _
-      change invoke (helpers (F := F) (G := G)) GkrSourceBodies.scopedHelper69Helper _ = _
+      change invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper82Helper _ = _
       simpa [Goals.SlopesItem.pack, Goals.SlopesDomain.pack, Goals.SlopesCaptures.pack,
         Values.append, closedMeanings_eq_closedMeaningsOn, Companion.slopeCallbackLaw,
         Goals.SlopeCallback.law, Companion.slopeCallbackReference, Goals.SlopeCallback.Inputs.pack,
@@ -164,7 +164,7 @@ theorem slope_map (left right : List F) (delta : F)
 
 theorem total_map (left right : List F)
     (small : left.length < indexLimit) (same : right.length = left.length) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper73Helper (Goals.Totals.Inputs.pack (Value := assignment F G) { left, right }) =
+    invoke (helpers (G := G)) GkrSourceBodies.helper86Helper (Goals.Totals.Inputs.pack (Value := assignment F G) { left, right }) =
       .done (Goals.Totals.encode (ringModel F G) ⟨List.zipWith (· + ·) left right⟩) := by
   rw [scopedHelper73_association.invoke unit.linked]
   named_equation Goals.Totals over F G
@@ -174,7 +174,7 @@ theorem total_map (left right : List F)
     (MultilinearCollectLaws.domain_admit totalBindings left right small same.symm) rfl
     (fun pair => pair.1 + pair.2) (by
       intro pair _
-      change invoke (helpers (F := F) (G := G)) GkrSourceBodies.scopedHelper72Helper _ = _
+      change invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper85Helper _ = _
       simpa [Goals.TotalsItem.pack, Goals.TotalsDomain.pack,
         Values.append, closedMeanings_eq_closedMeaningsOn, Companion.totalCallbackLaw,
         Goals.TotalCallback.law, Companion.totalCallbackReference, Goals.TotalCallback.Inputs.pack,
@@ -189,12 +189,12 @@ theorem total_map (left right : List F)
 /-- The line contraction uses a separate admission of the same checked body. -/
 theorem base_map (start finish : List F) (t : F) (sameLength : finish.length = start.length)
     (small : start.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper66Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper79Helper
       (.cons start (.cons finish (.cons t .nil))) =
       .done (.cons (linePoints start finish t) .nil) := by
   rw [scopedHelper66_association.invoke unit.linked]
   change (MultilinearCollectBodies.mapBody
-    { lineBindings with collection := GkrSourceBodies.scopedHelper66Helper.name }).denote
+    { lineBindings with collection := GkrSourceBodies.helper79Helper.name }).denote
     (meaning F G helpers) (Values.cons start (.cons finish (.cons t .nil))).get = _
   exact MultilinearCollectLaws.map_body helpers _ start finish t small sameLength.symm
     (fun lo hi => line_callback_equation start finish lo hi t)

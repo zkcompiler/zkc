@@ -28,9 +28,12 @@ and negation is `Zkc.Executable.Computation.apply`.
 The three logical custody rows (`logical/resource_unit.*`) take the slot as
 their one static argument and admit the custody sort of a valid slot at
 `logical.resource_unit/0`. They select logical bookkeeping, not an external
-backend: their meaning is the custody ledger (`PIR.Custody`). The constructed
-instruction profile has no custody transfer, so reading a program that executes
-one refuses explicitly.
+backend. Their native meaning is the custody ledger (`PIR.Custody`). Checked
+local helper recipes use its closed, payload-erased projection, with exact slot
+and arity checks. The constructed instruction profile has no standalone custody
+transfer; reading one as a participant instruction still refuses explicitly.
+The runtime acceptance-inclusion assumption covers successful ledger execution
+relative to this projection.
 
 The arkworks numerical kernels (`numerical.map`, `numerical.sum` and
 `numerical.product` over the scalar field) are one row each, whatever their

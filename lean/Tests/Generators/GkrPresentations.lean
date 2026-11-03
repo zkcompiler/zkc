@@ -10,15 +10,15 @@ open RoleViews
 
 def names : List ProtocolNames := [
   { space := "Rounds", body := "rounds", roles := ["proverRounds", "verifierRounds"],
-    inputs := ["add", "mul", "left", "right", "initialPoint", "claim", "rounds", "service"],
+    inputs := ["add", "mul", "left", "right", "initialCustody", "initialPoint", "claim", "rounds", "service"],
     callbacks := [{ body := "round", roles := ["prover", "verifier"], inputs := ["index", "add", "mul", "left", "right", "point", "point", "claim", "service"] }] },
   { space := "Input", body := "input", roles := ["verifier"],
-    inputs := ["values", "point", "claim"], callbacks := [] },
+    inputs := ["values", "claimCustody", "point", "claim"], callbacks := [] },
   { space := "Root", body := "gkr", roles := ["prover", "verifier"],
     inputs := ["inputs", "outputs", "add", "mul", "layers", "selector", "width", "service"],
     callbacks := [
       { body := "output", roles := ["proverOutput", "verifierOutput"], inputs := ["index", "point", "point", "service"] },
-      { body := "layer", roles := ["proverLayer", "verifierLayer"], inputs := ["index", "point", "point", "claim", "inputs", "add", "mul", "layers", "selector", "width", "service"] },
+      { body := "layer", roles := ["proverLayer", "verifierLayer"], inputs := ["index", "point", "claimCustody", "point", "claim", "inputs", "add", "mul", "layers", "selector", "width", "service"] },
       { body := "coefficient", roles := ["proverCoefficient", "verifierCoefficient"], inputs := ["index", "coefficients", "line"] }] }]
 
 def output : Output := {

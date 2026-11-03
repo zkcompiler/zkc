@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.SchnorrAndProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:3adfa9be4834f650cdf1ae35c6a441d5589c9325627aeb9bec8b8274a6d9e3c0"
-  candidate := "sha256:396aa9e964cdcdcbe5c3eb542af8f1eae9d8be9a7580da6cebf96bcd810f689a"
+  source := "sha256:bf6d9b48ccaac3830770ced3165477e8e579d638ff19d2a5892997977c2cd89d"
+  candidate := "sha256:a74d0d28851415150534887e2021d9a6b1e66b3bc85dc5655a1e582bdf0d4a5b"
   policy := ⟨"zkl_ca4d47255ab472c390dbc54e901ce9c73b3e2fdf3d860ea5dd1ae37ae3995c1c", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -45,5 +45,10 @@ def participant : Participant where
     ⟨.calculate (.groupEqual "bls12-381.g1"), [26, 28], [.data .boolean], []⟩,
     ⟨.calculate .booleanAnd, [25, 29], [.data .boolean], []⟩]
   returned := [30, 21]
+
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [] }
 
 end ZkcExamples.Construction.SchnorrAndProofParticipant

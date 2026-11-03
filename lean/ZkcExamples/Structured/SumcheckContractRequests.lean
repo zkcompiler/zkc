@@ -237,7 +237,7 @@ def childProcess (raw : List F) (claim : F) (count handle : Nat) :=
 
 set_option backward.isDefEq.respectTransparency false in
 /-- This request's component is the actual callee in the Source
-snapshot. The equation preserves the exact six-slot returned tuple and stops. -/
+snapshot. The equation preserves the exact seven-slot returned tuple and stops. -/
 theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted : count ≤ SumcheckSourceNormalForms.reduceMaximum) :
     childProcess (G := G) raw claim count handle =
       (PIR.repeatN count (SumcheckVerifierLaws.roundPresent SumcheckSourceVerifier.childContext handle)
@@ -248,7 +248,7 @@ theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted 
   rw [SumcheckSourceViews.unit.protocolTable_forgetSites]
   rw [SumcheckSourceVerifier.reduce_invoke_plain]
   change SumcheckVerifierPrelude.reduceDenote SumcheckSourceNormalForms.reduceMaximum SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 1
-    (SumcheckVerifierPrelude.reduceArguments none none none (some []) (some claim) (some count) (some handle)) = _
+    (SumcheckVerifierPrelude.reduceArguments none none none (some 0) (some []) (some claim) (some count) (some handle)) = _
   rw [SumcheckVerifierPrelude.reduce_optional SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies SumcheckSourceVerifier.claimBodies
     SumcheckSourceVerifier.childContext 1 rfl (by decide)]
   simp only [SumcheckVerifierPrelude.pendingRounds, admitted, ↓reduceIte]
@@ -280,14 +280,14 @@ theorem child_claim_read (raw : List F) (claim : F) (count handle : Nat) (outcom
     childClaim.read SumcheckSourceVerifier.childContext
       (childBoundary (G := G) raw claim count handle outcome) = some claim := by
   exact publicReductionCall.boundaryOfOutcome_input {} 1 _ outcome childClaim
-    (.there (.there (.there (.there .here)))) rfl rfl
+    (.there (.there (.there (.there (.there .here))))) rfl rfl
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem child_initial_point_read (raw : List F) (claim : F) (count handle : Nat) (outcome) :
     childInitialPoint.read SumcheckSourceVerifier.childContext
       (childBoundary (G := G) raw claim count handle outcome) = some [] := by
   exact publicReductionCall.boundaryOfOutcome_input {} 1 _ outcome childInitialPoint
-    (.there (.there (.there .here))) rfl rfl
+    (.there (.there (.there (.there .here)))) rfl rfl
 
 def childUse (raw : List F) (claim : F) (count handle : Nat) (outcome) :
     ApplicationUse (childSelection (G := G) (sourceEnvironment := sourceEnvironment))
@@ -355,11 +355,11 @@ def reductionRootInput (proverValues : Option (List F)) (proverDimension : Optio
 
 def reductionCallEnvironment (claim : F) (count handle : Nat) :
     Environment (Component (assignment F G))
-      [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
+      [SumcheckPendingBodies.custodyType, vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
         .service "random.bls12-381.fr/0"] :=
-  (Values.cons (some []) (.cons (some claim) (.cons none (.cons none (.cons none
+  (Values.cons (some 0) (.cons (some []) (.cons (some claim) (.cons none (.cons none (.cons none
     (.cons (some 1) (.cons none (.cons none (.cons (some claim)
-      (.cons (some count) (.cons (some handle) .nil))))))))))).get
+      (.cons (some count) (.cons (some handle) .nil)))))))))) )).get
 
 def reductionBoundary (claim : F) (count handle : Nat) (outcome) :=
   reductionCall.boundaryOfOutcome {} 1 (reductionCallEnvironment (G := G) claim count handle) outcome
@@ -374,9 +374,9 @@ def reductionUse (raw : List F) (dimension : Nat) (claim : F) (count handle : Na
   arguments := .cons raw (.cons dimension (.cons 1 (.cons [] (.cons claim .nil))))
   read := reduction_application_read raw dimension claim _ _
     (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionClaim
-      (.there (.there (.there (.there .here)))) rfl rfl)
+      (.there (.there (.there (.there (.there .here))))) rfl rfl)
     (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionInitialPoint
-      (.there (.there (.there .here))) rfl rfl)
+      (.there (.there (.there (.there .here)))) rfl rfl)
 
 def reductionRefutation (raw : List F) (dimension : Nat) (claim : F) (count handle : Nat) :=
   ContractRequest.relation (reductionSelection (G := G) (reductionEnvironment := reductionEnvironment))
@@ -409,15 +409,15 @@ theorem wrapper_terminal_iff (raw : List F) (remaining count : Nat)
     (wrapperTerminal raw remaining count).Holds {}
       ((reductionRootInput proverValues proverDimension claim count handle).boundary (.returned outputs))
       (wrapperAssignments (G := G)) ↔
-      match outputs.get (.there (.there .here)), outputs.get (.there (.there (.there .here))) with
+      match outputs.get (.there (.there (.there .here))), outputs.get (.there (.there (.there (.there .here)))) with
       | some point, some value => Residual remaining count table point value
       | _, _ => False := by
   refine (residual_terminal_iff (.supplied raw) remaining count residualRootPoint residualRootValue rfl rfl
     _ _ _ raw rfl table decoded).trans ?_
-  change (∃ p v, outputs.get (.there (.there .here)) = some p ∧
-    outputs.get (.there (.there (.there .here))) = some v ∧ Residual remaining count table p v) ↔ _
-  generalize outputs.get (.there (.there .here)) = op
-  generalize outputs.get (.there (.there (.there .here))) = ov
+  change (∃ p v, outputs.get (.there (.there (.there .here))) = some p ∧
+    outputs.get (.there (.there (.there (.there .here)))) = some v ∧ Residual remaining count table p v) ↔ _
+  generalize outputs.get (.there (.there (.there .here))) = op
+  generalize outputs.get (.there (.there (.there (.there .here)))) = ov
   cases op <;> cases ov <;> simp
 
 end ZkcExamples.Structured.SumcheckContractRequests

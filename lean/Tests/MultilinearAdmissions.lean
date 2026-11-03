@@ -1,4 +1,5 @@
 import Tests.MultilinearReferences
+import Zkc.Protocols.Sumcheck.Source.PendingBodies
 import Zkc.Source.Structured.MultilinearAdmissionInstallation
 
 set_option autoImplicit false
@@ -7,10 +8,12 @@ open Zkc.Source Zkc.Source.Structured
 open ReferenceLibrary.Multilinear
 open Tests.MultilinearReferences
 
+abbrev slot := ZkcExamples.Structured.SumcheckPendingBodies.custodySlot
+
 abbrev checker := "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc"
 
 theorem bodies (selected : RetainedSource) :
-    Admission.Bodies (source selected).payload.definitions "bls12-381.fr" bindings checker := by
+    Admission.Bodies (source selected).payload.definitions "bls12-381.fr" bindings slot checker := by
   refine ⟨Tests.MultilinearReferences.bodies selected, ?_, ?_, ?_, ?_, ?_⟩
   all_goals cases selected <;> bind_structured_bodies
 
@@ -25,26 +28,26 @@ theorem actual_constructor (xs : List (model.Field "bls12-381.fr")) (n w : Nat)
     xs n w lengthBound nBound wBound
 
 /-- No truth premise: a false claim computes the ordinary false boolean. -/
-theorem actual_terminal (xs point : List (model.Field "bls12-381.fr"))
+theorem actual_terminal (xs point : List (model.Field "bls12-381.fr")) (token : CustodyToken)
     (claim : model.Field "bls12-381.fr")
     (lengthBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
     invoke (closed model (definitions := (source selected).payload.definitions))
-      ⟨checker, .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.boolean]⟩
-      (Admission.checkInputs model "bls12-381.fr" xs point claim) =
+      ⟨checker, .local, [.vector "bls12-381.fr", .resourceUnit slot, .vector "bls12-381.fr", .field "bls12-381.fr"], [.boolean]⟩
+      (Admission.terminalInputs model "bls12-381.fr" slot xs token point claim) =
       .done (Admission.boolResult model (decide (Admission.HasShape xs point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues xs point).sum = claim))) :=
   Admission.check_eq model (source selected).payload.linked (bodies selected)
-    xs point claim lengthBound pointBound
+    xs token point claim lengthBound pointBound
 
-theorem honest_terminal (xs point : List (model.Field "bls12-381.fr"))
+theorem honest_terminal (xs point : List (model.Field "bls12-381.fr")) (token : CustodyToken)
     (lengthBound : xs.length < indexLimit) (pointBound : point.length < indexLimit)
     (shape : Admission.HasShape xs point.length 1) :
     invoke (closed model (definitions := (source selected).payload.definitions))
-      ⟨checker, .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.boolean]⟩
-      (Admission.checkInputs model "bls12-381.fr" xs point
+      ⟨checker, .local, [.vector "bls12-381.fr", .resourceUnit slot, .vector "bls12-381.fr", .field "bls12-381.fr"], [.boolean]⟩
+      (Admission.terminalInputs model "bls12-381.fr" slot xs token point
         (Zkc.Polynomial.Multilinear.restrictPrefixValues xs point).sum) =
       .done (Admission.boolResult model true) := by
-  rw [actual_terminal model selected xs point _ lengthBound pointBound]
+  rw [actual_terminal model selected xs point token _ lengthBound pointBound]
   simp [shape]
 
 example (_xs _point : List (model.Field "bls12-381.fr"))

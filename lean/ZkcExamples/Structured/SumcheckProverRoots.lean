@@ -74,7 +74,7 @@ open SumcheckReduceViews
 residual entries; the verifier's point and claim are absent. -/
 def reductionResults (raw : List F) (point : List F) :
     Values (Component (assignment F G)) SumcheckReduceBodies.runSignature.outputs :=
-  .cons (some point) (.cons (some (restrictPrefixValues raw point)) (.cons none (.cons none .nil)))
+  .cons (some point) (.cons (some (restrictPrefixValues raw point)) (.cons none (.cons none (.cons none .nil))))
 
 /-- The complete Reduction root at the prover in an arbitrary caller context: the
 checked table, the actual Reduce at the unit's own maximum and the residual projection. -/

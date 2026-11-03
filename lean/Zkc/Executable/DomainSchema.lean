@@ -21,6 +21,9 @@ theorem decode_of_sort {value : Domain.Value carriers} {ty : Structured.Ty}
       simp only [Domain.Value.sort, ValueSort.data.injEq] at sorted
       subst actual
       exact ⟨contents, by simp [Domain.Value.decode, Domain.Payload.value]⟩
+  | custody slot token =>
+      cases ValueSort.data.inj sorted
+      exact ⟨token, by simp [Domain.Value.decode]⟩
   | transcript | indices => cases sorted
 
 theorem decodeValues_of_sorts :
@@ -38,12 +41,8 @@ theorem decodeValues_of_sorts :
 
 theorem encode_sort {ty : Structured.Ty} {value : carriers.Value ty}
     {encoded : Domain.Value carriers} (found : Domain.Value.encode ty value = some encoded) :
-    encoded.sort = .data ty := by
-  unfold Domain.Value.encode Domain.Payload.ofValue at found
-  split at found
-  · cases found
-    rfl
-  · cases found
+    encoded.sort = .data ty :=
+  Domain.Value.encode_sort found
 
 theorem encodeValues_sorts {tys : List Structured.Ty} (values : Values carriers.Value tys)
     {encoded : Domain.Environment carriers} (found : Domain.encodeValues values = some encoded) :

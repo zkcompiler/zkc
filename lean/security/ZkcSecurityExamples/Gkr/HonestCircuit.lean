@@ -23,7 +23,7 @@ open ZkcSecurity.Examples.Components
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
-  [helper34 := GkrSourceBodies.helper34]
+  [helper34 := GkrSourceBodies.helper65]
 
 set_option backward.isDefEq.respectTransparency false
 set_option linter.unusedSimpArgs false
@@ -41,22 +41,22 @@ theorem circuit_bodies : Goals.Bodies unit.definitions := by
 
 /-- The source gate callback is the independent gate formula. -/
 theorem gate_equation (add mul left right : F) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper31Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper19Helper
       ((GkrGateGoals.Value.Inputs.pack (Value := assignment F G))
         { addWeight := add, mulWeight := mul, left, right }) =
         .done (GkrGateGoals.Value.encode (ringModel F G)
           ⟨Zkc.Protocols.AlgebraicRounds.Gate.value add mul left right⟩) := by
   apply (GkrGateCompanion.valueLaw (ringModel F G)).invokeUniform
-    (helper := GkrSourceBodies.helper31Helper)
+    (helper := GkrSourceBodies.helper19Helper)
     unit.definitions unit.linked gate_bodies.value
   trivial
 
 /-- Dependencies use the same actual linked table, with no assumed helper law. -/
 theorem gate_value_dependency :
     (GkrGateCompanion.valueLaw (ringModel F G)).Realizes
-      (helper := GkrSourceBodies.helper31Helper) (helpers (G := G)) := by
+      (helper := GkrSourceBodies.helper19Helper) (helpers (G := G)) := by
   apply (GkrGateCompanion.valueLaw (ringModel F G)).realizesUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.helper31Helper)
+    (F := F) (G := G) (helper := GkrSourceBodies.helper19Helper)
     unit.definitions unit.linked gate_bodies.value
   intro arguments
   rw [← GkrGateGoals.Value.Inputs.pack_unpack arguments]
@@ -64,9 +64,9 @@ theorem gate_value_dependency :
 
 theorem gate_realization_dependency :
     (GkrGateCompanion.realizationLaw (ringModel F G)).Realizes
-      (helper := GkrSourceBodies.scopedHelper42Helper) (helpers (G := G)) := by
+      (helper := GkrSourceBodies.helper55Helper) (helpers (G := G)) := by
   apply (GkrGateCompanion.realizationLaw (ringModel F G)).realizesUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.scopedHelper42Helper)
+    (F := F) (G := G) (helper := GkrSourceBodies.helper55Helper)
     unit.definitions unit.linked gate_bodies.realization
   intro arguments
   rw [← GkrGateGoals.Value.Inputs.pack_unpack arguments]
@@ -83,15 +83,15 @@ theorem gate_callback (a m l r : F) (add mul left right : List F) :
       .done (GkrGateGoals.Callback.encode (ringModel F G)
         ⟨Zkc.Protocols.AlgebraicRounds.Gate.value (F := F) a m l r⟩) := by
   apply (GkrGateCompanion.callbackLaw (ringModel F G)).invokeUniform
-    (helper := GkrSourceBodies.scopedHelper43Helper)
+    (helper := GkrSourceBodies.helper56Helper)
     unit.definitions unit.linked gate_bodies.callback
   exact gate_realization_dependency
 
 theorem gate_callback_dependency :
     (GkrGateCompanion.callbackLaw (ringModel F G)).Realizes
-      (helper := GkrSourceBodies.scopedHelper43Helper) (helpers (G := G)) := by
+      (helper := GkrSourceBodies.helper56Helper) (helpers (G := G)) := by
   apply (GkrGateCompanion.callbackLaw (ringModel F G)).realizesUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.scopedHelper43Helper)
+    (F := F) (G := G) (helper := GkrSourceBodies.helper56Helper)
     unit.definitions unit.linked gate_bodies.callback
   intro arguments
   rw [← GkrGateGoals.Callback.Inputs.pack_unpack arguments]
@@ -109,7 +109,7 @@ theorem gate_map_dependencies (add mul left right : List F) :
 /-- Four arbitrary decoded tables, including every operand's shape. -/
 theorem gate_map_encodes {n : Nat} (add mul left right : Table F n)
     (small : 2 ^ n < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.scopedHelper44Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper57Helper
       (GkrGateGoals.Map.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode add, mulWeights := GkrRoundsLayout.encode mul,
           lefts := GkrRoundsLayout.encode left, rights := GkrRoundsLayout.encode right }) =
@@ -117,7 +117,7 @@ theorem gate_map_encodes {n : Nat} (add mul left right : Table F n)
         ⟨GkrRoundsLayout.encode (fun bits =>
           Zkc.Protocols.AlgebraicRounds.Gate.value (add bits) (mul bits) (left bits) (right bits))⟩) := by
   rw [(GkrGateCompanion.mapLaw (ringModel F G)).invokeUniform
-    (helper := GkrSourceBodies.scopedHelper44Helper)
+    (helper := GkrSourceBodies.helper57Helper)
     unit.definitions unit.linked gate_bodies.map]
   · change primitiveOutcome (GkrGateGoals.Map.encodeOutcome (ringModel F G)
       (GkrGateCompanion.mapReference (ringModel F G)
@@ -160,13 +160,13 @@ theorem layer_step_encodes {width : Nat} (a m : Zkc.Protocols.Gkr.Wiring F width
 /-- The complete actual helper33 loop, at every representable width. -/
 theorem layer_encoded {width : Nat} (a m : Zkc.Protocols.Gkr.Wiring F width)
     (v : Table F width) (small : width + width + width < 64) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper33Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper64Helper
       (Goals.Layer.Inputs.pack (Value := assignment F G)
         { addWeights := GkrRoundsLayout.encode a, mulWeights := GkrRoundsLayout.encode m,
           below := GkrRoundsLayout.encode v, width }) =
       .done (Goals.Layer.encode (ringModel F G) ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩) := by
   exact (Companion.layerLaw (G := G) a m v small).invokeUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.helper33Helper)
+    (F := F) (G := G) (helper := GkrSourceBodies.helper64Helper)
     unit.definitions unit.linked circuit_bodies.layer _ ⟨dependencies, rfl, rfl, rfl, rfl⟩
 
 /-- Arbitrary exact raw encodings compute the independent circuit layer. -/
@@ -175,7 +175,7 @@ theorem layer_encodes {width : Nat} (add mul below : List F)
     (da : ofList? (width + width + width) add = some a)
     (dm : ofList? (width + width + width) mul = some m)
     (dv : ofList? width below = some v) (small : width + width + width < 64) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper33Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper64Helper
       (Goals.Layer.Inputs.pack (Value := assignment F G) { addWeights := add, mulWeights := mul, below, width }) =
         .done (Goals.Layer.encode (ringModel F G) ⟨GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)⟩) := by
   dsimp only [Goals.Layer.Inputs.pack]

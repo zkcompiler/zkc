@@ -46,7 +46,7 @@ private theorem acceptance_eq (position : Nat) (result : Domain.Result (uniformC
   | none => rfl
   | some value =>
     cases value with
-    | transcript | indices => rfl
+    | transcript | indices | custody => rfl
     | data payload =>
       cases payload with
       | mk ty allowed contents => cases ty <;> rfl
@@ -60,7 +60,7 @@ theorem acceptance_first (result : Domain.Result (uniformCarriers F G)) :
   | nil => rfl
   | cons head tail =>
     cases head with
-    | transcript | indices => rfl
+    | transcript | indices | custody => rfl
     | data payload =>
       rcases payload with ⟨ty, allowed, value⟩
       cases ty <;> rfl

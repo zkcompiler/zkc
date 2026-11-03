@@ -14,6 +14,7 @@ construction = true
 executable = true
 
 [generated]
+pair = "lean/ZkcExamples/Construction/Generated/SmallSumcheckPair.lean"
 data = "lean/ZkcExamples/Structured/SumcheckSourceData.lean"
 participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/SumcheckArtifact.lean"

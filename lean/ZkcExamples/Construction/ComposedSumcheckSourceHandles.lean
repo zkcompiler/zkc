@@ -163,10 +163,10 @@ private theorem return_natural (ctx : ProtocolContext)
   rw [owned (G := G)]
 
 private theorem reduce_natural (maximum : Nat) (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
-    (original replacement : Nat) (count : Option Nat) (point : Option (List F)) (claim : Option F) :
-    ((reduce payload maximum ctx (ctx.roles 1) [] (verifierInputs (G := G) point claim count (some original))).interpret
+    (original replacement : Nat) (count : Option Nat) (custody : Option Nat) (point : Option (List F)) (claim : Option F) :
+    ((reduce payload maximum ctx (ctx.roles 1) [] (verifierInputs (G := G) custody point claim count (some original))).interpret
       project).interpret (ScalarHandles.replace replacement) =
-    (reduce payload maximum ctx (ctx.roles 1) [] (verifierInputs point claim count (some replacement))).interpret project := by
+    (reduce payload maximum ctx (ctx.roles 1) [] (verifierInputs custody point claim count (some replacement))).interpret project := by
   unfold verifierInputs
   rw [reduce_verifier payload Generated.Bindings.TwoSumsSumcheck.helper_bodies _ _ separate,
     reduce_verifier payload Generated.Bindings.TwoSumsSumcheck.helper_bodies _ _ separate]
@@ -209,7 +209,7 @@ theorem participant_handle (left right : Option (List F)) (leftClaim rightClaim 
     apply congrArg₂ PIR.Process.bind
     · apply congrArg₂ PIR.Process.bind
       · exact reduce_natural Generated.Original.TwoSums.maximum0
-          Generated.Original.TwoSums.firstContext (by decide) original replacement count _ _
+          Generated.Original.TwoSums.firstContext (by decide) original replacement count _ _ _
       · funext result; rfl
     · funext reducedLeft
       apply congrArg₂ PIR.Process.bind
@@ -221,7 +221,7 @@ theorem participant_handle (left right : Option (List F)) (leftClaim rightClaim 
           apply congrArg₂ PIR.Process.bind
           · apply congrArg₂ PIR.Process.bind
             · exact reduce_natural Generated.Original.TwoSums.maximum0
-                Generated.Original.TwoSums.lastContext (by decide) original replacement count _ _
+                Generated.Original.TwoSums.lastContext (by decide) original replacement count _ _ _
             · funext result; rfl
           · funext reducedRight
             apply congrArg₂ PIR.Process.bind

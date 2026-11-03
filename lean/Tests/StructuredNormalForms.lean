@@ -76,7 +76,7 @@ example : normalize (renamedSignature true) SumcheckVerifierBodies.roundBody 0 1
 The Reduce verifier still refuses its later owned local call without a law,
 including when its retained Pending fields, round count or service are absent. -/
 example : normalize {} (SumcheckVerifierBodies.reduceBody 4) 1 2
-    (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil))))))) =
+    (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil)))))))) =
     .error "no-law" := by kernel_rfl
 
 end Tests.StructuredNormalForms

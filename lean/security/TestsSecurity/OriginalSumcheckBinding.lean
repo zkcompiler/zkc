@@ -24,56 +24,65 @@ private theorem twoClaims : SumcheckPendingLaws.Bodies Two.payload.definitions :
 /-- Missing counts stop even if an input claim is itself incomplete. -/
 example (point : Option (List F)) (claim : Option F) (service : Option Nat) :
     reduce Small.payload 2 Small.context 1 []
-      (verifierInputs (G := G) point claim none service) = .halt .incomplete := by
+      (verifierInputs (G := G) (some 0) point claim none service) = .halt .incomplete := by
   refine (reduce_verifier (F := F) (G := G) Small.payload Small.helpers_bound 2
-    Small.context Small.distinct [] point claim none service).trans ?_
-  rw [SumcheckPendingLaws.identity_owned Small.payload _ smallClaims.openClaim, ite_eq_left rfl]
+    Small.context Small.distinct [] (some 0) point claim none service).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Small.payload smallClaims, ite_eq_left rfl]
   cases point <;> cases claim <;> rfl
 
 /-- A complete Pending value reaches the count bound before any service use. -/
 example (point : List F) (claim : F) (service : Option Nat) :
     reduce Small.payload 2 Small.context 1 []
-      (verifierInputs (G := G) (some point) (some claim) (some 3) service) = .halt .refused := by
+      (verifierInputs (G := G) (some 0) (some point) (some claim) (some 3) service) = .halt .refused := by
   refine (reduce_verifier (F := F) (G := G) Small.payload Small.helpers_bound 2
-    Small.context Small.distinct [] (some point) (some claim) (some 3) service).trans ?_
-  rw [SumcheckPendingLaws.identity_owned Small.payload _ smallClaims.openClaim, ite_eq_left rfl]
+    Small.context Small.distinct [] (some 0) (some point) (some claim) (some 3) service).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Small.payload smallClaims, ite_eq_left rfl]
   rfl
 
 example (point : List F) (claim : F) (service : Option Nat) :
     reduce Two.payload 4 Two.leftContext 1 []
-      (verifierInputs (G := G) (some point) (some claim) (some 5) service) = .halt .refused := by
+      (verifierInputs (G := G) (some 0) (some point) (some claim) (some 5) service) = .halt .refused := by
   refine (reduce_verifier (F := F) (G := G) Two.payload Two.helpers_bound 4
-    Two.leftContext Two.left_distinct [] (some point) (some claim) (some 5) service).trans ?_
-  rw [SumcheckPendingLaws.identity_owned Two.payload _ twoClaims.openClaim, ite_eq_left rfl]
+    Two.leftContext Two.left_distinct [] (some 0) (some point) (some claim) (some 5) service).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Two.payload twoClaims, ite_eq_left rfl]
   rfl
 
-/-- Zero trips retain the whole Pending pair. The unused service may be absent;
+/-- Zero trips return the complete Pending claim with a newly created custody value. The unused service may be absent;
 private producer outputs are masked away, but verifier-owned inputs are required. -/
 theorem zero_trips (point : List F) (claim : F) :
     reduce Small.payload 2 Small.context 1 []
-      (verifierInputs (G := G) (some point) (some claim) (some 0) none) =
+      (verifierInputs (G := G) (some 0) (some point) (some claim) (some 0) none) =
       .done (.cons none (.cons none (.cons none (.cons none
-        (.cons (some point) (.cons (some claim) .nil)))))) := by
+        (.cons (some 0) (.cons (some point) (.cons (some claim) .nil))))))) := by
   refine (reduce_verifier (F := F) (G := G) Small.payload Small.helpers_bound 2
-    Small.context Small.distinct [] (some point) (some claim) (some 0) none).trans ?_
-  rw [SumcheckPendingLaws.identity_owned Small.payload _ smallClaims.openClaim, ite_eq_left rfl]
+    Small.context Small.distinct [] (some 0) (some point) (some claim) (some 0) none).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Small.payload smallClaims, ite_eq_left rfl]
   exact return_verifier Small.payload smallClaims Small.context point claim
 
 example (point : Option (List F)) :
     reduce Small.payload 2 Small.context 1 []
-      (verifierInputs (G := G) point none (some 0) none) = .halt .incomplete := by
+      (verifierInputs (G := G) (some 0) point none (some 0) none) = .halt .incomplete := by
   refine (reduce_verifier (F := F) (G := G) Small.payload Small.helpers_bound 2
-    Small.context Small.distinct [] point none (some 0) none).trans ?_
-  rw [SumcheckPendingLaws.identity_owned Small.payload _ smallClaims.openClaim, ite_eq_left rfl]
+    Small.context Small.distinct [] (some 0) point none (some 0) none).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Small.payload smallClaims, ite_eq_left rfl]
   cases point <;> rfl
 
 example (claim : Option F) :
     reduce Small.payload 2 Small.context 1 []
-      (verifierInputs (G := G) none claim (some 0) none) = .halt .incomplete := by
+      (verifierInputs (G := G) (some 0) none claim (some 0) none) = .halt .incomplete := by
   refine (reduce_verifier (F := F) (G := G) Small.payload Small.helpers_bound 2
-    Small.context Small.distinct [] none claim (some 0) none).trans ?_
-  rw [SumcheckPendingLaws.identity_owned Small.payload _ smallClaims.openClaim, ite_eq_left rfl]
+    Small.context Small.distinct [] (some 0) none claim (some 0) none).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Small.payload smallClaims, ite_eq_left rfl]
   cases claim <;> rfl
+
+/-- A present mathematical claim does not replace missing local custody. -/
+example (point : List F) (claim : F) :
+    reduce Small.payload 2 Small.context 1 []
+      (verifierInputs (G := G) none (some point) (some claim) (some 0) none) = .halt .incomplete := by
+  refine (reduce_verifier (F := F) (G := G) Small.payload Small.helpers_bound 2
+    Small.context Small.distinct [] none (some point) (some claim) (some 0) none).trans ?_
+  rw [SumcheckPendingLaws.openClaim_owned Small.payload smallClaims, ite_eq_left rfl]
+  rfl
 
 /-- The same library declaration retains distinct nominal iteration sites. -/
 example (handle : Nat) :
@@ -83,6 +92,7 @@ example (handle : Nat) :
     qualifyProtocolSite Two.rightContext.applicationPrefix repeatSite
   decide
 
+set_option backward.isDefEq.respectTransparency false in
 /-- After a zero-trip call, an absent root table stops in the actual terminal
 helper. A present claim distinguishes this from Pending construction refusal. -/
 example (claim : F) :
@@ -93,12 +103,9 @@ example (claim : F) :
     (invoke (helpers (F := F) (G := G) Small.payload).closed SumcheckPendingBodies.pendingHelper)
     (.cons (some claim) .nil)).bind _ = _
   rw [SumcheckPendingLaws.pending_owned Small.payload smallClaims]
-  change (OriginalSumcheckRoots.Small.reduce (G := G) (some []) (some claim) (some 0) none).bind _ = _
-  have reduced := congrArg
-    (fun process => process.bind fun result =>
-      PIR.Process.done (maskValues 1 (Small.context.mapScopes Small.reduceDefinition.outputScopes) result))
-    (zero_trips (G := G) [] claim)
-  rw [show OriginalSumcheckRoots.Small.reduce (G := G) (some []) (some claim) (some 0) none = _ from reduced]
+  simp only [PIR.Process.bind]
+  change (OriginalSumcheckRoots.Small.reduce (G := G) (some 0) (some []) (some claim) (some 0) none).bind _ = _
+  simp only [OriginalSumcheckRoots.Small.reduce, OriginalSumcheckRoots.call]
   rfl
 
 #print axioms OriginalSumcheckLibrary.round_producer

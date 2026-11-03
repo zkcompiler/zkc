@@ -73,7 +73,8 @@ private theorem output_handle (ctx : ProtocolContext) (original replacement coun
 
 private theorem afterCoefficients_handle (ctx : ProtocolContext)
     (index original replacement selector : Nat) (add mul : List F)
-    (current combined : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])
+    (current : Values (assignment F G) GkrSourceBodies.helper12Helper.outputs)
+    (combined : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])
     (split : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
     (first : F) (line : List F) :
     (afterCoefficients ctx index original selector add mul current combined split first line).interpret

@@ -36,7 +36,7 @@ noncomputable def realizationLibrary (model : DomainModel) :=
 
 def realizationCondition (model : DomainModel) :=
   fun table (_ _ _ _ : model.Field scalarDomain) =>
-    (valueLaw model).Realizes (helper := GkrSourceBodies.helper31Helper) table
+    (valueLaw model).Realizes (helper := GkrSourceBodies.helper19Helper) table
 
 /-- The direct forwarding library preserves all outcomes of the explicit
 value dependency; it checks the actual scoped wrapper's complete body. -/
@@ -59,7 +59,7 @@ noncomputable def callbackLibrary (model : DomainModel) :=
 
 def callbackCondition (model : DomainModel) :=
   fun table (_ _ _ _ : model.Field scalarDomain) (_ _ _ _ : List (model.Field scalarDomain)) =>
-    (realizationLaw model).Realizes (helper := GkrSourceBodies.scopedHelper42Helper) table
+    (realizationLaw model).Realizes (helper := GkrSourceBodies.helper55Helper) table
 
 theorem callback (model : DomainModel) :
     Callback.Goal model (callbackReference model) (callbackCondition model) := by

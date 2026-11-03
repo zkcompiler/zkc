@@ -70,7 +70,7 @@ abbrev checkedResult (n : Nat) (table : Table F n) (pc : List F × F) :
 def residualObservation (remaining n : Nat) (table : Table F (remaining + n))
     (outputs : Values (Component (assignment F G)) SumcheckReduceBodies.runSignature.outputs) :
     Prop :=
-  match outputs.get (.there (.there .here)), outputs.get (.there (.there (.there .here))) with
+  match outputs.get (.there (.there (.there .here))), outputs.get (.there (.there (.there (.there .here)))) with
   | some point, some claim => Causal.residualTerminal remaining n table point claim
   | _, _ => False
 
@@ -215,7 +215,7 @@ theorem checked_implies_terminal (raw : List F) (claim : F) (n handle : Nat)
   rw [checked_reindex (G := G) (Nat.zero_add n).symm]
   exact accepted
 
-/-- Typed observation of the actual callee's returned six-slot boundary. -/
+/-- Typed observation of the actual callee's returned seven-slot boundary. -/
 def childResidualRequest (raw : List F) (claim : F) (count handle : Nat)
     (outputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs) : Prop :=
   (SumcheckContractRequests.childTerminal (G := G) 0 count).Holds SumcheckSourceVerifier.childContext
@@ -297,7 +297,7 @@ theorem child_residual_bound [Fintype F] [SampleableType F]
     simp [PIR.Process.runM, returnedSatisfies]
 
 /-- The actual caller terminal implies the typed child residual on every
-returned six-slot tuple, at every intermediate state. The source shape guard
+returned seven-slot tuple, at every intermediate state. The source shape guard
 supplies the point length; there is no callee reachability premise. -/
 theorem terminal_implies_request
     (handler : PIR.MonadHandler ProbComp (participantInterface F G) S E)
@@ -309,36 +309,44 @@ theorem terminal_implies_request
     (accepted : returnedSatisfies (fun result => result.get .here = some true) execution) :
     childResidualRequest raw claim n handle outputs := by
   unfold SumcheckCallBoundary.terminal at supported
-  cases pointRead : outputs.get (.there (.there (.there (.there .here)))) with
+  cases custodyRead : outputs.get (.there (.there (.there (.there .here)))) with
   | none =>
-    rw [pointRead, SumcheckVerifierTerminal.terminal_optional] at supported
+    rw [custodyRead, SumcheckVerifierTerminal.ownedCheck_missing] at supported
     simp only [PIR.Process.runM, support_pure, Set.mem_singleton_iff] at supported
     subst execution
     cases accepted
-  | some point =>
-    cases valueRead : outputs.get (.there (.there (.there (.there (.there .here))))) with
+  | some token =>
+    rw [custodyRead, SumcheckVerifierTerminal.ownedCheck_present] at supported
+    cases pointRead : outputs.get (.there (.there (.there (.there (.there .here))))) with
     | none =>
-      rw [pointRead, valueRead, SumcheckVerifierTerminal.terminal_optional] at supported
+      rw [pointRead, SumcheckVerifierTerminal.terminal_optional] at supported
       simp only [PIR.Process.runM, support_pure, Set.mem_singleton_iff] at supported
       subst execution
       cases accepted
-    | some value =>
-      rw [pointRead, valueRead, SumcheckCallBoundary.terminal_present n raw table decoded bounded point value] at supported
-      by_cases pointBound : point.length < indexLimit
-      · rw [ite_eq_left pointBound] at supported
-        simp only [PIR.Process.runM, support_pure, Set.mem_singleton_iff] at supported
-        subst execution
-        apply (SumcheckCallBoundary.child_request_iff raw claim n handle
-          ((Nat.zero_add n).symm ▸ table)
-          (decoded_reindex (Nat.zero_add n).symm raw table decoded) outputs).mpr
-        rw [pointRead, valueRead]
-        apply checked_implies_residual (G := G) n _ point value
-        rw [checked_reindex (G := G) (Nat.zero_add n).symm]
-        exact accepted
-      · rw [ite_eq_right pointBound] at supported
+    | some point =>
+      cases valueRead : outputs.get (.there (.there (.there (.there (.there (.there .here)))))) with
+      | none =>
+        rw [pointRead, valueRead, SumcheckVerifierTerminal.terminal_optional] at supported
         simp only [PIR.Process.runM, support_pure, Set.mem_singleton_iff] at supported
         subst execution
         cases accepted
+      | some value =>
+        rw [pointRead, valueRead, SumcheckCallBoundary.terminal_present n raw table decoded bounded point value] at supported
+        by_cases pointBound : point.length < indexLimit
+        · rw [ite_eq_left pointBound] at supported
+          simp only [PIR.Process.runM, support_pure, Set.mem_singleton_iff] at supported
+          subst execution
+          apply (SumcheckCallBoundary.child_request_iff raw claim n handle
+            ((Nat.zero_add n).symm ▸ table)
+            (decoded_reindex (Nat.zero_add n).symm raw table decoded) outputs).mpr
+          rw [pointRead, valueRead]
+          apply checked_implies_residual (G := G) n _ point value
+          rw [checked_reindex (G := G) (Nat.zero_add n).symm]
+          exact accepted
+        · rw [ite_eq_right pointBound] at supported
+          simp only [PIR.Process.runM, support_pure, Set.mem_singleton_iff] at supported
+          subst execution
+          cases accepted
 
 /-- The caller accepts at most the child's residual mass for any replacement
 child with the same returned ABI. Only the supplied interface bound is used;

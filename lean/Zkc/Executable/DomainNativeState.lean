@@ -28,6 +28,7 @@ theorem readbackValue_sorted (suite : String) (key : Origin → Origin) (initial
     HasSort scalar nominal.sort := by
   cases nominal with
   | indices path => cases found; trivial
+  | custody slot token => cases found; exact ⟨token, rfl⟩
   | transcript actual history =>
       simp only [DomainAdapter.readbackValue] at found
       split at found

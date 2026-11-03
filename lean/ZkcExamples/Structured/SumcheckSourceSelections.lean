@@ -51,7 +51,7 @@ noncomputable def outerSumBindings : Sum.Bindings := pairInstallation.val
 bodies. The library supplies the formulas; the source supplies their identities. -/
 noncomputable def multilinearInstallation : {bindings : MultilinearBodies.Bindings //
     Multilinear.Admission.Bodies SmallSumcheckInputs.program.payload.definitions field bindings
-      SmallSumcheckInputs.helper33Helper.name} := by
+      SumcheckPendingBodies.custodySlot SmallSumcheckInputs.helper33Helper.name} := by
   infer_reference_installation
 
 noncomputable abbrev bindings := multilinearInstallation.val
@@ -65,7 +65,7 @@ theorem roundBodies (selection : Selection) :
   · cases selection <;> bind_structured_bodies
 
 theorem admissionBodies (selection : Selection) :
-    Multilinear.Admission.Bodies (source selection).payload.definitions field bindings checker := by
+    Multilinear.Admission.Bodies (source selection).payload.definitions field bindings SumcheckPendingBodies.custodySlot checker := by
   refine ⟨(roundBodies selection).toBodies, ?_, ?_, ?_, ?_, ?_⟩
   all_goals cases selection <;> bind_structured_bodies
 
@@ -81,11 +81,11 @@ theorem outerSumBodies (model : DomainModel) :
 
 structure Wrappers (model : DomainModel) (definitions : List CheckedDefinition) : Prop where
   initial : BodyIn definitions
-    SmallSumcheckInputs.helper9Helper (Sum.initial model field "s0").body
+    SmallSumcheckInputs.helper9Helper (SumcheckReductionReference.pendingLaw model).body
   openClaim : BodyIn definitions
-    SmallSumcheckInputs.helper16Helper (Sum.identity model field).body
+    SmallSumcheckInputs.helper16Helper (SumcheckReductionReference.openClaimLaw model).body
   atPrefix : BodyIn definitions
-    TwoSumsInputs.helper24Helper (Sum.identity model field).body
+    TwoSumsInputs.helper24Helper (SumcheckReductionReference.atPrefixLaw model).body
   empty : BodyIn definitions
     SmallSumcheckInputs.helper15Helper (emptyVector model field "s0").body
   tableShape : BodyIn definitions SmallSumcheckInputs.helper13Helper (Sum.tableShape model field bindings).body

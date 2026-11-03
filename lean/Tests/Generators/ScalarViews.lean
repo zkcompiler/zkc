@@ -22,7 +22,7 @@ def sigma (inputs : List String) : List ProtocolNames :=
 
 def sumcheck (inputs : List String) : List ProtocolNames := [
   ⟨"Reduce", "body", ["prover", "verifier"],
-    ["entries", "dimension", "width", "point", "claim", "count", "service"],
+    ["entries", "dimension", "width", "custody", "point", "claim", "count", "service"],
     [⟨"round", ["proverRound", "verifierRound"],
       ["index", "entries", "dimension", "width", "proverPoint", "point", "claim", "service"]⟩]⟩,
   ⟨"Root", "body", ["prover", "verifier"], inputs, []⟩]

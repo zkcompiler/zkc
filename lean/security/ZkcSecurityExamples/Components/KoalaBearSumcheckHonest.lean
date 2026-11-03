@@ -125,7 +125,7 @@ def producerHandler (r : Octic) : PIR.Handler I Unit Packet
 
 theorem producer_run (a b : Base) (r : Octic) :
     (KoalaBearSumcheckSource.producer a b).run (producerHandler r) () =
-      ⟨.returned (.cons none (.cons none .nil)), (), packets (embed a, embed b)⟩ := by
+      ⟨.returned (.cons none (.cons none (.cons none .nil))), (), packets (embed a, embed b)⟩ := by
   rw [KoalaBearSumcheckSource.producer_equation]
   rfl
 

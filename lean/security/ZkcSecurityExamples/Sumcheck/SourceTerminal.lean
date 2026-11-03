@@ -54,7 +54,7 @@ theorem terminal_check (selection : Selection) (reference : PrefixState (model.F
     (count : Nat) (shape : reference.original.length = 2^count) (small : count < 64)
     (finite : reference.original.length < indexLimit) :
     terminalCheck model selection reference.original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots) =
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots) =
       .done (some (decide (reference.scalar = reference.entries.sum))) := by
   exact SourceFamily.terminal_check model (SourceFamilySelections.installed selection) reference count shape small finite
 

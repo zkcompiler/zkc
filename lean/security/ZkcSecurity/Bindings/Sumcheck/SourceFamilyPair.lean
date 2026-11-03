@@ -77,7 +77,7 @@ theorem pair (installation : Installation program) (site : String) (scope : Pair
       (by simpa only [same] using shape) small (by simpa only [same] using finite)
     rw [same] at checked
     change terminalCheck model installation original
-      (SumcheckVerifierBodies.reduceReturnValues (SourcePair.validatorSlots model state)) = _ at checked
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (SourcePair.validatorSlots model state)) = _ at checked
     change Pair scope _ (.done p) (terminalCheck model installation original _)
     rw [checked]
     exact .done (by simp only [right, decide_true]))

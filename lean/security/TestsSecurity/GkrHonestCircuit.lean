@@ -71,7 +71,7 @@ theorem mul_encoding : HonestCircuit.StackedEncoding rawMul 2 1 circuit.mul := b
 /-- The actual helper34 supplies the intermediate wires; they are not test
 inputs to the upper layer helper. -/
 theorem intermediate_values :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 0 .nil))))))) = .done (.cons [8, 15] .nil) := by
   rw [HonestCircuit.values_below rawAdd rawMul [3, 5] 2 1 0 circuit add_encoding mul_encoding
@@ -83,10 +83,10 @@ theorem intermediate_values :
 /-- Actual helper34 followed by actual helper33 computes the independent
 circuit's outputs, exercising both mixed add/multiply layers. -/
 theorem mixed_two_layers :
-    (invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    (invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 0 .nil)))))))).bind (fun below =>
-      invoke (helpers (G := ℚ)) GkrSourceBodies.helper33Helper
+      invoke (helpers (G := ℚ)) GkrSourceBodies.helper64Helper
         (.cons upperAdd (.cons upperMul (.cons (below.get .here) (.cons 1 .nil))))) =
       .done (.cons [120, 30] .nil) := by
   rw [HonestCircuit.values_below rawAdd rawMul [3, 5] 2 1 0 circuit add_encoding mul_encoding
@@ -102,7 +102,7 @@ theorem mixed_two_layers :
 
 /-- The zero-iteration boundary returns the exact inputs. -/
 theorem last_layer_below :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 1 .nil))))))) = .done (.cons [3, 5] .nil) := by
   rw [HonestCircuit.values_below rawAdd rawMul [3, 5] 2 1 1 circuit add_encoding mul_encoding
@@ -137,7 +137,7 @@ theorem padded_mul_encoding (tail : List ℚ) (tailSize : tail.length = 16) :
 
 theorem padded_values (addTail mulTail : List ℚ)
     (addSize : addTail.length = 16) (mulSize : mulTail.length = 16) :
-    invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper
+    invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper65Helper
       (.cons (rawAdd ++ addTail) (.cons (rawMul ++ mulTail) (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 2 (.cons 1 (.cons 0 .nil))))))) = .done (.cons [8, 15] .nil) := by
   rw [HonestCircuit.values_below_plain _ _ [3, 5] 2 2 0 circuit
@@ -153,7 +153,7 @@ def refusingHandler : PIR.Handler (participantInterface ℚ ℚ) (List ℚ) Unit
   fun _ initial => ⟨.stopped .refused, initial, []⟩
 
 theorem unchanged_suffix (suffix : List ℚ) :
-    (invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper
+    (invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
         (.cons 2 (.cons 1 (.cons 1 (.cons 0 .nil)))))))).run refusingHandler suffix =
       ⟨.returned (.cons [8, 15] .nil), suffix, []⟩ := by
@@ -165,7 +165,7 @@ theorem unchanged_suffix (suffix : List ℚ) :
 
 /-- Shape mismatch is refused before any scalar map callback. -/
 theorem malformed_gate_map :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.scopedHelper44Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
       (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) = .halt .refused := by
   rw [HonestCircuit.gate_bodies.map.invoke GkrSourceViews.unit.linked]
   change (Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
@@ -181,7 +181,7 @@ theorem malformed_gate_map :
 /-- Requesting a layer at the input boundary would subtract one from zero;
 the actual helper refuses before touching even these malformed empty tables. -/
 theorem refused_layer_index :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons ([] : List ℚ) (.cons [] (.cons []
         (.cons 2 (.cons 1 (.cons 1 (.cons 2 .nil))))))) = .halt .refused := by
   rw [HonestCircuit.circuit_bodies.values.invoke GkrSourceViews.unit.linked]

@@ -28,6 +28,7 @@ field, the transcript suite, the helpers it calls by name, its sites and the
 occurrence templates of its transcript operations. -/
 structure Names where
   scalar : String
+  custodySlot : String
   suite : String
   pendingHelper : String
   openClaimHelper : String
@@ -44,57 +45,57 @@ structure Names where
   delivery : Template
   deriving DecidableEq, Repr
 
-/-- The constructed instructions of one round. Positions count from the eight
-values before the loop (the data inputs, transcript, and both Pending pairs), then the round index and the carried point, claim and transcript. -/
+/-- The constructed instructions of one round. Positions count from the nine
+values before the loop (the data inputs, transcript, and the pending token, point and scalar, then the opened point and scalar), then the round index and the carried point, claim and transcript. -/
 def roundBody (n : Names) : List Instruction := [
   ⟨.receive n.firstReceive.1 n.firstReceive.2.1 n.firstReceive.2.2 (.field n.scalar), [], [.data (.field n.scalar)], []⟩,
   ⟨.indicesEmpty, [], [.indices], []⟩,
-  ⟨.indicesAppend, [13, 8], [.indices], []⟩,
-  ⟨.observe n.suite n.firstMessage, [11, 12, 14], [.transcript n.suite], []⟩,
+  ⟨.indicesAppend, [14, 9], [.indices], []⟩,
+  ⟨.observe n.suite n.firstMessage, [12, 13, 15], [.transcript n.suite], []⟩,
   ⟨.receive n.secondReceive.1 n.secondReceive.2.1 n.secondReceive.2.2 (.field n.scalar), [], [.data (.field n.scalar)],
     []⟩,
   ⟨.indicesEmpty, [], [.indices], []⟩,
-  ⟨.indicesAppend, [17, 8], [.indices], []⟩,
-  ⟨.observe n.suite n.secondMessage, [15, 16, 18], [.transcript n.suite], []⟩,
-  ⟨.calculate (.fieldAdd n.scalar), [12, 16], [.data (.field n.scalar)], []⟩,
-  ⟨.calculate (.fieldEqual n.scalar), [10, 20], [.data .boolean], []⟩,
-  ⟨.guard n.guardSite, [21], [], []⟩,
+  ⟨.indicesAppend, [18, 9], [.indices], []⟩,
+  ⟨.observe n.suite n.secondMessage, [16, 17, 19], [.transcript n.suite], []⟩,
+  ⟨.calculate (.fieldAdd n.scalar), [13, 17], [.data (.field n.scalar)], []⟩,
+  ⟨.calculate (.fieldEqual n.scalar), [11, 21], [.data .boolean], []⟩,
+  ⟨.guard n.guardSite, [22], [], []⟩,
   ⟨.indicesEmpty, [], [.indices], []⟩,
-  ⟨.indicesAppend, [22, 8], [.indices], []⟩,
-  ⟨.challenge n.suite n.scalar n.draw, [19, 23], [.data (.field n.scalar), .transcript n.suite], []⟩,
+  ⟨.indicesAppend, [23, 9], [.indices], []⟩,
+  ⟨.challenge n.suite n.scalar n.draw, [20, 24], [.data (.field n.scalar), .transcript n.suite], []⟩,
   ⟨.indicesEmpty, [], [.indices], []⟩,
-  ⟨.indicesAppend, [26, 8], [.indices], []⟩,
-  ⟨.observe n.suite n.delivery, [25, 24, 27], [.transcript n.suite], []⟩,
-  ⟨.call n.appendHelper, [9, 24], [.data (.vector n.scalar)], []⟩,
+  ⟨.indicesAppend, [27, 9], [.indices], []⟩,
+  ⟨.observe n.suite n.delivery, [26, 25, 28], [.transcript n.suite], []⟩,
+  ⟨.call n.appendHelper, [10, 25], [.data (.vector n.scalar)], []⟩,
   ⟨.calculate (.fieldConstant n.scalar 1), [], [.data (.field n.scalar)], []⟩,
-  ⟨.calculate (.fieldSubtract n.scalar), [30, 24], [.data (.field n.scalar)], []⟩,
-  ⟨.calculate (.fieldMultiply n.scalar), [31, 12], [.data (.field n.scalar)], []⟩,
-  ⟨.calculate (.fieldMultiply n.scalar), [24, 16], [.data (.field n.scalar)], []⟩,
-  ⟨.calculate (.fieldAdd n.scalar), [32, 33], [.data (.field n.scalar)], []⟩]
+  ⟨.calculate (.fieldSubtract n.scalar), [31, 25], [.data (.field n.scalar)], []⟩,
+  ⟨.calculate (.fieldMultiply n.scalar), [32, 13], [.data (.field n.scalar)], []⟩,
+  ⟨.calculate (.fieldMultiply n.scalar), [25, 17], [.data (.field n.scalar)], []⟩,
+  ⟨.calculate (.fieldAdd n.scalar), [33, 34], [.data (.field n.scalar)], []⟩]
 
 /-- Where a round leaves the next point, claim and transcript. -/
-abbrev yielded : List Nat := [29, 34, 28]
+abbrev yielded : List Nat := [30, 35, 29]
 
 /-- The sorts the round loop carries. -/
 def carriedSorts (n : Names) : List ValueSort := [.data (.vector n.scalar), .data (.field n.scalar), .transcript n.suite]
 
 /-- Construct Pending from the published scalar, then consume its components. -/
 def pendingCall (n : Names) : Instruction :=
-  ⟨.call n.pendingHelper, [1], [.data (.vector n.scalar), .data (.field n.scalar)], []⟩
+  ⟨.call n.pendingHelper, [1], [.data (.resourceUnit n.custodySlot), .data (.vector n.scalar), .data (.field n.scalar)], []⟩
 
 def openClaimCall (n : Names) : Instruction :=
-  ⟨.call n.openClaimHelper, [4, 5], [.data (.vector n.scalar), .data (.field n.scalar)], []⟩
+  ⟨.call n.openClaimHelper, [4, 5, 6], [.data (.vector n.scalar), .data (.field n.scalar)], []⟩
 
 /-- Consume the loop's complete pending claim before checking it. -/
 def atPrefixCall (n : Names) : Instruction :=
-  ⟨.call n.atPrefixHelper, [8, 9], [.data (.vector n.scalar), .data (.field n.scalar)], []⟩
+  ⟨.call n.atPrefixHelper, [9, 10], [.data (.resourceUnit n.custodySlot), .data (.vector n.scalar), .data (.field n.scalar)], []⟩
 
-def checkCall (n : Names) : Instruction := ⟨.call n.checkHelper, [0, 11, 12], [.data .boolean], []⟩
+def checkCall (n : Names) : Instruction := ⟨.call n.checkHelper, [0, 12, 13, 14], [.data .boolean], []⟩
 
 /-- The current five-step constructed validator, including both consuming wrappers. -/
 def instructions (n : Names) (maximum : Nat) : List Instruction :=
   [pendingCall n, openClaimCall n,
-    ⟨.loop n.loopSite maximum yielded, [2, 6, 7, 3], carriedSorts n, roundBody n⟩,
+    ⟨.loop n.loopSite maximum yielded, [2, 7, 8, 3], carriedSorts n, roundBody n⟩,
     atPrefixCall n, checkCall n]
 
 /-- The executable's reading of a round: each constructed instruction with what
@@ -113,7 +114,7 @@ def roundCode (n : Names) : List Code :=
 /-- The executable's reading of a validator. -/
 def code (n : Names) (maximum : Nat) : List Code :=
   [.helper (pendingCall n), .helper (openClaimCall n),
-    .loop n.loopSite maximum yielded [2, 6, 7, 3] (carriedSorts n) (roundCode n),
+    .loop n.loopSite maximum yielded [2, 7, 8, 3] (carriedSorts n) (roundCode n),
     .helper (atPrefixCall n), .helper (checkCall n)]
 
 theorem roundCode_instructions (n : Names) : Code.instructions (roundCode n) = roundBody n := by
@@ -145,6 +146,9 @@ def Names.of (instructions : List Instruction) : Names :=
     | .challenge _ _ template => template
     | _ => ⟨"", [], []⟩
   { scalar := match operationAt body 0 with | .receive _ _ _ (.field domain) => domain | _ => ""
+    custodySlot := match (instructions.head?.bind (·.results.head?)) with
+      | some (.data (.resourceUnit slot)) => slot
+      | _ => ""
     suite := match operationAt body 3 with | .observe suite _ => suite | _ => ""
     pendingHelper := match operationAt instructions 0 with | .call name => name | _ => ""
     openClaimHelper := match operationAt instructions 1 with | .call name => name | _ => ""

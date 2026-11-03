@@ -196,7 +196,7 @@ noncomputable example (reason : PIR.Stop) (routing : Original.Routing)
         (stopDefinition reason).helper .nil).interpret
           (closedLift (I := Occurrence.signature model.toCarriers))) state)
       (Domain.View.helper model (program reason) "stop" [] [] environment) :=
-  Original.Simulation.linkedDataHelperOn model (program reason) routing (stopDefinition reason).helper
+  Original.Simulation.linkedLocalHelperOn model (program reason) routing (stopDefinition reason).helper
     (by simp [program, unit]) rfl .nil environment [] rfl state rfl
 
 -- A later helper invokes the earlier captured closure. Unrelated suffixes do

@@ -47,19 +47,21 @@ noncomputable def process (initial outputs add mul : List F) (layers selector wi
   | none => .halt .incomplete
   | some point =>
     (invoke closed GkrSourceBodies.evaluateHelper (.cons outputs (.cons point .nil))).bind fun claim =>
-    (invoke closed GkrSourceBodies.sourceHelper19Helper
+    (invoke closed GkrSourceBodies.helper11Helper
       (.cons point (.cons (claim.get .here) .nil))).bind fun packed =>
     (denoteRepeat layerSpec {} 1 (some layers)
       (.cons (output.get (.there .here)) (.cons (some (packed.get .here))
-        (.cons (some (packed.get (.there .here))) .nil)))
+        (.cons (some (packed.get (.there .here)))
+          (.cons (some (packed.get (.there (.there .here)))) .nil))))
       (.cons (some initial) (.cons (some add) (.cons (some mul) (.cons (some layers)
         (.cons (some selector) (.cons (some width) (.cons (some handle) .nil)))))))
       (layerFn {} 1)).bind fun final =>
     invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G)
-      GkrSourceBodies.sourceProtocol80Signature
+      GkrSourceBodies.inputSignature
       (({} : ProtocolContext).enter "label_696e707574" [1]) 1
       (.cons (some initial) (.cons (final.get (.there .here))
-        (.cons (final.get (.there (.there .here))) .nil)))
+        (.cons (final.get (.there (.there .here)))
+          (.cons (final.get (.there (.there (.there .here)))) .nil))))
 
 /-- Successful source admission reduces to precisely this continuation. The
 premises describe shape and bounds only; replies and output truth are free. -/
@@ -101,12 +103,13 @@ theorem participant (initial outputs add mul : List F) (layers selector width ha
   have widthCheck : ¬ 4 < width := by omega
   have layersCheck : ¬ 4 < layers := by omega
   have capacityCheck : ¬ 2 ^ selector < layers := by omega
-  have input_call (values point : Option (List F)) (claim : Option F) :
+  have input_call (values : Option (List F)) (custody : Option CustodyToken)
+      (point : Option (List F)) (claim : Option F) :
       invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G)
-        GkrSourceBodies.sourceProtocol80Signature (({} : ProtocolContext).enter "label_696e707574" [1]) 1
-        (.cons values (.cons point (.cons claim .nil))) =
-      Generated.Presentations.Gkr.Input.verifierProcess values point claim :=
-    GkrInputInvocation.invoke _ values point claim
+        GkrSourceBodies.inputSignature (({} : ProtocolContext).enter "label_696e707574" [1]) 1
+        (.cons values (.cons custody (.cons point (.cons claim .nil)))) =
+      Generated.Presentations.Gkr.Input.verifierProcess values custody point claim :=
+    GkrInputInvocation.invoke _ values custody point claim
   unfold Generated.Presentations.Gkr.Root.verifierProcess process
   simp [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
     Generated.Presentations.Gkr.program, GkrSourceViews.program,

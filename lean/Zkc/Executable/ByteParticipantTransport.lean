@@ -58,7 +58,7 @@ theorem byteAcceptance_selection (position : Nat)
         cases payload with
         | boolean decision => cases decision <;> simp [byteAcceptance, observedVerdict, mapOutcome, scalarSelection, selectedTrue, found]
         | field | group => simp [byteAcceptance, observedVerdict, mapOutcome, scalarSelection, selectedTrue, found]
-      | index | vector | transcript | indices | unsupported =>
+      | index | vector | custody | transcript | indices | unsupported =>
         simp [byteAcceptance, observedVerdict, mapOutcome, scalarSelection, selectedTrue, found]
 
 def selected (position : Nat) (values : Environment F G) : Option Bool :=
@@ -81,7 +81,7 @@ theorem nominalAcceptance_selected (position : Nat)
     | none => rfl
     | some value =>
       cases value with
-      | transcript | indices => rfl
+      | transcript | indices | custody => rfl
       | data payload =>
         rcases payload with ⟨ty, admissible, contents⟩
         cases ty <;> rfl
@@ -218,7 +218,7 @@ theorem byteAcceptance_readable (suite : String) (key : Origin → Origin) (init
       simp only [nominal, Option.bind_some] at selected
       rw [selected]
       cases value with
-      | indices => rfl
+      | indices | custody => rfl
       | transcript actual history =>
         by_cases same : actual = suite
         · cases readbackHistory key history <;> simp [readbackValue, same]

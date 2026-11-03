@@ -184,7 +184,7 @@ theorem FitsStep.mono : ∀ item env proof used first second,
           | none => trivial
           | some value =>
               cases value with
-              | transcript | indices => trivial
+              | transcript | indices | custody => trivial
               | data payload =>
                   rcases payload with ⟨ty, eligible, contents⟩
                   cases ty <;> try (solve | trivial)

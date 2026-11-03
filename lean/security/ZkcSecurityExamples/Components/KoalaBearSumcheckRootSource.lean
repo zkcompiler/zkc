@@ -68,7 +68,7 @@ theorem callee_laws (role : Nat) (capture : ProtocolTable model.Value (Interface
         (Operands.identity declaration.outputs)))
   rw [optional_fill, lookup]
   have bounded : ∀ scope ∈ declaration.outputScopes, ∀ other ∈ scope, other < 2 := by
-    change ∀ scope ∈ ([[1], [1]] : List (List Nat)), ∀ other ∈ scope, other < 2
+    change ∀ scope ∈ ([[1], [1], [1]] : List (List Nat)), ∀ other ∈ scope, other < 2
     simp
   have masks (out : Values (Component model.Value) declaration.outputs) :=
     mask_context ctx role 2 distinct declaration.outputScopes bounded out
@@ -134,13 +134,13 @@ def rootProducer (a b : Base) :=
 def terminalCarry (a b : Base) (out : Values (Component model.Value) declaration.outputs) :=
   Participant.owned 1 1 (invoke tables.closed
     ⟨"s14h6d697865645f73756d636865636b5h636865636b", .local,
-      [base, base, .vector octicIdentity, extension], [.boolean]⟩)
+      [base, base, custody, .vector octicIdentity, extension], [.boolean]⟩)
     (.cons (some a) (.cons (some b) out))
 
 theorem terminalCarry_complete (a b : Base) (point value : Octic) :
-    terminalCarry a b (.cons (some [point]) (.cons (some value) .nil)) =
+    terminalCarry a b (.cons (some 0) (.cons (some [point]) (.cons (some value) .nil))) =
       .done (.cons (some (decide (value = embed a + (embed b - embed a) * point))) .nil) := by
-  have evaluated : terminalCarry a b (.cons (some [point]) (.cons (some value) .nil)) =
+  have evaluated : terminalCarry a b (.cons (some 0) (.cons (some [point]) (.cons (some value) .nil))) =
       .done (.cons (some (decide (value = embed a + (embed b - embed a) * (0 + point)))) .nil) := by
     kernel_rfl
   simpa only [zero_add] using evaluated
@@ -152,38 +152,40 @@ theorem root_verifier_equation (a b claim : Base) (handle : Nat) :
   have presented : KoalaBearSumcheckGenerated.RootVerifier.template.view model tables
       (KoalaBearSumcheckGenerated.RootVerifier.capture model) results (calleeProcesses 1) {}
       (.cons (some a) (.cons (some b) (.cons (some claim) (.cons (some handle) .nil)))) =
-    (source 1 roundContext (.cons (some a) (.cons (some b) (.cons (some [])
-      (.cons (some (embed claim)) (.cons (some handle) .nil)))))).bind
+    (source 1 roundContext (.cons (some a) (.cons (some b) (.cons (some 0) (.cons (some [])
+      (.cons (some (embed claim)) (.cons (some handle) .nil))))))).bind
       (fun out => (terminalCarry a b out).bind (fun result => .done (maskValues 1 [[1]] result))) := by
     have exposed : KoalaBearSumcheckGenerated.RootVerifier.template.view model tables
         (KoalaBearSumcheckGenerated.RootVerifier.capture model) results (calleeProcesses 1) {}
         (.cons (some a) (.cons (some b) (.cons (some claim) (.cons (some handle) .nil)))) =
-      ((source 1 roundContext (.cons (some a) (.cons (some b) (.cons (some [])
-        (.cons (some (embed claim)) (.cons (some handle) .nil)))))).bind fun out =>
-          (terminalCarry a b (.cons (out.get .here) (.cons (out.get (.there .here)) .nil))).bind
+      ((source 1 roundContext (.cons (some a) (.cons (some b) (.cons (some 0) (.cons (some [])
+        (.cons (some (embed claim)) (.cons (some handle) .nil))))))).bind fun out =>
+          (terminalCarry a b (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) .nil)))).bind
             (fun result => .done (.cons (result.get .here) .nil))).bind
           (fun result => .done (maskValues 1 [[1]] result)) := by
       kernel_rfl
     rw [exposed]
     rw [PIR.Process.bind_assoc]
     apply congrArg (PIR.Process.bind (source 1 roundContext
-      (.cons (some a) (.cons (some b) (.cons (some [])
-        (.cons (some (embed claim)) (.cons (some handle) .nil)))))))
+      (.cons (some a) (.cons (some b) (.cons (some 0) (.cons (some [])
+        (.cons (some (embed claim)) (.cons (some handle) .nil))))))))
     funext out
     cases out with
-    | cons point rest =>
+    | cons token rest =>
       cases rest with
-      | cons value rest =>
-        cases rest
-        change ((terminalCarry a b (.cons point (.cons value .nil))).bind _).bind _ = _
-        rw [PIR.Process.bind_assoc]
-        apply congrArg (PIR.Process.bind (terminalCarry a b (.cons point (.cons value .nil))))
-        funext result
-        cases result with
-        | cons decision rest => cases rest; rfl
+      | cons point rest =>
+        cases rest with
+        | cons value rest =>
+          cases rest
+          change ((terminalCarry a b (.cons token (.cons point (.cons value .nil)))).bind _).bind _ = _
+          rw [PIR.Process.bind_assoc]
+          apply congrArg (PIR.Process.bind (terminalCarry a b (.cons token (.cons point (.cons value .nil)))))
+          funext result
+          cases result with
+          | cons decision rest => cases rest; rfl
   rw [presented]
-  have same : source 1 roundContext (.cons (some a) (.cons (some b) (.cons (some [])
-      (.cons (some (embed claim)) (.cons (some handle) .nil))))) = rawVerifier [] (embed claim) handle := by
+  have same : source 1 roundContext (.cons (some a) (.cons (some b) (.cons (some 0) (.cons (some [])
+      (.cons (some (embed claim)) (.cons (some handle) .nil)))))) = rawVerifier [] (embed claim) handle := by
     unfold rawVerifier
     rw [verifier_binding roundContext (round_distinct _ (by decide)),
       verifier_binding roundContext (round_distinct _ (by decide))]
@@ -202,7 +204,7 @@ theorem root_verifier_equation (a b claim : Base) (handle : Nat) :
     change Octic at r
     apply PIR.Process.call_congr
     intro delivered
-    change ((terminalCarry a b (.cons (some [r]) (.cons (some (low + (high - low) * r)) .nil))).bind
+    change ((terminalCarry a b (.cons (some 0) (.cons (some [r]) (.cons (some (low + (high - low) * r)) .nil)))).bind
       (fun result => .done (maskValues 1 [[1]] result))) = _
     rw [terminalCarry_complete]
     rfl

@@ -39,8 +39,8 @@ def mutateFunction (bindings : List Binding) (mutation : Mutation) (function : Z
   let .block instructions terminator := function.body
   if function.kind == .protocol then
     { function with body := (.block (instructions.map (mutateRepeat mutation))
-        (if mutation == .returnPoint && terminator == .ret [5, 2, 3, 4, 0, 1]
-          then .ret [5, 2, 3, 4, 5, 1] else terminator)) }
+        (if mutation == .returnPoint && terminator == .ret [6, 3, 4, 5, 0, 1, 2]
+          then .ret [6, 3, 4, 5, 0, 6, 2] else terminator)) }
   else if mutation == .append then
     match instructions with
     | [.instruction (.exec "exec.apply" binding []) [0, 1] results [] site] =>
@@ -86,8 +86,8 @@ def changedOperands (mutation : Mutation) (op : ProtocolOp) (operands : List Nat
 mutual
   def changedRaw (mutation : Mutation) : RawRegion Ty ProtocolOp → RawRegion Ty ProtocolOp
     | .ret operands => .ret
-        (if mutation == .returnPoint && operands == [5, 2, 3, 4, 0, 1]
-          then [5, 2, 3, 4, 5, 1] else operands)
+        (if mutation == .returnPoint && operands == [6, 3, 4, 5, 0, 1, 2]
+          then [6, 3, 4, 5, 0, 6, 2] else operands)
     | .stop reason => .stop reason
     | .letOp op operands results bodies next =>
         .letOp op (changedOperands mutation op operands) results
@@ -139,7 +139,7 @@ def reductionInputs {F : Type} (claim : F) :
 def reductionOutput {F : Type}
     (values : Values (Component (assignment F F)) SumcheckReduceBodies.runSignature.outputs) :
     Option (List F) × Option F :=
-  (values.get (.there (.there .here)), values.get (.there (.there (.there .here))))
+  (values.get (.there (.there (.there .here))), values.get (.there (.there (.there (.there .here)))))
 
 def sourceInputs {F : Type} (raw : List F) (claim : F) :
     Values (Component (assignment F F)) SumcheckSourceBodies.runSignature.inputs :=

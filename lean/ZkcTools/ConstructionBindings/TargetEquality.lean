@@ -22,13 +22,19 @@ private def child (name : Name) (index : Nat) : Bool :=
   (name == ``Domain.View.sequence && (index == 1 || index == 2)) ||
   (name == ``Domain.View.loop && index == 6)
 
-private partial def expose (expression : Expr) : MetaM Expr := do
-  let expression := (← instantiateMVars expression).headBeta.consumeMData
-  if expression.isAppOf ``ConnectionTargetPrefix.Prefix.plug ||
-      expression.isAppOf ``ConnectionTargetPrefix.Prefix.block then
-    if let some next ← unfoldDefinition? expression then return ← expose next
+/-- Expose wrappers and aliases, stopping at the finite view vocabulary.
+Never unfold a view into its execution semantics to discover its shape. -/
+partial def expose (expression : Expr) : MetaM Expr := do
+  let mut expression := (← instantiateMVars expression).consumeMData
+  while expression.isHeadBetaTarget do
+    expression := expression.headBeta.consumeMData
+  if view expression || expression.isLambda || expression.isMVar || expression.isFVar then
+    return expression
+  if let .letE _ _ value body _ := expression then
+    return ← expose (body.instantiate1 value)
   if let some next ← withTransparency .all <| reduceRecMatcher? expression then
     return ← expose next
+  if let some next ← unfoldDefinition? expression then return ← expose next
   return expression
 
 /-- Infer finite placement operands without unfolding the execution of target
@@ -60,6 +66,10 @@ private partial def matchView (shapeOnly : Bool) (proposed actual : Expr) : Meta
         unless ← withTransparency .all <| isDefEq left[index]! right[index]! do return false
     return true
   if shapeOnly then return true
+  -- An unexposed counterpart cannot match a known instruction constructor.
+  -- Reducing that constructor's Process implementation would turn a syntax
+  -- mismatch into an unbounded semantic comparison.
+  if view proposed || view actual then return false
   withTransparency .all <| isDefEq proposed actual
 
 /-- Match the finite prefix rather than reducing a mismatched loop to its

@@ -51,12 +51,12 @@ def run(command: list[str], cwd: Path, report: Path, *, env=None, expected=0) ->
     return result
 
 
-def generate(compiler: Path, fixture: Path, output: Path, report: Path) -> bool:
+def generate(compiler: Path, fixture: Path, output: Path, report: Path, *, selection: str) -> bool:
     report.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     emitted = run([str(compiler), "language-emit", *source_format.with_option([
                    "--subject=Root", "--module=mixed_sumcheck=" + str(fixture),
-                   "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")])],
+                   "--module=zkc::primitives::vector=" + str(REPOSITORY / "libraries/core/primitives/collections/vector.zkc")], selection=selection)],
                   REPOSITORY, report, expected=None)
     if emitted.returncode != 0:
         return False
@@ -260,7 +260,9 @@ def main() -> None:
     PRINTER_CACHE = args.printer_cache.resolve() if args.printer_cache else None
     compiler, output, report = args.compiler.resolve(), args.output_root.resolve(), args.report_dir.resolve()
     fixture = SECURITY / "fixtures/koala-bear-sumcheck-round.zkc"
-    if not generate(compiler, fixture, output, report):
+    # Mutations retain the declared grammar of the original fixture and its modules.
+    selection = source_format.of_sources([fixture, REPOSITORY / "libraries/core/primitives/collections/vector.zkc"])
+    if not generate(compiler, fixture, output, report, selection=selection):
         raise RuntimeError("generic generation refused the actual source")
     export_pair(compiler, fixture, output, report)
     components_exported = export_components(compiler, fixture, output, report)
@@ -284,7 +286,7 @@ def main() -> None:
             case.mkdir(parents=True, exist_ok=True)
             candidate = case / "fixture.zkc"
             candidate.write_text(changed)
-            generated = generate(compiler, candidate, case / "modules", case)
+            generated = generate(compiler, candidate, case / "modules", case, selection=selection)
             boundary = "native export or typed selection"
             if generated:
                 boundary = "actual exported body and installed law"

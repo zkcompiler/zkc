@@ -538,6 +538,7 @@ import Zkc.Source.Structured.Repeat
 import Zkc.Source.Structured.RepeatAdmission
 import Zkc.Source.Structured.RepeatLaws
 import Zkc.Source.Structured.ReplyScript
+import Zkc.Source.Structured.SourceDeclarations
 import Zkc.Source.Structured.SumReference
 import Zkc.Source.Structured.SumReferenceInstallation
 import Zkc.Source.Structured.Table
@@ -641,6 +642,7 @@ import Tests.Constructed
 import Tests.ConstructedDiagnostics
 import Tests.ConstructionBindingsAnalysis
 import Tests.ConstructionControls
+import Tests.ConstructionCustodyValues
 import Tests.ConstructionPattern
 import Tests.ContractCallDerivation
 import Tests.ContractCallRequests
@@ -651,6 +653,7 @@ import Tests.ContractElaborationControls
 import Tests.ContractElaborationSources
 import Tests.ContractInvocation
 import Tests.ContractSourceCalls
+import Tests.CustodyScalarTransport
 import Tests.DataCodec
 import Tests.DecimalAdmission
 import Tests.DerivationCounter
@@ -719,6 +722,7 @@ import Tests.NamedValuesScope
 import Tests.NativeByteConsumerAudit
 import Tests.NativeByteConsumers
 import Tests.NormalFormReferences
+import Tests.NumericalPublicAdmission
 import Tests.Obligations
 import Tests.ObservedLoop
 import Tests.OccurrencePresentation
@@ -820,6 +824,7 @@ import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
 import Tests.StructuredContracts
 import Tests.StructuredCustody
+import Tests.StructuredDeclarationReduction
 import Tests.StructuredDeclarations
 import Tests.StructuredDomainModels
 import Tests.StructuredFormation
@@ -1397,6 +1402,7 @@ import ZkcTools.ConstructionBindings.Interface
 import ZkcTools.ConstructionBindings.LayoutLookup
 import ZkcTools.ConstructionBindings.LibraryBuilder
 import ZkcTools.ConstructionBindings.LibraryPlan
+import ZkcTools.ConstructionBindings.Normalization
 import ZkcTools.ConstructionBindings.ProcessViewTactic
 import ZkcTools.ConstructionBindings.Readback
 import ZkcTools.ConstructionBindings.Root

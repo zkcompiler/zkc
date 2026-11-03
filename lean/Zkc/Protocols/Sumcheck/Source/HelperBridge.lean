@@ -48,7 +48,7 @@ theorem check_mathematical (helpers : Meanings F G) (laws : MapPrefixContracts.L
         (checkTableBody bindings).denote (meaning F G helpers) (checkInputs xs point claim).get)
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
-    checkBody.denote (meaning F G helpers) (checkInputs xs point claim).get =
+    checkBody.denote (meaning F G helpers) (terminalInputs xs 0 point claim).get =
       .done (boolResult (Zkc.Protocols.Sumcheck.Multilinear.check
         (n := 0 + point.length) xs
         (Quadratic.point point.length (coordinates point.length point) Fin.elim0) claim)) := by
@@ -82,7 +82,7 @@ theorem check_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContrac
     (xs point : List F) (claim : F) (table : Table F (0 + point.length))
     (decoded : ofList? (0 + point.length) xs = some table)
     (vectorBound : xs.length < indexLimit) :
-    checkBody.denote (meaning F G helpers) (checkInputs xs point claim).get =
+    checkBody.denote (meaning F G helpers) (terminalInputs xs 0 point claim).get =
       .done (boolResult (decide (extension (0 + point.length) table
         (coordinates (0 + point.length) point) = claim))) := by
   have shape := (hasShape_iff_length xs point.length vectorBound).mpr

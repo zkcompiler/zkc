@@ -214,13 +214,13 @@ theorem meteredStep_prunes {R : Type} :
               cases carriedEq : Domain.read env refs with
               | none =>
                   cases value with
-                  | transcript | indices => exact stopped_pure (m := m) _ _ _
+                  | transcript | indices | custody => exact stopped_pure (m := m) _ _ _
                   | data payload =>
                       rcases payload with ⟨ty, admissible, contents⟩
                       cases ty <;> exact stopped_pure (m := m) _ _ _
               | some carried =>
                   cases value with
-                  | transcript | indices => exact stopped_pure (m := m) _ _ _
+                  | transcript | indices | custody => exact stopped_pure (m := m) _ _ _
                   | data payload =>
                       rcases payload with ⟨ty, data, value⟩
                       cases ty <;> try (exact stopped_pure (m := m) _ _ _)

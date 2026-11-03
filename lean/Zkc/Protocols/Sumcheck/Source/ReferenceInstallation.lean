@@ -265,27 +265,59 @@ def results : LawResults model signature.laws where
   result entry := match entry with
     | ⟨0, _⟩ => fun _ => .cons 0 .nil
     | ⟨1, _⟩ => fun _ => .cons 0 .nil
-    | ⟨2, _⟩ => fun args => args
-    | ⟨3, _⟩ => fun args => args
+    | ⟨2, _⟩ => fun args => .cons (args.get (.there .here)) (.cons (args.get (.there (.there .here))) .nil)
+    | ⟨3, _⟩ => fun args => .cons 0 args
     | ⟨_ + 4, outside⟩ => absurd outside (by simp [signature, SumcheckPreludeNormalForms.verifierReduceSignature])
 
-def inputs (point : Option (List (model.Field field))) (claim : Option (model.Field field))
+def inputs (custody : Option CustodyToken) (point : Option (List (model.Field field))) (claim : Option (model.Field field))
     (count service : Option Nat) : Binders model pattern.scope :=
-  .cons point (.cons claim (.cons count (.cons service .nil)))
+  .cons custody (.cons point (.cons claim (.cons count (.cons service .nil))))
+
+/-- The initial claim carries its local custody coordinate explicitly. -/
+def pendingLaw : ReferenceLaw model SumcheckPendingBodies.pendingHelper.inputs
+    SumcheckPendingBodies.pendingHelper.outputs where
+  body := SumcheckPendingBodies.pendingBody
+  Requires := fun _ _ => True
+  reference := fun args => .returned (.cons 0 (.cons [] args))
+  valid := by
+    intro table args _
+    cases args with | cons scalar args => cases args; rfl
+
+/-- The installed body consumes a local custody coordinate before exposing the fields. -/
+def openClaimLaw : ReferenceLaw model SumcheckPendingBodies.openClaimHelper.inputs
+    SumcheckPendingBodies.openClaimHelper.outputs where
+  body := SumcheckPendingBodies.openClaimBody
+  Requires := fun _ _ => True
+  reference := fun args => .returned
+    (.cons (args.get (.there .here)) (.cons (args.get (.there (.there .here))) .nil))
+  valid := by
+    intro table args _
+    cases args with | cons token args => cases args with | cons point args =>
+      cases args with | cons scalar args => cases args; rfl
+
+/-- The successor's closed interpretation returns its explicit erased token. -/
+def atPrefixLaw : ReferenceLaw model SumcheckPendingBodies.atPrefixHelper.inputs
+    SumcheckPendingBodies.atPrefixHelper.outputs where
+  body := SumcheckPendingBodies.atPrefixBody
+  Requires := fun _ _ => True
+  reference := fun args => .returned (.cons 0 args)
+  valid := by
+    intro table args _
+    cases args with | cons point args => cases args with | cons scalar args => cases args; rfl
 
 structure Bodies (definitions : List CheckedDefinition) : Prop where
   width : BodyIn definitions MapFirstBodies.widthHelper
     (.ret (.cons (.there (.there .here)) .nil))
   dimension : BodyIn definitions MapFirstBodies.variablesHelper (.ret (.cons (.there .here) .nil))
-  openClaim : BodyIn definitions SumcheckPendingBodies.openClaimHelper (Sum.identity model field).body
-  atPrefix : BodyIn definitions SumcheckPendingBodies.atPrefixHelper (Sum.identity model field).body
+  openClaim : BodyIn definitions SumcheckPendingBodies.openClaimHelper (openClaimLaw model).body
+  atPrefix : BodyIn definitions SumcheckPendingBodies.atPrefixHelper (atPrefixLaw model).body
 
 
 theorem laws (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies model definitions) (point : Option (List (model.Field field)))
+    (bodies : Bodies model definitions) (custody : Option CustodyToken) (point : Option (List (model.Field field)))
     (claim : Option (model.Field field)) (count service : Option Nat) :
     LawsHold (tables model definitions) (results model)
-      (pattern.environment model (inputs model point claim count service)) := by
+      (pattern.environment model (inputs model custody point claim count service)) := by
   intro entry
   match entry with
   | ⟨0, _⟩ =>
@@ -303,26 +335,24 @@ theorem laws (definitions : List CheckedDefinition) (linked : DeclarationsLinked
         Option.some.inj (found.symm.trans (by kernel_rfl))
       exact projection_components model definitions linked _ _ bodies.dimension _
   | ⟨2, _⟩ =>
-    intro args pinned values found
+    intro args _ values found
     match args with
-    | .cons a (.cons b .nil) =>
-      obtain rfl : values = (.cons a (.cons b .nil) : Values model.Value [.vector field, .field field]) :=
+    | .cons token (.cons point (.cons scalar .nil)) =>
+      obtain rfl : values = (.cons point (.cons scalar .nil) :
+          Values model.Value [.vector field, .field field]) :=
         Option.some.inj (found.symm.trans (by kernel_rfl))
-      change invoke (tables model definitions).closed SumcheckPendingBodies.openClaimHelper _ = _
-      exact (Sum.identity model field).invokeOn (model := model)
-        (helper := SumcheckPendingBodies.openClaimHelper) definitions linked bodies.openClaim _ trivial
+      exact (openClaimLaw model).invokeOn definitions linked bodies.openClaim _ trivial
   | ⟨3, _⟩ =>
-    intro args pinned values found
+    intro args _ values found
     match args with
-    | .cons a (.cons b .nil) =>
-      obtain rfl : values = (.cons a (.cons b .nil) : Values model.Value [.vector field, .field field]) :=
+    | .cons point (.cons scalar .nil) =>
+      obtain rfl : values = (.cons 0 (.cons point (.cons scalar .nil)) :
+          Values model.Value SumcheckPendingBodies.atPrefixHelper.outputs) :=
         Option.some.inj (found.symm.trans (by kernel_rfl))
-      change invoke (tables model definitions).closed SumcheckPendingBodies.atPrefixHelper _ = _
-      exact (Sum.identity model field).invokeOn (model := model)
-        (helper := SumcheckPendingBodies.atPrefixHelper) definitions linked bodies.atPrefix _ trivial
+      exact (atPrefixLaw model).invokeOn definitions linked bodies.atPrefix _ trivial
   | ⟨_ + 4, outside⟩ => exact absurd outside (by simp [signature, SumcheckPreludeNormalForms.verifierReduceSignature])
 
-/-- All six returned source slots are retained in their actual order. -/
+/-- All seven returned source slots are retained in their actual order. -/
 def terminal (returned : Values (Component model.Value) SumcheckVerifierBodies.repeatState) :
     PIR.Process (Occurrence.signature model.toCarriers)
       (Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs) :=
@@ -332,31 +362,31 @@ def terminal (returned : Values (Component model.Value) SumcheckVerifierBodies.r
     | none => .halt .incomplete
     | some scalar => .done (.cons (returned.get (.there (.there (.there .here))))
         (.cons (returned.get .here) (.cons (returned.get (.there .here))
-        (.cons (returned.get (.there (.there .here))) (.cons (some point) (.cons (some scalar) .nil))))))
+        (.cons (returned.get (.there (.there .here))) (.cons (some 0) (.cons (some point) (.cons (some scalar) .nil)))))))
 
 def reference (definitions : List CheckedDefinition)
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
-    (maximum : Nat) (ctx : ProtocolContext) (point : Option (List (model.Field field)))
+    (maximum : Nat) (ctx : ProtocolContext) (custody : Option CustodyToken) (point : Option (List (model.Field field)))
     (claim : Option (model.Field field)) (count service : Option Nat) :=
-  match point, claim with
-  | some point, some claim =>
+  match custody, point, claim with
+  | some _, some point, some claim =>
     (denoteRepeatOn (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 1) count
       (state model (some point) (some claim)) (.cons service .nil)
       (fun args => SumcheckVerifierBodies.roundBody.denote
         (participantMeaningWithOn model (.silent _) Occurrence.actions (tables model definitions)
           (ctx.roles 1) protocols ctx Occurrence.iterations) args.get)
       Occurrence.iterations SumcheckVerifierBodies.repeatSite).bind (terminal model)
-  | _, _ => .halt .incomplete
+  | _, _, _ => .halt .incomplete
 
 theorem presentation (definitions : List CheckedDefinition)
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
-    (maximum : Nat) (ctx : ProtocolContext) (point : Option (List (model.Field field)))
+    (maximum : Nat) (ctx : ProtocolContext) (custody : Option CustodyToken) (point : Option (List (model.Field field)))
     (claim : Option (model.Field field)) (count service : Option Nat) :
     (form maximum).denoteOn model Occurrence.actions (tables model definitions) (results model) ctx
       (runsAtOn model Occurrence.actions Occurrence.iterations (tables model definitions) protocols ctx 1)
-      (noCallees model _) (inputs model point claim count service) =
-      reference model definitions protocols maximum ctx point claim count service := by
-  cases point <;> cases claim <;> kernel_rfl
+      (noCallees model _) (inputs model custody point claim count service) =
+      reference model definitions protocols maximum ctx custody point claim count service := by
+  cases custody <;> cases point <;> cases claim <;> kernel_rfl
 
 /-- The premise is an exact, local nominal library installation. No whole-body
 semantic equation, evaluator or source/compiled connection is assumed. -/
@@ -364,18 +394,18 @@ theorem body_reference (definitions : List CheckedDefinition)
     (linked : DeclarationsLinked [] definitions) (bodies : Bodies model definitions)
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (maximum : Nat) (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (point : Option (List (model.Field field))) (claim : Option (model.Field field))
+    (custody : Option CustodyToken) (point : Option (List (model.Field field))) (claim : Option (model.Field field))
     (count service : Option Nat) :
     (SumcheckVerifierBodies.reduceBody maximum).denote
       (participantMeaningWithOn model (.silent _) Occurrence.actions (tables model definitions)
         (ctx.roles 1) protocols ctx Occurrence.iterations)
-      (pattern.environment model (inputs model point claim count service)).get =
-      reference model definitions protocols maximum ctx point claim count service :=
+      (pattern.environment model (inputs model custody point claim count service)).get =
+      reference model definitions protocols maximum ctx custody point claim count service :=
   (normalize_occurrence_sound signature (SumcheckVerifierBodies.reduceBody maximum) 1 2 pattern
     (form maximum) (SumcheckPreludeNormalForms.verifierReduce_normalized maximum)
     (SumcheckPreludeNormalForms.verifierReduce_lawsMatch maximum) distinct (results model)
-    (noCallees model _) (inputs model point claim count service)
-    (laws model definitions linked bodies point claim count service) (noCallees_hold _ _)).trans
-      (presentation model definitions protocols maximum ctx point claim count service)
+    (noCallees model _) (inputs model custody point claim count service)
+    (laws model definitions linked bodies custody point claim count service) (noCallees_hold _ _)).trans
+      (presentation model definitions protocols maximum ctx custody point claim count service)
 
 end ZkcExamples.Structured.SumcheckReductionReference

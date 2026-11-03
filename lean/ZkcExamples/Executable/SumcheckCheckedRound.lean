@@ -43,13 +43,14 @@ def binders (values : List F) (claim : F) (rounds index : Nat) (point : List F) 
     Binders (ringModel F G) frame.scope :=
   .cons index (.cons (SumcheckVerifierLaws.embedV (G := G) (some point, some current))
     (.cons (.cons (some []) (.cons (some claim) .nil))
-      (.cons (.cons [] (.cons claim .nil)) (.cons values (.cons claim (.cons rounds .nil))))))
+      (.cons (.cons 0 (.cons [] (.cons claim .nil))) (.cons values (.cons claim (.cons rounds .nil))))))
 
 def inputs (values : List F) (claim : F) (rounds : Nat)
     (initial : Domain.History (uniformCarriers F G)) (index : Nat) (point : List F) (current : F)
     (history : Domain.History (uniformCarriers F G)) : Domain.Environment (uniformCarriers F G) :=
   [.data (.vector "bls12-381.fr" values), .data (.field "bls12-381.fr" claim),
     .data (.index rounds), .transcript context.suite initial,
+    .custody SumcheckPendingBodies.custodySlot 0,
     .data (.vector "bls12-381.fr" []), .data (.field "bls12-381.fr" claim),
     .data (.vector "bls12-381.fr" []), .data (.field "bls12-381.fr" claim),
     .data (.index index), .data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" current),
@@ -171,14 +172,14 @@ theorem returns_read (count : Nat) (original : Values (Component (assignment F G
   obtain ⟨next, value, presented, length⟩ := valid
   obtain ⟨data, encoded, read⟩ := Original.outputReferences_read
     (maskValues frame.role frame.scopes original.1)
-    (show Original.outputReferences frame.role frame.scopes frame.outputs = some [29,34] by decide +kernel)
+    (show Original.outputReferences frame.role frame.scopes frame.outputs = some [30,35] by decide +kernel)
     related.1
   have encoding : Original.roleOutputValues frame.role frame.scopes
       (maskValues frame.role frame.scopes (SumcheckVerifierLaws.embedV (G := G) (some next, some value))) =
         some [.data (.vector "bls12-381.fr" next), .data (.field "bls12-381.fr" value)] := by kernel_rfl
   rw [presented, encoding] at encoded
   cases encoded
-  have profile : Original.profileReferences routing.context [29,34] frame.history = some SumcheckShape.yielded := by kernel_rfl
+  have profile : Original.profileReferences routing.context [30,35] frame.history = some SumcheckShape.yielded := by kernel_rfl
   have located := historyLocation_of_profile (model := ringModel F G) profile related.2.2.1
   have full := Original.profileReferences_read profile read located
   exact ⟨next, value, original.2.history, full, length⟩

@@ -16,7 +16,7 @@ and the terminal multilinear check. The finite helper rule prepares the first
 four against their complete admitted source bodies. The terminal check iterates
 outside that rule's recipe table; its separate proof evaluates the actual native
 fold, including its map binding, and preserves resource stops. Its exact charge
-on a shaped table is `62 + 20 * point.length`.
+on a shaped table is `63 + 20 * point.length`.
 -/
 
 set_option autoImplicit false
@@ -245,9 +245,9 @@ theorem add_returns {xs ys : List F} (same : xs.length = ys.length) :
   simp [Resolved.evaluate, Computation.apply, same]
 
 /-- The expression the fold's numerical call carries over its low half, high
-half and challenge: `in0 + (in1 + (-in0)) * in2`. -/
+half and challenge: `in0 + in2 * (in1 + (-in0))`. -/
 def interpolation : Zkc.Algebra.RingExpression.Expr Nat Nat :=
-  .add (.input 0) (.mul (.add (.input 1) (.neg (.input 0))) (.input 2))
+  .add (.input 0) (.mul (.input 2) (.add (.input 1) (.neg (.input 0))))
 
 /-- The numerical map over two vectors and a broadcast scalar computes the
 interpolation of `interpolate_eq` at every row. -/
@@ -268,7 +268,7 @@ theorem map_returns {low high : List F} {r : F} (same : low.length = high.length
     have inLow : index < low.length := by simpa using inRange
     have inHigh : index < high.length := same ▸ inLow
     simp [Numerical.row, Zkc.Algebra.RingExpression.Expr.map, Zkc.Algebra.RingExpression.Expr.eval,
-      Numerical.Slot.read, interpolation, inLow, inHigh, sub_eq_add_neg]
+      Numerical.Slot.read, interpolation, inLow, inHigh, sub_eq_add_neg, mul_comm]
 
 theorem sum_returns {xs : List F} :
     (Resolved.compute (.primitive (.vectorSum "bls12-381.fr"))).evaluate
@@ -286,6 +286,11 @@ theorem fieldEqual_returns {a b : F} :
     Op.arguments, Calculation.evaluate_fieldEqual]
   rfl
 
+/-- The exact-slot local projection consumes custody without exposing it. -/
+theorem consume_returns (slot : String) (token : CustodyToken) :
+    (Resolved.custody .consume slot).evaluate [(.custody slot token : Value F G)] =
+      .returned [] := by simp [Resolved.evaluate, CustodyTransfer.erased]
+
 end Operations
 
 /-! ## The terminal check
@@ -295,6 +300,7 @@ its row's meaning, each region by its taken branch and each loop by induction
 on its iterations. -/
 
 section Check
+variable {token : CustodyToken}
 
 /-- One installed operation of a concrete body that returns: its binding
 resolves and its operands are found by evaluation. -/
@@ -351,7 +357,7 @@ local macro "returns_iterate " results:term : tactic =>
 /-- The actual fold instruction, including its compiler-selected bindings. -/
 def restrictionLoop : Zkc.Executable.Step :=
   match checkFunction.body with
-  | [_, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
+  | [_, _, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
       match checked with
       | [_, _, _, _, _, _, _, _, _, _, loop@(.iterate ..), _, _, _] => loop
       | _ => .yield []
@@ -404,9 +410,9 @@ theorem interpolate_eq (low high : List F) (r : F) :
       | cons second high => simp only [List.zipWith_cons_cons, List.map_cons, ih]
 
 /-- The arguments of the check as the body names them. -/
-abbrev checkEnv (xs point : List F) (claim : F) : Env F G :=
+abbrev checkEnv (xs point : List F) (claim : F) (token : CustodyToken) : Env F G :=
   (checkFunction.inputs.map (·.1)).zip
-    [.vector "bls12-381.fr" xs, .vector "bls12-381.fr" point,
+    [.vector "bls12-381.fr" xs, .custody SumcheckPendingBodies.custodySlot token, .vector "bls12-381.fr" point,
       .data (.field "bls12-381.fr" claim)]
 
 /-- One installed operation that returns, with its exact charge. -/
@@ -502,16 +508,17 @@ theorem restriction_cost (point : List F) (small : point.length < 64) :
             (restrictValues_length current point[start] doubled)
       · omega
 
-/-- With a well-shaped table, the check charges `62 + 20 * n` instructions for a
+/-- With a well-shaped table, the check charges `63 + 20 * n` instructions for a
 point of `n` coordinates. -/
 theorem check_shaped_cost {xs point : List F} {claim : F} (pointBound : point.length < indexLimit)
     (small : point.length < 64) (vectorBound : xs.length < indexLimit)
     (shaped : xs.length = 2 ^ point.length) :
-    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).ReturnsAfter
+    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim token)).ReturnsAfter
       [.data (.boolean (decide ((restrictPrefixValues xs point).foldl (· + ·) 0 = claim)))]
-      (62 + 20 * point.length) := by
+      (63 + 20 * point.length) := by
   apply Evaluated.ReturnsAfter.of_eq
-  · charged_operation (length_returns pointBound)
+  · charged_operation (consume_returns SumcheckPendingBodies.custodySlot token)
+    charged_operation (length_returns pointBound)
     charged_operation (constant_returns 1)
     charged_operation (constant_returns 0)
     charged_operation (less_true (a := 0) (b := 1) (by decide) (by decide) (by decide))
@@ -583,15 +590,17 @@ theorem check_shaped_cost {xs point : List F} {claim : F} (pointBound : point.le
 
 /-- A point too long for an index stops the check at its length. -/
 theorem check_point_stops {xs point : List F} {claim : F} (overflow : ¬ point.length < indexLimit) :
-    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).Stops
+    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim token)).Stops
       (.kernel .exhausted) := by
+  continues_operation (consume_returns SumcheckPendingBodies.custodySlot token)
   stops_operation (length_stops overflow)
 
 /-- A table too long for an index stops the check at its length. -/
 theorem check_vector_stops {xs point : List F} {claim : F} (pointBound : point.length < indexLimit)
     (small : point.length < 64) (overflow : ¬ xs.length < indexLimit) :
-    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).Stops
+    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim token)).Stops
       (.kernel .exhausted) := by
+  continues_operation (consume_returns SumcheckPendingBodies.custodySlot token)
   continues_operation (length_returns pointBound)
   continues_operation (constant_returns 1)
   continues_operation (constant_returns 0)
@@ -606,8 +615,9 @@ theorem check_vector_stops {xs point : List F} {claim : F} (pointBound : point.l
 /-- A point of at least 64 coordinates fails the authored shape check. -/
 theorem check_large {xs point : List F} {claim : F} (pointBound : point.length < indexLimit)
     (large : ¬ point.length < 64) :
-    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).Returns
+    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim token)).Returns
       [.data (.boolean false)] := by
+  returns_operation (consume_returns SumcheckPendingBodies.custodySlot token)
   returns_operation (length_returns pointBound)
   returns_operation (constant_returns 1)
   returns_operation (constant_returns 0)
@@ -632,8 +642,9 @@ check fails. -/
 theorem check_unshaped {xs point : List F} {claim : F} (pointBound : point.length < indexLimit)
     (small : point.length < 64) (vectorBound : xs.length < indexLimit)
     (unshaped : xs.length ≠ 2 ^ point.length) :
-    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).Returns
+    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim token)).Returns
       [.data (.boolean false)] := by
+  returns_operation (consume_returns SumcheckPendingBodies.custodySlot token)
   returns_operation (length_returns pointBound)
   returns_operation (constant_returns 1)
   returns_operation (constant_returns 0)
@@ -672,7 +683,7 @@ theorem check_unshaped {xs point : List F} {claim : F} (pointBound : point.lengt
 the folded table's sum with the claim. -/
 theorem check_returns {xs point : List F} {claim : F} (pointBound : point.length < indexLimit)
     (small : point.length < 64) (vectorBound : xs.length < indexLimit) :
-    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).Returns
+    (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim token)).Returns
       [.data (.boolean (decide (PrimitiveLibrary.HasShape xs point.length 1 ∧
         (restrictPrefixValues xs point).sum = claim)))] := by
   by_cases shaped : xs.length = 2 ^ point.length
@@ -682,53 +693,57 @@ theorem check_returns {xs point : List F} {claim : F} (pointBound : point.length
       rw [List.sum_eq_foldl]
       simp [PrimitiveLibrary.HasShape, shaped, small, Nat.mod_one]
     rw [value]
-    exact (check_shaped_cost pointBound small vectorBound shaped).returns
+    exact (check_shaped_cost (token := token) pointBound small vectorBound shaped).returns
   · have value : decide (PrimitiveLibrary.HasShape xs point.length 1 ∧
           (restrictPrefixValues xs point).sum = claim) = false := by
       simp [PrimitiveLibrary.HasShape, shaped]
     rw [value]
-    exact check_unshaped pointBound small vectorBound shaped
+    exact check_unshaped (token := token) pointBound small vectorBound shaped
 
 /-- The terminal check's body implements the source's check helper. -/
 theorem check_prepared : Prepared installed validator (helperTable program F G) checkHelper.name := by
   intro callee found arguments length sorted
   rw [checkFunction_eq, Option.some.injEq] at found
   subst found
-  have inputs : checkFunction.inputs.length = 3 := rfl
+  have inputs : checkFunction.inputs.length = 4 := rfl
   rw [inputs] at length
-  rcases arguments with _ | ⟨first, _ | ⟨second, _ | ⟨third, _ | ⟨_, _⟩⟩⟩⟩
+  rcases arguments with _ | ⟨first, _ | ⟨second, _ | ⟨third, _ | ⟨fourth, _ | ⟨_, _⟩⟩⟩⟩⟩
+  · simp at length
   · simp at length
   · simp at length
   · simp at length
   rotate_left
   · simp at length
   · obtain ⟨xs, xsEq⟩ := sorted 0 first (.data (.vector "bls12-381.fr")) rfl rfl
-    obtain ⟨point, pointEq⟩ := sorted 1 second (.data (.vector "bls12-381.fr")) rfl rfl
-    obtain ⟨claim, claimEq⟩ := sorted 2 third (.data (.field "bls12-381.fr")) rfl rfl
-    subst xsEq pointEq claimEq
-    rw [call_eq SumcheckSourceAssociations.check_association _ (SumcheckHelperLaws.checkInputs xs point claim)
-      rfl]
+    obtain ⟨token, tokenEq⟩ := sorted 1 second (.data SumcheckPendingBodies.custodyType) rfl rfl
+    obtain ⟨point, pointEq⟩ := sorted 2 third (.data (.vector "bls12-381.fr")) rfl rfl
+    obtain ⟨claim, claimEq⟩ := sorted 3 fourth (.data (.field "bls12-381.fr")) rfl rfl
+    subst xsEq tokenEq pointEq claimEq
+    rw [call_eq SumcheckSourceAssociations.check_association _
+      (SumcheckHelperLaws.terminalInputs xs token point claim) rfl,
+      SumcheckSourceContracts.check_custody_irrelevant xs point claim token]
     have envEq : (checkFunction.inputs.map (·.1)).zip
-        [Value.encode (F := F) (G := G) (.vector "bls12-381.fr") xs, Value.encode (.vector "bls12-381.fr") point,
-          Value.encode (.field "bls12-381.fr") claim] = checkEnv xs point claim := rfl
+        [Value.encode (F := F) (G := G) (.vector "bls12-381.fr") xs,
+          Value.encode SumcheckPendingBodies.custodyType token, Value.encode (.vector "bls12-381.fr") point,
+          Value.encode (.field "bls12-381.fr") claim] = checkEnv xs point claim token := rfl
     rw [envEq]
     by_cases pointBound : point.length < indexLimit
     · by_cases small : point.length < 64
       · by_cases vectorBound : xs.length < indexLimit
         · rw [SumcheckSourceContracts.check_equation xs point claim vectorBound pointBound]
-          obtain ⟨cost, evaluated⟩ := check_returns (G := G) (claim := claim) pointBound small vectorBound
+          obtain ⟨cost, evaluated⟩ := check_returns (token := token) (G := G) (claim := claim) pointBound small vectorBound
           rw [evaluated]
           exact ⟨rfl, rfl, sorted_single (hasSort_encode .boolean _)⟩
         · rw [SumcheckSourceContracts.check_vector_exhausted xs point claim small vectorBound]
-          obtain ⟨cost, evaluated⟩ := check_vector_stops (G := G) (claim := claim) pointBound small vectorBound
+          obtain ⟨cost, evaluated⟩ := check_vector_stops (token := token) (G := G) (claim := claim) pointBound small vectorBound
           rw [evaluated]
           rfl
       · rw [SumcheckSourceContracts.check_large_dimension xs point claim pointBound small]
-        obtain ⟨cost, evaluated⟩ := check_large (G := G) (xs := xs) (claim := claim) pointBound small
+        obtain ⟨cost, evaluated⟩ := check_large (token := token) (G := G) (xs := xs) (claim := claim) pointBound small
         rw [evaluated]
         exact ⟨rfl, rfl, sorted_single (hasSort_encode .boolean _)⟩
     · rw [SumcheckSourceContracts.check_point_exhausted xs point claim pointBound]
-      obtain ⟨cost, evaluated⟩ := check_point_stops (G := G) (xs := xs) (claim := claim) pointBound
+      obtain ⟨cost, evaluated⟩ := check_point_stops (token := token) (G := G) (xs := xs) (claim := claim) pointBound
       rw [evaluated]
       rfl
 
@@ -761,35 +776,36 @@ theorem append_call (point : List F) (challenge : F) :
 
 /-- The terminal check helper compares the table's authored shape and the sum
 of the table restricted at the point with the claim. -/
-theorem check_call {xs point : List F} {claim : F} (vectorBound : xs.length < indexLimit)
+theorem check_call {token : CustodyToken} {xs point : List F} {claim : F} (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
     callHelper (helperTable program F G) checkHelper.name
-        [.vector "bls12-381.fr" xs, .vector "bls12-381.fr" point, .data (.field "bls12-381.fr" claim)] =
+        [.vector "bls12-381.fr" xs, .custody SumcheckPendingBodies.custodySlot token, .vector "bls12-381.fr" point, .data (.field "bls12-381.fr" claim)] =
       .returned [.data (.boolean (decide (PrimitiveLibrary.HasShape xs point.length 1 ∧
         (restrictPrefixValues xs point).sum = claim)))] := by
-  rw [call_eq SumcheckSourceAssociations.check_association _ (SumcheckHelperLaws.checkInputs xs point claim) rfl,
+  rw [call_eq SumcheckSourceAssociations.check_association _ (SumcheckHelperLaws.terminalInputs xs token point claim) rfl,
+    SumcheckSourceContracts.check_custody_irrelevant xs point claim token,
     SumcheckSourceContracts.check_equation xs point claim vectorBound pointBound]
   rfl
 
 /-- The terminal check's charge on a well-shaped table: what the helper call
 charges for its body. -/
-theorem check_cost {xs point : List F} {claim : F} (small : point.length < 64)
+theorem check_cost {token : CustodyToken} {xs point : List F} {claim : F} (small : point.length < 64)
     (shaped : xs.length = 2 ^ point.length) :
     helperCost installed validator checkHelper.name
-      [(.vector "bls12-381.fr" xs : Value F G), .vector "bls12-381.fr" point,
-        .data (.field "bls12-381.fr" claim)] = 62 + 20 * point.length := by
+      [(.vector "bls12-381.fr" xs : Value F G), .custody SumcheckPendingBodies.custodySlot token, .vector "bls12-381.fr" point,
+        .data (.field "bls12-381.fr" claim)] = 63 + 20 * point.length := by
   have pointBound : point.length < indexLimit := lt_trans small (by decide)
   have vectorBound : xs.length < indexLimit := by
     rw [shaped]
     exact indexLimit_pow small
-  have evaluated := check_shaped_cost (G := G) (claim := claim) pointBound small vectorBound shaped
+  have evaluated := check_shaped_cost (token := token) (G := G) (claim := claim) pointBound small vectorBound shaped
   unfold helperCost Validator.evaluateCall
   rw [checkFunction_eq]
-  simp only [show checkFunction.inputs.length = 3 from rfl, List.length_cons, List.length_nil]
+  simp only [show checkFunction.inputs.length = 4 from rfl, List.length_cons, List.length_nil]
   simp only [ite_true]
   have envEq : (checkFunction.inputs.map (·.1)).zip
-      [(.vector "bls12-381.fr" xs : Value F G), .vector "bls12-381.fr" point,
-        .data (.field "bls12-381.fr" claim)] = checkEnv xs point claim := rfl
+      [(.vector "bls12-381.fr" xs : Value F G), .custody SumcheckPendingBodies.custodySlot token, .vector "bls12-381.fr" point,
+        .data (.field "bls12-381.fr" claim)] = checkEnv xs point claim token := rfl
   rw [envEq, evaluated]
   rfl
 

@@ -129,8 +129,11 @@ native entropy realization or compiled completeness.
 `plain.py --compiler PATH --output DIRECTORY` reproduces the actual
 `libraries/relations/table` CheckMembership source and its plain constructed pair,
 and the `fixtures/batch-opening.zkc` nominal record-sequence message client.
-It compares exact generated constructor data and typed bodies; `--write`
-regenerates them through the same producers. `Tests.PlainConstruction` checks
+It also covers the reusable two-batch client. It compares exact generated
+constructor data, typed bodies, both whole constructed views and their shared
+root connection; `--write` regenerates them through the same producers. The
+views and connection use `checks/GenerateReusableAggregate.lean` and the common
+connection generator, then the complete connection module is kernel-checked. `Tests.PlainConstruction` checks
 admission, retained real outputs, successful and false-input execution,
 wrong nominal and differently typed empty messages, and refused plain queries.
 The library-root theorems are in `ZkcExamples.Construction.TableMembership`;

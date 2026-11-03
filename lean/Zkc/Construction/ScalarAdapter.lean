@@ -13,14 +13,14 @@ public import Zkc.Construction.DomainExecutionLaws
 This module proves representation and calculation equations against the shared
 nominal evaluator. It is not an instruction interpreter. Transcript capabilities
 are deliberately outside this data adapter: their histories, dynamic occurrences
-and handlers need a separate correspondence before the legacy byte claims can
+and handlers need a separate correspondence before the scalar byte claims can
 use Domain execution. No equality of those games is assumed here. -/
 set_option autoImplicit false
 namespace Zkc.Construction.Uniform.DomainAdapter
 open Zkc.Source
 variable {F G : Type}
 
-/-- Embed representable legacy operands without erasing nominal domains.
+/-- Embed representable local operands without erasing nominal domains.
 A transcript is a capability, not an operand encoding. -/
 def embedData : Value F G → Option (Domain.Value (Structured.uniformCarriers F G))
   | .data (.boolean value) => some (.data (.boolean value))
@@ -28,16 +28,18 @@ def embedData : Value F G → Option (Domain.Value (Structured.uniformCarriers F
   | .data (.group domain value) => some (.data (.group domain value))
   | .index value => some (.data (.index value))
   | .vector domain values => some (.data (.vector domain values))
+  | .custody slot token => some (.custody slot token)
   | .indices coordinates => some (.indices coordinates)
   | .transcript _ | .unsupported => none
 
-/-- Read only the selected legacy ABI out of the nominal value envelope. -/
+/-- Read only the selected local scalar ABI out of the nominal value envelope. -/
 def readbackData : Domain.Value (Structured.uniformCarriers F G) → Option (Value F G)
   | .data ⟨.boolean, _, value⟩ => some (.data (.boolean value))
   | .data ⟨.field domain, _, value⟩ => some (.data (.field domain value))
   | .data ⟨.group domain, _, value⟩ => some (.data (.group domain value))
   | .data ⟨.index, _, value⟩ => some (.index value)
   | .data ⟨.vector domain, _, values⟩ => some (.vector domain values)
+  | .custody slot token => some (.custody slot token)
   | .indices coordinates => some (.indices coordinates)
   | _ => none
 
@@ -58,7 +60,7 @@ theorem readback_embed {value : Value F G}
     (ok : embedData value = some encoded) : readbackData encoded = some value := by
   cases value with
   | data payload => cases payload <;> cases ok <;> rfl
-  | index | vector | indices => cases ok; rfl
+  | index | vector | custody | indices => cases ok; rfl
   | transcript | unsupported => cases ok
 
 theorem embed_injective {first second : Value F G}
@@ -77,7 +79,7 @@ theorem decode_embed (ty : Structured.Ty) {value : Value F G}
       cases payload <;> cases ok <;> cases ty <;>
         simp [Domain.Value.decode, Domain.Payload.value, Value.decode, eq_comm]
       all_goals split <;> subst_vars <;> simp_all
-  | index | vector =>
+  | index | vector | custody =>
       cases ok
       cases ty <;> simp [Domain.Value.decode, Domain.Payload.value, Value.decode, eq_comm]
       all_goals split <;> subst_vars <;> simp_all
@@ -108,21 +110,31 @@ theorem decodeValues_embed (tys : List Structured.Ty) {values : List (Value F G)
               | cons ty tys =>
                   simp only [Domain.decodeValues, decodeValues, decode_embed ty head, ih tys tail]
 
-theorem encode_embed (ty : Structured.Ty) (data : dataType ty = true)
+theorem encode_local_embed (ty : Structured.Ty) (data : localType ty = true)
     (value : Structured.assignment F G ty) :
     embedData (Value.encode ty value) = Domain.Value.encode ty value := by
-  cases ty <;> simp_all [dataType, Value.encode, embedData, Domain.Value.encode,
+  cases ty <;> simp_all [localType, dataType, Structured.Ty.isCustody, Value.encode, embedData, Domain.Value.encode,
     Domain.Payload.ofValue, Structured.Ty.isHandle]
 
-theorem encodeValues_embed {tys : List Structured.Ty}
-    (values : Values (Structured.assignment F G) tys) (data : tys.all dataType = true) :
+theorem encodeValues_local_embed {tys : List Structured.Ty}
+    (values : Values (Structured.assignment F G) tys) (data : tys.all localType = true) :
     embedValues (encodeValues values) = Domain.encodeValues values := by
   induction values with
   | nil => rfl
   | cons head tail ih =>
       simp only [List.all_cons, Bool.and_eq_true] at data
-      simp only [encodeValues, embedValues_cons, encode_embed _ data.1,
+      simp only [encodeValues, embedValues_cons, encode_local_embed _ data.1,
         ih data.2, Domain.encodeValues]
+
+theorem encode_embed (ty : Structured.Ty) (data : dataType ty = true)
+    (value : Structured.assignment F G ty) :
+    embedData (Value.encode ty value) = Domain.Value.encode ty value :=
+  encode_local_embed ty (localType_of_data data) value
+
+theorem encodeValues_embed {tys : List Structured.Ty}
+    (values : Values (Structured.assignment F G) tys) (data : tys.all dataType = true) :
+    embedValues (encodeValues values) = Domain.encodeValues values :=
+  encodeValues_local_embed values (localTypes_of_data data)
 
 /-- Preserve stopped calculations exactly. An unrepresentable returned tuple
 is refused by this partial ABI, rather than silently projected. -/
@@ -150,7 +162,7 @@ theorem operationOn_calculation {I : PIR.Signature}
   exact Calculation.operation_eq observations table calculation arguments bodies
 
 /-- The actual Domain calculation runner, including malformed operand refusal,
-commutes with the legacy operand adapter on the declared scalar/vector results.
+commutes with the local operand adapter on the declared scalar/vector results.
 The restriction is structural eligibility, never a relation-validity premise. -/
 theorem calculate_embed (calculation : Calculation)
     (resultsData : calculation.op.results.all dataType = true)
@@ -194,7 +206,7 @@ theorem callHelper_checked_signature (program : Structured.Program) (name : Stri
     (signature : ∀ entry : Structured.HelperDefinition (Structured.assignment F G) Structured.closedInterface,
       (Domain.helperTable (Structured.ringModel F G) program).find? (fun found => found.helper.name == name) =
         some entry → entry.helper.outputs.map ValueSort.data = declared ∧
-          entry.helper.outputs.all dataType = true)
+          entry.helper.outputs.all localType = true)
     {values : List (Value F G)} {encoded : Domain.Environment (Structured.uniformCarriers F G)}
     (ok : embedValues values = some encoded) :
     Domain.callHelper (Structured.ringModel F G) program name declared encoded =
@@ -217,7 +229,7 @@ theorem callHelper_checked_signature (program : Structured.Program) (name : Stri
           cases result : Construction.closedOutcome (entry.invoke arguments) with
           | stopped reason => simp only [result, embedOutcome]
           | returned returned =>
-              simp only [result, embedOutcome, encodeValues_embed returned eligible]
+              simp only [result, embedOutcome, encodeValues_local_embed returned eligible]
               cases Domain.encodeValues returned <;> rfl
 
 end Execution

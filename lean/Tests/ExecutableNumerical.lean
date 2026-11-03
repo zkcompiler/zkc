@@ -21,6 +21,31 @@ an operand count or kind other than the mask's and a vector of another length.
 namespace Tests.ExecutableNumerical
 open Zkc.Construction Zkc.Executable Zkc.Algebra.RingExpression
 
+section DecimalCount
+open Numerical
+
+/-- The transparent counter agrees with the standard decimal formatter for
+all structural bounds, including zero. -/
+theorem digitCountWith_eq_length (fuel value : Nat) (suffix : List Char) :
+    digitCountWith fuel value + suffix.length = (Nat.toDigitsCore 10 fuel value suffix).length := by
+  induction fuel generalizing value suffix with
+  | zero => simp [digitCountWith, Nat.toDigitsCore]
+  | succ fuel ih =>
+      simp only [digitCountWith, Nat.toDigitsCore]
+      by_cases small : value < 10
+      · have zero : value / 10 = 0 := Nat.div_eq_of_lt small
+        simp [small, zero, Nat.add_comm]
+      · have nonzero : value / 10 ≠ 0 := by omega
+        simp only [small, nonzero, ite_false]
+        rw [← ih]
+        simp [Nat.add_assoc, Nat.add_comm]
+
+theorem digitCount_eq_length (value : Nat) : digitCount value = (Nat.toDigits 10 value).length := by
+  simpa only [digitCount, Nat.toDigits, List.length_nil, Nat.add_zero] using
+    digitCountWith_eq_length (value + 1) value []
+
+end DecimalCount
+
 /-- The plan the compiled Sumcheck fold carries: `low + r (high - low)` written
 as `in0 + in2 * (in1 + (-in0))`, with the challenge `in2` a broadcast scalar. -/
 def interpolation : String :=

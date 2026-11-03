@@ -44,20 +44,20 @@ theorem changed_callback_rejected : changedCallback ≠ Goals.Step.body := by
 
 /-- An unchanged source name and ABI cannot associate an altered implementation. -/
 private def changedLine : CheckedDefinition :=
-  ⟨GkrSourceBodies.helper69Helper.name, GkrSourceBodies.helper69Helper.kind,
-    GkrSourceBodies.helper69Helper.inputs, GkrSourceBodies.helper69Helper.outputs,
+  ⟨GkrSourceBodies.helper102Helper.name, GkrSourceBodies.helper102Helper.kind,
+    GkrSourceBodies.helper102Helper.inputs, GkrSourceBodies.helper102Helper.outputs,
     (.stop .abort : Region dialect _ _).erase, .stop .abort,
     (Region.stop .abort : Region dialect _ _).elaborate_erase⟩
 
 theorem changed_line_not_associated :
-    ¬ BodyIn [changedLine] GkrSourceBodies.helper69Helper Goals.Line.body := by
+    ¬ BodyIn [changedLine] GkrSourceBodies.helper102Helper Goals.Line.body := by
   rintro ⟨selected, member, signature, same⟩
   simp only [List.mem_singleton] at member
   subst selected
   cases same
 
 /-- The source-selected callback association is checked independently of its math. -/
-example : HelperCallbacks.Selected GkrSourceBodies.helper69Body none Goals.lineCallback_selection :=
+example : HelperCallbacks.Selected GkrSourceBodies.helper102Body none Goals.lineCallback_selection :=
   Goals.lineCallback_association
 
 /-- Every returned coordinate matters, even when the coefficient list is right. -/
@@ -75,7 +75,7 @@ theorem wrong_cursor_rejected :
   omega
 
 /-- The finite shift law retains the complete previous-value/cursor state. -/
-example : invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper86Helper
+example : invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper99Helper
     (Goals.ShiftDomain.pack ⟨[2, 4, 0, 7, 9, 0]⟩ |>.append
       ((Goals.ShiftState.pack ⟨[13], 17, 0⟩).append (Goals.ShiftCaptures.pack ⟨3⟩))) =
       .done (Goals.ShiftState.pack ⟨[13, 0, 2, 4, 0, 7, 9], 0, 6⟩) := by
@@ -103,14 +103,14 @@ example (table : Evaluation.MeaningsOn model.toCarriers closedInterface) :
 
 private def stoppingZero (reason : PIR.Stop) :
     Evaluation.MeaningsOn model.toCarriers closedInterface :=
-  [⟨GkrSourceBodies.scopedHelper74Helper, fun _ => .halt reason⟩]
+  [⟨GkrSourceBodies.helper87Helper, fun _ => .halt reason⟩]
 
 /-- Every dependency stop reason survives the reached row-boundary callback. -/
 example (reason : PIR.Stop) :
     Goals.ShiftStep.run model (stoppingZero reason) [] 7 0 11 3 = .halt reason := by rfl
 
 theorem actual_quadratic :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [0, 0] (.cons [1, 1] (.cons 2 .nil)))) =
         .done (.cons [1, 3, 4] .nil) := by
   rw [coefficients_correspond 2 cubeValues [0, 0] [1, 1] cubeTable decoded
@@ -118,7 +118,7 @@ theorem actual_quadratic :
   norm_num [row, List.range_succ, coeff_add, coeff_mul_X, coeff_X_pow, coeff_one]
 
 theorem wrong_highest_rejected :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
       (.cons cubeValues (.cons [0, 0] (.cons [1, 1] (.cons 2 .nil)))) ≠
         .done (.cons [1, 3, 5] .nil) := by
   rw [actual_quadratic]
@@ -128,7 +128,7 @@ theorem wrong_highest_rejected :
   norm_num at impossible
 
 /-- Empty counted contraction retains the scalar coefficient. -/
-example : invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper69Helper
+example : invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper102Helper
     (.cons [7] (.cons [] (.cons [] (.cons 0 .nil)))) = .done (.cons [7] .nil) := by
   rw [line_coefficients (F := ℚ) [7] [] [] 0 rfl (by decide +kernel)
     (by decide +kernel) (by decide +kernel)]

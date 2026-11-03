@@ -171,9 +171,16 @@ def lex (characters : List Char) : Except Refusal (List Token) :=
 def byteLength (characters : List Char) : Nat :=
   characters.foldl (fun total character => total + character.utf8Size) 0
 
-/-- The number of decimal digits of a natural number. -/
-def digitCount (value : Nat) : Nat :=
-  (Nat.toDigits 10 value).length
+/-- Decimal digit counting with a structural bound. This stays transparent to
+public kernel clients; `Nat.toDigits` uses a hidden implementation. -/
+def digitCountWith : Nat → Nat → Nat
+  | 0, _ => 0
+  | fuel + 1, value => if value < 10 then 1 else 1 + digitCountWith fuel (value / 10)
+
+/-- The number of decimal digits, including the one digit of zero. Each
+recursive step strictly reduces a value of at least ten, so `value + 1`
+is a sufficient structural bound. -/
+def digitCount (value : Nat) : Nat := digitCountWith (value + 1) value
 
 /-- The UTF-8 length of the canonical text the tokens were read from: the
 compact form has no whitespace and no escapes. -/

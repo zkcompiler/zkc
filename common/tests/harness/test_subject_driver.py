@@ -390,3 +390,33 @@ def test_pair_validator_matches_complete_independent_export(driver_module, tmp_p
         result = capture.proof_artifacts(driver, subject, "compiler", tmp_path / "capture")
         assert result["pair"][2] == result["exported"]
         assert (tmp_path / "capture/pair.json").read_text() == result["pair_text"]
+
+
+@pytest.mark.parametrize(("exit_code", "reason", "accepted"), [
+    (1, "native-proof-correspondence", True),
+    (1, "native-proof-correspondence: native-transcript-correspondence: query", True),
+    (1, "native-proof-correspondence-extra: query", False),
+    (1, "other: native-proof-correspondence", False),
+    (1, "path/native-proof-correspondence", False),
+    (0, "native-proof-correspondence: query", False),
+])
+def test_native_mutations_require_the_exact_primary_diagnostic(
+        driver_module, tmp_path, monkeypatch, exit_code, reason, accepted):
+    from bridges.common.lean_render import CheckFailed
+
+    driver, _ = recording(driver_module, tmp_path)
+    driver.args.compiler = "compiler"
+    subject = SimpleNamespace(name="example", get=lambda *_: [])
+    kind = SimpleNamespace(stage="native", property="query identity",
+                           expected="native-proof-correspondence")
+    monkeypatch.setattr(driver_module.mutations, "kinds_for",
+                        lambda _: [("query-site", kind, lambda *_: ["mutated"])])
+    monkeypatch.setattr(driver, "run", lambda *_, **__: SimpleNamespace(
+        returncode=exit_code, stderr=reason + "\n"))
+    record = {}
+    if accepted:
+        driver.native_refusals(subject, {"candidate": "original", "exported": []}, record)
+        assert record["mutations"]["query-site"]["sites"][0]["reason"] == reason
+    else:
+        with pytest.raises(CheckFailed, match="native-refusal"):
+            driver.native_refusals(subject, {"candidate": "original", "exported": []}, record)

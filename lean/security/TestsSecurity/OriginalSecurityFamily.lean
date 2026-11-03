@@ -31,7 +31,7 @@ local instance : Field (model.Field field) := fieldLaw.out.toField
 
 def terminalZero (selection : Selection) (raw : List (model.Field field)) (scalar : model.Field field) :=
  SourceIteration.terminalCheck model selection raw
-  (SumcheckVerifierBodies.reduceReturnValues (SumcheckReferenceInstallation.state model (some []) (some scalar)))
+  (SumcheckVerifierBodies.reduceReturnValues (some 0) (SumcheckReferenceInstallation.state model (some []) (some scalar)))
 
 theorem zero_round_source (selection : Selection) (site : String) (raw : List (model.Field field))
     (scalar : model.Field field) (handle : Nat) :

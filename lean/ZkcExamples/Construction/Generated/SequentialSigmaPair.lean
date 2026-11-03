@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.Generated.SequentialSigmaPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:6b6b8fdffdb9eb2c66464d0a2f4b0b496e11c955c3ff40cf9dca6834c82472e6"
-  candidate := "sha256:8f3ce95d10f0f04971f51c08588ddbdaa2701c7370b412d143a0679ebf8571c0"
+  source := "sha256:2a8b6c45fb0d61d22febb1b5ec1410761abf53eb754816011221b068c1ac2d8d"
+  candidate := "sha256:cdeed68b38cf93eae470952b6afadc1689ca4f40a319048c546f19c5c8b45d7d"
   policy := ⟨"s7h6578616d706c6515h53657175656e7469616c5369676d61", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2, 3], [("apply_2_s0_label_6368616c6c656e6765", "apply_2_s0_label_64656c6976657279_0"), ("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -50,14 +50,19 @@ def participant : Participant where
   returned := [34]
   servicePorts := [⟨"service_5", "role00000000", 5, 5, "random.bls12-381.fr/0"⟩]
 
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [⟨"random.bls12-381.fr/0", "bls12-381.fr", ["draw"]⟩] }
+
 end ZkcExamples.Construction.Generated.SequentialSigmaPair.Producer
 
 namespace ZkcExamples.Construction.Generated.SequentialSigmaPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:6b6b8fdffdb9eb2c66464d0a2f4b0b496e11c955c3ff40cf9dca6834c82472e6"
-  candidate := "sha256:8f3ce95d10f0f04971f51c08588ddbdaa2701c7370b412d143a0679ebf8571c0"
+  source := "sha256:2a8b6c45fb0d61d22febb1b5ec1410761abf53eb754816011221b068c1ac2d8d"
+  candidate := "sha256:cdeed68b38cf93eae470952b6afadc1689ca4f40a319048c546f19c5c8b45d7d"
   policy := ⟨"s7h6578616d706c6515h53657175656e7469616c5369676d61", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2, 3], [("apply_2_s0_label_6368616c6c656e6765", "apply_2_s0_label_64656c6976657279_0"), ("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -101,6 +106,11 @@ def participant : Participant where
     ⟨.calculate .booleanAnd, [37, 41], [.data .boolean], []⟩,
     ⟨.calculate .booleanAnd, [19, 42], [.data .boolean], []⟩]
   returned := [43, 33]
+
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [] }
 
 end ZkcExamples.Construction.Generated.SequentialSigmaPair.Validator
 

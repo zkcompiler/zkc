@@ -358,11 +358,11 @@ def source (program : Program) (output : Output) : Except String String := do
       "  unfold " ++ step.name ++ " protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn\n" ++
       "  rw [invokeProtocol_cons_same]\n  unfold CheckedProtocol.denoteWithOn\n" ++
       "  rw [sourceProtocol0_body]\n  rfl\n\n"
-  text := text ++ "theorem library_call_binding (site : String) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :\n" ++
+  text := text ++ "theorem library_call_binding (site : String) (custody : Option Nat) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :\n" ++
     "    invokeProtocol (protocolPrefix (F := F) (G := G)) reduceDefinition.signature (({} : ProtocolContext).enter site [0, 1]) 1\n" ++
-    "      (.cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil))))))) =\n" ++
+    "      (.cons none (.cons none (.cons none (.cons custody (.cons point (.cons claim (.cons count (.cons service .nil)))))))) =\n" ++
     "      realizeCall payload maximum (({} : ProtocolContext).enter site [0, 1]) reduceDefinition.outputScopes\n" ++
-    "      (.cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil))))))) := by\n" ++
+    "      (.cons none (.cons none (.cons none (.cons custody (.cons point (.cons claim (.cons count (.cons service .nil)))))))) := by\n" ++
     "  unfold protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn\n" ++
     "  rw [invokeProtocol_cons_same]\n  unfold CheckedProtocol.denoteWithOn\n  rw [sourceProtocol0_body]\n  rfl\n\n"
   let inputParameters ← parameterText inputBinders

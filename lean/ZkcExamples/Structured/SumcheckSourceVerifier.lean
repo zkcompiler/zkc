@@ -62,7 +62,7 @@ def childContext : ProtocolContext :=
 /-- Foreign inputs to the child are absent at V; no prover prerequisite is imposed. -/
 def childInputs (claim : Option F) (count service : Option Nat) :
     Values (Component (assignment F G)) SumcheckSourceBodies.reduceSignature.inputs :=
-  .cons none (.cons none (.cons none (.cons (some []) (.cons claim (.cons count (.cons service .nil))))))
+  .cons none (.cons none (.cons none (.cons (some 0) (.cons (some []) (.cons claim (.cons count (.cons service .nil)))))))
 
 /-- The call and terminal suffix are recovered from the actual source tree. -/
 abbrev reduceCall : CallOccurrence SumcheckSourceBodies.runBody :=
@@ -77,7 +77,7 @@ def callEnvironment (rawV : Option (List F)) (claim : Option F) (count service :
         (sourceRootInputs (G := G) rawV claim count service).get .nil)
         (.cons (some 1) .nil)) .nil)
       (Values.absent (assignment F G) SumcheckSourceBodies.tableHelper.outputs)) .nil)
-      (.cons (some []) (.cons claim .nil))) .nil
+      (.cons (some 0) (.cons (some []) (.cons claim .nil)))) .nil
 
 /-- Complete Source invocation in an arbitrary caller context, including its
 actual child label, retained rawV and terminal owned by the original self. -/
@@ -106,6 +106,7 @@ theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
     cases checked with
     | cons value rest => cases rest; rfl
 
+set_option backward.isDefEq.respectTransparency false in
 /-- The complete root retains rawV and invokes its actual terminal under the
 caller's immutable participant identity and mapped child context. -/
 theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
@@ -115,15 +116,37 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
       ctx self (sourceRootInputs rawV claim count service) =
       (invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature
         (ctx.enter "label_726564756365" [0, 1]) self (childInputs claim count service)).bind
-        fun result => SumcheckVerifierTerminal.actualOwnedCheck unit self rawV
+        fun result => SumcheckVerifierTerminal.ownedCheck (G := G) unit self rawV
           (result.get (.there (.there (.there (.there .here)))))
-          (result.get (.there (.there (.there (.there (.there .here)))))) := by
-  rw [verifier_context_optional ctx self verifier separate,
-    reduce_invoke_plain (ctx.enter "label_726564756365" [0, 1]) self (childInputs claim count service)]
-  erw [SumcheckVerifierPrelude.reduce_optional unit helperBodies claimBodies (ctx.enter "label_726564756365" [0, 1])
-    self verifier separate SumcheckSourceNormalForms.reduceMaximum none none none (some []) claim count service]
-  refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
-  rfl
+          (result.get (.there (.there (.there (.there (.there .here))))))
+          (result.get (.there (.there (.there (.there (.there (.there .here))))))) := by
+  subst self
+  refine (SumcheckSourceNormalForms.verifier_invoke (F := F) (G := G) helperBodies claimBodies
+    ctx _ rfl separate rawV claim count service).trans ?_
+  unfold SumcheckSourceNormalForms.verifierProcess
+  rw [SumcheckPendingLaws.pending_plain_owned unit claimBodies]
+  unfold childInputs
+  erw [SumcheckSourceNormalForms.reduce_verifierReduce_invoke (F := F) (G := G)
+    helperBodies claimBodies (ctx.enter "label_726564756365" [0, 1]) separate]
+  cases claim with
+  | none => rfl
+  | some claim =>
+    simp only [PIR.Process.bind, PIR.Process.bind_assoc]
+    apply congrArg (PIR.Process.bind _)
+    funext result
+    simp only [Values.get]
+    change (SumcheckVerifierTerminal.ownedCheck (G := G) unit (ctx.roles 1) rawV
+      (result.get (.there (.there (.there (.there .here)))))
+      (result.get (.there (.there (.there (.there (.there .here))))))
+      (result.get (.there (.there (.there (.there (.there (.there .here)))))))).bind _ = _
+    conv_rhs => rw [← PIR.Process.bind_done
+      (SumcheckVerifierTerminal.ownedCheck (G := G) unit (ctx.roles 1) rawV
+        (result.get (.there (.there (.there (.there .here)))))
+        (result.get (.there (.there (.there (.there (.there .here))))))
+        (result.get (.there (.there (.there (.there (.there (.there .here))))))))]
+    apply congrArg (PIR.Process.bind _)
+    funext checked
+    cases checked with | cons value rest => cases rest; rfl
 
 /-- Root construction skips P work and passes the unchanged raw V vector to check. -/
 theorem verifier_linked (rawV : Option (List F)) (claim : Option F)
@@ -131,9 +154,10 @@ theorem verifier_linked (rawV : Option (List F)) (claim : Option F)
     program.participant F G 1 (sourceRootInputs rawV claim count service) =
       (invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature
         childContext 1 (childInputs claim count service)).bind fun result =>
-          SumcheckVerifierTerminal.actualOwnedCheck unit 1 rawV
+          SumcheckVerifierTerminal.ownedCheck unit 1 rawV
             (result.get (.there (.there (.there (.there .here)))))
-            (result.get (.there (.there (.there (.there (.there .here)))))) :=
+            (result.get (.there (.there (.there (.there (.there .here))))))
+            (result.get (.there (.there (.there (.there (.there (.there .here))))))) :=
   (unit.protocolTable_forgetSites (F := F) (G := G)
     SumcheckSourceBodies.runSignature {} 1 (sourceRootInputs rawV claim count service)).trans
     (root_context_expansion {} 1 rfl (by decide) rawV claim count service)

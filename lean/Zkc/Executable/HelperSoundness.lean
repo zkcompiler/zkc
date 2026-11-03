@@ -243,6 +243,17 @@ theorem decodeValues_encodeValues :
       simp only [encodeValues, decodeValues, Value.decode_encode data.1, decodeValues_encodeValues rest data.2]
       rfl
 
+/-- Local helper frames additionally carry exact-slot custody coordinates. -/
+theorem decodeValues_encodeLocalValues :
+    ∀ {tys : List Ty} (values : Values (assignment F G) tys), tys.all localType = true →
+      decodeValues tys (encodeValues values) = some values
+  | [], .nil, _ => rfl
+  | ty :: tys, .cons value rest, data => by
+      simp only [List.all_cons, Bool.and_eq_true] at data
+      simp only [encodeValues, decodeValues, Value.decode_encode_local data.1,
+        decodeValues_encodeLocalValues rest data.2]
+      rfl
+
 /-- Arguments of the sorts of data types are encodings of structured values. -/
 theorem sorted_encoded :
     ∀ {tys : List Ty} {arguments : List (Value F G)}, tys.length = arguments.length →
@@ -490,6 +501,23 @@ theorem implements_sound (table : Structured.Meanings F G) {op : Structured.Op} 
               exact sound_primitive table _ arguments callbacks
           | _ => simp [implements] at implemented
       | _ => simp [implements] at implemented
+  | createUnit slot | passUnit slot | consumeUnit slot =>
+      cases resolved with
+      | custody transfer actual =>
+          cases transfer <;> simp [implements] at implemented
+          all_goals
+            subst actual
+            rcases arguments with _ | ⟨token, _ | _⟩
+            cases callbacks
+            first
+            | rfl
+            | change (if slot = slot then PIR.Outcome.returned [Value.custody slot 0]
+                else .stopped .refused) = (.returned [.custody slot 0] : PIR.Outcome (List (Value F G)))
+              simp only [ite_true]
+            | change (if slot = slot then PIR.Outcome.returned []
+                else .stopped .refused) = (.returned [] : PIR.Outcome (List (Value F G)))
+              simp only [ite_true]
+      | _ => simp [implements, Calculation.ofOp?] at implemented
   | _ =>
       cases resolved with
       | calculate calculation =>
@@ -1378,7 +1406,7 @@ theorem checkHelper_sound {definitions : List CheckedDefinition} (distinct : (de
               subst named
               by_cases signature : function.inputs.map (·.2.sort) = definition.inputs.map .data ∧
                   function.results.map (·.sort) = definition.outputs.map .data ∧
-                  (function.inputs.map (·.1)).Nodup ∧ definition.inputs.all dataType = true
+                  (function.inputs.map (·.1)).Nodup ∧ definition.inputs.all localType = true
               · rw [ite_eq_left_of_eq_true _ _ (eq_true signature)] at accepted
                 obtain ⟨inputSorts, resultSorts, formalsDistinct, data⟩ := signature
                 intro callee calleeEq arguments length sorted
@@ -1390,7 +1418,7 @@ theorem checkHelper_sound {definitions : List CheckedDefinition} (distinct : (de
                 obtain ⟨values, encoded⟩ := sorted_encoded (tys := definition.inputs) (arguments := arguments)
                   (by rw [← length]; simpa using formalsLength.symm) sorted
                 subst encoded
-                have decoded := decodeValues_encodeValues values data
+                have decoded := decodeValues_encodeLocalValues values data
                 have callEq : callHelper (tableOf F G definitions) definition.name (encodeValues values) =
                     mapOutcome encodeValues (Construction.closedOutcome (definition.body.denote
                       (Evaluation.meaning SiteObservations.closed (tableOf F G (definitions.take index))) values.get)) := by

@@ -7,7 +7,7 @@ public import Zkc.Source.Structured.Admission
 
 /-! Structural construction admission for explicit plain and Fiat–Shamir profiles.
 
-The plain rule carries data and loop indices only. The Fiat–Shamir rule tracks
+The plain rule carries local values, including custody, and loop indices. The Fiat–Shamir rule tracks
 its affine transcript and pending observations, admitting recursively typed data.
 Both retain the exact declared return ABI. Nominal property consumers prove full
 Process equations through `Domain.Correspondence`; this check alone is not a
@@ -46,8 +46,15 @@ structure CheckState where
 def CheckState.path (state : CheckState) (reference : Nat) : Option (List Nat) :=
   state.paths.lookup reference
 
+/-- Wire payload eligibility excludes all handles, including custody. -/
 def isData : Option ValueSort → Bool
   | some (.data ty) => !ty.isHandle
+  | _ => false
+
+/-- Local frames also carry nominal custody; other handles remain excluded.
+This structural transport check does not establish ledger freshness or linearity. -/
+def isLocalValue : Option ValueSort → Bool
+  | some (.data ty) => ty.isCustody || !ty.isHandle
   | _ => false
 
 /-- The transcript occurrence carries exactly the enclosing induction values. -/
@@ -65,8 +72,8 @@ def checkFrom (context : Context) : CheckState → List Instruction → Except S
 /-- One step of the rule. A received message is observed next with its message
 occurrence. A challenge needs no pending observation, consumes the current
 state, carries a selected query occurrence, and its delivery is observed next.
-Calculations, helper calls and guards read data only and may separate a
-challenge from its delivery. A loop carries the current transcript exactly once,
+Calculations and guards read ordinary data; helper calls also carry local
+custody. These steps may separate a challenge from its delivery. A loop carries the current transcript exactly once,
 starts and ends its body with nothing pending, and yields its final state.
 Every other operation refuses. -/
 def checkStep (context : Context) (state : CheckState) : Instruction → Except String CheckState
@@ -142,8 +149,8 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
       match state.pending with
       | .observe _ _ => .error "construction-pending"
       | _ =>
-          if operands.all (fun operand => isData state.sorts[operand]?) ∧
-              results.all (fun result => isData (some result)) then
+          if operands.all (fun operand => isLocalValue state.sorts[operand]?) ∧
+              results.all (fun result => isLocalValue (some result)) then
             .ok { state with sorts := state.sorts ++ results }
           else .error "construction-call"
   | ⟨.guard _, [condition], [], []⟩ =>
@@ -159,7 +166,7 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
           if state.sorts[count]? = some (.data .index) ∧
               initial.map (state.sorts[·]?) = results.map some ∧
               initial.count state.current = 1 ∧
-              (initial.eraseIdx position).all (fun operand => isData state.sorts[operand]?) ∧
+              (initial.eraseIdx position).all (fun operand => isLocalValue state.sorts[operand]?) ∧
               yielded.length = initial.length then
             match checkFrom context
                 { state with
@@ -184,15 +191,15 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
   | _ => .error "construction-shape"
 end
 
-/-- The complete rule for one exported validator. Inputs are data followed by
+/-- The complete rule for one exported validator. Inputs are local values followed by
 one host transcript of the selected suite; the selected query sites are
 distinct and each is challenged at exactly one exported operation; nothing
 remains pending, the last returned value is the final transcript state and the
-other returned values are data matching the declared outputs. -/
+other returned values are local values matching the declared outputs. -/
 def checkFiatShamir (context : Context) (participant : Participant) : Except String Unit :=
   match participant.inputs.getLast? with
   | some (.transcript suite) =>
-      if suite = context.suite ∧ participant.inputs.dropLast.all (fun sort => isData (some sort)) then
+      if suite = context.suite ∧ participant.inputs.dropLast.all (fun sort => isLocalValue (some sort)) then
         match checkFrom context ⟨participant.inputs, participant.inputs.length - 1, .none, [], [], []⟩
             participant.instructions with
         | .ok final =>
@@ -200,7 +207,7 @@ def checkFiatShamir (context : Context) (participant : Participant) : Except Str
                 context.draws.all (fun draw => final.seen.contains draw.1) then
               if final.pending = .none ∧ participant.returned.getLast? = some final.current ∧
                   participant.returned.map (final.sorts[·]?) = participant.outputs.map some ∧
-                  participant.returned.dropLast.all (fun index => isData final.sorts[index]?) then
+                  participant.returned.dropLast.all (fun index => isLocalValue final.sorts[index]?) then
                 .ok ()
               else .error "construction-final"
             else .error "construction-draws"
@@ -209,7 +216,7 @@ def checkFiatShamir (context : Context) (participant : Participant) : Except Str
   | _ => .error "construction-inputs"
 
 
-/-- A plain frame carries only data and the enclosing induction references.
+/-- A plain frame carries local values and the enclosing induction references.
 There is no transcript reference or pending transcript observation. -/
 structure PlainState where
   sorts : List ValueSort
@@ -236,12 +243,12 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
   | ⟨.calculate calculation, operands, results, []⟩ =>
       if operands.map (state.sorts[·]?) = calculation.op.arguments.map (some ∘ .data) ∧
           results = calculation.op.results.map .data ∧
-          results.all (fun sort => isData (some sort)) then
+          results.all (fun sort => isLocalValue (some sort)) then
         .ok { state with sorts := state.sorts ++ results }
       else .error "construction-plain-calculation"
   | ⟨.call _, operands, results, []⟩ =>
-      if operands.all (fun operand => isData state.sorts[operand]?) ∧
-          results.all (fun sort => isData (some sort)) then
+      if operands.all (fun operand => isLocalValue state.sorts[operand]?) ∧
+          results.all (fun sort => isLocalValue (some sort)) then
         .ok { state with sorts := state.sorts ++ results }
       else .error "construction-plain-call"
   | ⟨.guard _, [condition], [], []⟩ =>
@@ -260,7 +267,7 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
       let fresh := state.sorts.length
       if state.sorts[count]? = some (.data .index) ∧
           initial.map (state.sorts[·]?) = results.map some ∧
-          results.all (fun sort => isData (some sort)) ∧ yielded.length = results.length then
+          results.all (fun sort => isLocalValue (some sort)) ∧ yielded.length = results.length then
         match checkPlainFrom context self peer
             ⟨state.sorts ++ .data .index :: results, state.inductions ++ [fresh]⟩ body with
         | .ok final =>
@@ -275,11 +282,11 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
 end
 
 def checkPlain (context : Context) (self peer : Nat) (participant : Participant) : Except String Unit := do
-  if !participant.inputs.all (fun sort => isData (some sort)) then
+  if !participant.inputs.all (fun sort => isLocalValue (some sort)) then
     throw "construction-plain-inputs"
   let final ← checkPlainFrom context self peer ⟨participant.inputs, []⟩ participant.instructions
   if participant.returned.map (final.sorts[·]?) = participant.outputs.map some ∧
-      participant.outputs.all (fun sort => isData (some sort)) then return ()
+      participant.outputs.all (fun sort => isLocalValue (some sort)) then return ()
   else throw "construction-plain-final"
 
 /-- Profile admission follows the actual ABI. Plain checks never append, consume

@@ -291,44 +291,52 @@ def checkTable : ReferenceLaw model [.vector domain, .vector domain, .field doma
           exact checkTable_body model domain bindings table xs point claim premises.1 premises.2.1
             premises.2.2.1 premises.2.2.2
 
+def terminalInputs (slot : String) (xs : List (model.Field domain)) (token : CustodyToken)
+    (point : List (model.Field domain)) (claim : model.Field domain) :
+    Values model.Value [.vector domain, .resourceUnit slot, .vector domain, .field domain] :=
+  .cons xs (.cons token (.cons point (.cons claim .nil)))
+
 set_option backward.isDefEq.respectTransparency false in
-def check : ReferenceLaw model [.vector domain, .vector domain, .field domain] [.boolean] where
-  body := checkBody domain bindings
+def check (slot : String) : ReferenceLaw model [.vector domain, .resourceUnit slot, .vector domain, .field domain] [.boolean] where
+  body := checkBody domain slot bindings
   Requires table args :=
     let xs := args.get .here
-    let point := args.get (.there .here)
+    let point := args.get (.there (.there .here))
     point.length < indexLimit ∧
     invoke table (shapeHelper domain bindings) (tableValues model domain xs point.length 1) =
       primitiveOutcome ((shape model domain bindings).reference (tableValues model domain xs point.length 1)) ∧
-    (HasShape xs point.length 1 → invoke table (checkTableHelper domain bindings) args =
-      primitiveOutcome ((checkTable model domain bindings).reference args))
+    (HasShape xs point.length 1 → invoke table (checkTableHelper domain bindings)
+      (checkInputs model domain xs point (args.get (.there (.there (.there .here))))) =
+      primitiveOutcome ((checkTable model domain bindings).reference
+        (checkInputs model domain xs point (args.get (.there (.there (.there .here)))))))
   reference args := .returned (boolResult model (decide
-    (HasShape (args.get .here) (args.get (.there .here)).length 1 ∧
-      (Zkc.Polynomial.Multilinear.restrictPrefixValues (args.get .here) (args.get (.there .here))).sum =
-        args.get (.there (.there .here)))))
+    (HasShape (args.get .here) (args.get (.there (.there .here))).length 1 ∧
+      (Zkc.Polynomial.Multilinear.restrictPrefixValues (args.get .here) (args.get (.there (.there .here)))).sum =
+        args.get (.there (.there (.there .here))))))
   valid table args premises := by
     cases args with
     | cons xs rest => cases rest with
-      | cons point rest => cases rest with
-        | cons claim rest =>
-          cases rest
-          change point.length < indexLimit ∧ _ at premises
-          simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, Region.denote,
-            Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
-            Values.get_cons, get_cons_here, get_cons_there, Values.get, prepend_empty, prepend_one, Environment.push,
-            SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-            Evaluation.invokeCallbackOn, Values.split]
-          simp only [Primitive.evaluateOn, premises.1, show 1 < indexLimit by decide +kernel,
-            ite_true, primitiveOutcome, PIR.Process.bind, Values.get_cons, get_cons_here, get_cons_there, Values.get, prepend_one,
-            Environment.push]
-          simp only [Values.get_cons, get_cons_here, get_cons_there, Values.get, tableValues] at premises
-          rw [premises.2.1]
-          by_cases valid : HasShape xs point.length 1
-          · simp only [shape, tableValues, Values.get_cons, get_cons_here, get_cons_there, Values.get, valid, decide_true, boolResult,
-              primitiveOutcome, PIR.Process.bind, ite_true, prepend_one, Environment.push]
-            rw [premises.2.2 valid]
-            simp [checkTable, checkInputs, checkTableOutcome, valid, primitiveOutcome,
-              boolResult, Values.get_cons, get_cons_here, get_cons_there, Values.get, PIR.Process.bind]
-          · simp [shape, tableValues, Values.get_cons, get_cons_here, get_cons_there, Values.get, valid, boolResult, primitiveOutcome, PIR.Process.bind]
+      | cons token rest => cases rest with
+       | cons point rest => cases rest with
+         | cons claim rest =>
+           cases rest
+           change point.length < indexLimit ∧ _ at premises
+           simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, Region.denote,
+             Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+             Values.get_cons, get_cons_here, get_cons_there, Values.get, prepend_empty, prepend_one, Environment.push,
+             SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+             Evaluation.invokeCallbackOn, Values.split]
+           simp only [Primitive.evaluateOn, premises.1, show 1 < indexLimit by decide +kernel,
+             ite_true, primitiveOutcome, PIR.Process.bind, Values.get_cons, get_cons_here, get_cons_there, Values.get, prepend_one,
+             Environment.push]
+           simp only [Values.get_cons, get_cons_here, get_cons_there, Values.get, tableValues, checkInputs] at premises
+           rw [premises.2.1]
+           by_cases valid : HasShape xs point.length 1
+           · simp only [shape, tableValues, Values.get_cons, get_cons_here, get_cons_there, Values.get, valid, decide_true, boolResult,
+               primitiveOutcome, PIR.Process.bind, ite_true, prepend_one, Environment.push]
+             rw [premises.2.2 valid]
+             simp [checkTable, checkInputs, checkTableOutcome, valid, primitiveOutcome,
+               boolResult, Values.get_cons, get_cons_here, get_cons_there, Values.get, PIR.Process.bind]
+           · simp [shape, tableValues, Values.get_cons, get_cons_here, get_cons_there, Values.get, valid, boolResult, primitiveOutcome, PIR.Process.bind]
 
 end Zkc.Source.Structured.ReferenceLibrary.Multilinear.Admission

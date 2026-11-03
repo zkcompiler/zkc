@@ -34,7 +34,7 @@ theorem maximum_small (selection : Selection) : maximum selection < 64 :=
 theorem terminal_equation (selection : Selection) (original : List (model.Field field))
     (reference : PrefixState (model.Field field) Frame 0) (small : reference.point.length < 64) :
     terminalCheck model selection original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots) =
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots) =
       if original.length < indexLimit then .done (some (decide
         (Multilinear.Admission.HasShape original reference.point.length 1 ∧
           (Zkc.Polynomial.Multilinear.restrictPrefixValues original reference.point).sum = reference.scalar)))
@@ -46,7 +46,7 @@ theorem terminal_invalid (selection : Selection) (original : List (model.Field f
     (referenceShape : reference.original.length = 2^count) (small : count < 64)
     (invalid : original.length ≠ 2^count) :
     PIR.Yields (fun out => out = some false) (terminalCheck model selection original
-      (SumcheckVerifierBodies.reduceReturnValues (encode model 0 reference).slots)) := by
+      (SumcheckVerifierBodies.reduceReturnValues (some 0) (encode model 0 reference).slots)) := by
   exact SourceFamily.terminal_invalid model (SourceFamilySelections.installed selection) original reference count referenceShape small invalid
 
 theorem one_unbounded (selection : Selection) (site : String)

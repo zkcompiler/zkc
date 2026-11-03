@@ -27,9 +27,9 @@ def advance (state : State F) (low high challenge : F) : State F :=
 def embedded (state : State F) : Values (Component (assignment F G)) repeatState :=
   SumcheckVerifierLaws.embedV (some state.point, some state.scalar)
 
-/-- All six original optional output slots, in the source return order. -/
+/-- All seven original optional output slots, in the source return order. -/
 def output (state : State F) : Values (Component (assignment F G)) reduceOutputs :=
-  reduceReturnValues (embedded state)
+  reduceReturnValues (some 0) (embedded state)
 
 noncomputable def step (context : Realizations.Sumcheck.Original.Context) (index : Nat)
     (state : State F) : PIR.Process (OriginalSumcheckLibrary.signature (F := F) (G := G)) (State F) :=
@@ -120,13 +120,13 @@ theorem source_reduce (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.
     (protocols : ProtocolTable (assignment F G) (OriginalSumcheckLibrary.signature (F := F) (G := G)))
     (count : Nat) (point : List F) (scalar : F) :
     OriginalSumcheckLibrary.reduce payload maximum context.protocol (context.protocol.roles 1)
-      protocols (OriginalSumcheckLibrary.verifierInputs (some point) (some scalar) (some count) (some context.handle)) =
+      protocols (OriginalSumcheckLibrary.verifierInputs (some 0) (some point) (some scalar) (some count) (some context.handle)) =
       if count ≤ maximum then
         (run (G := G) context (List.range count) ⟨point, scalar⟩).bind (fun result => .done (output result))
       else .halt .refused := by
   unfold OriginalSumcheckLibrary.verifierInputs
   rw [OriginalSumcheckLibrary.reduce_verifier payload bodies maximum context.protocol separate]
-  rw [SumcheckPendingLaws.identity_owned payload _ claims.openClaim, ite_eq_left rfl]
+  rw [SumcheckPendingLaws.openClaim_owned payload claims, ite_eq_left rfl]
   dsimp only [PIR.Process.bind, Values.get]
   have active : ((repeatSpec maximum).roles.map context.protocol.roles).contains
       (context.protocol.roles 1) = true := by

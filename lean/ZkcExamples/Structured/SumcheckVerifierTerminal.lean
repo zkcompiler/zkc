@@ -17,6 +17,27 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 
 open SumcheckSourceViews (unit)
 
+/-- Present local custody is consumed without observing its coordinate; absence
+is handled separately and is never replaced by a canonical token. -/
+theorem ownedCheck_present (self : Nat) (raw point : Option (List F))
+    (claim : Option F) (token : CustodyToken) :
+    ownedCheck (G := G) unit self raw (some token) point claim =
+      actualOwnedCheck unit self raw point claim := by
+  rw [ownedCheck_optional, terminal_optional]
+  cases raw with
+  | none => rfl
+  | some xs =>
+    cases point with
+    | none => rfl
+    | some point =>
+      cases claim with
+      | none => rfl
+      | some claim =>
+        exact congrArg (fun process =>
+          (process.interpret (closedLift (I := participantInterface F G))).bind
+            (fun result => .done result.present))
+          (SumcheckSourceContracts.check_custody_irrelevant (G := G) xs point claim token)
+
 /-- The helper owner's complete actual-source decision, transported to owned work. -/
 theorem terminal_decision (self : Nat) (xs point : List F) (claim : F) :
     actualOwnedCheck (G := G) unit self (some xs) (some point) (some claim) =

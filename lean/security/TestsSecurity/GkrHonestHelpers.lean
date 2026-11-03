@@ -30,7 +30,7 @@ theorem mixed_circuit :
 /-- Actual helper36 at every field point of the mixed circuit's upper layer.
 The lower wire values here are explicit test data. -/
 theorem upper_layout (rho : ℚ) :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper36Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper66Helper
       (.cons upperAdd (.cons upperMul (.cons [rho] (.cons [8, 15] (.cons 1 .nil))))) =
       .done (GkrCallerRealization.raw rho).values := by
   rw [HonestHelpers.layout_equation upperAdd upperMul [8, 15] [rho] 1 (by decide)
@@ -41,13 +41,13 @@ theorem upper_layout (rho : ℚ) :
     GkrCallerRealization.raw, GkrRoundsRealization.RawState.values, sub_eq_add_neg]
 
 theorem read_output :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper97Helper
       (.cons ([120, 30] : List ℚ) (.cons 1 .nil)) = .done (.cons 30 .nil) := by
   simpa using HonestHelpers.element_equation (G := ℚ) ([120, 30] : List ℚ) 1
     (by norm_num [indexLimit]) (by norm_num [indexLimit])
 
 theorem changed_readback :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper97Helper
       (.cons ([120, 30] : List ℚ) (.cons 1 .nil)) ≠ .done (.cons 31 .nil) := by
   rw [read_output]
   intro wrong
@@ -55,7 +55,7 @@ theorem changed_readback :
   norm_num [Values.get] at value
 
 theorem read_past_end :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper57Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.helper97Helper
       (.cons ([120, 30] : List ℚ) (.cons 2 .nil)) = .done (.cons 0 .nil) := by
   simpa using HonestHelpers.element_equation (G := ℚ) ([120, 30] : List ℚ) 2
     (by norm_num [indexLimit]) (by norm_num [indexLimit])
@@ -123,7 +123,7 @@ theorem missing_delivery (ctx : ProtocolContext) (point : List ℚ) :
 
 theorem changed_message :
     invoke (Zkc.Source.Structured.plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper41Helper (GkrCallerRealization.raw 0).values ≠
+      GkrSourceBodies.helper73Helper (GkrCallerRealization.raw 0).values ≠
       .done (.cons 121 (.cons (-15) (.cons (-105) .nil))) := by
   rw [HonestHelpers.round_coefficients _ (GkrCallerRealization.reference 0)
     (GkrCallerRealization.represented 0).1 (by norm_num [indexLimit]), first_message]
@@ -144,7 +144,7 @@ theorem changed_message_rejected (ctx : ProtocolContext) (point suffix : List �
 
 theorem malformed_round :
     invoke (Zkc.Source.Structured.plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper41Helper
+      GkrSourceBodies.helper73Helper
       (.cons [] (.cons [0, 1] (.cons [1, 1] (.cons [1, 1] .nil)))) = .halt .refused := by
   rw [HonestHelpers.round_message_table, GkrRoundsProcesses.round_equation]
   rfl

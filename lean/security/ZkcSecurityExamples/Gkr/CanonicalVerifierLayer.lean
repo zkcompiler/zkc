@@ -46,6 +46,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
     layerBody.denote (participantMeaningWithOn (ringModel F G) (.silent _)
       Occurrence.actions observedHelpers 1 beforeRoot {} Occurrence.iterations)
       (((SourceRows.LayerArguments.pack {
+          custody := some 0,
           index := some index,
           proverPoint := none,
           point := some point,
@@ -61,7 +62,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
           (.index :: (layerSpec.state ++ layerSpec.captures))).get =
       (HonestProducerObservedLayers.validatorLayer {} handle encoding.width currentLayerSites
         encoding.circuit.add encoding.circuit.mul (index, point, claim)).bind
-          (fun result => .done (verifierLayerState (some result.2.1) (some result.2.2))) := by
+          (fun result => .done (verifierLayerState (some 0) (some result.2.1) (some result.2.2))) := by
   have widthBound := admitted.2.2.1
   have small : encoding.width + encoding.width + encoding.width < 64 := by omega
   have position : index < 2 ^ encoding.selector := lt_of_lt_of_le inside admitted.1.2.2.2
@@ -79,7 +80,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
       (2 ^ (encoding.width + encoding.width + encoding.width))).length < indexLimit :=
     Nat.lt_of_le_of_lt (by simp [GkrSourceLaws.block]) mulBound
   have normalized := layerPresentation_equation (F := F) (G := G) {} (.root _ _)
-    beforeRoot beforeRoot_masked index (some point) (some claim) (some encoding.inputs)
+    beforeRoot beforeRoot_masked index (some 0) (some point) (some claim) (some encoding.inputs)
     (some encoding.add) (some encoding.mul) (some encoding.layers)
     (some encoding.selector) (some encoding.width) (some handle)
   refine normalized.trans ?_
@@ -87,17 +88,19 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
   conv_lhs =>
     arg 1
     erw [OccurrencePresentation.closed_helper (F := F) (G := G) GkrSourceViews.unit
-      GkrSourceBodies.sourceHelper20Helper ((SourceRows.PointClaimInputs.pack { point := point, claim := claim })),
-      tuple20_plain (F := F) (G := G) point claim]
+      GkrSourceBodies.helper12Helper ((SourceRows.PointClaimInputs.pack {
+      custody := 0, point := point, claim := claim })),
+      tuple20_plain (F := F) (G := G) 0 point claim]
   simp only [PIR.Process.interpret, PIR.Process.bind, Values.get]
   conv_lhs =>
     arg 1
     erw [OccurrencePresentation.closed_helper (F := F) (G := G) GkrSourceViews.unit
-      GkrSourceBodies.sourceHelper37Helper ((SourceRows.PendingInputs.pack { claim := claim })),
+      GkrSourceBodies.helper20Helper ((SourceRows.PendingInputs.pack { claim := claim })),
       pending_plain (F := F) (G := G) claim]
   simp only [PIR.Process.interpret, PIR.Process.bind, Values.get]
   change (invokeProtocol beforeRoot GkrSourceBodies.roundsSignature (GkrVerifier.leftContext {}) 1
     ((SourceRows.RoundsInputs.pack {
+        custody := some 0,
         add := none,
         mul := none,
         left := none,
@@ -107,7 +110,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
         count := some encoding.width,
         service := some handle
       }))).bind _ = _
-  erw [rounds_reads (GkrVerifier.leftContext {}) rfl rfl handle encoding.width widthBound [] claim,
+  erw [rounds_reads (GkrVerifier.leftContext {}) rfl rfl handle encoding.width widthBound 0 [] claim,
     PIR.Process.bind_assoc]
   simp only [PIR.Process.bind, GkrRoundsReading.roundsResults, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get, Values.append,
     Values.present, List.nil_append]
@@ -118,6 +121,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
   intro left leftSize
   change (invokeProtocol beforeRoot GkrSourceBodies.roundsSignature (GkrVerifier.rightContext {}) 1
     ((SourceRows.RoundsInputs.pack {
+        custody := some 0,
         add := none,
         mul := none,
         left := none,
@@ -127,7 +131,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
         count := some encoding.width,
         service := some handle
       }))).bind _ = _
-  erw [rounds_reads (GkrVerifier.rightContext {}) rfl rfl handle encoding.width widthBound left.1 left.2,
+  erw [rounds_reads (GkrVerifier.rightContext {}) rfl rfl handle encoding.width widthBound 0 left.1 left.2,
     PIR.Process.bind_assoc]
   simp only [PIR.Process.bind, GkrRoundsReading.roundsResults, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get, Values.append,
     Values.present]
@@ -138,13 +142,14 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
   conv_lhs =>
     arg 1
     erw [OccurrencePresentation.closed_helper (F := F) (G := G) GkrSourceViews.unit
-      GkrSourceBodies.sourceHelper40Helper ((SourceRows.RepackPendingInputs.pack { point := left.1 ++ right.1, claim := right.2 })),
-      GkrRoundsReading.tuple40_plain (F := F) (G := G) (left.1 ++ right.1) right.2]
+      GkrSourceBodies.helper22Helper ((SourceRows.RepackPendingInputs.pack {
+      custody := 0, point := left.1 ++ right.1, claim := right.2 })),
+      GkrRoundsReading.tuple40_plain (F := F) (G := G) 0 (left.1 ++ right.1) right.2]
   simp only [PIR.Process.interpret, PIR.Process.bind, Values.get]
   conv_lhs =>
     arg 1
     erw [OccurrencePresentation.closed_helper (F := F) (G := G) GkrSourceViews.unit
-      GkrSourceBodies.sourceHelper50Helper
+      GkrSourceBodies.helper27Helper
       ((SourceRows.SplitPendingInputs.pack { point := left.1 ++ right.1 })),
       split_pending_plain (F := F) (G := G) left.1 right.1
       (by rw [leftSize, rightSize]) (by rw [List.length_append, leftSize, rightSize]; unfold indexLimit; omega)]
@@ -307,12 +312,13 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
     conv_lhs =>
       arg 1
       erw [OccurrencePresentation.closed_helper (F := F) (G := G) GkrSourceViews.unit
-        GkrSourceBodies.sourceHelper19Helper
-        ((SourceRows.NextPointClaimInputs.pack {
+        GkrSourceBodies.helper37Helper
+        ((SourceRows.RefreshInputs.pack {
+            custody := 0, retainedPoint := point, retainedClaim := claim,
             point := linePoints left.1 right.1 challenge,
             claim := powerSum coefficients challenge
           })),
-        tuple19_plain]
+        refresh_plain]
     rfl
   · rw [lineCheck_neg {} handle encoding.width (encoding.circuit.add index) (encoding.circuit.mul index)
       (index, point, claim) left.1 right.1 right.2 first coefficients check]

@@ -20,7 +20,7 @@ theorem zero_rounds (a b claim : ℚ) :
 /-- The source's empty pending-point case is a successful split, not a refusal. -/
 theorem empty_split :
     invoke (GkrRoundsReading.closed (F := ℚ) (G := ℚ))
-      GkrSourceBodies.sourceHelper50Helper (.cons [] .nil) =
+      GkrSourceBodies.helper27Helper (.cons [] .nil) =
       .done (.cons [] (.cons [] .nil)) := by kernel_rfl
 
 #print axioms GkrRoundsReading.round_prefix

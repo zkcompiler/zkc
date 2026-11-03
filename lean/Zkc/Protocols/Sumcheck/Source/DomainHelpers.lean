@@ -52,24 +52,41 @@ theorem call_return (program : Structured.Program) (helper : Helper)
 theorem pending (program : Structured.Program)
     (claims : SumcheckPendingLaws.Bodies program.payload.definitions) (scalar : F) :
     Domain.callHelper (ringModel F G) program SumcheckPendingBodies.pendingHelper.name
-      [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data SumcheckPendingBodies.custodyType,
+        .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
       [.data (.field "bls12-381.fr" scalar)] =
-      .returned [.data (.vector "bls12-381.fr" []), .data (.field "bls12-381.fr" scalar)] := by
+      .returned [.custody SumcheckPendingBodies.custodySlot 0,
+        .data (.vector "bls12-381.fr" []), .data (.field "bls12-381.fr" scalar)] := by
   apply call_return program SumcheckPendingBodies.pendingHelper (.cons scalar .nil)
-    (.cons [] (.cons scalar .nil)) _ _ _ rfl rfl
+    (.cons 0 (.cons [] (.cons scalar .nil))) _ _ _ rfl rfl
   rw [claims.pending.invoke program.payload.linked]
   rfl
 
-theorem claim_identity (program : Structured.Program) (name : String)
-    (body : BodyIn program.payload.definitions (SumcheckPendingLaws.identityHelper name)
-      SumcheckPendingLaws.identityBody) (point : List F) (scalar : F) :
-    Domain.callHelper (ringModel F G) program name
+theorem openClaim (program : Structured.Program)
+    (claims : SumcheckPendingLaws.Bodies program.payload.definitions)
+    (token : CustodyToken) (point : List F) (scalar : F) :
+    Domain.callHelper (ringModel F G) program SumcheckPendingBodies.openClaimHelper.name
       [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
-      [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] =
+      [.custody SumcheckPendingBodies.custodySlot token,
+        .data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] =
       .returned [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] := by
-  apply call_return program (SumcheckPendingLaws.identityHelper name)
-    (.cons point (.cons scalar .nil)) (.cons point (.cons scalar .nil)) _ _ _ rfl rfl
-  rw [body.invoke program.payload.linked]
+  apply call_return program SumcheckPendingBodies.openClaimHelper
+    (.cons token (.cons point (.cons scalar .nil))) (.cons point (.cons scalar .nil)) _ _ _ rfl rfl
+  rw [claims.openClaim.invoke program.payload.linked]
+  rfl
+
+theorem atPrefix (program : Structured.Program)
+    (claims : SumcheckPendingLaws.Bodies program.payload.definitions)
+    (point : List F) (scalar : F) :
+    Domain.callHelper (ringModel F G) program SumcheckPendingBodies.atPrefixHelper.name
+      [.data SumcheckPendingBodies.custodyType,
+        .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] =
+      .returned [.custody SumcheckPendingBodies.custodySlot 0,
+        .data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] := by
+  apply call_return program SumcheckPendingBodies.atPrefixHelper
+    (.cons point (.cons scalar .nil)) (.cons 0 (.cons point (.cons scalar .nil))) _ _ _ rfl rfl
+  rw [claims.atPrefix.invoke program.payload.linked]
   rfl
 
 variable (program : Structured.Program)
@@ -155,17 +172,17 @@ theorem check
     (raw point : List F) (claim : F)
     (rawBound : raw.length < indexLimit) (pointBound : point.length < indexLimit) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
-      [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" point),
+      [.data (.vector "bls12-381.fr" raw), .custody SumcheckPendingBodies.custodySlot 0, .data (.vector "bls12-381.fr" point),
         .data (.field "bls12-381.fr" claim)] =
       .returned [.data (.boolean (decide (HasShape raw point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim)))] := by
   obtain ⟨bindings, implementation⟩ := terminal
   obtain ⟨collectBindings, first⟩ := implementation.first
-  apply call_return program checkHelper (checkInputs raw point claim)
+  apply call_return program checkHelper (terminalInputs raw 0 point claim)
     (boolResult (decide (HasShape raw point.length 1 ∧
       (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim)))
     _ _ _ rfl rfl
-  exact (implementation.check.invoke program.payload.linked (checkInputs raw point claim)).trans
+  exact (implementation.check.invoke program.payload.linked (SumcheckHelperLaws.terminalInputs raw 0 point claim)).trans
     (SumcheckHelperLaws.check_generic_body _
       (MapPrefixContracts.laws_of_bodies program.payload.linked implementation.restriction first)
       (fun raw point claim => implementation.checkTable.invoke program.payload.linked (checkInputs raw point claim))

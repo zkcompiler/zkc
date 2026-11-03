@@ -163,9 +163,20 @@ The custody rows `logical/resource_unit.create`, `pass` and `consume` take the
 slot as their one static argument, any valid slot identity, and the custody sort
 of a valid slot is admitted at `logical.resource_unit/0`
 (`Vocabulary.custodyRepresentations`). They select logical bookkeeping whose
-meaning is the custody ledger (`PIR.Custody`), not a kernel. The constructed
-instruction profile has no custody transfer: reading a program that executes
-one refuses with `unsupported "resource_unit"`.
+operational meaning is the custody ledger (`PIR.Custody`). Local helper
+correspondence uses its closed, payload-erased projection, matching
+`SiteObservations.closed`: create and pass return token zero, and consume
+returns no value. The local decoder checks the exact nominal slot and operand
+shape. This interpretation proves neither runtime token freshness nor nested
+ledger ownership. Successful native runs are related to this projection by the
+explicit runtime acceptance-inclusion boundary; checked ledger refusal is never
+asserted to be a successful native run. The structured custody-erasure and
+frame-soundness theorems retain their stated admission premises.
+
+Custody coordinates may occur in local helper arguments and results, but never
+in public inputs, proof messages or transcript payloads. The constructed
+instruction profile has no standalone custody transfer: reading a transfer
+outside a checked local helper refuses with `unsupported "resource_unit"`.
 
 `evalSteps` is the unbounded meaning of a local body that applies no transcript
 operation: the values it hands back, or the cause it stops for, after the
@@ -181,7 +192,8 @@ validator calls by name.
 
 - A local call to a function the constructed validator calls by name is a
   helper call. Its body must apply no transcript operation, its operands must
-  have the sorts of its formals and its results must be data. The reading keeps
+  have the sorts of its formals and its results must be local scalar data or
+  exact-slot custody coordinates. The reading keeps
   the call, and its charge is what the body's evaluation charges.
 - Any other local call is transparent: formals denote actual operands and the
   results denote the operands of the return, as the constructed-participant
@@ -432,26 +444,27 @@ reader and runtime links remain the separate assumptions below.
 `ZkcExamples.Executable.SumcheckProof` applies the rule to the validator of the
 `zkc.program/0` candidate of the Sumcheck example's `example::Proof`
 (`SumcheckProofProgramData`). The rule accepts it against the constructed
-validator of `ZkcExamples.Construction.SumcheckProof`: a helper call for the
-empty point, a loop over the round count of at most the Entry's static maximum
+validator of `ZkcExamples.Construction.SumcheckProof`: the Pending constructor
+and claim-opening helper calls, a loop over the round count of at most the Entry's static maximum
 of rounds (`maximum`, two for this Entry), each receiving its two message
 coordinates, observing them, checking the round sum, drawing and delivering the
 challenge, extending the point by a helper call and updating the claim, and
-finally the terminal check as a helper call. Its receive plan gives two scalar
+finally prefix repacking and the terminal check as helper calls. Its receive plan gives two scalar
 messages per admitted round (`plan_types`).
 
-`ZkcExamples.Executable.SumcheckHelpers` proves the three helpers prepared
+`ZkcExamples.Executable.SumcheckHelpers` proves the five helpers prepared
 against the admitted source's closed helper table. The helper rule accepts the
-empty point and the point extension (`rule_accepted`). The terminal check
+Pending constructor, claim opening, point extension and prefix repacking
+(`rule_accepted`). The terminal check
 iterates and is outside the rule's table (`check_outside`); its preparation
 (`check_prepared`) evaluates its body, which checks the authored table shape
 with a doubling loop and then folds the table over the point one coordinate at
 a time, interpolating its low and high halves with one numerical map call
-(`map_returns`), whose decoded expression is `low + (high - low) r`. The fold is
+(`map_returns`), whose decoded expression is `low + r (high - low)`. The fold is
 `Zkc.Polynomial.Multilinear.restrictPrefixValues`, and the source contract of
 the check (`SumcheckSourceContracts.check_equation` and the stop contracts for
 out-of-range lengths) gives the same result in every case. The same evaluation
-gives the check's charge, `62 + 20 · n` on a well-shaped table and a point of
+gives the check's charge, `63 + 20 · n` on a well-shaped table and a point of
 `n` coordinates (`check_cost`).
 
 `ZkcExamples.Executable.SumcheckFamily.honest_accepted` proves actual byte
@@ -466,8 +479,8 @@ correspondence premise.
 The family derives round and loop correspondence, the restricted-table
 invariant, successful terminal execution, sufficient resources and exact
 message decoding. With append-helper price bounded by `a`, its sufficient
-charge is `72 + (a + 57) * rounds`; the terminal helper uses the selected
-`62 + 20 * point.length` price law. This is a reusable cost method for this
+charge is `76 + (a + 57) * rounds`; the terminal helper uses the selected
+`63 + 20 * point.length` price law. This is a reusable cost method for this
 shape, not a universal backend cost model. Generic family modules do not import
 the retained Entry; `SumcheckCharges` and `SumcheckDomainHonest` discharge its
 concrete local obligations.
@@ -496,7 +509,7 @@ the loop's entry, the rounds and their yields, the consuming terminal check and
 its helper body, and the return. The Pending boundary adds four fixed
 instructions relative to the earlier scalar-only root. The loop is bounded by `DomainVM.FitsK.loop_invariant` with the
 invariant that the carried point has one coordinate per completed round. For
-this Entry `charge rounds = 72 + 59 · rounds` (`charge_eq`): per round, 38
+this Entry `charge rounds = 76 + 59 · rounds` (`charge_eq`): per round, 38
 instructions in the loop body, the point extension's body included, its yield,
 and 20 in the terminal check: 14 in its fold and 3 in each of its two shape
 checks' doubling loops. It is `DomainVM.Sufficient` for every proof and
@@ -512,7 +525,7 @@ draws, sending the sums of the low and high halves of its current table in each
 round and then restricting the table at the challenge. Each honest round passes
 by the round statement with the challenge function's answers and no stop, and
 the rounds compose by the fold invariant: the claim is the sum of the table
-restricted at the point. At two rounds the bound is 186 instructions, the
+restricted at the point. At two rounds the bound is 194 instructions, the
 runtime's measured threshold.
 
 `ZkcArkLibExamples.ExecutableSumcheckFiatShamir` transfers the compiled

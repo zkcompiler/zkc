@@ -19,8 +19,8 @@ open ZkcSecurity.Examples.Components
 
 set_option maxRecDepth 20000
 
-named_values CoefficientResults [constant, linear, quadratic] := GkrSourceBodies.helper41Helper.outputs
-named_values RestrictionArguments [add, mul, left, right, challenge] := GkrSourceBodies.helper45Helper.inputs
+named_values CoefficientResults [constant, linear, quadratic] := GkrSourceBodies.helper73Helper.outputs
+named_values RestrictionArguments [add, mul, left, right, challenge] := GkrSourceBodies.helper78Helper.inputs
 named_values EmptyResults [values] := GkrSourceBodies.emptyHelper.outputs
 named_values AppendArguments [point, challenge] := GkrSourceBodies.appendHelper.inputs
 named_values AppendResults [point] := GkrSourceBodies.appendHelper.outputs
@@ -30,16 +30,16 @@ variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
 
 /-- Only the reached round helper is compared. The complete current declaration
 list includes new guards and is not identified with another export's list. -/
-theorem round_message_table (args : Values (assignment F G) GkrSourceBodies.helper41Helper.inputs) :
+theorem round_message_table (args : Values (assignment F G) GkrSourceBodies.helper73Helper.inputs) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper41Helper args =
+      GkrSourceBodies.helper73Helper args =
     invoke GkrRoundsHelpers.table GkrRoundsHelpers.roundMessageHelper args := by
   kernel_rfl
 
 /-- Exact helper correspondence includes arbitrary restrictions and stops. -/
-theorem round_restriction_table (args : Values (assignment F G) GkrSourceBodies.helper45Helper.inputs) :
+theorem round_restriction_table (args : Values (assignment F G) GkrSourceBodies.helper78Helper.inputs) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper45Helper args =
+      GkrSourceBodies.helper78Helper args =
     invoke GkrRoundsHelpers.table GkrRoundsHelpers.gateRestrictionHelper args := by
   kernel_rfl
 
@@ -48,7 +48,7 @@ theorem round_coefficients {n : Nat} (raw : GkrRoundsRealization.RawState F)
     (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ n < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper41Helper raw.values =
+      GkrSourceBodies.helper73Helper raw.values =
       .done (CoefficientResults.pack (Value := assignment F G)
         { constant := (GkrRoundsReference.message state).constant,
           linear := (GkrRoundsReference.message state).linear,
@@ -62,7 +62,7 @@ theorem round_restriction {n : Nat} (raw : GkrRoundsRealization.RawState F)
     (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ n < indexLimit) (challenge : F) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper45Helper (RestrictionArguments.pack (Value := assignment F G)
+      GkrSourceBodies.helper78Helper (RestrictionArguments.pack (Value := assignment F G)
         { add := raw.add, mul := raw.mul, left := raw.left, right := raw.right, challenge }) =
       .done (raw.restrict challenge).values := by
   rw [round_restriction_table]

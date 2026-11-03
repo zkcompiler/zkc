@@ -22,11 +22,13 @@ def main (args : List String) : IO Unit := do
   (← IO.getStdout).flush
   let [round, root] := program.payload.protocols
     | throw (IO.userError "mixed-sumcheck-protocol-selection")
+  let [_, _, .resourceUnit slot, _, _, _] := round.inputs
+    | throw (IO.userError "mixed-sumcheck-custody-input")
   unless root.signature == program.payload.entry.signature &&
       round.signature.roles.length == 2 && root.signature.roles.length == 2 &&
-      round.inputs == [.field "koala-bear", .field "koala-bear",
+      round.inputs == [.field "koala-bear", .field "koala-bear", .resourceUnit slot,
         .vector "koala-bear.ext8-binomial3", .field "koala-bear.ext8-binomial3", .service "random.koala-bear.ext8-binomial3/0"] &&
-      round.outputs == [.vector "koala-bear.ext8-binomial3", .field "koala-bear.ext8-binomial3"] &&
+      round.outputs == [.resourceUnit slot, .vector "koala-bear.ext8-binomial3", .field "koala-bear.ext8-binomial3"] &&
       root.inputs == [.field "koala-bear", .field "koala-bear", .field "koala-bear",
         .service "random.koala-bear.ext8-binomial3/0"] && root.outputs == [.boolean] do
     throw (IO.userError "mixed-sumcheck-protocol-types")

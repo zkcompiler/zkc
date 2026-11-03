@@ -23,8 +23,8 @@ structured_associations GkrSourceViews
   [helper2 := PrimitiveShapeViews.less,
     helper3 := PrimitiveShapeViews.rows,
     helper4 := PrimitiveShapeViews.shape,
-    sourceHelper4 := GkrSourceBodies.sourceHelper4,
-    helper18 := GkrSourceBodies.helper18]
+    sourceHelper4 := GkrSourceBodies.helper3,
+    helper18 := GkrSourceBodies.helper4]
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -33,14 +33,14 @@ abbrev helpers : Meanings F G := closedMeanings GkrSourceViews.unit.definitions
 
 set_option linter.unusedSimpArgs false in
 theorem index_add_all (a b : Nat) :
-    invoke (helpers (F := F) (G := G)) GkrSourceBodies.sourceHelper4Helper
+    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper3Helper
       (.cons a (.cons b .nil)) =
       if a < indexLimit ∧ b < indexLimit ∧ a + b < indexLimit then
         .done (.cons (a + b) .nil) else .halt .refused := by
   rw [sourceHelper4_association.invoke GkrSourceViews.unit.linked]
   by_cases aBound : a < indexLimit <;> by_cases bBound : b < indexLimit <;>
     by_cases sumBound : a + b < indexLimit <;>
-      simp [GkrSourceBodies.sourceHelper4Body, Region.denote, meaning,
+      simp [GkrSourceBodies.helper3Body, Region.denote, meaning,
         Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
         Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
         SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
@@ -60,7 +60,7 @@ theorem rows_bounded : RowsLaw (helpers (F := F) (G := G)) := by
     (rows_body _ comparison_bounded dimension small)
 
 theorem power_bounded (exponent : Nat) (small : exponent < 64) :
-    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper18Helper (.cons exponent .nil) =
+    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper4Helper (.cons exponent .nil) =
       .done (.cons (2 ^ exponent) .nil) :=
   (helper18_association.invoke GkrSourceViews.unit.linked _).trans
     (Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerOfTwo_body _ exponent small)

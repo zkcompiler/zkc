@@ -19,46 +19,48 @@ open ZkcExamples.Structured Generated.Presentations.Gkr
 
 named_values Inputs [inputs, outputs, add, mul, layers, selector, width, service] := GkrSourceBodies.gkrSignature.inputs
 named_values Decision [accepted] := GkrSourceBodies.gkrSignature.outputs
-named_values RoundsInputs [add, mul, left, right, pending, claim, count, service] := GkrSourceBodies.roundsSignature.inputs
-named_values RoundsResults [point, add, mul, left, right, pending, claim] := GkrSourceBodies.roundsSignature.outputs
-named_values InputInputs [inputs, point, claim] := GkrSourceBodies.sourceProtocol80Signature.inputs
-named_values InputResults [accepted] := GkrSourceBodies.sourceProtocol80Signature.outputs
+named_values RoundsInputs [add, mul, left, right, custody, pending, claim, count, service] := GkrSourceBodies.roundsSignature.inputs
+named_values RoundsResults [point, add, mul, left, right, custody, pending, claim] := GkrSourceBodies.roundsSignature.outputs
+named_values InputInputs [inputs, custody, point, claim] := GkrSourceBodies.inputSignature.inputs
+named_values InputResults [accepted] := GkrSourceBodies.inputSignature.outputs
 named_values RoundState [add, mul, left, right, point, pending, claim] := Rounds.roundSpec.state
 named_values RoundCaptures [service] := Rounds.roundSpec.captures
 named_values RoundArguments [index, add, mul, left, right, point, pending, claim, service] := .index :: (Rounds.roundSpec.state ++ Rounds.roundSpec.captures)
 named_values OutputState [verifierPoint, proverPoint] := Root.outputSpec.state
 named_values OutputCaptures [service] := Root.outputSpec.captures
 named_values OutputArguments [index, verifierPoint, proverPoint, service] := .index :: (Root.outputSpec.state ++ Root.outputSpec.captures)
-named_values LayerState [proverPoint, point, claim] := Root.layerSpec.state
+named_values LayerState [proverPoint, custody, point, claim] := Root.layerSpec.state
 named_values LayerCaptures [inputs, add, mul, layers, selector, width, service] := Root.layerSpec.captures
-named_values LayerArguments [index, proverPoint, point, claim, inputs, add, mul, layers, selector, width, service] := .index :: (Root.layerSpec.state ++ Root.layerSpec.captures)
+named_values LayerArguments [index, proverPoint, custody, point, claim, inputs, add, mul, layers, selector, width, service] := .index :: (Root.layerSpec.state ++ Root.layerSpec.captures)
 named_values CoefficientState [coefficients] := Root.coefficientSpec.state
 named_values CoefficientCaptures [line] := Root.coefficientSpec.captures
 named_values CoefficientArguments [index, coefficients, line] := .index :: (Root.coefficientSpec.state ++ Root.coefficientSpec.captures)
 named_values ProducerLayerScope [index, point, inputs, add, mul, layers, selector, width, service] := Root.proverLayerPattern.scope
-named_values VerifierLayerScope [index, point, claim, inputs, add, mul, layers, selector, width, service] := Root.verifierLayerPattern.scope
+named_values VerifierLayerScope [index, custody, point, claim, inputs, add, mul, layers, selector, width, service] := Root.verifierLayerPattern.scope
 named_values SelectBlockInputs [table, position, bits] := GkrSourceBodies.selectBlockHelper.inputs
 named_values SelectBlockResults [block] := GkrSourceBodies.selectBlockHelper.outputs
 named_values LinePointInputs [start, finish, challenge] := GkrSourceBodies.linePointHelper.inputs
 named_values LinePointResults [point] := GkrSourceBodies.linePointHelper.outputs
-named_values ValuesBelowInputs [add, mul, inputs, layers, selector, width, index] := GkrSourceBodies.helper34Helper.inputs
-named_values ValuesBelowResults [wires] := GkrSourceBodies.helper34Helper.outputs
-named_values LayoutInputs [add, mul, point, wires, width] := GkrSourceBodies.helper36Helper.inputs
-named_values LayoutResults [add, mul, left, right] := GkrSourceBodies.helper36Helper.outputs
-named_values LineCoefficientsInputs [wires, left, right, width] := GkrSourceBodies.helper69Helper.inputs
-named_values LineCoefficientsResults [coefficients] := GkrSourceBodies.helper69Helper.outputs
-named_values ElementInputs [coefficients, index] := GkrSourceBodies.helper57Helper.inputs
-named_values ElementResults [coefficient] := GkrSourceBodies.helper57Helper.outputs
-named_values PointClaimInputs [point, claim] := GkrSourceBodies.sourceHelper20Helper.inputs
-named_values PointClaimResults [point, claim] := GkrSourceBodies.sourceHelper20Helper.outputs
-named_values NextPointClaimInputs [point, claim] := GkrSourceBodies.sourceHelper19Helper.inputs
-named_values NextPointClaimResults [point, claim] := GkrSourceBodies.sourceHelper19Helper.outputs
-named_values PendingInputs [claim] := GkrSourceBodies.sourceHelper37Helper.inputs
-named_values PendingResults [point, claim] := GkrSourceBodies.sourceHelper37Helper.outputs
-named_values RepackPendingInputs [point, claim] := GkrSourceBodies.sourceHelper40Helper.inputs
-named_values RepackPendingResults [point, claim] := GkrSourceBodies.sourceHelper40Helper.outputs
-named_values SplitPendingInputs [point] := GkrSourceBodies.sourceHelper50Helper.inputs
-named_values SplitPendingResults [left, right] := GkrSourceBodies.sourceHelper50Helper.outputs
+named_values ValuesBelowInputs [add, mul, inputs, layers, selector, width, index] := GkrSourceBodies.helper65Helper.inputs
+named_values ValuesBelowResults [wires] := GkrSourceBodies.helper65Helper.outputs
+named_values LayoutInputs [add, mul, point, wires, width] := GkrSourceBodies.helper66Helper.inputs
+named_values LayoutResults [add, mul, left, right] := GkrSourceBodies.helper66Helper.outputs
+named_values LineCoefficientsInputs [wires, left, right, width] := GkrSourceBodies.helper102Helper.inputs
+named_values LineCoefficientsResults [coefficients] := GkrSourceBodies.helper102Helper.outputs
+named_values ElementInputs [coefficients, index] := GkrSourceBodies.helper97Helper.inputs
+named_values ElementResults [coefficient] := GkrSourceBodies.helper97Helper.outputs
+named_values PointClaimInputs [custody, point, claim] := GkrSourceBodies.helper12Helper.inputs
+named_values PointClaimResults [custody, retainedPoint, retainedClaim, point, claim] := GkrSourceBodies.helper12Helper.outputs
+named_values NextPointClaimInputs [point, claim] := GkrSourceBodies.helper11Helper.inputs
+named_values NextPointClaimResults [custody, point, claim] := GkrSourceBodies.helper11Helper.outputs
+named_values RefreshInputs [custody, retainedPoint, retainedClaim, point, claim] := GkrSourceBodies.helper37Helper.inputs
+named_values RefreshResults [custody, point, claim] := GkrSourceBodies.helper37Helper.outputs
+named_values PendingInputs [claim] := GkrSourceBodies.helper20Helper.inputs
+named_values PendingResults [custody, point, claim] := GkrSourceBodies.helper20Helper.outputs
+named_values RepackPendingInputs [custody, point, claim] := GkrSourceBodies.helper22Helper.inputs
+named_values RepackPendingResults [point, claim] := GkrSourceBodies.helper22Helper.outputs
+named_values SplitPendingInputs [point] := GkrSourceBodies.helper27Helper.inputs
+named_values SplitPendingResults [left, right] := GkrSourceBodies.helper27Helper.outputs
 named_values EmptyInputs [] := GkrSourceBodies.emptyHelper.inputs
 named_values EmptyResults [vector] := GkrSourceBodies.emptyHelper.outputs
 named_values AppendInputs [vector, element] := GkrSourceBodies.appendHelper.inputs
@@ -136,6 +138,6 @@ def roundsResult {F G : Type} (result : HonestProducerRounds.Result F) :
     Values (Component (assignment F G)) ZkcExamples.Structured.GkrSourceBodies.roundsSignature.outputs :=
   SourceRows.RoundsResults.pack
     { point := result.2.2.2.2, add := result.1, mul := result.2.1,
-      left := result.2.2.1, right := result.2.2.2.1, pending := none, claim := none }
+      left := result.2.2.1, right := result.2.2.2.1, custody := none, pending := none, claim := none }
 
 end ZkcSecurity.Realizations.Gkr.SourceRows

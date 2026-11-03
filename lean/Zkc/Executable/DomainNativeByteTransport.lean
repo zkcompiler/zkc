@@ -57,7 +57,7 @@ private theorem selected_readback (suite : String) (key : Origin → Origin) (in
     simp only [nominal, Option.bind_some] at found
     rw [found]
     cases value with
-    | indices => rfl
+    | indices | custody => rfl
     | transcript actual history =>
       by_cases same : actual = suite
       · cases mapped : DomainAdapter.readbackHistory key history <;> simp [DomainAdapter.readbackValue, same, mapped]

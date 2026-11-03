@@ -23,7 +23,7 @@ set_option smartUnfolding false
 
 open ZkcExamples.Construction.ComposedSumcheckProofBodies in
 structured_views ZkcExamples.Construction.ComposedSumcheckProofData.snapshot
-  helpers [helper0, helper1, helper2, helper3, helper4, helper5, helper6, helper7, helper8, pending, helper15, helper9, helper16, tableShapeFormula, helper11, helper12, helper13, pendingFormula, helper17, openClaim, helper18, helper19, helper20, helper23, atPrefix, helper31, scopedHelper22, scopedHelper23, scopedHelper24, helper22, helper24, helper25, scopedHelper28, scopedHelper29, helper27, helper28, check, helper30]
+  helpers [helper0, helper1, helper2, helper3, helper4, helper5, helper6, helper7, helper8, helper9, helper10, helper11, helper12, helper13, helper14, helper15, helper16, helper17, helper18, helper19, helper20, helper21, helper22, helper23, helper24, helper25, helper26, helper27, helper28, helper29, helper30, helper31, helper32, helper33, helper34, helper35, helper36, helper37]
   protocols [protocol0, proof]
 
 theorem admitted : Structured.check ZkcExamples.Construction.ComposedSumcheckProofData.snapshot = .ok program := kernel_admission

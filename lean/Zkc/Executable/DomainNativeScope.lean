@@ -95,7 +95,7 @@ def nativeResults (program : Structured.Program) (context : Context) (scope : Na
       match (nativeHelperSignatures program).find? (fun helper => helper.name == name) with
       | some helper =>
           if references.map (scope.slots[·]?) = helper.inputs.map (some ∘ NativeSlot.data) ∧
-              helper.inputs.all dataType ∧ helper.outputs.all dataType then
+              helper.inputs.all localType ∧ helper.outputs.all localType then
             some (helper.outputs.map NativeSlot.data, false) else none
       | none => none
   | .guard _, [condition] =>

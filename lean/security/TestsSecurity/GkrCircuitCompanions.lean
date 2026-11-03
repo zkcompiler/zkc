@@ -20,7 +20,7 @@ private def below : Table ℚ 0 := fun _ => 3
 
 /-- A scalar layer exercises both independent addition and multiplication. -/
 theorem actual_layer :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper33Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper64Helper
       (Goals.Layer.Inputs.pack { addWeights := [2], mulWeights := [1], below := [3], width := 0 }) =
       .done (Goals.Layer.encode model ⟨[21]⟩) := by
   have actual := layer_encoded (G := ℚ) add mul below (by decide +kernel)
@@ -55,11 +55,11 @@ example : Goals.Layer.Inputs.pack (Value := assignment ℚ ℚ)
   norm_num [Goals.Layer.Inputs.unpack_pack] at weights
 
 private def changedLayer : CheckedDefinition :=
-  .ofBody GkrSourceBodies.helper33Helper (.stop .abort)
+  .ofBody GkrSourceBodies.helper64Helper (.stop .abort)
 
 /-- An unchanged name and signature do not associate a different actual body. -/
 theorem changed_body_refused :
-    ¬ BodyIn [changedLayer] GkrSourceBodies.helper33Helper Goals.Layer.body := by
+    ¬ BodyIn [changedLayer] GkrSourceBodies.helper64Helper Goals.Layer.body := by
   rintro ⟨selected, member, signature, same⟩
   simp only [List.mem_singleton] at member
   subst selected
@@ -68,7 +68,7 @@ theorem changed_body_refused :
 
 /-- The complete source-generated equation retains the original early guard. -/
 theorem boundary_refused :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper34Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper65Helper
       (Goals.Traversal.Inputs.pack
         { addWeights := [], mulWeights := [], inputValues := [], layers := 2,
           selector := 1, width := 1, layerIndex := 2 }) = .halt .refused := by

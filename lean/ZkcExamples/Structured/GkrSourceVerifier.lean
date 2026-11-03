@@ -19,19 +19,19 @@ open Zkc.Source Zkc.Source.Structured SumcheckVerifierHelpers
 open Zkc.Polynomial Zkc.Polynomial.Multilinear Zkc.Protocols.Gkr
 open GkrRoundsReading GkrLayerReading
 
-structured_associations GkrSourceViews [sourceHelper84 := GkrSourceBodies.sourceHelper84]
+structured_associations GkrSourceViews [sourceHelper84 := GkrSourceBodies.helper54]
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-theorem terminal_plain (n : Nat) (xs point : List F) (table : Table F n) (claim : F)
+theorem terminal_plain (n : Nat) (custody : CustodyToken) (xs point : List F) (table : Table F n) (claim : F)
     (decoded : ofList? n xs = some table) (length : point.length = n) (small : n < 64)
     (vectorBound : xs.length < indexLimit) :
-    invoke (GkrRoundsReading.closed (F := F) (G := G)) GkrSourceBodies.sourceHelper84Helper
-      (.cons xs (.cons point (.cons claim .nil))) =
+    invoke (GkrRoundsReading.closed (F := F) (G := G)) GkrSourceBodies.helper54Helper
+      (.cons xs (.cons custody (.cons point (.cons claim .nil)))) =
       .done (.cons (decide (extension n table (coordinates n point) = claim)) .nil) := by
   apply GkrRoundsReading.invoke_law
   rw [sourceHelper84_association.invoke GkrSourceViews.unit.linked]
-  simp [GkrSourceBodies.sourceHelper84Body, Region.denote, meaning, Evaluation.meaning,
+  simp [GkrSourceBodies.helper54Body, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
     Environment.prepend, Environment.push, SiteObservations.closed,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
@@ -100,9 +100,9 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
     evaluate_plain width outputs point outputsTable outputsDecoded pointLength small outputsBound, GkrLayerReading.tuple19_plain, PIR.Process.bind]
   have layerFold := Generated.Presentations.Gkr.Root.verifierLayer_fold (F := F) (G := G) {} (.ofSeparate separate (by decide)) (some inputs)
     (some add) (some mul) (some layers) (some selector) (some width) (some handle) layers layersBound
-    (.cons none (.cons (some point) (.cons (some (extension width outputsTable (coordinates width point))) .nil)))
-    (some point, some (extension width outputsTable (coordinates width point)))
-    (Generated.Presentations.Gkr.Root.verifierLayerState_masked {} _ rfl (some point)
+    (.cons none (.cons (some 0) (.cons (some point) (.cons (some (extension width outputsTable (coordinates width point))) .nil))))
+    (some 0, some point, some (extension width outputsTable (coordinates width point)))
+    (Generated.Presentations.Gkr.Root.verifierLayerState_masked {} _ rfl (some 0) (some point)
       (some (extension width outputsTable (coordinates width point))))
   erw [layerFold]
   rw [PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.Process.interpret_bind]
@@ -122,8 +122,8 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
   simp only [PIR.Process.bind, Generated.Presentations.Gkr.Root.verifierLayerState, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons]
   erw [GkrInputInvocation.invoke (F := F) (G := G)
     (({} : ProtocolContext).enter "label_696e707574" [1])
-    (some inputs) (some final.2.1) (some final.2.2)]
-  simp only [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program, Generated.Presentations.Gkr.Input.verifierProcess, terminal_plain width inputs final.2.1
+    (some inputs) (some 0) (some final.2.1) (some final.2.2)]
+  simp only [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program, Generated.Presentations.Gkr.Input.verifierProcess, terminal_plain width 0 inputs final.2.1
     inputsTable final.2.2 inputsDecoded valid.2 small inputsBound, PIR.Process.bind,
     TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, PIR.Process.interpret, GkrVerifier.decision]
 

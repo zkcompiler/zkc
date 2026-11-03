@@ -39,12 +39,12 @@ private def queryTemplate : Template :=
   | _ => ⟨"invalid-fixture", [], []⟩
 
 -- The unchanged real export has a root Entry, a different local definition,
--- and local input_6 transported from root input_3 through an apply and repeat.
+-- and local input_7 transported from root input_3 through an apply and repeat.
 example : valid snapshot context messageTemplate = true := by decide +kernel
 example : valid snapshot context queryTemplate = true := by decide +kernel
 example : check snapshot context exported = .ok () := by decide +kernel
 example : messageTemplate.event[1]? ≠ some context.entry := by decide +kernel
-example : queryTemplate.event[3]? = some "input_6" := by decide +kernel
+example : queryTemplate.event[3]? = some "input_7" := by decide +kernel
 example : (Domain.templateOrigin context messageTemplate [0]).isSome = true := by decide +kernel
 example : (Domain.queryOrigin context context.suite "bls12-381.fr" queryTemplate [0]).isSome = true := by
   decide +kernel

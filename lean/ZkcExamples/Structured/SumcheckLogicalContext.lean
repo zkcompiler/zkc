@@ -135,10 +135,10 @@ theorem residual_iff (remaining count : Nat) (table : Table F (remaining + count
     (residualAtom remaining count).Holds (interpretation F G) {}
       ((reductionRootInput proverValues proverDimension claim count handle).boundary (.returned outputs))
       (store (owner := reductionRoot) (invocation := rootInvocation) table) ↔
-      match outputs.get (.there (.there .here)), outputs.get (.there (.there (.there .here))) with
+      match outputs.get (.there (.there (.there .here))), outputs.get (.there (.there (.there (.there .here)))) with
       | some point, some value => Residual remaining count table point value
       | _, _ => False := by
-  rcases outputs with _ | ⟨pointP, _ | ⟨valuesP, _ | ⟨point, _ | ⟨value, _ | ⟨⟩⟩⟩⟩⟩
+  rcases outputs with _ | ⟨pointP, _ | ⟨valuesP, _ | ⟨custody, _ | ⟨point, _ | ⟨value, _ | ⟨⟩⟩⟩⟩⟩⟩
   cases point <;> cases value
   · constructor
     · rintro ⟨_, read, _⟩
@@ -217,14 +217,16 @@ def rootOutputMap : Renaming SumcheckReduceBodies.runSignature.outputs
     SumcheckRepackedBodies.runSignature.outputs := by
   intro _ ref
   cases ref with
-  | here => exact .there (.there (.there .here))
+  | here => exact .there (.there (.there (.there .here)))
   | there ref => cases ref with
-    | here => exact .there (.there .here)
+    | here => exact .there (.there (.there .here))
     | there ref => cases ref with
       | here => exact .here
       | there ref => cases ref with
         | here => exact .there .here
-        | there ref => nomatch ref
+        | there ref => cases ref with
+          | here => exact .there (.there .here)
+          | there ref => nomatch ref
 
 /-- The retained root's ports in the repacked positions. Roles and scopes are kept. -/
 def rootMap : PortMap reductionRoot.protocol.signature repackedRoot.protocol.signature where
@@ -254,14 +256,16 @@ def rootMap : PortMap reductionRoot.protocol.signature repackedRoot.protocol.sig
         | here => rfl
         | there ref => cases ref with
           | here => rfl
-          | there ref => nomatch ref
+          | there ref => cases ref with
+            | here => rfl
+            | there ref => nomatch ref
 
 def repackedClaim : BoundarySelector repackedRoot.protocol.signature scalar :=
   ⟨.input .here, ⟨1, by decide⟩, by decide⟩
 def repackedPoint : BoundarySelector repackedRoot.protocol.signature vector :=
-  ⟨.output .here, ⟨1, by decide⟩, by decide⟩
-def repackedValue : BoundarySelector repackedRoot.protocol.signature scalar :=
   ⟨.output (.there .here), ⟨1, by decide⟩, by decide⟩
+def repackedValue : BoundarySelector repackedRoot.protocol.signature scalar :=
+  ⟨.output (.there (.there .here)), ⟨1, by decide⟩, by decide⟩
 
 /-- The map sends the retained observations to the repacked positions. -/
 theorem map_observations :
@@ -297,10 +301,10 @@ theorem repacked_residual_iff (remaining count : Nat) (table : Table F (remainin
       (store (owner := repackedRoot) (invocation := rootInvocation) table) ↔
     (residualAtom remaining count).Holds (interpretation F G) {}
       ((reductionRootInput proverValues proverDimension claim count handle).boundary
-        (.returned (SumcheckReduceVerifier.reduceRootResults (outputs.get .here, outputs.get (.there .here)))))
+        (.returned (SumcheckReduceVerifier.reduceRootResults (outputs.get (.there .here), outputs.get (.there (.there .here))))))
       (store (owner := reductionRoot) (invocation := rootInvocation) table) := by
   rw [rootMap.atom_holds]
-  rcases outputs with _ | ⟨point, _ | ⟨value, _ | ⟨valuesP, _ | ⟨pointP, _ | ⟨⟩⟩⟩⟩⟩
+  rcases outputs with _ | ⟨custody, _ | ⟨point, _ | ⟨value, _ | ⟨valuesP, _ | ⟨pointP, _ | ⟨⟩⟩⟩⟩⟩⟩
   exact Iff.rfl
 
 /-! ### Controls -/
@@ -432,9 +436,9 @@ theorem inline_initial_lowers_at_call (claim : F) (count handle : Nat) (outcome)
   inline_initial_lowers (List.ofFn values) 1 (ofVector values) (ofList?_ofFn values)
     (by rw [List.length_ofFn]; decide) claim _ _
     (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionClaim
-      (.there (.there (.there (.there .here)))) rfl rfl)
+      (.there (.there (.there (.there (.there .here))))) rfl rfl)
     (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionInitialPoint
-      (.there (.there (.there .here))) rfl rfl)
+      (.there (.there (.there (.there .here)))) rfl rfl)
 
 /-! ### Substitution at the actual public Sumcheck call -/
 

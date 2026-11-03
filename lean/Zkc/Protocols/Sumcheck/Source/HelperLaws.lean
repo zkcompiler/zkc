@@ -70,7 +70,7 @@ theorem check_malformed_generic_body (table : Meanings F G)
         .done (boolResult (decide (HasShape xs dimension columns))))
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) (malformed : ¬ HasShape xs point.length 1) :
-    checkBody.denote (meaning F G table) (checkInputs xs point claim).get = .done (boolResult false) := by
+    checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get = .done (boolResult false) := by
   rw [check_expansion, ite_eq_left pointBound,
     shapeLaw xs point.length 1 vectorBound pointBound (by decide +kernel)]
   simp only [boolResult, PIR.Process.bind, Values.get, decide_eq_false malformed, Bool.false_eq_true, ite_false]
@@ -82,7 +82,7 @@ theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Law
         (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get)
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
-    checkBody.denote (meaning F G table) (checkInputs xs point claim).get =
+    checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get =
       .done (boolResult (decide (HasShape xs point.length 1 ∧
         (restrictPrefixValues xs point).sum = claim))) := by
   rw [check_expansion, ite_eq_left pointBound,
@@ -97,7 +97,7 @@ theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Law
 /-- Point-length exhaustion occurs before shape or constructor in both bodies. -/
 theorem check_point_exhausted (table : Meanings F G) (xs point : List F) (claim : F)
     (overflow : ¬ point.length < indexLimit) :
-    checkBody.denote (meaning F G table) (checkInputs xs point claim).get = .halt .exhausted ∧
+    checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get = .halt .exhausted ∧
     (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get = .halt .exhausted := by
   simp only [check_expansion, checkTable_expansion, ite_eq_right overflow, and_self]
 
@@ -132,7 +132,7 @@ theorem sums_generic_body_all (table : Meanings F G) (less : LessAllLaw table)
 theorem check_large_dimension_generic_body (table : Meanings F G) (less : LessLaw table)
     (association : ShapeBodyLaw table) (xs point : List F) (claim : F)
     (pointBound : point.length < indexLimit) (large : ¬ point.length < 64) :
-    checkBody.denote (meaning F G table) (checkInputs xs point claim).get = .done (boolResult false) := by
+    checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get = .done (boolResult false) := by
   rw [check_expansion, ite_eq_left pointBound, association,
     shape_large_dimension table less xs point.length 1 (by decide) (by decide +kernel) pointBound large]
   rfl
@@ -141,7 +141,7 @@ theorem check_large_dimension_generic_body (table : Meanings F G) (less : LessLa
 theorem check_vector_exhausted_generic_body (table : Meanings F G) (less : LessLaw table)
     (association : ShapeBodyLaw table) (xs point : List F) (claim : F)
     (small : point.length < 64) (vectorOverflow : ¬ xs.length < indexLimit) :
-    checkBody.denote (meaning F G table) (checkInputs xs point claim).get = .halt .exhausted := by
+    checkBody.denote (meaning F G table) (terminalInputs xs 0 point claim).get = .halt .exhausted := by
   have pointBound : point.length < indexLimit := Nat.lt_trans small (by decide +kernel)
   rw [check_expansion, ite_eq_left pointBound, association,
     shape_length_exhausted table less xs point.length 1 (by decide) (by decide +kernel) small vectorOverflow]

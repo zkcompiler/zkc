@@ -8,18 +8,18 @@ public import Zkc.Protocols.Sumcheck.Source.PreludeNormalForms
 
 @[expose] public section
 
-/-! Seven-input Pending admission, exact rounds and consuming return of Reduce. -/
+/-! Eight-input Pending admission, exact rounds and consuming return of Reduce. -/
 namespace ZkcExamples.Structured.SumcheckVerifierPrelude
 open Zkc.Source Zkc.Source.Structured
 open SumcheckVerifierBodies SumcheckVerifierHelpers
 
-abbrev reduceInputScopes : List (List Nat) := [[0], [0], [0], [1], [1], [0, 1], [1]]
-abbrev reduceOutputScopes : List (List Nat) := [[0], [0], [0], [0], [1], [1]]
+abbrev reduceInputScopes : List (List Nat) := [[0], [0], [0], [1], [1], [1], [0, 1], [1]]
+abbrev reduceOutputScopes : List (List Nat) := [[0], [0], [0], [0], [1], [1], [1]]
 
 /-- The literal source permutation, before any participant mask is applied. -/
-def returnValues {Value : Ty → Type} (state : Values Value repeatState) :
-    Values Value reduceOutputs :=
-  SumcheckVerifierBodies.reduceReturnValues state
+def returnValues {F G : Type} (state : Values (Component (assignment F G)) repeatState) :
+    Values (Component (assignment F G)) reduceOutputs :=
+  SumcheckVerifierBodies.reduceReturnValues (some 0) state
 
 /-- The suffix consumes the returned Pending through the actual local helper. -/
 theorem return_uses_atPrefix :
@@ -30,14 +30,14 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
 def reduceArguments (valuesP : Option (List F)) (dimensionP widthP : Option Nat)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     Values (Component (assignment F G)) reduceInputs :=
   .cons valuesP (.cons dimensionP (.cons widthP
-    (.cons point (.cons claim (.cons count (.cons service .nil))))))
+    (.cons custody (.cons point (.cons claim (.cons count (.cons service .nil)))))))
 
 def reduceResults (pc : Option (List F) × Option F) :
     Values (Component (assignment F G)) reduceOutputs :=
-  .cons none (.cons none (.cons none (.cons none (.cons pc.1 (.cons pc.2 .nil)))))
+  .cons none (.cons none (.cons none (.cons none (.cons (some 0) (.cons pc.1 (.cons pc.2 .nil))))))
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- At the verifier, the returned tuple keeps exactly the verifier's carried point
@@ -50,7 +50,7 @@ theorem mask_returnValues (ctx : ProtocolContext) (self : Nat)
         state.get SumcheckRoundNormalForms.verifierClaimSlot) := by
   subst self
   unfold returnValues SumcheckVerifierBodies.reduceReturnValues reduceResults
-  iterate 7 unfold maskValues
+  iterate 8 unfold maskValues
   simp [reduceOutputScopes, ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
 
 def reduceDenote (maximum : Nat) (U : UnitPayload) (ctx : ProtocolContext) (self : Nat)
@@ -66,13 +66,13 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 theorem mask_reduceArguments (ctx : ProtocolContext) (self : Nat)
     (verifier : self = ctx.roles 1) (separate : ctx.roles 0 ≠ self)
     (valuesP : Option (List F)) (dimensionP widthP : Option Nat)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     maskValues self (ctx.mapScopes reduceInputScopes)
-      (reduceArguments (G := G) valuesP dimensionP widthP point claim count service) =
-        reduceArguments none none none point claim count service := by
+      (reduceArguments (G := G) valuesP dimensionP widthP custody point claim count service) =
+        reduceArguments none none none custody point claim count service := by
   subst self
   unfold reduceArguments
-  iterate 8 unfold maskValues
+  iterate 9 unfold maskValues
   simp [reduceInputScopes, ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
 
 /-- Exact checked normal form, including opening and reconstructing Pending. -/
@@ -80,34 +80,34 @@ theorem prelude_expansion (U : UnitPayload) (bodies : Bodies U.definitions)
     (claims : SumcheckPendingLaws.Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self) (maximum : Nat)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     (reduceBody maximum).denote
       (participantMeaningWith (.silent _) (participantActions F G)
         (plainHelpers U) self (U.plainProtocolTable F G) ctx)
-      (reduceArguments none none none point claim count service).get =
-      SumcheckPreludeNormalForms.verifierReduceProcess U maximum ctx point claim count service :=
+      (reduceArguments none none none custody point claim count service).get =
+      SumcheckPreludeNormalForms.verifierReduceProcess U maximum ctx custody point claim count service :=
   SumcheckPreludeNormalForms.verifierReduce_process U maximum bodies claims ctx self verifier separate
-    point claim count service
+    custody point claim count service
 
 open SumcheckVerifierLaws
 
 /-- Ordinary count admission on a complete Pending value. -/
 def pendingRounds (maximum : Nat) (ctx : ProtocolContext)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     PIR.Process (participantInterface F G) (Option (List F) × Option F) :=
-  match point, claim with
-  | some point, some claim =>
+  match custody, point, claim with
+  | some _, some point, some claim =>
     match count with
     | none => .halt .incomplete
     | some count =>
       if count ≤ maximum then PIR.repeatN count (roundPlain ctx service) (some point, some claim)
       else .halt .refused
-  | _, _ => .halt .incomplete
+  | _, _, _ => .halt .incomplete
 
 /-- The caller constructs Pending from its scalar before admitting any rounds. -/
 def admittedRounds (maximum : Nat) (ctx : ProtocolContext)
     (count service : Option Nat) (claim : Option F) :=
-  pendingRounds (G := G) maximum ctx (some []) claim count service
+  pendingRounds (G := G) maximum ctx (some 0) (some []) claim count service
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem admittedRounds_missing (maximum : Nat) (ctx : ProtocolContext)
@@ -134,7 +134,7 @@ theorem repeat_optional (U : UnitPayload) (bodies : Bodies U.definitions)
     (point : List F) (claim : F) (count service : Option Nat) :
     denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count
       (embedV (G := G) (some point, some claim)) (cap service) (bodyFn U ctx (ctx.roles 1)) =
-      (pendingRounds maximum ctx (some point) (some claim) count service).bind
+      (pendingRounds maximum ctx (some 0) (some point) (some claim) count service).bind
         (fun pc => .done (embedV pc)) := by
   have inside : ((repeatSpec maximum).roles.map ctx.roles).contains (ctx.roles 1) = true := by simp
   cases count with
@@ -149,7 +149,7 @@ theorem repeat_optional (U : UnitPayload) (bodies : Bodies U.definitions)
         (Nat.lt_of_not_ge bounded)]
       simp only [pendingRounds, bounded, ↓reduceIte, PIR.Process.bind]
 
--- Returned rounds contain both Pending components, including the zero case.
+-- Returned rounds contain all Pending components, including the zero case.
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 private theorem finish_rounds (ctx : ProtocolContext) (point : List F) (claim : F)
     (count : Nat) (service : Option Nat) :
@@ -180,43 +180,46 @@ private theorem finish_rounds (ctx : ProtocolContext) (point : List F) (claim : 
 /-- The consuming suffix is erased only after proving returned Pending completeness. -/
 theorem verifierReduce_rounds (U : UnitPayload) (bodies : Bodies U.definitions)
     (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1) (maximum : Nat)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
-    SumcheckPreludeNormalForms.verifierReduceProcess (G := G) U maximum ctx point claim count service =
-      (pendingRounds maximum ctx point claim count service).bind
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    SumcheckPreludeNormalForms.verifierReduceProcess (G := G) U maximum ctx custody point claim count service =
+      (pendingRounds maximum ctx custody point claim count service).bind
         (fun pc => .done (returnValues (embedV (G := G) pc))) := by
-  cases point with
+  cases custody with
   | none => rfl
-  | some point =>
-    cases claim with
+  | some token =>
+    cases point with
     | none => rfl
-    | some claim =>
-      unfold SumcheckPreludeNormalForms.verifierReduceProcess
-      change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count
-        (embedV (G := G) (some point, some claim)) (cap service) (bodyFn U ctx (ctx.roles 1))).bind _ = _
-      rw [repeat_optional U bodies ctx separate]
-      simp only [PIR.Process.bind_assoc, PIR.Process.bind]
-      cases count with
+    | some point =>
+      cases claim with
       | none => rfl
-      | some count =>
-        by_cases bounded : count ≤ maximum
-        · simp only [pendingRounds, bounded, ↓reduceIte]
-          refine Eq.trans ?_ (finish_rounds (G := G) ctx point claim count service)
-          apply congrArg (PIR.Process.bind _)
-          funext pc
-          rcases pc with ⟨p, c⟩
-          cases p <;> cases c <;> rfl
-        · simp only [pendingRounds, bounded, ↓reduceIte, PIR.Process.bind]
+      | some claim =>
+        unfold SumcheckPreludeNormalForms.verifierReduceProcess
+        change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count
+          (embedV (G := G) (some point, some claim)) (cap service) (bodyFn U ctx (ctx.roles 1))).bind _ = _
+        rw [repeat_optional U bodies ctx separate]
+        simp only [PIR.Process.bind_assoc, PIR.Process.bind]
+        cases count with
+        | none => rfl
+        | some count =>
+          by_cases bounded : count ≤ maximum
+          · simp only [pendingRounds, bounded, ↓reduceIte]
+            refine Eq.trans ?_ (finish_rounds (G := G) ctx point claim count service)
+            apply congrArg (PIR.Process.bind _)
+            funext pc
+            rcases pc with ⟨p, c⟩
+            cases p <;> cases c <;> rfl
+          · simp only [pendingRounds, bounded, ↓reduceIte, PIR.Process.bind]
 
-/-- All seven optional inputs and both actual Pending operations, with output masks. -/
+/-- All eight optional inputs and both actual custody operations, with output masks. -/
 theorem reduce_optional (U : UnitPayload) (bodies : Bodies U.definitions)
     (claims : SumcheckPendingLaws.Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self) (maximum : Nat)
     (valuesP : Option (List F)) (dimensionP widthP : Option Nat)
-    (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     reduceDenote (G := G) maximum U ctx self
-      (reduceArguments valuesP dimensionP widthP point claim count service) =
-      (pendingRounds maximum ctx point claim count service).bind
+      (reduceArguments valuesP dimensionP widthP custody point claim count service) =
+      (pendingRounds maximum ctx custody point claim count service).bind
         (fun pc => .done (reduceResults pc)) := by
   unfold reduceDenote
   rw [mask_reduceArguments ctx self verifier separate,
@@ -232,21 +235,21 @@ theorem reduce_missing (U : UnitPayload) (bodies : Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self) (maximum : Nat)
     (valuesP : Option (List F)) (dimensionP widthP : Option Nat)
-    (point : Option (List F)) (claim : Option F) (service : Option Nat) :
+    (custody : Option CustodyToken) (point : Option (List F)) (claim : Option F) (service : Option Nat) :
     reduceDenote (G := G) maximum U ctx self
-      (reduceArguments valuesP dimensionP widthP point claim none service) = .halt .incomplete := by
+      (reduceArguments valuesP dimensionP widthP custody point claim none service) = .halt .incomplete := by
   rw [reduce_optional U bodies claims ctx self verifier separate]
-  cases point <;> cases claim <;> rfl
+  cases custody <;> cases point <;> cases claim <;> rfl
 
-/-- Excess count is refused after both Pending components have been consumed. -/
+/-- Excess count is refused after all Pending components have been consumed. -/
 theorem reduce_excess (U : UnitPayload) (bodies : Bodies U.definitions)
     (claims : SumcheckPendingLaws.Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self) (maximum count : Nat) (large : maximum < count)
     (valuesP : Option (List F)) (dimensionP widthP : Option Nat)
-    (point : List F) (claim : F) (service : Option Nat) :
+    (custody : CustodyToken) (point : List F) (claim : F) (service : Option Nat) :
     reduceDenote (G := G) maximum U ctx self
-      (reduceArguments valuesP dimensionP widthP (some point) (some claim) (some count) service) =
+      (reduceArguments valuesP dimensionP widthP (some custody) (some point) (some claim) (some count) service) =
       .halt .refused := by
   rw [reduce_optional U bodies claims ctx self verifier separate]
   simp only [pendingRounds, Nat.not_le_of_lt large, ↓reduceIte, PIR.Process.bind]
@@ -257,9 +260,9 @@ theorem reduce_zero (U : UnitPayload) (bodies : Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self) (maximum : Nat)
     (valuesP : Option (List F)) (dimensionP widthP : Option Nat)
-    (point : List F) (claim : F) (service : Option Nat) :
+    (custody : CustodyToken) (point : List F) (claim : F) (service : Option Nat) :
     reduceDenote (G := G) maximum U ctx self
-      (reduceArguments valuesP dimensionP widthP (some point) (some claim) (some 0) service) =
+      (reduceArguments valuesP dimensionP widthP (some custody) (some point) (some claim) (some 0) service) =
       .done (reduceResults (some point, some claim)) := by
   rw [reduce_optional U bodies claims ctx self verifier separate]
   simp only [pendingRounds, Nat.zero_le, ↓reduceIte, PIR.repeatN, PIR.Process.bind]

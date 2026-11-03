@@ -104,6 +104,9 @@ nested regions: on arguments that encode the structured arguments, it returns
 the encoded structured results or stops for the same reason. A carrier
 calculation must take data arguments only. -/
 def implements : Structured.Op → Resolved → Bool
+  | .createUnit slot, .custody .create actual
+  | .passUnit slot, .custody .pass actual
+  | .consumeUnit slot, .custody .consume actual => slot == actual
   | .exec (.indexConstant value), .calculate (.indexConstant value') =>
       value == value' && decide (value < indexLimit)
   | .exec .indexEqual, .calculate .indexEqual => true
@@ -131,7 +134,9 @@ def resultsBounded : Structured.Op → Bool
 
 /-- Whether a structured operation without nested regions has a recipe: a
 carrier calculation or a primitive. -/
-def hasRecipe (op : Structured.Op) : Bool := (Calculation.ofOp? op).isSome || (op matches .exec _)
+def hasRecipe (op : Structured.Op) : Bool :=
+  (Calculation.ofOp? op).isSome ||
+    (op matches .exec _ | .createUnit _ | .passUnit _ | .consumeUnit _)
 
 /-- The names a walk has bound so far, and those of its index names whose value
 is known to be below the index limit. -/
@@ -302,7 +307,7 @@ def checkHelper (vocabulary : Vocabulary) (validator : Validator) (definitions :
           let formals := function.inputs.map (·.1)
           if function.inputs.map (·.2.sort) = definition.inputs.map .data ∧
               function.results.map (·.sort) = definition.outputs.map .data ∧ formals.Nodup ∧
-              definition.inputs.all dataType then
+              definition.inputs.all localType then
             match walkRegion vocabulary validator helperFuel (definitions.take index) formals ⟨formals, []⟩
                 definition.body function.body with
             | .ok (.returned [.ret values] returned _) =>

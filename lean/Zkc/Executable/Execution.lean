@@ -86,6 +86,25 @@ inductive CustodyTransfer where
   | create | pass | consume
   deriving DecidableEq, Repr
 
+/-- The local closed projection of a custody transfer. This is the same
+payload-erased interpretation as `SiteObservations.closed`; it does not model
+runtime freshness or ledger refusal. Slot and operand-shape checks remain exact.
+The runtime acceptance-inclusion boundary relates successful checked runs to
+this projection. Custody never becomes a proof or transcript payload. -/
+def CustodyTransfer.erased {F G : Type} (transfer : CustodyTransfer) (slot : String) :
+    List (Value F G) → PIR.Outcome (List (Value F G))
+  | [] => match transfer with
+      | .create => .returned [.custody slot 0]
+      | _ => .stopped .refused
+  | [.custody actual _] =>
+      if slot = actual then
+        match transfer with
+        | .pass => .returned [.custody slot 0]
+        | .consume => .returned []
+        | .create => .stopped .refused
+      else .stopped .refused
+  | _ => .stopped .refused
+
 /-- The meaning assumed for an installed operation. Constants take their value
 from the operation's single canonical decimal parameter. A numerical row takes
 the operand mask as its last static argument and the expression as its single
@@ -457,6 +476,10 @@ def Resolved.apply (context : Context) (challenge : History F G → m F) (live :
       pure (match operation.apply arguments with
         | .returned results => .returned (results, live, 0)
         | .stopped reason => .stopped reason)
+  | .custody transfer slot, arguments =>
+      pure (match transfer.erased slot arguments with
+        | .returned results => .returned (results, live, 0)
+        | .stopped reason => .stopped reason)
   | _, _ => pure (.stopped .refused)
 
 variable (vocabulary : Vocabulary) (validator : Validator) (context : Context)
@@ -604,6 +627,7 @@ def Resolved.evaluate : Resolved → List (Value F G) → PIR.Outcome (List (Val
   | .indicesAppend, [.indices coordinates, .index index] => .returned [.indices (coordinates ++ [index])]
   | .calculate calculation, arguments => Zkc.Construction.calculate calculation arguments
   | .compute operation, arguments => operation.apply arguments
+  | .custody transfer slot, arguments => transfer.erased slot arguments
   | _, _ => .stopped .refused
 
 /-- Iterate a region without a transcript. -/

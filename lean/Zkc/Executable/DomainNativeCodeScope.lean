@@ -17,7 +17,7 @@ theorem NativeScope.Holds.index {scope : NativeScope} {env : Environment F G}
     ∃ value, env[reference]? = some (.data (.index value)) := by
   obtain ⟨value, looked, sorted⟩ := holds.get found
   cases value with
-  | transcript | indices => cases sorted
+  | transcript | indices | custody => cases sorted
   | data payload =>
       rcases payload with ⟨ty, supported, contents⟩
       simp only [NativeSlot.Holds, Domain.Value.sort, ValueSort.data.injEq] at sorted

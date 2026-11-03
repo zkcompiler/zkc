@@ -38,7 +38,7 @@ private theorem step_loop (program : Structured.Program) (context : Context)
       | none => rfl
       | some value =>
           cases value with
-          | transcript | indices => rfl
+          | transcript | indices | custody => rfl
           | data payload =>
               rcases payload with ⟨ty, admissible, contents⟩
               cases ty <;> cases Domain.read env refs <;> rfl
@@ -218,13 +218,13 @@ theorem meteredStep_fits {R : Type} :
               cases readEq : Domain.read env refs with
               | none =>
                   cases value with
-                  | transcript | indices => simp [DomainAdapter.runK]
+                  | transcript | indices | custody => simp [DomainAdapter.runK]
                   | data payload =>
                       rcases payload with ⟨ty, admissible, contents⟩
                       cases ty <;> simp [DomainAdapter.runK]
               | some carried =>
                   cases value with
-                  | transcript | indices => simp [DomainAdapter.runK]
+                  | transcript | indices | custody => simp [DomainAdapter.runK]
                   | data payload =>
                       rcases payload with ⟨ty, admissible, contents⟩
                       cases ty <;> try (simp [DomainAdapter.runK])

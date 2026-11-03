@@ -36,7 +36,7 @@ private theorem mul_encoding : StackedEncoding [1, 81, 82, 83] 1 2 circuit.mul :
     norm_num [circuit, GkrRoundsLayout.encode]
   rw [← encoded, GkrRoundsLayout.decode_encode]
 
-example : HelperCallbacks.Selected GkrSourceBodies.helper34Body none Goals.traversalCallback_selection :=
+example : HelperCallbacks.Selected GkrSourceBodies.helper65Body none Goals.traversalCallback_selection :=
   Goals.traversalCallback_association
 
 /-- The actual step decrements the backward index and keeps all four captures,
@@ -115,7 +115,7 @@ private def stoppingSecondBlock (reason : PIR.Stop) : Evaluation.MeaningsOn mode
 
 private def stoppingLayer (reason : PIR.Stop) : Evaluation.MeaningsOn model.toCarriers closedInterface :=
   [⟨GkrSourceBodies.selectBlockHelper, fun _ => .done (Goals.BlockResult.pack ⟨[2]⟩)⟩,
-   ⟨GkrSourceBodies.helper33Helper, fun _ => .halt reason⟩]
+   ⟨GkrSourceBodies.helper64Helper, fun _ => .halt reason⟩]
 
 example (reason : PIR.Stop) :
     Goals.TraversalStep.run model (stoppingBlock reason) 0 [3] 1 [2] [1] 0 0 = .halt reason := by rfl

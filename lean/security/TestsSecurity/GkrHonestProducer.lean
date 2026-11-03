@@ -88,7 +88,7 @@ theorem wrong_shape : ¬ ({ mixed with inputs := [2] } : CircuitEncoding ℚ).Ad
 /-- The actual source helper computes the mixed arithmetic layer. -/
 theorem actual_layer :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper33Helper
+      GkrSourceBodies.helper64Helper
       (.cons (List.replicate 8 1) (.cons (List.replicate 8 1) (.cons [2, 2] (.cons 1 .nil)))) =
         .done (.cons [32, 32] .nil) := by
   have decodedWiring : ofList? 3 (List.replicate 8 (1 : ℚ)) = some (fun _ => 1) := replicate_decode 3 1
@@ -107,7 +107,7 @@ theorem actual_layer :
 /-- Altering the helper result does not preserve the actual source equation. -/
 theorem changed_helper :
     invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper33Helper
+      GkrSourceBodies.helper64Helper
       (.cons (List.replicate 8 1) (.cons (List.replicate 8 1) (.cons [2, 2] (.cons 1 .nil)))) ≠
         .done (.cons [33, 32] .nil) := by
   rw [actual_layer]

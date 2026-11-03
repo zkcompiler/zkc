@@ -76,57 +76,65 @@ theorem checkTable_equation (xs point : List F) (claim : F)
   (checkTable_body xs point claim).trans
     (checkTable_generic_body _ prefix_laws xs point claim vectorBound pointBound)
 
+/-- The closed helper consumes custody without observing its coordinate. -/
+theorem check_custody_irrelevant (xs point : List F) (claim : F) (token : CustodyToken) :
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs token point claim) =
+      invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) := by
+  exact (check_association.invoke unit.linked (terminalInputs xs token point claim)).trans
+    ((SumcheckHelperLaws.check_custody_irrelevant _ xs token point claim).trans
+      (check_association.invoke unit.linked (terminalInputs xs 0 point claim)).symm)
+
 theorem check_equation (xs point : List F) (claim : F)
     (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) =
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) =
       .done (boolResult (decide (HasShape xs point.length 1 ∧
         (restrictPrefixValues xs point).sum = claim))) :=
-  (check_association.invoke unit.linked (checkInputs xs point claim)).trans
+  (check_association.invoke unit.linked (SumcheckHelperLaws.terminalInputs xs 0 point claim)).trans
     (check_generic_body _ prefix_laws checkTable_body xs point claim vectorBound pointBound)
 
 /-- The existing mathematical checker, including malformed vectors, for the actual public helper. -/
 theorem check_mathematical (xs point : List F) (claim : F)
     (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) =
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) =
       .done (boolResult (Zkc.Protocols.Sumcheck.Multilinear.check
         (n := 0 + point.length) xs
         (Quadratic.point point.length (coordinates point.length point) Fin.elim0) claim)) :=
-  (check_association.invoke unit.linked (checkInputs xs point claim)).trans
+  (check_association.invoke unit.linked (SumcheckHelperLaws.terminalInputs xs 0 point claim)).trans
     (SumcheckHelperLaws.check_mathematical _ prefix_laws checkTable_body
       xs point claim vectorBound pointBound)
 
 theorem check_mle (xs point : List F) (claim : F) (table : Table F (0 + point.length))
     (decoded : ofList? (0 + point.length) xs = some table) (vectorBound : xs.length < indexLimit) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) =
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) =
       .done (boolResult (decide (extension (0 + point.length) table
         (coordinates (0 + point.length) point) = claim))) :=
-  (check_association.invoke unit.linked (checkInputs xs point claim)).trans
+  (check_association.invoke unit.linked (SumcheckHelperLaws.terminalInputs xs 0 point claim)).trans
     (check_mle_generic_body _ prefix_laws checkTable_body xs point claim table decoded vectorBound)
 
 theorem check_large_dimension (xs point : List F) (claim : F)
     (pointBound : point.length < indexLimit) (large : ¬ point.length < 64) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) = .done (boolResult false) :=
-  (check_association.invoke unit.linked (checkInputs xs point claim)).trans
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) = .done (boolResult false) :=
+  (check_association.invoke unit.linked (SumcheckHelperLaws.terminalInputs xs 0 point claim)).trans
     (check_large_dimension_generic_body _ (lessAll_bounded _ first_laws.less) shape_body
       xs point claim pointBound large)
 
 theorem check_vector_exhausted (xs point : List F) (claim : F)
     (small : point.length < 64) (overflow : ¬ xs.length < indexLimit) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) = .halt .exhausted :=
-  (check_association.invoke unit.linked (checkInputs xs point claim)).trans
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) = .halt .exhausted :=
+  (check_association.invoke unit.linked (SumcheckHelperLaws.terminalInputs xs 0 point claim)).trans
     (check_vector_exhausted_generic_body _ (lessAll_bounded _ first_laws.less) shape_body
       xs point claim small overflow)
 
 theorem check_point_exhausted (xs point : List F) (claim : F)
     (overflow : ¬ point.length < indexLimit) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) = .halt .exhausted :=
-  (check_association.invoke unit.linked (checkInputs xs point claim)).trans
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) = .halt .exhausted :=
+  (check_association.invoke unit.linked (SumcheckHelperLaws.terminalInputs xs 0 point claim)).trans
     (SumcheckHelperLaws.check_point_exhausted (bindings := SumcheckMathBindings.prefixBindings)
       _ xs point claim overflow).1
 
 /-- Total actual lookup, preserving the source's ordered admission and short-circuit cases. -/
 theorem check_all (xs point : List F) (claim : F) :
-    invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) =
+    invoke (helperMeanings (G := G)) checkHelper (terminalInputs xs 0 point claim) =
       if point.length < indexLimit then
         if point.length < 64 then
           if xs.length < indexLimit then
@@ -153,7 +161,7 @@ theorem check_all (xs point : List F) (claim : F) :
 /-- Actual helper lookup after forgetting sites returns the proved mathematical Boolean. -/
 theorem check_plain (xs point : List F) (claim : F)
     (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
-    (invoke (unit.tables F G).closed checkHelper (checkInputs xs point claim)).interpret forgetSites =
+    (invoke (unit.tables F G).closed checkHelper (terminalInputs xs 0 point claim)).interpret forgetSites =
       .done (boolResult (Zkc.Protocols.Sumcheck.Multilinear.check
         (n := 0 + point.length) xs
         (Quadratic.point point.length (coordinates point.length point) Fin.elim0) claim)) := by

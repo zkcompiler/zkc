@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.ChaumPedersenProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:adf0f3334311b880f5bbd3d05240131f813d7438e295cb7f0bcfc46824846b9e"
-  candidate := "sha256:85205cf2e77faab74de8780f31be81ae126c1bbfbf6b524c6f05cdf89d1ff00b"
+  source := "sha256:9aa55a5711d68922a1d719fb0d37d51dc2428db1bf559de18724ced7d5ce8f7d"
+  candidate := "sha256:01a8b6ae803df270a8a3781319753290bde712e6a47d4f66e4e8a5729de27913"
   policy := ⟨"zkl_171308863f7ffea0edd6d7c73a76733c4d6cae9ba8a58405e8c7862fb91df111", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2, 3], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -42,5 +42,10 @@ def participant : Participant where
     ⟨.calculate (.groupEqual "bls12-381.g1"), [23, 25], [.data .boolean], []⟩,
     ⟨.calculate .booleanAnd, [22, 26], [.data .boolean], []⟩]
   returned := [27, 18]
+
+/-- The exported catalogue rows of the identities the participant names, for
+`Participant.checkCatalogue` to admit. -/
+def catalogue : Zkc.Source.Structured.Catalogue :=
+  { nominals := [⟨"bls12-381.fr", .field, [("PairingG1", "bls12-381.g1"), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")], ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"], (some 52435875175126190479447740508185965837690552500527637822603658699938581184513)⟩, ⟨"bls12-381.g2", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.gt", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"bls12-381.g1", .group, [("Scalar", "bls12-381.fr")], ["Group", "ScalarAction"], none⟩, ⟨"merlin3.bls12-381.fr64be/0", .transcript, [("ChallengeField", "bls12-381.fr")], ["FieldTranscript", "Transcript"], none⟩], services := [] }
 
 end ZkcExamples.Construction.ChaumPedersenProofParticipant

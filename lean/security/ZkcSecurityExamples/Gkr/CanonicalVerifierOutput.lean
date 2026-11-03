@@ -68,9 +68,10 @@ its checked multilinear-extension comparison. -/
 theorem input_reads (encoding : CircuitEncoding F) («outputs» : List F)
     (admitted : encoding.Admitted 4 4 «outputs») (point : List F) (claim : F)
     (pointSize : point.length = encoding.width) :
-    invokeProtocol (beforeRoot (F := F) (G := G)) GkrSourceBodies.sourceProtocol80Signature
+    invokeProtocol (beforeRoot (F := F) (G := G)) GkrSourceBodies.inputSignature
       (SourceRows.inputContext {}) 1
       ((SourceRows.InputInputs.pack {
+          custody := some 0,
           «inputs» := some encoding.inputs,
           point := some point,
           claim := some claim
@@ -79,8 +80,9 @@ theorem input_reads (encoding : CircuitEncoding F) («outputs» : List F)
           accepted := some (decide (extension encoding.width encoding.circuit.inputs (coordinates encoding.width point) = claim))
         })) := by
   have body : invokeProtocol (beforeRoot (F := F) (G := G))
-      GkrSourceBodies.sourceProtocol80Signature (SourceRows.inputContext {}) 1
+      GkrSourceBodies.inputSignature (SourceRows.inputContext {}) 1
       ((SourceRows.InputInputs.pack {
+          custody := some 0,
           «inputs» := some encoding.inputs,
           point := some point,
           claim := some claim
@@ -89,20 +91,22 @@ theorem input_reads (encoding : CircuitEncoding F) («outputs» : List F)
         (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers
           1 beforeInput (SourceRows.inputContext {}) Occurrence.iterations)
         (((SourceRows.InputInputs.pack {
+            custody := some 0,
             «inputs» := some encoding.inputs,
             point := some point,
             claim := some claim
           })) :
           Values (Component (assignment F G)) Generated.Presentations.Gkr.Input.inputInputs).get := by
-    change invokeProtocol (⟨GkrSourceViews.sourceProtocol80Definition.signature, _⟩ :: beforeInput)
-      GkrSourceViews.sourceProtocol80Definition.signature _ _ _ = _
+    change invokeProtocol (⟨GkrSourceViews.inputDefinition.signature, _⟩ :: beforeInput)
+      GkrSourceViews.inputDefinition.signature _ _ _ = _
     rw [invokeProtocol_cons_same]
     unfold CheckedProtocol.denoteWithOn
-    erw [GkrSourceViews.sourceProtocol80Definition.body_eq_of_raw _ Generated.Presentations.Gkr.Input.inputBody_raw]
+    erw [GkrSourceViews.inputDefinition.body_eq_of_raw _ Generated.Presentations.Gkr.Input.inputBody_raw]
     change (Generated.Presentations.Gkr.Input.inputBody.denote
       (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers
         1 beforeInput (SourceRows.inputContext {}) Occurrence.iterations)
         (((SourceRows.InputInputs.pack {
+            custody := some 0,
             «inputs» := some encoding.inputs,
             point := some point,
             claim := some claim
@@ -120,7 +124,7 @@ theorem input_reads (encoding : CircuitEncoding F) («outputs» : List F)
     exact Nat.pow_lt_pow_right (by decide) small
   have normalized := inputPresentation_equation (F := F) (G := G)
     (SourceRows.inputContext {}) (.only _) beforeInput beforeInput_masked
-    (some encoding.inputs) (some point) (some claim)
+    (some encoding.inputs) (some 0) (some point) (some claim)
   refine normalized.trans ?_
   dsimp only [inputPresentation, inputPresentation_certificate]
   simp only [
@@ -129,7 +133,7 @@ theorem input_reads (encoding : CircuitEncoding F) («outputs» : List F)
     Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push,
     SiteObservations.silent, PIR.Process.bind, PIR.Process.bind_done, Participant.owned,
     ProtocolContext.roles, ProtocolContext.enter, roleSubstitution, RoleFamily.sequence,
-    OccurrencePresentation.closed_helper, GkrSourceVerifier.terminal_plain encoding.width encoding.inputs point
+    OccurrencePresentation.closed_helper, GkrSourceVerifier.terminal_plain encoding.width 0 encoding.inputs point
       encoding.circuit.inputs claim (encoding.inputs_decode admitted.1) pointSize small inputBound,
     PIR.Process.interpret, Values.present, Values.get, Values.split, ProtocolOp.results,
     maskValues, Participant.restrict, ProtocolContext.mapScopes, Function.comp_apply,

@@ -398,7 +398,8 @@ class Driver(Runner):
                                   name=f"{subject.name}:native-refusal:{name}")
                 reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
                 self.check(f"{subject.name}:native-refusal:{name}:{index}",
-                           result.returncode > 0 and reason == kind.expected, result.stderr[-400:])
+                           result.returncode > 0 and reason.partition(":")[0] == kind.expected,
+                           result.stderr[-400:])
                 sites.append(dict(site=index, applicable=True, reason=reason))
             record.setdefault("mutations", {})[name] = dict(
                 stage=kind.stage, property=kind.property, expected=kind.expected, sites=sites,

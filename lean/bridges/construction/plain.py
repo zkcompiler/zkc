@@ -43,6 +43,17 @@ def batch_names(inventory, paired):
     return names
 
 
+def constructed_sources(runner, lake, directory, namespace):
+    """Use the common connection generator for the retained aggregate pair."""
+    runner.run([lake, "build", namespace + "Artifacts", "ZkcTools.ConstructionBindings.Generate"],
+               cwd=ROOT / "lean", name="two-batches:build-connection-inputs")
+    runner.run([lake, "env", "lean", "--run", "checks/GenerateReusableAggregate.lean", directory],
+               cwd=ROOT / "lean", name="two-batches:print-connections")
+    return [(ROOT / "lean" / relative, (directory / relative).read_text())
+            for role in ("Producer", "Validator", "Connection")
+            for relative in [Path(*(namespace + role).split(".")).with_suffix(".lean")]]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, required=True)
@@ -158,6 +169,12 @@ def main():
                                       names=batch_names(inventories[name], name == "two-batches"),
                                       inventory=inventories[name], runner=runner, lake=args.lake,
                                       fresh=args.fresh_bodies))
+        if not args.subject or "two-batches" in args.subject:
+            for path, value in constructed_sources(runner, args.lake,
+                    args.output / "two-batches" / "views", "Tests.ReusableAggregateTwoBatches"):
+                generated(path, value)
+            runner.run([args.lake, "build", "Tests.ReusableAggregateTwoBatchesConnection"],
+                       cwd=ROOT / "lean", name="two-batches:check-connections")
         report["status"] = "pass"
     finally:
         if report["status"] == "running":

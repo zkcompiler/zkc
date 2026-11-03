@@ -22,7 +22,7 @@ def roundPrefix (shape : Shape) : List Code := (roundCode shape.names).take 27
 def roundSuffix (shape : Shape) : List Code := (roundCode shape.names).drop 28
 
 theorem round_split (shape : Shape) : roundCode shape.names = roundPrefix shape ++
-    [.helper ⟨.call shape.names.appendHelper, [9,24], [.data (.vector shape.names.scalar)], []⟩] ++
+    [.helper ⟨.call shape.names.appendHelper, [10,25], [.data (.vector shape.names.scalar)], []⟩] ++
       roundSuffix shape := rfl
 
 theorem roundPrefix_static (shape : Shape) : Code.static (roundPrefix shape) = some 28 := rfl
@@ -33,26 +33,26 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 /-- Only local helper prices are admitted. The round certificate and total
 budget are generated below, rather than supplied by a realization. -/
 structure Prices (shape : Shape) (price : String → List (Value F G) → Nat) (appendBound : Nat) : Prop where
-  pending : ∀ (claim : F), price shape.names.pendingHelper [.data (.field shape.names.scalar claim)] ≤ 2
+  pending : ∀ (claim : F), price shape.names.pendingHelper [.data (.field shape.names.scalar claim)] ≤ 3
   openClaim : ∀ (point : List F) (claim : F),
-    price shape.names.openClaimHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar claim)] ≤ 1
+    price shape.names.openClaimHelper [.custody shape.names.custodySlot 0, .vector shape.names.scalar point, .data (.field shape.names.scalar claim)] ≤ 2
   atPrefix : ∀ (point : List F) (claim : F),
-    price shape.names.atPrefixHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar claim)] ≤ 1
+    price shape.names.atPrefixHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar claim)] ≤ 2
   append : ∀ (point : List F) (answer : F),
     price shape.names.appendHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar answer)] ≤ appendBound
   check : ∀ (values point : List F) (claim : F), point.length < 64 → values.length = 2 ^ point.length →
-    price shape.names.checkHelper [.vector shape.names.scalar values, .vector shape.names.scalar point,
-      .data (.field shape.names.scalar claim)] = 62 + 20 * point.length
+    price shape.names.checkHelper [.vector shape.names.scalar values, .custody shape.names.custodySlot 0, .vector shape.names.scalar point,
+      .data (.field shape.names.scalar claim)] = 63 + 20 * point.length
 
 /-- The fixed nonhelper round charge is 36. The only variable local price is
 point extension; all result declarations and continuation branches are checked. -/
 theorem round_fits (shape : Shape) (occurrences : Occurrences shape) (helpers : Helpers (F := F) (G := G) shape)
     (price : String → List (Value F G) → Nat) (appendBound : Nat) (prices : Prices shape price appendBound)
-    (a b c d e f g h : Domain.Value (Structured.uniformCarriers F G))
+    (a b c d e f g h k : Domain.Value (Structured.uniformCarriers F G))
     (index : Nat) (point : List F) (scalar : F) (history : Domain.History (Structured.uniformCarriers F G))
     (proof : Proof F G) (used budget : Nat) (within : used + (36 + appendBound) ≤ budget) :
     DomainVM.FitsK shape.program shape.context price budget (roundCode shape.names)
-      ([a,b,c,d,e,f,g,h] ++ .data (.index index) :: ProgramShape.carried shape point scalar history) proof used
+      ([a,b,c,d,e,f,g,h,k] ++ .data (.index index) :: ProgramShape.carried shape point scalar history) proof used
       (fun final unread charged => charged ≤ used + (36 + appendBound) ∧ ∀ values,
         Domain.read final yielded = some values →
           Domain.sortsMatch (carriedSorts shape.names) values = true →
@@ -124,7 +124,7 @@ theorem budgetContract (shape : Shape) (occurrences : Occurrences shape) (helper
     round_fits shape occurrences helpers price appendBound prices
       (.data (.vector shape.names.scalar values)) (.data (.field shape.names.scalar publicClaim))
       (.data (.index rounds)) (.transcript shape.names.suite initial)
-      (.data (.vector shape.names.scalar [])) (.data (.field shape.names.scalar publicClaim))
+      (.custody shape.names.custodySlot 0) (.data (.vector shape.names.scalar [])) (.data (.field shape.names.scalar publicClaim))
       (.data (.vector shape.names.scalar [])) (.data (.field shape.names.scalar publicClaim))
 
 end ZkcExamples.Executable.SumcheckFamily.Source

@@ -16,7 +16,7 @@ theorem embed_readbackData (nominal : Domain.Value (Structured.uniformCarriers F
     DomainAdapter.embedData scalar = some nominal := by
   cases nominal with
   | transcript => cases found
-  | indices => cases found; rfl
+  | indices | custody => cases found; rfl
   | data payload =>
       rcases payload with ⟨ty, supported, contents⟩
       cases ty <;> simp only [DomainAdapter.readbackData] at found
@@ -29,7 +29,7 @@ theorem readbackData_nontranscript (suite : String) (key : Origin → Origin) (i
     DomainAdapter.readbackValue suite key initial nominal = DomainAdapter.readbackData nominal := by
   cases nominal with
   | transcript actual => exact (notTranscript actual rfl).elim
-  | data | indices => rfl
+  | data | indices | custody => rfl
 
 theorem readbackData_embed (suite : String) (key : Origin → Origin) (initial : History F G)
     (scalar : Value F G) (nominal : Domain.Value (Structured.uniformCarriers F G))
@@ -37,7 +37,7 @@ theorem readbackData_embed (suite : String) (key : Origin → Origin) (initial :
     DomainAdapter.readbackValue suite key initial nominal = some scalar := by
   cases scalar with
   | data payload => cases payload <;> cases embedded <;> rfl
-  | index | vector | indices => cases embedded; rfl
+  | index | vector | indices | custody => cases embedded; rfl
   | transcript | unsupported => cases embedded
 
 theorem embedValues_erases (suite : String) (key : Origin → Origin) (initial : History F G) :
@@ -89,18 +89,26 @@ theorem Erases.dataEmbedding {suite : String} {key : Origin → Origin} {initial
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem encodeValues_local_embeds {types : List Structured.Ty}
+    (values : Values (Structured.assignment F G) types) (eligible : types.all localType = true) :
+    ∃ nominal : Environment F G,
+      DomainAdapter.embedValues (encodeValues values) = some nominal ∧
+        nominal.map Domain.Value.sort = types.map ValueSort.data := by
+  have admitted : types.all Domain.localType = true := by
+    apply List.all_eq_true.mpr
+    intro ty member
+    have allowed := List.all_eq_true.mp eligible ty member
+    cases ty <;> simp_all [localType, Domain.localType, dataType, Domain.dataType, Structured.Ty.isCustody, Structured.Ty.isHandle]
+  obtain ⟨encoded, found⟩ := Domain.encodeValues_local_exists values admitted
+  exact ⟨encoded, (DomainAdapter.encodeValues_local_embed values eligible).trans found, encodeValues_sorts values found⟩
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem encodeValues_embeds {types : List Structured.Ty}
     (values : Values (Structured.assignment F G) types) (eligible : types.all dataType = true) :
     ∃ nominal : Environment F G,
       DomainAdapter.embedValues (encodeValues values) = some nominal ∧
-        nominal.map Domain.Value.sort = types.map ValueSort.data := by
-  have admitted : types.all Domain.dataType = true := by
-    apply List.all_eq_true.mpr
-    intro ty member
-    have allowed := List.all_eq_true.mp eligible ty member
-    cases ty <;> simp_all [dataType, Domain.dataType, Structured.Ty.isHandle]
-  obtain ⟨encoded, found⟩ := Domain.encodeValues_exists values admitted
-  exact ⟨encoded, (DomainAdapter.encodeValues_embed values eligible).trans found, encodeValues_sorts values found⟩
+        nominal.map Domain.Value.sort = types.map ValueSort.data :=
+  encodeValues_local_embeds values (localTypes_of_data eligible)
 
 theorem calculate_returns_embeds (calculation : Calculation)
     (eligible : calculation.op.results.all dataType = true)
