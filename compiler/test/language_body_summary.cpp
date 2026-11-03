@@ -30,7 +30,7 @@ ValueId operation(Body &body, decltype(Operation::action) action,
   body.operations.push_back({std::move(action), {result}, {}, 0});
   return result;
 }
-std::shared_ptr<Body> identity(unsigned count = 1, unsigned result = 0) {
+std::shared_ptr<Body> identityBody(unsigned count = 1, unsigned result = 0) {
   auto body = inputs(count);
   body->results = {{result}};
   return body;
@@ -61,7 +61,7 @@ std::shared_ptr<Body> invocation(unsigned width = 0) {
   body->parameterizedSummary = true;
   body->scopedBindings.push_back({signature(), 0, {}, {}, {}, {}, {}});
   for (unsigned i = 0; i < width; ++i) {
-    auto left = identity(), right = identity();
+    auto left = identityBody(), right = identityBody();
     Control control;
     control.kind = Control::Kind::If;
     control.operands = {{0}, {1}};
@@ -102,7 +102,7 @@ void refused(Semantics &types, StringRef code) {
 std::vector<Declaration> graph(unsigned depth, bool diamond) {
   std::vector<Declaration> declarations(depth + 1);
   for (unsigned i = 0; i <= depth; ++i) {
-    auto body = identity();
+    auto body = identityBody();
     if (i) {
       auto first =
           operation(*body, HelperCall{{i - 1}, {{0}}, {}, {}, {}}, {0});
@@ -145,7 +145,7 @@ uint64_t callbackGraphWork(unsigned depth, bool diamond) {
     }
     declarations[i].body = std::move(body);
   }
-  auto selected = computation(identity());
+  auto selected = computation(identityBody());
   Limits limits;
   Work work{limits};
   Semantics types(declarations, {}, work);
@@ -162,7 +162,7 @@ uint64_t repeatedWork(unsigned width, unsigned calls, bool parameterized) {
   Semantics types(declarations, {}, work);
   BodySummaryCache cache;
   auto body = invocation(width);
-  auto selected = computation(identity());
+  auto selected = computation(identityBody());
   auto callback = binding(*selected);
   if (!parameterized) {
     body->scopedBindings.clear();
@@ -319,7 +319,7 @@ int main() {
     body->results = {operation(
         *body, FiniteApplication{FiniteApplication::Kind::Collect, 0, 0, 1, {}},
         {})};
-    auto item = computation(identity());
+    auto item = computation(identityBody());
     auto predicateBody = constant(2);
     operation(*predicateBody,
               MathValue{MathematicalIdentity::BooleanAnd, {{0}, {1}}, {}},
@@ -348,7 +348,7 @@ int main() {
               {
                 BodySummaryCache cache;
                 {
-                  auto selected = computation(identity());
+                  auto selected = computation(identityBody());
                   retained = selected;
                   auto callback = binding(*selected);
                   callback.owner = selected;
@@ -406,7 +406,7 @@ int main() {
       });
   cases.run("cold and warm work allowances admit exactly L and refuse L-1", [] {
     auto body = invocation(40);
-    auto selected = computation(identity());
+    auto selected = computation(identityBody());
     const std::vector<Declaration> declarations;
     for (bool warm : {false, true}) {
       uint64_t cost = 0;
@@ -445,7 +445,7 @@ int main() {
     Work work{limits};
     Semantics types(declarations, {}, work);
     auto body = invocation(40);
-    auto selected = computation(identity());
+    auto selected = computation(identityBody());
     uint64_t cold, warm;
     {
       BodySummaryCache cache;
@@ -483,7 +483,7 @@ int main() {
               Semantics types(declarations, {}, work);
               BodySummaryCache cache;
               auto body = invocation();
-              auto internal = identity();
+              auto internal = identityBody();
               Type nested(Type::Kind::Tuple);
               nested.arguments = {boolean};
               internal->values.push_back({nested, {}, {}});
