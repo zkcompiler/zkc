@@ -27,7 +27,8 @@ json::Object sourceWorkLedger(const language::WorkLedger &ledger) {
   for (size_t i = 0; i < ledger.phases.size(); ++i)
     subphases[language::sourceWorkPhaseName(
         static_cast<language::SourceWorkPhase>(i))] = ledger.phases[i];
-  return {{"total", ledger.total}, {"subphases", std::move(subphases)}};
+  return json::Object{{"total", ledger.total},
+                      {"subphases", std::move(subphases)}};
 }
 json::Object
 sourceWorkObservation(const language::SourceWorkObservation &observation) {
@@ -36,8 +37,8 @@ sourceWorkObservation(const language::SourceWorkObservation &observation) {
     separate.push_back(
         json::Object{{"phase", language::sourceWorkPhaseName(budget.phase)},
                      {"work", sourceWorkLedger(budget.ledger)}});
-  return {{"charged", sourceWorkLedger(observation.charged)},
-          {"separate_budgets", std::move(separate)}};
+  return json::Object{{"charged", sourceWorkLedger(observation.charged)},
+                      {"separate_budgets", std::move(separate)}};
 }
 json::Object closedSourceWork(const language::ClosedEntry &entry) {
   auto result = sourceWorkObservation(entry.workObservation());

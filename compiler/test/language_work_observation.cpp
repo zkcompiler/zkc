@@ -142,8 +142,9 @@ int main() {
         } else
           require(remaining == 0, "exact nested allowance was not consumed");
       } else {
-        require(!layout, "nested port layout bypassed a smaller allowance");
-        limit(layout.takeError(), "permissions");
+        // The nested observer owns its diagnostic type. Its accepted work is
+        // still attributed to the caller's phase exactly once.
+        refuses(std::move(layout), "source.limit");
       }
       exact(work.ledger, work.used);
       require(work.ledger.used(SourceWorkPhase::Permissions) == work.used &&

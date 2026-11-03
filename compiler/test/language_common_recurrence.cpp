@@ -1635,10 +1635,9 @@ protocol Run roles()") + (shared ? "P,V" : "P") +
                                 .empty(),
                             "closed static count acquired input obligations");
                     auto entry = take(closeNativeRun(project, "m::Run"));
-                    require(take(zkc::language::deriveCommonControlRequirements(
-                                     entry))
-                                .empty(),
-                            "closed static stages changed requirements");
+                    require(
+                        take(entry.commonInputs(entry.protocol().id)).empty(),
+                        "closed static stages changed requirements");
                   });
   for (bool distinct : {false, true})
     for (bool receivedSelector : {false, true})

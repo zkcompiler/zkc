@@ -478,7 +478,7 @@ protocol Run roles(P,V)(s:Sized<1>@(P,V))->(r:bool@(P,V)){
       });
   cases.run("retained publication cost is independent of helper body size", [] {
     auto cost = [](unsigned operations) {
-      std::string source = "module m;fn gate(x:bool)->bool{";
+      std::string source = "module m;math fn gate(x:bool)->bool{";
       for (unsigned i = 0; i < operations; ++i)
         source += "let unused" + std::to_string(i) + "=if x{true}else{false};";
       source += R"(return x;}
@@ -655,7 +655,8 @@ protocol Run roles(P,V)(xs:[bool;2]@(P,V))->(r:bool@(P,V)){
         for (const auto &decl : entry.declarations()) {
           if (isClosedConcreteProtocol(decl)) {
             concrete.insert(decl.symbol);
-            take(entry.commonInputs(decl.id));
+            require(!take(entry.commonInputs(decl.id)).empty(),
+                    "closed instance lost its selected-control requirement");
           } else if (decl.kind == Declaration::Kind::Protocol)
             refuses(entry.commonInputs(decl.id), "source.common-provenance");
         }

@@ -411,8 +411,11 @@ void limits() {
         &Budget::diagnostics, &Budget::insertions}) {
     Budget raised;
     raised.*field = UINT64_MAX;
-    check(read("module m\n", raised).status() == Status::Complete,
+    auto result = read("module m\n", raised);
+    check(result.status() == Status::Complete,
           "a larger enclosing allowance keeps small parses valid");
+    check(result.workUsed() == read("module m\n").workUsed(),
+          "capped parsing reports actual work without underflow");
   }
   Budget raised;
   raised.depth = UINT64_MAX;

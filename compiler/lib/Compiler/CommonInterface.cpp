@@ -314,7 +314,7 @@ sourceCommonRequirements(const ClosedEntry &entry, const Declaration &decl,
     return error;
   const uint64_t initial = std::min(enclosing, limits.work);
   uint64_t remaining = initial;
-  auto debit = llvm::make_scope_exit([&] { enclosing -= initial - remaining; });
+  auto debit = llvm::scope_exit([&] { enclosing -= initial - remaining; });
   if (!charge(remaining, 1))
     return capacity();
   auto derived = entry.commonInputs(decl.id);
