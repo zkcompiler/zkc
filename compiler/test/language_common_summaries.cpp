@@ -172,7 +172,7 @@ int main() {
                     " <- send state from P to V\n        private" +
                     std::to_string(i) + " := received" + std::to_string(i) +
                     "\n";
-        source += "    return state\n"
+        source += "        state := !state\n    return state\n"
                   "pub protocol Run roles(P,V)(n:index @(P,V),base:bool @(P,V))"
                   "->() @(P,V):\n";
         for (unsigned i = 0; i < calls; ++i)
@@ -183,7 +183,9 @@ int main() {
         exactInputs(result.rows, {0, 1});
         require(result.observation.loopNamespaces == calls &&
                     result.observation.boundCarrySlots == 2 * calls,
-                "an undemanded private carry allocated an application slot");
+                "unexpected application storage: namespaces=" +
+                    Twine(result.observation.loopNamespaces) +
+                    ", slots=" + Twine(result.observation.boundCarrySlots));
         costs.push_back(result.work);
       }
       deltas.push_back(costs[1] - costs[0]);

@@ -271,37 +271,39 @@ int main() {
             "unrelated capture affected constructor client's authority");
   });
   for (unsigned mutation = 0; mutation < 3; ++mutation)
-    cases.run(
-        "immutable route rejects provider forgery " + Twine(mutation), [&] {
-          auto project = take(check(facades()));
-          accepted(project);
-          auto &storage = candidate(project);
-          auto &owner =
-              storage.declarations[named(project, "m::read").id.index];
-          auto call = llvm::find_if(owner.body->operations, [](const auto &op) {
-            return op.binding.has_value();
-          });
-          require(call != owner.body->operations.end(), "missing call binding");
-          auto forged = selected(project, owner.id, "second::f");
-          require(forged.target.index ==
-                      call->binding->target.declaration.index,
-                  "fixture changed canonical target");
-          call->binding->target.reference = forged;
-          if (mutation == 1) {
-            for (auto &record : storage.api.references)
-              if (record.owner.index == owner.id.index &&
-                  record.written == "first::f") {
-                record.provider = forged.provider;
-                record.reference = forged;
-              }
-            auto &metadata =
-                storage.declarations[named(project, "second").id.index];
-            metadata.name = "first";
-            metadata.qualifiedName = "first";
-          } else if (mutation == 2)
-            call->binding->target.reference = {};
-          rejected(project);
-        });
+    cases.run("immutable route rejects provider forgery " + Twine(mutation),
+              [&] {
+                auto project = take(check(facades()));
+                accepted(project);
+                auto &storage = candidate(project);
+                auto &owner =
+                    storage.declarations[named(project, "m::read").id.index];
+                auto body = std::make_shared<Body>(*owner.body);
+                owner.body = body;
+                auto call = llvm::find_if(body->operations, [](const auto &op) {
+                  return op.binding.has_value();
+                });
+                require(call != body->operations.end(), "missing call binding");
+                auto forged = selected(project, owner.id, "second::f");
+                require(forged.target.index ==
+                            call->binding->target.declaration.index,
+                        "fixture changed canonical target");
+                call->binding->target.reference = forged;
+                if (mutation == 1) {
+                  for (auto &record : storage.api.references)
+                    if (record.owner.index == owner.id.index &&
+                        record.written == "first::f") {
+                      record.provider = forged.provider;
+                      record.reference = forged;
+                    }
+                  auto &metadata =
+                      storage.declarations[named(project, "second").id.index];
+                  metadata.name = "first";
+                  metadata.qualifiedName = "first";
+                } else if (mutation == 2)
+                  call->binding->target.reference = {};
+                rejected(project);
+              });
   for (bool body : {false, true})
     cases.run(
         body ? "body constructor forgery" : "signature constructor forgery",
@@ -310,9 +312,15 @@ int main() {
           accepted(project);
           auto &decl = candidate(project)
                            .declarations[named(project, "m::Run").id.index];
-          auto &port =
-              body ? decl.body->services.front() : decl.services.front();
-          port.constructor.provider = named(project, "zkc::prelude").id;
+          if (body) {
+            auto changed = std::make_shared<Body>(*decl.body);
+            changed->services.front().constructor.provider =
+                named(project, "zkc::prelude").id;
+            decl.body = std::move(changed);
+          } else {
+            decl.services.front().constructor.provider =
+                named(project, "zkc::prelude").id;
+          }
           rejected(project);
         });
   cases.run(
