@@ -52,11 +52,11 @@ def Ty.isCustody : Ty → Bool
 /-- A logical handle other than a custody permission. -/
 def Ty.isForeignHandle (ty : Ty) : Bool := ty.isHandle && !ty.isCustody
 
--- Materialize the mutual equations in their defining module. Lazy generation
+-- Materialize the admission equations in their defining module. Lazy generation
 -- in independent clients can produce different stored proofs for the same
 -- equation name; declaration provenance must have a single checked owner.
 section
-attribute [local simp] Ty.isService ProductFields.hasService Ty.isHandle ProductFields.hasHandle
+attribute [local simp] Ty.isService ProductFields.hasService Ty.isHandle ProductFields.hasHandle Ty.isCustody
 end
 
 /-- Native preparation identifiers have a stricter bound than helper symbols. -/
