@@ -5,6 +5,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <cstdint>
+#include <deque>
 #include <numeric>
 #include <set>
 #include <tuple>
@@ -159,7 +160,8 @@ class Requirements {
   std::map<ApplicationKey, std::shared_ptr<Application>> applications;
   // Deferred nodes contain an owner-relative index, never a shared_ptr back
   // into their application. This arena makes ownership acyclic and explicit.
-  std::vector<std::shared_ptr<Application>> activeApplications;
+  // Recursive evaluation may append applications while borrowing an owner.
+  std::deque<std::shared_ptr<Application>> activeApplications;
   std::vector<std::pair<std::shared_ptr<Application>, unsigned>> loopOwners;
   std::vector<std::set<unsigned>> boundLoops;
   std::vector<std::set<unsigned>> boundTransitions;
@@ -1016,7 +1018,9 @@ class Requirements {
     for (const auto &input : inputs)
       parameters.push_back(formals(input, operands, roles, shape, span));
     auto nested = formalEnvironment(context, operands, roles, shape, span);
-    if (failure || !charge(shape.size() + 1, span))
+    // Formal construction already charges each structural type and operand.
+    // A coefficient's decimal spelling must not price unobserved capacity.
+    if (failure || !charge(1, span))
       return {};
     TemplateKey templateKey{&source, declaration, computation};
     InstanceKey key{templateKey, context.statics.get(), roles.size(),
@@ -1071,7 +1075,8 @@ class Requirements {
       if (failure)
         return {};
       instance = std::move(product);
-      instances.emplace(std::move(key), instance);
+      // Keep the active key intact until the scope guard removes it.
+      instances.emplace(key, instance);
     }
     if (callDepth + instance->callHeight > work.limits.callDepth ||
         instance->regionHeight > work.limits.expressionDepth) {

@@ -462,6 +462,7 @@ protocol Run roles(P,V)(flag:bool@(P,V))->(){
 math fn helper(x:bool)->(bool,bool){return (x,x);}
 protocol Run roles(P,V)(flag:bool@(P,V))->(){
  let a=helper(flag);let b=helper(flag);let c=helper(flag);
+ if a.0{()}else{} if b.0{()}else{}
  let guard=a.0&&(b.0&&c.0);if guard{()}else{()}return();})"));
     Limits limits;
     limits.expressionDepth = 3;
