@@ -219,11 +219,16 @@ public:
           return candidates.takeError();
         if (auto e = work.charge(1 + source.qualifiedName.size()))
           return std::move(e);
-        origin = json::Object{{"kind", "declaration"},
-                              {"owner", source.qualifiedName},
-                              {"generated", source.generated.has_value()},
-                              {"source", span(source.span)},
-                              {"candidates", std::move(*candidates)}};
+        origin = json::Object{
+            {"kind", "declaration"},
+            {"owner", source.qualifiedName},
+            {"generated", source.generated.has_value()},
+            {"source",
+             entry.project().sources()[source.span.source.index].origin ==
+                     SourceOrigin::Installation
+                 ? json::Value(nullptr)
+                 : json::Value(span(source.span))},
+            {"candidates", std::move(*candidates)}};
       }
       json::Array statics, scoped, domains;
       for (unsigned i = 0; i < source.parameters.size(); ++i) {

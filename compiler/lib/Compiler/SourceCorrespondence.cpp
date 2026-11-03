@@ -75,7 +75,13 @@ public:
     for (const auto &location : original.locations()) {
       if (auto e = charge(1))
         return std::move(e);
-      locations[{location.line, location.column}].push_back(location.source);
+      // Installed declarations have no captured written source. Their exact
+      // original row remains associated, but no synthetic source span is added.
+      if (original.entry()
+              .project()
+              .sources()[location.source.source.index]
+              .origin != SourceOrigin::Installation)
+        locations[{location.line, location.column}].push_back(location.source);
     }
     for (const auto &item : *ast.getAsObject()->getArray("declarations")) {
       const auto &declaration = *item.getAsObject();

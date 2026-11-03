@@ -330,6 +330,39 @@ void generatedOccurrences(Cases &cases) {
 int main() {
   Cases cases;
   cases.run(
+      "installed rows retain original association without written spans", [] {
+        auto project = take(analyze(take(capture({{"m",
+                                                   R"(module m;
+      protocol P roles(A)(x:index@A,y:index@A)->(sum:index@A){
+        let sum=x+y;return(sum=sum);
+      })",
+                                                   {}}})))
+                                .checkedProject());
+        auto subject =
+            take(prepareOriginal(take(closeSubject(project, "m::P"))));
+        auto document = report(subject);
+        auto symbol = symbolOf(document, "zkc::prelude::index_add");
+        const auto &root = *document.getAsObject();
+        bool found = false;
+        for (const auto &item : *root.getArray("rows")) {
+          const auto &row = *item.getAsObject();
+          const auto &path = *row.getArray("row");
+          if (path.size() != 2)
+            continue;
+          const auto &definition =
+              *at(*root.get("snapshot"), path).getAsArray();
+          if (definition[1].getAsString() != symbol)
+            continue;
+          found = true;
+          require(row.getObject("original") && row.getArray("sources")->empty(),
+                  "installed row lost its original association or gained "
+                  "written source");
+        }
+        require(found, "installed row was not associated");
+        accepted(
+            checkSourceCorrespondenceExport(subject, zkc::printJson(document)));
+      });
+  cases.run(
       "syntax, rows and claims share the checked original association", [] {
         auto value = original();
         auto document = report(value);

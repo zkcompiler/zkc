@@ -372,8 +372,9 @@ and the nullable original lexical range come from the structured encoder's
 They are produced in the same call that emits the snapshot. The original range
 has `begin`, `end`, `line` and `column`.
 
-`sources` retains every checked-original source span at that parsed MLIR
-position. Each element contains `span` and `candidates`. Candidates are all
+`sources` retains every captured-source span at that parsed MLIR
+position. Installed declarations retain their original-row association with
+empty `sources`; no zero-length written span is invented for an installation. Each element contains `span` and `candidates`. Candidates are all
 written `{owner,path}` nodes with exactly that span. They are search hints;
 there is no nearest-span match. Empty sources or candidates remain explicit,
 including generated rows with no authored node. A row is never silently omitted
@@ -404,7 +405,9 @@ Oracle instances additionally have `oracle_definition`. The symbol is an actual
 closed declaration name. No consumer decodes its hash to establish source origin.
 
 A declaration template has `kind: "declaration"`, its canonical `owner`, a
-`generated` flag, its source span and exact-span `candidates`. A scoped template
+`generated` flag, its source span and exact-span `candidates`. An installed
+declaration has `source: null` and empty candidates: its authority is the
+installation, and it has no captured written source. A scoped template
 has `kind: "scoped"`, its lexical owner, source span and exact written `nodes`.
 The latter uses retained expression provenance, never the generated helper's
 private expression number. Empty nodes remain explicit for generated adapters.
