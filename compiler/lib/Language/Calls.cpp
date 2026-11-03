@@ -260,12 +260,31 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     }
     std::vector<Dependencies> formation;
     Dependencies result;
-    if (callee.body) {
-      auto summary = summarizeBody(checker.types, checker.output.declarations,
-                                   *callee.body, subst, inputs, selected, 1,
-                                   selectedDomains);
+    // Select the implementation without replacing the caller's retained source
+    // route below. A retained dependency application is not resolution
+    // evidence.
+    auto dispatch = checker.types.dispatch(target.module, target.declaration,
+                                           staticArgs, expr.span);
+    if (!dispatch)
+      return {};
+    const auto &implementation =
+        checker.output.declarations[dispatch->declaration.index];
+    if (implementation.body) {
+      auto frame =
+          bodySummaryFrame(checker.types, checker.output.declarations,
+                           implementation, dispatch->arguments, target.module);
+      if (!frame)
+        return {};
+      auto summary = checker.bodySummaries.apply(
+          checker.types, checker.output.declarations, *implementation.body,
+          *frame, inputs, selected, 1, selectedDomains);
       if (!summary)
         return {};
+      if (summary->results.size() != 1) {
+        fail("source.scoped-summary", "Math summary result arity differs",
+             expr.span);
+        return {};
+      }
       result = summary->results.front();
       formation = std::move(summary->formation);
       body.parameterizedSummary |= summary->parameterized;

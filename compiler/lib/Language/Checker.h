@@ -1,5 +1,6 @@
 #ifndef ZKC_LANGUAGE_CHECKER_H
 #define ZKC_LANGUAGE_CHECKER_H
+#include "BodySummary.h"
 #include "CallResolution.h"
 #include "Internal.h"
 #include "Semantics.h"
@@ -49,6 +50,7 @@ public:
   CheckedStorage &output;
   Work &work;
   Semantics types;
+  BodySummaryCache bodySummaries;
   std::vector<SyntaxDeclaration *> sources;
   std::vector<unsigned> bodyState, bodyHeights;
   std::vector<std::shared_ptr<const NotationEnvironment>> notationEnvironments;
