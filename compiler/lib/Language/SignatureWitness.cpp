@@ -583,8 +583,12 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
     for (auto id : implementations) {
       const auto &module = storage.declarations[id.index];
       const auto &source = *headers.sources.at(id.index);
+      auto selection = storage.declarationIndex->lookup(
+          SourceAccess{id}, source.definition->name,
+          {[&] { return types.charge(1, source.definition->span); }, {}});
+      const auto *reference = std::get_if<ResolvedReference>(&selection);
       auto contract =
-          storage.declarationIndex->lookup(id, source.definition->name);
+          reference ? std::optional(reference->target) : std::nullopt;
       if (!contract || contract->index >= storage.declarations.size())
         return types.fail("source.scoped-witness", "missing authored interface",
                           module.span);

@@ -163,8 +163,13 @@ class Requirements {
   // Recursive evaluation may append applications while borrowing an owner.
   std::deque<std::shared_ptr<Application>> activeApplications;
   std::vector<std::pair<std::shared_ptr<Application>, unsigned>> loopOwners;
-  std::vector<std::set<unsigned>> boundLoops;
-  std::vector<std::set<unsigned>> boundTransitions;
+  struct AppliedLoop {
+    Components counts;
+    std::map<unsigned, Components> initial, transition;
+    bool countsBound = false, atMostOne = false;
+  };
+  // Only demanded carry slots allocate application-local component maps.
+  std::vector<AppliedLoop> appliedLoops;
   std::vector<unsigned> expressionHeights;
   uint64_t applicationCount = 0;
   // These caches own their nodes until the current root completes. Reusable
@@ -1169,22 +1174,20 @@ class Requirements {
     ++applicationCount;
     ++observation.applications;
     std::vector<unsigned> loopBindings(instance->loops.size());
-    std::iota(loopBindings.begin(), loopBindings.end(), loops.size());
+    std::iota(loopBindings.begin(), loopBindings.end(), appliedLoops.size());
     auto app = std::make_shared<Application>(
         instance, std::move(operands), std::move(roles),
         std::move(loopBindings), std::move(sites), callDepth,
         activeApplications.size());
     activeApplications.push_back(app);
     for (unsigned i = 0; i < instance->loops.size(); ++i) {
-      if (!charge(1, span) || loops.size() >= work.limits.operations) {
+      if (!charge(1, span) || appliedLoops.size() >= work.limits.operations) {
         capacity(span, "common fresh recurrence limit exceeded");
         return {};
       }
       ++observation.loopNamespaces;
-      loops.push_back({{}, {}, {}, false, {}});
+      appliedLoops.emplace_back();
       loopOwners.emplace_back(app, i);
-      boundLoops.emplace_back();
-      boundTransitions.emplace_back();
     }
     if (reusable)
       applications.emplace(std::move(key), app);
@@ -1230,11 +1233,11 @@ class Requirements {
   }
   void bindLoop(unsigned invocation, unsigned slot, unsigned depth,
                 bool needTransition = false) {
-    if (failure)
+    if (failure || !charge(1, {}))
       return;
     auto [app, local] = loopOwners.at(invocation);
     const auto &source = app->instance->loops[local];
-    if (boundLoops[invocation].empty()) {
+    if (!appliedLoops[invocation].countsBound) {
       auto values = evaluate({source.counts}, app, depth);
       bool small = true;
       for (auto [role, value] : values.front()) {
@@ -1244,18 +1247,21 @@ class Requirements {
       }
       bool atMostOne = small || (source.maximum.isClosed() &&
                                  source.maximum.closedValue() <= 1);
-      loops[invocation] = {std::move(values.front()),
-                           std::vector<Components>(source.initial.size()),
-                           std::vector<Components>(source.transition.size()),
-                           atMostOne, source.maximum};
+      appliedLoops[invocation].counts = std::move(values.front());
+      appliedLoops[invocation].atMostOne = atMostOne;
+      appliedLoops[invocation].countsBound = true;
     }
-    if (boundLoops[invocation].insert(slot).second) {
+    if (!appliedLoops[invocation].initial.count(slot)) {
       auto initial = evaluate({source.initial.at(slot)}, app, depth);
-      loops[invocation].initial.at(slot) = std::move(initial.front());
+      appliedLoops[invocation].initial.emplace(slot,
+                                               std::move(initial.front()));
+      ++observation.boundCarrySlots;
     }
-    if (needTransition && boundTransitions[invocation].insert(slot).second) {
+    if (needTransition && !appliedLoops[invocation].transition.count(slot)) {
       auto transition = evaluate({source.transition.at(slot)}, app, depth);
-      loops[invocation].transition.at(slot) = std::move(transition.front());
+      appliedLoops[invocation].transition.emplace(
+          slot, std::move(transition.front()));
+      ++observation.boundCarrySlots;
     }
   }
   Node branch(const Type &type, Node subject, std::vector<Node> arms,
@@ -1729,11 +1735,29 @@ class Requirements {
         if (failure)
           return false;
         if (first.kind == Provenance::Kind::Exit ||
-            !loops[first.loop->invocation].atMostOne)
+            !appliedLoops[first.loop->invocation].atMostOne)
           bindLoop(first.loop->invocation, first.loop->slot, 0, true);
         if (failure)
           return false;
-        const auto loop = loops[first.loop->invocation];
+        const auto &bound = appliedLoops[first.loop->invocation];
+        const bool transitionNeeded =
+            first.kind == Provenance::Kind::Exit || !bound.atMostOne;
+        const bool countsNeeded = first.kind == Provenance::Kind::Exit;
+        const auto &initialSource = bound.initial.at(first.loop->slot);
+        if (!charge(initialSource.size() +
+                        (transitionNeeded
+                             ? bound.transition.at(first.loop->slot).size()
+                             : 0) +
+                        (countsNeeded ? bound.counts.size() : 0) + 1,
+                    span))
+          return false;
+        // Recursive agreement may add loop applications. Snapshot only this
+        // demanded slot and its count, never all private carry slots.
+        const auto initial = initialSource;
+        const auto transition = transitionNeeded
+                                    ? bound.transition.at(first.loop->slot)
+                                    : Components{};
+        const auto loopCounts = countsNeeded ? bound.counts : Components{};
         auto check = [&](const Components &components) {
           std::vector<Node> pair{
               observe(at(components, first.loop->role, first.type), first, span,
@@ -1742,14 +1766,12 @@ class Requirements {
                       depth + 1)};
           return agree(pair, span, hypotheses, depth + 1);
         };
-        if (!check(loop.initial[first.loop->slot]) ||
-            ((first.kind == Provenance::Kind::Exit || !loop.atMostOne) &&
-             !check(loop.transition[first.loop->slot])))
+        if (!check(initial) || (transitionNeeded && !check(transition)))
           return false;
         if (first.kind == Provenance::Kind::Exit) {
           std::vector<Node> counts{
-              at(loop.counts, first.loop->role, Type(Type::Kind::Index)),
-              at(loop.counts, other.loop->role, Type(Type::Kind::Index))};
+              at(loopCounts, first.loop->role, Type(Type::Kind::Index)),
+              at(loopCounts, other.loop->role, Type(Type::Kind::Index))};
           if (!agree(counts, span, hypotheses, depth + 1))
             return false;
         }
@@ -2161,8 +2183,7 @@ public:
     applications.clear();
     activeApplications.clear();
     loopOwners.clear();
-    boundLoops.clear();
-    boundTransitions.clear();
+    appliedLoops.clear();
     expressionHeights.clear();
     applicationCount = 0;
     callSites.clear();

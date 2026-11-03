@@ -1977,11 +1977,13 @@ Requests can lower these ceilings, never raise them. Checks refuse before charge
 work or recursive-depth budgets are exceeded; no truncated result is returned.
 Capture lexing, parsing and definition checking share one work budget.
 Specialization, layouts, emission, comparison, predicate admission and interface
-serialization each have a separate work budget. Within the common-input
-interface inventory, retained Protocol derivation, semantic-index setup,
-layout observation and normalization share the enclosing allowance, including
-work preceding a failed observation. Native common-input derivation likewise
-shares one API allowance with its layout and component-mapping stages.
+serialization each have a separate work budget. Closure's common-input analysis
+shares the closure allowance and retains immutable Protocol inventories.
+Interface publication borrows those inventories and charges its current
+allowance for layout observation, component mapping and normalization, including
+work preceding a failed observation. Publication does not charge a second source
+body derivation. Independent native common-input derivation shares its enclosing
+API allowance with its layout and component-mapping stages.
 Nested placement validation, role remapping and alias generation use the current
 remaining allowance and debit performed work on both success and refusal.
 Semantic native-layout and port observations reconcile their bounded work before

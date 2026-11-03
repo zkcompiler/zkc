@@ -11,6 +11,8 @@ struct CommonSummaryObservation {
   uint64_t templates = 0, instances = 0, instanceHits = 0;
   uint64_t applications = 0, applicationHits = 0, expressions = 0;
   uint64_t bodyTraversals = 0, loopNamespaces = 0;
+  /// Actual application-local initial/transition component maps retained.
+  uint64_t boundCarrySlots = 0;
 };
 llvm::Expected<std::vector<CommonControlRequirement>>
 deriveCommonSummaryRequirements(const std::vector<Declaration> &,

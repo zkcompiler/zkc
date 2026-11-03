@@ -4,6 +4,7 @@
 #include "WrittenSource.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Language/Diagnostics.h"
 #include <algorithm>
 #include <numeric>
 using namespace llvm;

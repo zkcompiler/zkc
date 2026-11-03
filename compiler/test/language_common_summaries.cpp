@@ -153,6 +153,44 @@ int main() {
     require(difference * 100 <= std::max(deltas[0], deltas[1]),
             "per-application work depends on unused helper body size");
   });
+  cases.run("private carry breadth does not multiply application storage", [&] {
+    std::vector<uint64_t> deltas;
+    for (unsigned privateSlots : {4u, 40u}) {
+      std::vector<uint64_t> costs;
+      for (unsigned calls : {1u, 8u}) {
+        std::string source =
+            "protocol Evolve roles(P,V)(n:index @(P,V),base:bool @(P,V))"
+            "->bool @(P,V):\n    mut state = base\n";
+        for (unsigned i = 0; i < privateSlots; ++i)
+          source +=
+              "    mut private" + std::to_string(i) + ": bool @V = false\n";
+        source += "    for i in 0..n roles(P,V) max 4:\n"
+                  "        if state:\n            ()\n"
+                  "        else:\n            ()\n";
+        for (unsigned i = 0; i < privateSlots; ++i)
+          source += "        received" + std::to_string(i) +
+                    " <- send state from P to V\n        private" +
+                    std::to_string(i) + " := received" + std::to_string(i) +
+                    "\n";
+        source += "    return state\n"
+                  "pub protocol Run roles(P,V)(n:index @(P,V),base:bool @(P,V))"
+                  "->() @(P,V):\n";
+        for (unsigned i = 0; i < calls; ++i)
+          source +=
+              "    result" + std::to_string(i) + " <- Evolve(n,base) @(P,V)\n";
+        source += "    return ()\n";
+        auto result = derive(take(check(source, true)));
+        exactInputs(result.rows, {0, 1});
+        require(result.observation.loopNamespaces == calls &&
+                    result.observation.boundCarrySlots == 2 * calls,
+                "an undemanded private carry allocated an application slot");
+        costs.push_back(result.work);
+      }
+      deltas.push_back(costs[1] - costs[0]);
+    }
+    require(deltas[0] == deltas[1],
+            "private carry breadth multiplied per-application work");
+  });
   cases.run("projection does not force an unused helper result field", [&] {
     for (unsigned length : {40u, 400u}) {
       std::string source = "module m;math fn pair(x:bool)->(bool,bool){";

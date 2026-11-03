@@ -181,7 +181,9 @@ LookupResult DeclarationIndex::lookup(const AccessContext &access,
   if (!charge(traversal))
     return LookupFailure{LookupFailureKind::Limit, {}, name.str()};
   bool absolute = name.consume_front("::");
-  auto [head, tail] = name.split("::");
+  auto parts = name.split("::");
+  auto head = parts.first;
+  auto tail = parts.second;
   std::optional<ResolvedReference> selected;
   auto select = [&](LookupResult result) -> std::optional<LookupFailure> {
     if (auto *ref = std::get_if<ResolvedReference>(&result))
