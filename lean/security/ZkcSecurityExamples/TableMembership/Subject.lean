@@ -46,6 +46,13 @@ This subject requires the links explicitly; failed proof production cannot
 leave an optional connection unresolved in a certified fixture. -/
 def subject : HonestPair.Subject model original imported selected := {
   admittedSubject with
+  -- Read role metadata from a checked context literal, without recomputing the
+  -- complete source selection during bounded request extraction.
+  selection := { admittedSubject.selection with context := ZkcExamples.Construction.TableMembership.context }
+  selectionExact := by kernel_rfl
+  selectionChecked := by decide +kernel
+  producerOccurrences := by kernel_rfl
+  validatorOccurrences := by kernel_rfl
   producerConnection := some ⟨by derive_source_connection⟩
   validatorConnection := some ⟨by derive_source_connection⟩ }
 
