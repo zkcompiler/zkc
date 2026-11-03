@@ -84,7 +84,7 @@ with case('source work distinguishes missing closure and failed checking'):
     assert work['check_completed'] and work['closure'] is None
     exact_source_work(work['check'])
     invalid = OUT / 'source-work-invalid.zkc'
-    invalid.write_text('module invalid; protocol Bad roles(P)()->bool@P{return missing;}')
+    invalid.write_text('module invalid; protocol Bad roles(P)()->(out:bool@P){return missing;}')
     report = OUT / 'source-work-refusal.json'
     commands.run([compiler, 'language-check', '--source-format=zkc',
                   f'--module=invalid={invalid}', f'--diagnostics={report}'],

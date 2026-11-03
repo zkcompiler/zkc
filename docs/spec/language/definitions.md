@@ -2039,11 +2039,14 @@ notation environments, including lexical parents and the installed prelude.
 Bodies in one source file share its filtered token stream, with a separate
 notation environment for each module.
 
-The work ceiling accommodates composed source libraries while preserving charges
-for each traversal. Project checking derives every concrete Protocol's
-common-input requirements and checks record placement; the ceiling is twice the
-work of the largest maintained closure, the STARK library with its AIR
-relations. Each parse invocation stays within the
+The work ceiling bounds actual checking, including summary construction and
+application, record placement and independent witnesses. Maintained Schnorr,
+Sumcheck, GKR, FRI/STARK and accumulator closures must fit within 16,000,000
+charged units for each independent source allowance, leaving at least half of
+the implementation ceiling available. This is a charged-work capacity policy,
+not a wall-clock performance claim or a native preparation bound. Diagnostic
+work ledgers report exclusive subphases; Host child work is already included in
+its parent's total. Each parse invocation stays within the
 [layout syntax ceiling](layout-syntax.md#syntax-environments-and-recovery) and
 is charged to the phase. File, type, instance, operation and output ceilings
 remain independent; a higher work allowance does not admit a larger type or
