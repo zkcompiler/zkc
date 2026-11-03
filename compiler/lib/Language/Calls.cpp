@@ -285,6 +285,37 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
              expr.span);
         return {};
       }
+      // Hits retain the source call height as well as summary traversal
+      // bounds. Propagate it exactly as ordinary lazy body completion does.
+      const unsigned edge =
+          callee.primitive && primitiveCallIsInline(body.mode, callee.kind,
+                                                    callee.primitive->identity)
+              ? 0
+              : 1;
+      const auto height = summary->callHeight - 1 + edge;
+      if (callDepth > checker.work.limits.callDepth ||
+          height > checker.work.limits.callDepth - callDepth) {
+        fail("source.limit", "retained helper call depth exceeded", expr.span);
+        return {};
+      }
+      // A literal's checked source is retained before checking its body. These
+      // enclosing lexical literals account for scoped frames; control regions
+      // share their declaration's frame. Deduplicate replayed source records.
+      std::set<uint32_t> enclosingScopes;
+      for (const auto &source : witnesses.sources) {
+        if (!checker.types.charge(1, expr.span))
+          return {};
+        if (!source || source->owner.index != decl.id.index ||
+            source->expression >= syntax.expressions.size())
+          continue;
+        const auto &scope = syntax.expressions[source->expression].span;
+        if (scope.source.index == expr.span.source.index &&
+            scope.begin <= expr.span.begin && scope.end >= expr.span.end)
+          enclosingScopes.insert(source->expression);
+      }
+      checker.bodyHeights[decl.id.index] =
+          std::max(checker.bodyHeights[decl.id.index],
+                   height + unsigned(enclosingScopes.size()) + 1);
       result = summary->results.front();
       formation = std::move(summary->formation);
       body.parameterizedSummary |= summary->parameterized;

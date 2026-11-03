@@ -229,6 +229,67 @@ int main() {
                 require(small == large && small > 0,
                         "incremental calls depend on callee body size");
               });
+  cases.run("unrelated instances do not increase warm application work", [] {
+    const std::vector<Declaration> declarations;
+    auto selected = computation(identityBody());
+    auto measured = [&](unsigned count) {
+      Limits limits;
+      Work work{limits};
+      Semantics types(declarations, {}, work);
+      BodySummaryCache cache;
+      std::vector<std::shared_ptr<Body>> bodies;
+      for (unsigned i = 0; i <= count; ++i) {
+        bodies.push_back(invocation());
+        apply(cache, types, declarations, *bodies.back(),
+              {{{1}, false}, {{2}, false}}, {binding(*selected)});
+      }
+      auto before = work.used;
+      apply(cache, types, declarations, *bodies.front(),
+            {{{3}, false}, {{4}, false}}, {binding(*selected)});
+      return work.used - before;
+    };
+    require(measured(0) == measured(100),
+            "warm work depends on another body's instance population");
+  });
+  cases.run("candidate helpers use their own declaration inventory", [] {
+    std::vector<Declaration> source(1);
+    source[0].kind = Declaration::Kind::Module;
+    source[0].id = {0};
+    source[0].qualifiedName = "m";
+    auto candidate = source;
+    candidate.resize(2);
+    candidate[1].kind = Declaration::Kind::Math;
+    candidate[1].id = {1};
+    candidate[1].parent = DeclarationId{0};
+    candidate[1].qualifiedName = "m::generated";
+    candidate[1].body = invocation();
+    auto selected = computation(identityBody());
+    for (bool member : {false, true}) {
+      auto body = inputs(2);
+      ScopedBinding scoped;
+      scoped.signature = signature();
+      scoped.computation = selected;
+      body->scopedBindings.push_back(std::move(scoped));
+      HelperCall call{{1}, {{0}, {1}}, {}, {}, {}};
+      call.scopedArguments = {0};
+      if (member)
+        call.module = Type(Type::Kind::Module, "m");
+      body->results = {operation(*body, std::move(call), {})};
+      Limits limits;
+      Work work{limits};
+      // Specialization's independent witness intentionally has source types
+      // while the body inventory also contains generated candidate helpers.
+      Semantics types(source, {}, work);
+      auto witness = summarizeBody(types, candidate, *body, {},
+                                   {{{7}, false}, {{8}, false}}, {});
+      require(bool(witness), "candidate helper was dispatched as source ID");
+      dependency(witness->results.front(), {8});
+      BodySummaryCache cache;
+      auto result =
+          apply(cache, types, candidate, *body, {{{9}, false}, {{10}, false}});
+      dependency(result.results.front(), {10});
+    }
+  });
   cases.run("unknown callback is not a cached constant", [] {
     const std::vector<Declaration> declarations;
     Limits limits;
@@ -529,6 +590,88 @@ int main() {
             "recursive source body accepted through a retained entry");
     refused(types, "source.cycle");
   });
+  cases.run("warm applications retain exact internal operation bounds", [] {
+    const std::vector<Declaration> declarations;
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, {}, work);
+    BodySummaryCache cache;
+    auto body = invocation(40);
+    auto selected = computation(identityBody());
+    apply(cache, types, declarations, *body, {{{1}, false}, {{2}, false}},
+          {binding(*selected)});
+    limits.operations = body->operations.size();
+    apply(cache, types, declarations, *body, {{{3}, false}, {{4}, false}},
+          {binding(*selected)});
+    --limits.operations;
+    require(!cache.apply(types, declarations, *body, {},
+                         {{{3}, false}, {{4}, false}}, {binding(*selected)}),
+            "warm application bypassed internal operation bound");
+    refused(types, "source.limit");
+  });
+  cases.run("warm bounds include substituted intermediate module types", [] {
+    auto project = take(check(R"(
+interface Choice {math fn call(x:bool)->bool;}
+module Implementation<T:Type>:Choice {math fn call(x:bool)->bool{return x;}}
+math fn selected<C:Choice>(x:bool)->bool{return C::call(x);}
+math fn outer<T:Type>(x:bool)->bool{return selected<Implementation<[T;1]>>(x);}
+)"));
+    std::vector<Declaration> declarations(project.declarations().begin(),
+                                          project.declarations().end());
+    const auto &outer = *llvm::find_if(
+        declarations, [](const auto &decl) { return decl.name == "outer"; });
+    Type array(Type::Kind::Array);
+    array.arguments = {boolean};
+    array.dimension = Natural::constant(1);
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, project.assets(), work);
+    BodySummaryCache cache;
+    auto statics = types.substitution(outer, {array});
+    auto apply = [&] {
+      return cache.apply(types, declarations, *outer.body, statics,
+                         {{{1}, false}}, {});
+    };
+    require(bool(apply()), "cold intermediate type refused");
+    limits.typeDepth = limits.typeNodes = 4;
+    require(bool(apply()), "exact intermediate type bounds refused");
+    limits.typeDepth = 3;
+    require(!apply(), "warm application ignored expanded type depth");
+    refused(types, "source.limit");
+    limits.typeDepth = 4;
+    limits.typeNodes = 3;
+    require(!apply(), "warm application ignored expanded type nodes");
+    refused(types, "source.limit");
+  });
+  cases.run(
+      "warm applications propagate their caller's source call height", [] {
+        const std::string helpers = R"(
+interface Operation {math fn call(x:bool)->bool;}
+math fn tail(x:bool)->bool{return x;}
+module Implementation:Operation {math fn call(x:bool)->bool{return tail(x);}}
+)";
+        for (bool region : {false, true})
+          for (bool warm : {false, true}) {
+            auto source =
+                helpers +
+                (region ? "math fn forward<C:Operation>(x:bool)->bool{return "
+                          "if true{C::call(x)}else{x};}"
+                        : "math fn forward<C:Operation>(x:bool)->bool{return "
+                          "C::call(x);}");
+            if (warm)
+              source += "math fn warm(x:bool)->bool{return "
+                        "forward<Implementation>(x);}";
+            source += R"(
+math fn relay(x:bool)->bool{return forward<Implementation>(x);}
+math fn deep(x:bool)->bool{return relay(x);}
+)";
+            Limits limits;
+            limits.callDepth = 5;
+            take(check(source, limits));
+            limits.callDepth = 4;
+            refuses(check(source, limits), "source.limit");
+          }
+      });
   cases.run(
       "source helper chain 40 and shared diamond 30 fit default limits", [] {
         for (bool diamond : {false, true}) {
@@ -598,6 +741,87 @@ protocol Demo<M:nat> roles(P)(x:bool@P)->(r:bool@P){return outer<M>(x);}
     take(closeNativeRun(project, "m::Demo", {}, {argument(5)}));
     refuses(closeNativeRun(project, "m::Demo", {}, {argument(6)}),
             "source.natural");
+  });
+  cases.run("distinct dispatched instances may re-enter a helper body", [] {
+    auto project = take(check(R"(
+interface Choice {math fn choose(x:bool,y:bool)->bool;}
+math fn relay<C:Choice>(x:bool,y:bool)->bool{return C::choose(x,y);}
+module Later:Choice {math fn choose(x:bool,y:bool)->bool{return y;}}
+module Earlier:Choice {math fn choose(x:bool,y:bool)->bool{return relay<Later>(x,y);}}
+protocol Demo roles(P,Q)(x:bool@P,y:bool@Q)->(r:bool@Q){return relay<Earlier>(x,y);}
+entry fn Run(inputs:Demo::Inputs){return Demo::run(inputs);}
+)"));
+    auto closed = take(closeProtocolDeployment(project, "m::Run"));
+    if (auto error = checkScopedSpecialization(closed))
+      throw std::runtime_error(toString(std::move(error)));
+    refuses(check(R"(
+interface Choice {math fn choose(x:bool,y:bool)->bool;}
+math fn relay<C:Choice>(x:bool,y:bool)->bool{return C::choose(x,y);}
+module Earlier:Choice {math fn choose(x:bool,y:bool)->bool{return relay<Later>(x,y);}}
+module Later:Choice {math fn choose(x:bool,y:bool)->bool{return relay<Earlier>(x,y);}}
+)"),
+            "source.cycle");
+  });
+  cases.run("nested finite callbacks may re-enter the finite helper body", [] {
+    auto project = take(check(R"(
+domain fn range(lower:index,upper:index)->domain<index>=domain("range");
+math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
+math fn visit(rows:domain<index>,x:bool)->bool{
+ return fold(rows,x,fn(s,i)=>fold(rows,s,fn(t,j)=>t));
+}
+protocol Demo roles(P)(n:index@P,x:bool@P)->(r:bool@P){return visit(range(0,n),x);}
+entry fn Run(inputs:Demo::Inputs){return Demo::run(inputs);}
+)"));
+    take(closeProtocolDeployment(project, "m::Run"));
+  });
+  cases.run("finite callback statics retain their defining lexical stages", [] {
+    auto project = take(check(R"(
+domain fn range(lower:index,upper:index)->domain<index>=domain("range");
+math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
+interface Operation {math fn apply(x:bool)->bool;}
+module Direct:Operation {math fn apply(x:bool)->bool{return x;}}
+math fn calc<N:nat,C:Operation>(x:bool)->bool{return fold(range(0,1),x,fn(s,i)=>C::apply(s));}
+math fn inner<N:nat,C:Operation>(x:bool)->bool{return calc<pow2(N),C>(x);}
+math fn outer<M:nat,C:Operation>(x:bool)->bool{return inner<pow2(M),C>(x);}
+protocol Demo<M:nat> roles(P)(x:bool@P)->(r:bool@P){return outer<M,Direct>(x);}
+)"));
+    auto argument = [](unsigned value) {
+      Type natural(Type::Kind::Natural);
+      natural.dimension = Natural::constant(value);
+      return natural;
+    };
+    take(closeNativeRun(project, "m::Demo", {}, {argument(5)}));
+    refuses(closeNativeRun(project, "m::Demo", {}, {argument(6)}),
+            "source.natural");
+  });
+  cases.run("independent Oracle summaries observe actual module dispatch", [] {
+    const std::string helpers = R"(
+type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
+type Oracle<K:OracleKind>=builtin("oracle",K);
+type I=Oracle<Fixed<index,16>>;
+interface Position {math fn choose(answer:index,position:index)->index;}
+module KeepPosition:Position {math fn choose(answer:index,position:index)->index{return position;}}
+module KeepAnswer:Position {math fn choose(answer:index,position:index)->index{return answer;}}
+math fn selected<C:Position>(answer:index,position:index)->index{return C::choose(answer,position);}
+)";
+    for (bool answer : {false, true}) {
+      auto source = helpers + R"(
+oracle def Independent(source:I)->I {
+ query(position:index) {
+  let first <- oracle.query(source,position);
+  let next=selected<)" +
+                    (answer ? "KeepAnswer" : "KeepPosition") +
+                    R"(>(first,position);
+  let second <- oracle.query(source,next);
+  return second;
+ }
+}
+)";
+      if (answer)
+        refuses(check(source), "source.oracle-adaptive");
+      else
+        take(check(source));
+    }
   });
   for (bool formation : {false, true})
     cases.run(

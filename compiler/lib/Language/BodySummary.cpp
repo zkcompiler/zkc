@@ -1,6 +1,7 @@
 #include "BodySummary.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
+#include <unordered_map>
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
@@ -55,12 +56,98 @@ bool chargeBinding(Semantics &types, const ScopedSummaryBinding &binding,
 
 namespace {
 using StaticFrame = std::vector<std::pair<std::string, std::string>>;
+using StaticContext = std::vector<StaticFrame>;
+using LexicalStatics = std::shared_ptr<const BodySummaryStatics>;
+
+bool staticReferences(Semantics &types, const Type &type,
+                      std::set<std::string> &references, unsigned depth = 1) {
+  if (depth > types.work.limits.typeDepth)
+    return types.fail("source.limit", "summary static type depth exceeded", {});
+  if (!types.charge(type.domain.size() + type.arguments.size() + 1, {}))
+    return false;
+  if (type.symbolic && !type.domain.empty())
+    references.insert(type.domain);
+  for (const auto &[factors, coefficient] : type.dimension.terms()) {
+    (void)coefficient;
+    if (!types.charge(factors.size() + 1, {}))
+      return false;
+    for (const auto &factor : factors) {
+      if (!types.charge(factor.name.size() + 1, {}))
+        return false;
+      references.insert(factor.name);
+    }
+  }
+  for (const auto &argument : type.arguments)
+    if (!staticReferences(types, argument, references, depth + 1))
+      return false;
+  return true;
+}
+
+/// Only a dispatch observation demands normalization. Resolve each actual in
+/// its defining parent before substituting it into the containing expression.
+std::optional<Type> substituteStatic(Semantics &types, const Type &type,
+                                     LexicalStatics environment, Span span,
+                                     BodySummaryCache *retained,
+                                     unsigned depth = 0) {
+  if (!environment)
+    return type;
+  struct Actual {
+    const Type *type;
+    LexicalStatics parent;
+    unsigned depth;
+  };
+  auto lookup = [&](StringRef name) -> std::optional<Actual> {
+    unsigned nesting = depth;
+    for (auto frame = environment; frame; frame = frame->parent) {
+      if (++nesting > types.work.limits.callDepth) {
+        types.fail("source.limit", "summary static environment depth exceeded",
+                   span);
+        return {};
+      }
+      if (!types.charge(name.size() + 1, span))
+        return {};
+      auto found = frame->bindings.find(name.str());
+      if (found != frame->bindings.end())
+        return Actual{&found->second, frame->parent, nesting};
+    }
+    return {};
+  };
+  if (type.symbolic && !type.domain.empty()) {
+    auto actual = lookup(type.domain);
+    if (types.diagnostic)
+      return {};
+    if (actual)
+      return substituteStatic(types, *actual->type, actual->parent, span,
+                              retained, actual->depth);
+  }
+  std::set<std::string> references;
+  if (!staticReferences(types, type, references))
+    return {};
+  Substitution bindings;
+  for (const auto &name : references) {
+    auto actual = lookup(name);
+    if (types.diagnostic)
+      return {};
+    if (!actual)
+      continue;
+    auto value = substituteStatic(types, *actual->type, actual->parent, span,
+                                  retained, actual->depth);
+    if (!value)
+      return {};
+    bindings.emplace(name, std::move(*value));
+  }
+  auto result = types.substitute(type, bindings, span);
+  if (result && retained && !retained->observeType(types, *result, span))
+    return {};
+  return result;
+}
+
 struct CallbackContext {
   const ScopedComputation *computation;
   ScopedSignature::Mode mode;
   bool mayStop, opaque;
   std::vector<std::string> signature;
-  StaticFrame statics;
+  StaticContext statics;
   unsigned captures, domains;
   std::vector<CallbackContext> scoped;
   bool operator<(const CallbackContext &other) const {
@@ -75,7 +162,7 @@ struct CallbackContext {
 };
 struct InstanceContext {
   const Body *body;
-  StaticFrame statics;
+  StaticContext statics;
   std::vector<CallbackContext> scoped;
   unsigned domains;
   bool operator<(const InstanceContext &other) const {
@@ -85,6 +172,21 @@ struct InstanceContext {
            std::tie(other.statics, other.scoped, other.domains);
   }
 };
+uint64_t contextWidth(const StaticContext &context) {
+  uint64_t width = 1;
+  for (const auto &frame : context)
+    for (const auto &[name, type] : frame)
+      width += name.size() + type.size() + 1;
+  return width;
+}
+uint64_t contextWidth(const CallbackContext &context) {
+  uint64_t width = contextWidth(context.statics) + 1;
+  for (const auto &type : context.signature)
+    width += type.size() + 1;
+  for (const auto &nested : context.scoped)
+    width += contextWidth(nested);
+  return width;
+}
 bool staticFrame(Semantics &types, const Substitution &statics,
                  StaticFrame &key) {
   for (const auto &[name, value] : statics) {
@@ -93,6 +195,47 @@ bool staticFrame(Semantics &types, const Substitution &statics,
     key.emplace_back(name, typeIdentity(value));
     if (!types.charge(key.back().second.size() + 1, {}))
       return false;
+  }
+  return true;
+}
+bool staticContext(Semantics &types, const Substitution &statics,
+                   LexicalStatics parent, StaticContext &key) {
+  StaticFrame local;
+  if (!staticFrame(types, statics, local))
+    return false;
+  key.push_back(std::move(local));
+  std::set<std::string> references;
+  for (const auto &[name, value] : statics)
+    if (!staticReferences(types, value, references))
+      return false;
+  unsigned depth = 0;
+  // Unreferenced callers are not part of an instance. Besides reducing keys,
+  // this makes re-entry with the same concrete actuals the same cycle subject.
+  for (auto frame = parent; frame && !references.empty();
+       frame = frame->parent) {
+    if (++depth > types.work.limits.callDepth)
+      return types.fail("source.limit", "summary lexical key depth exceeded",
+                        {});
+    Substitution selected;
+    for (auto it = references.begin(); it != references.end();) {
+      if (!types.charge(it->size() + 1, {}))
+        return false;
+      auto found = frame->bindings.find(*it);
+      if (found == frame->bindings.end()) {
+        ++it;
+        continue;
+      }
+      selected.insert(*found);
+      it = references.erase(it);
+    }
+    StaticFrame context;
+    if (!staticFrame(types, selected, context))
+      return false;
+    if (!context.empty())
+      key.push_back(std::move(context));
+    for (const auto &[name, value] : selected)
+      if (!staticReferences(types, value, references))
+        return false;
   }
   return true;
 }
@@ -125,7 +268,7 @@ struct BodySummaryCache::Storage {
   struct Template {
     const Body *body;
     bool completedDependencies;
-    unsigned height = 1;
+    unsigned height = 1, callHeight = 1;
     uint64_t typeDepth = 0, typeNodes = 0, operations = 0;
   };
   struct Instance {
@@ -133,13 +276,17 @@ struct BodySummaryCache::Storage {
     Template requirements;
   };
   struct Construction {
-    const Body *body;
+    InstanceContext context;
     unsigned depth, height = 1;
     Template requirements;
   };
-  std::map<const Body *, Template> templates;
-  std::map<InstanceContext, Instance> instances;
-  std::map<const ScopedComputation *, std::shared_ptr<const ScopedComputation>>
+  std::unordered_map<const Body *, Template> templates;
+  // A body's application cost depends on its own specialization population,
+  // independently of how many other bodies or regions have been summarized.
+  std::unordered_map<const Body *, std::map<InstanceContext, Instance>>
+      instances;
+  std::unordered_map<const ScopedComputation *,
+                     std::shared_ptr<const ScopedComputation>>
       callbackOwners;
   std::set<const Body *> formingTemplates;
   std::vector<Construction> constructing;
@@ -195,11 +342,13 @@ struct BodySummaryCache::Storage {
       result.typeDepth = std::max(result.typeDepth, height);
       return true;
     };
-    auto child = [&](const Body &nested) {
+    auto child = [&](const Body &nested, unsigned callEdge = 1) {
       const auto *summary = getTemplate(types, declarations, nested, depth + 1);
       if (!summary)
         return false;
       result.height = std::max(result.height, summary->height + 1);
+      result.callHeight =
+          std::max(result.callHeight, summary->callHeight + callEdge);
       result.typeDepth = std::max(result.typeDepth, summary->typeDepth);
       result.typeNodes = std::max(result.typeNodes, summary->typeNodes);
       result.operations = std::max(result.operations, summary->operations);
@@ -251,7 +400,13 @@ struct BodySummaryCache::Storage {
                      op.span);
           return nullptr;
         }
-        result.completedDependencies &= !call->module &&
+        const auto &callee = declarations[call->callee.index];
+        const bool abstractDispatch =
+            call->module && callee.parent &&
+            callee.parent->index < declarations.size() &&
+            declarations[callee.parent->index].kind ==
+                Declaration::Kind::Interface;
+        result.completedDependencies &= !abstractDispatch &&
                                         call->scopedArguments.empty() &&
                                         call->domainArguments.empty();
         for (const auto &argument : call->arguments)
@@ -259,12 +414,11 @@ struct BodySummaryCache::Storage {
             return nullptr;
         if (call->module && !type(*call->module))
           return nullptr;
-        const auto &callee = declarations[call->callee.index];
         if (callee.body && !child(*callee.body))
           return nullptr;
       } else if (const auto *control = std::get_if<Control>(&op.action)) {
         for (const auto &region : control->regions)
-          if (!region || !child(*region))
+          if (!region || !child(*region, 0))
             return nullptr;
       } else if (std::holds_alternative<ScopedInvoke>(op.action) ||
                  std::holds_alternative<FiniteApplication>(op.action) ||
@@ -316,14 +470,15 @@ bodySummaryFrame(Semantics &types, ArrayRef<Declaration> declarations,
   }
   return frame;
 }
-std::optional<bool>
-BodySummaryCache::staticIndependent(Semantics &types,
-                                    ArrayRef<Declaration> declarations,
-                                    const Body &body, unsigned depth) {
+std::optional<bool> BodySummaryCache::staticIndependent(
+    Semantics &types, ArrayRef<Declaration> declarations, const Body &body,
+    unsigned depth, unsigned *callHeight) {
   const auto *definition =
       storage->getTemplate(types, declarations, body, depth);
   if (!definition)
     return {};
+  if (callHeight)
+    *callHeight = definition->callHeight;
   return definition->completedDependencies;
 }
 void BodySummaryCache::observeDepth(unsigned depth) {
@@ -332,21 +487,37 @@ void BodySummaryCache::observeDepth(unsigned depth) {
       construction.height =
           std::max(construction.height, depth - construction.depth + 1);
 }
+bool BodySummaryCache::observeType(Semantics &types, const Type &type,
+                                   Span span) {
+  if (!types.chargeType(type, span))
+    return false;
+  uint64_t nodes = 0, height = 0;
+  std::function<void(const Type &, unsigned)> visit = [&](const Type &term,
+                                                          unsigned depth) {
+    ++nodes;
+    height = std::max(height, uint64_t(depth));
+    for (const auto &argument : term.arguments)
+      visit(argument, depth + 1);
+  };
+  visit(type, 1);
+  for (auto &construction : storage->constructing) {
+    auto &bounds = construction.requirements;
+    bounds.typeDepth = std::max(bounds.typeDepth, height);
+    bounds.typeNodes = std::max(bounds.typeNodes, nodes);
+  }
+  return true;
+}
 std::optional<BodySummaryApplication>
 BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
                         const Body &body, const Substitution &statics,
                         ArrayRef<Dependencies> inputs,
                         ArrayRef<ScopedSummaryBinding> environment,
-                        unsigned depth, ArrayRef<Dependencies> domains) {
+                        unsigned depth, ArrayRef<Dependencies> domains,
+                        LexicalStatics lexical, unsigned sourceDepth) {
   if (inputs.size() != body.inputs) {
     types.fail("source.scoped-summary", "summary input arity differs", {});
     return {};
   }
-  for (const auto &active : storage->constructing)
-    if (active.body == &body) {
-      types.fail("source.cycle", "recursive body summary application", {});
-      return {};
-    }
   const auto *definition =
       storage->getTemplate(types, declarations, body, depth);
   if (!definition)
@@ -363,7 +534,7 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
   observeDepth(depth + definition->height - 1);
 
   InstanceContext key{&body, {}, {}, unsigned(domains.size())};
-  if (!staticFrame(types, statics, key.statics))
+  if (!staticContext(types, statics, lexical, key.statics))
     return {};
   std::vector<Dependencies> actuals;
   auto slot = [&](const Dependencies &actual) -> std::optional<Dependencies> {
@@ -409,13 +580,14 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
     for (const auto &type : key.signature)
       if (!types.charge(type.size() + 1, {}))
         return {};
-    if (!staticFrame(types, binding.statics, key.statics))
+    if (!staticContext(types, binding.statics, binding.lexical, key.statics))
       return {};
     key.captures = binding.captures.size();
     key.domains = binding.domains.size();
     ScopedSummaryBinding formal{
         binding.computation, binding.signature, binding.statics, {}, {}, {}};
     formal.owner = binding.owner;
+    formal.lexical = binding.lexical;
     for (const auto &capture : binding.captures) {
       auto input = slot(capture);
       if (!input)
@@ -479,6 +651,7 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
   auto application = [&](const BodySummaryApplication &contract)
       -> std::optional<BodySummaryApplication> {
     BodySummaryApplication result;
+    result.callHeight = contract.callHeight;
     for (auto products :
          {std::make_pair(&contract.results, &result.results),
           std::make_pair(&contract.formation, &result.formation)})
@@ -500,6 +673,7 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
   if (definition->completedDependencies && environment.empty() &&
       domains.empty()) {
     BodySummaryApplication contract;
+    contract.callHeight = definition->callHeight;
     for (auto result : body.results) {
       if (result.index >= body.values.size()) {
         types.fail("source.scoped-summary", "invalid retained body result", {});
@@ -517,36 +691,61 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
     }
     return application(contract);
   }
-  uint64_t levels = 1;
-  for (auto count = storage->instances.size(); count > 1; count >>= 1)
-    ++levels;
-  if (!types.charge((actuals.size() + statics.size() + 1) * levels, {}))
+  // Dependency inputs remain formal slots and cannot select an instance. The
+  // lexical static and callback context can: the same Body may be entered with
+  // a different implementation or with a different nested finite callback.
+  uint64_t width = contextWidth(key.statics) + 1;
+  for (const auto &context : key.scoped)
+    width += contextWidth(context);
+  if (!types.charge(width, {}))
     return {};
-  if (auto found = storage->instances.find(key);
-      found != storage->instances.end()) {
-    if (!storage->bounds(types, found->second.requirements, depth))
+  for (const auto &active : storage->constructing) {
+    if (!types.charge(active.context.body == &body ? width : 1, {}))
       return {};
-    observeDepth(depth + found->second.requirements.height - 1);
-    observeRequirements(found->second.requirements);
-    return application(found->second.contract);
+    if (!(active.context < key) && !(key < active.context)) {
+      types.fail("source.cycle", "recursive body summary application", {});
+      return {};
+    }
   }
+  auto population = storage->instances.find(&body);
+  uint64_t levels = 1;
+  for (auto count = population == storage->instances.end()
+                        ? 0
+                        : population->second.size();
+       count > 1; count >>= 1)
+    ++levels;
+  if (!types.charge((actuals.size() + width) * levels, {}))
+    return {};
+  if (population != storage->instances.end()) {
+    auto found = population->second.find(key);
+    if (found != population->second.end()) {
+      if (!storage->bounds(types, found->second.requirements, depth))
+        return {};
+      observeDepth(depth + found->second.requirements.height - 1);
+      observeRequirements(found->second.requirements);
+      return application(found->second.contract);
+    }
+  }
+  if (!types.charge(width, {}))
+    return {};
   storage->constructing.push_back(
-      {&body, depth, definition->height, *definition});
+      {key, depth, definition->height, *definition});
   auto leave = llvm::scope_exit([&] { storage->constructing.pop_back(); });
   auto derived = summarizeBody(types, declarations, body, statics, formalInputs,
-                               formalEnvironment, depth, formalDomains, this);
+                               formalEnvironment, depth, formalDomains, this,
+                               lexical, sourceDepth ? sourceDepth : depth);
   if (!derived)
     return {};
   BodySummaryApplication contract{std::move(derived->results),
                                   std::move(derived->formation),
-                                  derived->parameterized};
+                                  derived->parameterized, derived->callHeight};
   auto result = application(contract);
   if (!result)
     return {};
   auto height = storage->constructing.back().height;
   auto requirements = storage->constructing.back().requirements;
   requirements.height = height;
-  storage->instances.emplace(
+  storage->instances[&body].emplace(
       std::move(key), Storage::Instance{std::move(contract), requirements});
   return result;
 }
@@ -614,11 +813,13 @@ summarizeDomainBinding(Semantics &types, const Body &body, unsigned index,
   }
   return join(types, dependencies);
 }
-std::optional<ScopedSummaryBinding> summarizeScopedBinding(
-    Semantics &types, const Body &body, unsigned index,
-    const Substitution &statics, ArrayRef<Dependencies> values,
-    ArrayRef<ScopedSummaryBinding> environment, unsigned depth,
-    bool identityValues, ArrayRef<Dependencies> domains) {
+std::optional<ScopedSummaryBinding>
+summarizeScopedBinding(Semantics &types, const Body &body, unsigned index,
+                       const Substitution &statics,
+                       ArrayRef<Dependencies> values,
+                       ArrayRef<ScopedSummaryBinding> environment,
+                       unsigned depth, bool identityValues,
+                       ArrayRef<Dependencies> domains, LexicalStatics lexical) {
   if (index >= body.scopedBindings.size() ||
       depth > types.work.limits.callDepth) {
     types.fail("source.limit", "scoped summary depth exceeded", {});
@@ -635,12 +836,15 @@ std::optional<ScopedSummaryBinding> summarizeScopedBinding(
         return {};
       return environment[*binding.parameter];
     }
-    return ScopedSummaryBinding{nullptr, binding.signature, statics, {}, {},
-                                {}};
+    ScopedSummaryBinding unresolved{nullptr, binding.signature, statics, {}, {},
+                                    {}};
+    unresolved.lexical = lexical;
+    return unresolved;
   }
   ScopedSummaryBinding result{
       binding.computation.get(), binding.signature, statics, {}, {}, {}};
   result.owner = binding.computation;
+  result.lexical = lexical;
   for (auto capture : binding.captures) {
     if (capture.index >=
         (identityValues ? body.values.size() : values.size())) {
@@ -657,9 +861,9 @@ std::optional<ScopedSummaryBinding> summarizeScopedBinding(
     }
   }
   for (auto capture : binding.scopedCaptures) {
-    auto nested =
-        summarizeScopedBinding(types, body, capture, statics, values,
-                               environment, depth + 1, identityValues, domains);
+    auto nested = summarizeScopedBinding(types, body, capture, statics, values,
+                                         environment, depth + 1, identityValues,
+                                         domains, lexical);
     if (!nested)
       return {};
     result.scoped.push_back(std::move(*nested));
@@ -673,12 +877,14 @@ std::optional<ScopedSummaryBinding> summarizeScopedBinding(
   }
   return result;
 }
-std::optional<BodySummary>
-summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
-              const Body &body, const Substitution &statics,
-              ArrayRef<Dependencies> inputs,
-              ArrayRef<ScopedSummaryBinding> environment, unsigned depth,
-              ArrayRef<Dependencies> domains, BodySummaryCache *retained) {
+static std::optional<BodySummary>
+summarizeBodyImpl(Semantics &types, ArrayRef<Declaration> declarations,
+                  const Body &body, const Substitution &statics,
+                  ArrayRef<Dependencies> inputs,
+                  ArrayRef<ScopedSummaryBinding> environment, unsigned depth,
+                  ArrayRef<Dependencies> domains, BodySummaryCache *retained,
+                  LexicalStatics lexical, unsigned sourceDepth,
+                  BodySummaryCache &definitions) {
   if (retained)
     retained->observeDepth(depth);
   if (depth > types.work.limits.callDepth || inputs.size() != body.inputs) {
@@ -686,22 +892,34 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
                {});
     return {};
   }
-  auto nestedSummary = [&](const Body &nested, const Substitution &frame,
-                           ArrayRef<Dependencies> arguments,
-                           ArrayRef<ScopedSummaryBinding> callbacks,
-                           unsigned nesting,
-                           ArrayRef<Dependencies> domainArguments = {})
-      -> std::optional<BodySummaryApplication> {
+  LexicalStatics current = lexical;
+  if (!statics.empty()) {
+    for (const auto &[name, value] : statics)
+      if (!types.charge(name.size() + 1, {}) || !types.chargeType(value, {}))
+        return {};
+    current = std::make_shared<BodySummaryStatics>(
+        BodySummaryStatics{statics, lexical});
+  }
+  auto nestedSummary =
+      [&](const Body &nested, const Substitution &frame,
+          ArrayRef<Dependencies> arguments,
+          ArrayRef<ScopedSummaryBinding> callbacks, unsigned nesting,
+          ArrayRef<Dependencies> domainArguments = {},
+          LexicalStatics parent = {},
+          unsigned sourceEdge = 1) -> std::optional<BodySummaryApplication> {
     if (retained)
       return retained->apply(types, declarations, nested, frame, arguments,
-                             callbacks, nesting, domainArguments);
-    auto summary = summarizeBody(types, declarations, nested, frame, arguments,
-                                 callbacks, nesting, domainArguments);
+                             callbacks, nesting, domainArguments, parent,
+                             sourceDepth + sourceEdge);
+    auto summary =
+        summarizeBodyImpl(types, declarations, nested, frame, arguments,
+                          callbacks, nesting, domainArguments, nullptr, parent,
+                          sourceDepth + sourceEdge, definitions);
     if (!summary)
       return {};
     return BodySummaryApplication{std::move(summary->results),
                                   std::move(summary->formation),
-                                  summary->parameterized};
+                                  summary->parameterized, summary->callHeight};
   };
   BodySummary result;
   if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
@@ -745,13 +963,14 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
             return false;
         return true;
       };
-  auto absorb = [&](const BodySummaryApplication &nested) {
+  auto absorb = [&](const BodySummaryApplication &nested, unsigned edge = 1) {
     for (const auto &formation : nested.formation)
       if (!types.charge(formation.inputs.size() + 1, {}))
         return false;
     result.formation.insert(result.formation.end(), nested.formation.begin(),
                             nested.formation.end());
     result.parameterized |= nested.parameterized;
+    result.callHeight = std::max(result.callHeight, nested.callHeight + edge);
     return true;
   };
   for (const auto &op : body.operations) {
@@ -761,7 +980,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
     if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
       auto binding = summarizeScopedBinding(types, body, invoke->binding,
                                             statics, result.values, environment,
-                                            depth, false, domains);
+                                            depth, false, domains, lexical);
       auto operands = gather(invoke->operands);
       if (!binding || !operands)
         return {};
@@ -770,7 +989,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
                          binding->captures.end());
         auto nested = nestedSummary(
             *binding->computation->body, binding->statics, *operands,
-            binding->scoped, depth + 1, binding->domains);
+            binding->scoped, depth + 1, binding->domains, binding->lexical);
         if (!nested)
           return {};
         if (!absorb(*nested))
@@ -826,7 +1045,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
         } else {
           auto binding = summarizeScopedBinding(
               types, body, predicate ? *open->predicate : open->body, statics,
-              result.values, environment, depth, false, domains);
+              result.values, environment, depth, false, domains, lexical);
           if (!binding)
             return {};
           if (!binding->computation) {
@@ -839,7 +1058,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
                         binding->captures.end());
           nested = nestedSummary(*binding->computation->body, binding->statics,
                                  inputs, binding->scoped, depth + 1,
-                                 binding->domains);
+                                 binding->domains, binding->lexical);
         }
         if (!nested || !absorb(*nested))
           return {};
@@ -889,7 +1108,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
       for (auto scoped : call->scopedArguments) {
         auto binding =
             summarizeScopedBinding(types, body, scoped, statics, result.values,
-                                   environment, depth, false, domains);
+                                   environment, depth, false, domains, lexical);
         if (!binding)
           return {};
         selected.push_back(std::move(*binding));
@@ -901,9 +1120,10 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
       bool ordinary = !call->module && known.kind == Declaration::Kind::Math &&
                       known.body && !known.body->parameterizedSummary &&
                       selected.empty() && selectedDomains.empty();
-      if (ordinary && retained) {
-        auto independent = retained->staticIndependent(types, declarations,
-                                                       *known.body, depth + 1);
+      unsigned ordinaryHeight = 1;
+      if (ordinary) {
+        auto independent = definitions.staticIndependent(
+            types, declarations, *known.body, depth + 1, &ordinaryHeight);
         if (!independent)
           return {};
         ordinary = *independent;
@@ -932,6 +1152,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
             return join(types, values);
           };
           nested.emplace();
+          nested->callHeight = ordinaryHeight;
           for (auto value : known.body->results) {
             if (value.index >= known.body->values.size())
               return {};
@@ -955,31 +1176,53 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
           return {};
         dependencies = std::move(*combined);
       } else {
-        std::vector<Type> arguments;
-        for (const auto &argument : call->arguments) {
-          auto value = types.substitute(argument, statics, op.span);
-          if (!value)
+        // Keep unused actuals in their defining frame. Composing pow2(N),
+        // N := pow2(M) before M is concrete is outside the natural algebra.
+        std::vector<Type> arguments = call->arguments;
+        std::optional<Type> module = call->module;
+        auto target = call->callee;
+        // Direct calls already name their implementation in this declaration
+        // inventory. An independent candidate witness may use Semantics over
+        // the source type declarations, which do not contain generated helpers.
+        if (module && known.parent &&
+            known.parent->index < declarations.size() &&
+            declarations[known.parent->index].kind ==
+                Declaration::Kind::Interface) {
+          module = substituteStatic(types, *module, current, op.span, retained);
+          if (!module ||
+              (retained && !retained->observeType(types, *module, op.span)))
             return {};
-          arguments.push_back(*value);
-        }
-        std::optional<Type> module;
-        if (call->module) {
-          module = types.substitute(*call->module, statics, op.span);
-          if (!module)
+          if (!module->symbolic) {
+            const auto inherited =
+                declarations[known.parent->index].parameters.size();
+            for (unsigned i = 0; i < std::min(inherited, arguments.size());
+                 ++i) {
+              auto actual = substituteStatic(types, arguments[i], current,
+                                             op.span, retained);
+              if (!actual)
+                return {};
+              arguments[i] = std::move(*actual);
+            }
+          }
+          auto dispatch =
+              types.dispatch(module, target, arguments, op.span, sourceDepth);
+          if (!dispatch || dispatch->declaration.index >= declarations.size())
             return {};
+          target = dispatch->declaration;
+          arguments = std::move(dispatch->arguments);
+          if (retained)
+            for (const auto &argument : arguments)
+              if (!retained->observeType(types, argument, op.span))
+                return {};
         }
-        auto dispatch =
-            types.dispatch(module, call->callee, arguments, op.span, depth);
-        if (!dispatch || dispatch->declaration.index >= declarations.size())
-          return {};
-        const auto &callee = declarations[dispatch->declaration.index];
+        const auto &callee = declarations[target.index];
         if (callee.body && callee.kind == Declaration::Kind::Math) {
-          auto frame = bodySummaryFrame(types, declarations, callee,
-                                        dispatch->arguments, module);
+          auto frame =
+              bodySummaryFrame(types, declarations, callee, arguments, module);
           if (!frame)
             return {};
           auto nested = nestedSummary(*callee.body, *frame, *operands, selected,
-                                      depth + 1, selectedDomains);
+                                      depth + 1, selectedDomains, current);
           if (!nested || !absorb(*nested))
             return {};
           auto combined = join(types, nested->results);
@@ -1076,12 +1319,9 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
               nestedInputs.push_back(result.values[capture.index]);
             auto nested =
                 nestedSummary(*region, statics, nestedInputs, environment,
-                              depth + 1, selectedDomains);
-            if (!nested)
+                              depth + 1, selectedDomains, lexical, 0);
+            if (!nested || !absorb(*nested, 0))
               return {};
-            result.formation.insert(result.formation.end(),
-                                    nested->formation.begin(),
-                                    nested->formation.end());
           }
         }
         for (auto domain : control->domainArguments) {
@@ -1132,5 +1372,21 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
   for (const auto &requirement : result.formation)
     result.parameterized |= requirement.parameterized;
   return result;
+}
+std::optional<BodySummary>
+summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
+              const Body &body, const Substitution &statics,
+              ArrayRef<Dependencies> inputs,
+              ArrayRef<ScopedSummaryBinding> environment, unsigned depth,
+              ArrayRef<Dependencies> domains, BodySummaryCache *retained,
+              LexicalStatics lexical, unsigned sourceDepth) {
+  // Independent reconstruction shares only a private structural index. It
+  // derives the current body's values/formation from operations and cannot
+  // read or populate the producer's retained application contracts.
+  BodySummaryCache independentDefinitions;
+  return summarizeBodyImpl(types, declarations, body, statics, inputs,
+                           environment, depth, domains, retained, lexical,
+                           sourceDepth,
+                           retained ? *retained : independentDefinitions);
 }
 } // namespace zkc::language::detail
