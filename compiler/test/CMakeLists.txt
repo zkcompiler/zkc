@@ -38,6 +38,7 @@ add_zkc_test(role_assembly CpuTarget role-assembly)
 add_zkc_test(language_value_placement Language language-value-placement)
 add_zkc_test(language_invocation_provenance Language language-invocation-provenance)
 add_zkc_test(language_selected_control Compiler language-selected-control)
+add_zkc_test(language_common_summaries Language language-common-summaries)
 add_zkc_test(language_common_recurrence Compiler language-common-recurrence)
 mlir_target_link_libraries(zkc-language_common_recurrence-test PRIVATE MLIRParser)
 zkc_source_project(zkc-language_common_recurrence-test
