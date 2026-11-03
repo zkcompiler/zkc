@@ -23,17 +23,6 @@ struct ScopedCallSource;
 struct ScopedInvocationSource;
 struct SourceCall;
 using IntrinsicCallSource = SourceCall;
-struct SourceBinding {
-  DeclarationId target;
-  Span span;
-  bool isPublic;
-  std::optional<DeclarationId> provider;
-};
-/// Frozen source namespaces, including resolved imports and facade bindings.
-struct NameEnvironment {
-  std::map<std::string, DeclarationId> modules;
-  std::vector<std::map<std::string, SourceBinding>> visible;
-};
 struct AuthoringStorage;
 /// Defining source authorities, computed once after the last checking step.
 /// A unit is one captured file, named by its module path. Installation
@@ -74,8 +63,8 @@ struct CheckedStorage {
   std::shared_ptr<const WrittenSources> writtenSources;
   NotationRecords notations;
   APIRecords api;
+  std::shared_ptr<const std::vector<ReferenceRecord>> authoredReferences;
   std::vector<LexicalResolution> lexicalResolutions;
-  std::shared_ptr<const NameEnvironment> names;
   std::shared_ptr<const DeclarationIndex> declarationIndex;
   std::shared_ptr<const AuthoringStorage> authoring;
   /// Immutable authored callback and effect contracts, independent of mutable
@@ -111,11 +100,13 @@ struct AuthoringStorage {
   std::vector<std::optional<syntax::Snapshot>> layoutBodies;
   std::vector<LexicalResolution> lexicalResolutions;
   APIRecords api;
-  std::shared_ptr<const NameEnvironment> names;
   std::shared_ptr<const DeclarationIndex> declarationIndex;
 };
 /// Internal immutable vector access; the project/Entry must outlive the borrow.
 struct DeclarationAccess {
+  static const CheckedStorage &storage(const CheckedProject &project) {
+    return *project.storage;
+  }
   static const std::vector<Declaration> &get(const CheckedProject &project) {
     return project.storage->declarations;
   }

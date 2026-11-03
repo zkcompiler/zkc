@@ -80,11 +80,17 @@ std::optional<ValueId> BodyChecker::instantiateOracle(const Expression &expr,
   operation.binding = CallBinding{target, arguments, operands, {}, {}, {}, {}};
   operation.binding->argumentOrder = order;
   operation.binding->scopedSource = witnesses.calls.size();
-  witnesses.calls.push_back(std::make_shared<ScopedCallSource>(ScopedCallSource{
-      {decl.id, target.declaration, id, {}, target.module, arguments},
-      scoped,
-      domains,
-      {}}));
+  witnesses.calls.push_back(
+      std::make_shared<ScopedCallSource>(ScopedCallSource{{decl.id,
+                                                           target.declaration,
+                                                           id,
+                                                           {},
+                                                           target.module,
+                                                           arguments,
+                                                           target.reference},
+                                                          scoped,
+                                                          domains,
+                                                          {}}));
   placement->oracleInstantiations.push_back(body.operations.size() - 1);
   return result;
 }

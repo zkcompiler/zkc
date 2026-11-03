@@ -290,6 +290,67 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     return types.diagnostic
                ? types.takeError()
                : failure("source.installation", "missing declaration index");
+  if (!storage.authoredReferences ||
+      storage.authoredReferences->size() != storage.api.references.size())
+    return failure("source.binding-witness",
+                   "source reference inventory differs");
+  for (unsigned i = 0; i < storage.api.references.size(); ++i) {
+    const auto &authored = (*storage.authoredReferences)[i];
+    const auto &candidate = storage.api.references[i];
+    if (!types.charge(authored.reference.path.size() + 1, authored.span))
+      return types.takeError();
+    if (authored.owner.index != candidate.owner.index ||
+        authored.provider.index != candidate.provider.index ||
+        authored.target.index != candidate.target.index ||
+        !same(authored.span, candidate.span) ||
+        authored.written != candidate.written ||
+        authored.route != candidate.route ||
+        authored.abstractModule != candidate.abstractModule ||
+        authored.position.node.index != candidate.position.node.index ||
+        authored.position.kind != candidate.position.kind ||
+        authored.position.slot != candidate.position.slot ||
+        authored.position.ordinal != candidate.position.ordinal ||
+        authored.reference != candidate.reference)
+      return failure("source.binding-witness",
+                     "source reference occurrence differs", authored.span);
+    for (const auto &step : authored.reference.path) {
+      auto selected = storage.declarationIndex->member(
+          SourceAccess{authored.owner}, step.owner, step.name,
+          {[&] { return types.charge(1, authored.span); }, {}});
+      if (!std::holds_alternative<ResolvedReference>(selected))
+        return types.diagnostic
+                   ? types.takeError()
+                   : failure("source.binding-witness",
+                             "source reference route is inaccessible",
+                             authored.span);
+    }
+  }
+  // Constructor authority belongs to the port's authored occurrence. It is
+  // independent of the field type and of later managed-query evidence.
+  for (const auto &decl : storage.declarations) {
+    if (!types.charge(decl.services.size() + 1, decl.span))
+      return types.takeError();
+    auto source = storage.bodySources.find(decl.id.index);
+    if (source == storage.bodySources.end()) {
+      if (!decl.services.empty())
+        return failure("source.binding-witness",
+                       "missing managed constructor source", decl.span);
+      continue;
+    }
+    if (!source->second || !source->second->syntax)
+      return failure("source.binding-witness",
+                     "missing managed constructor syntax", decl.span);
+    const auto &written = source->second->syntax->services;
+    if (written.size() != decl.services.size())
+      return failure("source.binding-witness",
+                     "managed constructor coverage differs", decl.span);
+    for (unsigned i = 0; i < written.size(); ++i)
+      if (!written[i].serviceReference ||
+          *written[i].serviceReference != decl.services[i].constructor)
+        return failure("source.binding-witness",
+                       "managed constructor provider differs",
+                       decl.services[i].span);
+  }
   // This closure is immutable for the whole check; share operand-relative
   // summaries, while each declaration reconstructs its own premise scope.
   HelperResults helperResults(types, storage.declarations);
@@ -324,15 +385,36 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     if (!same(expr.span, op.span) || expr.binding ||
         binding.target.declaration.index != source.target.index ||
         binding.target.module != source.module ||
+        binding.target.reference != source.reference ||
+        source.reference.target.index != source.target.index ||
         binding.arguments != source.arguments)
       return refuse("resolved source target or static arguments differ");
     if (expr.kind == Expression::Kind::Call && !source.module) {
       // A protocol's generated Host companions are members of its public
       // namespace, not lexical declarations visible inside its own body.
       auto selected = storage.declarationIndex->lookup(
-          owner.parent.value_or(owner.module), expr.text);
-      if (!selected || selected->index != source.target.index)
-        return refuse("source declaration lookup differs");
+          SourceAccess{source.owner}, expr.text,
+          {[&] { return types.charge(1, op.span); }, {}});
+      auto *reference = std::get_if<ResolvedReference>(&selected);
+      if (!reference || *reference != source.reference)
+        return types.diagnostic ? false
+                                : refuse("source declaration lookup differs");
+    }
+    // Abstract member evidence is typed and immutable. Re-authorize its path
+    // using the same source access policy, independently of candidate metadata.
+    if (source.module) {
+      if (!source.reference.abstract ||
+          source.reference.abstract->module != *source.module)
+        return refuse("abstract source context differs");
+      for (const auto &step : source.reference.path) {
+        auto selected = storage.declarationIndex->member(
+            SourceAccess{source.owner}, step.owner, step.name,
+            {[&] { return types.charge(1, op.span); }, {}});
+        if (!std::holds_alternative<ResolvedReference>(selected))
+          return types.diagnostic
+                     ? false
+                     : refuse("abstract source route is inaccessible");
+      }
     }
     auto order = bindArguments(types, inputNames(callee), expr.children.size(),
                                expr.callLabels, true, expr.span, diagnostic);
@@ -407,7 +489,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           types, storage.declarations, *storage.declarationIndex, owner,
           body.values[receiver->second.index].type, expr.text, expr.span);
       if (!selected || selected->declaration.index != source.target.index ||
-          selected->module != source.module)
+          selected->module != source.module ||
+          selected->reference != source.reference)
         return types.diagnostic ? false : refuse();
     }
     if (callee.kind == Declaration::Kind::Protocol) {
@@ -496,14 +579,21 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         return types.fail("source.binding-witness",
                           "intrinsic authored authority differs", op.span);
       const auto &expr = source.syntax->expressions[source.expression];
-      auto selected = storage.declarationIndex->lookup(source.owner, expr.text);
+      auto selected = storage.declarationIndex->lookup(
+          SourceAccess{source.owner}, expr.text,
+          {[&] { return types.charge(1, op.span); }, {}});
+      auto *reference = std::get_if<ResolvedReference>(&selected);
       if (expr.kind != Expression::Kind::Call || expr.binding ||
-          !same(expr.span, op.span) || !selected ||
-          selected->index != source.target.index ||
+          !same(expr.span, op.span) || !reference ||
+          *reference != source.reference ||
+          binding.target.reference != source.reference ||
           expr.children.size() != binding.operands.size() ||
           !expr.callLabels.empty() || !expr.arguments.empty() || expr.roles)
-        return types.fail("source.binding-witness",
-                          "intrinsic resolved declaration differs", op.span);
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.binding-witness",
+                                "intrinsic resolved declaration differs",
+                                op.span);
       return authoredCall(body, op, source);
     }
     auto refuse = [&] {
@@ -581,7 +671,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           storage.declarations[source.owner.index],
           body.values[receiver->second.index].type, expr.text, expr.span);
       if (!selected || selected->declaration.index != source.target.index ||
-          selected->module != binding.target.module)
+          selected->module != binding.target.module ||
+          selected->reference != source.reference)
         return refuse();
     }
     if (!same(expr.span, op.span) ||
@@ -685,6 +776,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               application.factory->declaration.index !=
                   authored.target.declaration.index ||
               application.factory->module != authored.target.module ||
+              application.factory->reference != authored.target.reference ||
               application.arguments != authored.arguments)
             return refuse();
           const auto &factory =
@@ -805,6 +897,25 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           return types.fail("source.limit", "scoped witness body depth", {});
         if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
           return false;
+        if (!body.services.empty()) {
+          auto source = storage.bodySources.find(lexicalOwner.index);
+          if (source == storage.bodySources.end() || !source->second->syntax)
+            return types.fail("source.binding-witness",
+                              "missing managed constructor owner", {});
+          const auto &written = source->second->syntax->services;
+          for (const auto &service : body.services) {
+            if (!types.charge(written.size() + 1, service.span))
+              return false;
+            auto found = llvm::find_if(written, [&](const auto &port) {
+              return port.name == service.name;
+            });
+            if (found == written.end() || !found->serviceReference ||
+                *found->serviceReference != service.constructor)
+              return types.fail("source.binding-witness",
+                                "body constructor provider differs",
+                                service.span);
+          }
+        }
         std::vector<const Operation *> producers(body.values.size());
         for (const auto &op : body.operations)
           for (auto value : op.results) {

@@ -383,6 +383,7 @@ add_zkc_test(language_semantic_budget Language language-semantic-budget)
 add_zkc_test(language_work_observation Language language-work-observation)
 add_zkc_test(language_body_summary Language language-body-summary)
 add_zkc_test(language_names Language language-names)
+add_zkc_test(language_resolution Language language-resolution)
 target_link_libraries(zkc-language_names-test PRIVATE utf8proc::utf8proc)
 target_compile_definitions(zkc-language_names-test PRIVATE
   ZKC_UNICODE_DATA="${ZKC_UNICODE_SOURCE_DIR}/17.0.0")

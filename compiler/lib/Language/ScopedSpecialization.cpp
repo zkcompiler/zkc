@@ -264,6 +264,7 @@ class SpecializationCheck {
     for (unsigned i = 0; i < original.services.size(); ++i)
       if (actual.services[i].name != original.services[i].name ||
           actual.services[i].owner != original.services[i].owner ||
+          actual.services[i].constructor != original.services[i].constructor ||
           !typeEqual(original.services[i].field, actual.services[i].field,
                      subst, original.services[i].span))
         return refuse(original.services[i].span);
@@ -282,6 +283,7 @@ class SpecializationCheck {
         auto statics = arguments(a.arguments, subst, op.span);
         if (!statics || *statics != b.arguments ||
             a.target.declaration.index != b.target.declaration.index ||
+            a.target.reference != b.target.reference ||
             !same(b.operands, mapped(a.operands)) || a.symbol != b.symbol ||
             a.family != b.family || a.scopedSource != b.scopedSource ||
             a.argumentOrder != b.argumentOrder || a.roles != b.roles ||
@@ -852,7 +854,7 @@ class SpecializationCheck {
     };
     auto method = [&](const CallableReference &x, const CallableReference &y,
                       ArrayRef<Type> args, ArrayRef<Type> closedArgs) {
-      if (x.declaration.index >= source.size() ||
+      if (x.reference != y.reference || x.declaration.index >= source.size() ||
           !optionalType(x.module, y.module))
         return false;
       auto selected = arguments(args, subst, actual.span);

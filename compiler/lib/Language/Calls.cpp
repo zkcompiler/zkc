@@ -328,11 +328,16 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
     evidence.domainArguments = domainArgs;
-    ScopedCallSource source{
-        {decl.id, target.declaration, id, {}, target.module, staticArgs},
-        scoped,
-        domains,
-        {}};
+    ScopedCallSource source{{decl.id,
+                             target.declaration,
+                             id,
+                             {},
+                             target.module,
+                             staticArgs,
+                             target.reference},
+                            scoped,
+                            domains,
+                            {}};
     std::function<bool(uint32_t, unsigned)> retainDomain =
         [&](uint32_t expression, unsigned nesting) {
           const auto &argument = syntax.expressions[expression];

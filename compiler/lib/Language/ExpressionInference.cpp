@@ -280,11 +280,14 @@ class ExpressionInference {
   bool recordNotation(uint32_t id, DeclarationId provider,
                       const CallableReference &target) {
     const auto &expr = syntax.expressions[id];
+    SaveAndRestore site(checker.referenceSite, expr.referenceSite);
+    auto reference = target.reference;
+    // The notation provider and the callable's original route are distinct.
+    // Keep the latter in CallableReference and add the authored notation owner.
+    reference.provider = provider;
     return checker.recordReference(
-        decl, ReferenceRoute::Notation, provider, target.declaration,
-        expr.notation->symbol + expr.notation->closing, expr.span,
-        target.module ? std::optional(formatType(*target.module))
-                      : std::nullopt);
+        decl, ReferenceRoute::Notation, reference,
+        expr.notation->symbol + expr.notation->closing, expr.span);
   }
   bool finishCalls(unsigned begin, unsigned firstExpression, Span span) {
     std::optional<Diagnostic> incompleteCall;
@@ -814,6 +817,7 @@ class ExpressionInference {
     if (auto it = expressions.find(id); it != expressions.end())
       return it->second;
     const auto &expr = syntax.expressions[id];
+    SaveAndRestore site(checker.referenceSite, expr.referenceSite);
     contexts.emplace(
         id, CallContext{scopedMode.value_or(owner.body.mode), scopedDepth});
     Result result{types.fresh(expr.span)};
@@ -1041,6 +1045,8 @@ class ExpressionInference {
                                 : expr.constructorSpans[i];
           if (label.contains("::")) {
             auto [qualifier, alternative] = label.rsplit("::");
+            SaveAndRestore constructorSite(checker.referenceSite,
+                                           expr.constructorSites.at(i));
             auto target = checker.resolve(decl, qualifier, occurrence);
             if (!target)
               break;

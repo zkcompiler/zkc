@@ -64,6 +64,7 @@ bool Checker::constructions() {
     ConstructionDefinition result;
     result.base = syntax.base;
     if (syntax.parent) {
+      SaveAndRestore site(referenceSite, syntax.parent->referenceSite);
       auto parent = resolve(decl, syntax.parent->name, syntax.parent->span);
       if (!parent || !signature(*parent))
         return false;
@@ -196,6 +197,7 @@ bool Checker::constructions() {
     }
     llvm::sort(result.services);
     if (syntax.provider) {
+      SaveAndRestore site(referenceSite, syntax.provider->referenceSite);
       auto provider = type(decl, *syntax.provider);
       if (!provider)
         return false;
@@ -220,12 +222,16 @@ bool Checker::constructions() {
           return types.fail("source.construction",
                             "transcript requires a module provider",
                             syntax.provider->span);
-        auto state =
-            constructionMember(decl, *provider, "State", syntax.provider->span);
+        auto state = constructionMember(
+            decl, *provider, "State", syntax.provider->span,
+            typeReferences.count(syntax.provider->referenceSite)
+                ? std::optional(
+                      typeReferences.at(syntax.provider->referenceSite))
+                : std::nullopt);
         if (!state)
           return false;
         auto stateType =
-            types.associated(*provider, *state, syntax.provider->span);
+            types.associated(*provider, state->target, syntax.provider->span);
         if (!stateType)
           return false;
         auto permissions = types.permissions(*stateType, decl.span, &decl);
@@ -236,11 +242,15 @@ bool Checker::constructions() {
               "source.construction",
               "source-created transcript state requires Copy and Drop",
               decl.span);
-        auto member =
-            constructionMember(decl, *provider, "initialize", decl.span);
+        auto member = constructionMember(
+            decl, *provider, "initialize", decl.span,
+            typeReferences.count(syntax.provider->referenceSite)
+                ? std::optional(
+                      typeReferences.at(syntax.provider->referenceSite))
+                : std::nullopt);
         if (!member)
           return false;
-        const auto &factory = output.declarations[member->index];
+        const auto &factory = output.declarations[member->target.index];
         auto bindings =
             types.boundMemberSubstitution(factory, *provider, decl.span);
         if (!bindings)
@@ -264,7 +274,8 @@ bool Checker::constructions() {
         result.provider = std::move(*provider);
         result.root = ConstructionDefinition::Root::Local;
         result.state = std::move(*stateType);
-        result.initializer = CallableReference{*member, result.provider};
+        result.initializer =
+            CallableReference{member->target, result.provider, *member};
         for (const auto &parameter : factory.parameters)
           result.initializerArguments.push_back(bindings->at(parameter.atom));
       }
@@ -379,6 +390,7 @@ bool Checker::constructions() {
       if (!selectedCalls.insert(application.path).second)
         return types.fail("source.construction",
                           "duplicate construction application", source.span);
+      SaveAndRestore site(referenceSite, source.construction.referenceSite);
       auto selected = resolve(decl, source.construction.name, source.span);
       if (!selected || !signature(*selected))
         return false;

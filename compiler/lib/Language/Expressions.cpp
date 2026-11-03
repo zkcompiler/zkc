@@ -13,6 +13,8 @@ BodyChecker::expression(uint32_t id, std::optional<Type> expected,
                         unsigned depth, bool allowUntypedStop,
                         std::optional<ValuePlacement> placed,
                         const ValuePlacement *schema) {
+  SaveAndRestore referenceSite(checker.referenceSite,
+                               syntax.expressions[id].referenceSite);
   assert((!protocol() || placement) &&
          "protocol expression requires a statement inference scope");
   SaveAndRestore completionScope(completionAllowed,

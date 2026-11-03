@@ -12,7 +12,8 @@ bool sameOperands(ArrayRef<ValueId> a, ArrayRef<ValueId> b) {
                     [](ValueId x, ValueId y) { return x.index == y.index; });
 }
 bool sameTarget(const CallableReference &a, const CallableReference &b) {
-  return a.declaration.index == b.declaration.index && a.module == b.module;
+  return a.declaration.index == b.declaration.index && a.module == b.module &&
+         a.reference == b.reference;
 }
 bool sameSpan(Span a, Span b) {
   return a.source.index == b.source.index && a.begin == b.begin &&

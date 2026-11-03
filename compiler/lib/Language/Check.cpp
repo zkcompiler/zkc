@@ -30,23 +30,11 @@ Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
     return true;
   };
 }
-Checker::Checker(CheckedStorage &output, Work &work,
-                 const NameEnvironment &names, bool external)
+Checker::Checker(CheckedStorage &output, Work &work, AccessContext policy)
     : Checker({}, output, work) {
-  modules = names.modules;
-  visible = names.visible;
   signatureState.assign(output.declarations.size(), 2);
-  externalSelection = external;
+  access = std::move(policy);
   types.completeDispatchBody = {};
-  for (const auto &decl : output.declarations)
-    if (decl.kind == Declaration::Kind::Module &&
-        (*output.sources)[decl.span.source.index].origin ==
-            SourceOrigin::Captured) {
-      if (!decl.parent)
-        externalNames[decl.qualifiedName].insert(decl.id.index);
-      for (const auto &[name, binding] : visible[decl.id.index])
-        externalNames[name].insert(binding.target.index);
-    }
 }
 bool Checker::prepareSignatureReconstruction(DeclarationId id,
                                              const SyntaxDeclaration &source) {
@@ -358,8 +346,9 @@ Error Checker::run() {
   phase.enter(SourceWorkPhase::RetainedViews);
   if (!retainAPI() || !retainNotations() || !retainScopedSources())
     return types.takeError();
-  output.names = std::make_shared<NameEnvironment>(
-      NameEnvironment{std::move(modules), std::move(visible)});
+  output.authoredReferences =
+      std::make_shared<const std::vector<ReferenceRecord>>(
+          output.api.references);
   phase.enter(SourceWorkPhase::ScopedSources);
   if (auto error = checkScopedSources(output, work))
     return error;
@@ -385,16 +374,12 @@ bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
     return types.fail("source.shadow", "binding shadows a static parameter",
                       span);
-  auto scope = decl.kind == Declaration::Kind::Module ? std::optional(decl.id)
-                                                      : decl.parent;
-  for (; scope; scope = output.declarations[scope->index].parent) {
-    if (member(decl, *scope, name, span))
-      return types.fail("source.shadow",
-                        "binding shadows a visible declaration", span);
-    if (types.diagnostic)
-      return false;
-  }
-  return true;
+  auto selected =
+      index().scopeBinding(accessFor(decl), name, lookupTraversal(span));
+  if (std::holds_alternative<ResolvedReference>(selected))
+    return types.fail("source.shadow", "binding shadows a visible declaration",
+                      span);
+  return acceptFailure(std::get<LookupFailure>(selected), span, false);
 }
 bool Checker::collect() {
   std::function<bool(SyntaxDeclaration &)> generated =
@@ -554,8 +539,8 @@ bool Checker::collect() {
     if (decl.anonymous)
       decl.qualifiedName = output.declarations[parent->index].qualifiedName +
                            "::<" + source.name + ">";
-    if (!decl.anonymous &&
-        !qualified.emplace(decl.qualifiedName, decl.id).second)
+    if (!formingIndex->add(decl,
+                           (*output.sources)[decl.span.source.index].origin))
       return types.fail("source.duplicate",
                         "duplicate declaration: " + decl.name, decl.span);
     auto symbol =
@@ -604,17 +589,10 @@ bool Checker::collect() {
     }
     auto id = decl.id;
     sources.push_back(&source);
-    visible.emplace_back();
     if (decl.kind == Declaration::Kind::Module) {
-      if (!modules.emplace(decl.qualifiedName, id).second)
-        return types.fail("source.duplicate", "duplicate module body",
-                          decl.span);
       moduleIds.push_back(id);
       module = id;
     }
-    if (parent && !decl.anonymous)
-      visible[parent->index].emplace(
-          decl.name, ScopeBinding{id, decl.span, decl.isPublic, {}});
     output.declarations.push_back(std::move(decl));
     if (parent)
       output.declarations[parent->index].members.push_back(id);
@@ -642,172 +620,149 @@ bool Checker::collect() {
       return false;
   }
   for (auto &root : syntax) {
-    auto found = modules.find(root.name);
-    if (found == modules.end())
+    auto found = formingIndex->canonical(root.name);
+    if (!found ||
+        output.declarations[found->index].kind != Declaration::Kind::Module)
       return types.fail("source.module",
                         "captured child needs an external module declaration",
                         root.span);
   }
   return true;
 }
+bool Checker::acceptFailure(const LookupFailure &failure, Span span,
+                            bool required) {
+  if (types.diagnostic)
+    return false;
+  switch (failure.kind) {
+  case LookupFailureKind::NotFound:
+    if (!required)
+      return true;
+    return types.fail("source.name", "unknown declaration: " + failure.segment,
+                      span);
+  case LookupFailureKind::Inaccessible:
+    return types.fail(
+        "source.private",
+        "cannot reference private declaration: " + failure.segment, span,
+        failure.definition ? std::vector<Span>{*failure.definition}
+                           : std::vector<Span>{});
+  case LookupFailureKind::Ambiguous:
+    return types.fail("source.entry",
+                      "ambiguous selector name: " + failure.segment, span);
+  case LookupFailureKind::Cycle:
+    return types.fail("source.cycle", "cyclic import bindings", span);
+  case LookupFailureKind::Limit:
+    return types.fail("source.limit", "declaration lookup work limit", span);
+  case LookupFailureKind::WrongCategory:
+    return types.fail("source.name",
+                      "selected declaration has the wrong category", span);
+  }
+  llvm_unreachable("unknown lookup failure");
+}
+LookupTraversal Checker::lookupTraversal(Span span) {
+  LookupTraversal result{[this, span] { return types.charge(1, span); }, {}};
+  if (loadBinding)
+    result.load = [this](DeclarationId owner,
+                         StringRef name) -> std::optional<LookupFailure> {
+      if (loadBinding(owner, name))
+        return {};
+      // Preserve the binding loader's diagnostic, including cancellation and
+      // conflicts; do not relabel a failed work charge as an import cycle.
+      auto kind = LookupFailureKind::WrongCategory;
+      if (types.diagnostic) {
+        if (types.diagnostic->code == "source.limit" ||
+            types.diagnostic->code == "source.cancelled")
+          kind = LookupFailureKind::Limit;
+        else if (types.diagnostic->code == "source.cycle")
+          kind = LookupFailureKind::Cycle;
+      }
+      return LookupFailure{kind, owner, name.str()};
+    };
+  return result;
+}
+std::optional<ResolvedReference> Checker::select(const Declaration &context,
+                                                 StringRef name, Span span,
+                                                 bool required) {
+  auto result = index().lookup(accessFor(context), name, lookupTraversal(span));
+  if (auto *ref = std::get_if<ResolvedReference>(&result))
+    return *ref;
+  acceptFailure(std::get<LookupFailure>(result), span, required);
+  return {};
+}
 std::optional<DeclarationId> Checker::member(const Declaration &context,
                                              DeclarationId owner,
                                              StringRef name, Span span) {
-  const auto &decl = output.declarations[owner.index];
-  if (!types.charge(1, span))
-    return {};
-  auto check = [&](DeclarationId target, bool isPublic,
-                   Span definition) -> std::optional<DeclarationId> {
-    if (checkingVisibility && !isPublic &&
-        !types.withinModule(context.module, decl.module)) {
-      types.fail("source.private",
-                 "cannot reference private declaration: " + name, span,
-                 {definition});
-      return {};
-    }
-    return target;
-  };
-  if (decl.kind == Declaration::Kind::Module && loadBinding &&
-      !loadBinding(owner, name))
-    return {};
-  auto found = visible[owner.index].find(name.str());
-  if (found != visible[owner.index].end())
-    return check(found->second.target, found->second.isPublic,
-                 found->second.span);
+  auto result =
+      index().member(accessFor(context), owner, name, lookupTraversal(span));
+  if (auto *ref = std::get_if<ResolvedReference>(&result))
+    return ref->target;
+  acceptFailure(std::get<LookupFailure>(result), span, false);
   return {};
 }
-std::optional<DeclarationId>
-Checker::resolve(const Declaration &context, StringRef name, Span span,
-                 bool required, std::vector<ModuleLookup> *route,
-                 std::optional<DeclarationId> *provider) {
-  return lookupPath(context, name, span, required, route, provider, true);
+std::optional<DeclarationId> Checker::resolve(const Declaration &context,
+                                              StringRef name, Span span,
+                                              bool required) {
+  auto ref = select(context, name, span, required);
+  if (!ref)
+    return {};
+  if (referenceSite)
+    typeReferences.insert_or_assign(referenceSite, *ref);
+  if (!recordReference(context, ReferenceRoute::Path, *ref, name, span))
+    return {};
+  return ref->target;
 }
 std::optional<DeclarationId>
 Checker::probe(const Declaration &context, StringRef name, Span span,
                std::optional<DeclarationId> *provider) {
-  return lookupPath(context, name, span, false, nullptr, provider, false);
-}
-std::optional<DeclarationId>
-Checker::lookupPath(const Declaration &context, StringRef name, Span span,
-                    bool required, std::vector<ModuleLookup> *route,
-                    std::optional<DeclarationId> *provider, bool record) {
-  if (!types.charge(1, span))
+  auto ref = select(context, name, span, false);
+  if (!ref)
     return {};
-  const auto written = name;
-  std::optional<DeclarationId> selectedProvider;
-  const bool absolute = name.consume_front("::");
-  auto [head, tail] = name.split("::");
-  std::optional<DeclarationId> root;
-  if (!absolute && !externalSelection) {
-    auto scope = (context.kind == Declaration::Kind::Module ||
-                  context.kind == Declaration::Kind::Interface)
-                     ? std::optional(context.id)
-                     : context.parent;
-    for (; scope; scope = output.declarations[scope->index].parent) {
-      root = member(context, *scope, head, span);
-      if (types.diagnostic)
-        return {};
-      if (root) {
-        const auto &binding = visible[scope->index].at(head.str());
-        selectedProvider =
-            binding.provider.value_or(output.declarations[root->index].module);
-        if (route)
-          route->push_back({*scope, head.str()});
-        break;
-      }
-    }
-  }
-  if (!root && externalSelection && !absolute) {
-    auto found = externalNames.find(head.str());
-    if (found != externalNames.end()) {
-      if (found->second.size() != 1) {
-        types.fail("source.entry",
-                   "ambiguous selector name: " + head +
-                       "; specify a qualified source name",
-                   span);
-        return {};
-      }
-      root = DeclarationId{*found->second.begin()};
-      selectedProvider = output.declarations[root->index].module;
-    }
-  }
-  if (!root) {
-    // Only source roots enter global lookup. Descendants are reached through
-    // actual bindings, so absolute paths and aliases obey the same privacy.
-    StringRef prefix = name;
-    while (!prefix.empty()) {
-      auto found = modules.find(prefix.str());
-      if (found != modules.end() &&
-          !output.declarations[found->second.index].parent) {
-        root = found->second;
-        selectedProvider = *root;
-        tail = name.size() == prefix.size()
-                   ? StringRef{}
-                   : name.drop_front(prefix.size() + 2);
-        break;
-      }
-      prefix = prefix.contains("::") ? prefix.rsplit("::").first : StringRef{};
-    }
-  }
-  while (root && !tail.empty()) {
-    auto next = tail.split("::");
-    auto owner = *root;
-    root = member(context, owner, next.first, span);
-    if (root && route)
-      route->push_back({owner, next.first.str()});
-    if (types.diagnostic)
-      return {};
-    tail = next.second;
-  }
-  if (!root && required)
-    types.fail("source.name", "unknown declaration: " + name, span);
-  if (root && selectedProvider) {
-    if (provider)
-      *provider = selectedProvider;
-    if (record && checkingVisibility &&
-        !recordReference(context, ReferenceRoute::Path, *selectedProvider,
-                         *root, written, span))
-      return {};
-  }
-  return root;
+  if (provider)
+    *provider = ref->provider;
+  return ref->target;
 }
 bool Checker::recordReference(const Declaration &owner, ReferenceRoute route,
-                              DeclarationId provider, DeclarationId target,
-                              StringRef written, Span span,
-                              std::optional<std::string> abstractModule) {
-  // Selection over a frozen project and the scoped witness check re-resolve
-  // checked names; only the checking pass records source references.
-  if (!checkingVisibility ||
-      (replayedOwner && *replayedOwner == owner.id.index))
+                              const ResolvedReference &reference,
+                              StringRef written, Span span, uint32_t ordinal) {
+  if (!referencesReady || (replayedOwner && *replayedOwner == owner.id.index))
     return true;
-  if (!types.charge(written.size() + 1 +
-                        (abstractModule ? abstractModule->size() : 0),
-                    span))
+  if (!types.charge(written.size() + reference.path.size() + 1, span))
     return false;
-  // Checking may resolve one written occurrence more than once, for example a
-  // constructor name as a callee and then as its nominal type. The occurrence
-  // and its route are recorded once.
-  if (!recordedReferences
-           .emplace(owner.id.index, route, provider.index, target.index,
-                    span.source.index, span.begin, span.end, written.str(),
-                    abstractModule)
-           .second)
-    return true;
-  output.api.references.push_back({owner.id, provider, target, span,
-                                   written.str(), std::move(abstractModule),
-                                   route});
+  const auto &site =
+      referenceSite ? referenceSite : sources[owner.id.index]->referenceSite;
+  auto [node, inserted] = referenceNodes.emplace(
+      site, ReferenceNodeId{uint32_t(referenceNodes.size())});
+  auto key = std::make_tuple(owner.id.index, node->second.index, route,
+                             written.str(), ordinal);
+  if (auto at = recordedReferences.find(key); at != recordedReferences.end()) {
+    return output.api.references[at->second].reference == reference ||
+           types.fail("source.binding-witness",
+                      "one authored reference selected different routes", span);
+  }
+  recordedReferences.emplace(std::move(key), output.api.references.size());
+  output.api.references.push_back(
+      {owner.id,
+       reference.provider,
+       reference.target,
+       span,
+       written.str(),
+       reference.abstract && reference.abstract->module.symbolic
+           ? std::optional(formatType(reference.abstract->module))
+           : std::nullopt,
+       route,
+       reference,
+       {node->second, route, written.str(), ordinal}});
   return true;
 }
 bool Checker::retainAPI() {
   auto &records = output.api;
-  if (!types.charge(sources.size() + visible.size(), Span{{0}, 0, 0}))
+  if (!types.charge(sources.size() + index().bindingCount(), Span{{0}, 0, 0}))
     return false;
   for (unsigned id = 0; id < sources.size(); ++id) {
     const auto &source = *sources[id];
     records.writtenRequirements.push_back(source.explicitRequirements);
     records.writtenEffects.push_back(!source.generated &&
                                      source.effects.has_value());
-    for (const auto &[name, binding] : visible[id]) {
+    for (const auto &[name, binding] : index().bindings(DeclarationId{id})) {
       if (!types.charge(name.size() + 1, binding.span))
         return false;
       if (binding.isPublic)
@@ -871,8 +826,7 @@ Expected<std::shared_ptr<const AuthoringStorage>> Checker::retainAnalysis() {
   uint64_t count = output.declarations.size() + output.api.references.size() +
                    output.lexicalResolutions.size() +
                    output.pendingSpecifications.size();
-  for (const auto &scope : visible)
-    count += scope.size();
+  count += index().bindingCount();
   for (const auto &scope : output.lexicalResolutions)
     count += scope.references.size() + scope.bindings.size();
   if (auto error = work.charge(count))
@@ -903,9 +857,6 @@ Expected<std::shared_ptr<const AuthoringStorage>> Checker::retainAnalysis() {
   result->declarationIndex = output.declarationIndex;
   result->api = output.api;
   result->lexicalResolutions = output.lexicalResolutions;
-  result->names = output.names ? output.names
-                               : std::make_shared<NameEnvironment>(
-                                     NameEnvironment{modules, visible});
   return std::shared_ptr<const AuthoringStorage>(std::move(result));
 }
 Error check(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,

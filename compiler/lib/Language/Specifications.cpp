@@ -264,6 +264,7 @@ Checker::selector(const Declaration &decl, const SyntaxSelector &source) {
 bool Checker::specifications(Declaration &decl) {
   auto apply =
       [&](const SyntaxSubject &source) -> std::optional<RelationApplication> {
+    SaveAndRestore site(referenceSite, source.relation.referenceSite);
     auto target =
         source.inlineMember
             ? std::optional<DeclarationId>(decl.members[*source.inlineMember])

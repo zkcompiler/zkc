@@ -47,21 +47,14 @@ bool isRecordIntrinsic(const protocol::FrontendDeclaration *row) {
   return row && row->rule && isRecordIntrinsic(*row->rule);
 }
 bool Checker::indexDeclarations() {
-  std::vector<DeclarationIndex::Namespace> namespaces;
   for (const auto &decl : output.declarations)
     if (!types.charge(decl.qualifiedName.size() + decl.members.size() + 1,
                       decl.span))
       return false;
-  for (const auto &scope : visible) {
-    if (!types.charge(scope.size() + 1, {}))
-      return false;
-    auto &names = namespaces.emplace_back();
-    for (const auto &[name, binding] : scope)
-      names.emplace(name, DeclarationIndex::NamespaceBinding{binding.target,
-                                                             binding.isPublic});
-  }
-  output.declarationIndex = std::make_shared<const DeclarationIndex>(
-      output.declarations, *output.sources, std::move(namespaces));
+  if (!types.charge(formingIndex->bindingCount(), {}))
+    return false;
+  formingIndex->finish(output.declarations, *output.sources);
+  output.declarationIndex = formingIndex;
   for (const auto &row : protocol::frontendDeclarations()) {
     auto id = output.declarationIndex->canonical(row.module + "::" + row.name);
     if (!id || output.declarationIndex->association(*id) != &row)
@@ -266,7 +259,8 @@ std::optional<ValueId> BodyChecker::recordCall(const Expression &expr,
                           uint32_t(&expr - syntax.expressions.data()),
                           {},
                           target.module,
-                          binding.arguments}));
+                          binding.arguments,
+                          target.reference}));
   operation.binding = std::move(binding);
   if (!checkCallAction(checker.types, checker.output.declarations, body,
                        operation, checker.output.declarationIndex.get()))

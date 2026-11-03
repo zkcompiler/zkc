@@ -556,12 +556,10 @@ resolveEntry(const CheckedProject &project, StringRef name,
                               project.declarations().end());
     scope.assets.assign(project.assets().begin(), project.assets().end());
     scope.sources = project.storage->sources;
-    const auto &names = *project.storage->names;
-    for (const auto &bindings : names.visible)
-      for (const auto &[name, binding] : bindings)
-        if (auto error = work.charge(name.size() + 1))
-          return std::move(error);
-    detail::Checker checker(scope, work, names);
+    scope.declarationIndex = project.storage->declarationIndex;
+    if (auto error = work.charge(scope.declarationIndex->bindingCount()))
+      return std::move(error);
+    detail::Checker checker(scope, work, ExternalSelectionAccess{});
     Declaration context{};
     context.kind = Declaration::Kind::EntryFunction;
     StringRef requested = syntax->target.name;

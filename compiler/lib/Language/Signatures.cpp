@@ -152,6 +152,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   if (signatureState[id.index] == 2)
     return true;
+  SaveAndRestore site(referenceSite, sources[id.index]->referenceSite);
   if (decl.generated)
     return generatedSignature(decl, depth);
   if (depth > work.limits.typeDepth || signatureDepth >= work.limits.typeDepth)
@@ -263,8 +264,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                         "member shadows an inherited static parameter",
                         decl.span);
     if (decl.kind == Declaration::Kind::Module) {
-      auto binding = visible[decl.id.index].find(p.name);
-      if (binding != visible[decl.id.index].end())
+      auto binding = index().bindings(decl.id).find(p.name);
+      if (binding != index().bindings(decl.id).end())
         return types.fail(
             "source.shadow",
             "declaration or import shadows an inherited static parameter",
@@ -296,10 +297,18 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     else if (name == "OracleKind")
       p.sort = Parameter::Sort::OracleKind;
     else {
-      std::optional<DeclarationId> provider;
-      auto target = resolve(decl, name, src.span, true, nullptr, &provider);
+      SaveAndRestore parameterSite(referenceSite, src.constraint.referenceSite);
+      auto reference = select(decl, name, src.span);
+      if (!reference || !recordReference(decl, ReferenceRoute::Path, *reference,
+                                         name, src.span))
+        return false;
+      auto target = std::optional(reference->target);
       if (!target || !signature(*target, depth + 1))
         return false;
+      if (reference->category == ResolutionCategory::ServiceConstructor)
+        return types.fail("source.service",
+                          "managed constructor is not an interface constraint",
+                          src.span);
       auto &interface = output.declarations[target->index];
       if (interface.kind != Declaration::Kind::Interface)
         return types.fail("source.generic",
@@ -311,7 +320,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       p.sort = Parameter::Sort::Module;
       p.interface = *target;
       p.arguments = std::move(*args);
-      moduleParameterProviders.emplace(p.atom, *provider);
+      moduleParameterReferences.emplace(
+          p.atom, ModuleParameterReference{*reference, decl.id,
+                                           uint32_t(decl.parameters.size())});
     }
     if (p.sort != Parameter::Sort::Module && !src.constraint.arguments.empty())
       return types.fail("source.generic", "static sort does not take arguments",
@@ -803,6 +814,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                           ? protocol::sourceService(*src.serviceConstructor)
                           : nullptr;
       if (decl.kind != Declaration::Kind::Protocol || !service ||
+          !src.serviceReference ||
           service->family != protocol::ServiceFamily::Random ||
           src.type.arguments.size() != service->parameters ||
           !src.type.labels.empty())
@@ -827,7 +839,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return types.fail(
             "source.service",
             "managed random service requires a field and one owner", src.span);
-      decl.services.push_back({src.name, *field, owner->front(), src.span, {}});
+      decl.services.push_back({src.name,
+                               *field,
+                               owner->front(),
+                               src.span,
+                               {},
+                               *src.serviceReference});
     }
     if (decl.kind == Declaration::Kind::Math && decl.effectAllowance &&
         (decl.effectAllowance->fixed.mayStop ||

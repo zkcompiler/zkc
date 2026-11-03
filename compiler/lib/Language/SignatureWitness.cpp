@@ -436,8 +436,7 @@ bool implementationAgrees(Semantics &types, const Declaration &module,
 }
 } // namespace
 llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
-  if (!storage.sources || (storage.names && storage.names->visible.size() !=
-                                                storage.declarations.size()))
+  if (!storage.sources || !storage.declarationIndex)
     return failure("source.scoped-witness",
                    "invalid conformance source context");
   for (unsigned i = 0; i < storage.declarations.size(); ++i) {
@@ -516,7 +515,7 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
     }
     if (implementations.empty())
       return true;
-    if (!storage.names)
+    if (!storage.declarationIndex)
       return types.fail("source.scoped-witness",
                         "missing conformance namespaces", {});
     if (auto error = chargeSemanticIndex(storage.declarations, work))
@@ -526,7 +525,7 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
     replay.assets = storage.assets;
     replay.sources = storage.sources;
     replay.declarationIndex = storage.declarationIndex;
-    Checker reader(replay, work, *storage.names, false);
+    Checker reader(replay, work, SourceAccess{{0}});
     // Register dependencies before reading any signature. Replaying only the
     // two selected members would trust mutable aliases and associated domains
     // on which both authored signatures depend.

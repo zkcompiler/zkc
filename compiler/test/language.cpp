@@ -843,7 +843,7 @@ void managedServices() {
            {"entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
             "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }fn "
             "bad(x:Random<Fr>)->(){return ();}",
-            "source.name"},
+            "source.service"},
        })
     sourceRefuses(replace(source, from, to), code);
   auto alternate = source + R"(

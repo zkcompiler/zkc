@@ -158,6 +158,55 @@ struct Port {
   std::optional<OraclePort> oracle = {};
   std::optional<ValuePlacement> placement = {};
 };
+/// Project-local resolution evidence. These IDs are meaningful only inside the
+/// owning checked project; published identities use finalized source authority.
+enum class ResolutionCategory {
+  Module,
+  Interface,
+  Type,
+  Domain,
+  Callable,
+  ServiceConstructor,
+  Other
+};
+struct ResolutionStep {
+  DeclarationId owner;
+  std::string name;
+  /// The import/re-export occurrence, when this binding is imported.
+  std::optional<uint32_t> import;
+  bool operator==(const ResolutionStep &other) const {
+    return owner.index == other.owner.index && name == other.name &&
+           import == other.import;
+  }
+};
+struct AbstractMemberContext {
+  Type module;
+  DeclarationId interface;
+  /// Original lexical binder, including when inherited by a member. Concrete
+  /// module terms and interface self terms use the occurrence owner and no
+  /// slot.
+  DeclarationId binderOwner;
+  uint32_t binder; // UINT32_MAX when there is no static binder.
+  bool operator==(const AbstractMemberContext &other) const {
+    return module == other.module && interface.index == other.interface.index &&
+           binderOwner.index == other.binderOwner.index &&
+           binder == other.binder;
+  }
+};
+struct ResolvedReference {
+  DeclarationId provider{UINT32_MAX}, target{UINT32_MAX};
+  ResolutionCategory category = ResolutionCategory::Other;
+  std::vector<ResolutionStep> path;
+  std::optional<AbstractMemberContext> abstract;
+  bool operator==(const ResolvedReference &other) const {
+    return provider.index == other.provider.index &&
+           target.index == other.target.index && category == other.category &&
+           path == other.path && abstract == other.abstract;
+  }
+  bool operator!=(const ResolvedReference &other) const {
+    return !(*this == other);
+  }
+};
 /// A managed port is a borrowed service root, never an ordinary data type.
 struct ServicePort {
   std::string name;
@@ -165,6 +214,7 @@ struct ServicePort {
   unsigned owner;
   Span span;
   std::string contract; // Filled by selected Entry closure.
+  ResolvedReference constructor = {};
 };
 struct Value {
   Type type;
@@ -195,6 +245,7 @@ struct MathValue {
 struct CallableReference {
   DeclarationId declaration;
   std::optional<Type> module;
+  ResolvedReference reference = {};
 };
 /// The tracked Local effects, also used as fixed callback acceptance ceilings.
 struct Effects {

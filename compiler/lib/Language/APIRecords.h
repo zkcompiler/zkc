@@ -20,12 +20,22 @@ enum class ReferenceRoute {
   ImportName,
   Method,
   ModuleMember,
-  Implicit,
   Service,
   Notation,
   Construction
 };
 llvm::StringRef referenceRouteName(ReferenceRoute);
+struct ReferenceNodeId {
+  uint32_t index;
+};
+struct ReferencePosition {
+  ReferenceNodeId node;
+  ReferenceRoute kind;
+  /// A node may own several references (for example selected import names).
+  std::string slot;
+  /// Repeated written names in the same node still occupy distinct positions.
+  uint32_t ordinal = 0;
+};
 /// The provider is the source module selected by the written route. A facade
 /// reference therefore retains its facade provider and its canonical target.
 struct ReferenceRecord {
@@ -34,6 +44,8 @@ struct ReferenceRecord {
   std::string written;
   std::optional<std::string> abstractModule;
   ReferenceRoute route;
+  ResolvedReference reference;
+  ReferencePosition position;
 };
 struct APIRecords {
   std::vector<ExportRecord> exports;

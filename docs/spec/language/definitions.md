@@ -172,12 +172,27 @@ for default output paths.
 
 Qualified references first resolve their root in the nearest lexical scope,
 then each enclosing module, including imports. A resolved lexical
-root owns the rest of the path: a missing or private member does not fall back
+root owns the rest of the path: a wrong category, missing or private member does not fall back
 to an unrelated captured module. If no lexical root exists, a qualified module
 path is considered. A leading `::` explicitly selects an absolute module path,
 for example `::algebra::Fr`. It is reference syntax, not part of module or
 canonical declaration names. Optional prefix lookup preserves privacy and
 resource-limit diagnostics.
+
+`DeclarationIndex` owns the declaration/import namespaces during formation and
+freezes them after import authorization. Source checking, external static-term
+selection, authoring and independent witness replay use that index with an
+explicit access context. Lexical frames remain lexical state. Static binders
+select their root before declaration and prelude lookup; a non-callable binder
+named `unpack`, for example, refuses with `source.call` instead of selecting the
+installed intrinsic. Absolute qualification can select that intrinsic directly.
+
+Lookup returns either a provider-bearing reference or a typed failure: absence,
+inaccessibility, ambiguity, wrong category, cycle or limit. Category checks do
+not restart root selection. References retain project-local provider and target
+IDs, the owner/name/import steps of the selected route, and typed module,
+interface and binder context for abstract members. Exact canonical-name joins
+are internal identity operations and do not authorize source access.
 
 ### Module imports and operator scope
 
@@ -215,8 +230,14 @@ read directly into the declaration index; they have no written source text, and
 every row is included in installation identity. Captures cannot supply either
 name or claim an installation origin. Installed modules cannot be linked as
 external children. The prelude's public scalar operator bindings
-are visible by default; its function names require qualification or explicit
-import. The prelude itself has no imports or inherited operator environment.
+are visible by default; scalar function names require qualification or explicit
+import. The existing catalog `implicit` flag admits only its marked declarations
+into an explicit prelude namespace. That namespace is considered only after no
+source root was selected; it supplies no fallback for an invalid selected root.
+Managed constructors selected through it or through an ordinary qualified or
+imported facade retain the same constructor category. They are legal only in
+managed-port positions; ordinary type positions, interface constraints and module
+implementations refuse them with `source.service`. The prelude itself has no imports or inherited operator environment.
 There is no runtime source-file lookup. Capture identity and captured file/byte
 limits exclude installed modules; declaration and work limits include reading
 and checking them. `Analysis::sources()` and `CheckedProject::sources()` include
@@ -238,9 +259,9 @@ route, with its route kind, as published in the
 is discarded records nothing. The dependencies of a unit `u` are its parent
 file, its linked child files, and, for every recorded reference whose owner is
 defined in `u`, the defining units of the reference's provider and target. An
-abstract interface reference contributes only the interface member's unit, so
-a closed instance's concrete dispatch never enters a generic library's
-closure. The closure of `u` is the least set of units that contains `u` and is
+abstract interface reference contributes its authored interface provider and
+member units, including a facade selected by the bound. A closed instance's
+concrete dispatch never enters a generic library's closure. The closure of `u` is the least set of units that contains `u` and is
 closed under dependencies. The assets of `u` are the captured assets named by
 asset domains and captured relations declared in its closure. Unrelated units,
 consumer Entry names, diagnostic paths and source ordering do not enter it.

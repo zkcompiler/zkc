@@ -24,6 +24,7 @@ bool Checker::entry(DeclarationId id, unsigned depth) {
   state[id.index] = 1;
   unsigned height = 1;
   const auto &source = *sources[id.index];
+  SaveAndRestore entrySite(referenceSite, source.referenceSite);
   auto target = resolve(entry, source.target, source.span);
   if (!target)
     return false;
@@ -176,6 +177,7 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
   value.span = source.span;
   if (source.selectedConstruction) {
     const auto &choice = *source.selectedConstruction;
+    SaveAndRestore site(referenceSite, choice.referenceSite);
     auto selected = resolve(entry, choice.name, choice.span);
     if (!selected)
       return false;

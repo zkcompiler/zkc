@@ -32,22 +32,21 @@ bool Checker::classifyServices() {
         if (!bound) {
           // A data port's type records its own route when the signature
           // resolves it, so this classification records only a service.
-          auto target = probe(decl, port.type.name, port.type.span, nullptr);
+          auto reference = select(decl, port.type.name, port.type.span, false);
           if (types.diagnostic)
             return false;
-          if (!target)
-            target = output.declarationIndex->implicit(port.type.name);
-          if (target) {
-            const auto &constructor = output.declarations[target->index];
-            service = output.declarationIndex->association(*target);
-            if (service &&
-                service->rule != protocol::FrontendSignature::RandomConstructor)
+          if (reference) {
+            const auto &constructor =
+                output.declarations[reference->target.index];
+            service = index().association(reference->target);
+            if (reference->category != ResolutionCategory::ServiceConstructor)
               service = nullptr;
             if (service) {
               port.serviceConstructor = constructor.qualifiedName;
-              if (!recordReference(decl, ReferenceRoute::Service,
-                                   constructor.module, *target, port.type.name,
-                                   port.type.span))
+              port.serviceReference = *reference;
+              SaveAndRestore site(referenceSite, port.type.referenceSite);
+              if (!recordReference(decl, ReferenceRoute::Service, *reference,
+                                   port.type.name, port.type.span))
                 return false;
             }
           }
