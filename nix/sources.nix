@@ -50,6 +50,7 @@ let
     "common/tests/fixtures/program/bytes.json"
     "common/tests/fixtures/entry-json/nodes.json"
     "compiler/test/fixtures/relation/polynomial-chunks.json"
+    "compiler/test/fixtures/common-inputs/custody-fields.json"
     "compiler/adapters/accumulator-machine/fixtures"
     "compiler/adapters/plonky3/fixtures/recurrence"
   ];

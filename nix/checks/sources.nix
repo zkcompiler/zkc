@@ -51,6 +51,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.rustTests}/common/tests/fixtures/program/bytes.json
   test -f ${sources.rustTests}/common/tests/fixtures/entry-json/nodes.json
   test -f ${sources.rustTests}/compiler/test/fixtures/relation/polynomial-chunks.json
+  test -f ${sources.rustTests}/compiler/test/fixtures/common-inputs/custody-fields.json
   # Scope discovery must not require protocol-only project support.
   test ! -e ${sources.rustTests}/common/tests/support
   python3 ${sources.rustTests}/common/tests/run.py rust --help > /dev/null
