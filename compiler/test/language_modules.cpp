@@ -767,11 +767,14 @@ int main() {
             const_cast<Declaration &>(named(project, "m::A::rows"))
                 .domainResult = Type{};
             break;
-          case 14:
-            const_cast<Declaration &>(named(project, "m::A::run"))
-                .scopedInputs.front()
-                .signature.allowance.mayStop = true;
+          case 14: {
+            auto &allowance =
+                const_cast<Declaration &>(named(project, "m::A::run"))
+                    .scopedInputs.front()
+                    .signature.allowance;
+            allowance.mayStop = !allowance.mayStop;
             break;
+          }
           case 15:
             a.implementation.reset();
             break;

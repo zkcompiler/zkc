@@ -1181,7 +1181,7 @@ entry fn Run(inputs:Demo::Inputs) {return Demo::run(inputs);}
       [] {
         auto project = take(check(R"(
 interface I {fn run(x:bool,body:fn(bool)->bool effects())->bool effects();}
-module A:I {fn run(x:bool,body:fn(bool)->bool effects())->bool {return body(x);}}
+module Implementation:I {fn run(x:bool,body:fn(bool)->bool effects())->bool {return body(x);}}
 )"));
         for (const auto &declaration : project.declarations())
           if (declaration.name == "run")
