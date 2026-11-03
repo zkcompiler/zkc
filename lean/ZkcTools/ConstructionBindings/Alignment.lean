@@ -921,7 +921,10 @@ private def discoverReturn (discovery : CutDiscovery) (expected : Expr) : Tactic
     let mut selected : Option Nat := none
     for suffix in discovery.suffixes, index in [:discovery.suffixes.size] do
       let candidate ← viewHead (mkApp suffix model)
-      if ← isDefEq view candidate then
+      -- Search the finite instruction vocabulary. Definitional equality of
+      -- mismatched views can unfold symbolic loop execution while looking
+      -- for a cut; the final application still checks the exact boundary.
+      if ← TargetEquality.matchBlock view candidate then
         selected := some index
         break
     let some index := selected | return

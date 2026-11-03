@@ -128,4 +128,22 @@ example : ConnectionReturnProjection.form noneSelected
 #print axioms root
 #print axioms facts
 #print axioms connected
+-- Candidate discovery distinguishes finite instruction shapes even when their
+-- process meanings reduce to the same function. It still accepts exact views
+-- through aliases and rejects changed occurrence operands.
+private def emptyTarget : ConnectionCertificate.Block := fun _ => Domain.View.empty
+private def sequencedEmptyTarget : ConnectionCertificate.Block := fun _ =>
+  Domain.View.sequence Domain.View.empty Domain.View.empty
+private def aliasedTarget : ConnectionCertificate.Block := target
+
+run_elab
+  Lean.Meta.withLocalDeclD `model (Lean.mkConst ``DomainModel) fun model => do
+    let applied := fun name => Lean.mkApp (Lean.mkConst name) model
+    unless ← TargetEquality.matchBlock (applied ``target) (applied ``aliasedTarget) do
+      throwError "exact aliased target did not match"
+    if ← TargetEquality.matchBlock (applied ``target) (applied ``changedOccurrence) then
+      throwError "changed occurrence matched the original target"
+    if ← TargetEquality.matchBlock (applied ``emptyTarget) (applied ``sequencedEmptyTarget) then
+      throwError "candidate discovery unfolded process semantics"
+
 end Tests.ConnectionReturnProjections

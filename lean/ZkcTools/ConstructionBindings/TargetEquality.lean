@@ -72,6 +72,11 @@ private partial def matchView (shapeOnly : Bool) (proposed actual : Expr) : Meta
   if view proposed || view actual then return false
   withTransparency .all <| isDefEq proposed actual
 
+/-- Match finite target instructions and operands without executing their process
+meaning. This only discovers candidates; the complete association is checked later. -/
+def matchBlock (proposed actual : Expr) : MetaM Bool :=
+  matchView false proposed actual
+
 /-- Match the finite prefix rather than reducing a mismatched loop to its
 Process implementation. This shares the view vocabulary with target equality;
 no second execution interpretation or semantic premise is introduced. -/
