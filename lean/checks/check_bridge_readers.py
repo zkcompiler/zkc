@@ -100,7 +100,7 @@ def original(inputs=(FIELD, FIELD, FIELD, FIELD, SERVICE), outputs=(BOOLEAN,)):
             ["protocol", NATIVE_ROLES, scopes, [NATIVE_ROLES[1:]]], [], ["main", []],
             ["block", [], ["return", []]]]
     return ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [], [], [], [root],
-            [["main", []]], [[], []], [[], []]]
+            [["main", []]], [[], []], [[], [], []]]
 
 
 def exported(policy):
