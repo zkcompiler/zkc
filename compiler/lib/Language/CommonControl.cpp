@@ -2260,6 +2260,7 @@ Error checkCommonSummaryRequirements(
 Error retainCommonControlRequirements(const ClosedEntry &entry,
                                       ClosedStorage &storage, Work &work) {
   const auto &declarations = detail::DeclarationAccess::get(entry);
+  CommonSummaryObservation observation;
   std::optional<Requirements> derivation;
   for (const auto &decl : declarations) {
     if (auto error = work.charge(1, decl.span))
@@ -2269,7 +2270,8 @@ Error retainCommonControlRequirements(const ClosedEntry &entry,
     if (!derivation) {
       if (auto error = chargeSemanticIndex(declarations, work))
         return error;
-      derivation.emplace(declarations, entry.project().assets(), work);
+      derivation.emplace(declarations, entry.project().assets(), work,
+                         observation);
     }
     auto requirements = derivation->run(decl.id);
     if (!requirements)
