@@ -61,7 +61,8 @@ struct Node {
   uint32_t environmentOwner;
 };
 enum class Status { Complete, Partial, Cancelled, ResourceExhausted };
-/// Invocation ceilings may be lowered, never raised above these defaults.
+/// Each effective invocation limit is the minimum of the requested value and
+/// its default ceiling. Larger enclosing allowances do not invalidate a parse.
 /// A stopped parse retains two sentinel tokens and one error node even at zero.
 struct Budget {
   uint64_t bytes = 1048576, tokens = 1000000, tokenBytes = 4096;

@@ -369,7 +369,7 @@ class Comparison {
         budget.tokenBytes = limits.tokenBytes;
         budget.identifierBytes = limits.identifierBytes;
         budget.depth = limits.parseDepth;
-        budget.work = std::min(remaining, syntax::Budget{}.work);
+        budget.work = remaining;
         auto tree = syntax::parseHeaders(source::Revision(sources[module]),
                                          {module}, budget);
         if (!charge(tree.workUsed()) ||

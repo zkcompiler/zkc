@@ -405,9 +405,21 @@ void limits() {
     check(s.status() == Status::ResourceExhausted, "zero budget stops safely");
     coverage(s, "stopped parse preserves bytes");
   }
+  for (uint64_t Budget::*field :
+       {&Budget::bytes, &Budget::tokens, &Budget::tokenBytes,
+        &Budget::identifierBytes, &Budget::nodes, &Budget::depth, &Budget::work,
+        &Budget::diagnostics, &Budget::insertions}) {
+    Budget raised;
+    raised.*field = UINT64_MAX;
+    check(read("module m\n", raised).status() == Status::Complete,
+          "a larger enclosing allowance keeps small parses valid");
+  }
   Budget raised;
-  ++raised.depth;
-  refused("module m\n", "syntax.limit", raised);
+  raised.depth = UINT64_MAX;
+  std::string deep = "module m\ndef f():\n    x";
+  for (unsigned i = 0; i < 65; ++i)
+    deep += "+x";
+  refused(deep + "\n", "syntax.limit", raised);
   Budget noDiagnostics;
   noDiagnostics.diagnostics = 0;
   auto partial = read("module m\n!\n", noDiagnostics);

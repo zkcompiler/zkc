@@ -1076,15 +1076,13 @@ public:
   }
   Snapshot run() {
     const Budget maximum;
-    if (work.budget.bytes > maximum.bytes ||
-        work.budget.tokens > maximum.tokens ||
-        work.budget.tokenBytes > maximum.tokenBytes ||
-        work.budget.identifierBytes > maximum.identifierBytes ||
-        work.budget.nodes > maximum.nodes ||
-        work.budget.depth > maximum.depth || work.budget.work > maximum.work ||
-        work.budget.diagnostics > maximum.diagnostics ||
-        work.budget.insertions > maximum.insertions)
-      work.exhaust(0);
+    // The parser owns its ceilings. An enclosing phase may have a larger
+    // allowance; that does not enlarge any single parse's resource bounds.
+    for (uint64_t Budget::*field :
+         {&Budget::bytes, &Budget::tokens, &Budget::tokenBytes,
+          &Budget::identifierBytes, &Budget::nodes, &Budget::depth,
+          &Budget::work, &Budget::diagnostics, &Budget::insertions})
+      work.budget.*field = std::min(work.budget.*field, maximum.*field);
     lex(work);
     layout(work);
     for (uint32_t i = 0; i < data->tokens.size(); ++i)
