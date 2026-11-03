@@ -22,7 +22,7 @@ import sys
 from native_entry import native_subject
 from bridges.common import source_format
 from registry import CONTRACTS
-from request_support import Obligation, require
+from request_support import check_lean_resources, Obligation, require
 from structured import entry, profile, views, compile_modules, lean_environment
 from bridges.structured.snapshot import render, text, nat
 from bridges.common.schema import interpreted_type
@@ -412,6 +412,7 @@ theorem requested_subject : ExpectedData.snapshot = CandidateData.snapshot := by
                 raise Obligation('proof-budget', 'Lean exceeded the bounded proof-generation timeout')
             result = subprocess.CompletedProcess(child.args, child.returncode, stdout)
         (output / 'lean.log').write_text(result.stdout)
+        check_lean_resources(result, str(output / 'lean.log'))
         require(result.returncode == 0 and 'PROOF-REQUEST-KERNEL-PASS' in result.stdout and 'PROOF-REQUEST-BOUNDARY-PASS' in result.stdout,
                 'correspondence-unproved', 'Lean did not certify this source/contract/property combination; inspect Certificate.lean and lean.log')
         require(relation is None or 'RELATION-BOUNDARY-PASS' in result.stdout,

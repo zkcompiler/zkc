@@ -224,7 +224,7 @@ class Suite:
         return self.observe(left, data)
 
     def value(self, ty):
-        return self.rng.choice([False,True]) if ty[0]=='bool' else self.rng.randrange(97)
+        return self.rng.choice([False,True]) if interpreted_type(ty)[0]=='bool' else self.rng.randrange(97)
 
     def exercise(self, text, symbol='main', repetitions=2):
         source, exported, data = self.export(text,symbol)
@@ -233,7 +233,7 @@ class Suite:
         self.instructions.update(x[0][0] for x in selected[9][1])
         for _ in range(repetitions):
             for role in range(len(selected[6][1])):
-                inputs = [self.value(interpreted_type(ty)) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
+                inputs = [self.value(ty) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
                 request = ['scalar-control',role,inputs,[]]
                 for _ in range(65):
                     result = self.compare(source,exported,symbol,request)
@@ -246,14 +246,14 @@ class Suite:
                         stopped[3].append([action,['stop',stop]])
                         observed = self.compare(source,exported,symbol,stopped)
                         if not (observed[1] == ['stopped',stop]):
-                            raise AssertionError("bridges/common/check.py:190: observed[1] == ['stopped',stop]")
+                            raise AssertionError(f"reply stop {stop}: observed {observed[1]} at {action}")
                     altered = copy.deepcopy(request)
                     wrong = copy.deepcopy(action)
                     wrong[1] += '-wrong-site'
                     altered[3].append([wrong,['stop','abort']])
                     if not (self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']):
                         raise AssertionError("bridges/common/check.py:195: self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']")
-                    ty = action[3] if action[0]=='receive' else ['field',FIELD]
+                    ty = action[3] if action[0]=='receive' else ['apply','field',[['domain','Field',FIELD]]]
                     value = None if action[0]=='send' else self.value(ty)
                     request[3].append([action,['return',value]])
                 else:

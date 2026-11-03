@@ -98,6 +98,12 @@ participant controls. Open-process equalities retain every independent reply,
 continuation, handler state, event and stop; honest-message restrictions are
 confined to the mathematical experiment or theorem premises.
 
+Resource failures leave an incomplete obligation: `proof-budget` covers
+wall-clock, heartbeat, recursion and memory limits, and `proof-interrupted`
+covers signal termination. Neither is `correspondence-unproved`, and neither
+can pass a semantic-mutation control. Ordinary proof refusals still require
+the expected equation or alignment diagnostic.
+
 Success remains **`verified-in-model`**. It is neither a canonical established
 claim nor native security. Receipts retain the exact registered experiment and
 premises, and explicitly exclude native sampling/arithmetic conformance,

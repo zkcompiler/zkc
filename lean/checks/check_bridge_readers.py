@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
+from types import SimpleNamespace
 
 LEAN = Path(__file__).resolve().parents[1]
 ROOT = LEAN.parent
@@ -28,6 +29,8 @@ from bridges.construction import render as participant  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import glue  # noqa: E402
 import intent  # noqa: E402
+from bridges.common import check as scalar_controls  # noqa: E402
+from bridges.common.request_support import Obligation, check_lean_resources  # noqa: E402
 
 SUITE = "merlin3.bls12-381.fr64be/0"
 FIELD = ["apply", "field", [["domain", "Field", "bls12-381.fr"]]]
@@ -106,6 +109,31 @@ def original(inputs=(FIELD, FIELD, FIELD, FIELD, SERVICE), outputs=(BOOLEAN,)):
 def exported(policy):
     return ["zkc.constructed-participant/0", "sha256:" + "0" * 64, "sha256:" + "0" * 64, policy, "validator",
             [], [], [], [], [], [[], []]]
+
+
+class LeanProcessFailures(unittest.TestCase):
+    def test_resource_failures_cannot_be_correspondence_refusals(self):
+        for message in ("maximum number of heartbeats", "(deterministic) timeout", "maximum recursion depth",
+                        "out of memory", "excessive memory consumption"):
+            with self.subTest(message=message), self.assertRaises(Obligation) as raised:
+                check_lean_resources(SimpleNamespace(returncode=1, stdout="Type mismatch\n" + message), "control")
+            self.assertEqual(raised.exception.code, "proof-budget")
+        with self.assertRaises(Obligation) as raised:
+            check_lean_resources(SimpleNamespace(returncode=-9, stdout=""), "control")
+        self.assertEqual(raised.exception.code, "proof-interrupted")
+
+    def test_ordinary_diagnostics_remain_for_the_callers_check(self):
+        check_lean_resources(SimpleNamespace(returncode=1, stdout="Type mismatch"), "control")
+        check_lean_resources(SimpleNamespace(returncode=0, stdout="checked"), "control")
+
+
+class ScalarReplyValues(unittest.TestCase):
+    def test_values_follow_logical_types_in_requests_and_inputs(self):
+        suite = scalar_controls.Suite(SimpleNamespace(seed=20261012), Path("unused"))
+        for _ in range(20):
+            self.assertIs(type(suite.value(BOOLEAN)), bool)
+            self.assertIs(type(suite.value(FIELD)), int)
+            self.assertIs(type(suite.value(SERVICE)), int)
 
 
 class ExactReplacement(unittest.TestCase):
