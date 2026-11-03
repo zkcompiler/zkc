@@ -158,8 +158,8 @@ theorem context_eq : subject.selection.context = (Context.plain ("zkl_a640d0482d
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 
-theorem original_export : subject.originalExport = ("sha256:f9ad0166f81e29dacbc6be4e2e674912a349fcff66f6cf01826b81b8511326fc") := rfl
-theorem producer_export : subject.producerExport = ("sha256:031121c1a6117b34ca2edacf20d589dd65958524d9054cb3edf674278330a977") := rfl
-theorem validator_export : subject.validatorExport = ("sha256:fdb65e400d7005ce06cbeddeda37f05f2ab0f24dab1625f9198b9dc65a45d59d") := rfl
+theorem original_export : subject.originalExport = ("sha256:74d4bc43c8cb1cf3ec783e4cfbffcceb2671d08d0c6132c2d884dfbf06895964") := rfl
+theorem producer_export : subject.producerExport = ("sha256:df57c1cb2687526661407fe7edf64ae135a7e39949b99ee7b36cef61e5870744") := rfl
+theorem validator_export : subject.validatorExport = ("sha256:604950bc7ce10f42e51966e1edbbaf6fd28f5394a5341b4b3626f39d58edaa16") := rfl
 
 end ZkcSecurity.Examples.TableMembership.ABI
