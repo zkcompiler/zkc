@@ -20,7 +20,7 @@ DeclarationIndex::DeclarationIndex(ArrayRef<Declaration> declarations,
       continue;
     if (auto *row = protocol::frontendDeclaration(decl.qualifiedName)) {
       associations.emplace(decl.id.index, row);
-      if (row->implicit)
+      if (row->prelude)
         implicitDeclarations.emplace(row->name, decl.id);
     }
   }

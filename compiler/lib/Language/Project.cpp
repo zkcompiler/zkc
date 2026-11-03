@@ -1044,7 +1044,7 @@ std::string installedCatalogIdentity() {
       row({"frontend-home-member", home.constructor, member});
   }
   for (const auto &method : protocol::serviceMethodDeclarations())
-    row({"service-method", method.name,
+    row({"service-method", method.identity, method.constructor, method.name,
          std::to_string(static_cast<unsigned>(method.signature)),
          method.capability});
   // Every field of an installed declaration and notation is semantic: its
@@ -1062,7 +1062,7 @@ std::string installedCatalogIdentity() {
                                           *declaration.rule))
                           : "primitive:" + declaration.primitive,
          declaration.output ? term(*declaration.output) : "none",
-         declaration.implicit ? "implicit" : "explicit"});
+         declaration.prelude ? "prelude" : "explicit"});
     for (const auto &[position, value] : llvm::enumerate(declaration.statics))
       row({"frontend-static", declaration.identity, std::to_string(position),
            value.name, value.kind, value.sort});

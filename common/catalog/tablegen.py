@@ -202,7 +202,7 @@ def project(catalog, installation):
         inputs = seq(inst(f"ZKC_SourceInput<{q(s['name'])}, {source_term(s['type'])}>") for s in d["inputs"])
         emit(f"ZKC_FrontendDeclaration<{q(d['identity'])}, {q(d['owner'])}, {q(d['name'])}, {q(d['kind'])}, "
              f"{statics}, {inputs}, {source_output(d['output'])}, {q(d['association']['kind'])}, "
-             f"{q(d['association']['target'])}, {flag(d['implicit'])}>", [ordinal(i)])
+             f"{q(d['association']['target'])}, {flag(d['prelude'])}>", [ordinal(i)])
     for i, n in enumerate(catalog["frontendNotations"]):
         fixity = n["fixity"] or {"associativity": "", "precedence": 0}
         emit(f"ZKC_FrontendNotation<{q(n['owner'])}, {q(n['symbol'])}, {q(fixity['associativity'])}, "
@@ -214,7 +214,7 @@ def project(catalog, installation):
     for i, m in enumerate(catalog["serviceSignatures"]):
         emit(f"ZKC_ServiceSignature<{q(m['name'])}, {q(m['capability'])}>", [ordinal(i)])
     for i, m in enumerate(catalog["serviceMethods"]):
-        emit(f"ZKC_ServiceMethod<{q(m['name'])}, {q(m['signature'])}, {q(m['capability'])}>", [ordinal(i)])
+        emit(f"ZKC_ServiceMethod<{q(m['identity'])}, {q(m['constructor'])}, {q(m['name'])}, {q(m['signature'])}, {q(m['capability'])}>", [ordinal(i)])
     operations = {
         o["name"]: symbol("Operation", o["name"]) for o in catalog["operations"]
     }

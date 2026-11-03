@@ -64,10 +64,11 @@ impl ServiceContract {
     pub fn signature(self, method: &str) -> Option<ServiceSignature> {
         use super::{Identity, LogicalType, Type};
         use zkc_catalog::ServiceSignature as Rule;
+        // This adapter consumes the nominal Random constructor's methods.
         let declared = zkc_catalog::CATALOG
             .service_methods
             .iter()
-            .find(|row| row.name == method)?;
+            .find(|row| row.constructor == "service.random" && row.name == method)?;
         let field = self.row().map(|_| self.field())?;
         if !declared.capability.is_empty() && !field.holds(declared.capability) {
             return None;

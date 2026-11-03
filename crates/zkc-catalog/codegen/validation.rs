@@ -798,12 +798,13 @@ fn source_shape<'a>(
     Ok((kind_name, statics, inputs, output))
 }
 /// Installed source declarations, rules and notations. Rule shapes and every
-/// declaration reference are data; no rule or declaration name is fixed here.
+/// declaration reference are data. Service ownership below separately checks
+/// the semantic constructor rule supported by the service adapter.
 fn frontend<'a>(
     v: &'a Value,
     catalog: &Catalog<'a>,
     exports: &mut BTreeSet<(&'a str, &'a str)>,
-) -> Result<()> {
+) -> Result<BTreeSet<&'a str>> {
     let mut rules = BTreeMap::new();
     for r in list(&v["frontendRules"])? {
         object(r, &["name", "kind", "statics", "inputs", "output"], &[])?;
@@ -823,7 +824,7 @@ fn frontend<'a>(
     }
     let intrinsics = names(&v["mathematicalIntrinsics"])?;
     let mut identities = BTreeSet::new();
-    let mut implicit_names = BTreeSet::new();
+    let mut prelude_names = BTreeSet::new();
     let mut declared = BTreeSet::new();
     for r in list(&v["frontendDeclarations"])? {
         let identity = string(&r["identity"])?;
@@ -880,8 +881,8 @@ fn frontend<'a>(
             _ => return Err("unknown frontend association".into()),
         }
         require(
-            !boolean(&r["implicit"])? || implicit_names.insert(name),
-            "duplicate implicit frontend name",
+            !boolean(&r["prelude"])? || prelude_names.insert(name),
+            "duplicate prelude frontend name",
         )?;
     }
     let mut notations = BTreeSet::new();
@@ -911,7 +912,7 @@ fn frontend<'a>(
             "duplicate frontend notation",
         )?;
     }
-    Ok(())
+    Ok(identities)
 }
 pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
     let sorts = list(&v["sorts"])?
@@ -1084,7 +1085,7 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
             )?;
         }
     }
-    frontend(v, &catalog, &mut exports)?;
+    let mut identities = frontend(v, &catalog, &mut exports)?;
     // A home names a catalog type constructor or a declared frontend
     // constructor, a logical type head the source language owns. Exactly one
     // row spells each form, the logical meaning the frontend gives a head.
@@ -1144,11 +1145,29 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
             )?;
         }
     }
+    let mut service_constructors = BTreeSet::new();
+    for r in list(&v["frontendDeclarations"])? {
+        if string(&r["association"]["kind"])? == "rule"
+            && string(&r["association"]["target"])? == "RandomConstructor"
+        {
+            service_constructors.insert(string(&r["identity"])?);
+        }
+    }
     let mut methods = BTreeSet::new();
     for r in list(&v["serviceMethods"])? {
+        let identity = string(&r["identity"])?;
+        require(
+            !identity.is_empty() && identities.insert(identity),
+            "duplicate service method identity",
+        )?;
+        let constructor = string(&r["constructor"])?;
+        require(
+            service_constructors.contains(constructor),
+            "invalid service method constructor",
+        )?;
         let name = string(&r["name"])?;
         require(
-            identifier(name) && methods.insert(name),
+            identifier(name) && methods.insert((constructor, name)),
             "invalid or duplicate service method",
         )?;
         require(

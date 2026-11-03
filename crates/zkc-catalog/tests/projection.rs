@@ -842,6 +842,69 @@ fn frontend_association_mutations_refuse() {
 
 type Mutation = (&'static str, fn(&mut Value));
 
+#[test]
+fn source_service_projection_preserves_identity_and_membership() {
+    let value = source();
+    for (row, projected) in value["frontendDeclarations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(CATALOG.frontend_declarations)
+    {
+        assert_eq!(row["identity"], projected.identity);
+        assert_eq!(row["prelude"], projected.prelude);
+    }
+    for (row, projected) in value["serviceMethods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(CATALOG.service_methods)
+    {
+        assert_eq!(row["identity"], projected.identity);
+        assert_eq!(row["constructor"], projected.constructor);
+        assert_eq!(row["name"], projected.name);
+        assert_eq!(row["signature"], format!("{:?}", projected.signature));
+        assert_eq!(row["capability"], projected.capability);
+    }
+}
+
+#[test]
+fn frontend_and_service_row_fields_are_exact() {
+    let original = source();
+    for table in ["frontendDeclarations", "serviceMethods"] {
+        for field in original[table][0].as_object().unwrap().keys() {
+            let mut changed = original.clone();
+            changed[table][0].as_object_mut().unwrap().remove(field);
+            let error = check(&changed).unwrap_err();
+            assert!(
+                error.contains(&format!("missing field {field}")),
+                "{table}: {error}"
+            );
+        }
+        let mut changed = original.clone();
+        changed[table][0]["extra"] = json!(true);
+        let error = check(&changed).unwrap_err();
+        assert!(error.contains("unknown field extra"), "{table}: {error}");
+    }
+    for retain_prelude in [false, true] {
+        let mut changed = original.clone();
+        changed["frontendDeclarations"][0]["implicit"] = json!(true);
+        if !retain_prelude {
+            changed["frontendDeclarations"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("prelude");
+        }
+        let error = check(&changed).unwrap_err();
+        let expected = if retain_prelude {
+            "unknown field implicit"
+        } else {
+            "missing field prelude"
+        };
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
 fn rows<'a>(value: &'a mut Value, table: &str) -> &'a mut Vec<Value> {
     value[table].as_array_mut().unwrap()
 }

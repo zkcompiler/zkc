@@ -80,7 +80,8 @@ inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
   if (field.empty())
     return {};
   for (const auto &row : serviceMethodDeclarations()) {
-    if (row.name != method ||
+    // This adapter consumes the nominal Random constructor's methods.
+    if (row.constructor != "service.random" || row.name != method ||
         (!row.capability.empty() &&
          !installedDomains().hasFact(row.capability, {field.str()})))
       continue;

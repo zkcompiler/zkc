@@ -127,7 +127,7 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
                                 ("frontendNotations", "duplicate frontend notation"),
                                 ("frontendHomes", "duplicate frontend home"),
                                 ("serviceSignatures", "invalid or duplicate service signature"),
-                                ("serviceMethods", "invalid or duplicate service method")]:
+                                ("serviceMethods", "duplicate service method identity")]:
         with case("independent duplicate " + section):
             value = copy.deepcopy(source)
             value[section].append(copy.deepcopy(value[section][0]))
@@ -145,6 +145,21 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
             assert "unknown fields" in str(error)
         else:
             raise AssertionError("source accepted unknown association authority")
+
+    # JSON row fields are checked before projection; malformed TableGen
+    # spellings exercise the native schema's required parameters independently.
+    for label, extra, diagnostic in [
+        ("missing service row arguments", 'def MissingService : ZKC_ServiceMethod<"id", "service.random", "draw", "RandomDraw">;',
+         "template argument"),
+        ("missing prelude membership", 'def MissingPrelude : ZKC_FrontendDeclaration<"id", "zkc::extra", "Sample", "Interface", [], [], [], "rule", "RandomConstructor">;',
+         "template argument"),
+        ("unknown service row field", 'def ExtraService : ZKC_ServiceMethod<"id", "service.random", "sample", "RandomDraw", ""> { string extra = "unexpected"; }',
+         "unknown field extra"),
+        ("old implicit field", 'def OldDeclaration : ZKC_FrontendDeclaration<"id", "zkc::extra", "Sample", "Interface", [], [], [], "rule", "RandomConstructor", 0> { bit implicit = 1; }',
+         "unknown field implicit"),
+    ]:
+        with case(label):
+            native(source, diagnostic, check_source=False, extra="\n" + extra + "\n")
 
     with case("installed contribution cannot enroll itself into the selected consumer"):
         inventory = native(source, composed=True)

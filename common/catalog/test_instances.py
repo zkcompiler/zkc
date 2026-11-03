@@ -6,6 +6,7 @@ oracles, which are read here and never changed.
 """
 
 import ast
+import copy
 import json
 from pathlib import Path
 import sys
@@ -94,6 +95,32 @@ class Documents(unittest.TestCase):
                     validate(declarations)
                     validate_installation(physical, declarations)
                 self.assertIn(case["diagnostics"]["generator"], str(refusal.exception))
+
+    def test_exact_frontend_and_service_row_fields(self):
+        # Projection cannot preserve missing or unknown JSON fields. Each
+        # strict JSON reader exercises them directly.
+        catalog, _ = documents()
+        for table in ("frontendDeclarations", "serviceMethods"):
+            for field in catalog[table][0]:
+                with self.subTest(table=table, missing=field):
+                    changed = copy.deepcopy(catalog)
+                    del changed[table][0][field]
+                    with self.assertRaisesRegex(ValueError, "missing fields"):
+                        validate(changed)
+            with self.subTest(table=table, unknown="extra"):
+                changed = copy.deepcopy(catalog)
+                changed[table][0]["extra"] = True
+                with self.assertRaisesRegex(ValueError, "unknown fields"):
+                    validate(changed)
+        for retain_prelude in (False, True):
+            with self.subTest(retain_prelude=retain_prelude):
+                changed = copy.deepcopy(catalog)
+                row = changed["frontendDeclarations"][0]
+                row["implicit"] = row["prelude"]
+                if not retain_prelude:
+                    del row["prelude"]
+                with self.assertRaisesRegex(ValueError, "unknown fields" if retain_prelude else "missing fields"):
+                    validate(changed)
 
 
 def literal(tree, name):

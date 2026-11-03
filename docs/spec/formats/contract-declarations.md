@@ -468,8 +468,9 @@ message frame, and a row is required before any reader admits such a frame.
 
 A random service names a unique `contract` and the Field domain it draws
 from. Services and the `rng` logical types correspond one to one through that
-field. Service methods remain the declared `serviceMethods` rules gated by the
-field's capabilities.
+field. The random-service consumer selects `serviceMethods` owned by the nominal
+frontend declaration `service.random`, then gates them by the field's capabilities.
+Another constructor's methods do not enter that profile through a shared name.
 
 ### Limits
 
@@ -736,7 +737,7 @@ order. A row has exactly:
 
 | Field | Meaning |
 |---|---|
-| `identity` | Unique installation identity, such as `record.unpack`. |
+| `identity` | Unique installation identity, such as `record.unpack`, distinct from every frontend declaration and service method identity. |
 | `owner` | The installed module path that declares it, a `zkc::` path. |
 | `name` | Its identifier in that module. |
 | `kind` | `Math`, `Local` or `Interface`. |
@@ -744,7 +745,7 @@ order. A row has exactly:
 | `inputs` | Ordered data inputs, each `{name, type}`. |
 | `output` | The result type, or null for an interface. |
 | `association` | Exactly one `{kind, target}`: a `primitive` or a `rule`. |
-| `implicit` | Whether lookup may find it after ordinary lookup fails. |
+| `prelude` | Boolean membership in the installed prelude scope. This does not grant fallback permission after a selected binding fails. |
 
 A type is `{static}`, the index of a static parameter, optionally with an
 associated `member` of that parameter's sort from `members`, or
@@ -753,7 +754,7 @@ association names a mathematical intrinsic for a `Math` declaration and an
 executable operation for a `Local` one; an interface has no primitive. A `rule`
 association names a `frontendRules` row, and the declaration's kind, static
 kinds, inputs and output must equal that row's shape. Identities, the owner
-and name pair, static and input names within a row, and implicit names are
+and name pair, static and input names within a row, and prelude names are
 unique; an installed declaration shares no owner and name with an export.
 
 A rule row has exactly `name`, `kind`, `statics` (parameter kinds), `inputs`
@@ -765,10 +766,13 @@ The installed modules are the distinct owners. The frontend reads each module's
 rows as its checker input: the module keeps an empty installation buffer at
 `<installation>/catalog/<module>`, nothing is lexed or parsed, and a row the
 frontend cannot express refuses with `source.installation`. Captured source
-with the same spelling cannot install an association. An implicit declaration
-is considered only after ordinary lexical/import lookup fails; a failed
-declared call never retries an intrinsic. The installation identity frames
-every field of every declaration and notation row.
+with the same spelling cannot install an association. Prelude membership is
+explicit scope membership. Lexical and static binders and selected roots stay
+terminal: a failed declared call never retries an intrinsic. The old `implicit`
+field is refused, including when `prelude` is also present. Ordinary authored
+source syntax is unchanged. The installation identity frames every field of
+every declaration, notation and service method row, including `prelude`, method
+identity and constructor ownership.
 
 ### Installed notations
 
@@ -818,9 +822,22 @@ their own home; aliases retain their target. A home association supplies no new
 methods, capabilities, role inference or implementation.
 
 A service signature contains exactly `name` and `capability`: the empty
-capability or an installed unary Field predicate. A service member contains
-exactly `name`, `signature` and `capability`; its signature names a
-`serviceSignatures` row and its capability equals that row's. Today
+capability or an installed unary Field predicate. A `serviceMethods` row contains
+exactly `identity`, `constructor`, `name`, `signature` and `capability`:
+
+- `identity` is explicit and nonempty, unique across frontend declarations and
+  service methods. No identity is derived from a name or constructor.
+- `constructor` references a `frontendDeclarations.identity` whose association
+  is exactly `{kind: "rule", target: "RandomConstructor"}`. Its declaration must
+  match that rule's declared shape. An arbitrary `Interface` or a source
+  declaration named `Random` grants no service authority.
+- `name` is an identifier unique within its constructor. Different constructors
+  may declare the same method name.
+- `signature` names a `serviceSignatures` row and `capability` equals that row's
+  capability.
+
+The installed rows are `service.random.draw`, `service.random.index` and
+`service.random.indices`, all owned by `service.random`. Today
 `RandomDraw` requires no capability, `RandomIndex` requires `IndexRandomness`
 and `RandomIndices` requires `IndexBlockRandomness`. These rules retain the
 existing ordered request signatures and independently selected provider roots.
