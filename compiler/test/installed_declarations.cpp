@@ -1,6 +1,7 @@
 #include "../lib/Language/Internal.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Language/Types.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -47,23 +48,47 @@ int main() {
                 read("zkc::records").members.size() == 3,
             "installed inventory differs");
   });
-  cases.run("declared frontend constructors are the frontend's logical heads",
-            [] {
-              // Catalog validators check homes against the declared rows; the
-              // frontend checks that those rows are the logical type heads it
-              // forms, so a home lookup by type category finds each one.
-              std::vector<std::string> formed{
-                  oracleConstructor(Type(Type::Kind::Oracle)).str(),
-                  oracleConstructor(Type(Type::Kind::OracleSequence)).str()};
-              auto declared = zkc::protocol::frontendConstructors();
-              require(std::vector<std::string>(declared.begin(),
-                                               declared.end()) == formed,
-                      "declared frontend constructors differ");
-              for (const auto &home : zkc::protocol::frontendHomes())
-                require(llvm::is_contained(formed, home.constructor) ||
-                            zkc::protocol::typeDeclaration(home.constructor),
-                        "home names no constructor: " + home.constructor);
-            });
+  cases.run("each frontend constructor row forms and spells its head", [] {
+    // The rows own the spellings; the frontend gives each form its meaning.
+    auto kind = take(builtinType("oracle.table", {Type(Type::Kind::Index)}));
+    Type maximum(Type::Kind::Natural);
+    maximum.dimension = Natural::constant(4);
+    std::vector<Type::Kind> formed;
+    for (const auto &row : zkc::protocol::frontendConstructors()) {
+      std::vector<Type> arguments{kind};
+      if (row.form ==
+          zkc::protocol::FrontendConstructorForm::OracleHandleSequence)
+        arguments.push_back(maximum);
+      auto type = take(builtinType(row.name, arguments));
+      require(isOracleHandle(type) && type.kind == logicalHeadKind(row.form),
+              "row formed another head: " + row.name);
+      require(oracleConstructor(type) == row.name &&
+                  StringRef(spelling(type))
+                      .starts_with("builtin(\"" + row.name + "\", "),
+              "head is not spelled by its row: " + row.name);
+      formed.push_back(type.kind);
+    }
+    llvm::sort(formed);
+    require(formed == std::vector<Type::Kind>{Type::Kind::Oracle,
+                                              Type::Kind::OracleSequence},
+            "a logical handle has no frontend constructor row");
+  });
+  cases.run("a spelling no frontend constructor row names is not a head", [] {
+    auto kind = take(builtinType("oracle.table", {Type(Type::Kind::Index)}));
+    Type maximum(Type::Kind::Natural);
+    maximum.dimension = Natural::constant(4);
+    for (StringRef spelling :
+         {"oracle_handle", "Oracle", "oracles", "oracle_sequence_handle"}) {
+      require(!zkc::protocol::frontendConstructor(spelling),
+              "unexpected frontend constructor row: " + spelling.str());
+      for (const auto &arguments :
+           {std::vector<Type>{kind}, std::vector<Type>{kind, maximum}}) {
+        auto result = builtinType(spelling, arguments);
+        require(!result, "spelling formed a head: " + spelling.str());
+        consumeError(result.takeError());
+      }
+    }
+  });
   cases.run("installed modules are the declaration owners", [] {
     require(installedModules() ==
                 std::vector<std::string>{"zkc::prelude", "zkc::records"},

@@ -118,6 +118,7 @@ constructor homes. The generator, zkc-tblgen and the Rust build each check
 their structure: rule associations against the declared rule shapes, primitive
 associations against the declaration kind, static, member and notation
 references, home constructors against the type and frontend-constructor rows,
+one frontend-constructor row per form,
 unknown fields, duplicate owners and capability drift.
 Captured homonyms grant no authority.
 See [frontend associations](../../docs/spec/formats/contract-declarations.md#frontend-declaration-associations).

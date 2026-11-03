@@ -95,6 +95,11 @@ DeclarationIndex::association(DeclarationId id) const {
   auto at = associations.find(id.index);
   return at == associations.end() ? nullptr : at->second;
 }
+const protocol::FrontendDeclaration *
+DeclarationIndex::ruleAssociation(DeclarationId id) const {
+  const auto *row = association(id);
+  return row && row->rule ? row : nullptr;
+}
 std::optional<DeclarationId> DeclarationIndex::implicit(StringRef name) const {
   auto at = implicitDeclarations.find(name.str());
   return at == implicitDeclarations.end() ? std::nullopt
@@ -114,12 +119,12 @@ std::optional<DeclarationId> DeclarationIndex::home(const Type &type) const {
     auto at = nominalHomes.find(type.domain);
     return at == nominalHomes.end() ? std::nullopt : std::optional(at->second);
   }
-  // Builtin.domain is the checked catalog constructor identity. Domain names
-  // of field/group types and printed aliases are never home lookup keys.
-  StringRef head = type.kind == Type::Kind::Builtin  ? StringRef(type.domain)
-                   : type.kind == Type::Kind::Oracle ? "oracle"
-                   : type.kind == Type::Kind::OracleSequence ? "oracle_sequence"
-                                                             : StringRef{};
+  // Builtin.domain is the checked catalog constructor identity; a logical
+  // handle's head is its frontend constructor row. Domain names of field/group
+  // types and printed aliases are never home lookup keys.
+  StringRef head = type.kind == Type::Kind::Builtin ? StringRef(type.domain)
+                   : isOracleHandle(type)           ? oracleConstructor(type)
+                                                    : StringRef{};
   auto at = constructorHomes.find(head.str());
   return at == constructorHomes.end() ? std::nullopt
                                       : std::optional(at->second);

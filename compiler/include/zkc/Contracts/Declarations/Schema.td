@@ -10,9 +10,11 @@ class ZKC_Contribution<string id, list<string> dependencies,
   list<ZKC_Declaration> declarations = records;
 }
 // A logical type head the source language owns that is not a catalog type
-// constructor. A frontend home may name one.
-class ZKC_FrontendConstructor<string value> : ZKC_Declaration {
+// constructor: its spelling and the form, the logical meaning the frontend
+// gives it. A frontend home may name one.
+class ZKC_FrontendConstructor<string value, string meaning> : ZKC_Declaration {
   string name = value;
+  string form = meaning;
 }
 class ZKC_FrontendHome<string head, string owner, list<string> exports = []> : ZKC_Declaration {
   string name = head;

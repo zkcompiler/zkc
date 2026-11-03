@@ -76,8 +76,9 @@ public:
         << "^\n";
   }
   void diagnostic(const Diagnostic &value) {
+    // A refusal without a detail renders as its code alone.
     if (!value.code.empty())
-      out << escaped(value.code, 128) << ": ";
+      out << escaped(value.code, 128) << (value.message.empty() ? "" : ": ");
     out << escaped(value.message, 2048);
     if (value.primary)
       location(*value.primary);

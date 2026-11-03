@@ -73,8 +73,7 @@ Error Checker::run() {
   // Rule associations have catalog contracts; installed primitives infer
   // theirs like any primitive declaration.
   auto ruled = [&](const Declaration &decl) {
-    const auto *association = output.declarationIndex->association(decl.id);
-    return association && association->rule;
+    return output.declarationIndex->ruleAssociation(decl.id) != nullptr;
   };
   for (auto &decl : output.declarations)
     if (!decl.abstract && !ruled(decl) &&

@@ -1,4 +1,6 @@
 #include "zkc/Language/Types.h"
+#include "zkc/Contracts/Declarations.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
@@ -52,16 +54,15 @@ bool isLogicalValue(const PlacedType &type) {
           std::holds_alternative<ProductPlacement>(type.placement->value));
 }
 StringRef oracleConstructor(const Type &type) {
-  switch (type.kind) {
-  case Type::Kind::OracleKind:
+  if (type.kind == Type::Kind::OracleKind)
     return type.domain == "table" ? "oracle.table" : "";
-  case Type::Kind::Oracle:
-    return "oracle";
-  case Type::Kind::OracleSequence:
-    return "oracle_sequence";
-  default:
-    return {};
-  }
+  // A logical handle is spelled by the frontend constructor row whose form
+  // the frontend gives this kind.
+  if (isOracleHandle(type))
+    for (const auto &row : protocol::frontendConstructors())
+      if (logicalHeadKind(row.form) == type.kind)
+        return row.name;
+  return {};
 }
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {

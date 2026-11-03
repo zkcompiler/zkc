@@ -4,7 +4,7 @@ mod installation;
 #[path = "instances.rs"]
 mod instances;
 
-use super::{Result, boolean, list, number, object, string};
+use super::{Result, boolean, choice, list, number, object, string};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1086,16 +1086,27 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
     }
     frontend(v, &catalog, &mut exports)?;
     // A home names a catalog type constructor or a declared frontend
-    // constructor, a logical type head the source language owns.
+    // constructor, a logical type head the source language owns. Exactly one
+    // row spells each form, the logical meaning the frontend gives a head.
+    const FORMS: &[&str] = &["OracleHandle", "OracleHandleSequence"];
     let mut constructors = BTreeSet::new();
+    let mut forms = BTreeSet::new();
     for r in list(&v["frontendConstructors"])? {
-        object(r, &["name"], &[])?;
+        object(r, &["name", "form"], &[])?;
         let name = string(&r["name"])?;
         require(
             identifier(name) && !catalog.types.contains_key(name) && constructors.insert(name),
             "invalid or duplicate frontend constructor",
         )?;
+        require(
+            forms.insert(choice(&r["form"], FORMS)?),
+            "duplicate frontend constructor form",
+        )?;
     }
+    require(
+        forms.len() == FORMS.len(),
+        "missing frontend constructor form",
+    )?;
     let mut homes = BTreeSet::new();
     for r in list(&v["frontendHomes"])? {
         let head = string(&r["constructor"])?;

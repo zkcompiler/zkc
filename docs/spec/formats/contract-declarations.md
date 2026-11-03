@@ -797,10 +797,18 @@ inspection and repacking require ordered execution and an outer `<-` in layout
 source. Custody-retiring restricted destructuring has the same ordered requirement.
 
 `frontendConstructors` lists the logical type heads the source language owns
-that are not catalog type constructors; the installed rows are `oracle` and
-`oracle_sequence`. A row has exactly `name`, an identifier that is unique and
-names no `types` row. The frontend checks that the rows are exactly the
-logical heads it forms, and the installation identity frames each row.
+that are not catalog type constructors. A row has exactly `name` and `form`.
+The name is the head's spelling, an identifier that is unique and names no
+`types` row. The form is the logical meaning the frontend gives the head:
+`OracleHandle`, one logical oracle handle over an oracle kind, or
+`OracleHandleSequence`, a bounded ordered sequence of such handles with a
+static maximum. Exactly one row has each form; the installed rows spell them
+`oracle` and `oracle_sequence`. The rows own the spelling and the frontend owns
+each form's meaning: the frontend forms, prints, encodes in static terms and
+looks up the home of a logical handle only through its row, and a spelling that
+no row names is not a logical head. The interface schema kinds `oracle` and
+`oracle_sequence` belong to the [Entry format](entry.md) and do not follow the
+rows. The installation identity frames each row's name and form.
 
 A frontend home contains exactly `constructor`, `module` and `members`. The constructor
 names a `types` row or a `frontendConstructors` row; validators check that

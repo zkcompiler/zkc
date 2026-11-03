@@ -3,6 +3,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/ErrorHandling.h"
 using namespace llvm;
 namespace zkc::language {
 namespace {
@@ -151,6 +152,36 @@ Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
   result.arguments.assign(arguments.begin(), arguments.end());
   return result;
 }
+Type::Kind logicalHeadKind(protocol::FrontendConstructorForm form) {
+  switch (form) {
+  case protocol::FrontendConstructorForm::OracleHandle:
+    return K::Oracle;
+  case protocol::FrontendConstructorForm::OracleHandleSequence:
+    return K::OracleSequence;
+  }
+  llvm_unreachable("unknown frontend constructor form");
+}
+Expected<Type> logicalHeadType(protocol::FrontendConstructorForm form,
+                               ArrayRef<Type> arguments) {
+  bool sequence = logicalHeadKind(form) == K::OracleSequence;
+  if (arguments.size() != (sequence ? 2u : 1u) ||
+      arguments[0].kind != K::OracleKind ||
+      (sequence && arguments[1].kind != K::Natural))
+    return error(
+        "source.oracle-kind",
+        "oracle handle needs a kind; its sequence also needs a maximum");
+  const auto &kind = arguments[0];
+  if (!kind.symbolic) {
+    if (kind.domain != "table")
+      return error("source.oracle-kind", "unknown oracle kind");
+    auto formed = builtinType("oracle.table", kind.arguments);
+    if (!formed)
+      return formed.takeError();
+  }
+  Type result(logicalHeadKind(form));
+  result.arguments.assign(arguments.begin(), arguments.end());
+  return result;
+}
 Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
   if (name == "oracle.table") {
     if ((arguments.size() != 1 && arguments.size() != 2) ||
@@ -164,26 +195,10 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
     result.arguments.assign(arguments.begin(), arguments.end());
     return result;
   }
-  if (name == "oracle" || name == "oracle_sequence") {
-    bool sequence = name == "oracle_sequence";
-    if (arguments.size() != (sequence ? 2u : 1u) ||
-        arguments[0].kind != K::OracleKind ||
-        (sequence && arguments[1].kind != K::Natural))
-      return error(
-          "source.oracle-kind",
-          "oracle handle needs a kind; its sequence also needs a maximum");
-    const auto &kind = arguments[0];
-    if (!kind.symbolic) {
-      if (kind.domain != "table")
-        return error("source.oracle-kind", "unknown oracle kind");
-      auto formed = builtinType("oracle.table", kind.arguments);
-      if (!formed)
-        return formed.takeError();
-    }
-    Type result(sequence ? K::OracleSequence : K::Oracle);
-    result.arguments.assign(arguments.begin(), arguments.end());
-    return result;
-  }
+  // A logical head is recognized only by the frontend constructor row that
+  // spells it.
+  if (const auto *head = protocol::frontendConstructor(name))
+    return logicalHeadType(head->form, arguments);
   if (name == "bool" && arguments.empty())
     return Type{};
   if (name == "index" && arguments.empty())

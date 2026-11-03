@@ -1,4 +1,5 @@
 include "zkc/Contracts/Declarations/Schema.td"
+include "frontend_constructors.td"
 def FSort : ZKC_Sort<"Field">;
 def GSort : ZKC_Sort<"Group">;
 def FDomain : ZKC_Domain<FSort>;

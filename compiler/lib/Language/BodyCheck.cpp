@@ -821,11 +821,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
 bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   // A rule association has no body; an installed primitive keeps its own.
-  const auto *association = output.declarationIndex
-                                ? output.declarationIndex->association(id)
-                                : nullptr;
   if ((decl.generated && decl.generated->operation) ||
-      (association && association->rule))
+      (output.declarationIndex && output.declarationIndex->ruleAssociation(id)))
     return true;
   if (sources[id.index]->invalidBody)
     return types.fail("source.dependency", "body depends on malformed source",

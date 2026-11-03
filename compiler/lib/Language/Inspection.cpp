@@ -243,8 +243,8 @@ Expected<json::Object> describe(const CheckedProject &project,
   bool domain = decl.kind == Declaration::Kind::DomainFunction;
   bool ordered = decl.kind != Declaration::Kind::Math && !domain;
   // A rule association is an installed definition without a body.
-  const auto *association = project.declarationIndex().association(decl.id);
-  const bool installed = association && association->rule;
+  const auto *association = project.declarationIndex().ruleAssociation(decl.id);
+  const bool installed = association != nullptr;
   auto renderEffects = [](const EffectSummary &summary) {
     json::Array dependencies;
     for (const auto &[slot, ceiling] : summary.dependencies)

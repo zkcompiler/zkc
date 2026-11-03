@@ -366,7 +366,8 @@ def Good : ZKC_Operation<"good.direct", [T], [ZKC_Apply<State>, T], [ZKC_Apply<S
 ]=] "")
 # Kinded fixture preserves explicit stage and never becomes source authority.
 execute_process(COMMAND "${ZKC_TABLEGEN}" -dump-contract-declarations
-  -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
+  -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" -I "${ZKC_DECLARATION_FIXTURES}"
+  "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
   RESULT_VARIABLE result OUTPUT_VARIABLE fixture ERROR_VARIABLE stderr)
 if(NOT result EQUAL 0)
   list(APPEND failures "Type/Nat fixture failed: ${stderr}")
@@ -436,7 +437,7 @@ foreach(action gen-contract-declarations dump-contract-declarations)
   endif()
 endforeach()
 execute_process(COMMAND "${ZKC_TABLEGEN}" -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}"
-  "${ZKC_DECLARATION_FIXTURES}/minimal.td"
+  -I "${ZKC_DECLARATION_FIXTURES}" "${ZKC_DECLARATION_FIXTURES}/minimal.td"
   RESULT_VARIABLE missing_action OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
 if(missing_action EQUAL 0)
   list(APPEND failures "generation without an explicit action succeeded")

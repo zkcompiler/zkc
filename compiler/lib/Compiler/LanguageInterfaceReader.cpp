@@ -1991,16 +1991,14 @@ class Reader {
     } else if ((*tag == "builtin" || *tag == "formal") && row->size() == 3 &&
                (*row)[1].getAsString()) {
       auto name = *(*row)[1].getAsString();
-      result.kind = *tag == "formal"            ? K::Formal
-                    : name == "oracle.table"    ? K::OracleKind
-                    : name == "oracle"          ? K::Oracle
-                    : name == "oracle_sequence" ? K::OracleSequence
-                                                : K::Builtin;
-      result.domain =
-          name == "oracle.table" ? "table"
-          : result.kind == K::Oracle || result.kind == K::OracleSequence
-              ? ""
-              : name.str();
+      // A logical handle's head is the name a frontend constructor row spells.
+      const auto *head =
+          *tag == "builtin" ? protocol::frontendConstructor(name) : nullptr;
+      result.kind = *tag == "formal"         ? K::Formal
+                    : name == "oracle.table" ? K::OracleKind
+                    : head                   ? logicalHeadKind(head->form)
+                                             : K::Builtin;
+      result.domain = name == "oracle.table" ? "table" : head ? "" : name.str();
       arguments = (*row)[2].getAsArray();
       if (!arguments)
         return fail("retained builtin arguments are absent"), std::nullopt;

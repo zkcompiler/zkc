@@ -550,6 +550,27 @@ protocol Run roles(P)(n:index@P)->(){
       accepted(source);
     });
   }
+  cases.run("only rule-elaborated installed definitions are bodiless", [] {
+    auto project = checked("module m;fn value(x:bool)->bool{return x;}");
+    const auto &index = project.declarationIndex();
+    auto id = [&](StringRef path) {
+      auto found = index.canonical(path);
+      require(bool(found), "missing declaration " + path.str());
+      return *found;
+    };
+    for (StringRef path :
+         {"zkc::records::unpack", "zkc::records::inspect_record",
+          "zkc::records::repack_record", "zkc::prelude::Random"})
+      require(index.ruleAssociation(id(path)) &&
+                  index.ruleAssociation(id(path)) ==
+                      index.association(id(path)),
+              "rule association lost: " + path.str());
+    auto primitive = id("zkc::prelude::field_add");
+    require(index.association(primitive) && !index.ruleAssociation(primitive),
+            "installed primitive became bodiless");
+    require(!index.ruleAssociation(id("m::value")),
+            "written declaration acquired a rule association");
+  });
   cases.run(
       "installed aliases preserve canonical association and caller authority",
       [] {

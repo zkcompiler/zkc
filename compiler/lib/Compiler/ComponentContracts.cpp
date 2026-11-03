@@ -1,6 +1,7 @@
 #include "ComponentContracts.h"
 #include "SourceView.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Instances.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/SourceTerms.h"
@@ -1409,8 +1410,8 @@ Error checkComponentDeclarations(const J &value) {
     } else if (tag == "tuple")
       arguments = &array(term[1]);
     else if (tag == "builtin" || tag == "formal") {
-      if (tag == "builtin" &&
-          (term[1] == J("oracle") || term[1] == J("oracle_sequence")))
+      // A head that a frontend constructor row spells is a logical handle.
+      if (tag == "builtin" && protocol::frontendConstructor(string(term[1])))
         return error("component-declaration-record");
       arguments = &array(term[2]);
     }

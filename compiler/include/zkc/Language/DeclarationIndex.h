@@ -20,6 +20,10 @@ public:
   std::optional<DeclarationId> lookup(DeclarationId context,
                                       llvm::StringRef) const;
   const protocol::FrontendDeclaration *association(DeclarationId) const;
+  /// The association of an installed definition that a catalog rule
+  /// elaborates, which has no body. Null for an installed primitive, which
+  /// keeps its own body, and for every written declaration.
+  const protocol::FrontendDeclaration *ruleAssociation(DeclarationId) const;
   std::optional<DeclarationId> implicit(llvm::StringRef) const;
   std::optional<DeclarationId> home(const Type &) const;
   llvm::ArrayRef<DeclarationId> members(DeclarationId) const;

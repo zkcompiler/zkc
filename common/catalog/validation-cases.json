@@ -246,25 +246,31 @@
       ]
     },
     {
-      "name": "a home over a further declared frontend constructor",
+      "name": "a renamed frontend constructor with its home",
       "edits": [
         {
           "document": "declarations",
           "table": "frontendConstructors",
-          "op": "insert",
-          "value": {
-            "name": "oracle_family"
-          }
+          "op": "set",
+          "where": {
+            "name": "oracle"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "oracle_handle"
         },
         {
           "document": "declarations",
           "table": "frontendHomes",
-          "op": "insert",
-          "value": {
-            "constructor": "oracle_family",
-            "module": "zkc::oracles",
-            "members": []
-          }
+          "op": "set",
+          "where": {
+            "constructor": "oracle"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "oracle_handle"
         }
       ]
     },
@@ -5794,10 +5800,14 @@
         {
           "document": "declarations",
           "table": "frontendConstructors",
-          "op": "delete",
+          "op": "set",
           "where": {
             "name": "oracle"
-          }
+          },
+          "path": [
+            "name"
+          ],
+          "value": "oracle_handle"
         }
       ],
       "diagnostics": {
@@ -5815,7 +5825,8 @@
           "table": "frontendConstructors",
           "op": "insert",
           "value": {
-            "name": "vector"
+            "name": "vector",
+            "form": "OracleHandle"
           }
         }
       ],
@@ -5842,6 +5853,68 @@
         "generator": "invalid or duplicate frontend constructor",
         "native": "invalid or duplicate frontend constructor",
         "rust": "invalid or duplicate frontend constructor"
+      }
+    },
+    {
+      "name": "a frontend constructor with an unknown form",
+      "rule": "frontend constructor forms",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "set",
+          "where": {
+            "name": "oracle"
+          },
+          "path": [
+            "form"
+          ],
+          "value": "OracleTable"
+        }
+      ],
+      "diagnostics": {
+        "generator": "unknown declaration alternative OracleTable",
+        "native": "unknown frontend constructor form",
+        "rust": "unknown declaration alternative OracleTable"
+      }
+    },
+    {
+      "name": "two frontend constructors of one form",
+      "rule": "frontend constructor forms",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "oracle_handle",
+            "form": "OracleHandle"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend constructor form",
+        "native": "duplicate frontend constructor form",
+        "rust": "duplicate frontend constructor form"
+      }
+    },
+    {
+      "name": "a frontend constructor form without a row",
+      "rule": "frontend constructor forms",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "delete",
+          "where": {
+            "name": "oracle_sequence"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "missing frontend constructor form",
+        "native": "missing frontend constructor form",
+        "rust": "missing frontend constructor form"
       }
     },
     {

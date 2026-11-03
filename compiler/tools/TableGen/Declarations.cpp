@@ -403,13 +403,24 @@ void Model::validate() {
             "duplicate frontend notation");
   }
   // A home names a catalog type constructor or a declared frontend
-  // constructor, a logical type head the source language owns.
-  std::set<StringRef> heads;
+  // constructor, a logical type head the source language owns. Exactly one
+  // row spells each form, the logical meaning the frontend gives a head.
+  static constexpr StringRef frontendConstructorForms[] = {
+      "OracleHandle", "OracleHandleSequence"};
+  std::set<StringRef> heads, forms;
   for (const auto *t : types)
     heads.insert(name(t));
-  for (const auto *r : frontendConstructors)
+  for (const auto *r : frontendConstructors) {
     require(identifier(name(r)) && heads.insert(name(r)).second, r,
             "invalid or duplicate frontend constructor");
+    auto form = r->getValueAsString("form");
+    require(is_contained(frontendConstructorForms, form), r,
+            "unknown frontend constructor form");
+    require(forms.insert(form).second, r,
+            "duplicate frontend constructor form");
+  }
+  if (forms.size() != std::size(frontendConstructorForms))
+    PrintFatalError("missing frontend constructor form");
   for (const auto *r : frontendHomes) {
     auto head = name(r), module = r->getValueAsString("module");
     require(heads.count(head) && module.starts_with("zkc::") &&
@@ -1171,11 +1182,18 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
        << quote(r->getValueAsString("target")) << ", "
        << boolean(r->getValueAsBit("public")) << "},\n";
   os << "}; return rows; }\n";
-  os << "llvm::ArrayRef<std::string> frontendConstructors() {\n"
-        "static const std::vector<std::string> rows = {\n";
+  os << "llvm::ArrayRef<FrontendConstructor> frontendConstructors() {\n"
+        "static const std::vector<FrontendConstructor> rows = {\n";
   for (const auto *r : m.frontendConstructors)
-    os << quote(name(r)) << ",\n";
-  os << "}; return rows; }\n";
+    os << "{" << quote(name(r))
+       << ", FrontendConstructorForm::" << r->getValueAsString("form")
+       << "},\n";
+  os << "}; return rows; }\n"
+        "const FrontendConstructor *frontendConstructor(llvm::StringRef "
+        "spelling) {\n"
+        "for (const auto &r : frontendConstructors())\n"
+        "if (spelling == r.name) return &r;\n"
+        "return nullptr; }\n";
   os << "llvm::ArrayRef<FrontendHome> frontendHomes() {\n"
         "static const std::vector<FrontendHome> rows = {\n";
   for (const auto *r : m.frontendHomes)
@@ -1622,7 +1640,8 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
     signatures.push_back(json::Object{
         {"name", name(r)}, {"capability", r->getValueAsString("capability")}});
   for (const auto *r : m.frontendConstructors)
-    constructors.push_back(json::Object{{"name", name(r)}});
+    constructors.push_back(
+        json::Object{{"name", name(r)}, {"form", r->getValueAsString("form")}});
   for (const auto *r : m.frontendHomes)
     homes.push_back(json::Object{{"constructor", name(r)},
                                  {"module", r->getValueAsString("module")},

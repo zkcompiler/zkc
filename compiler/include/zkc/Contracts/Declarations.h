@@ -120,6 +120,17 @@ struct FrontendNotation {
   std::string target;
   bool isPublic;
 };
+/// The logical meanings the frontend gives its own type heads: one logical
+/// oracle handle over an oracle kind, and a bounded ordered sequence of such
+/// handles with a static maximum.
+enum class FrontendConstructorForm { OracleHandle, OracleHandleSequence };
+/// A logical type head the source language owns that is not a catalog type
+/// constructor. The row owns the head's spelling; the frontend owns the
+/// meaning of its form. Exactly one row spells each form.
+struct FrontendConstructor {
+  std::string name;
+  FrontendConstructorForm form;
+};
 struct FrontendHome {
   std::string constructor, module;
   std::vector<std::string> members;
@@ -134,10 +145,12 @@ llvm::ArrayRef<FrontendDeclaration> frontendDeclarations();
 llvm::ArrayRef<FrontendNotation> frontendNotations();
 /// The logical type heads the source language owns that are not catalog type
 /// constructors. A frontend home names a catalog constructor or one of these.
-llvm::ArrayRef<std::string> frontendConstructors();
+llvm::ArrayRef<FrontendConstructor> frontendConstructors();
 llvm::ArrayRef<FrontendHome> frontendHomes();
 llvm::ArrayRef<ServiceMethodDeclaration> serviceMethodDeclarations();
 const FrontendDeclaration *frontendDeclaration(llvm::StringRef qualifiedName);
+/// The frontend constructor row with this spelling, if any.
+const FrontendConstructor *frontendConstructor(llvm::StringRef spelling);
 
 enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 struct TypePermissions {

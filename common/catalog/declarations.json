@@ -16445,10 +16445,12 @@
   ],
   "frontendConstructors": [
     {
-      "name": "oracle"
+      "name": "oracle",
+      "form": "OracleHandle"
     },
     {
-      "name": "oracle_sequence"
+      "name": "oracle_sequence",
+      "form": "OracleHandleSequence"
     }
   ],
   "frontendHomes": [

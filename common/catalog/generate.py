@@ -86,6 +86,9 @@ def kind(value):
 
 
 source_kind = one_of("Math", "Local", "Interface")
+# The logical meanings the frontend gives its own type heads; a
+# `frontendConstructors` row spells each one.
+FRONTEND_CONSTRUCTOR_FORMS = ("OracleHandle", "OracleHandleSequence")
 
 
 def source_term(value):
@@ -450,7 +453,7 @@ def validate(catalog):
                 "fixity": nullable(row({"associativity": one_of("left", "right", "none"), "precedence": count})),
                 "target": text, "public": flag,
             })),
-            "frontendConstructors": sequence(row({"name": text})),
+            "frontendConstructors": sequence(row({"name": text, "form": one_of(*FRONTEND_CONSTRUCTOR_FORMS)})),
             "frontendHomes": sequence(row({"constructor": text, "module": text, "members": sequence(text)})),
             "serviceSignatures": sequence(row({"name": text, "capability": text})),
             "serviceMethods": sequence(row({"name": text, "signature": text, "capability": text})),
@@ -666,11 +669,16 @@ def validate_frontend(catalog):
         require(key not in notations, "duplicate frontend notation")
         notations.add(key)
     # A home names a catalog type constructor or a declared frontend
-    # constructor, a logical type head the source language owns.
+    # constructor, a logical type head the source language owns. Exactly one
+    # row spells each form.
     heads = set(types)
+    forms = set()
     for row in catalog["frontendConstructors"]:
         require(identifier(row["name"]) and row["name"] not in heads, "invalid or duplicate frontend constructor")
         heads.add(row["name"])
+        require(row["form"] not in forms, "duplicate frontend constructor form")
+        forms.add(row["form"])
+    require(forms == set(FRONTEND_CONSTRUCTOR_FORMS), "missing frontend constructor form")
     seen = set()
     for row in catalog["frontendHomes"]:
         require(row["constructor"] in heads and path(row["module"]), "invalid frontend home")

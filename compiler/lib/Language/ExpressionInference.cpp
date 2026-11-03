@@ -1113,7 +1113,8 @@ class ExpressionInference {
       }
       if (checker.types.diagnostic)
         break;
-      auto type = builtinType("oracle_sequence", arguments);
+      auto type = logicalHeadType(
+          protocol::FrontendConstructorForm::OracleHandleSequence, arguments);
       if (!type)
         checker.types.accept(type.takeError(), expr.span);
       else

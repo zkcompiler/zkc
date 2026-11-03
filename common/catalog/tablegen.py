@@ -208,7 +208,7 @@ def project(catalog, installation):
         emit(f"ZKC_FrontendNotation<{q(n['owner'])}, {q(n['symbol'])}, {q(fixity['associativity'])}, "
              f"{fixity['precedence']}, {q(n['target'])}, {flag(n['public'])}>", [ordinal(i)])
     for i, c in enumerate(catalog["frontendConstructors"]):
-        emit(f"ZKC_FrontendConstructor<{q(c['name'])}>", [ordinal(i)])
+        emit(f"ZKC_FrontendConstructor<{q(c['name'])}, {q(c['form'])}>", [ordinal(i)])
     for i, h in enumerate(catalog["frontendHomes"]):
         emit(f"ZKC_FrontendHome<{q(h['constructor'])}, {q(h['module'])}, {seq(q(m) for m in h['members'])}>", [ordinal(i)])
     for i, m in enumerate(catalog["serviceSignatures"]):
