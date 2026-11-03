@@ -293,6 +293,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   // This closure is immutable for the whole check; share operand-relative
   // summaries, while each declaration reconstructs its own premise scope.
   HelperResults helperResults(types, storage.declarations);
+  if (auto error = checkModuleContracts(storage, work))
+    return error;
   if (auto error = checkSignatureSources(storage, work))
     return error;
   std::vector<unsigned> uses(storage.scopedSources.size());
@@ -962,8 +964,6 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       return types.takeError();
     }
   }
-  if (auto error = checkModuleContracts(storage, work))
-    return error;
   for (const auto &[owner, source] : storage.bodySources)
     if (source->syntax && !source->syntax->bodies.empty() &&
         (owner >= storage.declarations.size() ||

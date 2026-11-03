@@ -1449,6 +1449,18 @@ its implementation must explicitly declare a nominal type with `:` or a resource
 or sealing attribute. Interface
 membership never changes an alias's meaning. The module path and canonical static
 arguments determine nominal identity, independent of imports or file layout.
+The checked implementing module retains one required-member to provided-member
+edge per interface member, in interface order. Selection uses direct authored
+members and includes associated types and domain factories. Imports and members
+of other modules cannot supply an edge. The implementing module's exact static
+arguments and selected interface instance supply its substitution context;
+identical member names in two implementations do not identify one dispatch.
+Checking forms the edges before dependent signatures and bodies, and validates
+all obligations before admitting a checked project. A source witness reconstructs
+the expected edges and signatures from retained authored headers and refuses
+missing, extra, forged, reordered or cross-module edges with
+`source.scoped-witness`. Runtime publication formats do not carry this checking
+record.
 Records and variants are ordinary module declarations. An abstract call or type projection
 requires a bound module; a free interface name cannot select an implementation.
 

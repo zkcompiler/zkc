@@ -287,29 +287,30 @@ class Requirements {
     }
     return {std::move(parent), {}, {}, callee.qualifiedName};
   }
-  DeclarationId target(DeclarationId known, std::vector<Type> &arguments,
-                       const std::optional<Type> &module, Span span) {
-    if (!module || declarations[known.index].origin)
-      return known;
-    const auto *definition = types.typeDeclaration(*module);
-    if (!definition || definition->kind != Declaration::Kind::Module)
-      return known;
-    const auto &formal = declarations[known.index];
-    for (auto member : definition->members) {
-      if (!charge(1, span))
-        return known;
-      if (declarations[member.index].name != formal.name)
-        continue;
-      unsigned inherited =
-          formal.parent ? declarations[formal.parent->index].parameters.size()
-                        : 0;
-      std::vector<Type> selected = module->arguments;
-      if (arguments.size() >= inherited)
-        llvm::append_range(selected, ArrayRef(arguments).drop_front(inherited));
-      arguments = std::move(selected);
-      return member;
+  std::optional<DeclarationId> target(DeclarationId known,
+                                      std::vector<Type> &arguments,
+                                      const std::optional<Type> &module,
+                                      const Environment &context, Span span) {
+    auto actual = arguments;
+    const auto parent = declarations[known.index].parent;
+    if (module && !module->symbolic && parent &&
+        declarations[parent->index].kind == Declaration::Kind::Interface) {
+      // Only the inherited interface prefix participates in dispatch. Own
+      // statics retain their lexical frame until an observation needs them.
+      const auto inherited = declarations[parent->index].parameters.size();
+      for (unsigned i = 0; i < std::min(inherited, actual.size()); ++i)
+        actual[i] = substitute(actual[i], context, span);
     }
-    return known;
+    if (failure)
+      return {};
+    auto selected = types.dispatch(module, known, actual, span);
+    if (!selected) {
+      if (types.diagnostic && !failure)
+        failure = make_error<DiagnosticError>(*types.diagnostic);
+      return {};
+    }
+    arguments = std::move(selected->arguments);
+    return selected->declaration;
   }
   std::optional<StringRef> staticAlias(const Type &type) {
     if (type.symbolic && !type.domain.empty())
@@ -627,9 +628,11 @@ class Requirements {
       std::optional<Type> module;
       if (binding.factory->module)
         module = substitute(*binding.factory->module, context, binding.span);
-      auto selected =
-          target(binding.factory->declaration, statics, module, binding.span);
-      const auto &callee = declarations[selected.index];
+      auto selected = target(binding.factory->declaration, statics, module,
+                             context, binding.span);
+      if (!selected)
+        return {};
+      const auto &callee = declarations[selected->index];
       if (!callee.domainDefinition) {
         if (callee.kind != Declaration::Kind::DomainFunction ||
             !callee.abstract) {
@@ -1239,8 +1242,10 @@ class Requirements {
         std::optional<Type> module;
         if (call->module)
           module = substitute(*call->module, context, op.span);
-        auto selected = target(call->callee, statics, module, op.span);
-        const auto &callee = declarations.at(selected.index);
+        auto selected = target(call->callee, statics, module, context, op.span);
+        if (!selected)
+          return {};
+        const auto &callee = declarations.at(selected->index);
         auto nested = environment(callee, statics, module, context.statics);
         for (auto index : call->scopedArguments)
           nested.scoped.push_back(

@@ -1,7 +1,11 @@
 #include "SignatureWitness.h"
+#include "Checker.h"
 #include "Effects.h"
 #include "Internal.h"
+#include "WrittenSource.h"
+#include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
+using namespace llvm;
 namespace zkc::language::detail {
 namespace {
 bool checkOrigins(Semantics &types, const Declaration &decl,
@@ -163,60 +167,504 @@ llvm::Error checkSignatureSources(const CheckedStorage &storage, Work &work) {
     return failure("source.scoped-witness", "invalid signature source owner");
   return llvm::Error::success();
 }
-llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
-  Semantics types(storage.declarations, storage.assets, work);
-  for (const auto &module : storage.declarations) {
-    if (!types.charge(1, module.span))
-      return types.takeError();
-    if (module.kind != Declaration::Kind::Module || !module.implementation)
+namespace {
+// The expected edges come from immutable authored headers and frozen canonical
+// IDs, not the mutable Declaration::members or conformance vectors.
+struct ContractHeaders {
+  const CheckedStorage &storage;
+  Semantics &types;
+  std::map<uint32_t, const SyntaxDeclaration *> sources;
+  std::map<uint32_t, uint32_t> parents;
+  bool collect(const SyntaxDeclaration &source, const std::string &path,
+               std::optional<DeclarationId> parent, unsigned depth) {
+    if (depth > types.work.limits.typeDepth)
+      return types.fail("source.limit", "conformance source depth",
+                        source.span);
+    if (!types.charge(path.size() + source.members.size() + 1, source.span))
+      return false;
+    if (source.anonymous || source.generated)
+      return true;
+    if (source.kind != Declaration::Kind::Module &&
+        source.kind != Declaration::Kind::Interface &&
+        source.kind != Declaration::Kind::Associated &&
+        source.kind != Declaration::Kind::Alias &&
+        source.kind != Declaration::Kind::Domain &&
+        source.kind != Declaration::Kind::Record &&
+        source.kind != Declaration::Kind::Variant &&
+        source.kind != Declaration::Kind::Math &&
+        source.kind != Declaration::Kind::Local &&
+        source.kind != Declaration::Kind::DomainFunction)
+      return true;
+    auto id = storage.declarationIndex->canonical(path);
+    if (!id || id->index >= storage.declarations.size())
+      return types.fail("source.scoped-witness", "missing authored declaration",
+                        source.span);
+    // An external child link has no signature; its captured file supplies it.
+    if (source.externalModule)
+      return true;
+    if (!sources.emplace(id->index, &source).second)
+      return types.fail("source.scoped-witness", "duplicate authored header",
+                        source.span);
+    if (!parent && StringRef(path).contains("::"))
+      parent = storage.declarationIndex->canonical(
+          StringRef(path).rsplit("::").first);
+    if (parent)
+      parents.emplace(id->index, parent->index);
+    for (const auto &member : source.members)
+      if (!collect(member, path + "::" + member.name, *id, depth + 1))
+        return false;
+    return true;
+  }
+};
+bool signatureAgrees(Semantics &types, const Declaration &actual,
+                     const Declaration &written) {
+  auto refuse = [&] {
+    return types.fail("source.scoped-witness",
+                      "conformance signature differs from authored header",
+                      actual.span);
+  };
+  if (!types.charge(actual.parameters.size() + actual.inputs.size() +
+                        actual.outputs.size() + actual.bounds.size() +
+                        actual.permissionBounds.size() +
+                        actual.capabilityBounds.size() + 1,
+                    actual.span))
+    return false;
+  if (actual.kind != written.kind || actual.abstract != written.abstract ||
+      actual.associatedSort != written.associatedSort ||
+      !(actual.permissions == written.permissions) ||
+      actual.resource != written.resource || actual.sealed != written.sealed ||
+      actual.domain != written.domain ||
+      actual.implementation != written.implementation ||
+      actual.parameters.size() != written.parameters.size() ||
+      actual.inputs.size() != written.inputs.size() ||
+      actual.outputs.size() != written.outputs.size() ||
+      actual.domainResult != written.domainResult ||
+      actual.dataPreconditions != written.dataPreconditions)
+    return refuse();
+  for (unsigned i = 0; i < actual.parameters.size(); ++i) {
+    const auto &a = actual.parameters[i], &b = written.parameters[i];
+    if (a.name != b.name || a.atom != b.atom || a.sort != b.sort ||
+        a.domainSort != b.domainSort || a.arguments != b.arguments ||
+        bool(a.interface) != bool(b.interface) ||
+        (a.interface && a.interface->index != b.interface->index) ||
+        !a.permissions.includes(b.permissions) ||
+        (actual.abstract && !(a.permissions == b.permissions)))
+      return refuse();
+  }
+  for (bool input : {true, false}) {
+    const auto &a = input ? actual.inputs : actual.outputs;
+    const auto &b = input ? written.inputs : written.outputs;
+    for (unsigned i = 0; i < a.size(); ++i)
+      if (a[i].name != b[i].name || a[i].type != b[i].type)
+        return refuse();
+  }
+  if (!checkMemberInputs(types, written, actual, {}))
+    return false;
+  // Inferred requirements are re-judged against the interface below. Authored
+  // requirements, including inherited requirements, must remain exact.
+  unsigned next = 0;
+  for (const auto &bound : actual.bounds) {
+    if (bound.inferred)
       continue;
-    const auto *interface = types.typeDeclaration(*module.implementation);
-    if (!interface)
-      return failure("source.scoped-witness", "missing module interface",
-                     module.span);
-    if (!types.charge(module.parameters.size() + 1, module.span) ||
-        !types.chargeType(*module.implementation, module.span))
-      return types.takeError();
-    auto bindings =
-        types.substitution(*interface, module.implementation->arguments);
+    if (next == written.bounds.size() ||
+        bound.lhs != written.bounds[next].lhs ||
+        bound.rhs != written.bounds[next++].rhs)
+      return refuse();
+  }
+  if (next != written.bounds.size())
+    return refuse();
+  next = 0;
+  for (const auto &bound : actual.permissionBounds) {
+    if (bound.inferred)
+      continue;
+    if (next == written.permissionBounds.size() ||
+        bound.type != written.permissionBounds[next].type ||
+        !(bound.permissions == written.permissionBounds[next++].permissions))
+      return refuse();
+  }
+  if (next != written.permissionBounds.size())
+    return refuse();
+  next = 0;
+  for (const auto &bound : actual.capabilityBounds) {
+    if (bound.inferred)
+      continue;
+    if (next == written.capabilityBounds.size() ||
+        bound.predicate != written.capabilityBounds[next].predicate ||
+        bound.arguments != written.capabilityBounds[next++].arguments)
+      return refuse();
+  }
+  if (next != written.capabilityBounds.size())
+    return refuse();
+  // Defined Local effects may be inferred from their independently checked
+  // body. Explicit and abstract ceilings must equal the authored ceiling.
+  if ((written.effectAllowance || actual.abstract) &&
+      actual.effectAllowance != written.effectAllowance)
+    return refuse();
+  return true;
+}
+bool implementationAgrees(Semantics &types, const Declaration &module,
+                          const Declaration &interface,
+                          const Declaration &required,
+                          const Declaration &provided,
+                          const Substitution &bindings) {
+  auto refuse = [&](StringRef message) {
+    return types.fail("source.scoped-witness", message, provided.span);
+  };
+  if (required.kind == Declaration::Kind::Associated) {
+    const auto &sort = required.associatedSort;
+    if (isDomainSort(sort) && (sort != provided.associatedSort ||
+                               sort != domainSort(provided.domain)))
+      return refuse("associated implementation sort differs");
+    if (isStaticOnly(provided.domain))
+      return isDomainSort(sort) ||
+             refuse("runtime associated representation differs");
     Type self(Type::Kind::Module, module.qualifiedName);
-    for (const auto &parameter : module.parameters)
-      self.arguments.push_back(parameterType(parameter));
-    bindings.emplace("self:" + interface->qualifiedName, std::move(self));
-    for (auto requiredId : interface->members) {
-      if (!types.charge(module.members.size() + 1, module.span))
-        return types.takeError();
-      if (requiredId.index >= storage.declarations.size())
-        return failure("source.scoped-witness", "invalid interface member",
-                       module.span);
-      const auto &required = storage.declarations[requiredId.index];
-      if (required.kind != Declaration::Kind::Local &&
-          required.kind != Declaration::Kind::Math)
-        continue;
-      const Declaration *provided = nullptr;
-      for (auto id : module.members) {
-        if (id.index >= storage.declarations.size())
-          return failure("source.scoped-witness", "invalid module member",
-                         module.span);
-        const auto &member = storage.declarations[id.index];
-        if (member.name == required.name)
-          provided = &member;
-      }
-      if (!provided || !provided->body)
-        return failure("source.scoped-witness", "missing implementation member",
-                       module.span);
-      if (!checkMemberInputs(types, required, *provided, bindings))
-        return types.takeError();
-      if (!effectsWithin(types, provided->body->effects,
-                         required.effectAllowance.value_or(EffectSummary{}),
-                         module.span)) {
-        types.fail("source.scoped-witness",
-                   "implementation exceeds interface effect contract",
-                   module.span);
-        return types.takeError();
-      }
+    for (const auto &p : module.parameters)
+      self.arguments.push_back(parameterType(p));
+    Type type(Type::Kind::Associated, provided.qualifiedName);
+    type.arguments.push_back(std::move(self));
+    auto promised = required.permissions.value_or(Permissions{});
+    if (required.resource)
+      promised = {false, *required.resource == Resource::Affine};
+    auto caps = types.permissions(type, provided.span, &module);
+    return caps && (caps->includes(promised) ||
+                    refuse("associated implementation permissions differ"));
+  }
+  if (required.parameters.size() != interface.parameters.size() ||
+      provided.parameters.size() != module.parameters.size() ||
+      required.inputs.size() != provided.inputs.size() ||
+      required.outputs.size() != provided.outputs.size() ||
+      bool(required.domainResult) != bool(provided.domainResult))
+    return refuse("implementation signature arity differs");
+  for (bool input : {true, false}) {
+    const auto &a = input ? required.inputs : required.outputs;
+    const auto &b = input ? provided.inputs : provided.outputs;
+    for (unsigned i = 0; i < a.size(); ++i) {
+      auto expected = types.substitute(a[i].type, bindings, provided.span);
+      if (!expected || (*expected != b[i].type &&
+                        !refuse("implementation port signature differs")))
+        return false;
     }
   }
-  return llvm::Error::success();
+  if (!checkMemberInputs(types, required, provided, bindings))
+    return false;
+  if (required.domainResult) {
+    auto expected =
+        types.substitute(*required.domainResult, bindings, provided.span);
+    if (!expected || (*expected != *provided.domainResult &&
+                      !refuse("implementation domain result differs")))
+      return false;
+  }
+  for (const auto &condition : provided.dataPreconditions)
+    if (!llvm::is_contained(required.dataPreconditions, condition))
+      return refuse("implementation strengthens data preconditions");
+  Declaration available{};
+  available.parameters = module.parameters;
+  available.bounds = module.bounds;
+  available.permissionBounds = module.permissionBounds;
+  available.capabilityBounds = module.capabilityBounds;
+  for (const auto &p : required.parameters) {
+    auto actual = bindings.find(p.atom);
+    if (actual != bindings.end() && !(p.permissions == Permissions{}))
+      available.permissionBounds.push_back(
+          {actual->second, p.permissions, p.span});
+  }
+  for (const auto &bound : required.bounds) {
+    Type l(Type::Kind::Natural), r(Type::Kind::Natural);
+    l.dimension = bound.lhs;
+    r.dimension = bound.rhs;
+    auto lhs = types.substitute(l, bindings, provided.span);
+    auto rhs = types.substitute(r, bindings, provided.span);
+    if (!lhs || !rhs)
+      return false;
+    available.bounds.push_back({lhs->dimension, rhs->dimension, bound.span});
+  }
+  for (const auto &bound : required.permissionBounds) {
+    auto value = types.substitute(bound.type, bindings, provided.span);
+    if (!value)
+      return false;
+    available.permissionBounds.push_back(
+        {*value, bound.permissions, bound.span});
+  }
+  for (const auto &bound : required.capabilityBounds) {
+    CapabilityBound assumption{bound.predicate, {}, bound.span};
+    for (const auto &argument : bound.arguments) {
+      auto value = types.substitute(argument, bindings, provided.span);
+      if (!value)
+        return false;
+      assumption.arguments.push_back(std::move(*value));
+    }
+    if (llvm::any_of(assumption.arguments,
+                     [&](const auto &t) { return types.symbolic(t); }))
+      available.capabilityBounds.push_back(std::move(assumption));
+    else if (!types.entails(nullptr, assumption, "source.scoped-witness"))
+      return false;
+  }
+  for (const auto &bound : provided.capabilityBounds)
+    if (!types.entails(&available, bound, "source.scoped-witness"))
+      return false;
+  for (const auto &bound : provided.bounds)
+    if (!types.assumptions(available, bound, {}, provided.span))
+      return false;
+  for (const auto &bound : provided.permissionBounds) {
+    Type requirement = bound.type;
+    requirement.assumptions = {};
+    auto value = types.substitute(requirement, {}, provided.span);
+    auto caps = value ? types.permissions(*value, provided.span, &available)
+                      : std::nullopt;
+    if (!caps ||
+        (!caps->includes(bound.permissions) &&
+         !refuse("implementation strengthens permission preconditions")))
+      return false;
+  }
+  for (unsigned i = 0; i < provided.parameters.size(); ++i) {
+    if (isStaticOnly(parameterType(provided.parameters[i])))
+      continue;
+    auto caps = types.permissions(parameterType(module.parameters[i]),
+                                  provided.span, &available);
+    if (!caps || (!caps->includes(provided.parameters[i].permissions) &&
+                  !refuse("implementation strengthens parameter permissions")))
+      return false;
+  }
+  if (required.kind == Declaration::Kind::DomainFunction)
+    return bool(provided.domainDefinition) ||
+           refuse("implementation domain recipe missing");
+  return provided.body &&
+         effectsWithin(types, provided.body->effects,
+                       required.effectAllowance.value_or(EffectSummary{}),
+                       provided.span);
+}
+} // namespace
+llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
+  if (!storage.sources || (storage.names && storage.names->visible.size() !=
+                                                storage.declarations.size()))
+    return failure("source.scoped-witness",
+                   "invalid conformance source context");
+  for (unsigned i = 0; i < storage.declarations.size(); ++i) {
+    const auto &decl = storage.declarations[i];
+    if (auto error = work.charge(decl.members.size() + 1, decl.span))
+      return error;
+    if (decl.id.index != i ||
+        decl.span.source.index >= storage.sources->size() ||
+        decl.module.index >= storage.declarations.size() ||
+        (decl.parent && decl.parent->index >= storage.declarations.size()) ||
+        llvm::any_of(decl.members, [&](auto id) {
+          return id.index >= storage.declarations.size();
+        }))
+      return failure("source.scoped-witness",
+                     "invalid conformance declaration identity", decl.span);
+  }
+  Semantics types(storage.declarations, storage.assets, work);
+  auto verify = [&]() -> bool {
+    if (!storage.writtenSources || !storage.declarationIndex)
+      return types.fail("source.scoped-witness",
+                        "missing conformance source headers", {});
+    bool needsConformance =
+        llvm::any_of(storage.declarations, [](const auto &decl) {
+          return decl.implementation || !decl.conformance.empty();
+        });
+    std::function<bool(const SyntaxDeclaration &)> findImplementation =
+        [&](const SyntaxDeclaration &source) {
+          if (!types.charge(1, source.span))
+            return false;
+          needsConformance |= source.kind == Declaration::Kind::Module &&
+                              source.definition.has_value();
+          for (const auto &child : source.members)
+            if (!findImplementation(child))
+              return false;
+          return true;
+        };
+    for (const auto &source : storage.writtenSources->modules)
+      if (!findImplementation(source))
+        return false;
+    if (!needsConformance)
+      return true;
+    // Use the same section expansion on an independent authored snapshot;
+    // written parameter groups do not create declaration namespaces.
+    uint64_t tokens = 0;
+    for (const auto &source : storage.tokens)
+      tokens += source.size();
+    if (!types.charge(tokens, {}))
+      return false;
+    auto authored = storage.writtenSources->modules;
+    if (auto error = expandLayoutSections(authored, work))
+      return types.accept(std::move(error));
+    ContractHeaders headers{storage, types, {}, {}};
+    for (const auto &source : authored)
+      if (!headers.collect(source, source.name, {}, 1))
+        return false;
+    std::vector<DeclarationId> implementations;
+    for (unsigned index = 0; index < storage.declarations.size(); ++index) {
+      const auto &decl = storage.declarations[index];
+      if (!types.charge(1, decl.span))
+        return false;
+      if (decl.id.index != index)
+        return types.fail("source.scoped-witness",
+                          "invalid declaration identity", decl.span);
+      auto source = headers.sources.find(decl.id.index);
+      const bool implements =
+          source != headers.sources.end() &&
+          source->second->kind == Declaration::Kind::Module &&
+          source->second->definition.has_value();
+      if (implements)
+        implementations.push_back(decl.id);
+      if ((!implements && (!decl.conformance.empty() || decl.implementation)) ||
+          (implements &&
+           (!decl.implementation || decl.kind != Declaration::Kind::Module)))
+        return types.fail("source.scoped-witness", "invalid conformance owner",
+                          decl.span);
+    }
+    if (implementations.empty())
+      return true;
+    if (!storage.names)
+      return types.fail("source.scoped-witness",
+                        "missing conformance namespaces", {});
+    if (auto error = chargeSemanticIndex(storage.declarations, work))
+      return types.accept(std::move(error));
+    CheckedStorage replay(storage.capture, storage.installation);
+    replay.declarations = storage.declarations;
+    replay.assets = storage.assets;
+    replay.sources = storage.sources;
+    replay.declarationIndex = storage.declarationIndex;
+    Checker reader(replay, work, *storage.names, false);
+    // Register dependencies before reading any signature. Replaying only the
+    // two selected members would trust mutable aliases and associated domains
+    // on which both authored signatures depend.
+    for (const auto &[index, source] : headers.sources)
+      if (!reader.prepareSignatureReconstruction(DeclarationId{index}, *source))
+        return types.accept(reader.types.takeError());
+    // Match the producer's declaration order so an already completed earlier
+    // alias does not become a new deep dependency chain in the witness.
+    for (const auto &[index, source] : headers.sources) {
+      (void)source;
+      if (!reader.reconstructSignature(DeclarationId{index}))
+        return types.accept(reader.types.takeError());
+    }
+    std::set<uint32_t> reconstructed;
+    std::function<bool(DeclarationId)> reconstruct = [&](DeclarationId id) {
+      if (!reconstructed.insert(id.index).second)
+        return true;
+      auto source = headers.sources.find(id.index);
+      if (source == headers.sources.end())
+        return types.fail("source.scoped-witness", "missing authored contract",
+                          {});
+      const auto &actual = storage.declarations[id.index];
+      auto canonical =
+          storage.declarationIndex->canonical(actual.qualifiedName);
+      if (!canonical || canonical->index != id.index)
+        return types.fail("source.scoped-witness",
+                          "authored contract identity differs", actual.span);
+      auto parent = headers.parents.find(id.index);
+      if (bool(actual.parent) != (parent != headers.parents.end()) ||
+          (actual.parent && actual.parent->index != parent->second) ||
+          actual.module.index >= storage.declarations.size())
+        return types.fail("source.scoped-witness",
+                          "authored contract owner differs", actual.span);
+      auto owner = id.index;
+      std::set<uint32_t> ancestors;
+      while (headers.sources.at(owner)->kind != Declaration::Kind::Module) {
+        if (!ancestors.insert(owner).second || !headers.parents.count(owner))
+          return types.fail("source.scoped-witness",
+                            "invalid authored module owner", actual.span);
+        owner = headers.parents.at(owner);
+      }
+      if (actual.module.index != owner)
+        return types.fail("source.scoped-witness",
+                          "cached module owner differs", actual.span);
+      if (actual.parent && !reconstruct(*actual.parent))
+        return false;
+      if (!reader.reconstructSignature(id)) {
+        if (reader.types.diagnostic)
+          return types.accept(reader.types.takeError());
+        return types.fail("source.scoped-witness", "invalid authored contract",
+                          actual.span);
+      }
+      return signatureAgrees(types, actual, replay.declarations[id.index]);
+    };
+    for (auto id : implementations) {
+      const auto &module = storage.declarations[id.index];
+      const auto &source = *headers.sources.at(id.index);
+      auto contract =
+          storage.declarationIndex->lookup(id, source.definition->name);
+      if (!contract || contract->index >= storage.declarations.size())
+        return types.fail("source.scoped-witness", "missing authored interface",
+                          module.span);
+      auto writtenInterface = headers.sources.find(contract->index);
+      if (writtenInterface == headers.sources.end() ||
+          writtenInterface->second->kind != Declaration::Kind::Interface)
+        return types.fail("source.scoped-witness", "invalid authored interface",
+                          module.span);
+      const auto &interface = storage.declarations[contract->index];
+      if (interface.kind != Declaration::Kind::Interface ||
+          module.implementation->domain != interface.qualifiedName ||
+          !reconstruct(*contract) || !reconstruct(id))
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.scoped-witness",
+                                "module interface differs", module.span);
+      const auto &requiredSources = writtenInterface->second->members;
+      if (module.conformance.size() != requiredSources.size() ||
+          interface.members.size() != requiredSources.size())
+        return types.fail("source.scoped-witness",
+                          "conformance edge coverage differs", module.span);
+      std::set<uint32_t> providedIds;
+      auto bindings =
+          types.substitution(interface, module.implementation->arguments);
+      Type self(Type::Kind::Module, module.qualifiedName);
+      for (const auto &p : module.parameters)
+        self.arguments.push_back(parameterType(p));
+      bindings.emplace("self:" + interface.qualifiedName, std::move(self));
+      for (unsigned i = 0; i < requiredSources.size(); ++i) {
+        const auto &requiredSource = requiredSources[i];
+        auto requiredId = storage.declarationIndex->canonical(
+            interface.qualifiedName + "::" + requiredSource.name);
+        auto providedId = storage.declarationIndex->canonical(
+            module.qualifiedName + "::" + requiredSource.name);
+        const auto &edge = module.conformance[i];
+        if (!requiredId || !providedId ||
+            edge.required.index != requiredId->index ||
+            edge.provided.index != providedId->index ||
+            interface.members[i].index != requiredId->index ||
+            edge.provided.index >= storage.declarations.size() ||
+            !providedIds.insert(edge.provided.index).second)
+          return types.fail("source.scoped-witness",
+                            "conformance edge differs from source",
+                            module.span);
+        const auto &required = storage.declarations[requiredId->index];
+        const auto &provided = storage.declarations[providedId->index];
+        auto ownSource = headers.sources.find(providedId->index);
+        if (ownSource == headers.sources.end() ||
+            ownSource->second->kind != requiredSource.kind ||
+            headers.parents.find(providedId->index) == headers.parents.end() ||
+            headers.parents.at(providedId->index) != id.index ||
+            !required.parent || required.parent->index != contract->index ||
+            !provided.parent || provided.parent->index != id.index ||
+            provided.module.index != id.index ||
+            required.name != requiredSource.name ||
+            provided.name != requiredSource.name ||
+            required.kind != requiredSource.kind ||
+            provided.kind != requiredSource.kind ||
+            llvm::count_if(module.members, [&](auto member) {
+              return member.index == providedId->index;
+            }) != 1)
+          return types.fail("source.scoped-witness",
+                            "conformance member owner or kind differs",
+                            module.span);
+        if (!reconstruct(*requiredId) || !reconstruct(*providedId) ||
+            !implementationAgrees(types, module, interface, required, provided,
+                                  bindings))
+          return false;
+      }
+    }
+    return true;
+  };
+  if (verify())
+    return llvm::Error::success();
+  if (types.diagnostic && types.diagnostic->code != "source.limit" &&
+      types.diagnostic->code != "source.cancelled")
+    types.diagnostic->code = "source.scoped-witness";
+  return types.diagnostic
+             ? types.takeError()
+             : failure("source.scoped-witness", "conformance contract differs");
 }
 } // namespace zkc::language::detail

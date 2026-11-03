@@ -840,6 +840,14 @@ bool Checker::body(DeclarationId id, unsigned depth) {
            types.fail("source.limit", "helper call depth limit exceeded",
                       decl.span);
   bodyState[id.index] = 1;
+  auto previousBody = activeBody;
+  auto previousDepth = activeBodyDepth;
+  activeBody = id;
+  activeBodyDepth = depth;
+  auto restoreBody = llvm::scope_exit([&] {
+    activeBody = previousBody;
+    activeBodyDepth = previousDepth;
+  });
   auto finishState = llvm::scope_exit([&] {
     if (bodyState[id.index] == 1)
       bodyState[id.index] = 3;

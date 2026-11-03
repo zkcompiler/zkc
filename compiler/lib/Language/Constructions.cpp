@@ -220,11 +220,12 @@ bool Checker::constructions() {
           return types.fail("source.construction",
                             "transcript requires a module provider",
                             syntax.provider->span);
-        if (!constructionMember(decl, *provider, "State",
-                                syntax.provider->span))
+        auto state =
+            constructionMember(decl, *provider, "State", syntax.provider->span);
+        if (!state)
           return false;
         auto stateType =
-            types.associated(*provider, "State", syntax.provider->span);
+            types.associated(*provider, *state, syntax.provider->span);
         if (!stateType)
           return false;
         auto permissions = types.permissions(*stateType, decl.span, &decl);

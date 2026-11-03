@@ -1,3 +1,5 @@
+#include "../lib/Language/Semantics.h"
+#include "../lib/Language/TypeInference.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
@@ -538,5 +540,277 @@ int main() {
       take(check("module m;" + (reverse ? b + a : a + b)));
     }
   });
+  cases.run(
+      "recorded dispatch completes later implementations before summaries", [] {
+        auto project = take(check(R"(module m;
+      interface Choice {math fn choose(left:bool,right:bool)->bool;}
+      math fn selected<C:Choice>(left:bool,right:bool)->bool {
+        return C::choose(left,right);
+      }
+      module Early:Choice {
+        math fn choose(left:bool,right:bool)->bool {
+          return selected<Later<2>>(left,right);
+        }
+      }
+      module Later<N:nat>:Choice {
+        math fn choose(left:bool,right:bool)->bool {return right;}
+      }
+      module First:Choice {
+        math fn choose(left:bool,right:bool)->bool {return left;}
+      }
+      protocol Demo roles(P,V)(left:bool@P,right:bool@V)->(a:bool@P,b:bool@V) {
+        return (a=selected<First>(left,right),b=selected<Early>(left,right));
+      }
+      entry fn Run(inputs:Demo::Inputs) {return Demo::run(inputs);}
+    )"));
+        const auto &early = named(project, "m::Early::choose");
+        require(
+            early.body->values[early.body->results.front().index].components ==
+                std::vector<unsigned>{1},
+            "summary observed an unchecked later implementation");
+        for (StringRef name : {"m::Early", "m::Later", "m::First"}) {
+          const auto &module = named(project, name);
+          require(module.conformance.size() == 1 &&
+                      module.conformance.front().required.index ==
+                          named(project, "m::Choice::choose").id.index &&
+                      module.conformance.front().provided.index ==
+                          named(project, name.str() + "::choose").id.index,
+                  "conformance did not retain the actual implementing member");
+        }
+        auto closed =
+            take(zkc::test::closeProtocolDeployment(project, "m::Run"));
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+        take(prepareOriginal(closed));
+      });
+  cases.run("member dependencies do not create module conformance cycles", [] {
+    take(check(R"(module m;
+      interface I {math fn first(x:bool)->bool;math fn last(x:bool)->bool;}
+      math fn forward<C:I>(x:bool)->bool {return C::last(x);}
+      module A:I {
+        math fn first(x:bool)->bool {return forward<B>(x);}
+        math fn last(x:bool)->bool {return x;}
+      }
+      module B:I {
+        math fn first(x:bool)->bool {return x;}
+        math fn last(x:bool)->bool {return forward<A>(x);}
+      }
+    )"));
+    refuses(check(R"(module m;
+      interface I {math fn call(x:bool)->bool;}
+      math fn forward<C:I>(x:bool)->bool {return C::call(x);}
+      module A:I {math fn call(x:bool)->bool {return forward<B>(x);}}
+      module B:I {math fn call(x:bool)->bool {return forward<A>(x);}}
+    )"),
+            "source.cycle");
+  });
+  cases.run("lazy dispatch completion preserves helper depth boundaries", [] {
+    const std::string source = R"(module m;
+      interface I {math fn call(x:bool)->bool;}
+      math fn forward<C:I>(x:bool)->bool {return C::call(x);}
+      module A:I {math fn call(x:bool)->bool {return forward<B>(x);}}
+      module B:I {math fn call(x:bool)->bool {return x;}}
+    )";
+    Limits limits;
+    limits.callDepth = 3;
+    take(check({{"m", source, "m.zkc"}}, limits));
+    limits.callDepth = 2;
+    refuses(check({{"m", source, "m.zkc"}}, limits), "source.limit");
+  });
+  cases.run("conformance signature replay preserves completed alias depth", [] {
+    std::string source = "module m;type A0=bool;";
+    for (unsigned i = 1; i <= 40; ++i)
+      source +=
+          "type A" + std::to_string(i) + "=A" + std::to_string(i - 1) + ";";
+    take(check(source + R"(
+      interface I {math fn call(x:A40)->A40;}
+      module M:I {math fn call(x:A40)->A40 {return x;}}
+    )"));
+  });
+  const std::string contracts = R"(module m;
+    domain Fr=field("koala-bear");domain Fq=field("baby-bear");
+    type Flag=bool;
+    interface I<N:nat> {
+      type Scalar:Field;
+      math fn choose(left:Flag,right:Flag)->Flag;
+      domain fn rows(lo:index,hi:index)->domain<index>;
+      fn run(x:bool,body:fn(bool)->bool)->bool effects(body);
+    }
+    module A<N:nat>:I<N> {
+      type Scalar:Field=Fr;
+      math fn choose(left:Flag,right:Flag)->Flag {return left;}
+      domain fn rows(lo:index,hi:index)->domain<index>=domain("range");
+      fn run(x:bool,body:fn(bool)->bool)->bool {return body(x);}
+    }
+    module B<N:nat>:I<N> {
+      type Scalar:Field=Fq;
+      math fn choose(left:Flag,right:Flag)->Flag {return right;}
+      domain fn rows(lo:index,hi:index)->domain<index>=domain("range");
+      fn run(x:bool,body:fn(bool)->bool)->bool {return body(x);}
+    }
+  )";
+  cases.run(
+      "dispatch binds implementing instances and associated identities", [&] {
+        auto project = take(check(contracts));
+        std::vector<Declaration> declarations(project.declarations().begin(),
+                                              project.declarations().end());
+        Limits limits;
+        zkc::language::detail::Work work{limits};
+        zkc::language::detail::Semantics types(declarations, project.assets(),
+                                               work);
+        Type two(Type::Kind::Natural);
+        two.dimension = Natural::constant(2);
+        Type a(Type::Kind::Module, "m::A"), b(Type::Kind::Module, "m::B");
+        a.arguments = b.arguments = {two};
+        auto required = named(project, "m::I::choose").id;
+        auto left = types.dispatch(a, required, {two}, {});
+        auto right = types.dispatch(b, required, {two}, {});
+        require(left && right &&
+                    left->declaration.index ==
+                        named(project, "m::A::choose").id.index &&
+                    right->declaration.index ==
+                        named(project, "m::B::choose").id.index &&
+                    left->arguments == std::vector<Type>{two},
+                "dispatch confused two implementation instances");
+        Type projection(Type::Kind::Field, "m::I::Scalar");
+        projection.symbolic = true;
+        projection.arguments.push_back(a);
+        auto scalarA = types.substitute(projection, {}, {});
+        projection.arguments.front() = b;
+        auto scalarB = types.substitute(projection, {}, {});
+        require(
+            scalarA && scalarB && scalarA->domain == "koala-bear" &&
+                scalarB->domain == "baby-bear",
+            "associated substitution lost the required declaration identity");
+        for (const auto &module : {a, b}) {
+          zkc::language::detail::TypeInference inference(types);
+          auto variable = inference.fresh({});
+          Type parameter(Type::Kind::Module, "C");
+          parameter.symbolic = true;
+          projection.arguments = {parameter};
+          auto result =
+              inference.instantiate(projection, {{"C", variable}}, {});
+          require(inference.equal(variable, inference.known(module, {}), {}) &&
+                      inference.solve({}),
+                  "deferred associated dispatch did not solve");
+          auto actual = inference.get(result, {});
+          require(actual && *actual == (module == a ? *scalarA : *scalarB),
+                  "inference discarded the required associated member");
+        }
+        // A concrete target with a retained module annotation must stay
+        // concrete.
+        auto concrete =
+            types.dispatch(b, left->declaration, left->arguments, {});
+        require(concrete &&
+                    concrete->declaration.index == left->declaration.index,
+                "concrete implementation was dispatched a second time");
+        Type three(Type::Kind::Natural);
+        three.dimension = Natural::constant(3);
+        require(!types.dispatch(a, required, {three}, {}),
+                "dispatch accepted a different interface instance");
+      });
+  for (unsigned mutation = 0; mutation < 22; ++mutation)
+    cases.run(
+        "independent conformance witness mutation " + Twine(mutation), [&] {
+          auto project = take(check(contracts));
+          if (auto error = checkScopedElaboration(project))
+            throw std::runtime_error(toString(std::move(error)));
+          auto &a = const_cast<Declaration &>(named(project, "m::A"));
+          auto &b = const_cast<Declaration &>(named(project, "m::B"));
+          auto &required =
+              const_cast<Declaration &>(named(project, "m::I::choose"));
+          auto &provided =
+              const_cast<Declaration &>(named(project, "m::A::choose"));
+          switch (mutation) {
+          case 0:
+            a.conformance.clear();
+            break;
+          case 1:
+            a.conformance.push_back(a.conformance.front());
+            break;
+          case 2:
+            std::swap(a.conformance[0], a.conformance[1]);
+            break;
+          case 3:
+            a.conformance[1].provided = b.conformance[1].provided;
+            break;
+          case 4:
+            a.conformance[1].required = b.id;
+            break;
+          case 5:
+            a.conformance[1].provided = a.conformance[0].provided;
+            break;
+          case 6:
+            a.conformance[1].provided = DeclarationId{UINT32_MAX};
+            break;
+          case 7:
+            provided.parent = b.id;
+            break;
+          case 8:
+            provided.module = b.id;
+            break;
+          case 9:
+            provided.kind = Declaration::Kind::Local;
+            break;
+          case 10:
+            provided.outputs.front().type = Type(Type::Kind::Index);
+            break;
+          case 11:
+            required.outputs.front().type = provided.outputs.front().type =
+                Type(Type::Kind::Index);
+            break;
+          case 12:
+            const_cast<Declaration &>(named(project, "m::A::Scalar"))
+                .associatedSort = "Group";
+            break;
+          case 13:
+            const_cast<Declaration &>(named(project, "m::A::rows"))
+                .domainResult = Type{};
+            break;
+          case 14:
+            const_cast<Declaration &>(named(project, "m::A::run"))
+                .scopedInputs.front()
+                .signature.allowance.mayStop = true;
+            break;
+          case 15:
+            a.implementation.reset();
+            break;
+          case 16:
+            a.implementation->arguments.front().dimension =
+                Natural::constant(3);
+            break;
+          case 17:
+            provided.conformance = a.conformance;
+            break;
+          case 18:
+            a.members.push_back(provided.id);
+            break;
+          case 19:
+            provided.name = "forged";
+            break;
+          case 20:
+            const_cast<Declaration &>(named(project, "m::Flag")).domain =
+                Type(Type::Kind::Index);
+            for (const auto &declaration : project.declarations())
+              if (declaration.name == "choose") {
+                auto &changed = const_cast<Declaration &>(declaration);
+                for (auto &input : changed.inputs)
+                  input.type = Type(Type::Kind::Index);
+                changed.outputs.front().type = Type(Type::Kind::Index);
+              }
+            break;
+          case 21:
+            const_cast<Declaration &>(named(project, "m::Fr")).domain =
+                named(project, "m::Fq").domain;
+            const_cast<Declaration &>(named(project, "m::A::Scalar")).domain =
+                named(project, "m::Fq").domain;
+            break;
+          }
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "conformance mutation was accepted");
+          require(namesIdentifier(toString(std::move(error)),
+                                  "source.scoped-witness"),
+                  "conformance mutation did not name its witness refusal");
+        });
   return cases.result();
 }

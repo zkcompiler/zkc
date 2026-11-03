@@ -62,9 +62,11 @@ bool Checker::constructionCodec(Declaration &decl,
   if (provider->kind != Type::Kind::Module)
     return types.fail("source.construction", "record format requires a module",
                       syntax.codec->span);
-  if (!constructionMember(decl, *provider, "Record", syntax.codec->span))
+  auto member =
+      constructionMember(decl, *provider, "Record", syntax.codec->span);
+  if (!member)
     return false;
-  auto record = types.associated(*provider, "Record", syntax.codec->span);
+  auto record = types.associated(*provider, *member, syntax.codec->span);
   if (!record || !types.executableType(*record, syntax.codec->span))
     return false;
   auto permissions = types.permissions(*record, decl.span, &decl);

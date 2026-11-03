@@ -316,7 +316,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       for (const auto &parameter : parent.parameters)
         base.arguments.push_back(parameterType(parameter));
     }
-    return types.associated(base, decl.name, s.span);
+    return types.associated(base, decl.id, s.span);
   }
   auto args = arguments(context, decl, s.arguments, s.span, s.labels);
   if (!args)

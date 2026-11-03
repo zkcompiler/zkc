@@ -3,8 +3,9 @@
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::moduleContracts() {
-  // Interface membership determines the public contract before imports are
-  // authorized. Full type/effect conformance follows signature formation.
+  // Select direct members once, before lazy signatures or dependent bodies can
+  // dispatch. These provisional edges cannot publish a CheckedProject: full
+  // conformance and independent source checking must still succeed.
   for (auto id : moduleIds) {
     auto &module = output.declarations[id.index];
     auto &written = *sources[id.index];
@@ -25,10 +26,16 @@ bool Checker::moduleContracts() {
       const auto &member = output.declarations[required.index];
       auto found = visible[id.index].find(member.name);
       if (found == visible[id.index].end())
-        continue; // The conformance checker reports missing members.
+        return types.fail("source.conformance", "module member missing",
+                          module.span);
       auto &provided = output.declarations[found->second.target.index];
-      if (!provided.parent || provided.parent->index != id.index)
-        continue; // Imports do not implement an authored interface member.
+      if (!provided.parent || provided.parent->index != id.index ||
+          provided.kind != member.kind)
+        return types.fail(
+            "source.conformance",
+            "implementation requires a direct member of the same kind",
+            module.span);
+      module.conformance.push_back({required, provided.id});
       provided.isPublic = true;
       found->second.isPublic = true;
     }

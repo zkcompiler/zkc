@@ -242,21 +242,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         return true;
       if (!closeType(*module, bindings, span))
         return false;
-      const auto *owner = types.typeDeclaration(*module);
-      if (!owner || owner->kind != Declaration::Kind::Module)
-        return types.fail("source.conformance",
-                          "static dispatch did not select a module", span);
-      if (!types.charge(owner->members.size(), span))
+      auto selected = types.dispatch(module, target, arguments, span);
+      if (!selected)
         return false;
-      const auto name = declarations[target.index].name;
-      auto found = llvm::find_if(owner->members, [&](auto id) {
-        return declarations[id.index].name == name;
-      });
-      if (found == owner->members.end())
-        return types.fail("source.conformance",
-                          "static dispatch member missing", span);
-      target = *found;
-      arguments = module->arguments;
+      target = selected->declaration;
+      arguments = std::move(selected->arguments);
       return true;
     };
     auto callableSubstitution = [&](const Declaration &source,

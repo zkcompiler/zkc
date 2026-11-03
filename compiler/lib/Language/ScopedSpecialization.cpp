@@ -360,17 +360,11 @@ class SpecializationCheck {
           auto module = type(*call->module, subst, op.span);
           if (!module)
             return false;
-          const auto *definition = types.typeDeclaration(*module);
-          if (!definition || definition->kind != Declaration::Kind::Module ||
-              !types.charge(definition->members.size(), op.span))
-            return refuse(op.span, "finite module selection differs");
-          auto member = llvm::find_if(definition->members, [&](auto id) {
-            return source[id.index].name == source[target.index].name;
-          });
-          if (member == definition->members.end())
-            return refuse(op.span, "finite module member differs");
-          target = *member;
-          *statics = module->arguments;
+          auto selected = types.dispatch(*module, target, *statics, op.span);
+          if (!selected)
+            return false;
+          target = selected->declaration;
+          *statics = std::move(selected->arguments);
         }
         const auto &definition = source[target.index];
         if (definition.kind != Declaration::Kind::Math || definition.abstract ||
@@ -482,21 +476,12 @@ class SpecializationCheck {
                   auto module = type(*action.module, subst, op.span);
                   if (!module || *module != *value.module)
                     return false;
-                  auto *definition = types.typeDeclaration(*module);
-                  if (!definition ||
-                      definition->kind != Declaration::Kind::Module)
+                  auto selected =
+                      types.dispatch(*module, target, *statics, op.span);
+                  if (!selected)
                     return false;
-                  bool found = false;
-                  for (auto member : definition->members)
-                    if (source[member.index].name ==
-                        source[target.index].name) {
-                      target = member;
-                      *statics = module->arguments;
-                      found = true;
-                      break;
-                    }
-                  if (!found)
-                    return false;
+                  target = selected->declaration;
+                  *statics = std::move(selected->arguments);
                 }
               }
               if constexpr (std::is_same_v<T, HelperCall>) {
@@ -876,18 +861,14 @@ class SpecializationCheck {
       auto target = x.declaration;
       if (x.module) {
         auto bound = type(*x.module, subst, actual.span);
-        auto *owner = bound ? types.typeDeclaration(*bound) : nullptr;
-        if (!owner || owner->kind != Declaration::Kind::Module ||
-            !types.charge(owner->members.size(), actual.span))
+        if (!bound)
           return false;
-        auto found = llvm::find_if(owner->members, [&](DeclarationId member) {
-          return source[member.index].name == source[target.index].name;
-        });
-        if (found == owner->members.end() ||
-            ArrayRef<Type>(bound->arguments) != closedArgs)
+        auto dispatched =
+            types.dispatch(*bound, target, *selected, actual.span);
+        if (!dispatched)
           return false;
-        target = *found;
-        *selected = bound->arguments;
+        target = dispatched->declaration;
+        *selected = std::move(dispatched->arguments);
       }
       if (ArrayRef<Type>(*selected) != closedArgs)
         return false;

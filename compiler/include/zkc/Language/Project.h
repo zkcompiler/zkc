@@ -940,6 +940,12 @@ struct Declaration {
   std::vector<DeclarationId> members;
   std::optional<DeclarationId> parent;
   std::optional<Type> implementation;
+  struct ConformanceEdge {
+    DeclarationId required, provided;
+  };
+  /// Direct implementation edges, in interface member order. The owning
+  /// module and its implementation instance supply the substitution context.
+  std::vector<ConformanceEdge> conformance;
   std::optional<EffectSummary> effectAllowance;
   bool abstract = false;
   std::optional<PrimitiveDefinition> primitive;

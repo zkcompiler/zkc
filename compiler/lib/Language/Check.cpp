@@ -13,14 +13,31 @@ Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
     : output(output), work(work),
       types(output.declarations, output.assets, work,
             [this](DeclarationId id) { return signature(id); }),
-      syntax(std::move(syntax)) {}
+      syntax(std::move(syntax)) {
+  types.completeDispatchBody = [this](DeclarationId id,
+                                      unsigned enclosingCalls) {
+    auto caller = activeBody;
+    if (enclosingCalls >= this->work.limits.callDepth ||
+        activeBodyDepth >= this->work.limits.callDepth - enclosingCalls)
+      return types.fail("source.limit", "dispatched helper call depth exceeded",
+                        this->output.declarations[id.index].span);
+    if (!body(id, activeBodyDepth + enclosingCalls + 1))
+      return false;
+    if (caller)
+      bodyHeights[caller->index] =
+          std::max(bodyHeights[caller->index],
+                   bodyHeights[id.index] + enclosingCalls + 1);
+    return true;
+  };
+}
 Checker::Checker(CheckedStorage &output, Work &work,
-                 const NameEnvironment &names)
+                 const NameEnvironment &names, bool external)
     : Checker({}, output, work) {
   modules = names.modules;
   visible = names.visible;
   signatureState.assign(output.declarations.size(), 2);
-  externalSelection = true;
+  externalSelection = external;
+  types.completeDispatchBody = {};
   for (const auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Module &&
         (*output.sources)[decl.span.source.index].origin ==
@@ -30,6 +47,98 @@ Checker::Checker(CheckedStorage &output, Work &work,
       for (const auto &[name, binding] : visible[decl.id.index])
         externalNames[name].insert(binding.target.index);
     }
+}
+bool Checker::prepareSignatureReconstruction(DeclarationId id,
+                                             const SyntaxDeclaration &source) {
+  auto &decl = output.declarations[id.index];
+  if (!chargeStaticSignature(decl))
+    return false;
+  // Keep IDs, namespaces and immutable bodies for semantic queries. Rebuild
+  // the whole signature from authored syntax, including inherited contracts.
+  decl.kind = source.kind;
+  decl.parameters.clear();
+  decl.bounds.clear();
+  decl.permissionBounds.clear();
+  decl.capabilityBounds.clear();
+  decl.dataPreconditions.clear();
+  decl.inputs.clear();
+  decl.outputs.clear();
+  decl.scopedInputs.clear();
+  decl.domainInputs.clear();
+  decl.domainResult.reset();
+  decl.services.clear();
+  decl.fields.clear();
+  decl.alternatives.clear();
+  decl.placement.reset();
+  decl.permissions = source.permissions;
+  decl.resource = source.resource;
+  decl.sealed = source.sealed;
+  decl.associatedSort = source.associatedSort;
+  decl.abstract = source.abstract;
+  decl.logical = source.logical || (source.kind == Declaration::Kind::Record &&
+                                    !source.roles.empty());
+  decl.effectAllowance =
+      source.effects
+          ? std::optional<EffectSummary>(EffectSummary{*source.effects})
+          : std::nullopt;
+  decl.inputOrder = source.inputOrder;
+  decl.implementation.reset();
+  if (decl.kind == Declaration::Kind::Associated ||
+      decl.kind == Declaration::Kind::Alias)
+    decl.domain = {};
+  if (decl.kind == Declaration::Kind::Domain) {
+    // Domain identities originate in authored headers, too. A mutable alias
+    // or installed-domain name cannot become the witness's type authority.
+    if (source.assetDomain) {
+      auto asset = llvm::find_if(output.assets, [&](const Asset &asset) {
+        return asset.name() == source.domain;
+      });
+      if (asset == output.assets.end())
+        return types.fail("source.scoped-witness", "missing authored asset",
+                          source.span);
+      decl.domain = assetType(source.target == "ring" ? "Ring" : "Bundle",
+                              asset->identity());
+    } else {
+      auto sorts = protocol::domainSorts();
+      auto sort = llvm::find_if(sorts, [&](const std::string &sort) {
+        return StringRef(sort).lower() == source.target;
+      });
+      if (sort == sorts.end() ||
+          protocol::installedDomains().identitySort(source.domain) != *sort)
+        return types.fail("source.scoped-witness", "invalid authored domain",
+                          source.span);
+      decl.domain = domainType(*sort, source.domain);
+    }
+  }
+  auto &written = reconstructedSources[id.index];
+  // Body trees and nested declarations are not part of a signature replay.
+  written.kind = source.kind;
+  written.name = source.name;
+  written.span = source.span;
+  written.roles = source.roles;
+  written.fields = source.fields;
+  written.alternatives = source.alternatives;
+  written.oracleShapes = source.oracleShapes;
+  written.parameters = source.parameters;
+  written.requirements = source.requirements;
+  written.inputs = source.inputs;
+  written.outputs = source.outputs;
+  written.scopedInputs = source.scopedInputs;
+  written.domainInputs = source.domainInputs;
+  written.domainResult = source.domainResult;
+  written.services = source.services;
+  written.effects = source.effects;
+  written.effectDependencies = source.effectDependencies;
+  written.definition = source.definition;
+  written.associatedSort = source.associatedSort;
+  written.permissions = source.permissions;
+  written.resource = source.resource;
+  written.sealed = source.sealed;
+  written.abstract = source.abstract;
+  sources.resize(output.declarations.size());
+  sources[id.index] = &written;
+  signatureState[id.index] = 0;
+  return true;
 }
 Error Checker::run() {
   Work::Scope phase(work, SourceWorkPhase::Declarations);

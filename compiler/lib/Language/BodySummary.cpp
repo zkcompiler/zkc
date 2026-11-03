@@ -417,19 +417,16 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
             return {};
           arguments.push_back(*value);
         }
-        if (call->module && !known.origin) {
+        if (call->module) {
           auto module = types.substitute(*call->module, statics, op.span);
           if (!module)
             return {};
-          auto *definition = types.typeDeclaration(*module);
-          if (definition && definition->kind == Declaration::Kind::Module)
-            for (auto member : definition->members)
-              if (declarations[member.index].name ==
-                  declarations[target.index].name) {
-                target = member;
-                arguments = module->arguments;
-                break;
-              }
+          auto selected =
+              types.dispatch(*module, target, arguments, op.span, depth);
+          if (!selected)
+            return {};
+          target = selected->declaration;
+          arguments = std::move(selected->arguments);
         }
         const auto &callee = declarations[target.index];
         if (callee.body && callee.kind == Declaration::Kind::Math) {

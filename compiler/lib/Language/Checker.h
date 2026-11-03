@@ -30,7 +30,8 @@ class Checker {
 public:
   Checker(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
   /// Static selection over completed signatures and frozen source namespaces.
-  Checker(CheckedStorage &, Work &, const NameEnvironment &);
+  Checker(CheckedStorage &, Work &, const NameEnvironment &,
+          bool external = true);
   // Lazy signature completion captures this driver; keep its address stable.
   Checker(const Checker &) = delete;
   Checker &operator=(const Checker &) = delete;
@@ -41,6 +42,10 @@ public:
   bool namesReady = false;
   bool indexDeclarations();
   bool checkInstalledSignatures();
+  /// Prepare lazy authored-signature replay in a private witness snapshot.
+  /// Dependencies use the same signature cycle checks; bodies are not checked.
+  bool prepareSignatureReconstruction(DeclarationId, const SyntaxDeclaration &);
+  bool reconstructSignature(DeclarationId id) { return signature(id); }
   CheckedStorage &output;
   Work &work;
   Semantics types;
@@ -144,6 +149,7 @@ private:
                                     unsigned, bool allowPlacement);
   std::vector<SyntaxDeclaration> syntax;
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
+  std::map<unsigned, SyntaxDeclaration> reconstructedSources;
   std::map<std::string, DeclarationId> modules;
   std::vector<DeclarationId> moduleIds;
   using ScopeBinding = SourceBinding;
@@ -178,6 +184,8 @@ private:
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;
   unsigned signatureDepth = 0;
+  std::optional<DeclarationId> activeBody;
+  unsigned activeBodyDepth = 0;
   bool representations();
   bool chargeStaticSignature(const Declaration &);
   struct DeferredApplication {
