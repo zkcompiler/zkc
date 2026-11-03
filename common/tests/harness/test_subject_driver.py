@@ -420,3 +420,41 @@ def test_native_mutations_require_the_exact_primary_diagnostic(
     else:
         with pytest.raises(CheckFailed, match="native-refusal"):
             driver.native_refusals(subject, {"candidate": "original", "exported": []}, record)
+
+
+@pytest.mark.parametrize("library", [None, "Example.Connections.sourceLibrary"])
+def test_fresh_connection_and_mutations_use_the_same_library(driver_module, tmp_path, monkeypatch, library):
+    driver, _ = recording(driver_module, tmp_path)
+    configuration = {("construction", "library"): library,
+                     ("construction", "library_module"): "Example.Connections" if library else None}
+    subject = SimpleNamespace(
+        name="example", construction_namespace="Example",
+        get=lambda table, key, default=None: configuration.get((table, key), default),
+        module_name=lambda key: "Example." + key)
+    kind = SimpleNamespace(stage="connection", property="schedule", expected="refused",
+                           construction_accepts=False, refusing_rule="alignment-")
+    monkeypatch.setattr(driver_module.mutations, "kinds_for",
+                        lambda _: [("changed-schedule", kind, lambda _: [["mutation"]])])
+    monkeypatch.setattr(driver_module.structured, "render", lambda *_: "original")
+    monkeypatch.setattr(driver_module.constructed, "render", lambda _, namespace: namespace)
+    emitted = []
+
+    class Captured(Exception):
+        pass
+
+    def capture(_subject, name, source):
+        assert name == "FreshExport.lean"
+        emitted.append(source)
+        raise Captured
+
+    monkeypatch.setattr(driver, "lean", capture)
+    with pytest.raises(Captured):
+        driver.construction_rule(subject, {"exported": [None] * 7 + [[]], "original": []}, {})
+    source, = emitted
+    method = "derive_source_connection" + (f" with_library {library}" if library else "")
+    assert source.count(method + "\n") == 2
+    assert ("import Example.Connections\n" in source) == bool(library)
+    assert "set_option Elab.async false" in source
+    assert "freshImported.program Example.context .validator Fresh.Actual.participant" in source
+    assert "freshImported.program Example.context .validator Fresh.Mutation0.participant" in source
+    assert 'expect_connection_refusal "mutation 0" because "alignment-"' in source

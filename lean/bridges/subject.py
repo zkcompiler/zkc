@@ -253,14 +253,20 @@ class Driver(Runner):
     def construction_rule(self, subject, artifacts, record):
         """Structural admission and checked source connections on fresh exports.
 
-        Negative connection cases test the default proof method. They do not
-        claim that every refused candidate is semantically inequivalent.
+        Negative connection cases test the same proof method and library as the
+        valid connection. They do not claim that every refused candidate is
+        semantically inequivalent.
         """
         exported, original = artifacts["exported"], artifacts["original"]
         rule = subject.get("construction", "rule", "compiled")
         glue_module = subject.module_name("glue")
         glue_namespace = subject.construction_namespace
         data = subject.module_name("data")
+        library = subject.get("construction", "library")
+        library_module = subject.get("construction", "library_module")
+        connection_method = "derive_source_connection"
+        if library:
+            connection_method += f" with_library {library}"
         kinds = [item for item in mutations.kinds_for(subject.get("mutations", "kinds", []))
                  if item[1].stage in {"construction", "connection"}]
 
@@ -269,12 +275,16 @@ class Driver(Runner):
                 if mutations.bound(item, mutations.OBSERVE) or mutations.bound(item, mutations.CHALLENGE):
                     yield list(encode_tree(mutations.template_tree(item)))
 
-        parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
+        imports = [f"import {glue_module}"]
+        if library_module:
+            imports.append(f"import {library_module}")
+        parts = [*imports, "import Zkc.Construction.Encoding",
                  "import Zkc.Construction.CatalogueAdmission",
                  "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
                  "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm",
                  "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
                  "set_option linter.unusedTactic false",
+                 "set_option Elab.async false",
                  strip_header(structured.render(original, "Fresh.Original")),
                  strip_header(constructed.render(exported, "Fresh.Actual")),
                  "/-- Whether a check refuses with a code of the given rule. -/\n"
@@ -301,7 +311,7 @@ class Driver(Runner):
                        "selection.check freshImported Fresh.Actual.participant) = true := by decide +kernel",
                        "theorem actual_connected : Zkc.Construction.ConnectionAdmission.Required "
                        f"freshImported.program {glue_namespace}.context .validator Fresh.Actual.participant := by\n"
-                       "  derive_source_connection",
+                       f"  {connection_method}",
                        "#print axioms actual_connected"]
         else:
             proofs.append("theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
@@ -331,12 +341,12 @@ class Driver(Runner):
                                   "= .ok () := by decide +kernel")
                 if kind.stage == "connection":
                     proofs.append(
-                        f"/-- {name}: refusal of the default method, not an attack theorem. -/\n"
+                        f"/-- {name}: refusal of the selected method, not an attack theorem. -/\n"
                         "example : True := by\n"
                         f'  expect_connection_refusal "mutation {index}" because "{kind.refusing_rule}"\n'
                         "    have rejected : Zkc.Construction.ConnectionAdmission.Required "
                         f"freshImported.program {glue_namespace}.context .validator {namespace}.participant := by\n"
-                        "      derive_source_connection\n  trivial")
+                        f"      {connection_method}\n  trivial")
                     sites.append(dict(site=len(sites), applicable=True, control=f"mutation {index}", index=index,
                                       refusing_rule=kind.refusing_rule, construction_accepts=kind.construction_accepts,
                                       evidence="builder-refusal"))
@@ -373,7 +383,8 @@ class Driver(Runner):
                        result.stdout[-400:])
             connection_axioms = printed_axioms(result.stdout).get("actual_connected")
             record["kernel"]["source_connection"] = dict(file="FreshExport.lean", accepted=True,
-                                                         axioms=connection_axioms)
+                                                         axioms=connection_axioms, library=library,
+                                                         library_module=library_module)
             record_accepted(record, "source-connection", axioms=connection_axioms)
         if rule == "compiled":
             record_accepted(record, "selection")

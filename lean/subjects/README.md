@@ -184,6 +184,7 @@ public exposure used by the installed generated modules.
 |---|---|---|
 | `construction` | `namespace` | declaration namespace of generated admission metadata (default: its module name) |
 | `construction` | `connection` | maintained source-correspondence module, required for generated source claims and distinct from generated metadata |
+| `construction` | `library`, `library_module` | optional checked `ConnectionLibrary.Bundle` and its importing module, supplied together for the compiled profile; the valid connection and every connection mutation use this same explicit library |
 | `construction` | `admission` | how the glue admits the original: `views` (default: from the printed Bodies, which `generated.bodies` must name) or `external` (an existing Views module) |
 | `construction` | `views` | the Views module for `external` admission |
 | `construction` | `inputs` | `values` (default) or `payloads`: the form of the generated `inputs` |
@@ -209,3 +210,11 @@ and their expected refusals are listed by `python3 lean/bridges/subject.py
 ## Files
 
 - `fixtures/`: sources of subjects that exist only as verification fixtures.
+
+An explicit construction library reuses kernel-checked callee proofs for the
+fresh source. Lean checks its source type and each application; a missing or
+mismatched library fails the check without falling back to rediscovery. The
+fresh participant, connection statement, mutation sites, refusal reasons and
+axiom policy are unchanged. This is physical proof reuse, separate from the
+`lean.library` that resolves source claim requests. The fresh connection checks
+run synchronously so a slow or failed control is attributed to its own proof.

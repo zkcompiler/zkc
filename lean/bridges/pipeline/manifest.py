@@ -66,6 +66,7 @@ FIELDS = {
     # Optional extensions (lean/subjects/README.md).
     "construction": {"namespace": STRING, "connection": STRING, "admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
                      "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING,
+                     "library": STRING, "library_module": STRING,
                      "omit": STRINGS},
     "bodies": {"entry": STRING, "interactive_entry": STRING, "closed": BOOLEAN, "owners": TABLE},
     "interactive": {"views_doc": STRING},
@@ -225,10 +226,17 @@ def load(path):
     namespace = subject.get("lean", "namespace")
     require(namespace is None or __import__("re").fullmatch(NAMESPACE, namespace) is not None,
             f"{path}: lean.namespace must be a Lean namespace")
-    for key in ("namespace", "connection"):
+    for key in ("namespace", "connection", "library", "library_module"):
         value = subject.get("construction", key)
         require(value is None or __import__("re").fullmatch(NAMESPACE, value) is not None,
                 f"{path}: construction.{key} must be a Lean name")
+    connection_library = subject.get("construction", "library")
+    connection_library_module = subject.get("construction", "library_module")
+    require((connection_library is None) == (connection_library_module is None),
+            f"{path}: construction.library and construction.library_module must be supplied together")
+    require(connection_library is None or
+            (subject.profile("construction") and subject.get("construction", "rule", "compiled") == "compiled"),
+            f"{path}: construction.library requires the compiled construction profile")
     connection = subject.get("construction", "connection")
     require(not subject.generated("claims") or connection,
             f"{path}: generated.claims requires a maintained construction.connection module")

@@ -213,3 +213,19 @@ def test_generated_views_requires_bodies():
     with pytest.raises(loader.Refused, match="requires generated.bodies"):
         loader._validate({"schema": loader.SCHEMA, "name": "test",
                           "generated": {"views": "lean/ZkcExamples/Views.lean"}}, "test.toml")
+
+
+@pytest.mark.parametrize("replacement,diagnostic", [
+    ('', 'must be supplied together'),
+    ('library = "bad-name"', 'must be a Lean name'),
+    ('library = "Example.bundle"\nrule = "construction"', 'requires the compiled construction profile'),
+])
+def test_explicit_connection_library_is_checked(tmp_path, replacement, diagnostic):
+    loader = manifests()
+    subject = loader.load_all(["gkr"])[0]
+    source = subject.path.read_text().replace(
+        'library = "ZkcExamples.Structured.Generated.Connections.Gkr.sourceLibrary"', replacement)
+    path = tmp_path / "gkr.toml"
+    path.write_text(source)
+    with pytest.raises(loader.Refused, match=diagnostic):
+        loader.load(path)
