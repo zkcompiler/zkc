@@ -1953,6 +1953,66 @@ Nested placement validation, role remapping and alias generation use the current
 remaining allowance and debit performed work on both success and refusal.
 Semantic native-layout and port observations reconcile their bounded work before
 the enclosing query continues, including failed observations.
+
+Source checking and closure retain diagnostic work observations. A `WorkLedger`
+records the existing charged total and exclusive `SourceWorkPhase` counters;
+their sum equals the total. A charge belongs only to the innermost active scope,
+which restores its predecessor on exit. Rejected charges and cancellation add
+nothing. This observation introduces no charges, allowances or admission rules.
+Nested semantic layout work is reconciled once into the caller's active phase,
+including partial work before a refusal; it does not create an extra debit of
+the enclosing allowance. A work-budget refusal keeps `source.limit` and names
+the active subphase in its diagnostic message. Other structural/depth limits
+keep their own diagnostics.
+
+Checking distinguishes parsing (both header and body parsing), installed
+declarations, written retention, declaration preparation (collection, imports,
+index, notation and predicate preparation), signatures, conformance,
+representations, permissions, bodies, common inputs, constructions/Entries/claims,
+retained views, scoped sources and source authorities. Retained views include
+the editor snapshot copied after checking or recovery. Closure distinguishes
+specialization, assets, closed data, common inputs and Host children. These are
+execution scopes: recursive work requested within a scope lands there, rather
+than being relabelled by the helper it calls. `unscoped` is always exposed; it
+is zero for completed checking and closure, not an omitted residual bucket.
+
+The complete diagnostic phase names are `unscoped`, `parsing`,
+`installed_declarations`, `written_retention`, `declarations`, `signatures`,
+`conformance`, `representations`, `permissions`, `bodies`, `common_inputs`,
+`entries_and_claims`, `retained_views`, `scoped_sources`, `source_authorities`,
+`entry_selection`, `specialization`, `assets`, `closed_data`, `host_children`,
+`scoped_elaboration` and `scoped_specialization`.
+
+`Analysis::workObservation()` includes performed work even after refusal;
+`CheckedProject::workObservation().charged.total` equals `checkedWork()`.
+`ClosedEntry::workObservation().charged.total` equals `closedWork()`, the
+existing closure charge total. Closure also retains `separateBudgets` for each
+independently bounded scoped-elaboration check, scoped-specialization check and
+generic Entry selector. Repeated checks remain separate in execution order;
+their work is not added to the original closure total or its allowance. Scoped
+specialization performs another scoped-elaboration check, which is retained
+separately. These optional observations do not skip or memoize checks.
+Each Host child retains its own observation. The parent's existing aggregate
+charge for that child's primary closure total belongs to `host_children`, along
+with invocation traversal. Child subphase counters and independent checks are
+not merged into the parent's ledger. Summing parent and child primary totals
+would therefore count the existing child charge twice.
+
+The source driver publishes `source_work` in untruncated
+`zkc.compilation-observation/0` records,
+for both observations and diagnostics. Its fields are `check` (observation or
+null), `check_completed` (Boolean), and `closure` (completed observation or null).
+An observation has `charged` and `separate_budgets`; each ledger has `total`
+and `subphases`, an object containing every phase name from the public
+`sourceWorkPhaseName` API, including zero counters. A separate-budget item has
+`phase` and `work` (its ledger). A closure also has `entry` and `children`, an
+array of child closure observations. Unavailable checking or closure data is
+null, never a synthesized zero ledger. A failed closure has no published closure
+observation; completed checking remains available. Capture and later layout,
+emission, comparison or publication queries are outside this observation's
+scope. Observations grant no evidence, source authority, admission or formal
+support, and are not part of source/artifact identity.
+
 The capture-wide specification inventory has a separate phase budget from
 per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.

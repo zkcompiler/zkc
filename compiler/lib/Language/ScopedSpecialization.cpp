@@ -1301,13 +1301,18 @@ public:
 } // namespace
 } // namespace zkc::language::detail
 namespace zkc::language {
-llvm::Error checkScopedSpecialization(const ClosedEntry &entry,
-                                      const Limits &limits) {
+llvm::Error
+checkScopedSpecialization(const ClosedEntry &entry, const Limits &limits,
+                          std::vector<SourceWorkBudget> *observations) {
   if (auto error = checkLimits(limits))
     return error;
-  if (auto error = checkScopedElaboration(entry.project(), limits))
+  if (auto error =
+          checkScopedElaboration(entry.project(), limits, observations))
     return error;
   detail::Work work{limits};
+  detail::Work::Scope phase(work, SourceWorkPhase::ScopedSpecialization);
+  detail::Work::Record record(work, SourceWorkPhase::ScopedSpecialization,
+                              observations);
   return detail::SpecializationCheck(entry, work).run();
 }
 } // namespace zkc::language

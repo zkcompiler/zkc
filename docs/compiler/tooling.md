@@ -83,6 +83,14 @@ zkc run Main --report=build/run-observation
 The report directory must be fresh. `command.json` retains the operation result;
 `compilation.json` contains phase operation counts, operation histograms, bounded
 location/binding/type metadata, inclusive pass times, and mathematical decisions.
+The source driver's diagnostic `source_work` reports exclusive checking and
+closure work counters, independently bounded scoped checks and selectors, and
+Host child observations. These are charged work units, not elapsed times. Child
+primary totals are already charged to the parent's `host_children` counter;
+independent checks retain separate allowances. See the
+[work observation contract](../spec/language/definitions.md#bounds-and-scope)
+for the exact fields, null/unavailable cases and query scope. These observations
+grant no admission or verification evidence.
 Requested phase dumps are separate `.mlir` files with ordinal prefixes. The
 `entry` phase describes application control; nested calculations and child
 deployments retain their own phases. Numerical calculations report `execution`

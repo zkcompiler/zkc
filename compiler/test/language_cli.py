@@ -46,6 +46,56 @@ with case('diagnostic source indices include both installed catalog modules'):
     assert [s['path'] for s in sources[-2:]] == ['<installation>/catalog/zkc::prelude',
                                                '<installation>/catalog/zkc::records']
 
+def exact_source_work(observation):
+    charged = observation['charged']
+    assert charged['total'] == sum(charged['subphases'].values()), charged
+    assert charged['subphases']['unscoped'] == 0, charged
+    for budget in observation['separate_budgets']:
+        work = budget['work']
+        assert work['total'] == sum(work['subphases'].values()), budget
+        assert work['subphases'][budget['phase']] == work['total'], budget
+        assert work['subphases']['unscoped'] == 0, budget
+    for child in observation.get('children', []):
+        exact_source_work(child)
+
+
+with case('source work observes completed checking and Host child closure'):
+    report = OUT / 'source-work.json'
+    checked = commands.run([compiler, 'language-check', *options,
+                            f'--observations={report}'])
+    assert checked == commands.run([compiler, 'language-check', *options])
+    record = json.loads(report.read_text())
+    work = record['source_work']
+    assert record['completed'] and work['check_completed']
+    exact_source_work(work['check'])
+    exact_source_work(work['closure'])
+    assert work['check']['charged']['subphases']['bodies'] > 0
+    assert work['closure']['separate_budgets']
+    children = work['closure']['children']
+    assert len(children) == 1
+    assert work['closure']['charged']['subphases']['host_children'] >= sum(
+        child['charged']['total'] for child in children)
+
+with case('source work distinguishes missing closure and failed checking'):
+    definitions = OUT / 'source-work-definitions.json'
+    commands.run([compiler, 'language-check', '--source-format=zkc', *modules,
+                  f'--diagnostics={definitions}'])
+    work = json.loads(definitions.read_text())['source_work']
+    assert work['check_completed'] and work['closure'] is None
+    exact_source_work(work['check'])
+    invalid = OUT / 'source-work-invalid.zkc'
+    invalid.write_text('module invalid; protocol Bad roles(P)()->bool@P{return missing;}')
+    report = OUT / 'source-work-refusal.json'
+    commands.run([compiler, 'language-check', '--source-format=zkc',
+                  f'--module=invalid={invalid}', f'--diagnostics={report}'],
+                 refuses='source.name')
+    record = json.loads(report.read_text())
+    assert not record['completed']
+    work = record['source_work']
+    assert not work['check_completed'] and work['closure'] is None
+    exact_source_work(work['check'])
+    assert work['check']['charged']['total'] > 0
+
 with case('structured diagnostics carry a refusal code apart from its detail'):
     observation = OUT / 'option-refusal.json'
     commands.run([compiler, 'language-check', f'--diagnostics={observation}', *options,

@@ -12,6 +12,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/SHA256.h"
 #include <algorithm>
 
@@ -148,8 +149,12 @@ Error Work::charge(uint64_t amount, std::optional<Span> span) {
   if (cancellation && cancellation->cancelled())
     return failure("source.cancelled", "source analysis cancelled", span);
   if (amount > remaining())
-    return failure("source.limit", "checked work limit exceeded", span);
+    return failure(
+        "source.limit",
+        "checked work limit exceeded in " + sourceWorkPhaseName(phase), span);
   used += amount;
+  ledger.total += amount;
+  ledger.phases[static_cast<size_t>(phase)] += amount;
   if (allowance)
     *allowance -= amount;
   return Error::success();
@@ -315,7 +320,68 @@ uint64_t CheckedProject::checkedNotationDescriptors() const {
 uint64_t CheckedProject::checkedNotationHoles() const {
   return storage->notationHoles;
 }
+StringRef sourceWorkPhaseName(SourceWorkPhase phase) {
+  switch (phase) {
+  case SourceWorkPhase::Unscoped:
+    return "unscoped";
+  case SourceWorkPhase::Parsing:
+    return "parsing";
+  case SourceWorkPhase::InstalledDeclarations:
+    return "installed_declarations";
+  case SourceWorkPhase::WrittenRetention:
+    return "written_retention";
+  case SourceWorkPhase::Declarations:
+    return "declarations";
+  case SourceWorkPhase::Signatures:
+    return "signatures";
+  case SourceWorkPhase::Conformance:
+    return "conformance";
+  case SourceWorkPhase::Representations:
+    return "representations";
+  case SourceWorkPhase::Permissions:
+    return "permissions";
+  case SourceWorkPhase::Bodies:
+    return "bodies";
+  case SourceWorkPhase::CommonInputs:
+    return "common_inputs";
+  case SourceWorkPhase::EntriesAndClaims:
+    return "entries_and_claims";
+  case SourceWorkPhase::RetainedViews:
+    return "retained_views";
+  case SourceWorkPhase::ScopedSources:
+    return "scoped_sources";
+  case SourceWorkPhase::SourceAuthorities:
+    return "source_authorities";
+  case SourceWorkPhase::EntrySelection:
+    return "entry_selection";
+  case SourceWorkPhase::Specialization:
+    return "specialization";
+  case SourceWorkPhase::Assets:
+    return "assets";
+  case SourceWorkPhase::ClosedData:
+    return "closed_data";
+  case SourceWorkPhase::HostChildren:
+    return "host_children";
+  case SourceWorkPhase::ScopedElaboration:
+    return "scoped_elaboration";
+  case SourceWorkPhase::ScopedSpecialization:
+    return "scoped_specialization";
+  case SourceWorkPhase::Count:
+    break;
+  }
+  llvm_unreachable("invalid source work phase");
+}
 uint64_t CheckedProject::checkedWork() const { return storage->work; }
+const SourceWorkObservation &CheckedProject::workObservation() const {
+  return storage->workObservation;
+}
+const SourceWorkObservation &Analysis::workObservation() const {
+  return storage->workObservation;
+}
+const SourceWorkObservation &ClosedEntry::workObservation() const {
+  return storage->workObservation;
+}
+uint64_t ClosedEntry::closedWork() const { return storage->work; }
 uint64_t CheckedProject::checkedDeclarations() const {
   return storage->declarationCount;
 }
@@ -355,6 +421,7 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
   output->sources = sources;
   detail::Work work{limits};
   work.cancellation = cancellation;
+  detail::Work::Scope phase(work, SourceWorkPhase::Parsing);
   auto run = [&]() -> Error {
     if (auto error = checkLimits(limits))
       return error;
@@ -376,6 +443,8 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
     std::vector<detail::SyntaxDeclaration> modules;
     for (unsigned i = 0; i < sources->size(); ++i) {
       if ((*sources)[i].origin == SourceOrigin::Installation) {
+        detail::Work::Scope installedPhase(
+            work, SourceWorkPhase::InstalledDeclarations);
         auto installed =
             detail::readInstalledModule((*sources)[i], SourceId{i}, work);
         if (!installed)
@@ -407,6 +476,7 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
     if (!output->diagnostics.empty())
       return Error::success();
     checked->work = work.used;
+    checked->workObservation.charged = work.ledger;
     checked->declarationCount = work.declarations;
     checked->operationCount = work.operations;
     checked->notationDescriptors = work.notationDescriptors;
@@ -416,6 +486,7 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
   };
   if (auto diagnostic = detail::diagnose(run()))
     output->diagnostics.push_back(std::move(*diagnostic));
+  output->workObservation.charged = work.ledger;
   output->tokens = checked->tokens;
   return Analysis(std::move(output));
 }
@@ -450,9 +521,10 @@ std::vector<DeclarationId> CheckedProject::entries() const {
   });
   return result;
 }
-Expected<EntrySelection> resolveEntry(const CheckedProject &project,
-                                      StringRef name, const Limits &limits,
-                                      std::optional<EntryKind> kind) {
+Expected<EntrySelection>
+resolveEntry(const CheckedProject &project, StringRef name,
+             const Limits &limits, std::optional<EntryKind> kind,
+             std::vector<SourceWorkBudget> *observations) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (name.size() > 4096 ||
@@ -468,6 +540,9 @@ Expected<EntrySelection> resolveEntry(const CheckedProject &project,
                            "checked project exceeds requested limits");
   if (name.contains('<')) {
     detail::Work work{limits};
+    detail::Work::Scope phase(work, SourceWorkPhase::EntrySelection);
+    detail::Work::Record record(work, SourceWorkPhase::EntrySelection,
+                                observations);
     auto syntax = detail::parseEntrySelector(name, work);
     if (!syntax)
       return syntax.takeError();
@@ -709,10 +784,14 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
 Expected<ClosedEntry>
 ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
                            const Limits &limits, std::optional<EntryKind> kind,
-                           std::optional<HostInvocation::Kind> operation) {
-  if (auto error = checkScopedElaboration(project, limits))
+                           std::optional<HostInvocation::Kind> operation,
+                           std::vector<SourceWorkBudget> priorObservations) {
+  auto storage = std::make_shared<detail::ClosedStorage>();
+  storage->workObservation.separateBudgets = std::move(priorObservations);
+  auto &observations = storage->workObservation.separateBudgets;
+  if (auto error = checkScopedElaboration(project, limits, &observations))
     return std::move(error);
-  auto selected = resolveEntry(project, name, limits, kind);
+  auto selected = resolveEntry(project, name, limits, kind, &observations);
   if (!selected)
     return selected.takeError();
   const auto &decl = project.declarations()[selected->declaration.index];
@@ -725,7 +804,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
   detail::Work work{limits};
   // Metadata is bounded by definition checking. Immutable template bodies
   // are shared; specialization starts with its own phase budget.
-  auto storage = std::make_shared<detail::ClosedStorage>();
+  detail::Work::Scope phase(work, SourceWorkPhase::Specialization);
   if (auto error = work.charge(project.declarations().size()))
     return error;
   storage->declarations.assign(project.declarations().begin(),
@@ -740,15 +819,19 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
   storage->root = *storage->declarations[decl.id.index].target;
   if (decl.kind != Declaration::Kind::EntryFunction)
     storage->protocol = storage->root;
+  phase.enter(SourceWorkPhase::Assets);
   if (auto error = detail::closeAssets(project, *storage, work))
     return error;
   ClosedEntry entry(project, decl.id, storage);
-  if (auto error = checkScopedSpecialization(entry, limits))
+  if (auto error = checkScopedSpecialization(entry, limits, &observations))
     return error;
+  phase.enter(SourceWorkPhase::ClosedData);
   if (auto error = validateClosedData(entry, limits, work))
     return error;
+  phase.enter(SourceWorkPhase::CommonInputs);
   if (auto error = detail::checkCommonControlRequirements(entry, work))
     return error;
+  phase.enter(SourceWorkPhase::HostChildren);
   std::set<std::string> invoked;
   std::function<Error(const Body &, unsigned)> collect =
       [&](const Body &body, unsigned depth) -> Error {
@@ -793,6 +876,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
       if (auto e = collect(*definition.body, 1))
         return e;
   storage->work = work.used;
+  storage->workObservation.charged = work.ledger;
   return entry;
 }
 
@@ -801,11 +885,13 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
                                       const Limits &limits) {
   return ClosedEntry::closeProtocol(project, invocation, limits);
 }
-Expected<ClosedEntry>
-ClosedEntry::closeProtocol(const CheckedProject &project,
-                           const HostInvocation &invocation,
-                           const Limits &limits) {
-  if (auto e = checkScopedElaboration(project, limits))
+Expected<ClosedEntry> ClosedEntry::closeProtocol(
+    const CheckedProject &project, const HostInvocation &invocation,
+    const Limits &limits, std::vector<SourceWorkBudget> priorObservations) {
+  auto storage = std::make_shared<detail::ClosedStorage>();
+  storage->workObservation.separateBudgets = std::move(priorObservations);
+  auto &observations = storage->workObservation.separateBudgets;
+  if (auto e = checkScopedElaboration(project, limits, &observations))
     return e;
   if (invocation.kind != HostInvocation::Kind::Run &&
       invocation.kind != HostInvocation::Kind::Prove &&
@@ -822,13 +908,14 @@ ClosedEntry::closeProtocol(const CheckedProject &project,
                              "proof invocation requires a closed proof family",
                              target.span);
     return closeSelected(project, target.qualifiedName, limits,
-                         EntryKind::Proof, invocation.kind);
+                         EntryKind::Proof, invocation.kind,
+                         std::move(observations));
   }
   if (target.kind != Declaration::Kind::Protocol)
     return detail::failure("source.host-invocation",
                            "run invocation requires a protocol", target.span);
   detail::Work work{limits};
-  auto storage = std::make_shared<detail::ClosedStorage>();
+  detail::Work::Scope phase(work, SourceWorkPhase::Specialization);
   if (auto error = work.charge(project.declarations().size()))
     return error;
   storage->declarations.assign(project.declarations().begin(),
@@ -857,16 +944,20 @@ ClosedEntry::closeProtocol(const CheckedProject &project,
   storage->root = *storage->declarations[selected.index].target;
   storage->protocol = storage->root;
   storage->invocationKind = invocation.kind;
+  phase.enter(SourceWorkPhase::Assets);
   if (auto e = detail::closeAssets(project, *storage, work))
     return e;
   ClosedEntry child(project, selected, storage);
-  if (auto e = checkScopedSpecialization(child, limits))
+  if (auto e = checkScopedSpecialization(child, limits, &observations))
     return e;
+  phase.enter(SourceWorkPhase::ClosedData);
   if (auto e = validateClosedData(child, limits, work))
     return e;
+  phase.enter(SourceWorkPhase::CommonInputs);
   if (auto error = detail::checkCommonControlRequirements(child, work))
     return error;
   storage->work = work.used;
+  storage->workObservation.charged = work.ledger;
   return child;
 }
 
@@ -875,13 +966,14 @@ Expected<ClosedEntry> closeSubject(const CheckedProject &project,
   if (name.empty())
     return detail::failure("source.subject",
                            "a closed subject must be selected");
-  auto selected = resolveEntry(project, name, limits);
+  std::vector<SourceWorkBudget> observations;
+  auto selected = resolveEntry(project, name, limits, {}, &observations);
   if (!selected)
     return selected.takeError();
   const auto &declaration = project.declarations()[selected->declaration.index];
   if (declaration.kind == Declaration::Kind::Entry && declaration.proof())
     return ClosedEntry::closeSelected(project, name, limits, EntryKind::Proof,
-                                      {});
+                                      {}, std::move(observations));
   if (!declaration.generated ||
       declaration.generated->operation != HostInvocation::Kind::Run)
     return detail::failure("source.subject",
@@ -893,7 +985,7 @@ Expected<ClosedEntry> closeSubject(const CheckedProject &project,
                                      declaration.generated->target,
                                      std::move(selected->arguments),
                                      {}},
-                                    limits);
+                                    limits, std::move(observations));
 }
 
 const Declaration &ClosedEntry::entry() const {

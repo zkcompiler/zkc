@@ -67,6 +67,7 @@ struct CheckedStorage {
   /// Fixed before declaration collection, including generated nominal families.
   const std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
+  SourceWorkObservation workObservation;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   /// Written headers and parsed bodies, frozen before resolution/elaboration.
   std::shared_ptr<const WrittenSources> writtenSources;
@@ -95,6 +96,7 @@ struct ClosedStorage {
   std::vector<ClosedInvocation> invocations;
   std::optional<HostInvocation::Kind> invocationKind;
   uint64_t work = 0;
+  SourceWorkObservation workObservation;
 };
 /// Editor facts are frozen separately from a CheckedProject. A declaration may
 /// have a valid header without a checked signature, or a signature without a
@@ -119,6 +121,7 @@ struct DeclarationAccess {
   }
 };
 struct AnalysisStorage {
+  SourceWorkObservation workObservation;
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<Diagnostic> diagnostics;
   std::vector<std::vector<Token>> tokens;
@@ -144,6 +147,40 @@ struct Work {
   std::optional<source::Cancellation> cancellation = {};
   /// Optional enclosing allowance, debited immediately by every nested charge.
   uint64_t *allowance = nullptr;
+  WorkLedger ledger{};
+  SourceWorkPhase phase = SourceWorkPhase::Unscoped;
+  /// Exclusive attribution: nested scopes replace, then restore, the phase.
+  class Scope {
+    Work &work;
+    SourceWorkPhase previous;
+
+  public:
+    Scope(Work &work, SourceWorkPhase phase)
+        : work(work), previous(work.phase) {
+      enter(phase);
+    }
+    Scope(const Scope &) = delete;
+    Scope &operator=(const Scope &) = delete;
+    ~Scope() { work.phase = previous; }
+    void enter(SourceWorkPhase phase) { work.phase = phase; }
+  };
+  /// Snapshot an independently bounded operation, including partial failure.
+  class Record {
+    const Work &work;
+    SourceWorkPhase phase;
+    std::vector<SourceWorkBudget> *output;
+
+  public:
+    Record(const Work &work, SourceWorkPhase phase,
+           std::vector<SourceWorkBudget> *output)
+        : work(work), phase(phase), output(output) {}
+    Record(const Record &) = delete;
+    Record &operator=(const Record &) = delete;
+    ~Record() {
+      if (output)
+        output->push_back({phase, work.ledger});
+    }
+  };
   uint64_t remaining() const {
     auto local = limits.work - used;
     return allowance ? std::min(local, *allowance) : local;

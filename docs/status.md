@@ -636,6 +636,16 @@ messages, services, static protocol composition, bounded repetition and conditio
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
 
+Source checking and closure retain diagnostic work ledgers with exclusive
+subphase counters, separately bounded scoped checks and selector work, and
+explicit Host child attribution. The source driver publishes `source_work` in
+compilation observations and diagnostics. The
+[work observation regressions](../compiler/test/language_work_observation.cpp)
+cover sums, nested allowances, real checking refusals and child totals;
+[driver controls](../compiler/test/language_cli.py) exercise the diagnostic
+output. This surface grants no admission or formal evidence. See the
+[accounting contract](spec/language/definitions.md#bounds-and-scope).
+
 The total Math operation `multilinear.restrict_prefix` is available through
 both `primitive` and `intrinsic` authoring, original structured export and the
 strict Lean reader. Its Kernel recipe and native field-family implementation

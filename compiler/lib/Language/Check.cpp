@@ -32,11 +32,14 @@ Checker::Checker(CheckedStorage &output, Work &work,
     }
 }
 Error Checker::run() {
+  Work::Scope phase(work, SourceWorkPhase::Declarations);
   if (auto error = checkCapabilityInstallation())
     return error;
+  phase.enter(SourceWorkPhase::WrittenRetention);
   auto written = retainWrittenHeaders(syntax, work);
   if (!written)
     return written.takeError();
+  phase.enter(SourceWorkPhase::Declarations);
   if (auto error = expandLayoutSections(syntax, work))
     return error;
   if (!collect() || !imports() || !indexDeclarations() || !classifyServices() ||
@@ -54,6 +57,7 @@ Error Checker::run() {
         sources[decl.id.index]->layoutSyntax)
       bodyScopes[decl.span.source.index].push_back(
           {sources[decl.id.index], notationEnvironments[decl.module.index]});
+  phase.enter(SourceWorkPhase::Parsing);
   for (unsigned i = 0; i < bodyScopes.size(); ++i) {
     auto error = output.layoutHeaders[i]
                      ? parseLayoutBodies(SourceId{i}, bodyScopes[i], output,
@@ -63,9 +67,11 @@ Error Checker::run() {
     if (error)
       return error;
   }
+  phase.enter(SourceWorkPhase::Declarations);
   if (!prepareOraclePredicates() || !layoutSpecifications())
     return types.takeError();
   if (!recoveryDiagnostics || recoveryDiagnostics->empty()) {
+    Work::Scope writtenPhase(work, SourceWorkPhase::WrittenRetention);
     if (auto error = retainWrittenBodies(**written, sources, work))
       return error;
     output.writtenSources = std::move(*written);
@@ -133,6 +139,7 @@ Error Checker::run() {
       admissions[at->second] = std::move(obligation);
     return true;
   };
+  phase.enter(SourceWorkPhase::Signatures);
   signatureState.resize(output.declarations.size());
   bodyState.resize(output.declarations.size());
   bodyHeights.resize(output.declarations.size());
@@ -159,12 +166,15 @@ Error Checker::run() {
     return types.takeError();
   bodyState.resize(output.declarations.size());
   bodyHeights.resize(bodyState.size());
+  phase.enter(SourceWorkPhase::Conformance);
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Module && decl.implementation &&
         !conformance(decl.id))
       return types.takeError();
+  phase.enter(SourceWorkPhase::Representations);
   if (!representations())
     return types.takeError();
+  phase.enter(SourceWorkPhase::Permissions);
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Record ||
         decl.kind == Declaration::Kind::Variant) {
@@ -202,6 +212,7 @@ Error Checker::run() {
             return types.takeError();
           }
         }
+  phase.enter(SourceWorkPhase::Bodies);
   for (unsigned i = 0; i < sources.size(); ++i) {
     auto &decl = output.declarations[i];
     if ((decl.kind == Declaration::Kind::Oracle ||
@@ -223,9 +234,11 @@ Error Checker::run() {
   }
   if (recoveryDiagnostics && !recoveryDiagnostics->empty())
     return Error::success();
+  phase.enter(SourceWorkPhase::CommonInputs);
   if (auto error = checkCommonControlRequirements(output.declarations,
                                                   output.assets, work))
     return error;
+  phase.enter(SourceWorkPhase::EntriesAndClaims);
   if (!constructions() || !entries() || !sourceClaims())
     return types.takeError();
   inferredContracts.clear();
@@ -233,14 +246,17 @@ Error Checker::run() {
   types.inferNatural = {};
   types.collectUsage = {};
   types.recordAdmission = {};
+  phase.enter(SourceWorkPhase::RetainedViews);
   if (!retainAPI() || !retainNotations() || !retainScopedSources())
     return types.takeError();
   output.names = std::make_shared<NameEnvironment>(
       NameEnvironment{std::move(modules), std::move(visible)});
+  phase.enter(SourceWorkPhase::ScopedSources);
   if (auto error = checkScopedSources(output, work))
     return error;
   // The scoped witness check re-resolves but records nothing, so every
   // recorded route is final here.
+  phase.enter(SourceWorkPhase::SourceAuthorities);
   return computeSourceAuthorities(output, assetDomains, work);
 }
 std::shared_ptr<const SyntaxDeclaration>
@@ -793,6 +809,7 @@ Error check(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
     return error;
   if (error)
     checker.recover(std::move(error));
+  Work::Scope retained(work, SourceWorkPhase::RetainedViews);
   auto view = checker.retainAnalysis();
   if (!view)
     return view.takeError();

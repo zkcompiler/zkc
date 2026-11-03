@@ -987,8 +987,9 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
 }
 } // namespace zkc::language::detail
 namespace zkc::language {
-llvm::Error checkScopedElaboration(const CheckedProject &project,
-                                   const Limits &limits) {
+llvm::Error
+checkScopedElaboration(const CheckedProject &project, const Limits &limits,
+                       std::vector<SourceWorkBudget> *observations) {
   if (auto error = checkLimits(limits))
     return error;
   if (project.checkedWork() > limits.work ||
@@ -996,6 +997,9 @@ llvm::Error checkScopedElaboration(const CheckedProject &project,
     return detail::failure("source.limit",
                            "checked project exceeds scoped witness limits");
   detail::Work work{limits};
+  detail::Work::Scope phase(work, SourceWorkPhase::ScopedElaboration);
+  detail::Work::Record record(work, SourceWorkPhase::ScopedElaboration,
+                              observations);
   return detail::checkScopedSources(*project.storage, work);
 }
 } // namespace zkc::language

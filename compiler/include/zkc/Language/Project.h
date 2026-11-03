@@ -12,6 +12,8 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -73,6 +75,56 @@ struct Limits {
   uint64_t aggregateLeaves = 1024, naturalTerms = 1024, naturalFactors = 64;
 };
 llvm::Error checkLimits(const Limits &);
+
+/// Diagnostic attribution of existing charges, never an admission judgment.
+enum class SourceWorkPhase {
+  Unscoped,
+  Parsing,
+  InstalledDeclarations,
+  WrittenRetention,
+  Declarations,
+  Signatures,
+  Conformance,
+  Representations,
+  Permissions,
+  Bodies,
+  CommonInputs,
+  EntriesAndClaims,
+  RetainedViews,
+  ScopedSources,
+  SourceAuthorities,
+  EntrySelection,
+  Specialization,
+  Assets,
+  ClosedData,
+  HostChildren,
+  ScopedElaboration,
+  ScopedSpecialization,
+  Count
+};
+/// Stable diagnostic name for a real phase (excluding Count).
+llvm::StringRef sourceWorkPhaseName(SourceWorkPhase);
+
+struct WorkLedger {
+  uint64_t total = 0;
+  std::array<uint64_t, static_cast<std::size_t>(SourceWorkPhase::Count)>
+      phases{};
+  uint64_t used(SourceWorkPhase phase) const {
+    return phases[static_cast<std::size_t>(phase)];
+  }
+};
+/// One independently bounded check or selector; repeated checks remain
+/// distinct.
+struct SourceWorkBudget {
+  SourceWorkPhase phase = SourceWorkPhase::Unscoped;
+  WorkLedger ledger;
+};
+struct SourceWorkObservation {
+  /// Equals the original phase total; subphase counters are exclusive.
+  WorkLedger charged;
+  /// Performed on separate budgets, excluded from `charged`.
+  std::vector<SourceWorkBudget> separateBudgets;
+};
 
 struct CaptureOptions {
   std::string format = "zkc";
@@ -1002,10 +1054,11 @@ struct EntrySelection {
   std::vector<Type> arguments;
   std::string name;
 };
-llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
-                                            llvm::StringRef,
-                                            const Limits & = {},
-                                            std::optional<EntryKind> = {});
+/// Optional output appends performed independently bounded selector work.
+llvm::Expected<EntrySelection>
+resolveEntry(const CheckedProject &, llvm::StringRef, const Limits & = {},
+             std::optional<EntryKind> = {},
+             std::vector<SourceWorkBudget> * = nullptr);
 /// Closure checks source legality and publishes exact schemas, permissions,
 /// custody, setup associations and component maps. No closure judges external
 /// supply: closing a selection names no external operation, and the SDK's
@@ -1040,10 +1093,13 @@ private:
 };
 
 /// Check retained source places against actual capture extraction and
-/// snapshots.
-llvm::Error checkScopedElaboration(const CheckedProject &, const Limits & = {});
+/// snapshots. Optional output appends each performed independent budget.
+llvm::Error checkScopedElaboration(const CheckedProject &, const Limits & = {},
+                                   std::vector<SourceWorkBudget> * = nullptr);
 /// Relate source bodies and environments to the actual closed candidate.
-llvm::Error checkScopedSpecialization(const ClosedEntry &, const Limits & = {});
+llvm::Error
+checkScopedSpecialization(const ClosedEntry &, const Limits & = {},
+                          std::vector<SourceWorkBudget> * = nullptr);
 
 /// Only successful analysis can construct this immutable owning handle.
 class DeclarationIndex;
@@ -1061,6 +1117,7 @@ public:
   llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::StringRef installationIdentity() const;
   uint64_t checkedWork() const;
+  const SourceWorkObservation &workObservation() const;
   uint64_t checkedDeclarations() const;
   uint64_t checkedOperations() const;
   uint64_t checkedNotationDescriptors() const;
@@ -1073,7 +1130,8 @@ private:
   friend class Layouts;
   friend struct detail::DeclarationAccess;
   friend llvm::Error checkScopedElaboration(const CheckedProject &,
-                                            const Limits &);
+                                            const Limits &,
+                                            std::vector<SourceWorkBudget> *);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &,
@@ -1094,10 +1152,9 @@ private:
                                                       const Limits &);
   friend llvm::Expected<std::optional<std::string>>
   sourceAuthority(const CheckedProject &, llvm::StringRef);
-  friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
-                                                     llvm::StringRef,
-                                                     const Limits &,
-                                                     std::optional<EntryKind>);
+  friend llvm::Expected<EntrySelection>
+  resolveEntry(const CheckedProject &, llvm::StringRef, const Limits &,
+               std::optional<EntryKind>, std::vector<SourceWorkBudget> *);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.
@@ -1108,6 +1165,8 @@ public:
   llvm::ArrayRef<Diagnostic> diagnostics() const;
   llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::Expected<CheckedProject> checkedProject() const;
+  /// Includes performed work when analysis refuses or recovers diagnostics.
+  const SourceWorkObservation &workObservation() const;
 
 private:
   friend class Authoring;
@@ -1127,6 +1186,8 @@ public:
   const Declaration *protocolOrNull() const;
   const Declaration &protocol() const;
   llvm::ArrayRef<ClosedInvocation> invocations() const;
+  uint64_t closedWork() const;
+  const SourceWorkObservation &workObservation() const;
   /// Child policy chooses executable construction dependencies downstream.
   std::optional<HostInvocation::Kind> invocationKind() const;
   /// Canonical evaluator assets required by reachable closed operations.
@@ -1141,9 +1202,11 @@ private:
   friend struct detail::DeclarationAccess;
   static llvm::Expected<ClosedEntry>
   closeSelected(const CheckedProject &, llvm::StringRef, const Limits &,
-                std::optional<EntryKind>, std::optional<HostInvocation::Kind>);
+                std::optional<EntryKind>, std::optional<HostInvocation::Kind>,
+                std::vector<SourceWorkBudget> = {});
   static llvm::Expected<ClosedEntry>
-  closeProtocol(const CheckedProject &, const HostInvocation &, const Limits &);
+  closeProtocol(const CheckedProject &, const HostInvocation &, const Limits &,
+                std::vector<SourceWorkBudget> = {});
   friend llvm::Expected<ClosedEntry>
   closeSubject(const CheckedProject &, llvm::StringRef, const Limits &);
   ClosedEntry(CheckedProject checked, DeclarationId selected,
