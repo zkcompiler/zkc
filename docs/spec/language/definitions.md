@@ -231,7 +231,7 @@ every row is included in installation identity. Captures cannot supply either
 name or claim an installation origin. Installed modules cannot be linked as
 external children. The prelude's public scalar operator bindings
 are visible by default; scalar function names require qualification or explicit
-import. The existing catalog `implicit` flag admits only its marked declarations
+import. The catalog `prelude` flag admits only its marked declarations
 into an explicit prelude namespace. That namespace is considered only after no
 source root was selected; it supplies no fallback for an invalid selected root.
 Managed constructors selected through it or through an ordinary qualified or
