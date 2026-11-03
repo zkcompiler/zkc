@@ -28,6 +28,9 @@ private theorem decode_of_sort {carriers : Carriers} {physical : Domain.Value ca
     | mk actual allowed value =>
       cases same
       exact ⟨value, by simp [Domain.Value.decode, Domain.Payload.value]⟩
+  | custody slot token =>
+    cases same
+    exact ⟨token, by simp [Domain.Value.decode]⟩
   | transcript => cases same
   | indices => cases same
 

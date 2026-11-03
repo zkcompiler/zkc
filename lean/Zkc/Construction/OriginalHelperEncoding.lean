@@ -3,7 +3,7 @@ module
 public import Zkc.Construction.OriginalHelpers
 
 @[expose] public section
-/-! Complete nominal helper result encodings follow from their declared data
+/-! Complete nominal helper result encodings follow from their declared local
 sorts. The rule never assumes that the actual closure succeeds. -/
 set_option autoImplicit false
 noncomputable section
@@ -16,25 +16,25 @@ namespace Original
 def encodeHelperResult {tys : List Ty} (result : Values carriers.Value tys) :
     Domain.Environment carriers := (Domain.encodeValues result).getD []
 
-theorem encodeHelperResult_eq {tys : List Ty} (data : tys.all Domain.dataType = true)
+theorem encodeHelperResult_eq {tys : List Ty} (data : tys.all Domain.localType = true)
     (result : Values carriers.Value tys) :
     Domain.encodeValues result = some (encodeHelperResult result) :=
-  Domain.encodeValues_getD result data
+  Domain.encodeValues_local_getD result data
 
-theorem encodeHelperResult_sorts {tys : List Ty} (data : tys.all Domain.dataType = true)
+theorem encodeHelperResult_sorts {tys : List Ty} (data : tys.all Domain.localType = true)
     (result : Values carriers.Value tys) :
     Domain.sortsMatch (tys.map ValueSort.data) (encodeHelperResult result) = true := by
   simp only [Domain.sortsMatch, Domain.encodeValues_sorts (encodeHelperResult_eq data result), beq_self_eq_true]
 
 /-- Generic nominal helper connection. The checked helper types supply the
 complete encoding on every outcome; no mathematical result law is required. -/
-def Simulation.linkedDataHelperOn (model : DomainModel) (program : Program) (routing : Routing)
+def Simulation.linkedLocalHelperOn (model : DomainModel) (program : Program) (routing : Routing)
     (helper : Helper) (present : helper ∈ program.payload.definitions.map CheckedDefinition.helper)
-    (data : helper.outputs.all Domain.dataType = true)
+    (data : helper.outputs.all Domain.localType = true)
     (arguments : Values model.Value helper.inputs)
     (environment : Domain.Environment model.toCarriers) (references : List Nat)
     (read : Domain.read environment references = Domain.encodeValues arguments)
-    (state : State model.toCarriers) (inputData : helper.inputs.all Domain.dataType = true) :
+    (state : State model.toCarriers) (inputData : helper.inputs.all Domain.localType = true) :
     Simulation (HelperReturns encodeHelperResult state environment) (fun _ frame => frame = environment)
       (fold routing ((invoke (Domain.helperTable model program) helper arguments).interpret
         (closedLift (I := Occurrence.signature model.toCarriers))) state)
@@ -45,16 +45,16 @@ def Simulation.linkedDataHelperOn (model : DomainModel) (program : Program) (rou
     (encodeHelperResult_eq data) (encodeHelperResult_sorts data) state environment references
     (read.trans (encodeHelperResult_eq inputData arguments))
 
-def Simulation.linkedDataHelper {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
+def Simulation.linkedLocalHelper {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
     [DecidableEq F] [DecidableEq G] (program : Program) (routing : Routing)
     (helper : Helper) (present : helper ∈ program.payload.definitions.map CheckedDefinition.helper)
-    (data : helper.outputs.all Domain.dataType = true)
+    (data : helper.outputs.all Domain.localType = true)
     (arguments : Values (assignment F G) helper.inputs)
     (environment : Domain.Environment (uniformCarriers F G))
     (references : List Nat)
     (read : Domain.read environment references = Domain.encodeValues arguments)
     (state : State (uniformCarriers F G))
-    (inputData : helper.inputs.all Domain.dataType = true) :
+    (inputData : helper.inputs.all Domain.localType = true) :
     Simulation (HelperReturns encodeHelperResult state environment) (fun _ frame => frame = environment)
       (fold routing ((invoke (closedMeanings program.payload.definitions) helper arguments).interpret
         (closedLift (I := Occurrence.signature (uniformCarriers F G)))) state)

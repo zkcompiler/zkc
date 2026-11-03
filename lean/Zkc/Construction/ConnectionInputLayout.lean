@@ -52,6 +52,7 @@ theorem inputHistory_read {carriers : Carriers} (context : Context) (sorts : Lis
       simpa only [found, Option.map_some, Option.some.injEq] using declared
     cases value with
     | data _ => cases nominal
+    | custody _ _ => cases nominal
     | indices _ => cases nominal
     | transcript suite history =>
       cases nominal

@@ -422,7 +422,7 @@ There is no separate scalar arithmetic or unsupported-sort fallback.
 Selection is interpreted for every admitted type, including products and sequences.
 The Common scalar effect adapter refuses aggregate messages. The nominal
 construction runtime transports data as one exact `Ty` paired with its existing
-`Carriers.Value` and a proof that it contains no service capability. Products and
+`Carriers.Value` and a proof that it contains no handle. Products and
 sequences, including differently typed empty containers, retain their complete
 nominal sort; decoding requires exact sort equality. This runtime support does
 not bypass the separate construction rule, projection or generated ABI admission
@@ -525,6 +525,18 @@ types. `Ty.isHandle` holds for it, so it is never selected, packed into a
 product, placed in a sequence, transmitted, restricted, assembled, used as a
 statement or relation input, or carried as a construction payload.
 
+Local constructed frames have a separate `Domain.Value.custody slot token`
+case. `Domain.localType` admits ordinary wire data and direct nominal custody
+coordinates; `Domain.dataType` still admits only wire data. Local encoding and
+decoding preserve the exact slot and token. Helpers, local results and repeat
+frames may transport these coordinates, while message and transcript operations
+require a genuine `Domain.Payload`. In particular, connection send certificates
+carry an explicit wire-type check; successful local decoding alone is not one.
+Nested handle aggregates, public inputs, service handles and oracle handles do
+not gain support through this distinction. These local correspondence laws
+use the admitted helper table with closed custody observations. They do not
+establish operational ledger soundness for arbitrary nested helper frames.
+
 The three custody transfers are binding contracts with one `Slot` root and no
 parameters: `resource_unit.create` `[] → [U]`, `resource_unit.pass` `[U] → [U]`
 and `resource_unit.consume` `[U] → []`, with `U` the exact slot type. A slot root
@@ -532,8 +544,8 @@ is an exact nominal identity, never a catalogue domain; a field contract with a
 slot root, or a custody contract with a field root, refuses. Admission resolves
 them to `Op.createUnit`, `Op.passUnit` and `Op.consumeUnit`, which are effects,
 not pure primitives: their meaning is configured by `SiteObservations`. Its
-defaults are the payload-erased meaning every existing consumer uses (every
-token is zero and nothing is checked); `custodyObservations holder` issues the
+defaults use a closed erased meaning: creation returns zero, passing preserves
+the supplied coordinate, and consuming performs no ledger check; `custodyObservations holder` issues the
 requests of the custody ledger `PIR.Custody` instead.
 
 The ledger (`Zkc.Semantics.Custody`) is ghost ownership state: live entries with

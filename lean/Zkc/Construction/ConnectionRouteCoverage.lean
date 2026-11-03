@@ -198,17 +198,15 @@ macro "retain_connection_frame" : tactic => `(tactic|
       refine ⟨?_⟩
       simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
         ih model tables bindings protocols processes calleesHold selectionMeaning captured (.cons value binders) reachedHistory _ (related.bindData value encoded) (by retain_connection_frame)
-  | @send context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest reference readback plain template route tail ih =>
+  | @send context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest data reference readback plain template route tail ih =>
     apply Covered.action
-    · obtain ⟨actual, physical, present, encoded, read⟩ := readback.component related
-      exact ConnectionActionCoverage.send ty (context.roles peer) _ (data_of_encode encoded)
+    · exact ConnectionActionCoverage.send ty (context.roles peer) _ data
         (frames.sites_eval model binders) route
     · intro reply
       exact ih model tables bindings protocols processes calleesHold selectionMeaning captured binders reachedHistory environment related (by retain_connection_frame)
-  | @observedSend context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest replacement profile prepared preparation preparationProof reference stateRef pathRef readback preparedReadback stateRead pathRead template route tail ih =>
+  | @observedSend context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest data replacement profile prepared preparation preparationProof reference stateRef pathRef readback preparedReadback stateRead pathRead template route tail ih =>
     apply Covered.action
-    · obtain ⟨actual, physical, present, encoded, read⟩ := readback.component related
-      exact ConnectionActionCoverage.send ty (context.roles peer) _ (data_of_encode encoded)
+    · exact ConnectionActionCoverage.send ty (context.roles peer) _ data
         (frames.sites_eval model binders) route
     · intro reply
       apply Classical.choice
@@ -275,7 +273,7 @@ macro "retain_connection_frame" : tactic => `(tactic|
       obtain ⟨actual, rfl⟩ := valid
       let nextBinders : Binders model (RepeatScope spec.state scope) := .cons index (.cons actual.present binders)
       have entered := related.repeatEnter routing.context binders actual index reachedHistory
-        (Original.encodeHelperResult_eq (visibleState_data visible) actual)
+        (Original.encodeHelperResult_eq (visibleState_local visible) actual)
       have bodyMeaning := normalizeRegion_soundOn (model := model) (actions := Occurrence.actions)
         (iterations := Occurrence.iterations) (tables := tables) (protocols := protocols) (context := context)
         {strict := true, callees := callees} (LawResults.empty model) processes role roster distinct
@@ -318,7 +316,7 @@ macro "retain_connection_frame" : tactic => `(tactic|
     simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
       tailIH model tables bindings protocols processes calleesHold selectionMeaning captured (.cons actual.present binders) reachedHistory _
         (related.repeatExit routing.context binders actual reachedHistory
-          (Original.encodeHelperResult_eq (visibleState_data visible) actual)) (by retain_connection_frame)
+          (Original.encodeHelperResult_eq (visibleState_local visible) actual)) (by retain_connection_frame)
   | @projectedRepeat context definitions callees selection out role scopes outputs history scope frames layout spec site callback count initial captures next body rest
       roster distinct active visibility stateSorts schema countReference countRead initialLocations yieldLocations
       stateReferences initialReferences yieldData yielded initialHistory bodyHistory initialRead initialProjection yieldProjection

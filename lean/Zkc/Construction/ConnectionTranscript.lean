@@ -117,15 +117,10 @@ def Simulation.observedReceive (routing : Routing) (state : State carriers)
   apply Simulation.call
   intro value
   apply Classical.choice
-  obtain ⟨physical, encoded⟩ := Domain.Value.encode_exists (carriers := carriers)
-    (by simp [Domain.dataType, data]) value
-  obtain ⟨payload, payloadEq, physicalEq⟩ : ∃ payload,
-      Domain.Payload.ofValue ty value = some payload ∧ physical = .data payload := by
-    unfold Domain.Value.encode at encoded
-    cases found : Domain.Payload.ofValue ty value with
-    | none => simp [found] at encoded
-    | some payload => exact ⟨payload, rfl, (Option.some.inj (by simpa [found] using encoded)).symm⟩
-  subst physical
+  let payload : Domain.Payload carriers := ⟨ty, data, value⟩
+  have payloadEq : Domain.Payload.ofValue ty value = some payload := by
+    simp [Domain.Payload.ofValue, data, payload]
+  have encoded := Domain.Value.encode_ofPayload payloadEq
   refine ⟨?_⟩
   simp only [payloadEq, encoded, Domain.View.append,
     show Domain.sortsMatch [.data ty] [.data payload] = true from by
@@ -160,7 +155,7 @@ theorem ObservedReceived.frame {model : DomainModel} {scope : NormalForm.Scope}
   obtain ⟨payload, encoded, final, appended⟩ := returned
   rw [final, appended]
   exact ((related.retireHistory _).rename (target := .value ty :: scope) .there
-    (fun _ => rfl)).append (.cons ⟨source.1, rfl, by simp [Domain.Value.encode, encoded]⟩ (.cons rfl .nil))
+    (fun _ => rfl)).append (.cons ⟨source.1, rfl, Domain.Value.encode_ofPayload encoded⟩ (.cons rfl .nil))
 
 /-- A delivered challenge retains both its query event and its subsequent
 message observation. The two transcript cells denote different reached states. -/

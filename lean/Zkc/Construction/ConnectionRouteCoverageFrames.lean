@@ -18,14 +18,6 @@ def ReadReturns (model : DomainModel) (role : Nat) (scopes : List (List Nat))
   ∃ frame : Domain.Environment model.toCarriers,
     Original.ValuesHolds frame outputs (maskValues role scopes values)
 
-theorem data_of_encode {model : DomainModel} {ty : Ty} {value : model.Value ty}
-    {physical : Domain.Value model.toCarriers} (encoded : Domain.Value.encode ty value = some physical) :
-    ty.isHandle = false := by
-  unfold Domain.Value.encode Domain.Payload.ofValue at encoded
-  split at encoded
-  · assumption
-  · simp at encoded
-
 theorem CoordinatePrefix.realize {scope : Scope} {input output : Layout scope}
     {target : ConnectionCertificate.Block} (certificate : CoordinatePrefix input output target)
     {model : DomainModel} {binders : Binders model scope} {history : Domain.History model.toCarriers}

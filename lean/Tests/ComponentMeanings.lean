@@ -23,6 +23,8 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Obligations
 
 def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 abbrev pairTypes : List Ty := [.boolean, .boolean]
+def custodySlot := "zkl_resource_" ++ String.ofList (List.replicate 64 '1')
+abbrev pendingTypes : List Ty := .resourceUnit custodySlot :: pairTypes
 def formulaDeclaration : Relation :=
   ⟨"All", .publicDef, "zkc.language.formula/0", "all", "0", pairTypes, [.boolean],
     ["statement", "statement"], some "all", []⟩
@@ -34,36 +36,48 @@ def opaqueDeclaration : Relation :=
     formula := none
     staticArguments := [.index, .natural "2"] }
 def application (direction : ContractDirection) : RelationApplication :=
-  ⟨"All", [⟨direction, 0, "V", false⟩, ⟨direction, 1, "V", false⟩]⟩
+  ⟨"All", [⟨direction, 1, "V", false⟩, ⟨direction, 2, "V", false⟩]⟩
 def pending : OriginTerm := .nominal .record "PendingPair" []
-def ports : List SourcePort := [⟨"pair", pending, ["V"], 0, 2⟩]
+def ports : List SourcePort := [⟨"pair", pending, ["V"], 0, 3, .data ["V"]⟩]
 def plainInputs : List SourcePort :=
-  [⟨"first", .boolean, ["V"], 0, 1⟩, ⟨"second", .boolean, ["V"], 1, 1⟩]
-def plainOutput : List SourcePort := [⟨"accepted", .boolean, ["V"], 0, 1⟩]
+  [⟨"first", .boolean, ["V"], 0, 1, .data ["V"]⟩,
+   ⟨"second", .boolean, ["V"], 1, 1, .data ["V"]⟩]
+def plainOutput : List SourcePort := [⟨"accepted", .boolean, ["V"], 0, 1, .data ["V"]⟩]
 def original (declaration : Relation) : Snapshot :=
-  ⟨digest, "main", [], [declaration], [],
+  ⟨digest, "main", [], [declaration],
+    [⟨"consume_binding", "resource_unit.consume", [custodySlot], "",
+      some ⟨[.domain "Slot" custodySlot], [.resourceUnit custodySlot], []⟩⟩],
     [.function ⟨"swap", .math, .privateDef, pairTypes, pairTypes, none, [], none,
       .block [] (.ret [1, 0])⟩,
      .function ⟨"all", .math, .privateDef, pairTypes, [.boolean], none, [], none,
       .block [.instruction .booleanAnd [0, 1] [.boolean] [] ""] (.ret [0])⟩,
-     .function ⟨"finish", .local, .privateDef, pairTypes, [.boolean], none, [], some (.local "finish" []),
-      .block [.instruction .branch [0] [] [
+     .function ⟨"finish", .local, .privateDef, pendingTypes, [.boolean], none, [], some (.local "finish" []),
+      .block [.instruction (.exec "exec.apply" "consume_binding" []) [0] [] [] "consume",
+        .instruction .branch [1] [] [
         .region [] [] (.block [] (.yield [])),
-        .region [] [] (.block [] (.stop .reject "reject"))] "guard"] (.ret [1])⟩,
-     .function ⟨"decide", .protocol, .publicDef, pairTypes, [.boolean],
-      some ⟨["V"], [["V"], ["V"]], [["V"]]⟩, [], some (.protocol ⟨"decide", []⟩),
-      .block [.instruction (.localCall "finish" "V") [0, 1] [.boolean] [] "finish_call"] (.ret [0])⟩,
+        .region [] [] (.block [] (.stop .reject "reject"))] "guard"] (.ret [2])⟩,
+     .function ⟨"decide", .protocol, .publicDef, pendingTypes, [.boolean],
+      some ⟨["V"], [["V"], ["V"], ["V"]], [["V"]]⟩, [], some (.protocol ⟨"decide", []⟩),
+      .block [.instruction (.localCall "finish" "V") [0, 1, 2] [.boolean] [] "finish_call"] (.ret [0])⟩,
      .function ⟨"main", .protocol, .publicDef, pairTypes, [.boolean],
       some ⟨["V"], [["V"], ["V"]], [["V"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩,
-     .function ⟨"repack", .protocol, .publicDef, pairTypes, pairTypes,
-      some ⟨["V"], [["V"], ["V"]], [["V"], ["V"]]⟩, [], some (.protocol ⟨"repack", []⟩),
-      .block [.instruction (.call "swap") [0, 1] pairTypes [] ""] (.ret [0, 1])⟩],
+     .function ⟨"repack", .protocol, .publicDef, pendingTypes, pendingTypes,
+      some ⟨["V"], [["V"], ["V"], ["V"]], [["V"], ["V"], ["V"]]⟩, [], some (.protocol ⟨"repack", []⟩),
+      .block [.instruction (.call "swap") [1, 2] pairTypes [] ""] (.ret [2, 0, 1])⟩],
     [⟨"repack", [⟨.continuation, "next", application .input, some (application .output), none⟩]⟩,
      ⟨"decide", [⟨.target, "truth", application .input, none, some ⟨.output, 0, "V", false⟩⟩]⟩,
      ⟨"main", []⟩], blsRows,
-    ⟨[⟨pending, "linear", true, [("first", .boolean), ("second", .boolean)]⟩],
-      [⟨"repack", ports, ports⟩, ⟨"decide", ports, plainOutput⟩,
-       ⟨"main", plainInputs, plainOutput⟩]⟩⟩
+    {
+      records := [{
+        type := pending
+        resource := "linear"
+        sealed := true
+        members := .fields [⟨"first", .boolean, none⟩, ⟨"second", .boolean, none⟩]
+        roles := []
+        slot := some custodySlot }]
+      protocols := [⟨"repack", ports, ports⟩, ⟨"decide", ports, plainOutput⟩,
+        ⟨"main", plainInputs, plainOutput⟩]
+      authorities := [("PendingPair", none)] }⟩
 
 abbrev swapHelper : Helper := ⟨"swap", .math, pairTypes, pairTypes⟩
 def swapBody : Region dialect pairTypes pairTypes :=
@@ -71,23 +85,27 @@ def swapBody : Region dialect pairTypes pairTypes :=
 abbrev allHelper : Helper := ⟨"all", .math, pairTypes, [.boolean]⟩
 def allBody : Region dialect pairTypes [.boolean] :=
   .letOp .booleanAnd (.cons .here (.cons (.there .here) .nil)) .nil (.ret (.cons .here .nil))
-abbrev finishHelper : Helper := ⟨"finish", .local, pairTypes, [.boolean]⟩
-def finishBody : Region dialect pairTypes [.boolean] :=
+abbrev finishHelper : Helper := ⟨"finish", .local, pendingTypes, [.boolean]⟩
+def finishBody : Region dialect pendingTypes [.boolean] :=
+  .letOp (.mark "consume") .nil .nil <|
+  .letOp (.consumeUnit custodySlot) (.cons .here .nil) .nil <|
   .letOp (.mark "guard") .nil .nil <|
-  .letOp (.branch [] []) (.cons .here .nil)
+  .letOp (.branch [] []) (.cons (.there .here) .nil)
     (.cons (.ret .nil) (.cons (.letOp (.mark "reject") .nil .nil (.stop .reject)) .nil))
-    (.ret (.cons (.there .here) .nil))
+    (.ret (.cons (.there (.there .here)) .nil))
 def repackSignature : ProtocolSignature :=
-  ⟨"repack", ["V"], pairTypes, pairTypes, [[0], [0]], [[0], [0]]⟩
-def repackBody : Region protocolDialect pairTypes pairTypes :=
+  ⟨"repack", ["V"], pendingTypes, pendingTypes, [[0], [0], [0]], [[0], [0], [0]]⟩
+def repackBody : Region protocolDialect pendingTypes pendingTypes :=
   .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.invoke swapHelper) rfl) (.cons .here (.cons (.there .here) .nil)) .nil
-    (.ret (.cons .here (.cons (.there .here) .nil)))
+  .letOp (.calculate (.invoke swapHelper) rfl)
+    (.cons (.there .here) (.cons (.there (.there .here)) .nil)) .nil
+    (.ret (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) .nil))))
 def decideSignature : ProtocolSignature :=
-  ⟨"decide", ["V"], pairTypes, [.boolean], [[0], [0]], [[0]]⟩
-def decideBody : Region protocolDialect pairTypes [.boolean] :=
+  ⟨"decide", ["V"], pendingTypes, [.boolean], [[0], [0], [0]], [[0]]⟩
+def decideBody : Region protocolDialect pendingTypes [.boolean] :=
   .letOp (.mark "finish_call") .nil .nil <|
-  .letOp (.localCall finishHelper rfl 0 "finish_call") (.cons .here (.cons (.there .here) .nil)) .nil
+  .letOp (.localCall finishHelper rfl 0 "finish_call")
+    (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil
     (.ret (.cons .here .nil))
 def mainSignature : ProtocolSignature :=
   ⟨"main", ["V"], pairTypes, [.boolean], [[0], [0]], [[0]]⟩
@@ -130,15 +148,19 @@ def encode (statement : Bool × Bool) (_ : Unit) : Values model.Value pairTypes 
   .cons statement.1 (.cons statement.2 .nil)
 def readback (values : Values model.Value pairTypes) : Option (Bool × Bool) :=
   some (values.get .here, values.get (.there .here))
+def pendingEncode (statement : Bool × Bool) : Values model.Value pendingTypes :=
+  .cons 0 (encode statement ())
+def pendingReadback (values : Values model.Value pendingTypes) : Option (Bool × Bool) :=
+  some (values.get (.there .here), values.get (.there (.there .here)))
 def swapMap (values : Values model.Value pairTypes) : Values model.Value pairTypes :=
   .cons (values.get (.there .here)) (.cons (values.get .here) .nil)
 
 def wire : ComponentExport.Export :=
   ⟨[], [⟨"decide", .output 0 0, .terminal,
-    [.terminal (.localCall "finish" "V") [0] 0 "V" [.input 0 "V", .input 1 "V"]]⟩,
+    [.terminal (.localCall "finish" "V") [0] 0 "V" [.input 0 "V", .input 1 "V", .input 2 "V"]]⟩,
     ⟨"repack", .residual 0, .pure,
-    [.pure (.call "swap") [0] 0 "V" [.input 0 "V", .input 1 "V"],
-     .pure (.call "swap") [0] 1 "V" [.input 0 "V", .input 1 "V"]]⟩]⟩
+    [.input 0 "V", .pure (.call "swap") [0] 0 "V" [.input 1 "V", .input 2 "V"],
+     .pure (.call "swap") [0] 1 "V" [.input 1 "V", .input 2 "V"]]⟩]⟩
 theorem sorted_protocols (declaration : Relation) :
     (original declaration).protocolFunctions.mergeSort (fun first second => first.name ≤ second.name) =
       (original declaration).protocolFunctions := by
@@ -148,7 +170,7 @@ theorem sorted_protocols (declaration : Relation) :
   decide +kernel
 
 theorem derived (declaration : Relation) :
-    ComponentRoutes.derive (original declaration) = .ok ⟨wire.seams, [], 12⟩ := by
+    ComponentRoutes.derive (original declaration) = .ok ⟨wire.seams, [], 14⟩ := by
   simp only [ComponentRoutes.derive]
   rw [sorted_protocols]
   kernel_rfl
@@ -160,14 +182,14 @@ def opaqueAssociated : ComponentExport.Associated (original opaqueDeclaration) w
 
 -- The derived order is decide's terminal followed by repack's pure residual.
 def formulaPure : PureSeamBinding (imported := FormulaUnit.imported) formulaAssociated ⟨1, by decide +kernel⟩ :=
-  ⟨⟨0, by decide⟩, [0], 0, "V", .call "swap", .math rfl, [.input 0 "V", .input 1 "V"], by simp [wire, SeamRoute.subroutes]⟩
+  ⟨⟨0, by decide⟩, [0], 0, "V", .call "swap", .math rfl, [.input 1 "V", .input 2 "V"], by simp [wire, SeamRoute.subroutes]⟩
 def opaquePure : PureSeamBinding (imported := OpaqueUnit.imported) opaqueAssociated ⟨1, by decide +kernel⟩ :=
-  ⟨⟨0, by decide⟩, [0], 0, "V", .call "swap", .math rfl, [.input 0 "V", .input 1 "V"], by simp [wire, SeamRoute.subroutes]⟩
+  ⟨⟨0, by decide⟩, [0], 0, "V", .call "swap", .math rfl, [.input 1 "V", .input 2 "V"], by simp [wire, SeamRoute.subroutes]⟩
 def formulaTerminal : TerminalSeamBinding (imported := FormulaUnit.imported) formulaAssociated ⟨0, by decide +kernel⟩ :=
-  ⟨⟨2, by decide⟩, [0], 0, "V", .localCall "finish" "V", .local rfl, [.input 0 "V", .input 1 "V"], .here, rfl,
+  ⟨⟨2, by decide⟩, [0], 0, "V", .localCall "finish" "V", .local rfl, [.input 0 "V", .input 1 "V", .input 2 "V"], .here, rfl,
     rfl, ⟨0, 0, rfl⟩, ⟨_, by simp [wire], .here⟩, by simp [wire, SeamRoute.subroutes]⟩
 def opaqueTerminal : TerminalSeamBinding (imported := OpaqueUnit.imported) opaqueAssociated ⟨0, by decide +kernel⟩ :=
-  ⟨⟨2, by decide⟩, [0], 0, "V", .localCall "finish" "V", .local rfl, [.input 0 "V", .input 1 "V"], .here, rfl,
+  ⟨⟨2, by decide⟩, [0], 0, "V", .localCall "finish" "V", .local rfl, [.input 0 "V", .input 1 "V", .input 2 "V"], .here, rfl,
     rfl, ⟨0, 0, rfl⟩, ⟨_, by simp [wire], .here⟩, by simp [wire, SeamRoute.subroutes]⟩
 
 theorem formula_realizes : formulaMeaning.RealizesClaim claim rfl encode (fun _ _ => True) := by
@@ -273,11 +295,11 @@ def guardedSwapBody : Region dialect pairTypes pairTypes :=
 
 abbrev guardedSwapHelper : Helper := ⟨"swap", .local, pairTypes, pairTypes⟩
 
-def guardedRepackBody : Region protocolDialect pairTypes pairTypes :=
+def guardedRepackBody : Region protocolDialect pendingTypes pendingTypes :=
   .letOp (.mark "swap_call") .nil .nil <|
   .letOp (.localCall guardedSwapHelper rfl 0 "swap_call")
-    (.cons .here (.cons (.there .here) .nil)) .nil
-    (.ret (.cons .here (.cons (.there .here) .nil)))
+    (.cons (.there .here) (.cons (.there (.there .here)) .nil)) .nil
+    (.ret (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) .nil))))
 
 def guardedOriginal : Snapshot :=
   { original opaqueDeclaration with definitions :=
@@ -296,7 +318,7 @@ def guardedOriginal : Snapshot :=
                   .region [] [] (.block [] (.stop .reject "shape_reject_false")),
                   .region [] [] (.block [] (.yield []))] "shape_false"] (.yield []))] "shape"] (.ret [1, 0]) }
         else if helper.name = "repack" then .function { helper with
-          body := .block [.instruction (.localCall "swap" "V") [0, 1] pairTypes [] "swap_call"] (.ret [0, 1]) }
+          body := .block [.instruction (.localCall "swap" "V") [1, 2] pairTypes [] "swap_call"] (.ret [2, 0, 1]) }
         else .function helper
       | other => other }
 
@@ -310,9 +332,9 @@ end GuardedUnit
 
 def guardedWire : ComponentExport.Export :=
   { wire with seams := wire.seams.map fun row =>
-    if row.caller = "repack" then { row with routes := [
-      .pure (.localCall "swap" "V") [0] 0 "V" [.input 0 "V", .input 1 "V"],
-      .pure (.localCall "swap" "V") [0] 1 "V" [.input 0 "V", .input 1 "V"]] }
+    if row.caller = "repack" then { row with routes := [.input 0 "V",
+      .pure (.localCall "swap" "V") [0] 0 "V" [.input 1 "V", .input 2 "V"],
+      .pure (.localCall "swap" "V") [0] 1 "V" [.input 1 "V", .input 2 "V"]] }
     else row }
 
 theorem guarded_sorted :
@@ -322,7 +344,7 @@ theorem guarded_sorted :
   decide +kernel
 
 theorem guarded_derived :
-    ComponentRoutes.derive guardedOriginal = .ok ⟨guardedWire.seams, [], 15⟩ := by
+    ComponentRoutes.derive guardedOriginal = .ok ⟨guardedWire.seams, [], 17⟩ := by
   simp only [ComponentRoutes.derive]
   rw [guarded_sorted]
   kernel_rfl
@@ -331,7 +353,7 @@ def guardedAssociated : ComponentExport.Associated guardedOriginal guardedWire :
   ⟨_, guarded_derived, rfl, by unfold ComponentExport.check; rw [guarded_derived]; kernel_rfl⟩
 def guardedPure : PureSeamBinding (imported := GuardedUnit.imported) guardedAssociated ⟨1, by decide⟩ :=
   ⟨⟨0, by decide⟩, [0], 0, "V", .localCall "swap" "V", .local rfl,
-    [.input 0 "V", .input 1 "V"], by simp [guardedWire, wire, SeamRoute.subroutes]⟩
+    [.input 1 "V", .input 2 "V"], by simp [guardedWire, wire, SeamRoute.subroutes]⟩
 def guardedRelation : RelationBinding guardedOriginal (application .input) := by bind_contract
 def guardedMeaning : RelationMeaning GuardedUnit.imported guardedRelation model.Value registry :=
   .opaque ((registry.resolve _).get (by decide +kernel))
@@ -359,13 +381,14 @@ theorem guarded_helper_stops_outside_scope :
       guardedSwapHelper (encode (true, false) ()) = .halt .reject := by kernel_rfl
 
 theorem formulaTerminalLaw : TerminalSeamLaw formulaTerminal formulaRelation claim (fun _ => True)
-    readback formulaMeaning rfl encode (fun _ _ => True) where
+    pendingReadback formulaMeaning rfl encode (fun _ _ => True) where
   realizes := formula_realizes
   defined _ _ := ⟨_, rfl⟩
   adequate arguments results _ returned accepted := by
-    change Values model.Value pairTypes at arguments
-    obtain ⟨first, second, rfl⟩ : ∃ first second, arguments = .cons first (.cons second .nil) := by
-      cases arguments with | cons first rest => cases rest with | cons second rest => cases rest; exact ⟨_, _, rfl⟩
+    change Values model.Value pendingTypes at arguments
+    obtain ⟨token, first, second, rfl⟩ : ∃ token first second, arguments = .cons token (.cons first (.cons second .nil)) := by
+      cases arguments with | cons token rest => cases rest with | cons first rest =>
+        cases rest with | cons second rest => cases rest; exact ⟨_, _, _, rfl⟩
     cases first with
     | false => cases returned
     | true =>
@@ -374,13 +397,14 @@ theorem formulaTerminalLaw : TerminalSeamLaw formulaTerminal formulaRelation cla
       exact ⟨(true, second), rfl, (), rfl, accepted⟩
 
 theorem opaqueTerminalLaw : TerminalSeamLaw opaqueTerminal opaqueRelation claim (fun _ => True)
-    readback opaqueMeaning rfl encode (fun _ _ => True) where
+    pendingReadback opaqueMeaning rfl encode (fun _ _ => True) where
   realizes := opaque_realizes
   defined _ _ := ⟨_, rfl⟩
   adequate arguments results _ returned accepted := by
-    change Values model.Value pairTypes at arguments
-    obtain ⟨first, second, rfl⟩ : ∃ first second, arguments = .cons first (.cons second .nil) := by
-      cases arguments with | cons first rest => cases rest with | cons second rest => cases rest; exact ⟨_, _, rfl⟩
+    change Values model.Value pendingTypes at arguments
+    obtain ⟨token, first, second, rfl⟩ : ∃ token first second, arguments = .cons token (.cons first (.cons second .nil)) := by
+      cases arguments with | cons token rest => cases rest with | cons first rest =>
+        cases rest with | cons second rest => cases rest; exact ⟨_, _, _, rfl⟩
     cases first with
     | false => cases returned
     | true =>
@@ -394,8 +418,8 @@ def formulaClause : RetainedClause FormulaUnit.imported formulaOwner (applicatio
   ⟨by bind_contract, rfl, formulaMeaning⟩
 def opaqueClause : RetainedClause OpaqueUnit.imported opaqueOwner (application .input) model.Value registry :=
   ⟨by bind_contract, rfl, opaqueMeaning⟩
-def boundary (statement : Bool × Bool) : BoundaryValuation model.Value pairTypes [.boolean] :=
-  ⟨fun _ => .cons (some statement.1) (.cons (some statement.2) .nil), fun _ => .cons none .nil⟩
+def boundary (statement : Bool × Bool) : BoundaryValuation model.Value pendingTypes [.boolean] :=
+  ⟨fun _ => .cons (some 0) (.cons (some statement.1) (.cons (some statement.2) .nil)), fun _ => .cons none .nil⟩
 def assignments {snapshot : Snapshot} {imported : Imported snapshot} (owner : ContractBinding imported) :
     LogicalAssignments model.Value owner ⟨0, []⟩ := ⟨fun _ _ => none, fun _ _ => none⟩
 
@@ -423,12 +447,12 @@ theorem opaque_uniform_logical_agree (statement : Bool × Bool) :
 theorem terminal_rejects :
     invoke (closedMeaningsOn model OpaqueUnit.imported.program.payload.definitions)
       (OpaqueUnit.imported.program.payload.definitions.get opaqueTerminal.helperIndex).helper
-      (encode (false, true) ()) = .halt .reject := by kernel_rfl
+      (pendingEncode (false, true)) = .halt .reject := by kernel_rfl
 
 theorem terminal_returns_false :
     invoke (closedMeaningsOn model OpaqueUnit.imported.program.payload.definitions)
       (OpaqueUnit.imported.program.payload.definitions.get opaqueTerminal.helperIndex).helper
-      (encode (true, false) ()) = .done (.cons false .nil) := by kernel_rfl
+      (pendingEncode (true, false)) = .done (.cons false .nil) := by kernel_rfl
 
 -- Yes agreement cannot turn either mixed pair into a No statement.
 theorem promise_gap : ¬ claim.token.Yes (true, false) ∧ ¬ claim.No (true, false) := by
@@ -468,7 +492,7 @@ theorem undefined_terminal_readback_refused :
     ¬ ∃ _law : TerminalSeamLaw opaqueTerminal opaqueRelation claim (fun _ => True)
       (fun _ => none) opaqueMeaning rfl encode (fun _ _ => True), True := by
   rintro ⟨law, _⟩
-  obtain ⟨_, impossible⟩ := law.defined (encode (true, true) ()) trivial
+  obtain ⟨_, impossible⟩ := law.defined (pendingEncode (true, true)) trivial
   cases impossible
 
 theorem changed_runtime_map_refused :

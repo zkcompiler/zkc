@@ -16,24 +16,49 @@ variable {carriers : Structured.Carriers}
 
 namespace Value
 
+/-- The existing payload injection is unchanged on every encodable wire value. -/
+theorem encode_ofPayload {ty : Structured.Ty} {input : carriers.Value ty}
+    {payload : Payload carriers} (found : Payload.ofValue ty input = some payload) :
+    encode ty input = some (.data payload) := by
+  cases ty <;> simp only [encode]
+  case resourceUnit slot => simp [Payload.ofValue, Structured.Ty.isHandle] at found
+  all_goals rw [found]; rfl
+
+/-- A wire-admissible value still uses exactly the payload injection. -/
+theorem encode_data {ty : Structured.Ty} (admissible : ty.isHandle = false)
+    (value : carriers.Value ty) :
+    encode ty value = (Payload.ofValue ty value).map Value.data := by
+  cases ty <;> try rfl
+  simp [Structured.Ty.isHandle] at admissible
+
 theorem decode_encode {ty : Structured.Ty} {input : carriers.Value ty}
     {encoded : Value carriers} (ok : encode ty input = some encoded) :
     encoded.decode ty = some input := by
-  unfold encode at ok
-  cases h : Payload.ofValue ty input with
-  | none => simp [h] at ok
-  | some payload =>
-      simp only [h, Option.map_some, Option.some.injEq] at ok
-      subst encoded
-      exact Payload.value_ofValue h
+  cases ty <;> simp only [encode] at ok
+  case resourceUnit slot =>
+    cases ok
+    simp [decode]
+  all_goals
+    obtain ⟨payload, found, same⟩ := Option.map_eq_some_iff.mp ok
+    subst encoded
+    exact Payload.value_ofValue found
 
 theorem encode_decode {ty : Structured.Ty} {encoded : Value carriers}
     {input : carriers.Value ty} (ok : encoded.decode ty = some input) :
     encode ty input = some encoded := by
   cases encoded with
-  | data payload => simp only [decode] at ok; simp [encode, Payload.ofValue_value ok]
-  | transcript => simp [decode] at ok
-  | indices => simp [decode] at ok
+  | data payload => exact encode_ofPayload (Payload.ofValue_value ok)
+  | custody slot token =>
+    cases ty <;> simp only [decode] at ok
+    all_goals try contradiction
+    split at ok
+    · rename_i same
+      subst_vars
+      cases ok
+      rfl
+    · cases ok
+  | transcript => cases ty <;> cases ok
+  | indices => cases ty <;> cases ok
 
 /-- Nominal field identity is checked even when host carrier types coincide. -/
 theorem field_wrong_domain {actual expected : String} (different : actual ≠ expected)
@@ -45,6 +70,7 @@ theorem service_refused (contract : String) (value : Value carriers) :
     decode (.service contract) value = none := by
   cases value with
   | data payload => exact Payload.value_handle_refused rfl payload
+  | custody => rfl
   | transcript => rfl
   | indices => rfl
 
@@ -53,12 +79,15 @@ end Value
 theorem Value.encode_sort {ty : Structured.Ty} {input : carriers.Value ty}
     {encoded : Value carriers} (ok : Value.encode ty input = some encoded) :
     encoded.sort = .data ty := by
-  unfold Value.encode Payload.ofValue at ok
-  split at ok
-  · simp only [Option.map_some, Option.some.injEq] at ok
+  cases ty <;> simp only [Value.encode] at ok
+  case resourceUnit slot => cases ok; rfl
+  all_goals
+    obtain ⟨payload, found, same⟩ := Option.map_eq_some_iff.mp ok
     subst encoded
-    rfl
-  · simp at ok
+    unfold Payload.ofValue at found
+    split at found
+    · cases found; rfl
+    · cases found
 
 theorem encodeValues_sorts {tys : List Structured.Ty}
     {input : Values carriers.Value tys} {encoded : Environment carriers}
@@ -83,7 +112,41 @@ handles are excluded by the admitted ABI, not by a protocol truth premise. -/
 theorem Value.encode_exists {ty : Structured.Ty} (data : dataType ty = true)
     (input : carriers.Value ty) : ∃ encoded, Value.encode ty input = some encoded := by
   have admissible : ty.isHandle = false := by simpa [dataType] using data
-  exact ⟨.data ⟨ty, admissible, input⟩, by simp [Value.encode, Payload.ofValue, admissible]⟩
+  exact ⟨.data ⟨ty, admissible, input⟩,
+    Value.encode_ofPayload (by simp [Payload.ofValue, admissible])⟩
+
+/-- Local custody has an encoding without acquiring a wire representation. -/
+theorem Value.encode_local_exists {ty : Structured.Ty} (supported : localType ty = true)
+    (input : carriers.Value ty) : ∃ encoded, Value.encode ty input = some encoded := by
+  cases ty with
+  | resourceUnit slot => exact ⟨.custody slot input, rfl⟩
+  | _ => exact Value.encode_exists (by simpa [localType, Structured.Ty.isCustody] using supported) input
+
+/-- Successful local encoding cannot smuggle another handle kind into a frame. -/
+theorem Value.encode_localType {ty : Structured.Ty} {value : carriers.Value ty}
+    {encoded : Value carriers} (ok : Value.encode ty value = some encoded) :
+    localType ty = true := by
+  cases ty <;> simp_all [Value.encode, Payload.ofValue, localType, dataType,
+    Structured.Ty.isCustody, Structured.Ty.isHandle]
+  case sequence element => cases h : element.isHandle <;> simp_all
+  case product identity constructor fields => cases h : fields.hasHandle <;> simp_all
+
+theorem encodeValues_local_exists {tys : List Structured.Ty}
+    (input : Values carriers.Value tys) (supported : tys.all localType = true) :
+    ∃ encoded, encodeValues input = some encoded := by
+  induction input with
+  | nil => exact ⟨[], rfl⟩
+  | cons head tail ih =>
+    simp only [List.all_cons, Bool.and_eq_true] at supported
+    obtain ⟨encodedHead, headEq⟩ := Value.encode_local_exists supported.1 head
+    obtain ⟨encodedTail, tailEq⟩ := ih supported.2
+    exact ⟨encodedHead :: encodedTail, by simp [encodeValues, headEq, tailEq]⟩
+
+theorem encodeValues_local_getD {tys : List Structured.Ty}
+    (input : Values carriers.Value tys) (supported : tys.all localType = true) :
+    encodeValues input = some ((encodeValues input).getD []) := by
+  obtain ⟨encoded, found⟩ := encodeValues_local_exists input supported
+  simp only [found, Option.getD_some]
 
 theorem encodeValues_exists {tys : List Structured.Ty}
     (input : Values carriers.Value tys) (data : tys.all dataType = true) :
