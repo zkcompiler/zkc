@@ -129,14 +129,16 @@ theorem structuredSumcheckMissingCount {F G : Type}
   exact ZkcExamples.Structured.SumcheckSourceVerifier.verifier_missing raw claim service
 
 /-- The Reduction root returns its present claim unchanged at zero rounds,
-with an empty verifier point and no service requirement. -/
+with an empty verifier point and no service requirement. The extra slot is the
+closed interpretation's custody coordinate; it is not a wire payload or a token
+freshness assertion. -/
 theorem structuredSumcheckReductionZero {F G : Type}
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
     (claim : F) :
     ZkcExamples.Structured.SumcheckReduceViews.program.participant F G 1
       (ZkcExamples.Structured.SumcheckReduceVerifier.reduceRootInputs
         none none (some claim) (some 0) none) =
-          .done (.cons none (.cons none (.cons (some []) (.cons (some claim) .nil)))) := by
+          .done (.cons none (.cons none (.cons (some 0) (.cons (some []) (.cons (some claim) .nil))))) := by
   rw [ZkcExamples.Structured.SumcheckReduceVerifier.verifier_optional]
   rfl
 

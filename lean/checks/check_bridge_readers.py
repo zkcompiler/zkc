@@ -111,6 +111,20 @@ def exported(policy):
             [], [], [], [], [], [[], []]]
 
 
+class SubjectRoleSelection(unittest.TestCase):
+    def test_changed_public_inputs_refuse_at_policy_or_selection(self):
+        from bridges.subject import Driver
+        for public in ((), ("0",), ("0", "1", "2")):
+            with self.subTest(public=public):
+                driver = Driver(SimpleNamespace(output=Path(".")))
+                deployment = [None, None, [None, native(public=public)], None, None, None,
+                              [[NATIVE_ROLES[1], "validator", [[index, None] for index in public],
+                                [["0", None]], None, "0"]]]
+                driver.role_map(SimpleNamespace(name="role-control"), deployment)
+                self.assertTrue(all(check["passed"] for check in driver.checks))
+                self.assertEqual(driver.checks[-1]["name"], "role-control:role-map-refuses-other-inputs")
+
+
 class LeanProcessFailures(unittest.TestCase):
     def test_resource_failures_cannot_be_correspondence_refusals(self):
         for message in ("maximum number of heartbeats", "(deterministic) timeout", "maximum recursion depth",

@@ -520,6 +520,11 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
         | none => return if n.lower == 0 then some [.vector (exact 0)] else none
         | _ => throw .unknown
     | .exec p, _, .nil => primitive p args
+    -- Custody stays internal to the checked program. Its opaque coordinate
+    -- occupies constant space; this analysis does not establish freshness.
+    | .createUnit _, [], .nil => return some [.atom]
+    | .passUnit _, [.atom], .nil => return some [.atom]
+    | .consumeUnit _, [.atom], .nil => return some []
     | .vectorLength _, [.vector n], .nil => vectorWork n; return some [.index n]
     | .makeProduct .., _, .nil =>
         charge args.length

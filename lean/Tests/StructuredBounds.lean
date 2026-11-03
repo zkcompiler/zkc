@@ -146,6 +146,18 @@ def run : IO Unit := do
   let rawRefusal (name : String) (actual : Except Failure (Result × Meter)) (code : Failure) : IO Unit :=
     test name (match actual with | .error x => x == code | _ => false)
 
+  for (name, op, args, expected) in [
+      ("create", Op.createUnit "slot", [], [Value.atom]),
+      ("pass", Op.passUnit "slot", [Value.atom], [Value.atom]),
+      ("consume", Op.consumeUnit "slot", [Value.atom], []),
+      ("absent pass", Op.passUnit "slot", [Value.absent], [Value.absent])] do
+    test ("internal custody bounds: " ++ name)
+      (match (Bounds.operation {} op args .nil).run {} with
+       | .ok (some actual, _) => actual == expected
+       | _ => false)
+  rawRefusal "custody rejects a vector coordinate"
+    ((Bounds.operation {} (.passUnit "slot") [.vector (Bounds.exact 1)] .nil).run {}) .unknown
+
   equal "max constant returned" (runClosed (constantProgram maximum)) (returned [index maximum])
   equal "max constant open" (runOpen (constantProgram maximum))
     (arr [.str "zkc.structured-open-result/0", arr [.str "returned", arr [.str (toString maximum)]],

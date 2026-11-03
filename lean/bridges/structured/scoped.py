@@ -53,7 +53,9 @@ def domain_cases(suite):
     fixtures = ROOT / 'compiler/test/fixtures/structured-source'
     source = (fixtures / 'tuple-domains.mlir').read_text()
     for kind in ('product', 'zip'):
-        subject = suite.export('domain-' + kind, replace_exactly_once(source, 'domain_product', 'domain_' + kind))
+        domain_source = source if kind == 'product' else replace_exactly_once(
+            source, 'domain_product', 'domain_zip')
+        subject = suite.export('domain-' + kind, domain_source)
         for index, (left, right) in enumerate([([], []), ([], [3]), ([2, 7], [1, 4]), ([2], [1, 4])]):
             expected = ['stopped', 'refused']
             if kind == 'product' or len(left) == len(right):

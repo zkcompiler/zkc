@@ -636,11 +636,17 @@ class Driver(Runner):
         other[2][1][4] = str(int(other[2][1][4]) + 1)
         reordered = copy.deepcopy(deployment)
         inputs = reordered[2][1][7]
-        reordered[2][1][7] = list(reversed(inputs)) if len(inputs) > 1 else []
+        reordered[2][1][7] = list(reversed(inputs)) if len(inputs) > 1 else ([] if inputs else ["0"])
         self.check(f"{prefix}:role-map-refuses-other-acceptance",
                    not self.role_selection(other)["acceptance_match"])
-        self.check(f"{prefix}:role-map-refuses-other-inputs",
-                   not self.role_selection(reordered)["inputs_match"])
+        try:
+            changed_selection = self.role_selection(reordered)
+            refused_inputs = changed_selection is None or not changed_selection["inputs_match"]
+        except Refused:
+            # Reordering multiple public inputs violates the canonical policy
+            # before role selection; that is the expected refusal of this edit.
+            refused_inputs = True
+        self.check(f"{prefix}:role-map-refuses-other-inputs", refused_inputs)
         return dict(symbol=selection["symbol"], data_inputs=selection["data_inputs"],
                     acceptance=selection["acceptance"])
 

@@ -21,8 +21,8 @@ import snapshot as constructors
 
 GROUP = "bls12-381.g1"
 SERVICE = "random.bls12-381.fr/0"
-FIELD_TYPE = ["field", FIELD]
-GROUP_TYPE = ["group", GROUP]
+FIELD_TYPE = ["apply", "field", [["domain", "Field", FIELD]]]
+GROUP_TYPE = ["apply", "group", [["domain", "Group", GROUP]]]
 FIXTURES = ROOT / "compiler/test/fixtures"
 
 
@@ -63,9 +63,10 @@ class OpenSuite(Suite):
         if not (formal == expected):
             raise AssertionError({"formal": formal, "expected": expected})
 
-    def authored(self, label, selected_subject, modules, retained=None):
+    def authored(self, label, selected_subject, modules, retained=None, *, source_selection=None):
         flags = source_format.with_option(["--subject=" + selected_subject,
-                                           *[f"--module={name}={source}" for name, source in modules.items()]])
+                                           *[f"--module={name}={source}" for name, source in modules.items()]],
+                                          selection=source_selection)
         source, interface_text, interface = native_subject(
             lambda command: self.command(label + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export(label, source, interface["protocol"])
@@ -208,7 +209,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
     subject = suite.export("vector-receive", source)
-    action = ["receive", "vector", "P", "V", ["vector", FIELD]]
+    action = ["receive", "vector", "P", "V", ["apply", "vector", [["domain", "Field", FIELD]]]]
     maximum = ["0"] * 4096
     script = [reply(action, maximum)]
     suite.case("vector-receive-at-capacity", lambda: suite.compare_open(

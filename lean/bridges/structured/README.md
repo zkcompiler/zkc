@@ -270,6 +270,13 @@ Work and generated value caps retain separate closed/open diagnostics. Helpers
 are resolved in a bounded per-preflight table with full signature validation,
 preserving their checked bodies and ordinary linking.
 
+Internal custody creation, transfer and consumption carry constant-size opaque
+coordinates in this analysis; they establish no token freshness property. The
+wire readers continue to refuse custody inputs and outputs. Repeat observations
+of a pending Sumcheck result use a test-only consumer in the declaring module
+and compare its ordinary payload after consumption; the raw custody-output
+boundary has separate refusal controls.
+
 These transfers are conservative executable controls. Their soundness,
 agreement with native capacity thresholds and processor costs are not proved,
 and finite controls do not show that every input satisfying a source theorem is

@@ -30,7 +30,7 @@ SUITE_ROWS = [[["nominal", "merlin3.bls12-381.fr64be/0", "Transcript", [["Challe
 
 def source(bindings, definitions=None):
     return ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-            "main", [], [], bindings, definitions or [], [], [[], []], [[], []]]
+            "main", [], [], bindings, definitions or [], [], [[], []], [[], [], []]]
 
 
 class NeutralSchema(unittest.TestCase):
@@ -502,7 +502,7 @@ class MutationControls(unittest.TestCase):
         selection = SimpleNamespace(
             name="fixture", construction_namespace="Fixture.Construction",
             module_name=lambda key: "Fixture." + key.title(),
-            get=lambda _section, _key, default: default)
+            get=lambda _section, _key, default=None: default)
         driver = object.__new__(subject.Driver)
         with patch.object(driver, "lean", capture), self.assertRaises(RenderedOnly):
             driver.construction_rule(selection, {"exported": exported, "original": source([])}, {})

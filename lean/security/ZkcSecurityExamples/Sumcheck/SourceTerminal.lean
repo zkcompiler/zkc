@@ -43,12 +43,7 @@ theorem terminal_shape (reference : PrefixState (model.Field field) Frame 0)
 
 def terminalCheck (selection : Selection) (original : List (model.Field field))
     (returned : Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs) :=
-  (Participant.owned 1 1
-    (invoke (tables model (source selection).payload.definitions).closed
-      Generated.Bindings.SmallSumcheckInputs.helper33Helper)
-    (.cons (some original) (.cons (returned.get (.there (.there (.there (.there .here)))))
-      (.cons (returned.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind fun checked =>
-    PIR.Process.done (checked.get .here)
+  SourceFamily.terminalCheck model (SourceFamilySelections.installed selection) original returned
 
 theorem terminal_check (selection : Selection) (reference : PrefixState (model.Field field) Frame 0)
     (count : Nat) (shape : reference.original.length = 2^count) (small : count < 64)

@@ -1093,8 +1093,9 @@ def source_kernel_records():
          "ZkcSecurity.Examples.EmbeddingEqualityClient", "ideal"),
     ]
     modules = [module for module, _, _ in subjects]
-    subprocess.run(["lake", "build", *["+" + name for name in modules]], cwd=root / "security",
-                   check=True, capture_output=True, text=True)
+    built = subprocess.run(["lake", "build", *["+" + name for name in modules]], cwd=root / "security",
+                           capture_output=True, text=True)
+    assert built.returncode == 0, built.stdout + built.stderr
     payload = {"format": "zkc.receipt-audit-input/0", "operation": "extract",
                "records": [{"name": namespace + "." + prefix + suffix, "module": module}
                            for module, namespace, prefix in subjects for suffix in ("Data", "Receipt")]}

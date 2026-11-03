@@ -14,6 +14,7 @@ import tomllib
 
 from check import FIELD, MODULUS, ROOT, definition, digest, fixture_source, fixture_stems, fixture_table, write_json
 from bridges.common.replacement import replace_exactly_once
+from bridges.common import source_format
 from evidence import owned_sources
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
 
@@ -232,7 +233,8 @@ def nested_cases(suite, subject):
     changed = suite.directory / "changed-repeat-nested.zkc"
     text = original.read_text(encoding="utf-8")
     changed.write_text(replace_exactly_once(text, "result = result + x", "result = result * x"), encoding="utf-8")
-    variant = suite.authored("nested-same-name-source", selected_subject, {"sample": changed})
+    variant = suite.authored("nested-same-name-source", selected_subject, {"sample": changed},
+                             source_selection=source_format.of_source(original))
     if not (variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]):
         raise AssertionError('lean/bridges/structured/repeats.py: variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]')
     observe(suite, variant, "nested-same-name-source-result", p, ["2", "2", "3"], [], returned(["243"]))
@@ -335,7 +337,59 @@ def msb_rounds(values, challenges):
     return pairs, current
 
 
+def observed_reduction(suite, retained):
+    """Consume the pending obligation in its declaring module before observation.
+
+    The retained protocol still exports custody and is checked as such. The
+    test-only consumer returns ordinary payload fields, so observations never
+    serialize a capability or turn it into a transcript value.
+    """
+    _, v = roles(retained)
+    request = retained[1].parent / "custody-output.request.json"
+    write_json(request, ["zkc.structured-open-request/0", v,
+                        [None, None, "9", "0", None], [], 1000000])
+
+    def native_boundary():
+        number = len(suite.commands)
+        suite.command("reduction-custody-output:ssa", [suite.tools["reference"],
+            "open", retained[0], retained[2][3], request], success=False)
+        diagnostic = (suite.directory / f"command-{number:04d}.stderr").read_text()
+        if "structured-reference-signature" not in diagnostic:
+            raise AssertionError(diagnostic)
+    suite.case("reduction-custody-output-native-boundary", native_boundary)
+    if not suite.args.native_only:
+        def formal_boundary():
+            refusal = json.loads(suite.command("reduction-custody-output:lean",
+                [suite.tools["lean"], "open", retained[1], request], success=False))
+            if refusal != {"status": "refused", "code": "structured-open-value-type"}:
+                raise AssertionError(refusal)
+        suite.case("reduction-custody-output-formal-boundary", formal_boundary)
+
+    spec = next(row for row in SUBJECTS if row[0] == "sumcheck-reduce")
+    modules, _ = source_modules(ROOT / spec[3])
+    selection = source_format.of_sources(modules.values())
+    library = modules["sumcheck"].read_text()
+    library = replace_exactly_once(library, "fn open_claim<F: Field>",
+                                   "pub fn open_claim<F: Field>")
+    wrapper = modules["sums"].read_text()
+    wrapper = replace_exactly_once(wrapper, "evaluation: Pending<F> @V)",
+        "evaluation_point: Vector<F> @V, evaluation_value: F @V)")
+    wrapper = replace_exactly_once(wrapper,
+        "return (point=point, residual=mle::values(residual), evaluation=evaluation);",
+        "let observed @V = sumcheck::open_claim(evaluation);\n"
+        "  return (point=point, residual=mle::values(residual), "
+        "evaluation_point=observed.0, evaluation_value=observed.1);")
+    for name, text in (("sumcheck", library), ("sums", wrapper)):
+        path = suite.directory / (name + "-observed.zkc")
+        path.write_text(text)
+        modules[name] = path
+    return suite.authored("sumcheck-reduce-observed", spec[2], modules,
+                          source_selection=selection)
+
+
 def sumcheck_cases(suite, subject, complete):
+    if not complete:
+        subject = observed_reduction(suite, subject)
     p, v = roles(subject)
     [application] = select(body(subject), "protocol_apply")
     reduction = definition(subject[2], application[0][1])[9]
