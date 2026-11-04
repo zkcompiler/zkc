@@ -162,6 +162,8 @@ void mutation(
                          storage.api.references.begin(), same),
           "mutation changed a reference inventory");
   rejected(replay(project));
+  // The public boundary must invoke the projection witness, too.
+  rejected(checkScopedElaboration(project));
 }
 void replace(std::string &text, StringRef from, StringRef to) {
   auto position = text.find(from.str());
@@ -474,6 +476,15 @@ proof AliasDemo=Round<F>{prover P;verifier V;public{public};accept ok;
             storage.constructionSources.at(id));
       rejected(replay(project));
     });
+  cases.run("generic construction retains deferred boundary requirements", [] {
+    auto project = checked();
+    accepted(project);
+    auto &layer = named(project, "m::Layer");
+    require(!layer.admissions.empty(), "fixture has no deferred boundaries");
+    layer.admissions.clear();
+    rejected(replay(project));
+    rejected(checkScopedElaboration(project));
+  });
   cases.run("construction replay charges its allowance", [] {
     auto project = checked();
     accepted(project);

@@ -297,6 +297,31 @@ public:
       : storage(storage), reader(reader), types(reader.types),
         states(storage.declarations.size()), heights(states.size()) {}
   bool run() {
+    // Replaying a generic base propagates its pending boundary requirements.
+    // Observe the checked owner's obligations instead of treating a symbolic
+    // type as concrete or inferring new requirements during a witness check.
+    std::map<unsigned, std::set<std::pair<Boundary, std::string>>> pending;
+    SaveAndRestore admissionObserver(
+        types.recordAdmission,
+        std::function<bool(const Declaration &, AdmissionObligation)>(
+            [&](const Declaration &scope, AdmissionObligation obligation) {
+              if (!types.chargeType(obligation.type, obligation.span) ||
+                  !types.charge(obligation.calls.size() + 1, obligation.span))
+                return false;
+              auto [at, inserted] = pending.try_emplace(scope.id.index);
+              if (inserted)
+                for (const auto &required : scope.admissions) {
+                  if (!types.chargeType(required.type, required.span) ||
+                      !types.charge(1, required.span))
+                    return false;
+                  at->second.emplace(required.boundary,
+                                     typeIdentity(required.type));
+                }
+              return at->second.count({obligation.boundary,
+                                       typeIdentity(obligation.type)}) ||
+                     refuse(obligation.span,
+                            "missing construction boundary requirement");
+            }));
     for (uint32_t i = 0; i < storage.authoredReferences->size(); ++i) {
       const auto &record = (*storage.authoredReferences)[i];
       if (!types.charge(1, record.span))
