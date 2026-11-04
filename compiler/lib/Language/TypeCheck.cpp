@@ -280,7 +280,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   if (s.kind == S::Tuple) {
     Type result(s.arguments.empty() ? K::Unit : K::Tuple);
     for (auto &child : s.arguments) {
-      auto t = elaborateType(context, child, depth + 1, allowPlacement);
+      auto t = type(context, child, depth + 1, allowPlacement);
       if (!t)
         return {};
       if (!valueType(*t)) {

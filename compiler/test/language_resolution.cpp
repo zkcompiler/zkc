@@ -323,6 +323,45 @@ int main() {
           }
           rejected(project);
         });
+  cases.run("tuple children retain every authored type occurrence", [] {
+    auto project = take(check(std::vector<SourceBuffer>{
+        {"library", "module library;pub type Token=bool;", {}},
+        {"m",
+         "module m;math fn pair(x:(library::Token,library::Token))"
+         "->(library::Token,library::Token){return x;}",
+         {}}}));
+    accepted(project);
+    const auto owner = named(project, "m::pair").id;
+    std::set<uint32_t> nodes;
+    unsigned occurrences = 0;
+    for (const auto &record : candidate(project).api.references)
+      if (record.owner.index == owner.index &&
+          record.written == "library::Token") {
+        ++occurrences;
+        require(nodes.insert(record.position.node.index).second,
+                "tuple children share an authored reference node");
+      }
+    require(occurrences == 4, "tuple type occurrence inventory is incomplete");
+  });
+  cases.run("tuple children preserve distinct abstract binder contexts", [] {
+    auto project = take(check(R"(module m;
+interface I {type Data:Copy+Drop;}
+module Generic<C:I,D:I>{
+ math fn pair(x:(C::Data,D::Data))->(C::Data,D::Data){return x;}
+})"));
+    accepted(project);
+    const auto owner = named(project, "m::Generic::pair").id;
+    std::set<uint32_t> nodes;
+    std::map<unsigned, unsigned> binders;
+    for (const auto &record : candidate(project).api.references)
+      if (record.owner.index == owner.index && record.reference.abstract) {
+        require(nodes.insert(record.position.node.index).second,
+                "distinct tuple binders share an authored reference node");
+        ++binders[record.reference.abstract->binder];
+      }
+    require(binders == std::map<unsigned, unsigned>{{0, 2}, {1, 2}},
+            "tuple children lost a typed binder occurrence");
+  });
   cases.run(
       "abstract associated references retain node positions and typed context",
       [] {

@@ -1192,9 +1192,19 @@ summarizeBodyImpl(Semantics &types, ArrayRef<Declaration> declarations,
           if (!module ||
               (retained && !retained->observeType(types, *module, op.span)))
             return {};
+          const auto inherited =
+              declarations[known.parent->index].parameters.size();
+          // A member's own generic schema is an abstract call boundary, not
+          // an unused static of a known body. Preserve its natural-formation
+          // checks even while the implementing module remains symbolic.
+          for (unsigned i = inherited; i < arguments.size(); ++i) {
+            auto actual = substituteStatic(types, arguments[i], current,
+                                           op.span, retained);
+            if (!actual)
+              return {};
+            arguments[i] = std::move(*actual);
+          }
           if (!module->symbolic) {
-            const auto inherited =
-                declarations[known.parent->index].parameters.size();
             for (unsigned i = 0; i < std::min(inherited, arguments.size());
                  ++i) {
               auto actual = substituteStatic(types, arguments[i], current,
