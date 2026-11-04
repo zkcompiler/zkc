@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -29,6 +30,7 @@ struct Frame {
   std::string name;
   const FieldLayout *digestField = nullptr;
   unsigned digestBytes = 0, digestWordWidth = 0;
+  bool containsGroup = false;
 };
 
 // Every byte fact of a frame is the catalog's: the codec row's tag and element
@@ -143,6 +145,16 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
     kind = "field";
     domain = cast<algebra::FieldType>(type).getDomain();
     break;
+  case Kind::Group: {
+    auto group = realizeGroup(cast<algebra::GroupType>(type));
+    if (!group)
+      return group.takeError();
+    if (!protocol::nativeMessageAtom("group", group->type.getDomain()))
+      return zkc::error("evm.wire-type", "group has no native message atom");
+    result.tag = group->frameTag;
+    result.elementBytes = GroupLayout::compressedBytes;
+    return result;
+  }
   case Kind::FieldVector:
     kind = "vector";
     domain = cast<data::FieldVectorType>(type).getDomain();
@@ -271,6 +283,7 @@ struct WireGenerator::Storage {
   llvm::DenseMap<Type, std::unique_ptr<Frame>> frames;
   StringMap<std::string> operations;
   std::string text;
+  bool groups = false;
   raw_string_ostream out;
   Storage(NativeLayouts &layouts, const EvmLimits &limits)
       : layouts(layouts), limits(limits), out(text) {}
@@ -299,11 +312,14 @@ Expected<Frame *> WireGenerator::Storage::require(Type type) {
   selected->name = "evm_wire_" + std::to_string(frames.size());
   auto value = std::make_unique<Frame>(std::move(*selected));
   Frame *result = value.get();
+  groups |= result->layout->kind == Kind::Group;
+  result->containsGroup = result->layout->kind == Kind::Group;
   frames[type] = std::move(value);
   if (auto sequence = dyn_cast<data::SequenceType>(type)) {
     auto nested = require(sequence.getElementType());
     if (!nested)
       return nested.takeError();
+    result->containsGroup |= (*nested)->containsGroup;
   }
   if (auto variant = dyn_cast<data::VariantType>(type))
     for (auto alternative : variant.getAlternatives())
@@ -311,6 +327,7 @@ Expected<Frame *> WireGenerator::Storage::require(Type type) {
         auto nested = require(payload);
         if (!nested)
           return nested.takeError();
+        result->containsGroup |= (*nested)->containsGroup;
       }
   emit(*result);
   return result;
@@ -353,7 +370,8 @@ void WireGenerator::Storage::scan(const Frame &f) {
   bool collection = f.layout->collection.has_value() && !fixed;
   if (!aggregate && !collection) {
     uint64_t bytes =
-        kind == Kind::Boolean || kind == Kind::Index ? 6 + f.elementBytes
+        kind == Kind::Boolean || kind == Kind::Index || kind == Kind::Group
+            ? 6 + f.elementBytes
         : fixed
             ? 6 + cast<data::FieldArrayType>(f.layout->logical).getLength() *
                       uint64_t(width(f))
@@ -366,8 +384,10 @@ void WireGenerator::Storage::scan(const Frame &f) {
       << ")) { evm_decode(3) }\n";
   if (collection || kind == Kind::Variant)
     out << "let count := evm_le(add(p, 6), 4)\n";
-  if (kind == Kind::Field || kind == Kind::Index)
+  if (kind == Kind::Field || kind == Kind::Index || kind == Kind::Group)
     out << "evm_wire_elements(budget, 1)\n";
+  if (kind == Kind::Group)
+    out << "evm_wire_retain(budget, 128)\n";
   if (kind == Kind::Field && f.field->degree > 1)
     out << "evm_wire_retain(budget, " << f.field->coefficientBytes() << ")\n";
   if (fixed) {
@@ -473,8 +493,21 @@ void WireGenerator::Storage::canonical(const Frame &f) {
 void WireGenerator::Storage::read(const Frame &f) {
   auto kind = f.layout->kind;
   unsigned count = f.layout->lanes.size();
-  out << "function " << f.name << "_read(p) -> " << lanes(count) << " {\n";
-  if (kind == Kind::Root || kind == Kind::Path) {
+  out << "function " << f.name << "_read(p, checked) -> " << lanes(count)
+      << " {\n";
+  // Group admission can reach a precompile and fail with a target fault. A
+  // later scalar's canonicality must not bypass that earlier failure. Frames
+  // containing groups therefore validate in materialization order after the
+  // allocation-free shape scan. Other frames retain their canonical prepass.
+  if (!f.containsGroup)
+    out << "if iszero(checked) { " << f.name
+        << "_canonical(p) }\nchecked := 1\n";
+  if (kind == Kind::Group) {
+    // The structural/canonical passes never interpret a compressed point as
+    // an admitted group. Every materialized group is checked, including unused
+    // children, before its enclosing receive/observation completes.
+    out << "v0 := evm_g1_decode(add(p, 6))\n";
+  } else if (kind == Kind::Root || kind == Kind::Path) {
     out << "v1 := "
         << (kind == Kind::Root ? std::to_string(6 + f.digestBytes)
                                : "add(10, mul(evm_le(add(p, 6), 4), " +
@@ -521,7 +554,7 @@ void WireGenerator::Storage::read(const Frame &f) {
         << "let cursor := add(p, 10)\n"
         << "for { let i := 0 } lt(i, v1) { i := add(i, 1) } {\n"
         << "let " << lanes(childLanes, "c") << " := " << element.name
-        << "_read(add(cursor, 4))\n"
+        << "_read(add(cursor, 4), checked)\n"
         << "let cell := add(v0, mul(i, " << f.layout->collection->strideBytes
         << "))\n";
     stores(out, childLanes, "cell", "c");
@@ -539,7 +572,7 @@ void WireGenerator::Storage::read(const Frame &f) {
         const auto &nested = child(type);
         unsigned childLanes = nested.layout->lanes.size();
         out << "{ let " << lanes(childLanes, "c") << " := " << nested.name
-            << "_read(add(cursor, 4))\n";
+            << "_read(add(cursor, 4), checked)\n";
         stores(out, childLanes, "add(v0, " + std::to_string(offset) + ")", "c");
         out << "cursor := add(add(cursor, 4), evm_le(cursor, 4)) }\n";
         offset += childLanes * 32;
@@ -563,6 +596,9 @@ void WireGenerator::Storage::size(const Frame &f) {
       << ", budget, depth) -> n {\nevm_wire_node(budget, depth)\n";
   if (kind == Kind::Boolean) {
     out << "if gt(v0, 1) { evm_fault(10) } n := " << 6 + f.elementBytes << "\n";
+  } else if (kind == Kind::Group) {
+    out << "evm_g1_affine(v0) evm_wire_elements(budget, 1)\n"
+        << "evm_wire_retain(budget, 128) n := 54\n";
   } else if (kind == Kind::Index) {
     out << "if gt(v0, 0xffffffffffffffff) { evm_fault(10) }\n"
         << "evm_wire_elements(budget, 1) n := " << 6 + f.elementBytes << "\n";
@@ -656,7 +692,9 @@ void WireGenerator::Storage::write(const Frame &f) {
   }
   out << "function " << f.name << "_write(p, " << lanes(f.layout->lanes.size())
       << ") -> end {\nevm_wire_header(p, " << f.tag << ")\n";
-  if (kind == Kind::Boolean)
+  if (kind == Kind::Group)
+    out << "evm_g1_encode(add(p, 6), v0) end := add(p, 54)\n";
+  else if (kind == Kind::Boolean)
     out << "mstore8(add(p, 6), v0) end := add(p, " << 6 + f.elementBytes
         << ")\n";
   else if (kind == Kind::Index)
@@ -732,11 +770,13 @@ void WireGenerator::Storage::emit(const Frame &f) {
   out << "function " << f.name << "_decode(p, n) -> " << values << " {\n"
       << "evm_memory(p, n)\nlet budget := evm_wire_budget()\n"
       << f.name << "_scan(p, n, budget, 0)\n"
-      << "evm_wire_peak(budget, n)\n"
-      << f.name << "_canonical(p)\n"
-      << "evm_wire_construct(budget)\n"
+      << "evm_wire_peak(budget, n)\n";
+  if (!f.containsGroup)
+    out << f.name << "_canonical(p)\n";
+  out << "evm_wire_construct(budget)\n"
       << "mstore(0x40, budget)\n"
-      << values << " := " << f.name << "_read(p)\n}\n"
+      << values << " := " << f.name << "_read(p, "
+      << (f.containsGroup ? "0" : "1") << ")\n}\n"
       << "function " << f.name << "_encode(" << values << ") -> p, n {\n"
       << "let budget := evm_wire_budget()\n"
       << "n := " << f.name << "_size(" << values << ", budget, 0)\n"
@@ -932,6 +972,7 @@ Expected<std::string> WireGenerator::encoder(Type type) {
 Expected<std::string> WireGenerator::operation(Operation *op) {
   return storage->operation(op);
 }
+bool WireGenerator::emitsCurveHelpers() const { return storage->groups; }
 std::string WireGenerator::definitions() const {
   std::string text;
   raw_string_ostream out(text);
@@ -1004,6 +1045,8 @@ function evm_wire_header(p, tag) {
 }
 )YUL";
   out << storage->text;
+  if (emitsCurveHelpers())
+    out << detail::curveHelpers();
   return text;
 }
 } // namespace zkc::evm

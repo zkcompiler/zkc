@@ -210,11 +210,21 @@ Its original eight-query scalar fixture needs 122 transitions, above the target'
 Native/reference FRI success does not establish deployed FRI or STARK support.
 The small FRI geometry is a closure control, not a security profile.
 Every path envelope remains bounded by the declared path ceiling. Other Merkle
-schemes, multiproofs, curve operations, transcript families and decoders other
+schemes, multiproofs, additional curve operations, transcript families and decoders other
 than the realized ones and full STARK verifier deployment need additional
 target support. Conditional participant completion
 in the verifier refuses with `evm.completion`. These checks are bounded
 execution evidence, not a formal lowering or cryptographic theorem.
+
+The target-local [BLS G1 adapter](spec/targets/evm.md#bls12-381-g1-adapter)
+adds typed add/scale/equality operations and strict native compressed frames
+on Prague/Osaka. The explicit
+[Keccak Schnorr project](../examples/projects/schnorr-bls-keccak/README.md)
+selects the existing generic library and installed BLS Fr suite. Native/deployed
+controls cover 37 cases on Prague and Osaka, including valid proofs, false
+results and malformed frames, with complete ordered hash and physical
+precompile traces. This is bounded execution evidence, not a formal lowering
+or security theorem.
 
 `zkc-cpu` composes the five compiled providers through an immutable
 `CpuInstallation`. Reduced installations restrict operation, layout, codec,

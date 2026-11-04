@@ -3,6 +3,7 @@
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Instances.h"
@@ -13,6 +14,7 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Wire.h"
 
@@ -130,16 +132,21 @@ int main() {
                 take(layouts.get(fixed))->collection->strideBytes == 64,
             "fixed collection stride ignored empty child");
     auto group = algebra::GroupType::get(&context, "bls12-381.g1");
-    refuses(layouts.get(data::FixedVectorType::get(&context, group, 0)),
-            "evm.layout");
-    refuses(layouts.get(data::SequenceType::get(&context, group)),
-            "evm.layout");
+    require(take(layouts.get(data::FixedVectorType::get(&context, group, 0)))
+                        ->collection->strideBytes == 32 &&
+                take(layouts.get(data::SequenceType::get(&context, group)))
+                        ->collection->strideBytes == 32,
+            "group containers lost immutable pointer cells");
   });
   cases.run("inactive alternatives are fully admitted", [&] {
     auto group = algebra::GroupType::get(&context, "bls12-381.g1");
     auto value =
         variant({alternative("empty", {}), alternative("inactive", {group})});
-    refuses(layouts.get(value), "evm.layout");
+    take(layouts.get(value));
+    auto unsupported = algebra::GroupType::get(&context, "bls12-381.g2");
+    auto bad = variant(
+        {alternative("empty", {}), alternative("inactive", {unsupported})});
+    refuses(layouts.get(bad), "evm.group");
     auto resource = runtime::ScopeType::get(&context);
     auto affine = variant(
         {alternative("empty", {}), alternative("inactive", {resource})});
@@ -235,6 +242,55 @@ int main() {
         physicalFixture(builder, loc, outputs, code, arguments, attributes);
     return std::make_pair(std::move(module), result);
   };
+  cases.run("G1 adapter pins Scalar, codec and padded affine layout", [&] {
+    auto group = algebra::GroupType::get(&context, "bls12-381.g1");
+    auto facts = take(evm::realizeGroup(group));
+    auto *value = take(layouts.get(group));
+    require(value == take(layouts.get(group)) &&
+                value->kind == evm::ValueLayout::Kind::Group &&
+                value->lanes == ArrayRef<Type>{i64} && !value->collection &&
+                facts.scalar == field("bls12-381.fr") && facts.frameTag == 9 &&
+                facts.baseModulus.getActiveBits() == 381 &&
+                facts.scalarModulus.getActiveBits() == 255 &&
+                evm::GroupLayout::affineBytes == 128,
+            "curve facts were inferred from scalar width or lost");
+    for (StringRef name : {"bls12-381.g2", "bn254.g1"})
+      refuses(layouts.get(algebra::GroupType::get(&context, name)),
+              "evm.group");
+    require(!parseType(R"(!algebra.field<"bls12-381.fq">)", &context),
+            "uninstalled base field bypassed checked type admission");
+    for (auto fork : {EvmFork::Prague, EvmFork::Osaka}) {
+      auto error = evm::verifyGroupFork(fork);
+      require(!error, "supported group fork refused");
+    }
+    auto error = evm::verifyGroupFork(EvmFork::Cancun);
+    require(bool(error) && toString(std::move(error)).find("evm.group-fork") !=
+                               std::string::npos,
+            "Cancun acquired EIP-2537 support");
+  });
+  for (StringRef code : {"group.add", "group.scale", "group.equal"}) {
+    cases.run("typed ordered curve signature " + code, [&] {
+      auto group = algebra::GroupType::get(&context, "bls12-381.g1");
+      Type second = code == "group.scale" ? Type(i256) : Type(i64);
+      Type result =
+          code == "group.equal" ? Type(builder.getI1Type()) : Type(i64);
+      auto correct = operation(code, group, {i64, second}, {result});
+      require(succeeded(verify(correct.second)) &&
+                  !isMemoryEffectFree(correct.second),
+              "group operation lost signature or ordered effects");
+      auto wrong = operation(code, base, {i64, second}, {result});
+      require(failed(verify(wrong.second)), "field admitted as group");
+      auto widths = operation(code, group, {i256, second}, {result});
+      require(failed(verify(widths.second)), "wide group pointer admitted");
+      auto missing = operation(code, {}, {i64, second}, {result});
+      require(failed(verify(missing.second)), "untyped group admitted");
+      auto stray = operation(
+          code, group, {i64, second}, {result},
+          {builder.getNamedAttr("parameters", builder.getArrayAttr({}))});
+      require(failed(verify(stray.second)),
+              "uninterpreted group attributes admitted");
+    });
+  }
   cases.run(
       "positive verification requires logical field and exact expanded "
       "signature",

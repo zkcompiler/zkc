@@ -21,6 +21,8 @@ public:
   llvm::Expected<std::string> decoder(mlir::Type);
   llvm::Expected<std::string> encoder(mlir::Type);
   llvm::Expected<std::string> operation(mlir::Operation *);
+  /// Whether definitions() includes curve helpers for requested codecs.
+  bool emitsCurveHelpers() const;
   std::string definitions() const;
 
 private:

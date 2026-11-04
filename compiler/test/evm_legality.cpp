@@ -213,6 +213,12 @@ int main() {
                                   %coordinates:i64, %count:i64) {
         %yes = arith.constant true
         "evm.scope.check"(%scope) : (i64)->()
+        %sum = "evm.group.add"(%coordinates,%coordinates)
+          {value_type=!algebra.group<"bls12-381.g1">} : (i64,i64)->i64
+        %scaled = "evm.group.scale"(%sum,%value)
+          {value_type=!algebra.group<"bls12-381.g1">} : (i64,i256)->i64
+        %equal = "evm.group.equal"(%sum,%scaled)
+          {value_type=!algebra.group<"bls12-381.g1">} : (i64,i64)->i1
         %next = "evm.transcript.observe"(%scope,%generation,%value,%coordinates,%count)
           {value_type=!algebra.field<"bls12-381.fr">,
            origin=#runtime.origin<"main", #runtime.message_origin<"Round","message","field","P","V">>}
@@ -227,8 +233,8 @@ int main() {
             "invalid typed effect fixture: " + diagnostics);
     SmallVector<Operation *> ordered;
     module->walk([&](Operation *op) {
-      if (isa<evm::ScopeCheckOp, evm::TranscriptObserveOp, evm::SourceGuardOp>(
-              op)) {
+      if (isa<evm::ScopeCheckOp, evm::TranscriptObserveOp, evm::SourceGuardOp,
+              evm::GroupAddOp, evm::GroupScaleOp, evm::GroupEqualOp>(op)) {
         require(!isMemoryEffectFree(op) && !isSpeculatable(op),
                 "ordered operation acquired pure/speculatable semantics");
         ordered.push_back(op);
@@ -241,12 +247,12 @@ int main() {
     SmallVector<Operation *> retained;
     unsigned shifts = 0;
     module->walk([&](Operation *op) {
-      if (isa<evm::ScopeCheckOp, evm::TranscriptObserveOp, evm::SourceGuardOp>(
-              op))
+      if (isa<evm::ScopeCheckOp, evm::TranscriptObserveOp, evm::SourceGuardOp,
+              evm::GroupAddOp, evm::GroupScaleOp, evm::GroupEqualOp>(op))
         retained.push_back(op);
       shifts += isa<evm::IndexLogicalShiftRightOp>(op);
     });
-    require(ordered.size() == 4 && ordered == retained && shifts == 0,
+    require(ordered.size() == 7 && ordered == retained && shifts == 0,
             "optimization erased or reordered observations/checks/stops, or "
             "retained dead total arithmetic");
     require(succeeded(evm::checkTarget(*module)),
@@ -496,6 +502,64 @@ proof Proof=Work{prover P;verifier V;public{w,h,i};accept accepted;construction 
     // The deployed trace controls check both dynamic occurrences.
     require(checks != 0, "raw authentication escaped typed conversion");
   });
+  cases.run(
+      "ordinary renamed curve consumer closes through all typed operations",
+      [&] {
+        constexpr StringLiteral source = R"zkc(
+module scalar;
+domain G = group("bls12-381.g1");
+domain Fr = field("bls12-381.fr");
+protocol Combine roles(P,V)
+    (a:G@V,b:G@V,s:Fr@V,challenges:Random<Fr>@V)->(accepted:bool@V) {
+  let challenge = challenges.draw();
+  let delivered = send V -> P(challenge);
+  let sum = a + b;
+  let scaled = sum * s;
+  return (accepted = scaled == b);
+}
+proof Proof = Combine {
+  prover P; verifier V; public { a,b,s }; accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.bls12-381.fr64be/0",challenges);
+}
+)zkc";
+        for (auto fork : {EvmFork::Prague, EvmFork::Osaka}) {
+          EvmOptions options;
+          options.fork = fork;
+          auto compiled =
+              take(compileEvmEntry(originalSource(source), options));
+          auto target = compiled.targetSnapshot();
+          unsigned adds = 0, scales = 0, equals = 0;
+          target->walk([&](Operation *op) {
+            adds += isa<evm::GroupAddOp>(op);
+            scales += isa<evm::GroupScaleOp>(op);
+            equals += isa<evm::GroupEqualOp>(op);
+          });
+          require(adds == 1 && scales == 1 && equals == 1 &&
+                      succeeded(evm::checkTarget(*target)),
+                  "curve closure used an alternate operation route");
+          require(
+              StringRef(compiled.yul()).count("function evm_g1_decode(") == 1,
+              "combined curve arithmetic and wire closure duplicated helpers");
+          std::string printed;
+          raw_string_ostream out(printed);
+          target->print(out);
+          auto reparsed =
+              parseSourceString<ModuleOp>(printed, target->getContext());
+          require(bool(reparsed) && succeeded(evm::checkTarget(*reparsed)),
+                  "typed curve target did not round trip");
+          require(take(evm::exportYul(*reparsed, compiled.endpoint(),
+                                      compiled.policy(), compiled.limits())) ==
+                      compiled.yul(),
+                  "curve target round trip changed emitted production helpers");
+        }
+        EvmOptions cancun;
+        cancun.fork = EvmFork::Cancun;
+        auto refused = compileEvmEntry(originalSource(source), cancun);
+        require(!refused, "Cancun compiled a group wire consumer");
+        require(
+            namesIdentifier(toString(refused.takeError()), "evm.group-fork"),
+            "group fork refusal lost its stable identifier");
+      });
   cases.run("typed target round trip retains origins and identical Yul", [&] {
     auto compiled = compileSource(proofSource(
         "fn work(a:Fr,b:Fr,c:Fr)->bool{return a*b==c;}", "accepted:bool@V",
@@ -1109,14 +1173,33 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
         });
         require(!native, "native execution wrapper remained");
       });
-  cases.run("unsupported reachable producer fails without blocking verifier",
-            [&] {
-              auto source = closed();
-              auto endpoint = take(closeEndpoint(*source, "P"));
-              refuses(evm::lowerEndpoint(endpoint, {}), "evm.lowering");
-              require(StringRef(diagnostics).contains("evm.unsupported-type"),
-                      "reachable type diagnostic was imprecise");
-            });
+  cases.run(
+      "G1 producer lowers generically and unsupported G2 still refuses", [&] {
+        auto source = closed();
+        auto endpoint = take(closeEndpoint(*source, "P"));
+        auto target = take(evm::lowerEndpoint(endpoint, {}));
+        unsigned scales = 0;
+        target->walk([&](evm::GroupScaleOp) { ++scales; });
+        require(scales == 1 && succeeded(evm::checkTarget(*target)),
+                "ordinary group scale did not reach typed target operation");
+        EvmOptions cancun;
+        cancun.fork = EvmFork::Cancun;
+        refuses(evm::lowerEndpoint(endpoint, cancun), "evm.group-fork");
+        std::string unsupported = sourceText.str();
+        size_t at = 0;
+        while ((at = unsupported.find("bls12-381.g1", at)) !=
+               std::string::npos) {
+          unsupported.replace(at, StringRef("bls12-381.g1").size(),
+                              "bls12-381.g2");
+          at += StringRef("bls12-381.g2").size();
+        }
+        auto other = close(unsupported);
+        diagnostics.clear();
+        refuses(evm::lowerEndpoint(take(closeEndpoint(*other, "P")), {}),
+                "evm.lowering");
+        require(StringRef(diagnostics).contains("evm.unsupported-type"),
+                "reachable type diagnostic was imprecise");
+      });
   cases.run("target legality refuses residual potentially undefined division",
             [&] {
               auto source = closed();

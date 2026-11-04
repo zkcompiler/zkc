@@ -29,6 +29,113 @@ The Python helpers use only the standard library and the existing independent
 Keccak/logical-tree reference. Without `ZKC_EVM_RUNNER`, deployed controls are
 explicitly skipped. Do not count those skips as deployed validation.
 
+## BLS G1 helper controls
+
+`curve_controls.py` uses the maintained C++ wire consumer's production G1
+codec/adapter helpers and an independent Python affine oracle. After the parent
+builds the consumer and selects the pinned tools:
+
+```sh
+python3 common/tests/evm/curve_controls.py \
+ --consumer build/compiler/test/zkc-evm_wire-test \
+ --solc /pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --output build/experiments/evm-curve
+```
+
+The controls cover Prague/Osaka canonical compressed round trips and raw
+128-byte affine values; nonidentity/identity/negated points; generic add, scale
+and equality; malformed lengths/flags/infinity/x, nonsquares and the native
+on-curve order-three negative fixture; nested/unused admission and mixed child
+failure order; exact status
+and output-size checks; real missing-account empty success; gas preflight; and
+wide ModExp; and direct negation, sign and x-cubed-plus-four helper boundaries
+against Python integers, including low-word borrow/carry, zero, double
+negation, the sign midpoint and conditional reduction. The consumer exposes
+`--emit group:bls12-381.g1 roundtrip|values`,
+`--emit sequence:group:bls12-381.g1 roundtrip`, and
+`--emit group-scalar roundtrip`, and
+`--emit-g1 add|scale|equal|unused|missing|mixed-missing|status|fund|modexp|negative|sign|rhs`.
+The last three modes take one canonical Fp value as two big-endian 32-byte
+words. Negation and rhs return the same two-word layout; sign returns one
+32-byte word. These are test-only helper entry points.
+
+These helper controls are separate from the real proof consumer below. This
+helper harness checks outcomes and independent affine bytes; it does not
+compare complete ModExp/ADD/MSM physical traces.
+
+## Ordinary BLS G1 Schnorr consumer
+
+`curve_closure.py` compiles the unchanged
+[`schnorr-bls-keccak` project](../../../examples/projects/schnorr-bls-keccak/README.md)
+with its ordinary `schnorr::Schnorr` library dependency. Use prepared binaries:
+
+```sh
+PYTHONPATH=common/tests/support:common/tests/evm \
+ python3 common/tests/evm/curve_closure.py \
+ --compiler=build/compiler-dev/zkc-compile \
+ --native-driver=/path/to/evm_fixture \
+ --solc=/pinned/solc --runner=/path/to/zkc-evm-test-runner \
+ --output=build/experiments/evm-schnorr
+```
+
+The native driver produces and independently verifies actual framed proofs.
+To reuse producer proofs without fresh randomness, add
+`--retained-native=/previous/run/prague`. Their checked subject, public values,
+context, package and native requests must match; native verification runs again
+with those exact proof bytes. The output directory must be new.
+The target consumes those exact bytes on Prague and Osaka, with all declared
+default limits and optimizer settings. Every case calls the same deployment
+twice. The harness checks installed runtime bytes against the solc output,
+exact Boolean or refusal bytes, the complete independent managed hash trace,
+and native message counts, transcript transitions and reached decode sites.
+An independent Python affine oracle checks the original Schnorr equation.
+Complete traces also agree with the shared `static_trace` oracle.
+
+This consumer requires a passive runner exposing `precompile_trace` on each
+call and the first-call projection, plus `deployment_precompile_trace`.
+The replay constructs every expected ModExp, G1ADD and G1MSM input and output
+from source public frames, proof frames and the independent challenge. It
+compares the entire array and every event field on both calls: kind, address,
+raw input/output, status, engine reason, `precompile_called`, and the hash-event
+count at call entry. Observed target bytes never supply expected inputs.
+The constructor must have no physical calls. A runner lacking these fields
+fails this gate.
+
+Each finite decoded point requires three ModExp calls followed by scalar-one
+subgroup MSM; identity admission requires none. Public base and point decode
+before proof-header checks or binding hashes. Commitment admission occurs at
+hash frontier two. Equation evaluation makes two MSM calls then one ADD at
+hash frontier twelve, including identity operands. The all-finite case has
+15 physical calls and 12 hashes. A nonsquare stops after its three ModExp calls;
+an out-of-subgroup point reaches a failed MSM with empty return data, an engine
+`PrecompileError` and `precompile_called=true`.
+
+Cases include multiple nonzero secrets and nonstandard bases, negative bases
+and scalars, zero secret, identity base/point/commitment, false equations,
+changed responses, trailing and truncated proofs, malformed frame lengths and
+tags, noncanonical infinity/x/scalars, nonsquares and an out-of-subgroup
+commitment. An earlier invalid commitment must mask a later bad scalar.
+Separately identified copies omitting the final value hash must retain the
+Boolean result and fail the complete hash oracle. Cancun must refuse with
+`evm.group-fork`. No source guards or protocol-specific lowering are added.
+Physical diagnostic mutation controls remove, add, reorder or alter input,
+output, frontier, status, reason or the precompile-called flag. Each must fail
+the physical oracle while the Boolean and complete hash trace still pass, on
+either repeated call. These mutate diagnostic copies, not engine outcomes.
+
+`run.json` records completion; `summary.json` records per-case results. Sources,
+native packages/reports/proofs, expected frontiers and traces, calldata,
+solc requests/artifacts, tool/module/code/proof digests, fork/limits, deployment
+gas, per-call gas and memory high water remain in the output directory.
+Native reports expose outcomes and transition counters, not a passive native
+hash trace. The physical gate establishes bounded reached primitive bytes,
+order and hash frontiers under the engine's unchanged outcomes. It does not
+trace the entire call ABI or establish a gas theorem. The native matrix uses
+canonical public inputs; malformed public admission has separate replay unit
+controls. Ordinary SDK/CLI artifact capture, formal correspondence and
+cryptographic security remain separate gates. Passing helper controls alone
+does not satisfy this consumer check.
+
 ## Runner protocol
 
 One JSON object on stdin, one on stdout, with hex strings optionally prefixed
